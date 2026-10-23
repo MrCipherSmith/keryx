@@ -80,10 +80,10 @@ export interface ShellDeps {
   idSeq: () => string;
   initial: { provider: string; model: string; baseUrl?: string; modelParams?: ShellModelParams };
   /**
-   * Bundled detect+pick selector for `/models`, `/provider`, and `/connect`.
-   * `/models` passes `{ onlyProvider }`; `/provider` passes no opts (configure);
-   * `/connect` passes `{ onlyConnected: true }` (switch among live providers).
-   * When omitted, `/models`/`/provider` write "not available"; `/connect` falls
+   * Bundled detect+pick selector for `/models` and `/connect`.
+   * `/models` passes `{ onlyProvider }`; `/connect` passes `{ onlyConnected: true }`
+   * (the Providers dialog: switch among live providers, or add one).
+   * When omitted, `/models` writes "not available"; `/connect` falls
    * back to static env guidance. They NEVER crash the loop.
    */
   selectProviderModel?: (

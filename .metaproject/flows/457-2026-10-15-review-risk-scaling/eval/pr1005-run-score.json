@@ -1,0 +1,51 @@
+{
+  "pr": 1005,
+  "round": 1,
+  "diff": "input.round1-c75f0091.diff",
+  "reviewedHead": "c75f0091da095a2d90ce0f03ffbf8c29fdb7abd6",
+  "reviewerModel": "opus",
+  "plan": {
+    "slices": 2, "maxBytes": 18000, "waveBytes": 54000, "host": "claude-code",
+    "deep": 0, "light": 2, "audit": 0,
+    "dispatchesActual": 5,
+    "perRole": {"review-architecture": ["slice-01"], "review-clean-code": ["slice-01"], "review-logic": ["slice-01", "slice-02"], "review-security-code": ["slice-01"], "review-testing-practices": ["slice-01", "slice-02"]},
+    "oldPlanDispatches": 8, "reduction": 0.375,
+    "wallSecondsDispatch": 200,
+    "subagentTokensApprox": 441000
+  },
+  "recall": {
+    "truthIds": ["F-057", "F-058", "F-061"],
+    "foundAtMajor": ["F-057"],
+    "foundDowngraded": ["F-061"],
+    "missed": ["F-058"],
+    "strict": "1/3",
+    "lenient": "2/3",
+    "matches": {
+      "F-057": ["SEC-1 (major, flow-check-ac.ts:170)", "LOG-1 (major, same mechanism: unguarded sibling git call sites, pin test over-claims)"],
+      "F-061": ["TEST-1 (minor, jev rows pass without reaching git)", "TEST-2 (minor)", "TEST-3 (minor, textual needle count)"],
+      "F-058": []
+    },
+    "missReasons": {
+      "F-058": "reviewer miss: routed to review-security-code (slice-01), but slice-01 was light depth (risk 0.3, no why). The security reviewer looked at hasDashValue and the EXEC_FLAGS recursion (SEC-2) and did not probe tokenizer spellings (backslash, brace, $'..').",
+      "F-061": "found by mechanism, but rated minor rather than major"
+    }
+  },
+  "extras": {
+    "blockerMajorNotInTruth": [],
+    "verifierDispatches": 0,
+    "confirmed": 0, "refuted": 0, "unverifiable": 0,
+    "precision": null,
+    "notableMinor": ["LOG-2 --diff=- stdin spelling now prompts (minor)", "TEST-4 review create --ref stored unchecked then reaches resolveIngestDiff (info, sibling of F-057)"]
+  },
+  "verdict": {
+    "knownDefects": "worse",
+    "knownDefectsNote": "the old round-1 found all 3 at major with 8 dispatches. The new plan found 1/3 at major, or 2/3 if the downgraded F-061 counts, with 5 dispatches",
+    "confirmedExtras": "equal (0 vs 0)"
+  },
+  "largePrDatapoint": {
+    "diff": "input.diff (full PR)",
+    "dispatched": false,
+    "at54k": {"slices": 32, "oldDispatches": 64, "newDispatches": 23, "reduction": 0.641, "deep": 4, "light": 28, "audit": 4, "oldMinutes": [32, 80], "newMinutes": [18, 45], "seriousLanded": "6/6", "oldSeriousLanded": "6/6"},
+    "at60k": {"slices": 32, "oldDispatches": 57, "newDispatches": 19, "reduction": 0.667, "deep": 4, "light": 28, "audit": 4, "oldMinutes": [30, 75], "newMinutes": [16, 40], "seriousLanded": "6/6"}
+  }
+}

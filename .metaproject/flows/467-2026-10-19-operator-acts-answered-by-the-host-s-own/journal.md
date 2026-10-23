@@ -1,0 +1,45 @@
+# Flow Journal
+
+- 2026-10-19T19:21:21.871Z - flow created
+- 2026-10-19T19:22:01.788Z - origin-set: unknown -> human-request; quote: "Это должен быть просто вопрос, все харнесы умеют это делать. И Claude может создавать вот тут вопрос/опрос, прям щас этим пользуемся."; source: helyx-channel message 214878, 2026-10-19 (Operator asked that every harness record review acts through its plain question tool)
+- 2026-10-19T19:22:53.157Z - task-added: T5: Tests first: host-question flags on the four verbs (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:22:53.701Z - task-added: T6: Implement flags, refusals and host-question record (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:22:54.189Z - task-added: T7: Decisions journal entry and report/modal display (AC6, AC8)
+- 2026-10-19T19:22:54.736Z - task-added: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
+- 2026-10-19T19:22:55.285Z - task-added: T9: Verify: run AC verification commands and the full local test slice for touched areas
+- 2026-10-19T19:22:55.808Z - task-added: T10: Review through the project review orchestrator and open the PR
+- 2026-10-19T19:23:00.022Z - frozen: 11 criteria; checksum recorded
+- 2026-10-19T19:23:00.027Z - warning: no verification kind on AC5 — add [verify: …] or accept them unclassified
+- 2026-10-19T19:23:00.602Z - started
+- 2026-10-19T19:23:10.187Z - ac-updated: AC5: "Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5`] · sensitive: failure-scenario" -> "Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5` · sensitive: failure-scenario]" (marker must be last on the line)
+- 2026-10-19T19:23:19.393Z - task-done: T1: Collect remaining context
+- 2026-10-19T19:23:19.923Z - task-done: T2: Implement per plan
+- 2026-10-19T19:23:20.357Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-19T19:23:20.800Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-19T19:23:21.243Z - task-depends-set: T6: dependsOn T5 (was empty) — tests first
+- 2026-10-19T19:23:21.881Z - task-depends-set: T7: dependsOn T6 (was empty) — journal entry builds on the verb
+- 2026-10-19T19:23:22.528Z - task-depends-set: T9: dependsOn T6, T7, T8 (was empty) — verify after implementation
+- 2026-10-19T19:23:23.159Z - task-depends-set: T10: dependsOn T9 (was empty) — review after verify
+- 2026-10-19T19:44:44.579Z - task-done: T5: Tests first: host-question flags on the four verbs (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:44:44.806Z - task-done: T6: Implement flags, refusals and host-question record (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:44:45.037Z - task-done: T7: Decisions journal entry and report/modal display (AC6, AC8)
+- 2026-10-19T19:44:45.265Z - task-done: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
+- 2026-10-19T19:44:51.761Z - task-done: T9: Verify: run AC verification commands and the full local test slice for touched areas
+- 2026-10-19T20:52:49.554Z - ac-updated: AC12: "(new)" -> "(operator-only) The operator asks for a held finding in a live review, answers a question in Telegram, and sees the decision recorded with `confirmedVia: "host-question"`. The agent does not confirm this criterion. [verify: judged]" (AC12 was written as '- AC12 (operator-only):', which the AC parser skips; rewrite in the '- ACn:' form (review finding HQ-16))
+- 2026-10-19T20:52:57.012Z - ac-updated: remove the duplicate malformed AC12 line left after the AC12 rewrite (HQ-16)
+- 2026-10-19T21:29:26.815Z - decision d-mvfrowln-2a8863 [review decide-premise, ordinary]: chose uphold; no recommendation
+- 2026-10-19T21:29:27.365Z - decision d-mvfrox0x-91ca22 [review decide-premise, ordinary]: chose uphold; no recommendation
+- 2026-10-19T21:29:27.912Z - decision d-mvfroxg4-d5e30b [review decide-premise, ordinary]: chose uphold; no recommendation
+- 2026-10-19T22:51:35.804Z - ac-confirmed: AC1: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:36.369Z - ac-confirmed: AC2: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:36.932Z - ac-confirmed: AC3: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:37.519Z - ac-confirmed: AC4: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:38.100Z - ac-confirmed: AC5: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:38.655Z - ac-confirmed: AC6: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:39.232Z - ac-confirmed: AC7: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:39.815Z - ac-confirmed: AC8: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:40.394Z - ac-confirmed: AC9: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:40.964Z - ac-confirmed: AC10: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-19T22:51:41.521Z - task-done: T10: Review through the project review orchestrator and open the PR
+- 2026-10-19T22:51:46.732Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1058 (warning: PR is not a draft)
+- 2026-10-20T04:00:19.607Z - ac-confirmed: AC11: C-05, C-10 (package 1052), E-42 (r04) and C-25 (re-asked, poll 231) recorded through decide-premise with --answered-by helyx-poll; operator words verbatim, confirmedVia host-question (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])

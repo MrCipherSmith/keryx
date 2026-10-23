@@ -3,15 +3,25 @@
 // AC3 (cache freshness), AC4 (the flat-picker mapping, incl. AC8's
 // revert-check against the OLD hardcoded source), AC5 (balance never
 // guessed). Every fetch here is injected — no real network.
+// Tests under the flow 468 banners are titled "flow 468 AC<n>:" so `-t "flow 468 AC1"` selects exactly them, never flow 309's AC labels above.
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { detectProviders } from "../commands/select";
-import { loadProviderCatalogCache, saveProviderCatalogCache } from "./provider-catalog-cache";
-import { catalogToFlatPickerProviders, loadOrRefreshProviderCatalog, refreshProviderCatalog } from "./provider-catalog";
+import { resolveTuiStartup } from "../commands/shell";
+import { keryxConfigDir } from "../lib/config-dir";
+import { envWithSavedApiKeys, saveApiKey, saveShellConfig } from "../lib/shell-config";
+import { isCatalogFresh, loadProviderCatalogCache, saveProviderCatalogCache } from "./provider-catalog-cache";
+import {
+  catalogToFlatPickerProviders,
+  loadOrRefreshProviderCatalog,
+  loadOrRefreshProviderCatalogFromDetected,
+  loadOrRefreshProviderCatalogLive,
+  refreshProviderCatalog,
+} from "./provider-catalog";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -322,4 +332,225 @@ test("loadOrRefreshProviderCatalog: --refresh (force: true) bypasses a fresh cac
 
   const catalog = await loadOrRefreshProviderCatalog({ fetch: fetchFn, env: { DEEPSEEK_API_KEY: "sk-test" }, dir, platform: "linux" }, { force: true });
   expect(catalog.providers.deepseek?.models).toEqual(["fresh-model"]);
+});
+
+// --- flow 468 AC1: the startup catalog never derives from an empty `detected` ---
+
+/** A fetch that answers the models endpoint of deepseek and groq and refuses the ollama probe and balance lookups. */
+function twoProviderFetch(calledUrls: string[] = []): typeof fetch {
+  return (async (url: string) => {
+    calledUrls.push(url);
+    if (ollamaRefused(url) || url.includes("/user/balance")) return { ok: false } as Response;
+    if (url.includes("deepseek")) return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
+    if (url.includes("groq")) return { ok: true, json: async () => ({ data: [{ id: "llama-fake" }] }) } as Response;
+    throw new Error(`unexpected fetch: ${url}`);
+  }) as unknown as typeof fetch;
+}
+
+test("flow 468 AC1: a shell that starts with a saved provider+model (startup detected is empty) still saves a catalog holding every provider with a stored key", async () => {
+  const dir = tempDir();
+  saveShellConfig({ provider: "deepseek", model: "deepseek-chat" }, dir);
+  saveApiKey("DEEPSEEK_API_KEY", "sk-fake-deepseek", dir);
+  saveApiKey("GROQ_API_KEY", "sk-fake-groq", dir);
+  const fetchFn = twoProviderFetch();
+
+  // `resolveTuiStartup` applies the saved keys to `process.env`; undo exactly what it applied.
+  const startup = await resolveTuiStartup({
+    detect: async () => {
+      throw new Error("a saved provider+model must skip detection");
+    },
+    configDir: dir,
+  });
+  try {
+    // The reproduction: the saved selection makes startup hand over NO detection.
+    expect(startup.detected).toEqual([]);
+
+    const env = envWithSavedApiKeys({}, dir);
+    // Test seam `redetect` (mirrors `tui-shell.ts`'s `opts.redetect`): the live detection the startup refresh falls back to when `detected` is empty.
+    const redetect = () => detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+    const catalog = await loadOrRefreshProviderCatalogFromDetected(startup.detected, { fetch: fetchFn, env, dir, platform: "linux", redetect });
+
+    expect(Object.keys(catalog.providers).sort()).toEqual(["deepseek", "groq"]);
+    expect(catalog.providers.deepseek?.models).toEqual(["deepseek-chat"]);
+    // And what the next reader (`/routing`) loads from disk is that same non-empty catalog, not `{providers: {}}`.
+    expect(Object.keys(loadProviderCatalogCache(dir)?.providers ?? {}).sort()).toEqual(["deepseek", "groq"]);
+  } finally {
+    for (const key of startup.appliedKeys) delete process.env[key];
+  }
+});
+
+test("flow 468 AC1: a non-empty detected list is used as given — redetect is never called", async () => {
+  const dir = tempDir();
+  const fetchFn = twoProviderFetch();
+  const env = { GROQ_API_KEY: "sk-fake-groq" };
+  const detected = await detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+  expect(detected.length).toBeGreaterThan(0);
+  let redetections = 0;
+  const redetect = async () => {
+    redetections += 1;
+    return [];
+  };
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected(detected, { fetch: fetchFn, env, dir, platform: "linux", redetect });
+
+  expect(redetections).toBe(0);
+  expect(catalog.providers.groq?.status).toBe("ok");
+});
+
+test("flow 468 AC1: loadOrRefreshProviderCatalogLive detects live once on an empty cache, saves the result, and does not detect again on the next read", async () => {
+  const dir = tempDir();
+  const fetchFn = twoProviderFetch();
+  const env = { DEEPSEEK_API_KEY: "sk-fake-deepseek" };
+  let detections = 0;
+  const redetect = async () => {
+    detections += 1;
+    return detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+  };
+
+  const first = await loadOrRefreshProviderCatalogLive({ fetch: fetchFn, env, dir, platform: "linux", redetect });
+  const second = await loadOrRefreshProviderCatalogLive({ fetch: fetchFn, env, dir, platform: "linux", redetect });
+
+  expect(first.providers.deepseek?.models).toEqual(["deepseek-chat"]);
+  expect(second.providers.deepseek?.models).toEqual(["deepseek-chat"]);
+  expect(detections).toBe(1);
+});
+
+test("flow 468 AC1: loadOrRefreshProviderCatalogLive does not detect twice when the live detection finds nothing", async () => {
+  const dir = tempDir();
+  let detections = 0;
+
+  const catalog = await loadOrRefreshProviderCatalogLive({
+    fetch: twoProviderFetch(),
+    env: {},
+    dir,
+    platform: "linux",
+    redetect: async () => {
+      detections += 1;
+      return [];
+    },
+  });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  expect(detections).toBe(1);
+});
+
+// --- flow 468 AC2: an empty catalog is never served or saved as fresh -------
+
+function writeCacheFile(dir: string, body: unknown): void {
+  // Written by hand, not through `saveProviderCatalogCache`: this is the poisoned file an older build left on disk.
+  const configDir = keryxConfigDir(dir);
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(path.join(configDir, "provider-catalog.json"), `${JSON.stringify(body)}\n`, "utf8");
+}
+
+test("flow 468 AC2: a fresh-by-age cache file with zero providers is not served — loadOrRefreshProviderCatalog refreshes instead", async () => {
+  const dir = tempDir();
+  writeCacheFile(dir, { fetchedAt: new Date().toISOString(), providers: {} });
+  const calledUrls: string[] = [];
+
+  const catalog = await loadOrRefreshProviderCatalog({
+    fetch: twoProviderFetch(calledUrls),
+    env: { DEEPSEEK_API_KEY: "sk-fake-deepseek" },
+    dir,
+    platform: "linux",
+  });
+
+  expect(calledUrls.length).toBeGreaterThan(0);
+  expect(catalog.providers.deepseek?.status).toBe("ok");
+});
+
+test("flow 468 AC2: a fresh-by-age cache file with zero providers is not served — loadOrRefreshProviderCatalogFromDetected refreshes instead", async () => {
+  const dir = tempDir();
+  writeCacheFile(dir, { fetchedAt: new Date().toISOString(), providers: {} });
+  const calledUrls: string[] = [];
+  const fetchFn = twoProviderFetch(calledUrls);
+  const env = { GROQ_API_KEY: "sk-fake-groq" };
+  const detected = await detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected(detected, { fetch: fetchFn, env, dir, platform: "linux" });
+
+  expect(catalog.providers.groq?.status).toBe("ok");
+});
+
+test("flow 468 AC2: a refresh that yields zero providers is not saved as fresh (loadOrRefreshProviderCatalog)", async () => {
+  const dir = tempDir();
+
+  const catalog = await loadOrRefreshProviderCatalog({ fetch: twoProviderFetch(), env: {}, dir, platform: "linux" });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  // Absent or stale are both fine; what must not exist is an empty cache that a reader treats as fresh for the next TTL.
+  expect(isCatalogFresh(loadProviderCatalogCache(dir))).toBe(false);
+});
+
+test("flow 468 AC2: a refresh that yields zero providers is not saved as fresh (loadOrRefreshProviderCatalogFromDetected)", async () => {
+  const dir = tempDir();
+  const fetchFn = twoProviderFetch();
+  const detected = await detectProviders({ fetch: fetchFn, env: {}, configDir: dir, platform: "linux" });
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected(detected, { fetch: fetchFn, env: {}, dir, platform: "linux" });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  expect(isCatalogFresh(loadProviderCatalogCache(dir))).toBe(false);
+});
+
+test("flow 468 AC2: a forced refresh that yields zero providers drops the older non-empty cache file (loadOrRefreshProviderCatalog)", async () => {
+  const dir = tempDir();
+  const now = new Date().toISOString();
+  await saveProviderCatalogCache(
+    { fetchedAt: now, providers: { deepseek: { name: "deepseek", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: now } } },
+    dir,
+  );
+  expect(loadProviderCatalogCache(dir)?.providers.deepseek).toBeDefined();
+
+  const catalog = await loadOrRefreshProviderCatalog({ fetch: twoProviderFetch(), env: {}, dir, platform: "linux" }, { force: true });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  // Not served on the next read: the file is gone, so the next reader detects again.
+  expect(loadProviderCatalogCache(dir)).toBeUndefined();
+});
+
+test("flow 468 AC2: a forced refresh that yields zero providers drops the older non-empty cache file (loadOrRefreshProviderCatalogFromDetected)", async () => {
+  const dir = tempDir();
+  const now = new Date().toISOString();
+  await saveProviderCatalogCache(
+    { fetchedAt: now, providers: { deepseek: { name: "deepseek", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: now } } },
+    dir,
+  );
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected([], { fetch: twoProviderFetch(), env: {}, dir, platform: "linux" }, { force: true });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  expect(loadProviderCatalogCache(dir)).toBeUndefined();
+});
+
+// --- flow 468 AC4: the catalog as the Model tab's provider rows --------------
+
+test("flow 468 AC4: withStatusRows returns an auth-failed provider as a display-only row; the default still excludes it", () => {
+  const catalog = {
+    fetchedAt: "now",
+    providers: { deepseek: { name: "deepseek", status: "auth-failed" as const, models: [], fallbackModels: ["deepseek-chat"], fetchedAt: "now" } },
+  };
+  expect(catalogToFlatPickerProviders(catalog, { withStatusRows: true })).toEqual([{ name: "deepseek", models: [], authFailed: true }]);
+  expect(catalogToFlatPickerProviders(catalog)).toEqual([]);
+});
+
+test("flow 468 AC4: withStatusRows keeps an unreachable, timed-out or unsupported provider with no curated list, with its reason", () => {
+  const catalog = {
+    fetchedAt: "now",
+    providers: {
+      "rapid-mlx": { name: "rapid-mlx", status: "unreachable" as const, models: [], fallbackModels: [], fetchedAt: "now" },
+      slow: { name: "slow", status: "timeout" as const, models: [], fallbackModels: [], fetchedAt: "now" },
+      custom: { name: "custom", status: "not-supported" as const, models: [], fallbackModels: [], fetchedAt: "now" },
+      groq: { name: "groq", status: "unreachable" as const, models: [], fallbackModels: ["llama-fake"], fetchedAt: "now" },
+    },
+  };
+  expect(catalogToFlatPickerProviders(catalog, { withStatusRows: true })).toEqual([
+    { name: "rapid-mlx", models: [], listUnavailable: "unreachable" },
+    { name: "slow", models: [], listUnavailable: "timed out" },
+    { name: "custom", models: [], listUnavailable: "no live listing" },
+    // A curated fallback list still wins: shown as the offline list, not as a status row.
+    { name: "groq", models: ["llama-fake"], offline: true },
+  ]);
+  // Without the opt-in the old behaviour holds: nothing to show, nothing returned.
+  expect(catalogToFlatPickerProviders(catalog)).toEqual([{ name: "groq", models: ["llama-fake"], offline: true }]);
 });

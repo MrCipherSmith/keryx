@@ -2,6 +2,213 @@
 
 ## [Unreleased]
 
+## [0.3.130] - 2026-10-22
+
+0.3.129 was tagged but never published to npm: its release had no changelog section. Its changes ship here.
+
+### `/connect` is the one place for providers
+
+- **Changed:** `/connect` and `/providers` are one command and one modal with two tabs. Connected lists what is connected, as before, and has an Add provider button that moves to the second tab.
+- **Added:** the Add provider tab lists the providers you can connect. Each row has [Connect], which saves the key or login and checks `/models`, and [Test], which checks a provider without changing anything. A successful Connect returns to the Connected tab and does not switch the session's model.
+- **Removed:** `/provider` is gone. Use `/connect`.
+- **Added:** in Telegram the same modal opens, with Add provider and a [Test] on each row. A provider with a device login can be connected there. A provider that needs a key says to enter it in the shell: a key is never typed into a chat.
+
+## [0.3.128] - 2026-10-21
+
+0.3.127 was tagged but never published to npm. Its changes ship here.
+
+### `/setup` is a plan you can read, copy and run
+
+- **Changed:** `/setup` opens on the tab that fits the project. With no `.metaproject/index.md` it is Init. With an index, a manifest and modules it is Refresh. Anything else is Repair. An explicit `/setup <scenario>` still wins.
+- **Changed:** every step is exactly one `keryx …` command with a `[required]`/`[optional]` mark and a reason. `keryx setup <scenario>` prints the same marks and reasons.
+- **Changed:** the modal is readable and complete: bold titles, commands in the accent colour, and a body that scrolls to its last line at any height.
+- **Added:** an agent prompt generated from the tab's steps sits under the plan. It holds:
+  - the project root, and an instruction to read `.metaproject/index.md` first;
+  - the required and optional lists;
+  - the stop rules;
+  - the prohibitions: no deletion, no extra `--force`, no commit or push.
+- **Added:** buttons on the right of the modal, also on keys:
+  - Copy prompt (`c`) copies through OSC 52;
+  - Optional (`o`) adds or removes the optional steps in the list and the prompt;
+  - Run (`r`) runs the steps.
+- **Added:** Run shows a confirmation card with the exact commands. On yes, keryx runs the steps itself, one background job per step in the project root, using the keryx the shell runs on; no model is involved.
+  - A failed required step stops the run, and so does a `keryx update` version divergence. The reason goes in the transcript, and Run never picks `--accept-version` or `--keep-existing` for you.
+  - A failed optional step is reported, and the run goes on.
+  - A step that still needs a value is listed as skipped.
+  - Each step may stay silent for up to 30 minutes.
+
+### Sidebar cards, three widths and a pinned header
+
+- **Changed:** the ~30 sidebar sections become seven cards in a fixed order: Session, Workspace, Work, Reviews, Ops, Policy and Remote. Each card is a title row plus up to three summary rows.
+  - A click opens the card's detail modal, with one tab per former section.
+  - Enter on a tab runs its command: Route → `/routing`, Model → `/model`.
+- **Added:** a pending approval, a hold, an available update or a not-ready review raises its card with a badge (`↑`, `!` or a count) in every mode, without opening anything.
+- **Added:** three sidebar widths:
+  - default: 34 columns;
+  - wide: up to 68 columns, at most half the terminal, from a 100-column terminal;
+  - rail: a 5-column strip with one glyph and badge per card.
+- **Added:** a pinned header keeps `keryx vX.Y.Z` on screen. Two separate buttons switch to the other two modes, and Ctrl+L cycles the modes.
+- **Added:** the mode is saved in `~/.keryx/tui.json`. `/theme` no longer overwrites that file, so a theme change keeps the mode and a mode change keeps the theme.
+- **Fixed:** a modal opened beside a wide sidebar is sized against the terminal and keeps at least 72 columns.
+
+### A useful busy footer and one duration format
+
+- **Changed:** while a turn runs, the spinner, phase and timer show once, above the composer. Previously the footer repeated them in the attention colour.
+- **Changed:** the busy footer now shows:
+  - `Esc interrupt · Enter queue · / commands`;
+  - the turn's `↑in ↓out` tokens, and its cost when the price is known;
+  - `ctx N%`;
+  - queue, job and agent counts, when non-zero.
+
+  Parts drop from the end to fit the width, and the permission mode stays on the right.
+- **Changed:** every TUI duration prints as `58.3s`, `12:04.5` or `1:02:15.4`, never raw seconds such as `3600.0s`. This covers the busy timer, "worked for", subagent elapsed time and background jobs. A background job's Meta tab gains a Duration row.
+
+### `/routing` lists the connected providers again
+
+- **Fixed:** a shell started with a saved provider and model skipped provider detection, so the startup catalog refresh saved an empty catalog as fresh. `/routing` then offered only "session default" and called every saved assignment "not connected". The refresh now runs a real detection, and an empty catalog is neither served nor saved as fresh. A refresh that finds zero providers also removes an older non-empty cache file, including `keryx providers status --refresh`.
+- **Added:** the provider and model the session runs on are always pickable in `/routing`, labelled `(current session)`, and routing resolution treats that provider as connected.
+- **Added:** the Model tab shows a status row for each failure: no providers connected (with a `/connect` hint), model list unavailable (with the reason), auth failed, and 0 models. These providers are listed but cannot be selected.
+- **Added:** a category that falls back says why, in the Model tab's words: "no providers connected", "provider list unavailable", "provider not connected", "provider auth failed", "model list unavailable (<reason>)" or "model not in <provider>'s list". Loading the providers is bounded by a timeout, so the modal no longer sticks on "Reading routing table…".
+
+### The code graph and the test analyzer skip nested checkouts
+
+- **Fixed:** `keryx gdgraph build` and the testing analyzer now skip a repo-root `.worktrees/` folder, as they already skipped `.claude/`. Nested worktrees there inflated the graph from about 3k to 45k files, dirtied the graph artifacts after every commit, and made the pre-push test gate select their tests. `.worktrees/` is also gitignored.
+
+### Dependencies
+
+- **Security:** the `hono` override is raised to `^4.13.11`. Older versions have the `serveStatic` double-decode advisory.
+
+## [0.3.126] - 2026-10-20
+
+### Review questions reach a Telegram operator
+
+- **Fixed:** the review-orchestrator skill told Claude Code to ask every operator question with `AskUserQuestion`. In a session driven from Telegram that draws a selector in a terminal nobody watches, and the session hangs. When the `send_poll` tool is present the skill now asks every question through it (one call for the three start questions), waits for the poll answer, and records it as `helyx-poll:<poll-id>`.
+
+## [0.3.125] - 2026-10-20
+
+### Operator acts answered through the host's own question
+
+- **Added:** `--answered-by <source>:<ref> --answer-text "<verbatim>" --question-text "<as asked>"` on `review decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers` records the operator's answer to a plain question asked through the host (Claude Code, Codex, a Telegram poll) without a TTY. The record carries `confirmedVia: "host-question"` with both texts; keryx does not verify the answer. `review complete` stays with the operator (terminal or card).
+- **Added:** the verb refuses words that name the other choice or none, a decline or negation, a question that does not name its finding, unrun mutants or left-out reviewers, a repeated host question, an unattended run and `KERYX_TOOL_CALL=1`. The unattended shell floor treats these flags as host-question verbs.
+- **Changed:** host-question entries are a separate labelled kind in `keryx decisions` (`N decisions + M via host`), not counted as live decisions and not exported as rows.
+- **Docs:** TM-04, `cli-reference.md`, the review guides and the review-orchestrator, flow-orchestrator and job-orchestrator skills describe the verb and its limits.
+
+## [0.3.124] - 2026-10-19
+
+### Review confirmations answered in Telegram
+
+- **Added:** a `review_complete` card in keryx shell shows the reviewed head SHA, the evidence level and every waiver with its operator quote, and completes the review in process under the same gates as `keryx review complete`. `review_confirm_plan` and `review_decide_premise` answer through the same card.
+- **Added:** a card answered in the Telegram topic records `pressedBy` (the pressing user id) and `pressedAt` next to `confirmedVia: "remote-card"`. A remote answer is accepted only from an allowed user id, once, for that one question, within 1 hour. A replayed, expired, foreign or text-only answer is refused and records nothing; a rejected remote answer burns the card, so nothing is applied and the card has to be asked again. A card whose Telegram mirror was not delivered says so, and the terminal commands keep working as before.
+- **Added:** pending and answered operator cards appear in the remote status tab, the Remote sidebar row and `/decisions`.
+- **Docs:** TM-04 states what a Telegram answer proves and what it does not; the review guides, `cli-reference.md`, both review-orchestrator skill copies and the review-premise skill tell the agent to call the card and never send the operator to a terminal. `keryx flow ac confirm` is unchanged.
+
+### A project rule under `rules/project/core/` replaces its bundled twin
+
+- **Fixed:** `keryx skills resolve-context` treats a project rule at `.metaproject/rules/project/core/<name>.mdc` as replacing the bundled `.metaproject/rules/core/<name>.mdc`, as it already did for `rules/project/<name>.mdc`: the entry carries `shadows` (reason `replaces-bundled` when nothing else selects it) and the bundled rule is no longer listed. `keryx skills import` puts a cited rule that keryx also ships in that slot, so a worker used to get both conflicting files as `must_read`, and a project copy whose globs matched nothing was left out entirely.
+
+### A citation with a heading anchor cites its document
+
+- **Fixed:** a backticked citation that carries a heading anchor, such as `` `docs/x.md#some-heading` `` or `` `core/x.mdc#part` ``, now counts as a citation of the file. `keryx skills resolve-context` lists it as a `referenced-by` contract, and `keryx skills references check` / `suggest` see it, so a declared document cited only by `path#anchor` is no longer reported as `unused-declaration`.
+
+## [0.3.123] - 2026-10-18
+
+### Conditional mandatory reads for documents cited by project rules (flow 462, PR #1048)
+
+- **Added:** `.metaproject/rules/project/references.json` (schema 1) declares, per cited document, a path, `when.globs` and `when.keywords`, an anchor and a description. A second declaration of one normalised path is refused; a malformed file warns and turns promotion off, it never blocks.
+- **Added:** `keryx skills resolve-context --task-text '<text>'` (text beyond 4000 characters is truncated with a warning) promotes a declared reference from `on_demand` to `must_read` when a glob matches a touched path or a keyword occurs in the task text (keywords starting with `.` or `@` match). The entry carries its reason: `condition:glob:<g>`, `condition:keyword:<k>` or `declared`. Promoted entries are never dropped by the byte cap. A dead anchor falls back to the whole file with a warning.
+- **Added:** proof of reading is checked by `contracts validate`: path, sha256 pin and drift, an anchor equal to the declared one, and a summary of at least 40 characters that shares at least three distinct words of five or more letters with the anchored section (fewer when the section has fewer). `how: n/a` counts as a miss. The check is a vocabulary proxy, not proof of understanding.
+- **Added:** `keryx skills references check [--json]` (declarations, anchors, citations, linked imports scanned at their origin with a size cap) and `keryx skills references suggest` (writes no file).
+- **Added:** TUI: sidebar `refs p/n`, a References tab, `/projectctx refs`, states R0–R7; polling does not overlap a load still in flight; reference text is sanitised before it is rendered.
+- **Changed:** the flow-orchestrator, task-implementer, tests-creator, job-orchestrator and orchestrator-prompt skills pass `--task-text` single-quoted with `'` written as `'\''`; docs, README and a live-run runbook (`docs/requirements/keryx-conditional-reads/live-run.md`) updated; `docs:check` script added.
+- **Changed:** `last.json` of the resolver records only `taskTextLength` and `taskTextTruncated`, never the task text (acceptance criterion AC3 amended).
+
+### Shell startup, recovery and source scanning (PR #1035)
+
+- **Added:** opt-in JSONL diagnostics via `KERYX_SHELL_STARTUP_TRACE`: startup stages and event-loop timer lateness. See [Diagnose shell startup](docs/docs/guides/shell-startup.md).
+- **Changed:** orientation reuses one Git status result per preparation and removes an unused branch probe. No cross-preparation cache; failed checks remain unknown. No fixed speedup or complete animation-stall fix is guaranteed.
+- **Fixed:** interactive OpenAI recovery allows at most three retries per pending model round for HTTP 403 with the exact message `Our servers are currently overloaded. Please try again later.`, using cancellable backoff. Other transient errors do not reset the counter. Ordinary authorization failures do not qualify; non-interactive behavior is unchanged.
+- **Fixed:** filesystem JavaScript/TypeScript scans use optional parser context to distinguish `.env` property access from private-file references. Missing context or invalid syntax retains conservative findings with a warning; ambiguous matches remain. Output checks and secret redaction are unchanged. Misleading key/address examples were removed from shell UI source.
+
+## [0.3.122] - 2026-10-17
+
+### Added
+- **Token spend per review dispatch.** A reviewer's saved result may end with a `KERYX_USAGE {tokens_in, tokens_out, model, by: "host"}` line (keryx shell's spawn_subagent writes it; other hosts append it from their agent result; counts without the host mark are reported as stated by the reviewer, not measured); `ledger build` records usage per run, research.json and report.md state the round's total, and a dispatch with no usage is counted as unknown, never 0.
+- Readiness item 12 `quotes-located` names findings whose quote could not be placed at the reviewed head.
+
+### Fixed
+- **Readiness and complete agree.** Readiness item 3 runs the same coverage gate `review complete` runs. A light round's diff is recomputed at the repository top level against `target.base` (fallback origin/main, main, …) instead of `git diff <PR URL>...<head>`, which always failed and forced the full reviewer set; a package under a subdirectory's `.metaproject/reviews` works; a git failure names cwd, base and head.
+- A confirmed `reviewer-override` decision (card or `keryx review override-reviewers`) now lets `review complete` pass; it no longer needs a dispatch `override` field nothing wrote.
+- The shell's review-gate nudge names this session's review: the active-review pointer and packages started in the session (including under a subdirectory) come first, and an open package from before the session is never named.
+- A child subagent that ends with no text returns an error, not `Completed`; a DONE reply without `slices` under a slice manifest is not scope coverage; a reply saying it could not read a mandatory input is incomplete.
+- research.json lists "Not run: mutation (light round)" only when no mutation pass was recorded; an ingest with research lists the reviewers that ran in coverage.md and the manifest instead of `review-orchestrator`.
+- **`review ingest` no longer refuses a round for an unplaceable quote.** A finding whose quote is absent or matches several places is kept unanchored and flagged `quote_unlocated` (never relocated by similarity); the round is recorded, so the next `review plan` after a fix plans a delta round.
+- **A quote that is part of one line is placed.** A one-line quote of at least 12 characters that is an exact substring of exactly one line now anchors to it (`locator.method: substring`), after the exact and whitespace-collapsed passes; it used to be `quote_unlocated`. The reviewer-facing `quote` description says so.
+- **`review ingest --premises` is repeatable.** Duplicate claims for one finding are merged: agreeing claims collapse, disagreeing claims are dropped and listed as `duplicate-claim` in scope.md. A finding id may not hold `#`.
+- **A fix slice holds only fix lines and gets the fix roster.** `review plan` partitions a delta round so a FIX slice holds the hunks that touch a finding and is read by `review-logic`, `review-regression`, the findings' authors, `review-security-code` when a security finding is attached, the roles its own changed lines route by content (e.g. `review-security-code` for a fix that spawns a process), and the verifier. `filter_stats` gains `merged_duplicates`, and `total - drops - merged_duplicates = retained`.
+- **The shell's review gate reads the commands a session ran as a shell would split them.** A redirection (`2>&1`, `>&2`, `&>log`) is no longer a command separator, a pipe into `tee`/`head`/`grep` keeps the command on its left, and keryx is recognised however it is run (`npx keryx`, `bunx keryx`, `bun src/cli.ts`, a path to `keryx`). So `cd sub && keryx review start --pr N 2>&1` names the package under `sub`, and a `keryx review` command run in a subdirectory makes it a scanned root. A review id is matched against the package's directory name only, never the `reviewId` a committed manifest claims.
+- **A retry's partial result is no longer lost.** spawn_subagent marks a non-final save `"incomplete":true`; a later partial with text replaces an earlier partial, only a complete earlier result is kept, the parent is told which, saves to one path are serialised, and a failed or rate-limited child (usage unknown) still records its dispatch.
+- **The light recheck measures the widest diff.** It takes the files and the changed lines of the recorded base, the pull request's own base (read with gh at `review start`, recorded as `target.base` when no `--base` is given, else as `target.prBase`) and the default base, each dimension at its widest; a project reached through a symlink still excludes its review packages.
+- **A light round dispatches the security reviewer slice routing names.** A slice routed to `review-security-code` (process, argv, git, input-derived path, env or network code) adds it to the round's drivers, plan.json, `review required` and `ledger build`, whatever the depth.
+
+## [0.3.121] - 2026-10-16
+
+### Added
+- **`review-premise`, an independent final check of every finding's premise.** After the verifier, on the deep tier and a clean context, it reads each finding's bare claim and the code before the reviewer's argument and asks: is this a deliberate choice (an explicit override, suppression, exemption, a comment or commit giving a reason, a sibling doing the same), is the suggested behaviour accepted practice (platform guidelines, language idioms, clean code), would the fix make the system more consistent, would a senior reviewer accept the fix. It answers `upheld`, `downgraded`, `challenged` or `owner-decision`, and it can only lower or hold: never add a finding, raise a severity or edit text. A downgrade needs cited evidence and stops at `minor`, the fix-loop threshold.
+- `keryx review ingest --premises <file|->` takes the judge's claims (the bare object or a `json keryx:premises` block); invalid claims are listed in scope.md and change nothing.
+- **Held findings wait for the operator.** A `challenged` or `owner-decision` finding is not an open blocker/major and never reaches a fixer; the verdict lists it as awaiting the operator, and readiness and the flow review gate fail until `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"` (card `review_decide_premise` in keryx shell) records the answer.
+- `keryx review tier --premise` gives the judge the deep tier.
+
+### Changed
+- Every reviewer carries a fourth shared law: a deliberate choice is not a defect until its reason is read and shown wrong, and a project rule is checked against accepted platform practice and its known exceptions. review-layout lists what does not mirror under RTL (media/playback controls and progress, timelines, numbers, code).
+- review-orchestrator runs the premise check as Wave D; flow-orchestrator, job-orchestrator, review-pr-feedback and feature-dev keep held findings out of fix rounds and ask the operator; a flow that starts from a follow-up issue or an external finding checks its premise before planning.
+
+## [0.3.120] - 2026-10-16
+
+### Added
+- **Review rounds 2+ review the delta.** `keryx review start` finds the previous round of the same target — local package, review packages merged into the base branch, keryx's own round block on the PR, other PR comments, the flow package — and splits the change since the previous reviewed head into FIX changes (logic, regression and the authors of the attached findings, plus the slice's normal routing; every attached finding gets a disposition) and NEW changes (round-1 treatment). Code unchanged since the previous round gets a second look by review-logic and review-security-code, or a full review when the previous round was weak. Every orchestrator gets this by just calling `review start`; round details land in `<package>/round.json`.
+- **A previous round counts only when it is ours:** our own login's round block on the PR, a completed package merged into the base, or a matching entry in the machine-local round registry (written at ingest, complete and publish). A package the PR committed itself, a draft, or another branch's package gives a full round with the old findings as context.
+- **`keryx review plan`** runs start, scope, blast radius, slice, required and estimate in one step and writes plan.json; **`keryx review next`** returns the next dispatches for the whole package (no per-reviewer polling).
+- `review publish` adds a hidden machine-readable round block (no raw quotes); `comments collect` reads it back.
+
+### Changed
+- Duplicate findings from different reviewers merge at ingest with one severity (the verifier's when present) and `reported_by`; later waves get `known_findings`.
+- Overlapping reviewer lines (the frontend family, project overlays via `supersedes`) collapse to one per slice; the core roles are never removed.
+- Reviewers are read-only except the verifier and one testing reviewer with a time budget.
+- flow-orchestrator plans a state × event matrix for UI/store work, gates after the first green, asks the operator about user-visible tradeoffs (`behavior_changes`), treats a reviewer's suggested fix as a hypothesis, and sends one implementer when red probes exist; job-orchestrator, feature-dev and review-pr-feedback take the round from `review start` instead of re-reviewing the whole branch.
+- Reviewer results are parsed leniently (fenced JSON, wrapper keys, lists of one reviewer's results) with a precise refusal otherwise; `review slice --package` writes per-wave drivers with absolute paths; dispositions have one validated schema; drivers and results record the model.
+
+### Fixed
+- `ledger build` finds the project root for flow-bound packages; `--skip` of a required reviewer needs an operator decision; ingest into an existing package defaults to its head and refuses a missing commit; findings on a path absent at the reviewed head are flagged `path_missing`.
+- A merged PR no longer yields a silently empty review range; committed review packages are excluded from slices.
+
+## [0.3.119] - 2026-10-16
+
+### Added
+- **Operator decisions are answered in keryx shell, not in a separate terminal.** Thirteen card tools (`review_chunks_answer`, `review_publish`, `review_waive_coverage`, `review_waive_readiness`, `flow_confirm`, `external_apply`, `learn_accept`, `learn_promote`, `learn_graduate`, `schedule_resume`, `schedule_run`, `schedule_pause`, `schedule_remove`) show the real decision built from state; the operator presses yes or no, the decision applies in process only if that state has not moved, and the record carries `confirmedVia: tui-card | remote-card`. No mode, saved approval, review-auto or ask_user answerer can answer a card; unattended runs are denied; No is the default; long cards are not answerable remotely. In a real terminal the CLI paths are unchanged. Decision record: TM-04.
+- **Large-PR reviews scale by risk, not by graph reach.** The blast radius follows changed exported symbols through barrels, damps only beyond direct consumers, finds string-key / event / CSS-class / locale-key consumers by text, and records unrelated graph neighbours as reasoned omissions; tests that exercise the change go to `<package>/tests-to-run.json` to be run, not read. Mandatory graph chunks on keryx PR #940 / #1005: 55 → 0 and 48 → 3.
+- **Slices are routed by content.** Source code, agent instructions and schemas are read by every applicable round role; docs, tests, config and generated files get a light read with a 10–15% deep audit sample; a major finding on a light slice re-opens it deep. Routing is re-checked from the slice text at `ledger build` and `review complete`.
+- **A plan over 40 dispatches or 90 minutes needs the operator's yes** (`review_confirm_plan` card or `keryx review confirm-plan`), bound to the plan's key (roles, slices, depth, waves).
+- **`keryx review plan-eval`** compares the old and new plan offline on a diff and its ground-truth findings; **`keryx review verify-run`** runs a verification command in the parent and hands its output to the verifier as executed evidence; **`keryx review run --autonomous --target branch --ref <base>`** reviews a local range on hosts without a spawn tool.
+- New operator cards / TTY commands: `review_waive_mutation` (`review waive-mutation`), `review_override_reviewers` (`review override-reviewers`), `review_comments_reply`; each decision is bound to what the operator saw (head, mutants, dropped reviewers).
+
+### Changed
+- **The review-orchestrator skill works on every host:** a host table (keryx shell, Claude Code, Codex and other AGENTS.md hosts, autonomous runner), per-package results and ledger everywhere, the round plan in order, operator cards or the exact terminal command, never `--yes` / `--mode automatic`.
+- Results, drivers and slices live per review package; wave bytes follow the host's child deadline; the autonomous runner passes scope/package and runs one round unless the head moved.
+- **Minor findings are never dropped:** the per-reviewer findings cap trims only `info`; the verdict and the published review list minors one by one.
+
+### Fixed
+- `review start --unattended`, `publish --yes` and `chunks estimate --mode automatic` no longer bypass the operator (no env-var exemption; TTY or card).
+- Trigger review tasks go through the normal containment, spend and attempt path.
+- Wave bytes are never NaN; chunk halves record real sizes; the radius diffs `base...pinned head` and reads base text at the merge base; a branch target never uses its own ref as base; verify-run kills the whole process group on timeout; the skill-drift warning works for npm installs; packages started before this version are not refused by the plan gate.
+- **The model can no longer forge an operator's answer.** Remembered `ask_user` answers lived in session notes under `answer.<hash>`, and `slate_note` accepted any key, so a model could write a note that a later `ask_user` replayed as "Already answered by the operator". Operator answers now live in a harness-only store on the slate: never shown to the model, not counted against the Notes budget, capped at 32 with the oldest evicted, and carried when a session is resumed. `slate_note` refuses the `answer.` prefix, and answer notes left by an older build are dropped (on the next note write, on resume, and from the over-budget hint and the memory the model sees).
+- **An answer the operator did not give is never replayed as theirs.** An `ask_user` answered by an automatic review, the review-auto arbiter or an autonomous answers file was recorded and replayed later as "Already answered by the operator". Such answers are no longer recorded.
+- **Binding a workspace no longer wipes the slate's working memory.** `workspace_create` and the machine wrap-up rebuilt the slate without its Notes, Trail, recorded answers and child dispatches when they bound a workspace; they now change only the binding.
+- **An irreversible question is never answered from memory.** The replay used to skip only questions flagged `irreversible` or tagged with an `action`; it now applies the decision journal's own test (the project's irreversible terms and patterns over the question and every option), so "Run git reset --hard?" is asked every time.
+- **A remembered answer belongs to its options.** The stored answer is keyed on the question and its options (ids and normalized labels), so the same words with different or relabelled choices are asked again, and a stored pick whose id is not among the current options is never replayed.
+- **`/sessions` and `/rewind` are refused while a turn runs**, like `/new`, `/clear` and `/resume`. Queued, either would have replaced the session under the questions queued after it.
+- **A subagent the provider rate-limits is no longer reported as completed.** A child runs without same-round recovery, so a 429 or overloaded answer ended its turn with no text and `spawn_subagent` called it `Completed`. It is now an error whose first line is `STATUS: RATE_LIMITED` (with the provider's `retry-after` when given), the signal the review orchestrator halves its wave on, followed by any text the child produced before the refusal.
+- **Unattended trust-mode runs get no plan follow-through nudges.** A trigger dispatch in `trust` mode no longer has "items remain" turns pushed into it; both dispatchers set it off and the agent loop no longer defaults it on for an unattended run.
+
 ## [0.3.118] - 2026-10-15
 
 ### Added

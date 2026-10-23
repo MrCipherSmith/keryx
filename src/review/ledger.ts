@@ -1,15 +1,35 @@
 import { createHash } from "node:crypto";
-import { coverageErrors, type ReviewMode } from "./coverage";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
+import { coverageErrors, skipLine, type ReviewMode, type ReviewerSkip } from "./coverage";
+import { coverageGateErrors } from "./coverage-complete";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
-import { researchErrors } from "./research";
+import { INGEST_SCREENED_FILE, type IngestScreened, packageCoverageErrors, researchErrors } from "./research";
+import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
-import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
+import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
+import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
+import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
+import { type DispatchUsage, type RunUsage, type UsageTotals, isEmptyRecord, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
 const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
+
+/** How much of the reviewer's own list of unreadable inputs the gap quotes back. */
+const CLAIM_QUOTE_CHARS = 120;
+
+/**
+ * Flow 460 D: the mandatory inputs a reviewer reply says it could not read, quoted for the gap, or undefined. Read only
+ * from the result's structured `inputs_unreadable` list (reviewer-finding.schema.json), never guessed from the summary's
+ * prose: a summary about a schema or a payload defect ("The payload could not be parsed when slices is empty.", "Did not
+ * find any schema regressions.") is never read as the reviewer's own reading failure.
+ */
+export function unreadableInputClaim(result: Pick<ParsedResult, "inputs_unreadable" | "status" | "summary">): string | undefined {
+  const named = Array.isArray(result.inputs_unreadable) ? result.inputs_unreadable.filter(text).map((input) => input.trim()) : [];
+  return named.length === 0 ? undefined : named.join(", ").slice(0, CLAIM_QUOTE_CHARS);
+}
 
 export type ParsedResult = {
   reviewer?: string;
@@ -20,6 +40,14 @@ export type ParsedResult = {
   slices?: unknown;
   /** Work the reviewer hands back to the parent. Each entry becomes an obligation that only a disposition closes. */
   follow_ups?: unknown;
+  /** The model the reviewer ran on, when the dispatcher or the reviewer recorded it. */
+  model?: string;
+  /** Delta round (flow 458): what the reviewer concluded about each prior finding its fix slices answer, `[{ id, disposition }]`. */
+  prior_dispositions?: unknown;
+  /** Flow 460: `{tokens_in, tokens_out, model}` when the result envelope carries it; a `KERYX_USAGE` line in the raw file wins. */
+  usage?: unknown;
+  /** Flow 460 D: the mandatory inputs the reviewer could not read; a finished status with any is not a finished run. */
+  inputs_unreadable?: unknown;
 };
 
 export type RawFile = {
@@ -30,8 +58,14 @@ export type RawFile = {
   /** Slice assignment from the driver explicitly naming this result file. */
   assignedSlices?: string[];
   result?: ParsedResult;
-  /** True for a file a reviewer left empty ("(subagent produced no text)"): lost output, not a result to reconcile. */
+  /** True for a file a reviewer left empty (blank, or NO_TEXT_PLACEHOLDER): lost output, not a result to reconcile. */
   empty: boolean;
+  /** Why no result was read from this file (what is missing), set by the loader when `result` is absent. */
+  diagnosis?: string;
+  /** Flow 460: the dispatch's token use, from the file's `KERYX_USAGE` line (see ./dispatch-usage.ts). */
+  usage?: DispatchUsage | undefined;
+  /** The other dispatches saved to the same path (its `KERYX_USAGE_OTHER` lines); an undefined entry is unknown. */
+  otherUsage?: Array<DispatchUsage | undefined> | undefined;
 };
 
 export type Disposition = {
@@ -62,6 +96,8 @@ export type LedgerInputs = {
   payloadDispatchCounts?: Record<string, number>;
   /** Reviewer → resolved rule file, only when it exists. */
   ruleFiles: Record<string, string>;
+  /** Reviewer → the model its driver records (the dispatcher passes it); a result's own `model` wins. */
+  models?: Record<string, string> | undefined;
   raws: RawFile[];
   /** Reviewer → the text of its tool-call log; a reviewer with no entry has `layersUsed` unknown. */
   toolLogs?: Record<string, string | undefined>;
@@ -69,11 +105,30 @@ export type LedgerInputs = {
   canonical: Array<Record<string, unknown>>;
   dispositions: Disposition[];
   manifestPath?: string;
+  /** True when the package holds a mutation record (`research-evidence/mutation-*.json`): the round did run mutation. */
+  mutationRecorded?: boolean | undefined;
   /**
    * Written to `dispatch.roles`: the roles the code that dispatched this package knew about. Absent for a package nothing
    * says that of, so a rebuild never turns an in-flight package into one that must have run a role it predates.
    */
   dispatchRoles?: readonly string[] | undefined;
+  /**
+   * Required reviewers the operator deliberately did not run (`ledger build --skip <reviewer> --reason`). They leave
+   * `selected`, and are written to `dispatch.skipped` and as `Not run: <reviewer> — <reason>` lines to `dispatch.notRun`.
+   */
+  skipped?: readonly ReviewerSkip[] | undefined;
+  /** Reviewers the required set dropped by `supersedes` or an overlap group, and the notes of the ones it refused to drop (M6). */
+  superseded?: ReadonlyArray<{ reviewer: string; reason: string }> | undefined;
+  supersedeNotes?: readonly string[] | undefined;
+  /** Findings a delta round carried over unchanged (`round.json` `carried`): kept in the record; they cover no fix slice. */
+  carried?: ReadonlyArray<{ findingId: string; disposition: string }> | undefined;
+  /**
+   * Flow 460: the findings `review ingest` screened out of findings.json (scope-B floor, outside the blast radius), read
+   * from the package's {@link INGEST_SCREENED_FILE}. A raw finding among them closes `out-of-scope` with the screen's
+   * reason, so the ledger does not go stale when ingest removes a finding. `screenedEvidence` is the file it came from.
+   */
+  screened?: readonly IngestScreened[] | undefined;
+  screenedEvidence?: string | undefined;
 };
 
 export type LedgerResult = {
@@ -85,6 +140,10 @@ export type LedgerResult = {
     dispatch: Record<string, unknown>;
     /** Files in raw/ that were set aside as not reviewer replies; written by `ledger build`, not read by the gate. */
     setAside?: string[];
+    /** The audit sample of a routed round and what it caught; not read by the gate. */
+    audit?: AuditRecord;
+    /** Flow 460: the round's token spend over every raw result, unknown dispatches counted, never added as 0. */
+    usage?: UsageTotals;
   };
   gaps: LedgerGap[];
 };
@@ -92,6 +151,13 @@ export type LedgerResult = {
 export const sha = (value: string | Uint8Array): string => createHash("sha256").update(value).digest("hex").slice(0, 12);
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
+
+/** A key that names an obligation: the obligation id itself, or a global id `<reviewId>#<obligation id>`. */
+const namesObligation = (key: unknown, oid: string): boolean => key === oid || (typeof key === "string" && key.endsWith(`#${oid}`));
+/** A canonical finding whose `id` or `global_id` is `key`. */
+const holdsKey = (finding: Record<string, unknown>, key: unknown): boolean => finding.id === key || finding.global_id === key;
+/** A canonical finding the duplicate merge folded `id` into (its `merged_from` entries are `<reviewId>#<display id>`). */
+const mergedFromHas = (finding: Record<string, unknown>, id: string): boolean => Array.isArray(finding.merged_from) && finding.merged_from.some((entry) => namesObligation(entry, id));
 
 /** A `{` followed by a quote or `}`: where a JSON object with keys, or an empty one, can start. A prose brace such as `{config}` or `{ to` does not match, so it never opens a candidate. */
 const OBJECT_START = /\{\s*["}]/y;
@@ -298,11 +364,32 @@ function scannedResult(raw: string): ParsedResult | undefined {
  *    - with no fenced one, the last reviewer-shaped bare object, unless the bare objects (any with a status) carry
  *      different statuses (then none; the same status twice is not ambiguous).
  * Never guessed from prose.
+ * When none of that gives a result, the lenient reader (./result-parse.ts) is tried: a JSON array of results (one per
+ * wave), a result wrapped in `result` / `review_result`, a fenced ```json block or a bare object with prose around it.
+ * It is skipped for a reply that looks cut off, and gives none for disagreeing results.
  */
-export function parseReviewResult(raw: string): ParsedResult | undefined {
+export function parseReviewResult(reply: string): ParsedResult | undefined {
+  // A host's `KERYX_USAGE` line (flow 460) is not part of the reviewer's reply.
+  const raw = splitUsage(reply).body;
   const labelled = labelledFence(raw);
-  if (labelled !== undefined) return labelled.result;
-  return afterMarker(raw)?.result ?? scannedResult(raw);
+  if (labelled !== undefined) return labelled.result ?? lenientReviewResult(raw.slice(labelled.at));
+  const marked = afterMarker(raw)?.result;
+  if (marked !== undefined) return marked;
+  // A reply that looks cut off gives no result, whatever complete list or object stands before the cut: the lost part may
+  // hold findings (`[{DONE, slices:[s1]}]` followed by a cut-off `{…findings:[{"id":"F1"…` must not read as DONE).
+  const { truncated } = topLevelObjects(raw);
+  if (truncated) return undefined;
+  // A JSON list of results (one per wave) is merged, not read as its last object. A list beside a bare reviewer result, or
+  // a bare result that merely has a `waves` field, is not a list reply (`holdsResultList` says so): the strict reader judges it.
+  if (holdsResultList(raw)) return lenientReviewResult(raw);
+  const strict = scannedResult(raw);
+  if (strict !== undefined) return strict;
+  return lenientReviewResult(raw);
+}
+
+/** Why `parseReviewResult` found nothing in a reply, naming what is missing (reviewer, status, slices, findings). */
+export function explainUnparsedResult(raw: string): string {
+  return describeUnusableResult(raw);
 }
 
 /** A line that starts with `Parent follow-up:` (after at most a quote, list or emphasis prefix); the rest of the line is the follow-up. */
@@ -331,8 +418,19 @@ export function followUpsOf(result: ParsedResult, raw?: string): string[] {
   return [...new Set([...own, ...(raw === undefined ? [] : parentFollowUps(raw))])];
 }
 
-export function isEmptyOutput(raw: string): boolean {
-  return raw.trim() === "" || /^\(subagent produced no text\)$/.test(raw.trim());
+/** A blank reply or the no-text placeholder; a usage line (flow 460) records what it cost and does not make it a reply. */
+export function isEmptyOutput(reply: string): boolean {
+  return isEmptyRecord(reply);
+}
+
+/** A raw result's token use: the host's `KERYX_USAGE` line, else the result envelope's own `usage`; undefined is unknown. */
+export function rawUsage(raw: RawFile): DispatchUsage | undefined {
+  return raw.usage ?? usageFrom(raw.result?.usage);
+}
+
+/** Every dispatch a raw file records, one entry each: the other ones saved to the same path, then the one whose reply it holds. */
+export function rawDispatchUsages(raw: RawFile): Array<DispatchUsage | undefined> {
+  return [...(raw.otherUsage ?? []), rawUsage(raw)];
 }
 
 const sliceIdsOf = (value: unknown): string[] => readSliceIds(value).ids;
@@ -349,7 +447,7 @@ function retryNext(reviewer: string, raw: RawFile, manifestPath: string | undefi
 /** The dispatches still owed to a reviewer: its uncovered required slices, packed under the manifest's wave budget. */
 function wavesLeft(manifest: SliceManifest, reviewer: string, seen: ReadonlySet<string>): { slices: number; waves: number; bytes: number } {
   const graph = sliceGraph(manifest, reviewer);
-  return summarizeWaves(packWaves(graph.open(requiredSlices(manifest, reviewer), seen), waveBytesOf(manifest)));
+  return summarizeWaves(packWavesByKind(graph.open(requiredSlices(manifest, reviewer), seen), waveBytesOf(manifest)));
 }
 
 function waveNext(reviewer: string, manifestPath: string | undefined, processed: RawFile | undefined): string {
@@ -365,17 +463,39 @@ function waveNext(reviewer: string, manifestPath: string | undefined, processed:
  */
 export function buildLedger(input: LedgerInputs): LedgerResult {
   const gaps: LedgerGap[] = [];
+  const skipped = input.skipped ?? [];
+  const skippedNames = new Set(skipped.map((skip) => skip.reviewer));
+  const selected = input.selected.filter((reviewer) => !skippedNames.has(reviewer));
   const { manifest, raws } = input;
   const attributed = raws.filter((r) => r.result?.reviewer !== undefined && text(r.result.reviewer));
+  // Delta round (flow 458, M4): a `prior_dispositions` entry counts only for the reviewer that gave it, and only from a
+  // finished result of this scope (a result stamped with another scope fingerprint is a stale round's). Carried findings
+  // keep their recorded disposition for the report; they are never attached to a fix slice, so they cover none.
+  const fingerprintNow = manifest === undefined ? undefined : scopeFingerprint(manifest);
+  const dispositionsBy = new Map<string, Map<string, string>>();
+  for (const raw of [...attributed].sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))) {
+    const result = raw.result!;
+    const open = Array.isArray(result.needs_context) && result.needs_context.filter(text).length > 0;
+    const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
+    if (!FINISHED.has(String(result.status ?? "").toUpperCase()) || open || (typeof stamped === "string" && stamped !== fingerprintNow)) continue;
+    const mine = dispositionsBy.get(result.reviewer!) ?? new Map<string, string>();
+    for (const [id, disposition] of priorDispositionsOf(result)) mine.set(id, disposition);
+    dispositionsBy.set(result.reviewer!, mine);
+  }
+  const priorDispositions = new Map<string, string>();
+  for (const carried of input.carried ?? []) if (text(carried.findingId) && text(carried.disposition)) priorDispositions.set(carried.findingId, carried.disposition);
+  for (const given of dispositionsBy.values()) for (const [id, disposition] of given) priorDispositions.set(id, disposition);
+  /** Slices each reviewer's finished run read. */
+  const readBy = new Map<string, ReadonlySet<string>>();
   for (const raw of raws) {
     if (raw.empty) continue;
-    if (raw.result === undefined) gaps.push({ detail: `${raw.name}: no parseable REVIEW_RESULT block`, next: `re-dispatch the reviewer that produced ${raw.name}, or remove the file if it is not a reviewer result` });
+    if (raw.result === undefined) gaps.push({ detail: `${raw.name}: no parseable REVIEW_RESULT block${raw.diagnosis === undefined ? "" : ` (${raw.diagnosis})`}`, next: `re-dispatch the reviewer that produced ${raw.name}, or remove the file if it is not a reviewer result` });
     else if (!text(raw.result.reviewer)) gaps.push({ detail: `${raw.name}: the result names no reviewer, so it cannot be attributed`, next: `have the reviewer re-emit its result with "reviewer" set` });
   }
 
   const runs: Array<Record<string, unknown>> = [];
   const complete = new Map<string, Set<string>>();
-  for (const reviewer of input.selected) {
+  for (const reviewer of selected) {
     const mine = attributed.filter((r) => r.result!.reviewer === reviewer).sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
     const latest = mine[mine.length - 1];
     const fingerprint = manifest === undefined ? undefined : scopeFingerprint(manifest);
@@ -383,6 +503,12 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     if (known?.notRun === true) {
       runs.push({ reviewer, executionId: `${reviewer}:not-run`, status: "not-run", notRunReason: `${known.status} after the allowed retry (retry-state)`, scopeComplete: false });
       gaps.push({ reviewer, detail: `${reviewer}: not run (${known.status} after the allowed retry)`, next: "no retry is left; the report carries the Not run line, and only the operator can accept a smaller set (dispatch override with their own quote)" });
+      continue;
+    }
+    if (latest === undefined && manifest !== undefined && routedOut(manifest, reviewer)) {
+      // Slice routing gave this role no slice: there is nothing for it to read, and the manifest's routing is the evidence.
+      const anchor = `${input.manifestPath ?? "slices/manifest.json"}#roles`;
+      runs.push({ reviewer, executionId: `${reviewer}:routed-out:${routingHash(manifest)}`, status: "complete", scopeComplete: true, routedOut: true, coveredSlices: [], rawEvidence: anchor, ruleEvidence: [input.ruleFiles[reviewer] ?? anchor], executionRequired: false, executionReason: "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch", layersUsed: layersUsedFrom(undefined) });
       continue;
     }
     if (latest === undefined) {
@@ -399,8 +525,12 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const result = latest.result!;
     const status = String(result.status ?? "").toUpperCase();
     const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
-    const finished = FINISHED.has(status) && asked.length === 0;
+    const unreadable = unreadableInputClaim(result);
+    const finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined;
     const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
+    const recorded = [...mine].reverse().map((raw) => raw.result?.model).find(text) ?? input.models?.[reviewer];
+    if (text(recorded)) run.model = recorded.trim();
+    run.usage = runUsage(mine);
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
@@ -408,16 +538,17 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     if (manifest !== undefined) {
       for (const raw of mine) {
         const reply = raw.result!;
-        const closed = FINISHED.has(String(reply.status).toUpperCase()) && (!Array.isArray(reply.needs_context) || reply.needs_context.filter(text).length === 0);
         const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
         if (assigned === undefined) continue;
         const allowed = new Set(assigned);
-        const ids = reply.slices === undefined && closed ? assigned : sliceIdsOf(reply.slices);
+        // Flow 460 D: a reply that names no `slices` claims none; a DONE status alone is not coverage of a manifest.
+        const ids = sliceIdsOf(reply.slices);
         for (const id of ids) if (allowed.has(id)) claimed.add(id);
       }
       for (const id of known?.covered ?? []) claimed.add(id);
     }
-    const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+    const seen = manifest === undefined ? new Set<string>() : new Set(accountedFor(manifest, reviewer, claimed));
+    if (finished) readBy.set(reviewer, seen);
     if (manifest !== undefined) run.coveredSlices = [...seen].sort();
     const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
     const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
@@ -425,7 +556,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       run.status = "incomplete";
       run.scopeComplete = false;
       run.executionReason = "not claimed: the reviewer did not finish its scope";
-      const why = asked.length > 0 ? `open needs_context (${asked.length}): ${asked.slice(0, 3).join(" | ")}` : status;
+      const why = asked.length > 0 ? `open needs_context (${asked.length}): ${asked.slice(0, 3).join(" | ")}` : unreadable !== undefined && FINISHED.has(status) ? `the reply states a mandatory input could not be read ("${unreadable}")` : status;
       const left = manifest === undefined ? undefined : wavesLeft(manifest, reviewer, seen);
       const tail = left === undefined || left.slices === 0 ? "" : `; ${left.slices} slice(s) uncovered, ${left.waves} wave(s) left`;
       gaps.push({ reviewer, detail: `${reviewer}: ${why}; scope not closed${tail}${droppedTail}`, next: retryNext(reviewer, latest, input.manifestPath), ...(left === undefined ? {} : { waves: left.waves }) });
@@ -449,28 +580,77 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     runs.push(run);
   }
 
-  const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, ...(input.depth === "light" ? { depth: "light", notRun: ["Not run: mutation (light round)"] } : input.depth === "full" ? { depth: "full" } : {}), selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
+  // A fix slice is covered only when every reviewer on its roster (but a skip the operator confirmed) read it AND every
+  // finding attached to it has a disposition from a reviewer on that roster (M4).
+  const fix = manifest === undefined ? { covered: [], gaps: [] } : fixSliceCoverage(manifest, readBy, dispositionsBy, skippedNames);
+  const fixCovered = new Set(fix.covered);
+  gaps.push(...fix.gaps);
+
+  const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined);
+  const notRun = [...(input.depth === "light" && input.mutationRecorded !== true ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
+  const superseded = (input.superseded ?? []).map((entry) => ({ reviewer: entry.reviewer, reason: entry.reason }));
+  const dispatch = { version: 1, mode: input.mode, ...(superseded.length === 0 ? {} : { superseded }), ...((input.supersedeNotes ?? []).length === 0 ? {} : { supersedeNotes: [...input.supersedeNotes!] }), ...(fixCovered.size === 0 ? {} : { fixSlicesCovered: [...fixCovered].sort() }), ...(priorDispositions.size === 0 ? {} : { priorDispositions: Object.fromEntries([...priorDispositions].sort(([a], [b]) => a.localeCompare(b))) }), ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();
-  const canonicalByReviewer = (reviewer: string, id: string) => input.canonical.filter((f) => f.reviewer === reviewer && f.id === id);
+  // A raw finding the ingest merged into another reviewer's (flow 458 AC5) is found through `reported_by` + `merged_from`.
+  const absorbedInto = (f: Record<string, unknown>, reviewer: string, id: string): boolean =>
+    Array.isArray(f.reported_by) && f.reported_by.includes(reviewer) && mergedFromHas(f, id);
+  const canonicalByReviewer = (reviewer: string, id: string) => {
+    const own = input.canonical.filter((f) => f.reviewer === reviewer && f.id === id);
+    return own.length > 0 ? own : input.canonical.filter((f) => absorbedInto(f, reviewer, id));
+  };
+  // Flow 460: canonical findings are commonly named after the raw file and the reviewer's id (`<raw stem>:<id>`, the
+  // obligation id itself). Such a finding links by that id, and one the duplicate merge folded into a survivor links to
+  // the survivor through its `merged_from` (whose entries are `<reviewId>#<display id>`).
+  const canonicalByObligation = (oid: string) => {
+    const own = input.canonical.filter((f) => holdsKey(f, oid));
+    return own.length > 0 ? own : input.canonical.filter((f) => mergedFromHas(f, oid));
+  };
+  // A reviewer's display ids restart in every wave (review-logic-w3:F-001 and review-logic-w4:F-001 are two findings), so
+  // the reviewer plus a bare id names one raw finding only when exactly one raw file of that reviewer carries the id.
+  const carrierKey = (reviewer: string, id: string): string => `${reviewer}\u0000${id}`;
+  const carriers = new Map<string, number>();
+  for (const raw of attributed) {
+    const ids = new Set<string>();
+    for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) if (finding && typeof finding.id === "string") ids.add(finding.id);
+    for (const id of ids) {
+      const key = carrierKey(raw.result!.reviewer!, id);
+      carriers.set(key, (carriers.get(key) ?? 0) + 1);
+    }
+  }
+  /** The canonical findings a raw finding resolves to: the same reviewer and id first (when no other wave reuses the id), else by its obligation id. */
+  const resolveCanonical = (reviewer: string, fid: string, oid: string) => {
+    const byReviewer = carriers.get(carrierKey(reviewer, fid)) === 1 ? canonicalByReviewer(reviewer, fid) : [];
+    return byReviewer.length === 1 ? byReviewer : canonicalByObligation(oid);
+  };
+  const keyOf = (f: Record<string, unknown>): string | undefined => (text(f.global_id) ? f.global_id : text(f.id) ? f.id : undefined);
+  const resolvesOnce = (key: string | undefined): key is string => text(key) && input.canonical.filter((f) => holdsKey(f, key)).length === 1;
+  // Only the exact raw obligation (`<raw stem>:<id>`, or a global id ending in it) matches a screened entry. A reviewer's
+  // display ids restart in every wave, so the reviewer plus a bare id would close another wave's finding.
+  const screenedAs = (oid: string) => (input.screened ?? []).find((entry) => namesObligation(entry.id, oid) || namesObligation(entry.global_id, oid));
   for (const raw of attributed) {
     const reviewer = raw.result!.reviewer!;
     for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) {
       const fid = finding && typeof finding.id === "string" ? finding.id : undefined;
       if (fid === undefined) continue;
+      if (displayIdHasHash(fid)) gaps.push({ reviewer, detail: `${raw.name}: finding id "${fid}" holds "#"; ingest refuses it`, next: `have ${reviewer} re-emit its result with ids that hold no "#" (${DISPLAY_ID_FORM})` });
       const id = `${raw.name.replace(/^raw\//, "").replace(/\.txt$/, "")}:${fid}`;
       derived.add(id);
       const base = { id, source: raw.name, question: `Is ${reviewer} finding ${fid} (${String(finding.problem ?? finding.title ?? "").slice(0, 100)}) real, and where is it reported?` };
       const given = input.dispositions.find((d) => d.id === id);
-      const closure = closeWith(given, input.canonical);
+      const hit = resolveCanonical(reviewer, fid, id);
+      const key = hit.length === 1 ? keyOf(hit[0]!) : undefined;
+      const closure = closeWith(given, input.canonical, resolvesOnce(key) ? key : undefined);
       if (closure !== undefined) { obligations.push({ ...base, ...closure }); continue; }
-      const hit = canonicalByReviewer(reviewer, fid);
-      const link = hit.length === 1 ? hit[0]! : undefined;
-      const key = link === undefined ? undefined : (text(link.global_id) ? link.global_id : link.id);
-      if (text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1) {
-        obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
+      if (resolvesOnce(key)) {
+        const merged = hit[0]!.id !== fid && hit[0]!.id !== id && hit[0]!.global_id !== id;
+        obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: merged ? `reported by ${reviewer} as ${fid}; review ingest merged it as a duplicate into canonical ${key}` : `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
+        continue;
+      }
+      const screened = screenedAs(id);
+      if (screened !== undefined) {
+        obligations.push({ ...base, status: "out-of-scope", evidence: input.screenedEvidence ?? INGEST_SCREENED_FILE, reason: `review ingest's scope-B screen kept it out of findings.json (${screened.rule}): ${screened.detail}` });
         continue;
       }
       obligations.push({ ...base, status: "unresolved" });
@@ -494,7 +674,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const reconciled = raws.every((r) => r.empty || (r.result !== undefined && text(r.result.reviewer))) && obligations.every((o) => CLOSED.has(String(o.status)));
-  let scopeReviewed = input.selected.length > 0 && runs.every((r) => r.scopeComplete === true);
+  let scopeReviewed = selected.length > 0 && runs.every((r) => r.scopeComplete === true) && fix.gaps.length === 0;
   if (scopeReviewed && manifest !== undefined) {
     const covered = new Set<string>();
     for (const seen of complete.values()) seen.forEach((id) => covered.add(id));
@@ -504,19 +684,143 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       gaps.push({ detail: `${uncovered.length} slice(s) are covered by no finished reviewer: ${uncovered.slice(0, 8).join(", ")}`, next: "dispatch a reviewer whose path gate matches those slices" });
     }
   }
-  return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch }, gaps };
+  const audit = manifest === undefined ? undefined : auditRecord(manifest, attributed);
+  // Every dispatch counts, an empty or unparseable one included (it was paid for either way): one per raw result, plus
+  // each other dispatch a re-dispatch to the same path recorded on it.
+  const usage = usageTotals(raws.flatMap(rawDispatchUsages));
+  return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch, ...(audit === undefined ? {} : { audit }), usage }, gaps };
 }
 
-function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>): Record<string, unknown> | undefined {
+/**
+ * Flow 460: a run's token use over every raw result of its reviewer (one per dispatch/wave). `"unknown"` when none
+ * reported usage; otherwise the known sums with the count of dispatches that reported none, never folded in as 0.
+ */
+function runUsage(mine: readonly RawFile[]): RunUsage | "unknown" {
+  const usages = mine.flatMap(rawDispatchUsages);
+  const totals = usageTotals(usages);
+  if (totals.known === 0) return "unknown";
+  const model = [...usages].reverse().find((usage) => usage?.model !== undefined)?.model;
+  return { tokens_in: totals.tokens_in, tokens_out: totals.tokens_out, ...(model === undefined ? {} : { model }), dispatches: totals.dispatches, unknown: totals.unknown, ...(totals.partial === undefined ? {} : { partial: totals.partial }), ...(totals.reported === undefined ? {} : { reported: totals.reported }) };
+}
+
+/** A routable role that slice routing gave no slice, in a routed manifest; the regression reviewer always runs (scope B). */
+function routedOut(manifest: SliceManifest, reviewer: string): boolean {
+  return isRoutedManifest(manifest) && ROUTABLE_ROLES.has(reviewer) && !ROLES_RUN_WITHOUT_SLICES.has(reviewer) && requiredSlices(manifest, reviewer).length === 0;
+}
+
+function routingHash(manifest: SliceManifest): string {
+  return sha(JSON.stringify(manifest.slices.filter((s) => s.retryOf === undefined).map((s) => [s.id, s.roles ?? null, s.depth ?? null])));
+}
+
+export type AuditRecord = {
+  /** Light slices sampled to run deep. */
+  slices: string[];
+  /** Per audit slice, the findings the core roles the audit added (all but review-logic) reported on it. */
+  caught: Array<{ slice: string; findings: string[] }>;
+  /** Share of audit slices on which the audit roles found something the light routing would not have dispatched. */
+  catchRate: number;
+};
+
+const AUDIT_ROLES = new Set(DEEP_ROLES.filter((role) => role !== ALWAYS_ROLE));
+
+/** Which audit slices the audit's extra roles found something on: how often light routing would have missed a finding. */
+export function auditRecord(manifest: SliceManifest, raws: readonly RawFile[]): AuditRecord | undefined {
+  const audited = manifest.slices.filter((s) => s.retryOf === undefined && s.audit === true);
+  if (audited.length === 0) return undefined;
+  const caught = audited.map((slice) => {
+    const found: string[] = [];
+    for (const raw of raws) {
+      const reviewer = raw.result?.reviewer;
+      if (reviewer === undefined || !AUDIT_ROLES.has(reviewer)) continue;
+      for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) {
+        const named = finding.slice === slice.id || (Array.isArray(finding.slices) && finding.slices.includes(slice.id));
+        const file = typeof finding.file === "string" ? finding.file : typeof finding.location === "string" ? finding.location.replace(/:\d+(?:[-:]\d+)*$/, "") : undefined;
+        if (named || (file !== undefined && slice.files.includes(file))) found.push(`${reviewer}:${typeof finding.id === "string" ? finding.id : "?"}`);
+      }
+    }
+    return { slice: slice.id, findings: [...new Set(found)] };
+  });
+  const hits = caught.filter((entry) => entry.findings.length > 0).length;
+  return { slices: audited.map((s) => s.id), caught: caught.filter((entry) => entry.findings.length > 0), catchRate: Number((hits / audited.length).toFixed(3)) };
+}
+
+/** Keys a list of dispositions is commonly wrapped in, tried in order (`obligations` is what an earlier `ledger build` wrote). */
+export const DISPOSITION_WRAPPER_KEYS: readonly string[] = ["dispositions", "items", "results", "data", "entries", "obligations"];
+
+/** The one schema of a `ledger build --dispositions` row, worded for an error. */
+export const DISPOSITION_SCHEMA = `{"id":"<raw stem>:<Fn>","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"finding":… (status finding; optional: defaults to the canonical finding whose id is the row's id, or the one the raw finding resolves to),"remains":… (status narrowed)}`;
+
+/**
+ * The dispositions of a `--dispositions` input: an array, or an object holding one under a wrapper key (`dispositions`,
+ * `items`, `results`, `data`, `entries`, `obligations`; wrappers may nest). Rows are `Disposition`s of the one schema:
+ * an `id`, a `status` that closes (`finding`, `refuted`, `out-of-scope`, `narrowed`), and for `narrowed` the `remains`
+ * that still stands. `strict` (an input the caller wrote, as opposed to the obligations of an earlier build, whose still
+ * open rows are `unresolved`) collects every row that breaks the schema in `bad`, one line each, instead of reading it.
+ */
+export function normalizeDispositions(given: unknown, options: { strict: boolean }): { rows: Disposition[]; bad: string[] } {
+  const bad: string[] = [];
+  const find = (value: unknown, depth: number): unknown[] | undefined => {
+    if (Array.isArray(value)) return value;
+    if (value === null || typeof value !== "object" || depth > 3) return undefined;
+    for (const key of DISPOSITION_WRAPPER_KEYS) {
+      const inner = find((value as Record<string, unknown>)[key], depth + 1);
+      if (inner !== undefined) return inner;
+    }
+    return undefined;
+  };
+  const list = find(given, 0);
+  if (list === undefined) {
+    if (given === undefined || !options.strict) return { rows: [], bad };
+    bad.push(`not a list of dispositions: expected an array, or an object holding one under ${DISPOSITION_WRAPPER_KEYS.map((key) => `"${key}"`).join(", ")}`);
+    return { rows: [], bad };
+  }
+  const rows: Disposition[] = [];
+  list.forEach((row, at) => {
+    const label = row !== null && typeof row === "object" && text((row as Disposition).id) ? `row ${at + 1} (${(row as Disposition).id})` : `row ${at + 1}`;
+    if (row === null || typeof row !== "object" || Array.isArray(row)) { bad.push(`${label}: not an object`); return; }
+    const given = row as Disposition;
+    if (options.strict) {
+      const problems: string[] = [];
+      if (!text(given.id)) problems.push('no "id"');
+      const status = String(given.status);
+      if (!CLOSED.has(status) && status !== "unresolved") problems.push(`status "${status === "undefined" ? "" : status}" is not one of finding, refuted, out-of-scope, narrowed`);
+      else if (status === "narrowed" && !text(given.remains)) problems.push('narrowed needs "remains" (what of the finding still stands)');
+      if (problems.length > 0) { bad.push(`${label}: ${problems.join("; ")}`); return; }
+    }
+    rows.push(given);
+  });
+  return { rows, bad };
+}
+
+/**
+ * The closure a disposition gives, or undefined. A `status: finding` row with no `finding` link (flow 460) links to the
+ * canonical finding whose id (or global_id) is the row's own id, else to `defaultLink`, the canonical finding the raw
+ * finding already resolves to; a link that resolves to no single canonical finding does not close.
+ */
+function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>, defaultLink?: string): Record<string, unknown> | undefined {
   if (given === undefined || !CLOSED.has(String(given.status)) || !text(given.evidence) || !text(given.reason)) return undefined;
-  if (given.status === "finding" && !(text(given.finding) && canonical.filter((f) => f.id === given.finding || f.global_id === given.finding).length === 1)) return undefined;
+  const matching = (key: unknown) => canonical.filter((f) => holdsKey(f, key));
+  let finding = given.finding;
+  if (given.status === "finding" && !text(finding)) {
+    const same = matching(given.id);
+    const linked = same.length === 1 ? same[0]! : undefined;
+    finding = linked === undefined ? defaultLink : text(linked.global_id) ? linked.global_id : String(linked.id);
+  }
+  if (given.status === "finding" && !(text(finding) && matching(finding).length === 1)) return undefined;
   if (given.status === "narrowed" && !text(given.remains)) return undefined;
-  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
+  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
 }
 
-/** The gate's own validators over the built ledger, so "ready" cannot disagree with `keryx review complete`. */
+/**
+ * The gate's validators over the ledger just built (research, dispatch, coverage). With a `packageDir` they are the ones
+ * `review complete` runs (`packageResearchErrors`, ./research.ts): the coverage check with its options read from the
+ * package, then the layer/chunk completeness gate (`coverageGateErrors`) over this ledger, so READY here is what complete
+ * accepts. Without one (a ledger built outside a package) only the coverage check runs, with the options the caller passes.
+ */
 export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; packageDir?: string | undefined; files: readonly string[] | undefined; changedLines?: number | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
   const dispatch = dispatchErrors(ledger.dispatch);
-  const coverage = dispatch.length === 0 ? await coverageErrors(ledger.dispatch, options) : [];
-  return [...researchErrors(ledger, canonical), ...dispatch, ...coverage];
+  if (dispatch.length > 0) return [...researchErrors(ledger, canonical), ...dispatch];
+  if (options.packageDir === undefined) return [...researchErrors(ledger, canonical), ...await coverageErrors(ledger.dispatch, options)];
+  const coverage = await packageCoverageErrors(options.packageDir, ledger.dispatch);
+  return [...researchErrors(ledger, canonical), ...coverage, ...await coverageGateErrors(options.packageDir, ledger)];
 }

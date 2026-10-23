@@ -32,6 +32,7 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
 
 ## What it does where a person would answer
 
+- **The review acts (`review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage`, `review_complete`).** These are cards a person answers, in the shell or in the Telegram topic (one allowed user, once, within an hour; the record keeps `pressedBy` and `pressedAt`). An autonomous (unattended) run has nobody to answer them, so it is excluded from the card gate: it is not given these tools and closes the package through the CLI path as before (`keryx review complete`), while any waiver, which needs a terminal, stops it at the floor. An interactive agent in the shell completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal. The four acts that also take a host question (`confirm-plan`, `decide-premise`, `waive-mutation`, `override-reviewers`) refuse `--answered-by` in an unattended run, because nobody is there to have answered.
 - **A menu (`ask_user`).** A question marked irreversible is refused (the run sees it as
   cancelled). Any other question takes the recommended option, or the first one when none is
   recommended. A question with nothing to choose from is refused. Every automatic answer is

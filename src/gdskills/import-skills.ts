@@ -14,7 +14,7 @@ import {
   resolveRuleReference,
   ruleReferences,
 } from "./rule-references";
-import { frontmatterScalar, parseSkillFrontmatter } from "./skill-frontmatter";
+import { frontmatterList, frontmatterScalar, metadataList, parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   assertProjectWritesContained,
   createProjectSkill,
@@ -691,7 +691,16 @@ function frontmatterName(content: string): string | undefined {
   return frontmatterScalar(content, "name", "top") || undefined;
 }
 
-const KNOWN_CATEGORIES = new Set(["review", "quality", "orchestration", "planning", "platform", "core"]);
+const KNOWN_CATEGORIES = new Set([
+  "review",
+  "quality",
+  "orchestration",
+  "planning",
+  "platform",
+  "core",
+  "implementation",
+  "testing",
+]);
 
 /** `metadata.category`, else a top-level `category`, when it is a module keryx knows. */
 function frontmatterCategory(content: string): string | undefined {
@@ -830,7 +839,7 @@ function addFlagWarnings(
 }
 
 /** `*` any run of characters, `?` one; everything else literal. Package names hold no `/`. */
-function onlyMatcher(glob: string): (name: string) => boolean {
+export function onlyMatcher(glob: string): (name: string) => boolean {
   const source = glob
     .split("")
     .map((char) => (char === "*" ? ".*" : char === "?" ? "." : char.replace(/[.+^${}()|[\]\\]/g, "\\$&")))
@@ -1130,7 +1139,7 @@ async function skillPackageDirs(root: string): Promise<{ dirs: string[]; tree: b
  * - `blocked` — the gate could not produce bytes that are safe to persist
  *   (format-unsafe, posture unavailable). Not a finding, and not overridable.
  */
-type GateVerdict =
+export type GateVerdict =
   | {
       kind: "write";
       content: string;
@@ -1145,7 +1154,7 @@ type GateVerdict =
   | { kind: "refuse"; reason: string; security: ImportSecurity }
   | { kind: "blocked"; reason: string };
 
-type WriteGate = Extract<GateVerdict, { kind: "write" }>;
+export type WriteGate = Extract<GateVerdict, { kind: "write" }>;
 
 const isString = (value: string | undefined): value is string => value !== undefined;
 
@@ -1182,7 +1191,7 @@ function isWrittenRow(row: ImportedProjectSkill): boolean {
   return row.status !== "skipped" && !isRefusedStatus(row.status);
 }
 
-async function gateText(
+export async function gateText(
   projectRoot: string,
   text: string,
   target: string,
@@ -1244,7 +1253,7 @@ async function gateText(
  * the gate had something to say about: written because of --allow-flagged,
  * redacted, or flagged with findings that changed nothing.
  */
-function gateRowParts(gate: WriteGate, dryRun: boolean): Pick<ImportedProjectSkill, "reason" | "security"> {
+export function gateRowParts(gate: WriteGate, dryRun: boolean): Pick<ImportedProjectSkill, "reason" | "security"> {
   const detail = gate.warning !== null ? ` (${gate.warning})` : "";
   const security = gate.security !== undefined ? { security: gate.security } : {};
   if (gate.overridden) {
@@ -1403,6 +1412,7 @@ async function writeOne(
     origin: source.origin,
     originContent: source.content,
     ...versionOption(source.content),
+    ...taskTypesOption(source.content),
     format: "single",
   });
   await writeGatedSkill(options.projectRoot, created, gate);
@@ -1507,6 +1517,7 @@ async function writeUpdate(
     origin,
     originContent: content,
     ...versionOption(content),
+    ...taskTypesOption(content),
     format: "single",
   });
   await writeGatedSkill(options.projectRoot, created, gate);
@@ -1623,6 +1634,20 @@ function afterFrontmatter(text: string): number | undefined {
     start = next;
   }
   return undefined;
+}
+
+/** The task types a skill declares (`metadata.task_types` or `taskTypes`, or the same at the top level). */
+function taskTypesOption(content: string): { taskTypes?: string[] } {
+  for (const read of [
+    () => metadataList(content, "task_types"),
+    () => metadataList(content, "taskTypes"),
+    () => frontmatterList(content, "task_types"),
+    () => frontmatterList(content, "taskTypes"),
+  ]) {
+    const types = read();
+    if (types.length > 0) return { taskTypes: types };
+  }
+  return {};
 }
 
 function versionOption(content: string): { version?: string } {
@@ -2121,7 +2146,7 @@ function inferModule(name: string, content: string): string {
   if (category) return category;
   if (name.startsWith("review-") || name.startsWith("code-")) return PROJECT_REVIEWER_MODULE;
   throw new Error(
-    `keryx skills import: cannot infer module for ${name}. Pass --module review|quality|orchestration|…`,
+    `keryx skills import: cannot infer module for ${name}. Pass --module review|quality|orchestration|implementation|testing|…`,
   );
 }
 
@@ -2256,6 +2281,20 @@ detectable.
 Usage:
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
                       [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
+  keryx skills import --rules <dir> [--only <glob>]... [--link] [--dry-run] [--force]
+                      [--allow-flagged] [--json]
+
+--rules:
+  a project's own rules, with no skill citing them: every *.mdc and *.md file
+  under <dir> is copied byte for byte to .metaproject/rules/project/<relative path>
+  and recorded in the registry with its description, globs and alwaysApply.
+  --only is matched against the relative path or the file name. A re-run reports
+  \`unchanged\`; a differing project copy is replaced only with --force. The rules
+  go through the security gate below, and nothing is ever written under
+  rules/core. With --link nothing is copied: the registry keeps the origin path
+  and sha256, and \`keryx skills resolve-context\` reads the rule in place only
+  while the file still has that sha256 (run \`keryx skills update\` after it
+  changes). A copy of the same name wins over a link.
 
 --from:
   a skill package directory, a SKILL.md file, a parent tree that contains
@@ -2355,6 +2394,13 @@ file in it replaces the project's copy.
 Usage:
   keryx skills update <module>/<name> [--from <new-origin>] [--dry-run] [--allow-flagged] [--json]
   keryx skills update --all [--dry-run] [--allow-flagged] [--json]
+  keryx skills update --rules [<ref>] [--dry-run] [--force] [--allow-flagged] [--json]
+
+--rules:
+  re-read the rules \`keryx skills import --rules\` registered from their recorded
+  origin and report each as current, updated, modified-locally (the project's copy
+  was edited; replaced only with --force), refused or skipped, with the old and new
+  sha256. A copy is rewritten; a linked rule is re-pinned to the origin's new hash.
 
 ${SECURITY_GATE_HELP}
 

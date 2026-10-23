@@ -1,0 +1,69 @@
+{
+  "test_case_specs": {
+    "framework": "bun:test",
+    "test_files": [
+      {
+        "path": "src/harness/provider-catalog.test.ts",
+        "target_module": "src/harness/provider-catalog.ts",
+        "test_count": 5,
+        "tests": [
+          { "id": "test-1", "description": "AC1: a shell that starts with a saved provider+model (startup detected is empty) still saves a catalog holding every provider with a stored key", "criterion": "AC1", "type": "error_path", "status": "written", "red_reason": "saved catalog has zero providers, expected deepseek and groq", "assumed_seam": "ProviderCatalogDeps.redetect used by loadOrRefreshProviderCatalogFromDetected when detected is empty" },
+          { "id": "test-2", "description": "AC2: a fresh-by-age cache file with zero providers is not served - loadOrRefreshProviderCatalog refreshes instead", "criterion": "AC2", "type": "error_path", "status": "written", "red_reason": "no fetch happens, empty cache is served", "assumed_seam": "none" },
+          { "id": "test-3", "description": "AC2: a fresh-by-age cache file with zero providers is not served - loadOrRefreshProviderCatalogFromDetected refreshes instead", "criterion": "AC2", "type": "error_path", "status": "written", "red_reason": "groq entry undefined, empty cache is served", "assumed_seam": "none" },
+          { "id": "test-4", "description": "AC2: a refresh that yields zero providers is not saved as fresh (loadOrRefreshProviderCatalog)", "criterion": "AC2", "type": "error_path", "status": "written", "red_reason": "isCatalogFresh of the saved cache is true", "assumed_seam": "none" },
+          { "id": "test-5", "description": "AC2: a refresh that yields zero providers is not saved as fresh (loadOrRefreshProviderCatalogFromDetected)", "criterion": "AC2", "type": "error_path", "status": "written", "red_reason": "isCatalogFresh of the saved cache is true", "assumed_seam": "none" }
+        ]
+      },
+      {
+        "path": "src/tui/provider-catalog-startup.test.ts",
+        "target_module": "src/tui/tui-shell.ts",
+        "test_count": 2,
+        "tests": [
+          { "id": "test-6", "description": "flow 468 AC1: with detected: [] at startup the refresh is handed a real detection and saves its providers", "criterion": "AC1", "type": "happy_path", "status": "written", "red_reason": "redetect called 0 times, expected 1", "assumed_seam": "ProviderCatalogDeps.redetect" },
+          { "id": "test-7", "description": "flow 468 AC1: launchTuiAgentShell hands its redetect to the startup catalog refresh", "criterion": "AC1", "type": "happy_path", "status": "written", "red_reason": "providerCatalogReady kickoff does not mention redetect", "assumed_seam": "tui-shell.ts:4179 passes opts.redetect" }
+        ]
+      },
+      {
+        "path": "src/harness/routing/table.test.ts",
+        "target_module": "src/harness/routing/table.ts",
+        "test_count": 4,
+        "tests": [
+          { "id": "test-8", "description": "AC3: connectedPredicateFrom counts the session's provider (and model) as connected even when the list lacks it", "criterion": "AC3", "type": "happy_path", "status": "written", "red_reason": "session argument ignored, session provider not connected", "assumed_seam": "connectedPredicateFrom(providers, session?)" },
+          { "id": "test-9", "description": "AC3: resolution keeps an assignment to the session's model when the provider list is empty", "criterion": "AC3", "type": "edge_case", "status": "written", "red_reason": "assignment falls back to session-default", "assumed_seam": "connectedPredicateFrom(providers, session?)" },
+          { "id": "test-10", "description": "AC3: flatModelOptions lists the session's provider/model labelled (current session) even when the catalog lacks it", "criterion": "AC3", "type": "happy_path", "status": "written", "red_reason": "no session row in the options", "assumed_seam": "flatModelOptions(providers, session?)" },
+          { "id": "test-11", "description": "AC3: flatModelOptions does not list the session's model twice when the catalog already has it", "criterion": "AC3", "type": "edge_case", "status": "written", "red_reason": "row label lacks (current session)", "assumed_seam": "flatModelOptions(providers, session?)" }
+        ]
+      },
+      {
+        "path": "src/tui/routing-inspector.test.ts",
+        "target_module": "src/tui/routing-inspector.ts",
+        "test_count": 9,
+        "tests": [
+          { "id": "test-12", "description": "AC3: the session's own provider/model is listed (current session) although the provider loader returns none; Enter writes the user-layer pick and the Categories tab shows it", "criterion": "AC3", "type": "happy_path", "status": "written", "red_reason": "pickerOptions has no (current session) row", "assumed_seam": "existing options.session" },
+          { "id": "test-13", "description": "AC4: no provider connected - the Model tab says so and points at /connect", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "frame lacks 'no providers connected'", "assumed_seam": "none" },
+          { "id": "test-14", "description": "AC4: the catalog is unavailable - the Model tab shows the reason it gave", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "modal stays on Reading routing table", "assumed_seam": "reload() catches loader rejection" },
+          { "id": "test-15", "description": "AC4: a provider whose auth failed, and one with 0 models, are each shown on the Model tab - not omitted", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "no 'auth failed' or '0 models' text", "assumed_seam": "FlatPickerProvider.authFailed" },
+          { "id": "test-16", "description": "AC4: an assigned model missing from its provider's list says model not in <provider>'s list", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "text is 'not connected, falling back'", "assumed_seam": "none" },
+          { "id": "test-17", "description": "AC4: an assignment to a provider absent from a non-empty list says provider not connected", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "text lacks 'provider not connected'", "assumed_seam": "none" },
+          { "id": "test-18", "description": "AC4: an EMPTY provider list says provider list unavailable for an assignment - distinct from provider not connected", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "text lacks 'provider list unavailable'", "assumed_seam": "none" },
+          { "id": "test-19", "description": "AC4: a REJECTING provider loader leaves Reading routing table, and its assignments say provider list unavailable", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "Reading routing table remains", "assumed_seam": "reload() catches loader rejection" },
+          { "id": "test-20", "description": "AC4: a provider loader that NEVER resolves leaves Reading routing table within the timeout", "criterion": "AC4", "type": "error_path", "status": "written", "red_reason": "Reading routing table remains", "assumed_seam": "RoutingModalOptions.timeoutMs" }
+        ]
+      }
+    ],
+    "run_command": "bun test src/harness/provider-catalog.test.ts src/tui/provider-catalog-startup.test.ts src/harness/routing/table.test.ts src/tui/routing-inspector.test.ts --timeout 30000",
+    "expected_result": "20 new tests failing (RED); pre-existing tests passing",
+    "notes": "Assumed seams: ProviderCatalogDeps.redetect; connectedPredicateFrom and flatModelOptions optional trailing session {providerId, modelId}; FlatPickerProvider.authFailed; RoutingModalOptions.timeoutMs; reload() must not reject. Expected texts: 'no providers connected' + '/connect', 'auth failed', '0 models', 'model not in <provider>'s list', 'provider not connected', 'provider list unavailable', '(current session)'. Tests not committed; the orchestrator commits."
+  },
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" }
+  ],
+  "status_report": {
+    "status": "DONE",
+    "tests_written": 20,
+    "test_files_committed": [],
+    "all_criteria_covered": true,
+    "red_verified": true,
+    "concerns": "New table tests pass an extra argument to connectedPredicateFrom and flatModelOptions, so tsc flags them until the seams exist."
+  }
+}

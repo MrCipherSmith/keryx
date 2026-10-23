@@ -243,6 +243,12 @@ It prints, from the journal alone (plus the quality ratings, below):
   can prompt (forced irreversible questions and picker menus are in neither);
 - the **ineligible** questions (irreversible, an action or a match of the irreversible
   list) on a line of their own, outside the arm comparison;
+- the questions **answered via the host's own tool** (`keryx review decide-premise`,
+  `confirm-plan`, `waive-mutation` and `override-reviewers` with `--answered-by`) in a
+  block of their own, each labelled `answered via host question (<source>:<ref>)`. They
+  are a separate kind: nothing was recommended, so they are in no decision total, arm or
+  match share, are not rows of `keryx decisions export` (its summary line counts them), and
+  show in the `/decisions` sidebar row as `N via host`, apart from the decision count;
 - **progress** toward flow 392 AC11 (20 answered decisions, 5 of them blind) and toward
   the per-arm threshold: reversible, answered questions with a recommendation per arm,
   against `perArmThreshold` in `.metaproject/decisions.config.json` (150 by default,

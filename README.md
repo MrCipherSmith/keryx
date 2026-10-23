@@ -98,8 +98,9 @@ keryx providers list         # providers you already have configured
 keryx auth login <provider>  # subscription login (device code / OAuth) or API key
 ```
 
-Inside a running session, `/provider` reopens the same add/reconfigure wizard
-and `/connect` switches between providers you already configured.
+Inside a running session, `/connect` opens one Providers dialog with two tabs:
+Connected (switch to a provider you already configured, test it, disconnect it)
+and Add provider (save a key or log in, then check the provider's model list).
 
 ChatGPT / Codex model discovery reads the current stable Codex version from npm
 metadata and caches it for one day. **Test** in `/connect` (or
@@ -240,7 +241,7 @@ affected graph supplies deterministically, in one command.
 ├── memory/               # lessons, decisions, constraints, known mistakes
 ├── skills/               # bundled agent skills and routing
 ├── project-skills/       # skills generated from your own modules
-├── rules/                # your AGENTS.md / CLAUDE.md as project rules
+├── rules/                # bundled rules; rules/project/ holds yours and is read first
 ├── data/gdgraph/         # graph artifacts, module map, query results
 ├── data/testing/         # test context, related tests, normalized reports
 ├── data/health/          # normalized health artifacts and trends
@@ -254,6 +255,26 @@ a human wants to look at it (`keryx dash`):
 <p align="center">
   <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/dashboard.png" alt="The keryx dashboard: health score, attention signals, and the enabled modules" width="880">
 </p>
+
+### Your rules, applied first
+
+`keryx skills import --rules <dir>` copies your rule files into
+`.metaproject/rules/project/`. When an agent is about to write code or tests,
+`keryx skills resolve-context` lists which rules and skills it must read —
+yours before the bundled ones — and the task is checked against what the agent
+says it read (`warn` by default, `block` on request).
+
+A long document your rules point at, such as `STYLING.md` or `THEMING.md`, can
+be required only when the task needs it. List it in
+`.metaproject/rules/project/references.json` with the globs and keywords that
+make it required and, optionally, the heading to read. `resolve-context
+--task-text '<task>'` then promotes it to `must_read`, the worker names the
+heading and writes a short summary of what it read, and `keryx skills
+references check` and `suggest` help you write the declarations. The summary
+check is a proxy: keryx cannot see what an agent opens, and a summary that
+reuses the section's words passes. How often a document is required depends on
+how broad its globs and keywords are. See
+[Make agents follow my project's own rules](https://github.com/MrCipherSmith/keryx/blob/main/docs/docs/guides/apply-project-rules.md).
 
 ## The agent harness
 
@@ -364,7 +385,7 @@ What is in it today:
   change the loop, the tools or the policy.
 - **Custom file-backed providers.** Register any OpenAI-compatible endpoint —
   including one on your own LAN — in `~/.local/share/keryx/llm-providers.json`;
-  it merges into the built-in provider list. The `/provider` wizard in the TUI
+  it merges into the built-in provider list. The Add provider tab of `/connect` in the TUI
   has an "add custom provider" entry that walks name → URL → key → models and
   writes the file for you; a name that collides with a built-in provider is
   rejected. Custom providers get a narrow, opt-in SSRF allowance for private
@@ -1075,7 +1096,7 @@ queued lines will not run. From the topic you can also run a fixed list of slash
 commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
 in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
 after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
-and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
+and commands such as `/mcp`, `/guard`, `/schedule`, `/rewind`,
 `/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
 `/external-agents` and `/model` are queued with a notice in the topic and run when
 it goes idle; `/mode` takes effect at once. A topic is archived when the shell
@@ -1155,6 +1176,10 @@ Every managed review start, attach or ingest (and any `dispatch-check` or `blast
 ### Gates that keep a review report honest
 
 `keryx review complete` on a pull-request package (one that targets a PR, or whose `--ref` is a PR URL under any `--target`) refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
+
+### Operator decisions in a review: a card, or a host question
+
+Four review acts are the operator's: `keryx review confirm-plan`, `waive-mutation`, `override-reviewers` and `decide-premise` (a held finding's premise). In `keryx shell` the agent calls a card and you answer it in the shell or in the Telegram topic; a card press is verified by keryx. In Claude Code, Codex or another host there is no card: the agent asks you with the host's own question tool (or a Telegram poll through Helyx) and records your answer with `--answered-by <source>:<ref> --answer-text "<your words, verbatim>" --question-text "<the question as asked>"`, with no terminal. That record carries `confirmedVia: "host-question"` and is weaker than a card: keryx does not verify the answer. Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path. See [limitations](docs/docs/limitations.md#a-host-question-is-a-weaker-proof-than-a-card) and the [CLI reference](docs/docs/cli-reference.md#review).
 
 ### Review bot on pull requests
 

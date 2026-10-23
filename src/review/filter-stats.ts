@@ -113,6 +113,12 @@ export type ReviewFilterStats = {
   dropped_scope_b: number | null;
   /** Findings the per-reviewer reading cap truncated. Always measured. */
   dropped_findings_cap: number | null;
+  /**
+   * Flow 460: records the duplicate merge folded into another finding (`merged_from`). Not a drop — the defect is still
+   * reported, once — but one record fewer reaches `retained`, so `total − drops − merged_duplicates = retained`. Always
+   * measured on a record written since; absent on an older one, read as 0.
+   */
+  merged_duplicates?: number | undefined;
   /** Findings the round reports as open: what a completion gate must act on. */
   retained: number | null;
   /**
@@ -164,6 +170,8 @@ export type BuildFilterStatsInput = {
   externalRetained: number;
   /** `--refuted` findings, or `undefined` when the caller supplied no channel. */
   roundDismissed?: number | undefined;
+  /** Records the duplicate merge absorbed into a surviving finding (flow 460). */
+  duplicatesMerged?: number | undefined;
 };
 
 /**
@@ -277,6 +285,7 @@ export function buildFilterStats(input: BuildFilterStatsInput): ReviewFilterStat
     dropped_refuted: droppedRefuted,
     dropped_scope_b: droppedScopeB,
     dropped_findings_cap: droppedFindingsCap,
+    merged_duplicates: input.duplicatesMerged ?? 0,
     retained,
     dismissed_by_round: dismissedByRound,
     by_reason: byReason,
@@ -315,8 +324,8 @@ export type FilterStatsProblem = {
  *    measured count that claims to be unmeasured. This is the AC2 invariant made
  *    enforceable: a producer that starts writing `0` where it used to write
  *    `null` fails here rather than reading as a clean round.
- * 3. **arithmetic** — `total` minus the measured finding-stage drops must equal
- *    `retained`.
+ * 3. **arithmetic** — `total` minus the measured finding-stage drops and the
+ *    duplicate merges (`merged_duplicates`, flow 460) must equal `retained`.
  *
  * An unmeasured finding stage contributes nothing to the sum, and that is sound
  * rather than the "absent means zero" reading this whole module rejects: when
@@ -414,11 +423,20 @@ export function checkFilterStats(value: unknown): FilterStatsProblem[] {
   }
 
   const dropped = FINDING_FILTER_STAGES.reduce((sum, stage) => sum + (measured.get(stage) ?? 0), 0);
-  if (total - dropped !== retained) {
+  const rawMerged = stats["merged_duplicates"];
+  let merged = 0;
+  if (rawMerged !== undefined) {
+    if (typeof rawMerged !== "number" || !Number.isInteger(rawMerged) || rawMerged < 0) {
+      problems.push({ code: "shape", message: `filter_stats.merged_duplicates is not a non-negative integer: ${JSON.stringify(rawMerged)}.` });
+      return problems;
+    }
+    merged = rawMerged;
+  }
+  if (total - dropped - merged !== retained) {
     problems.push({
       code: "arithmetic",
-      message: `filter_stats does not add up: total ${total} minus the measured finding-stage drops (${dropped}) is ${
-        total - dropped
+      message: `filter_stats does not add up: total ${total} minus the measured finding-stage drops (${dropped}) and the duplicate merges (${merged}) is ${
+        total - dropped - merged
       }, but retained is ${retained}. Either a stage removed findings without counting them, or a count is wrong.`,
     });
   }
@@ -460,6 +478,7 @@ export function renderFilterStatsMarkdown(stats: ReviewFilterStats): string {
     const value = stats[field] as number | null;
     lines.push(value === null ? `${label}: null — ${reasons.get(stage) ?? "no reason recorded"}` : `${label}: ${value}`);
   }
+  lines.push(`merged_duplicates: ${stats.merged_duplicates ?? 0}`);
   lines.push(`retained: ${stats.retained ?? "null"}`);
   lines.push("");
   lines.push("### by_reason");
@@ -487,5 +506,5 @@ export function renderFilterStatsLine(stats: ReviewFilterStats): string {
     stats.dropped_low_confidence,
   )} refuted=${show(stats.dropped_refuted)} scope_b=${show(stats.dropped_scope_b)} findings_cap=${show(
     stats.dropped_findings_cap,
-  )} dismissed_by_round=${show(stats.dismissed_by_round)} retained=${show(stats.retained)}`;
+  )} merged_duplicates=${stats.merged_duplicates ?? 0} dismissed_by_round=${show(stats.dismissed_by_round)} retained=${show(stats.retained)}`;
 }

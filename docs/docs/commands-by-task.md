@@ -19,7 +19,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `/help` | Show available commands, grouped by task. |
 | `/doctor` | Same one-page health check, inside the session. |
-| `/setup` | Same preparation guide, inside the session — prints steps, runs nothing. |
+| `/setup` | Same preparation guide, inside the session — copy the agent prompt, or let keryx run the steps as background jobs after you confirm. |
 
 ## Connect a model provider
 
@@ -32,11 +32,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 
 | Shell command | Summary |
 |---|---|
-| `/connect` | Switch provider; row buttons test/disconnect it. |
+| `/connect` | Providers dialog: switch, test or disconnect a connected provider, or add one (Connected / Add provider tabs). |
 | `/routing` | Route task categories to models — a flat, searchable list across every connected provider. |
 | `/search-provider` | Configure and test a web search provider. |
 | `/search-connect` | Select a connected web search provider. |
-| `/provider` | Switch provider — /provider <name>, or no arg to re-select. |
 | `/external` | Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on\|off]. |
 
 ## Look and feel
@@ -115,6 +114,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
 | `/route` | Opt-in routing classifier: each request runs on its routing category's model — /route [on\|off]. |
 | `/editguard` | Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle. |
+| `/projectctx` | Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn\|block\|refs]. |
 | `/jevprofile` | Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
@@ -146,10 +146,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/permissions` | The saved shell rules (what Always remembered): honoured or not, session grants — remove one. |
 | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
 | `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
-| `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row). |
+| `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row), and the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete). |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
-| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. |
+| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed. |
 | `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 | `/intake` | GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status\|list\|pause\|resume\|poll]. |

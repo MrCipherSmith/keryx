@@ -6,7 +6,7 @@
 // capability `store.writePattern` requires for that transition.
 import { spawnSync } from "node:child_process";
 import { createAcceptCapability } from "./accept-capability";
-import { appendDecision } from "./decisions";
+import { appendDecision, type DecisionConfirmation } from "./decisions";
 import { scanLearnedText } from "./scan";
 import { LearningStoreError, readPattern, updateIndex, updatePattern, type StoreEnvOptions } from "./store";
 import type { IndexEntry, LearnedPattern, LearningScope } from "./types";
@@ -65,6 +65,8 @@ export interface AcceptOptions {
   actor?: string;
   /** No bypass flag or environment variable (plan D2) — accept and refresh both refuse without this. */
   isTerminal: boolean;
+  /** Flow 456: recorded in the decision log when the operator answered a shell card instead of a terminal. */
+  confirmation?: DecisionConfirmation;
   now?: () => Date;
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
@@ -146,6 +148,7 @@ async function doRefresh(
   storeOptions: StoreEnvOptions,
   actor: string,
   nowIso: string,
+  confirmation?: DecisionConfirmation,
 ): Promise<AcceptResult> {
   const record = await resolveRecord(root, id, "project", storeOptions);
   if (record.status !== "accepted") {
@@ -177,7 +180,11 @@ async function doRefresh(
       `no index entry for "${id}" under the current project's identity; run \`keryx learn accept ${id}\` first`,
     );
   }
-  await appendDecision(root, { action: "refresh", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope: "project" });
+  await appendDecision(
+    root,
+    { action: "refresh", id, actor, tty: true, at: nowIso, ...(confirmation !== undefined ? { confirmation } : {}) },
+    { ...storeOptions, scope: "project" },
+  );
   return { id, scope: "project", status: "accepted", indexUpdated: true };
 }
 
@@ -198,7 +205,7 @@ export async function acceptPattern(root: string, id: string, opts: AcceptOption
   if (!opts.isTerminal) {
     throw new LearningAcceptError(
       "accept-requires-terminal",
-      "keryx learn accept needs an interactive terminal; there is no bypass flag or environment variable.",
+      "keryx learn accept needs an interactive terminal; there is no bypass flag or environment variable. Inside keryx shell, call the learn_accept tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
   const scope: LearningScope = opts.scope ?? "project";
@@ -209,7 +216,7 @@ export async function acceptPattern(root: string, id: string, opts: AcceptOption
   const actor = resolveActor(root, opts.actor, env);
 
   if (opts.refresh) {
-    return doRefresh(root, id, storeOptions, actor, nowIso);
+    return doRefresh(root, id, storeOptions, actor, nowIso, opts.confirmation);
   }
 
   const record = await resolveRecord(root, id, scope, storeOptions);
@@ -244,7 +251,11 @@ export async function acceptPattern(root: string, id: string, opts: AcceptOption
     },
     { ...storeOptions, capability: createAcceptCapability() },
   );
-  await appendDecision(root, { action: "accept", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope });
+  await appendDecision(
+    root,
+    { action: "accept", id, actor, tty: true, at: nowIso, ...(opts.confirmation !== undefined ? { confirmation: opts.confirmation } : {}) },
+    { ...storeOptions, scope },
+  );
 
   let indexUpdated = false;
   if (scope === "project") {

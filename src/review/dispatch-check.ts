@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
-import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, waveBytesOf } from "./slice";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
+import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
   | "REVIEWER_INPUT_INVALID"
@@ -11,7 +12,10 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_SLICE_UNKNOWN"
   | "REVIEWER_INPUT_TOO_LARGE"
   | "REVIEWER_INPUT_NO_PR_CONTEXT"
-  | "REVIEWER_INPUT_PATH_MISSING";
+  | "REVIEWER_INPUT_PATH_MISSING"
+  | "REVIEWER_INPUT_MANIFEST_UNSIZED"
+  | "REVIEWER_INPUT_PLAN_UNCONFIRMED"
+  | "REVIEWER_INPUT_ID_FORM";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -62,7 +66,22 @@ export type CheckDispatchOptions = {
   pathBytes?: (slicePath: string) => number | undefined;
   /** Set for a pull-request review: every payload must name the collected `pr-context.md`, and it must be readable. */
   prContext?: { exists: (contextPath: string) => boolean };
+  /**
+   * The round's plan: when it is over the operator threshold and no plan confirmation is recorded, every payload is
+   * refused (`planGateRefusal` in estimate.ts says what to do).
+   */
+  plan?: { refusal: string | undefined };
 };
+
+/** The finding ids a payload hands its reviewer, with where each sits: `known_findings[].id`, `prior_findings[].finding.id`. */
+function findingIdsOf(payload: unknown): Array<{ field: "known_findings" | "prior_findings"; at: number; id: unknown }> {
+  if (!isRecord(payload)) return [];
+  const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  return [
+    ...list(payload.known_findings).map((entry, at) => ({ field: "known_findings" as const, at, id: isRecord(entry) ? entry.id : undefined })),
+    ...list(payload.prior_findings).map((entry, at) => ({ field: "prior_findings" as const, at, id: isRecord(entry) && isRecord(entry.finding) ? entry.finding.id : undefined })),
+  ];
+}
 
 /**
  * Refuse a reviewer payload that a bounded reviewer cannot finish.
@@ -75,9 +94,17 @@ export type CheckDispatchOptions = {
  * wave has to fit what a reviewer can finish before its child deadline.
  */
 export async function checkDispatch(payloads: readonly unknown[], options: CheckDispatchOptions = {}): Promise<DispatchCheckResult> {
+  const unsized = options.maxBytes === undefined && options.manifest !== undefined ? manifestSizeProblem(options.manifest) : undefined;
+  if (unsized !== undefined) {
+    // Without a size every byte comparison below would be against NaN and pass; refuse the whole check instead.
+    return { ok: false, checked: payloads.length, maxBytes: 0, errors: [{ code: "REVIEWER_INPUT_MANIFEST_UNSIZED", reviewer: "manifest", message: unsized }] };
+  }
   const maxBytes = options.maxBytes ?? (options.manifest === undefined ? DEFAULT_SLICE_MAX_BYTES : waveBytesOf(options.manifest));
   const schema = await loadReviewerInputSchema();
   const errors: DispatchCheckError[] = [];
+  if (options.plan?.refusal !== undefined) {
+    errors.push({ code: "REVIEWER_INPUT_PLAN_UNCONFIRMED", reviewer: "plan", message: options.plan.refusal });
+  }
   const pathExists = options.pathExists ?? ((filePath: string) => existsSync(path.resolve(filePath)));
 
   for (const [index, payload] of payloads.entries()) {
@@ -96,6 +123,13 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
             message: `${field} ${value} does not exist; the reviewer would be rejected at dispatch. Fix the path or omit the field`,
           });
         }
+      }
+    }
+    // Flow 460: a finding handed to the reviewer is named by a display id it will echo back; one holding "#" would
+    // only fail at ingest, after the whole round, when its global_id is minted.
+    for (const { field, at, id } of findingIdsOf(payload)) {
+      if (displayIdHasHash(id)) {
+        errors.push({ code: "REVIEWER_INPUT_ID_FORM", reviewer, path: `$.${field}[${at}]`, message: `finding id "${id}": ${DISPLAY_ID_FORM}` });
       }
     }
     if (options.prContext !== undefined) {

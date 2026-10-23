@@ -1,0 +1,153 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "C-01",
+      "verdict": "upheld",
+      "reasoning": "No prior intent signal. The only explanations of the empty-list convention (provider-catalog.ts:75, :217; routing-inspector.ts:539) are added by this branch. The older docstring of refreshProviderCatalogFromDetected (provider-catalog.ts:195-210) says the FromDetected path is for callers that already ran detection, and /routing has not. A named wrapper is a sound fix."
+    },
+    {
+      "finding_id": "C-02",
+      "verdict": "upheld",
+      "reasoning": "The docblock (provider-catalog.ts:273-280) still says auth-failed providers are excluded outright, but line 290 returns them under withAuthFailed. The fix matches the implementer's stated intent: excluded by default, opt-in only for /routing (results/T6.json:37)."
+    },
+    {
+      "finding_id": "C-03",
+      "verdict": "upheld",
+      "reasoning": "One verdict is decided in two places. The pre-existing AC14 rule keeps a not-connected rejection free of a reason key (table.ts:192-196), but that rule constrains the ResolvedCategory shape, not a shared verdict function, so it does not explain the split. No signal or practice source argues against one source of truth."
+    },
+    {
+      "finding_id": "C-04",
+      "verdict": "upheld",
+      "reasoning": "flatModelOptions is 33 lines (table.ts:363-395) and mixes injecting the session row with the per-provider loop. That falls in the clean-code reviewer's own 20-40-line mixed-abstraction band (B1). No intent signal argues for this shape, and the extraction does not change behaviour."
+    },
+    {
+      "finding_id": "C-05",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/journal.md:48",
+          "says": "operator decision (question tool): the redetect fallback when the cache is empty or stale, for /routing AND the turn classifier's loader, is not operator-visible and is accepted"
+        },
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T6.json:52-57",
+          "says": "behaviour change 3 offered the alternative 'Only /routing falls back; leave the classifier loader on the cache-only path' (the finding's second fix); the operator kept the fallback"
+        },
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/acceptance-criteria.md:21",
+          "says": "AC2, frozen before implementation: a zero-provider catalog is never served as fresh from the cache and never saved as fresh"
+        }
+      ],
+      "reasoning": "Repeated detection in the empty state follows directly from AC2. The operator accepted the classifier's redetect fallback and declined the cache-only path. The cost the finding sizes does not happen. hasProviders counts an entry whatever its status (provider-catalog.ts:219-224, 247-249), so any provider that reaches a fetch makes the catalog non-empty and gets it saved. The never-saved state runs only detectProviders: a localhost ollama probe plus key checks (select.ts:173-195). That runs inside the classifier's own deadline (routing-classifier-source.ts:110-124, 135), so the 8s per-provider bound cannot occur there. A negative cache, even a short one, would reopen the empty-catalog-served-from-cache shape that AC2 closes.",
+      "question": "With nothing detectable, each routed turn re-runs provider detection: a localhost ollama probe, and no provider fetch, because any fetched provider makes the catalog non-empty and saved. You accepted the classifier's redetect fallback as not operator-visible, and AC2 forbids serving an empty catalog as fresh. Keep this, or add a short negative marker?",
+      "options": [
+        "dismiss — keep: AC2 and the T6 decision stand",
+        "uphold — add a short in-memory negative marker (or a cache-only classifier path) so repeated turns skip detection"
+      ]
+    },
+    {
+      "finding_id": "C-06",
+      "verdict": "upheld",
+      "reasoning": "AC2 and the plan forbid saving an EMPTY catalog as fresh. They say nothing about keeping a stale non-empty one after an empty refresh. The AC2 test's own comment (provider-catalog.test.ts:424) says an absent or stale file is fine. Deleting the file, or writing fetchedAt 0, on an empty refresh therefore satisfies AC2 and closes the 5-minute window."
+    },
+    {
+      "finding_id": "C-07",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/acceptance-criteria.md:23",
+          "says": "AC4 lists exactly three category fallback reasons: 'provider list unavailable', 'provider not connected' or 'model not in <provider>'s list'"
+        },
+        {
+          "ref": "src/tui/routing-inspector.test.ts:631-653",
+          "says": "the red-first AC4 test (T5 test-18) pins an EMPTY provider list to 'provider list unavailable', explicitly not 'provider not connected'"
+        },
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/journal.md:46-47",
+          "says": "operator kept the reason inside the category line with those strings, and kept auth-failed providers listed and not selectable, treated as not connected (results/T6.json:47)"
+        }
+      ],
+      "reasoning": "The two tabs do disagree for a successful empty load. But the session's own provider is always connected, so an empty list arguably means the catalog failed rather than that nothing is connected; which tab's text is right is a product call. An auth-failed assignment reading 'provider not connected' matches the operator's decision to treat auth-failed as not connected. The fix adds category strings beyond AC4's list and changes a mapping that an AC4 test pins.",
+      "question": "In /routing, a successful load with zero providers shows 'no providers connected' on the Model tab but 'provider list unavailable' on a category, and an assignment to an auth-failed provider reads 'provider not connected'. AC4 lists only three category reasons. Keep AC4's three, or add 'no providers connected' and 'provider auth failed' for categories?",
+      "options": [
+        "dismiss — keep AC4's three category reasons, as the AC4 test pins them",
+        "uphold — pass the loader state in so categories say 'no providers connected' and 'provider auth failed', matching the Model tab (changes the AC4-pinned empty-list mapping)"
+      ]
+    },
+    {
+      "finding_id": "C-08",
+      "verdict": "upheld",
+      "reasoning": "The implementer meant only /routing's loader to opt in to auth-failed rows (results/T6.json:37). The classifier reuses loadRoutingProviders (tui-shell.ts:9988), so its session lookup (routing-classifier-source.ts:215-216) now finds an auth-failed row with no models. No signal shows that was deliberate."
+    },
+    {
+      "finding_id": "C-09",
+      "verdict": "upheld",
+      "reasoning": "The plan's state matrix asks for a per-provider 'model list unavailable (<reason>)' row when a fetch fails or times out (plan.md:160), and AC4 forbids silent omission. catalogToFlatPickerProviders still drops an unreachable, timeout or not-supported entry that has no fallback list (provider-catalog.ts:293-296)."
+    },
+    {
+      "finding_id": "C-10",
+      "verdict": "upheld",
+      "reasoning": "provider-catalog-startup.test.ts already prefixes its new tests 'flow 468 AC1'. provider-catalog.test.ts reuses bare AC1/AC2 next to flow 309's '(AC1)' titles, so `-t AC1` also selects flow 309's tests. The header-note alternative needs no edit to the frozen AC, and no signal shows the collision was chosen."
+    },
+    {
+      "finding_id": "C-11",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/acceptance-criteria.md:23",
+          "says": "AC4: if loading the providers rejects or hangs, the modal leaves 'Reading routing table…' within the timeout; the property under test is a time bound"
+        },
+        {
+          "ref": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T5.json:50,54",
+          "says": "test-20 was written red-first against the timeoutMs seam, red_reason 'Reading routing table remains'; the flow's own run command uses --timeout 30000"
+        },
+        {
+          "ref": "src/tui/routing-inspector.ts:150,211",
+          "says": "production default ROUTING_PROVIDERS_TIMEOUT_MS is 12_000; the 30 ms bound reaches the modal only through the timeoutMs seam"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md, 'Browser and E2E Determinism' (lines 169-175)",
+          "says": "the 'No fixed sleeps' rule the finding cites governs waits for events in browser/E2E tests; here the wait is the deadline of a headless TUI component test, not synchronization"
+        },
+        {
+          "name": "Bun test runner — per-test timeout (`--timeout`, default 5000 ms)",
+          "says": "with `await handle.ready` alone, the runner's per-test timeout becomes the only time bound on the assertion"
+        }
+      ],
+      "reasoning": "AC4 asks for a time bound, so the 500 ms wait is the assertion's deadline, not a synchronisation sleep. The suggested `await handle.ready` would make the runner timeout the only bound. Under --timeout 30000, which the flow (T5.json:54) and this review's mutation pass (mutation-1.md:3) both use, an implementation that ignored timeoutMs and waited the 12 s default would pass. The claimed flake did not reproduce: 30/30 passed under load (verify-review-testing-practices-w2_F-004-1.txt). What remains is about 500 ms per run.",
+      "question": "The hang test's 500 ms wait is the deadline AC4 names ('within the timeout'). Replacing it with `await handle.ready` alone would let a 12 s bound pass under --timeout 30000, the flow's own run command. Keep the deadline wait, or rewrite the test?",
+      "options": [
+        "dismiss — keep the 500 ms deadline wait as written",
+        "uphold — await handle.ready, assert it settled within a bound well under 12 s, and add one positive assertion"
+      ]
+    },
+    {
+      "finding_id": "C-12",
+      "verdict": "upheld",
+      "reasoning": "Mutant M-1 survived (mutation-1.md:9). The gate's purpose is documented (provider-catalog.ts:195-210, 217), and no intent signal or practice source makes an unpinned gate that the fix added any smaller."
+    },
+    {
+      "finding_id": "C-13",
+      "verdict": "upheld",
+      "reasoning": "AC3 names exactly the unpinned middle case: 'even when the catalog lacks them' (acceptance-criteria.md:22). Mutants M-2 and M-3 survived (mutation-1.md:10-11)."
+    },
+    {
+      "finding_id": "C-14",
+      "verdict": "upheld",
+      "reasoning": "The plan gives reload() a try/catch so it cannot stick on 'Reading routing table…' (plan.md:27). Mutant M-7 survived (mutation-1.md:15), and no test drives a config load that rejects."
+    },
+    {
+      "finding_id": "C-15",
+      "verdict": "upheld",
+      "reasoning": "Mutants M-8, M-9 and M-10 survived (mutation-1.md:16-18). Each would show a wrong status line, which AC4's 'its own visible text' covers. The absence assertions are cheap and fit the existing tests."
+    },
+    {
+      "finding_id": "C-16",
+      "verdict": "upheld",
+      "reasoning": "Mutants M-11 and M-12 survived (mutation-1.md:19-20). The wiring is where the reported bug lived, and the operator's 'listed, not selectable' decision (journal.md:47) has no pickerOptions assertion. The suggested source audit follows the file's documented idiom (provider-catalog-startup.test.ts)."
+    }
+  ]
+}

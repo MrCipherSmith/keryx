@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import { optionValue } from "../lib/args";
+import { optionValue, optionValues } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
-import { revisionOperand } from "../lib/git-revision";
+import { assertGitRevision, revisionOperand } from "../lib/git-revision";
 // Through the security facade, not `security/redact` directly — same
 // discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
 import { redactSensitiveText } from "../security/service";
@@ -22,9 +22,9 @@ import {
   type LearningSelection,
 } from "../review/review-learning";
 import {
-  completeManagedReview,
   createManagedReviewPackage,
   getManagedReviewStatus,
+  parseEmbeddedPremises,
   resolveGitHead,
   resolveReviewPackagePath,
   upsertPreFilterScopeBlock,
@@ -40,7 +40,12 @@ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/co
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
-import { estimatePackage, renderEstimate } from "../review/estimate";
+import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
+import { readJsonFileOr } from "../lib/json";
+import type { SliceManifest } from "../review/slice";
+import { manifestRosterRoles } from "../review/round-split";
+import { printPlanHelp, runPlan } from "./review-plan";
+import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -56,13 +61,23 @@ import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { guardReviewPaths } from "../lib/review-path-flags";
-import { startOrchestratorLog } from "../review/orchestrator-log";
+import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
+import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
+import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
+import { buildRunProfile, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
+import { completeReviewGated } from "../review/complete-gated";
+import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
 import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
+import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
+import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
+import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
+import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
+import { printNextHelp, runNext } from "./review-next";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -94,6 +109,10 @@ import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+import { findPreviousRound, NOT_REVIEW_PACKAGES, skippedRound, type PriorRoundDeps } from "../review/prior-round";
+import { recordFinishedRound } from "../review/round-registry";
+import { carryPremiseDecisions } from "../review/premise-question";
+import { renderRoundLine, ROUND_FILE, writeRoundRecord } from "../review/round-record";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
 // package. Minimal, additive — this hook never triggers a fresh Jev call
 // (that spend only happens via `keryx flow check-ac`/the advisory notices in
@@ -126,6 +145,7 @@ import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from ".
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
+  testsToRunLine,
   DEFAULT_BLAST_RADIUS_DEPTH,
   DEFAULT_BLAST_RADIUS_MAX_FILES,
   renderBlastRadiusDispatchBrief,
@@ -152,6 +172,7 @@ import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-r
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import { writeVerdict } from "../review/verdict";
+import { parsePremiseClaimSets } from "../review/premise";
 import {
   buildReplyPass,
   collectPrComments,
@@ -206,6 +227,7 @@ import {
   type FindingDispositionState,
   type ManagedReviewInput,
   type ManagedReviewMode,
+  type PremiseSource,
   type ReviewFindingsSource,
   type ReviewScopeRecordLike,
   type ReviewTargetKind,
@@ -309,6 +331,7 @@ export const CREATE_FLAGS = [
   "--reviewers",
   "--report",
   "--verifications",
+  "--premises",
   "--research",
   "--verification-mode",
   "--scope",
@@ -329,6 +352,18 @@ export const CREATE_FLAGS = [
   "--memory-query",
   "--graph-timeout",
   AUTOMATIC_REVIEW_FLAG,
+  // Flow 457 (T7): `start|attach` record how the round runs in <package>/run-profile.json. --unattended: nobody is at
+  // the keyboard, so an unrun mutation pass is recorded as not run instead of refused. --host: the agent host
+  // (keryx-shell, claude-code, codex, other); default detected from the environment.
+  "--unattended",
+  "--host",
+  // Flow 458 (AC1): `start|attach` find the previous round of the same target and write <package>/round.json and
+  // prior_findings.json. --no-prior-round skips the search (round 1, every source "not consulted"); --prior
+  // <package|reviewId> names the previous round instead of searching for it.
+  "--no-prior-round",
+  "--prior",
+  // The base the round's merge-base is read from, ahead of origin/main (a merged PR's merge-base with origin/main is its head).
+  "--base",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -441,6 +476,8 @@ const SCOPE_FLAGS = [
   "--diff",
   "--ref",
   "--base",
+  // Flow 458: with --ref, the diff ends at this commit instead of the working tree (`review plan --head`).
+  "--head",
   "--json",
   "--scoped-diff",
   "--append",
@@ -512,6 +549,8 @@ const BLAST_RADIUS_FLAGS = [
   "--brief",
   "--out",
   "--package",
+  "--reach",
+  "--no-text-links",
 ] as const;
 
 const TIER_FLAGS = [
@@ -524,6 +563,7 @@ const TIER_FLAGS = [
   "--diff-lines",
   "--verifier",
   "--security",
+  "--premise",
   "--session-provider",
   "--session-model",
   "--from-shell-config",
@@ -540,7 +580,7 @@ const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
-export const ESTIMATE_FLAGS = ["--package", "--manifest", "--json"] as const;
+export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -597,11 +637,70 @@ export interface ReviewCommandSeams {
   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
   /** Test seam: the operator's answer to "post this body?". Default: a prompt on the terminal. */
   confirmPublish?: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
+  /** Test seam: the previous-round search of `start|attach` (sources, git, the pull request read). Default: the real ones. */
+  priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
+  /** Test seam: a pull request's own base ref for `start|attach|ingest` of a PR target. Default: `gh pr view` (see ghPrBase). */
+  prBase?: (ref: string) => Promise<string | undefined>;
+}
+
+/** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
+const PR_BASE_TIMEOUT_MS = 15_000;
+
+/** `origin/<name>` for the branch name `gh` printed; undefined when it is not a plain branch name (an option, a range, empty). */
+export function prBaseRef(output: string): string | undefined {
+  const name = output.trim();
+  return /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
+}
+
+/**
+ * The pull request's own base as a ref git can resolve (`origin/<baseRefName>`), read with `gh pr view`; undefined when gh
+ * is missing, signed out or offline, or names something that is not a branch name. Never throws.
+ */
+export async function ghPrBase(ref: string): Promise<string | undefined> {
+  // `KERYX_REVIEW_PR_BASE=off` skips the lookup (the test runner sets it; an offline operator may too).
+  if (process.env.KERYX_REVIEW_PR_BASE === "off" || ref.startsWith("-") || Bun.which("gh") === null) return undefined;
+  try {
+    const proc = Bun.spawn(["gh", "pr", "view", ref, "--json", "baseRefName", "--jq", ".baseRefName"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: PR_BASE_TIMEOUT_MS, killSignal: "SIGKILL" });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return exitCode === 0 ? prBaseRef(stdout) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
   if (!(await githubAdapter.detect())) return null;
   return githubAdapter.prStatus(ref);
+}
+
+/**
+ * Runs one `keryx review <args>` step in this process and returns what it printed, for `review plan`, which reads the
+ * steps' results. console output and the exit code are captured and restored; nothing is spawned, so the step runs the
+ * code of this build, not an installed one.
+ */
+async function captureReviewStep(args: string[], seams?: ReviewCommandSeams): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const out: string[] = [];
+  const err: string[] = [];
+  const original = { log: console.log, info: console.info, warn: console.warn, error: console.error, exitCode: process.exitCode };
+  const join = (parts: unknown[]): string => parts.map((part) => (typeof part === "string" ? part : String(part))).join(" ");
+  console.log = (...parts: unknown[]) => void out.push(join(parts));
+  console.info = (...parts: unknown[]) => void out.push(join(parts));
+  console.warn = (...parts: unknown[]) => void err.push(join(parts));
+  console.error = (...parts: unknown[]) => void err.push(join(parts));
+  process.exitCode = 0;
+  try {
+    await reviewCommand(args, seams);
+    return { stdout: out.join("\n"), stderr: err.join("\n"), exitCode: typeof process.exitCode === "number" ? process.exitCode : 0 };
+  } catch (error) {
+    err.push(error instanceof Error ? error.message : String(error));
+    return { stdout: out.join("\n"), stderr: err.join("\n"), exitCode: 1 };
+  } finally {
+    console.log = original.log;
+    console.info = original.info;
+    console.warn = original.warn;
+    console.error = original.error;
+    process.exitCode = original.exitCode;
+  }
 }
 
 export async function reviewCommand(args: string[], seams?: ReviewCommandSeams): Promise<void> {
@@ -613,15 +712,15 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
 
   try {
     if (command === "attach") {
-      await runCreate("attach-review", args.slice(1));
+      await runCreate("attach-review", args.slice(1), seams);
       return;
     }
     if (command === "start") {
-      await runCreate("review-flow", args.slice(1));
+      await runCreate("review-flow", args.slice(1), seams);
       return;
     }
     if (command === "ingest") {
-      await runCreate("ingest", args.slice(1));
+      await runCreate("ingest", args.slice(1), seams);
       return;
     }
     if (command === "scope") {
@@ -642,6 +741,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "retry-plan") {
       await runRetryPlan(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "next") {
+      await runNext(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "ledger") {
@@ -681,7 +784,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "comments") {
-      await runComments(args.slice(1));
+      await runComments(args.slice(1), seams);
       return;
     }
     if (command === "ci-triage") {
@@ -786,7 +889,15 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "estimate") {
-      await runEstimate(args.slice(1));
+      await runEstimate(args.slice(1), seams);
+      return;
+    }
+    if (command === "plan") {
+      await runPlan(args.slice(1), { rejectUnknownFlags, run: (stepArgs) => captureReviewStep(stepArgs, seams) });
+      return;
+    }
+    if (command === "plan-eval") {
+      await runPlanEval(args.slice(1), { rejectUnknownFlags });
       return;
     }
     if (command === "mutate") {
@@ -824,6 +935,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "complete") {
       await runComplete(args.slice(1), seams);
+      return;
+    }
+    if ((OPERATOR_COMMANDS as readonly string[]).includes(command)) {
+      const code = await runOperatorCommand(command as OperatorCommand, args.slice(1), seams?.isTerminal === undefined ? {} : { isTerminal: seams.isTerminal });
+      if (code !== 0) process.exitCode = code;
       return;
     }
     if (command === "lightweight") {
@@ -929,7 +1045,7 @@ export async function refreshCreatedPackageLayers(
   }
 }
 
-async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void> {
+async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
   rejectUnknownFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
   const targetKind = targetKindFromArgs(mode, args);
   const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
@@ -938,12 +1054,30 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
   const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
+  const hostArg = optionValue(args, "--host");
+  if (hostArg !== undefined && parseReviewHost(hostArg) === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
+  const unattendedRefusal = unattendedStartRefusal({
+    unattended: mode !== "ingest" && args.includes("--unattended"),
+    isTerminal: createSeams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true),
+  });
+  if (unattendedRefusal !== undefined) throw new Error(unattendedRefusal);
+  if (mode !== "ingest" && args.includes("--no-prior-round") && optionValue(args, "--prior") !== undefined) {
+    throw new Error("--prior and --no-prior-round contradict each other: give one.");
+  }
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  // Recorded on the target (flow 460): the coverage gate's light recheck diffs against `target.base` before any default.
+  // A pull request started without --base records its own base, read from GitHub, so a PR into another branch than main is
+  // measured against that branch (review F-004); beside a --base, the PR's base is kept as `prBase`, which the recheck
+  // also measures, so a --base the starter chose cannot narrow the diff (SEC-001).
+  const givenBase = optionValue(args, "--base")?.trim() || undefined;
+  const prBase = targetKind === "pr" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;
+  const base = givenBase ?? prBase;
+  const keptPrBase = givenBase !== undefined && prBase !== undefined && prBase !== givenBase ? prBase : undefined;
   const input: ManagedReviewIngestInput = {
     cwd,
     mode,
-    target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
+    target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(keptPrBase === undefined ? {} : { prBase: keptPrBase }), ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
@@ -952,6 +1086,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
     verifications: await readVerifications(optionValue(args, "--verifications")),
+    premises: await readPremises(optionValues(args, "--premises")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -978,7 +1113,44 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
-  if (mode !== "ingest") await startOrchestratorLog(cwd, result.reviewId, result.path);
+  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward, the holds from this package's previous findings.json (no --premises given; the held findings are unchanged)");
+  if (mode !== "ingest") {
+    const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
+    await writeRunProfile(result.path, profile, { stampManifest: true });
+    await startOrchestratorLog(cwd, result.reviewId, result.path, profile.callerToken);
+    console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
+    console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
+    for (const line of renderSkillDrift(reviewSkillDrift({ projectRoot: resolveProjectRoot(cwd), bundledRoot: defaultBundledReviewRoot() }))) console.error(line);
+    const roundHead = result.manifest.target.head ?? null;
+    const forcedPrior = optionValue(args, "--prior");
+    const detected = args.includes("--no-prior-round")
+      ? skippedRound(roundHead, result.manifest.target)
+      : await findPreviousRound(optionValue(args, "--base") === undefined ? result.manifest.target : { ...result.manifest.target, base: optionValue(args, "--base") }, roundHead, {
+          cwd,
+          ...createSeams.priorRound,
+          ...(result.manifest.flow?.path === undefined ? {} : { flowDir: path.basename(result.manifest.flow.path) }),
+          excludeReviewId: result.reviewId,
+          ...(forcedPrior === undefined ? {} : { forced: forcedPrior }),
+        });
+    await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
+    const previousPackage = detected.round.previous?.packagePath;
+    if (detected.round.mode === "delta" && previousPackage !== undefined && detected.round.carried.length > 0) {
+      const carriedAnswers = await carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), detected.round.carried.map((entry) => entry.findingId), previousPackage, { projectRoot: cwd });
+      if (carriedAnswers.length > 0) console.log(`premise answers carried from ${previousPackage}: ${carriedAnswers.join(", ")}`);
+    }
+    console.log(renderRoundLine(detected.round));
+    for (const warning of detected.round.warnings ?? []) console.error(`warning: ${warning}`);
+    console.log(
+      `round record: ${path.join(result.path, ROUND_FILE)} (${detected.round.mode}; ${detected.priorFindings.length} prior finding(s); fix hunks ${detected.round.fixHunks.length}, new hunks ${detected.round.newHunks.length})`,
+    );
+  }
+  if (mode === "ingest") {
+    // Flow 458: the flow loop starts round N+1 right after ingest, so a round past its draft (a scopeReviewed ledger)
+    // is recorded in the machine-local round registry here, not only at complete/publish (review/round-registry.ts).
+    const registered = recordFinishedRound(result.path, "ingest", { cwd });
+    if (registered.error !== undefined) console.error(`warning: round not recorded in the local round registry (${registered.error})`);
+    if (registered.warning !== undefined) console.error(`warning: ${registered.warning}`);
+  }
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
   if (mode === "review-flow" && Array.isArray(startRadius?.dropped) && startRadius.dropped.length > 0) {
@@ -1515,6 +1687,7 @@ function tierSignalsFromArgs(args: string[]): TierSignals {
     diffLines: parseNonNegativeInteger(optionValue(args, "--diff-lines"), "--diff-lines"),
     forcedStrategyChange: args.includes("--forced-strategy-change"),
     hasSecurityFinding: args.includes("--security"),
+    premiseJudge: args.includes("--premise"),
   };
 }
 
@@ -1664,7 +1837,7 @@ export function dispatchModelBlock(decision: DispatchModelDecision): Record<stri
  * network and no pull request. It is not a test-only affordance — it is the
  * supported way to see what a reply pass would say before it says it.
  */
-async function runComments(args: string[]): Promise<void> {
+async function runComments(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   // Before the dispatch: `reply` posts, and must never be reached by a question.
   if (asksForHelp(args)) {
     printCommentsHelp();
@@ -1676,7 +1849,7 @@ async function runComments(args: string[]): Promise<void> {
     return;
   }
   if (sub === "reply") {
-    await runCommentsReply(args.slice(1));
+    await runCommentsReply(args.slice(1), seams);
     return;
   }
   throw new Error("Usage: keryx review comments <collect|reply> --repo <owner/repo> --pr <n> ...");
@@ -1740,13 +1913,34 @@ async function runCommentsCollect(args: string[]): Promise<void> {
   );
 }
 
-async function runCommentsReply(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+/**
+ * Flow 457 (T7, audit row 9): a final reply pass posts the operator's answers on the pull request, so outside a
+ * dry run and an offline `--fixtures` rehearsal it needs a person at a terminal, or the `review_comments_reply`
+ * card in keryx shell (which runs {@link commentsReplyPass} itself after the operator's yes).
+ */
+export function commentsReplyGate(args: readonly string[], isTerminal: () => boolean): string | undefined {
+  if (!args.includes("--final") || args.includes("--dry-run") || optionValue([...args], "--fixtures") !== undefined) return undefined;
+  if (isTerminal()) return undefined;
+  return "comments reply --final posts on the pull request and needs a terminal: refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_comments_reply tool: the operator reads the replies and answers a card. Outside keryx shell, run this command in a terminal; `--dry-run` shows the replies without posting.";
+}
+
+/** What one reply pass did (or, dry, would do): the result and where it ran. */
+export type CommentsReplyRun = {
+  result: Awaited<ReturnType<typeof postReplyPass>>;
+  cwd: string;
+  repo: string;
+  number: number;
+  state: Awaited<ReturnType<typeof readPrCommentState>>;
+  dryRun: boolean;
+};
+
+/** One reply pass from `comments reply` arguments; `dryRun` overrides `--dry-run`. Prints nothing. */
+export async function commentsReplyPass(args: string[], dryRunOverride?: boolean): Promise<CommentsReplyRun> {
   const repo = requiredOption(args, "--repo", "comments reply");
   const number = requiredInteger(args, "--pr");
   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
   const isFinal = args.includes("--final");
-  const dryRun = args.includes("--dry-run");
+  const dryRun = dryRunOverride ?? args.includes("--dry-run");
 
   // Before any network call, not merely before the post. A self-contradictory
   // result is refusable from the file alone, and making the caller wait on a
@@ -1796,6 +1990,14 @@ async function runCommentsReply(args: string[]): Promise<void> {
     state,
     dryRun,
   });
+  return { result, cwd, repo, number, state, dryRun };
+}
+
+async function runCommentsReply(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+  const refused = commentsReplyGate(args, seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true));
+  if (refused !== undefined) throw new Error(refused);
+  const { result, cwd, repo, number, state, dryRun } = await commentsReplyPass(args);
 
   console.log(`# review comments reply (${dryRun ? "dry run" : "posted"})`);
   console.log("");
@@ -3156,7 +3358,7 @@ async function runRequired(args: string[]): Promise<void> {
   const files = scope?.files !== undefined ? [...scope.files] : packageFiles;
   const forceFull = args.includes("--all") ? "--all" : args.includes("--gating") ? "--gating" : undefined;
   const decision = await decideRoundDepth(process.cwd(), depthArg, { files, changedLines, forceFull });
-  const set = await requiredReviewers(process.cwd(), mode, files, {
+  const baseSet = await requiredReviewers(process.cwd(), mode, files, {
     blastRadius:
       radiusFile !== undefined
         ? await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))
@@ -3167,6 +3369,10 @@ async function runRequired(args: string[]): Promise<void> {
         : packageDir !== undefined && packageHasPrContext(packageDir),
     depth: decision.depth,
   });
+  // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
+  const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
+  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? manifestRosterRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
+  const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
     // The one write: `ledger build` reads the round's depth back from the package.
     // The decision is tied to the head, file list and line count it was made for; `ledger build` drops it when any of them moved.
@@ -3174,22 +3380,37 @@ async function runRequired(args: string[]): Promise<void> {
     await writeFileAtomic(path.join(packageDir, ROUND_DEPTH_FILE), `${JSON.stringify({ ...decision, head: basis.head, files: files === undefined ? undefined : [...files].sort(), changedLines }, null, 2)}\n`);
   }
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...set, depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
+    console.log(JSON.stringify({ ...set, ...(fixRoles.length === 0 ? {} : { fixRoles }), depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
     return;
   }
   console.log(`depth: ${set.depth} (${decision.reason})`);
   console.log(`mode: ${set.mode}${set.filesKnown ? "" : " (no scope file list: path-gated reviewers stay required)"}`);
   console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
+  if (fixRoles.length > 0) console.log(`fix slices add: ${fixRoles.join(", ")} (they authored findings a fix slice answers)`);
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
 }
 
-async function runEstimate(args: string[]): Promise<void> {
+async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, ESTIMATE_FLAGS, "estimate");
   const placed = guardReviewPaths("estimate", args);
   const packageDir = placed("--package");
   if (packageDir === undefined) throw new Error("estimate needs --package <review-dir>");
+  const confirm = args.includes("--confirm");
+  const quote = optionValue(args, "--quote");
+  if (quote !== undefined && !confirm) throw new Error("--quote is the operator's answer to --confirm; pass both.");
+  // A plan confirmation is the operator's own statement, so a person has to be at the terminal that records it.
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (confirm && !isTerminal()) {
+    throw new Error(`--confirm needs a terminal: a plan confirmation is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the ${CONFIRM_PLAN_TOOL} tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.`);
+  }
+  if (confirm && (quote === undefined || quote.trim() === "")) throw new Error("--confirm needs the operator's own words: --quote \"<words>\".");
   const estimate = await estimatePackage(packageDir, { manifest: placed("--manifest") });
-  console.log(args.includes("--json") ? JSON.stringify(estimate, null, 2) : renderEstimate(estimate));
+  if (confirm) {
+    const file = await writePlanConfirmation(packageDir, planConfirmationFor(estimate, quote!, "terminal"));
+    console.log(args.includes("--json") ? JSON.stringify({ ...estimate, confirmation: file }, null, 2) : `${renderEstimate(estimate)}\nconfirmed: plan ${estimate.planKey} recorded in ${file}`);
+    return;
+  }
+  console.log(args.includes("--json") ? JSON.stringify({ ...estimate, confirmed: planConfirmed(packageDir, estimate) }, null, 2) : renderEstimate(estimate));
 }
 
 async function runCompareReference(args: string[]): Promise<void> {
@@ -3423,7 +3644,55 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
   }
+  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding ran in the parent and is
+  // recorded as execution. That promotion happens in the ingest, against the package directory it allocates, so the
+  // records come only from the package this ingest writes (review LG6-002, SEC6-001).
   return verificationClaims(parsed as VerificationSource);
+}
+
+/**
+ * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
+ * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
+ */
+async function readPremises(sources: readonly string[]): Promise<PremiseSource[] | undefined> {
+  if (sources.length === 0) {
+    return undefined;
+  }
+  // Flow 460: --premises is repeatable. Every file is read the same way and the result is always a list of premise
+  // results, each with its own judge, merged by the ingest as one set of claims (a conflicting claim across files is a
+  // duplicate-claim).
+  if (sources.filter((source) => source === "-").length > 1) {
+    throw new Error("--premises - (stdin) may be given once. Nothing was ingested.");
+  }
+  const files: PremiseSource[] = [];
+  for (const source of sources) files.push(...(await readPremiseFile(source)));
+  return files;
+}
+
+/**
+ * One --premises file as premise results: a judge's `{ judge, model?, premises }` object, a report holding one fenced
+ * `keryx:premises` block, or a package's own research-evidence/premises.json — which a multi-file ingest writes as a list
+ * of results, so it is read with the same reader the verdict uses (`parsePremiseClaimSets`) and can be passed back.
+ */
+async function readPremiseFile(source: string): Promise<PremiseSource[]> {
+  let raw: string;
+  try {
+    raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- the public message names the file and the reason, not the raw caught value.
+    throw new Error(`--premises ${source}: the file could not be read (${error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "unreadable"}). Nothing was ingested.`);
+  }
+  // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
+  const parsed: unknown = parseEmbeddedPremises(raw, `--premises ${source}`);
+  // Validates every result; throws on anything that is not one result or a list of results, so the filter drops nothing.
+  parsePremiseClaimSets(parsed);
+  const results: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  return results.filter(isPremiseSource);
+}
+
+/** A premise result: an object with a `premises` list (parsePremiseClaimSets has checked the rest). */
+function isPremiseSource(value: unknown): value is PremiseSource {
+  return typeof value === "object" && value !== null && "premises" in value && Array.isArray(value.premises);
 }
 
 /**
@@ -3532,6 +3801,8 @@ async function runScope(args: string[]): Promise<void> {
   const pathList = optionValue(args, "--path");
   const diffFile = optionValue(args, "--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const head = optionValue(args, "--head");
+  if (head !== undefined && (ref === undefined || diffFile !== undefined || pathList !== undefined)) throw new Error("--head needs --ref (the diff is <ref>..<head>) and cannot be combined with --diff or --path.");
 
   let scope: ReviewScope;
   if (pathList !== undefined) {
@@ -3541,7 +3812,7 @@ async function runScope(args: string[]): Promise<void> {
       .filter(Boolean);
     scope = buildPathScope(paths, { contextLines });
   } else {
-    const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
+    const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines, head);
     scope = buildReviewScope(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) });
   }
 
@@ -3688,10 +3959,21 @@ async function runBlastRadius(args: string[]): Promise<void> {
 
   const explicit = optionValue(args, "--changed");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const reachMode = optionValue(args, "--reach") ?? "symbol";
+  if (reachMode !== "symbol" && reachMode !== "file") throw new Error(`--reach ${reachMode}: expected symbol or file.`);
+  // Flow 457 AC7: with --package the changed files are `git diff base...head` at the package's pinned head, never the
+  // working tree, and the base is --ref/--base, else the PR base the layers resolved (a `<head>~1` fallback is announced).
+  const radiusPackage = optionValue(args, "--package");
+  const range =
+    radiusPackage === undefined || explicit !== undefined
+      ? undefined
+      : radiusRange({ ref, layers: await ensurePackageLayers(resolvePackageDir(args, cwd)) });
+  if (range?.warning !== undefined) console.error(range.warning);
+  if (range !== undefined) console.error(`range: ${range.base.slice(0, 12)}...${range.head.slice(0, 12)} (base from ${range.baseSource})`);
   const changedFiles =
     explicit !== undefined
       ? explicit.split(",").map((item) => item.trim()).filter(Boolean)
-      : await gitChangedFiles(ref);
+      : (await gitLines(changedFilesArgv(range, ref))).filter(Boolean);
 
   // Flow 451 AC7: a recount against a base that changes the file count past RECOUNT_RATIO x the package's own scope
   // (`--ref develop` turned 25 files into 1547) is refused, with both numbers, before anything is written.
@@ -3751,14 +4033,48 @@ async function runBlastRadius(args: string[]): Promise<void> {
     );
   }
   const testFiles = includeRelatedTests ? await gitTestFiles() : [];
+  // Symbol reach and text links read the zero-context patch of the same range the changed files came from. With
+  // --changed and no range there is no patch: every seed then falls back to its file edge, which is the old walk.
+  const projectRoot = resolveProjectRoot(cwd);
+  const patch = explicit !== undefined && range === undefined ? "" : await gitText(radiusDiffArgv(range, ref));
+  const symbols =
+    reachMode === "file"
+      ? undefined
+      : {
+          read: range === undefined ? workingTreeSourceReader(projectRoot, ref ?? "HEAD") : gitSourceReader(projectRoot, range.head, range.base),
+          diff: parseDiffHunks(patch),
+        };
+  const textLinks =
+    args.includes("--no-text-links") || patch === ""
+      ? undefined
+      : await findTextLinks({
+          diff: patch,
+          changedFiles,
+          search: range === undefined ? ripgrepSearcher(projectRoot) : gitGrepSearcher(projectRoot, range.head),
+        });
   const radius = computeBlastRadius({
     graph,
     changedFiles,
     testFiles,
     config: { depth, maxFiles, includeRelatedTests },
+    symbols,
+    textLinks,
+    testCommand: detectTestCommand(projectRoot),
   });
   await emitBlastRadius(radius, args);
-
+  const reasoned =
+    (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0) + (radius.counts.droppedTestConsumer ?? 0);
+  if (reasoned > 0) {
+    console.error(
+      `omitted with a reason: ${radius.counts.droppedUnrelatedSymbol ?? 0} unrelated-symbol, ${radius.counts.droppedHubDamped ?? 0} hub-damped, ${radius.counts.droppedTextHub ?? 0} text-hub, ${radius.counts.droppedTestConsumer ?? 0} test-consumer. ` +
+        "They are context, not owed a chunk pass.",
+    );
+  }
+  if (radius.testsToRun !== undefined) {
+    const runLine = testsToRunLine(radius);
+    if (runLine !== undefined) console.error(runLine);
+    if (packageOption !== undefined) console.error(`tests to run: ${await writeTestsToRun(resolvePackageDir(args, cwd), radius)}`);
+  }
   if (radius.counts.droppedByCap > 0) {
     console.error(
       `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
@@ -3807,10 +4123,12 @@ async function readPreviousRadius(source: string): Promise<BlastRadius> {
   return parsed as BlastRadius;
 }
 
-/** The changed-file list scope B is seeded from. Deleted paths are excluded. */
-async function gitChangedFiles(ref: string | undefined): Promise<string[]> {
-  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : revisionOperand(ref))];
-  return (await gitLines(command)).filter(Boolean);
+/** Raw stdout of a git command (the radius patch); throws on a non-zero exit like {@link gitLines}. */
+async function gitText(command: readonly string[]): Promise<string> {
+  const proc = Bun.spawn([...command], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  if (exitCode !== 0) throw new Error(`${command.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
+  return stdout;
 }
 
 async function gitTestFiles(): Promise<string[]> {
@@ -3861,8 +4179,9 @@ const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, reje
  * would make every region report `context_truncated` and hand reviewers less
  * than the configured bound.
  */
-async function gitDiff(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))];
+async function gitDiff(ref: string | undefined, contextLines: number, head?: string): Promise<string> {
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref)), ...(ref === undefined || head === undefined ? [] : [assertGitRevision(head)]), "--", ...NOT_REVIEW_PACKAGES];
+  // Committed review/flow packages record a review rather than being reviewed: the same pathspec the delta slicer uses.
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -4002,9 +4321,10 @@ Usage:
 The verdict of a review round as it stands: finding counts by severity, verified vs
 unverified (refuted excluded), open blockers and majors, and the reviewers that have
 not reported. Reads the ingested round (findings.json) when there is one, else the raw
-reviewer results in --raw <dir> (default <package>/raw; a shell host keeps them in
-.metaproject/data/review/raw). Verifier results in research-evidence/verifications.json are applied
-first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
+reviewer results in --raw <dir> (default <package>/raw, where every host keeps them; the shared
+.metaproject/data/review/raw is read only when passed explicitly, since it holds other rounds' replies). Verifier results in research-evidence/verifications.json are applied
+first, so a refuted finding is excluded; premise results in research-evidence/premises.json hold a challenged finding
+out of the open counts ("awaiting operator") until keryx review decide-premise answers it; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
 verdict-interim.md into the package. A package with no findings says so and exits 0.
 `);
 }
@@ -4180,6 +4500,12 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
   const yes = tokens.some((token) => token.name === "--yes");
   const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  // Flow 457 (T7, audit row 7; security review M2): `--yes` skips the operator's reading of the body, so only a person
+  // at a terminal may pass it. The autonomous runner's environment variable is no exemption: any process can set it.
+  // An unattended run that reaches this step records the publish as needing the operator (Not run).
+  if (yes && !isTerminal()) {
+    throw new Error("publish --yes needs a terminal: it posts without the operator reading the body, and is refused when stdin or stdout is not a TTY (an unattended or autonomous run included: record the publish as Not run, needs operator). Inside keryx shell, call the review_publish tool: the operator reads the body and answers a card. Outside keryx shell, run this command in a terminal.");
+  }
   let shown = false;
   const confirm = seams?.confirmPublish ?? (async (body: string, target: string, kind: ReviewEvent): Promise<boolean> => {
     console.log(`--- review body (${kind}) for ${target} ---`);
@@ -4188,7 +4514,7 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
     shown = true;
     if (yes) return true;
     if (!isTerminal()) {
-      console.log("Not posted: the operator has not read the body. Re-run with --yes once they have, or run the command in a terminal.");
+      console.log("Not posted: the operator has not read the body. Inside keryx shell, call the review_publish tool: the operator reads the body and answers it as a card. Outside keryx shell, run this command in a terminal.");
       return false;
     }
     return promptYes(`Post this ${kind} review to ${target}? [y/N] `);
@@ -4229,12 +4555,13 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   // statement, so a person has to be at the terminal that carries it.
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (waiver !== undefined && !isTerminal()) {
-    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
   }
   const readinessWaivers = parseReadinessWaivers(args);
   if (readinessWaivers.length > 0 && !isTerminal()) {
-    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
   }
+  // completeReviewGated also refuses slice routing narrower than a slice's content needs (security review M3).
   const {
     manifest,
     reviewNotes,
@@ -4242,7 +4569,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     coverageWaiver,
     readiness,
     warnings,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
@@ -4382,13 +4709,13 @@ function printTierHelp(): void {
 
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--from-shell-config] [--catalog <file|->] [--json]
 
 Computes the dispatch model block from signals the orchestrator already holds.
-There is no --tier flag. Base tier is standard. --scope blast-radius and
---forced-strategy-change floor at deep. --fix-attempt >= 2 raises one tier.
+There is no --tier flag. Base tier is standard. --scope blast-radius,
+--forced-strategy-change and --premise (the dispatch is review-premise) floor at deep. --fix-attempt >= 2 raises one tier.
 A small diff, or verifier execution/site-check, may allow light. --security
 never goes below standard. Reviewer name is not a signal.
 
@@ -4483,11 +4810,14 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["complete", printCompleteHelp],
   ["status", printStatusHelp],
   ["estimate", printEstimateHelp],
+  ["plan", printPlanHelp],
+  ["plan-eval", printPlanEvalHelp],
   ["required", printRequiredHelp],
   ["scope", printScopeHelp],
   ["slice", printSliceHelp],
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
+  ["next", printNextHelp],
   ["ledger", printLedgerHelp],
   ["verdict", printVerdictHelp],
   ["layers", printLayersHelp],
@@ -4498,6 +4828,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["learn", printLearnHelp],
   ["import", printImportHelp],
   ["run", () => console.log(RUN_HELP)],
+  ...OPERATOR_COMMANDS.map((name): [string, () => void] => [name, () => printOperatorCommandHelp(name)]),
 ]);
 
 /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
@@ -4508,7 +4839,7 @@ export function printReviewHelpFor(rest: readonly string[] = []): void {
 }
 
 function printEstimateHelp(): void {
-  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments, dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.");
+  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote \"<words>\"] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments (a routed slice is owned by its roles), dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.\nA plan over routing.config.json reviewPlan.maxDispatches (default 40) or reviewPlan.maxMinutes (default 90) is flagged `over threshold`;\ndispatch-check and ledger build refuse it until the operator confirms it: the review_confirm_plan card inside keryx shell, or\n--confirm --quote \"<the operator's words>\" at a terminal (refused without a TTY), which writes <review-dir>/plan-confirmation.json.");
 }
 
 const GRAPH_TIMEOUT_HELP = `--graph-timeout <seconds> bounds the wait for the graph, wiki and memory refresh of the new package
@@ -4519,7 +4850,18 @@ process; past the bound the package is still created, the command returns, and t
 function printStartHelp(): void {
   console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
-                   [--graph-timeout <seconds>]
+                   [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                   [--no-prior-round | --prior <package|reviewId>]
+
+The previous round of the same target is found in the local packages, the packages in git history (any branch), the
+keryx round block on the pull request, other PR comments (prior findings with no head) and the flow's rounds; the newest
+reviewed head that is an ancestor of --head makes this a delta round over prevHead..head, a non-ancestor (force-push)
+a full round over merge-base..head with the prior findings attached. Written to <package>/round.json and
+prior_findings.json. --no-prior-round: round 1 without searching. --prior: use that package or review id.
+
+--unattended: nobody is at the keyboard, so an unrun mutation pass is recorded as \`Not run\` instead of refused
+(default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
+caller token \`start\` prints; a package created before run-profile.json keeps the earlier operator-quote rules.
 
 Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
 ${GRAPH_TIMEOUT_HELP}`);
@@ -4528,6 +4870,7 @@ ${GRAPH_TIMEOUT_HELP}`);
 function printIngestHelp(): void {
   console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                    [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
                     [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
@@ -4550,9 +4893,13 @@ Writes mutation-<n>.json and .md to research-evidence/.`);
 function printBlastRadiusHelp(): void {
   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--json | --brief] [--out <file>]
+                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief] [--out <file>]
 
 The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
+--reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
+high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
+Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
+--no-text-links. With --package the changed files are base...head at the package's pinned head.
 --package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
 }
 
@@ -4593,13 +4940,20 @@ function reviewHelpText(): string {
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
-                      [--automatic]
+                      [--automatic] [--no-prior-round | --prior <package|reviewId>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
-                     [--graph-timeout <seconds>]
+                     [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                     [--no-prior-round | --prior <package|reviewId>]  (writes <package>/round.json)
+  keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
+  keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
+  keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
+  keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+                                                                     (terminal; card review_decide_premise)
+  keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
-                      [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                      [--verifications <file|->] [--premises <file|->]... [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]
@@ -4666,7 +5020,16 @@ Usage:
   keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]
                         Roles x slices = assignments, waves at the manifest's wave
                         budget, and an expected duration range (2-5 min per dispatch,
-                        4 in parallel); not sliced: assignments = roles.
+                        4 in parallel); not sliced: assignments = roles. Over the
+                        plan threshold it says so; --confirm --quote at a terminal
+                        records the operator's confirmation.
+  keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
+                        The round plan in one command, never dispatching: start (round detection),
+                        scope, blast-radius, slice, required and estimate; writes <review-dir>/plan.json
+                        (round, fix and new slices, roster, dispatches, minutes, next step).
+  keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+                        Old plan vs new (routed, depth by risk) plan for the same
+                        diff, and where each ground-truth finding lands. Offline.
                         --blast-radius adds review-regression to the set; without a
                         computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available
@@ -4687,6 +5050,11 @@ Usage:
                           nothing new, or 6 failed rounds, are "Not run" — never a clean
                           pass. NEEDS_CONTEXT is not terminal: its questions are answered,
                           the scope stays open. --result is optional with --next-wave.
+  keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+                          What is left to dispatch for the whole package at once: every
+                          reviewer's next wave (slices, absolute paths, model, reason
+                          missing|retry|stalled|escalated), or "done". Run it after each
+                          batch instead of polling retry-plan per reviewer.
   keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
                             [--findings <file>] [--dispositions <file>] [--out <file>]
                             [--dry-run] [--json]
@@ -4721,7 +5089,7 @@ Usage:
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--catalog <file|->] [--json]
 ${COMMENTS_USAGE}
@@ -4985,6 +5353,17 @@ verification (attach/start/ingest):
   --verification-mode defaults to \`${DEFAULT_VERIFICATION_MODE}\`: verdicts are recorded and
   NOTHING is removed, so the drop rate is measured before it bites. Only
   \`filter\` removes a refuted finding.
+  --premises takes what review-premise returned: the bare \`{ judge, model?, premises }\`
+  object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
+  DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
+  only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
+  without --premises over a package the judge held carries each hold from the previous
+  findings.json to the same unchanged finding, and is refused otherwise.
+  --premises is repeatable (one file per judge dispatch): the files are merged as one set of
+  claims, each keeping its own judge. Two claims on one finding that agree (the same verdict,
+  across files, or on a finding and the duplicate ingest folded into it) apply once; claims that
+  disagree apply neither (duplicate-claim). A finding id holds no "#": that is the global_id
+  separator (<reviewId>#<id>).
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
@@ -5047,7 +5426,7 @@ tier:
   The \`model\` block a dispatch document carries, COMPUTED — run this instead of
   working the tier out by hand. The signals are ones the orchestrator already
   holds: --scope, --fix-attempt, --forced-strategy-change, --findings,
-  --diff-lines, --verifier and --security. Prints the tier, the ordered rule ids
+  --diff-lines, --verifier, --security and --premise (the review-premise judge: deep). Prints the tier, the ordered rule ids
   that produced it, the resolved provider/model, \`tier_resolution\`, and what was
   on the table when it resolved; --json prints the block alone.
   NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from

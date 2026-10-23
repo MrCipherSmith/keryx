@@ -31,6 +31,8 @@ For a non-trivial navigation, debugging, review, or investigation task, end with
 
 For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.
 
+The orchestrators (`review-orchestrator`, `flow-orchestrator`, `job-orchestrator`, `autodoc-orchestrator`) run in the main session: the main agent reads the SKILL.md and runs it inline, and never hands a whole orchestrator to a subagent, because a subagent cannot spawn the reviewers and workers the orchestrator dispatches.
+
 For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.
 
 For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.

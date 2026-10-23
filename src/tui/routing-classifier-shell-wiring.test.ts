@@ -99,8 +99,12 @@ test("flow411: cancellation after routed preparation suppresses success and fall
 });
 
 
-test("routing dispatch and picker share their catalog loader", () => {
+test("routing dispatch and picker share their catalog loader, both handed the shell's redetect", () => {
+  // Flow 468: per-turn dispatch and the `/routing` picker load the same catalog through `loadRoutingProviders`, each with the shell's live detection.
   const start = SOURCE.indexOf('if (routingEnabled && origin === "operator" && line.trim().length > 0) {', FN_START);
-  expect(SOURCE.slice(start, SOURCE.indexOf("// Flow 341", start))).toContain("providers: loadRoutingProviders,");
-  expect(readFileSync(join(import.meta.dir, "routing-inspector.ts"), "utf8")).toContain("options.providers ?? loadRoutingProviders");
+  expect(SOURCE.slice(start, SOURCE.indexOf("// Flow 341", start))).toContain("providers: () => loadRoutingProviders(opts.redetect),");
+  expect(readFileSync(join(import.meta.dir, "routing-inspector.ts"), "utf8")).toContain("options.providers ?? (() => loadRoutingProviders(options.redetect");
+  const showRoutingAt = SOURCE.indexOf("openRouting(otui, chrome, {", FN_START);
+  expect(showRoutingAt).toBeGreaterThan(FN_START);
+  expect(SOURCE.slice(showRoutingAt, showRoutingAt + 1200)).toContain("redetect: opts.redetect");
 });

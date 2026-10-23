@@ -45,7 +45,7 @@ export async function runGameModelTurn(
     return { move: undefined, error: `model error: ${turn.error.message}`, stats };
   }
   if (!turn.credentialAvailable && opts.providerFactory === undefined) {
-    return { move: undefined, error: "no model credential — configure a provider first (/provider)", stats };
+    return { move: undefined, error: "no model credential — configure a provider first (/connect)", stats };
   }
   return { move: game.parseMove(turn.text, state), error: undefined, stats };
 }

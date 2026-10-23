@@ -26,8 +26,8 @@ import { grantedToolSpec } from "../trigger/granted-tools";
 import { isScheduleInstalled, lingerStatus, planInstall, type ScheduleHost } from "../trigger/install";
 import { expectedReportRelPath, type TriggerRunRecord } from "../trigger/record";
 import { nextCronRuns } from "../trigger/cron";
+import { cardSafe } from "../lib/card-safe";
 import {
-  cardSafe,
   latestReportPath,
   nestedAgentScheduleRefusal,
   pauseStoredSchedule,

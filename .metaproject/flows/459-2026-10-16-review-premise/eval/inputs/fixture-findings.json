@@ -1,0 +1,58 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "review-layout",
+    "severity": "major",
+    "file": "src/player/PlaybackTimeline.tsx",
+    "line": 33,
+    "quote": "<div className=\"timeline\" dir=\"ltr\" ref={scroller} onWheel={onWheel} style={{ overflowX: \"auto\" }}>",
+    "title": "Playback timeline pinned LTR — does not mirror in RTL, violates STYLING.md",
+    "problem": "The timeline root hard-codes dir=\"ltr\", so in an RTL locale (Arabic, Hebrew) the whole strip keeps its left-to-right scroll origin, tick order and progress growth while every other surface on the page mirrors. STYLING.md states the project rule: \"Layout is direction-agnostic: use logical properties ... Never hard-code a writing direction.\" This line is a direct, unambiguous breach of that rule, and the same component is the only one in src/player that forces a direction on a scrolling surface the user interacts with. RTL users get a page whose primary control sits on the wrong side of the visual flow and whose progress moves against the reading direction of everything around it.",
+    "impact": "Trigger: a user whose locale is ar or he opens the player. Outcome: the timeline renders and scrolls left-to-right inside a mirrored page; it looks broken and inconsistent, and the project's own styling rule is violated in shipped code. Accessibility reviewers will flag the same thing.",
+    "suggested_fix": "Remove dir=\"ltr\" from the timeline root and compute scroll offsets with logical properties (scrollInlineStart / writing-mode aware offsets). Delete the lint exemption for src/player/PlaybackTimeline.tsx in eslint.config.js so the logical-properties rule applies here like everywhere else.",
+    "evidence": "STYLING.md line 3; eslint.config.js has to carry a special exemption to keep this line, which shows the rule is being worked around rather than followed.",
+    "confidence": "high"
+  },
+  {
+    "id": "C1",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/player/PlaybackTimeline.tsx",
+    "line": 14,
+    "quote": "const x = e.clientX - rect.left;",
+    "title": "Wheel seek ignores the scroller's scroll offset",
+    "problem": "onWheel converts the pointer position to media time with e.clientX - rect.left only. The strip is a horizontally scrolling element (overflowX: auto) whose content is wider than its box, so the pixel under the pointer is rect-relative position PLUS scroller.scrollLeft. Without scrollLeft the computed time is always inside the first viewport-width of the media.",
+    "impact": "Trigger: the user scrolls the timeline past the first screen and wheels over it. Outcome: onSeek jumps back to a time in the first few seconds instead of the time under the pointer.",
+    "suggested_fix": "Use const x = e.clientX - rect.left + e.currentTarget.scrollLeft.",
+    "evidence": "The effect on line 18-21 maps positionMs to scrollLeft with the same PX_PER_SECOND, so the two directions are inconsistent.",
+    "confidence": "high"
+  },
+  {
+    "id": "C2",
+    "reviewer": "review-performance",
+    "severity": "major",
+    "file": "src/player/PlaybackTimeline.tsx",
+    "line": 29,
+    "quote": "window.addEventListener(\"resize\", onResize);",
+    "title": "Resize listener is never removed",
+    "problem": "The effect registers a window resize listener and returns no cleanup. It re-registers every time positionMs changes (several times a second during playback) and is never removed on unmount, so listeners accumulate and each keeps a stale closure and the unmounted element alive.",
+    "impact": "Trigger: playback for a few minutes, or mounting and unmounting the timeline. Outcome: hundreds of resize handlers run on every resize, and the detached scroller is retained (leak).",
+    "suggested_fix": "Return () => window.removeEventListener(\"resize\", onResize) from the effect.",
+    "evidence": "No removeEventListener anywhere in the file.",
+    "confidence": "high"
+  },
+  {
+    "id": "C3",
+    "reviewer": "review-frontend",
+    "severity": "major",
+    "file": "src/player/VolumeBar.tsx",
+    "line": 6,
+    "quote": "<button onClick={onMute}>🔇</button>",
+    "title": "Icon-only mute button has no accessible name",
+    "problem": "The button's only content is an emoji glyph. Screen readers announce it as a speaker-with-cancellation-stroke emoji or nothing at all, and there is no aria-label, title or visually hidden text. The sibling controls in MediaPlaybackControls.tsx all carry aria-label.",
+    "impact": "Trigger: a screen-reader user tabs to the volume control. Outcome: they cannot tell what the button does (WCAG 4.1.2 Name, Role, Value).",
+    "suggested_fix": "Add aria-label=\"Mute\" (localised) to the button.",
+    "evidence": "MediaPlaybackControls.tsx lines 10-12 label every button.",
+    "confidence": "high"
+  }
+]

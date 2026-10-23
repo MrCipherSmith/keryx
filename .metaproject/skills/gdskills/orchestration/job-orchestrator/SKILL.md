@@ -746,8 +746,10 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
 
   keryx job step <job-name> tests-creator --status in-progress      # wave 1 only
   # Step A — tests-creator (MANDATORY, run first)
-  Dispatch one tests-creator per task in this wave, in a SINGLE turn (parallel).
-  Wait for ALL of them. Collect TEST_SPECS[task_id] from each response.
+  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --task-text '<task title and description, each ' written as '\''>' --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+  Dispatch one tests-creator per task in this wave, in a SINGLE turn (parallel), each carrying resolved_context_file.
+  Wait for ALL of them. Collect TEST_SPECS[task_id] from each response, then per result:
+    keryx skills contracts validate <task_id>-tests.json --schema tests-creator-output --resolved <that resolved file>
   keryx job step <job-name> tests-creator --status completed         # last wave only
 
   # Parallel safety check, before Step B:
@@ -755,9 +757,10 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
 
   keryx job step <job-name> implement --status in-progress           # wave 1 only
   # Step B — task-implementer (after all test stubs are committed)
+  keryx skills resolve-context --for implement ... --out <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json
   Dispatch one task-implementer per task in this wave, in a SINGLE turn (parallel),
-  each carrying test_case_specs: TEST_SPECS[task_id].
-  Wait for ALL of them.
+  each carrying test_case_specs: TEST_SPECS[task_id] and resolved_context_file (an entry promoted by a declared condition, reason condition:glob:<g> or condition:keyword:<k>, needs its project_context_applied item to carry path, sha256 of the whole file, the declared anchor, a summary of 40+ characters in the worker's own words, and how read|followed, never n/a).
+  Wait for ALL of them; per result: keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that resolved file>
 
   Read each result's STATUS line:
     DONE / DONE_WITH_CONCERNS → accept it (record every concern)
@@ -789,6 +792,7 @@ Task({
     - package_manager:  <pm>
     - run_command:      <runner>
     - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
+    - resolved_context_file: <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
 
     ## Required response
     Begin with STATUS: <STATUS>. Return the test_case_specs for this task and
@@ -819,6 +823,7 @@ Task({
     - issue_number:     <N>
     - job_name:         <job-name>
     - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
+    - resolved_context_file: <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json
 
     ## Automation (task-implementer input `automation`)
     - auto_commit:      <implementer_settings.auto_commit>   # false: do not commit; report exact paths
@@ -989,7 +994,7 @@ transcript and nothing else, which is precisely the failure the managed pipeline
 replaced.
 
 A pull request driven by this orchestrator has to pass the completion gate shipped in
-0.2.71. Its five conditions are what 2.6 and 2.7 are built to satisfy:
+0.2.71. Its conditions are what 2.6 and 2.7 are built to satisfy:
 
 | Gate condition | Satisfied by |
 |---|---|
@@ -998,6 +1003,7 @@ A pull request driven by this orchestrator has to pass the completion gate shipp
 | scope B is recorded when a scope-B reviewer ran | `keryx review blast-radius --json` → `review ingest --blast-radius` (2.6.1) |
 | no inbound PR comment is unanswered | `keryx review comments collect` every round, `… reply --final` once (2.6.2) |
 | verification stats exist | `review-verifier` dispatched, passed as `--verifications` (2.6.1) |
+| no held finding lacks an operator decision | `review-premise` (Wave D) claims passed as `--premises`; each held finding asked as `review-orchestrator` "Wave D" says (2.6.1) |
 
 #### 2.6.0 Review Scope Selection
 
@@ -1113,10 +1119,8 @@ keryx review tier --scope <scope> --diff-lines <n> --findings <n> [--security] [
 ```
 
 Paste the `model` block it prints into that dispatch. `model_strategy: "current"` is
-gone: it meant "do not switch models", which is exactly the behaviour this command
-replaced. The command names no model — it ranks what the provider reports at runtime
-and, when it cannot rank anything, prints `inherit: true`, which means the dispatch
-runs on the session model. That is a correct answer, not a failure.
+gone. The command names no model: it ranks what the provider reports at runtime and,
+when it cannot, prints `inherit: true` — the dispatch runs on the session model, a correct answer.
 
 **Step 6 — run `review-orchestrator` inline, in this main session.** Load
 `skills/gdskills/review/review-orchestrator/SKILL.md` yourself; do **not** wrap it in a
@@ -1125,24 +1129,26 @@ runs on the session model. That is a correct answer, not a failure.
 
 ```
 flags:             <selected flags, e.g. --backend --security --testing-practices>
-commit_range:      <BASE_SHA>..HEAD
+commit_range:      <BASE_SHA>..HEAD   # round 1 only; a later round takes its range from round.json
 issue_url:         <issue URL, when the job has one — enables the Stage 1 spec gate>
 context_doc:       <JOBS_ROOT>/<job-name>/ai/context.md
 verification_mode: annotate
 managed_review:    { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
-is_fix_round:      <true on any round after the first>
+is_fix_round:      <true on any round after the first; the round, its range and prior_findings come from `review start`/`review plan`, never from your own range>
 pr_comments:       { enabled: <true when a PR exists> }
 ```
 
-It emits the unified report AND the fenced ```json keryx:findings``` block, and runs
-`review-verifier` (Wave C) over the consolidated findings, returning its verification
-claims as a file path.
+It emits the unified report AND the fenced ```json keryx:findings``` block, runs
+`review-verifier` (Wave C) and then `review-premise` (Wave D) over the consolidated
+findings, and returns the verification claims and the premise claims as file paths.
 
-**Step 7 — verification is part of the round, not an extra.** `review-orchestrator`
-dispatches `review-verifier` in Wave C over the consolidated findings. The verifier
-**runs something** and can only delete — it never raises a severity, adds a finding,
-or rewrites one, and it never verifies a finding raised by the same reviewer. Its
-claims are merged by the CLI, not by hand.
+**Step 7 — verification and the premise check are part of the round, not extras.**
+`review-orchestrator` dispatches `review-verifier` in Wave C over the consolidated
+findings. The verifier **runs something** and can only delete — it never raises a
+severity, adds a finding, or rewrites one, and it never verifies a finding raised by the
+same reviewer. After it, `review-premise` (Wave D) judges whether each finding is a
+defect at all: it can lower a severity or hold a finding for the operator, never add
+one. Both claim sets are merged by the CLI, not by hand.
 
 **Step 8 — ingest the round.** This is what makes it citable.
 
@@ -1152,13 +1158,13 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
   --scope <JOBS_ROOT>/<job-name>/scope.json \
   --blast-radius <JOBS_ROOT>/<job-name>/blast-radius.json \
   --verifications <path/to/verifications.json> --verification-mode annotate \
-  --refuted <path/to/refuted.json> \
+  --premises <path/to/premises.json> --refuted <path/to/refuted.json> \
   --spent <usd-so-far> --outstanding <subagents in flight>
 ```
 
-An unrecognised option is **refused, not ignored** — a silently dropped flag writes
-nothing and still reports success. `--refuted` carries findings this round raised and
-then dismissed; without it the package keeps only the survivors of an unlogged triage.
+An unrecognised option is **refused, not ignored**. `--refuted` carries findings this round
+raised and then dismissed; without it the package keeps only the survivors of an unlogged
+triage. A first ingest without `--premises` holds nothing; a re-ingest carries earlier holds.
 
 **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
 
@@ -1174,8 +1180,17 @@ then dismissed; without it the package keeps only the survivors of an unlogged t
 
 **Classify:**
 ```
-NEEDS_FIX = count(blocker) > 0 OR count(major) > 0
+HELD      = findings review-premise holds (challenged / owner-decision) with no operator decision
+OPEN      = blocker + major findings not in HELD
+NEEDS_FIX = count(OPEN) > 0
 ```
+
+A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks
+the job until answered. Ask the operator about each one with the host's question tool and
+record the answer with `keryx review decide-premise --answered-by …` as `review-orchestrator`
+"Wave D" says (never send them to a terminal); an upheld one rejoins OPEN at its severity
+(carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one carries `dismissed-incorrect` from the
+operator's decision. Unattended: stop and report the HELD list; never let the loop end reading clean while HELD is non-empty.
 
 **Document:** record the report in the job package too, so the job and the review
 record point at each other:
@@ -1265,18 +1280,14 @@ cumulative ever-correct is **0.847**
 ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
 hardcode the same bound (`max_reflections = 3`).
 
-The bound is a ceiling, not a target. Repetition ends the loop earlier and
-**regardless of remaining iterations** — a counter cannot tell "converging
-slowly" from "stuck", and an agent emitting the identical failing output three
-times spends the whole budget before anything notices.
+The bound is a ceiling, not a target. Repetition ends the loop earlier, **regardless of
+remaining iterations**: a counter cannot tell "converging slowly" from "stuck".
 
-**A finding leaves this loop by being dispositioned, never by being absent.** The
-previous version of this section recomputed "unresolved" as whatever the next round
-still reported — so a finding the next reviewer simply did not look at was recorded as
-fixed. That is absence-as-evidence, and the completion gate refuses it.
+**A finding leaves this loop by being dispositioned, never by being absent.** One the next
+reviewer did not look at is not fixed: absence-as-evidence, which the completion gate refuses.
 
 ```
-UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6
+UNRESOLVED_FINDINGS = OPEN from step 2.6          # never a HELD finding (Classify, 2.6.1)
 PREVIOUS_REVIEW_OUTPUT = <the ingested report from step 2.6>
 
 FOR iteration in [1, 2, 3]:
@@ -1293,20 +1304,21 @@ FOR iteration in [1, 2, 3]:
      previously_unresolved: <findings that were in UNRESOLVED_FINDINGS last iteration but still present>
          → Prefix: "These specific findings were NOT fixed in iteration <N-1>: [list]"
 
-  3. Launch task-implementer with the fix prompt (subagent_type: "general-purpose"),
+  3. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text '<fix task description, each ' written as '\''>'` and a fresh `--out`), then launch task-implementer
+     with the fix prompt and `resolved_context_file` (subagent_type: "general-purpose"),
      on the model `keryx review tier --fix-attempt <N> --findings <n> --json` computes
-  4. Run the sanity check (step 2.5.2 logic) — verify commits were made
+  4. Run the sanity check (step 2.5.2 logic) — verify commits were made — and `contracts validate --resolved` on the result
   5. Run the next managed round — the FULL 2.6.1 sequence, not a bare re-dispatch:
        keryx review budget  --spent <usd> --outstanding <n>
-       keryx review start   --target branch --ref <feature-branch> --head <new-head>
+       keryx review plan    --target branch --ref <feature-branch> --head <new-head>
+                            # start + scope + blast-radius + slice + required + estimate on the new head;
+                            # round.json names the delta, scope.json and blast-radius.json land in the package
        keryx review comments collect --repo <r> --pr <n> --sha <new-head> --round <N+1> --out <file>
-       keryx review scope        --ref "$BASE_SHA" --json > scope.json
-       keryx review blast-radius --ref "$BASE_SHA" --previous blast-radius.json --json > blast-radius.json
-       <run review-orchestrator inline, in this session, with is_fix_round: true>
+       <run review-orchestrator inline, in this session; it takes the round from round.json>
        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
                             --scope scope.json --blast-radius blast-radius.json \
-                            --verifications <file> --refuted <file> --outstanding <n>
-  6. Recompute NEEDS_FIX from the ingested findings
+                            --verifications <file> --premises <file> --refuted <file> --outstanding <n>
+  6. Recompute HELD, OPEN and NEEDS_FIX from the ingested findings; a new HELD finding is asked about as in Classify
   7. Record what became of each finding raised in the PREVIOUS round — every one of
      them, before the next iteration starts:
 
@@ -1320,9 +1332,8 @@ FOR iteration in [1, 2, 3]:
      must cite where the outcome is written down. A recorded state and its citation
      cannot be overwritten by a later close — record a correction as a new round.
      Closing with no dispositions leaves every finding reading `unknown`, which means
-     "nobody wrote down what happened".
-  8. UNRESOLVED_FINDINGS = the blocker + major findings of the NEW round that are
-     still without a terminal disposition
+     "nobody wrote down what happened". A HELD finding gets no disposition here: it waits for the operator.
+  8. UNRESOLVED_FINDINGS = the OPEN findings of the NEW round still without a terminal disposition
 
   9. STUCK CHECK — runs before the next iteration and ignores the budget:
      IF any finding identity is in UNRESOLVED_FINDINGS for the SECOND iteration
@@ -1351,6 +1362,8 @@ IF still NEEDS_FIX after max iterations, or the stuck check broke the loop:
   steps. Give every surviving finding a disposition (dismissed-wont-fix or
   dismissed-deprioritised, with evidence) rather than leaving it `unknown`
   → continue to VERIFY (2.8)
+
+IF HELD is non-empty when the loop ends: ask the operator (Classify); unattended, stop and report the HELD list
 ```
 
 `comments reply` **refuses without `--final`**: replying per round turns one review
@@ -1936,28 +1949,8 @@ When `dry_run: true` is set (or `--dry-run` is passed):
 3. **Phase 2 is skipped entirely** — no sub-agents dispatched, no git operations
 4. **Output:** Full plan tree with agent names, input data shapes, dependencies:
 
-```
-Dry-run plan for: issue-4141--pipeline-validation
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Step 1: analyze          [issue-analyzer]           → input: issue #4141
-Step 2: context          [context-collector]        → input: analysis result, project_dir
-Step 3: prepare          [orchestrator]             → creates: feature/pipeline-validation worktree
-Step 4: tests-creator    [tests-creator × 3]        → RED stubs, one per task
-Step 5: implement        [task-implementer × 3]     → wave-parallel, 3 tasks
-Step 6: sanity-check     [orchestrator]             → verifies commits exist
-Step 7: verify           [code-verifier]            → lint + type-check + test + imports
-Step 8: review           [review-orchestrator]      → managed round, ingested
-Step 9: security         [security-audit]           → conditional: auth/API/DB/env files
-Step 10: fix             [task-implementer]         → conditional: if NEEDS_FIX
-Step 11: verify-post-fix [code-verifier]            → conditional: after fix
-Step 12: perf-check      [perf-check]               → conditional: frontend/bundle files
-Step 13: report          [orchestrator]             → aggregates all results
-Step 14: pr              [orchestrator + gh CLI]    → conditional: if create_pr
-Step 15: deploy          [deploy]                   → conditional: if user asks
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Estimated sub-agent calls: 11-14 (varies with tasks and review findings)
-No changes will be made. Use without --dry-run to execute.
-```
+The full plan tree (agent names, input shapes, dependencies, no changes made):
+`SKILL.detail.md`, "Dry-run plan output example".
 
 5. Ask user: "Execute this plan? (yes / adjust / abort)"
 
@@ -2158,29 +2151,7 @@ When a job ends with a step recorded `failed`, or with unresolved blocker findin
    off `journal.md`, which `keryx job` timestamped as the job ran, and the retry counts
    come from `keryx job status <job-name> --json`:
 
-```markdown
-# Post-Mortem: <job-name>
-
-## Timeline
-(from .metaproject/jobs/<job-name>/journal.md — every line as recorded)
-- <ISO timestamp> - created
-- <ISO timestamp> - step: implement in-progress (retries 0)
-- <ISO timestamp> - step: implement in-progress (retries 1)
-- <ISO timestamp> - step: implement failed (retries 1) — <reason>
-
-## What Went Wrong
-- <Step name> failed with: <error class> — <error message>
-- Recorded retries: <metrics.steps[].retries>
-- Root cause hypothesis: <analysis>
-
-## What Worked
-- <N> tasks completed successfully
-- Context collection was accurate
-
-## Recommendations for Retry
-- Fix <specific issue> before re-running
-- Consider splitting task-3 into smaller subtasks
-```
+Use the template in `SKILL.detail.md`, "Post-mortem document template".
 
 2. Save to `.metaproject/jobs/<job-name>/post-mortem.md`
 3. Include in final user message: "Post-mortem saved to `.metaproject/jobs/<job-name>/post-mortem.md`"
@@ -2220,16 +2191,7 @@ terminal disposition.
 keryx job status <job-name> --json     # `retries` per step, plus phase and next_step
 ```
 
-**Aggregated in the report:**
-```markdown
-## Metrics
-| Step | Duration | Retries |
-|------|----------|---------|
-| Analyze | 45s | 0 |
-| Context | 30s | 0 |
-| Implement | 5m 22s | 1 |
-| Review | 1m 10s | 0 |
-| **Total** | **7m 47s** | **1** |
-```
+**Aggregated in the report:** a per-step Duration/Retries table with a total row
+(`SKILL.detail.md`, "Metrics table in the report").
 
 This data identifies which steps are bottlenecks and which ones needed a second attempt.

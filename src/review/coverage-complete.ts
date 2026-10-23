@@ -6,10 +6,12 @@ import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
-import { BLAST_RADIUS_SCOPE_REVIEWER } from "./blast-radius";
+import { BLAST_RADIUS_SCOPE_REVIEWER, isCapDrop, isReasonedDrop } from "./blast-radius";
 import { packageScopeFiles } from "./coverage";
 import type { SliceManifest } from "./slice";
+import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
 import { readJsonFileOr } from "../lib/json";
+import { asRecord as record, dispatchRunRecords } from "./record";
 
 export const COVERAGE_FILE = "coverage.json";
 /** Where the ledger build leaves a copy of the slice manifest when the input directory is not the package. */
@@ -27,7 +29,7 @@ export type CoverageFile = {
   reason?: string;
 };
 
-export type CoverageWaiver = { operatorQuote: string; time: string; files: string[] };
+export type CoverageWaiver = { operatorQuote: string; time: string; files: string[]; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
 export type CoverageReport = {
   schemaVersion: 1;
@@ -45,7 +47,6 @@ export type CoverageReport = {
 const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
 
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
-const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
 
 type Radius = { files?: Array<{ file?: unknown }>; dropped?: Array<{ file?: unknown; reason?: unknown; detail?: unknown }> };
 
@@ -59,12 +60,12 @@ async function readManifest(packageDir: string): Promise<SliceManifest | undefin
 
 function coveredSliceIds(dispatch: Record<string, unknown> | undefined, retry: unknown): Set<string> {
   const ids = new Set<string>();
-  const runs = Array.isArray(dispatch?.runs) ? dispatch.runs : [];
-  for (const entry of runs) {
-    const run = record(entry);
-    if (run === undefined || run.status === "not-run" || !Array.isArray(run.coveredSlices)) continue;
+  for (const run of dispatchRunRecords(dispatch)) {
+    if (run.status === "not-run" || !Array.isArray(run.coveredSlices)) continue;
     for (const id of run.coveredSlices) if (typeof id === "string") ids.add(id);
   }
+  // Delta round (flow 458): fix slices whose attached findings all have a disposition.
+  if (Array.isArray(dispatch?.fixSlicesCovered)) for (const id of dispatch.fixSlicesCovered) if (typeof id === "string") ids.add(id);
   const reviewers = record(record(retry)?.reviewers);
   for (const entry of Object.values(reviewers ?? {})) {
     const covered = record(entry)?.covered;
@@ -74,11 +75,7 @@ function coveredSliceIds(dispatch: Record<string, unknown> | undefined, retry: u
 }
 
 function scopeBRunComplete(dispatch: Record<string, unknown> | undefined): boolean {
-  const runs = Array.isArray(dispatch?.runs) ? dispatch.runs : [];
-  return runs.some((entry) => {
-    const run = record(entry);
-    return run?.reviewer === BLAST_RADIUS_SCOPE_REVIEWER && run.status === "complete" && run.scopeComplete !== false;
-  });
+  return dispatchRunRecords(dispatch).some((run) => run.reviewer === BLAST_RADIUS_SCOPE_REVIEWER && run.status === "complete" && run.scopeComplete !== false);
 }
 
 /**
@@ -90,15 +87,17 @@ export async function packageRecordsCoverage(packageDir: string, research?: unkn
   if (hasChunkPlan(packageDir)) return true;
   if ((await readJson<unknown>(path.join(packageDir, COVERAGE_FILE))) !== undefined) return true;
   const ledger = research ?? (await readJson<unknown>(path.join(packageDir, "research.json")));
-  const runs = record(record(ledger)?.dispatch)?.runs;
-  return Array.isArray(runs) && runs.some((entry) => Array.isArray(record(entry)?.coveredSlices));
+  return dispatchRunRecords(record(ledger)?.dispatch).some((run) => Array.isArray(run.coveredSlices));
 }
 
 export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefined {
   const waiver = record(record(dispatch)?.coverageWaiver);
   if (waiver === undefined || !text(waiver.operatorQuote) || !text(waiver.time)) return undefined;
   const files = Array.isArray(waiver.files) ? waiver.files.filter(text) : [];
-  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files };
+  const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" ? waiver.confirmedVia : undefined;
+  const pressedBy = typeof waiver.pressedBy === "number" && Number.isSafeInteger(waiver.pressedBy) ? waiver.pressedBy : undefined;
+  const pressedAt = text(waiver.pressedAt) ? waiver.pressedAt : undefined;
+  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }), ...cardPressFields({ pressedBy, pressedAt }) };
 }
 
 export type ComputeCoverageOptions = {
@@ -118,8 +117,12 @@ export async function computeCoverage(packageDir: string, options: ComputeCovera
 
   const radiusFiles = (radius?.files ?? []).map((entry) => entry.file).filter(text);
   const dropped = (radius?.dropped ?? []).filter((entry) => text(entry.file));
-  const capDropped = dropped.filter((entry) => entry.reason !== "pre-filter").map((entry) => entry.file as string);
+  const capDropped = dropped.filter((entry) => isCapDrop(entry.reason)).map((entry) => entry.file as string);
   const preFiltered = new Map(dropped.filter((entry) => entry.reason === "pre-filter").map((entry) => [entry.file as string, text(entry.detail) ? `pre-filter: ${entry.detail}` : "pre-filter"]));
+  // Reasoned omissions (flow 457): not consumers of the changed contract, so omitted under their reason, never owed a pass.
+  const reasonedDrops = new Map(
+    dropped.filter((entry) => isReasonedDrop(entry.reason)).map((entry) => [entry.file as string, text(entry.detail) ? `${String(entry.reason)}: ${entry.detail}` : String(entry.reason)]),
+  );
 
   const tracked = manifest !== undefined || capDropped.length > 0 || chunkPass !== null;
   const files: CoverageFile[] = [];
@@ -172,6 +175,7 @@ export async function computeCoverage(packageDir: string, options: ComputeCovera
     place(file, "B", doneChunks.get(file) ?? sliceCover.get(file), omitted.get(file), whyNot);
   }
   for (const [file, reason] of [...preFiltered].sort(([a], [b]) => a.localeCompare(b))) add({ file, scope: "B", status: "omitted", reason });
+  for (const [file, reason] of [...reasonedDrops].sort(([a], [b]) => a.localeCompare(b))) add({ file, scope: "B", status: "omitted", reason });
 
   const omissions = files.filter((entry) => entry.status === "omitted").map((entry) => ({ file: entry.file, reason: entry.reason ?? "omitted" }));
   const omissionReasons: Record<string, number> = {};
@@ -208,7 +212,7 @@ const MIN_WAIVER_QUOTE_CHARS = 8;
  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape
  * of the mutation waiver: their quote, the time, and the waived file list). Nothing uncovered means nothing to waive.
  */
-export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date()): Promise<CoverageWaiver | undefined> {
+export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<CoverageWaiver | undefined> {
   // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
   const quote = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
@@ -221,7 +225,7 @@ export async function recordCoverageWaiver(packageDir: string, operatorQuote: st
   const report = await computeCoverage(packageDir, { research });
   const uncovered = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
   if (!report.tracked || uncovered.length === 0) return undefined;
-  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered };
+  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press) };
   await writeFileAtomic(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
   return waiver;
 }

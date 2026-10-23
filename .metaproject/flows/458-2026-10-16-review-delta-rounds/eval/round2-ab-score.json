@@ -1,0 +1,76 @@
+{
+ "A_pr1005": {
+  "round": 2,
+  "head": "f5d3385f",
+  "truth": [
+   "F-066 major",
+   "F-067 major (outside diff)"
+  ],
+  "delta": {
+   "dispatches": 11,
+   "tokens": 1257691,
+   "found_any": [],
+   "found_major": [],
+   "confirmed_extra_blocker_major": 0,
+   "minor": 15,
+   "info": 8
+  },
+  "full": {
+   "dispatches": 18,
+   "tokens": 1700360,
+   "found_any": [],
+   "found_major": [],
+   "confirmed_extra_blocker_major": 0,
+   "minor": 25,
+   "info": 20
+  },
+  "notes": "Both arms flagged only the opposite direction (isShellSpelledOption over-refusal); F-066 under-catch missed. F-067 outside diff."
+ },
+ "B_pr992": {
+  "round": 2,
+  "head": "d9ccfb6c",
+  "truth": [
+   "F-007",
+   "F-008",
+   "F-009",
+   "F-011",
+   "F-012"
+  ],
+  "delta": {
+   "dispatches": 9,
+   "tokens": 1004454,
+   "found_any": [
+    "F-007",
+    "F-009(info)"
+   ],
+   "found_major": [
+    "F-007"
+   ],
+   "confirmed_extra_blocker_major": 0
+  },
+  "full": {
+   "dispatches": 18,
+   "tokens": 1748135,
+   "found_any": [
+    "F-007",
+    "F-008",
+    "F-009(info)"
+   ],
+   "found_major": [
+    "F-007",
+    "F-008"
+   ],
+   "confirmed_extra_blocker_major": 0,
+   "extra_major_verified": "interviewer SKILL.md gap: real but minor"
+  },
+  "missed_both": [
+   "F-011",
+   "F-012"
+  ]
+ },
+ "setup": {
+  "registry": "isolated XDG_DATA_HOME; round-1 packages recorded via recordFinishedRound(event=complete); manifest status draft->closed in eval copy; A manifest target.kind report->branch; schema copied",
+  "cloneForMergeBase": "private clone with origin/main=c586a3e2 because PRs are merged and resolveBase gave mergeBase==head (empty delta slice)",
+  "fullArm": "--diff - with -U20 and review-package exclusions"
+ }
+}

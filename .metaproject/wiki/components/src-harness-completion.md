@@ -1,8 +1,8 @@
 ---
 Title: Module src/harness/completion
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/completion` groups 3 file(s). Depends on `src/contracts`. Exposes 6 public symbol(s)."
 ---
 
@@ -10,20 +10,31 @@ Summary: "`src/harness/completion` groups 3 file(s). Depends on `src/contracts`.
 
 ## Overview
 
-`src/harness/completion` owns the completion-evaluation part of the harness. It provides a small, explicit contract for deciding whether a completion condition has been satisfied, separating the data needed for evaluation from the dependencies used to perform it.
+`src/harness/completion` owns completion-gate evaluation for the harness. Its `gate.ts` file exposes `evaluateCompletion`, which takes a `CompletionInput` and `CompletionDeps` and returns a `CompletionGateResult`, an evidence artifact that reports whether a standalone run's completion conditions hold. The result is consumed by Task Manager and never changes managed-flow completion itself.
 
-The module is used by higher-level harness components such as `flow`, `child`, and `run`. Those callers rely on it to apply completion gates consistently rather than embedding completion logic directly in execution code.
+The companion `metrics.ts` file checks metric reliability with `assessMetricsReliability` and `reduceReliability`. It is a pure helper and is not wired into the pass/fail decision of `evaluateCompletion`.
 
-## Architecture
+Callers in `flow`, `child` and `run` use this module so that completion gates are applied consistently, rather than embedding completion logic in execution code.
 
-The module is organized around a **completion gate abstraction**:
+## How it works
 
-1. A caller provides `CompletionInput` — describing what is being evaluated.
-2. The caller also provides `CompletionDeps` — containing the dependencies needed to make a completion decision.
-3. `evaluateCompletion` performs the evaluation and returns a `CompletionGateResult`.
-4. The result tells callers whether completion was established under the given conditions.
+`evaluateCompletion` is a pure function over its input and injected deps. It builds one blocking check per required gate (`gate:<name>`), then adds three more: `evidence:required-present`, `blockers:none-undisposed` and `final-message:emitted`.
 
-The dependency on `src/contracts` means the module reuses shared definitions rather than defining completion-related domain types independently.
+The result `status` follows these rules:
+
+- `pass` only when all four conditions hold: every required gate reports `pass`, every required evidence ref is present, no undisposed blocker remains, and a final message was emitted.
+- `blocked` when undisposed blockers remain.
+- `fail` when no undisposed blockers remain but at least one of the other conditions does not hold.
+
+A final message alone never passes. Determinism comes from the injected deps: `deps.clock` supplies `evaluatedAt`, and `deps.idSeq` supplies `gateId` and is called exactly once per evaluation. The module has no `Date.now`, randomness, network or filesystem access. `schemaVersion` is always 1.
+
+## Key concepts
+
+- `RequiredGate`: a named gate with status `pass`, `fail`, `skipped` or `unknown`. Each one becomes a `gate:<name>` check.
+- `CompletionInput`: the run being evaluated, given as `runId`, `requiredGates`, `requiredEvidenceRefs`, `presentEvidenceIds`, `undisposedBlockerIds` and `finalMessageEmitted`.
+- `CompletionCheck`: one entry in the result, with `checkId`, `status`, `blocking`, `evidenceRefs` and an optional `detail`. `detail` is left out when empty, because the frozen schema rejects an explicit undefined key.
+- `CompletionGateResult`: the evidence artifact, with `schemaVersion`, `gateId`, `runId`, `status`, `checks`, `evaluatedAt`, `evidenceRefs` and `unresolvedBlockerIds`.
+- `CompletionDeps`: the injected `clock` and `idSeq` sources.
 
 ## Public API
 
@@ -43,12 +54,14 @@ The dependency on `src/contracts` means the module reuses shared definitions rat
 |--------|-------------|
 | `evaluateCompletion` | Runs completion evaluation against the provided input and dependencies. |
 
-## Usage Flow
+## Main flows
 
-1. A caller from `flow`, `child`, or `run` constructs a `CompletionInput`.
-2. It supplies any required `CompletionDeps`.
-3. It calls `evaluateCompletion`.
-4. The module returns a `CompletionGateResult` for the caller to consume.
+1. A caller in `flow`, `child` or `run` builds a `CompletionInput` from its gate states, the required and present evidence refs, the undisposed blockers and whether the final message was emitted.
+2. It supplies `CompletionDeps` with a clock and an id sequence.
+3. `evaluateCompletion` runs the per-gate, evidence, blocker and final-message checks and returns a `CompletionGateResult`.
+4. Task Manager consumes the result as evidence. Managed-flow completion is unchanged.
+
+A second flow covers metric reliability. `assessMetricsReliability` flags any metric that reports `exact` with a `null` value, or reports `estimated` or `unknown` without a `source`. `reduceReliability` returns the worst reliability across a record, so an aggregate is only as trustworthy as its least reliable member.
 
 ## Key Files
 
@@ -56,7 +69,7 @@ The dependency on `src/contracts` means the module reuses shared definitions rat
 |------|---------|
 | `src/harness/completion/gate.ts` | Core gate implementation and interfaces. Imported by 7 modules. |
 | `src/harness/completion/gate.test.ts` | Unit tests for gate behavior and evaluation. |
-| `src/harness/completion/metrics.ts` | Supporting metrics-related functionality. |
+| `src/harness/completion/metrics.ts` | Pure metric reliability helpers, `assessMetricsReliability` and `reduceReliability`. Not wired into `evaluateCompletion`'s pass/fail decision. |
 
 ## Dependencies
 
@@ -77,3 +90,7 @@ The module is consumed by:
 - [Module src/harness/flow](src-harness-flow.md)
 - [Module src/harness/child](src-harness-child.md)
 - [Module src/harness/run](src-harness-run.md)
+
+## Changelog
+
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.

@@ -1,0 +1,1048 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and 6a8941b75fd90a79caff47484440faffe1e226f2 (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "6a8941b75fd90a79caff47484440faffe1e226f2",
+    "head": "2e1936eeb9760e1bbfb05500bd7479c37d44ba80"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md",
+      "startLine": 1,
+      "endLine": 35
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+      "startLine": 1,
+      "endLine": 467
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md",
+      "startLine": 1,
+      "endLine": 46
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json",
+      "startLine": 1,
+      "endLine": 48
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json",
+      "startLine": 1,
+      "endLine": 47
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": "README.md",
+      "startLine": 101,
+      "endLine": 103
+    },
+    {
+      "file": "README.md",
+      "startLine": 388,
+      "endLine": 388
+    },
+    {
+      "file": "README.md",
+      "startLine": 1099,
+      "endLine": 1099
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1032,
+      "endLine": 1032
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1209,
+      "endLine": 1209
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1486,
+      "endLine": 1486
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1490,
+      "endLine": 1490
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1498,
+      "endLine": 1498
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1502,
+      "endLine": 1502
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1512,
+      "endLine": 1513
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "startLine": 524,
+      "endLine": 524
+    },
+    {
+      "file": "docs/docs/harness.md",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": "docs/docs/hooks.md",
+      "startLine": 766,
+      "endLine": 766
+    },
+    {
+      "file": "docs/docs/onboarding.md",
+      "startLine": 438,
+      "endLine": 441
+    },
+    {
+      "file": "docs/docs/onboarding.md",
+      "startLine": 449,
+      "endLine": 456
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 31,
+      "endLine": 31
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 172,
+      "endLine": 172
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 251,
+      "endLine": 251
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 288,
+      "endLine": 288
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 297,
+      "endLine": 319
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 335,
+      "endLine": 335
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 337,
+      "endLine": 338
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 357,
+      "endLine": 357
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 432,
+      "endLine": 432
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 502,
+      "endLine": 503
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 569,
+      "endLine": 569
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 82,
+      "endLine": 82
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 85,
+      "endLine": 86
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 98,
+      "endLine": 98
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 756,
+      "endLine": 768
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 803,
+      "endLine": 803
+    },
+    {
+      "file": "src/commands/providers.models-failure.test.ts",
+      "startLine": 11,
+      "endLine": 11
+    },
+    {
+      "file": "src/commands/shell-grant-refresh.test.ts",
+      "startLine": 31,
+      "endLine": 31
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "startLine": 20,
+      "endLine": 20
+    },
+    {
+      "file": "src/commands/shell-types.ts",
+      "startLine": 83,
+      "endLine": 86
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 41,
+      "endLine": 41
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 50,
+      "endLine": 50
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 92,
+      "endLine": 92
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 95,
+      "endLine": 95
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 369,
+      "endLine": 369
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 385,
+      "endLine": 385
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 393,
+      "endLine": 393
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 493,
+      "endLine": 494
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 513,
+      "endLine": 513
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 551,
+      "endLine": 551
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 555,
+      "endLine": 555
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 567,
+      "endLine": 567
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 580,
+      "endLine": 581
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 593,
+      "endLine": 593
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 597,
+      "endLine": 597
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 613,
+      "endLine": 640
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 166,
+      "endLine": 166
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 247,
+      "endLine": 247
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 978,
+      "endLine": 978
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 983,
+      "endLine": 983
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 1171,
+      "endLine": 1171
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 1187,
+      "endLine": 1187
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 2273,
+      "endLine": 2273
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 3266,
+      "endLine": 3266
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 3270,
+      "endLine": 3270
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 4569,
+      "endLine": 4569
+    },
+    {
+      "file": "src/remote/command-connect.test.ts",
+      "startLine": 113,
+      "endLine": 121
+    },
+    {
+      "file": "src/remote/command-connect.test.ts",
+      "startLine": 130,
+      "endLine": 356
+    },
+    {
+      "file": "src/remote/command-gateway.test.ts",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": "src/remote/command-gateway.ts",
+      "startLine": 42,
+      "endLine": 42
+    },
+    {
+      "file": "src/remote/command-gateway.ts",
+      "startLine": 74,
+      "endLine": 74
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 50,
+      "endLine": 65
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 94,
+      "endLine": 102
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 173,
+      "endLine": 175
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 612,
+      "endLine": 612
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 614,
+      "endLine": 617
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 622,
+      "endLine": 624
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 633,
+      "endLine": 635
+    },
+    {
+      "file": "src/remote/command-router.ts",
+      "startLine": 639,
+      "endLine": 729
+    },
+    {
+      "file": "src/remote/command.test-helpers.ts",
+      "startLine": 37,
+      "endLine": 39
+    },
+    {
+      "file": "src/remote/command.test-helpers.ts",
+      "startLine": 87,
+      "endLine": 89
+    },
+    {
+      "file": "src/remote/shell-bridge.ts",
+      "startLine": 371,
+      "endLine": 375
+    },
+    {
+      "file": "src/standard/help-groups.test.ts",
+      "startLine": 214,
+      "endLine": 218
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 160,
+      "endLine": 160
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 178,
+      "endLine": 178
+    },
+    {
+      "file": "src/tui/balance-panel.ts",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 308,
+      "endLine": 308
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 469,
+      "endLine": 469
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 600,
+      "endLine": 600
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 646,
+      "endLine": 647
+    },
+    {
+      "file": "src/tui/connect-modal.test.ts",
+      "startLine": 1,
+      "endLine": 773
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "startLine": 565,
+      "endLine": 565
+    },
+    {
+      "file": "src/tui/game-modal.ts",
+      "startLine": 213,
+      "endLine": 213
+    },
+    {
+      "file": "src/tui/games/model-turn.ts",
+      "startLine": 48,
+      "endLine": 48
+    },
+    {
+      "file": "src/tui/modal-host.test.ts",
+      "startLine": 327,
+      "endLine": 359
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 42,
+      "endLine": 46
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 383,
+      "endLine": 385
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/tui/provider-probe.test.ts",
+      "startLine": 1,
+      "endLine": 38
+    },
+    {
+      "file": "src/tui/queue-nav.test.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/tui/queue-nav.test.ts",
+      "startLine": 39,
+      "endLine": 46
+    },
+    {
+      "file": "src/tui/queue-nav.ts",
+      "startLine": 71,
+      "endLine": 82
+    },
+    {
+      "file": "src/tui/remote-provider-hooks.test.ts",
+      "startLine": 1,
+      "endLine": 241
+    },
+    {
+      "file": "src/tui/remote-provider-hooks.ts",
+      "startLine": 1,
+      "endLine": 192
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 156,
+      "endLine": 163
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 276,
+      "endLine": 276
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 288,
+      "endLine": 288
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 445,
+      "endLine": 446
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 736,
+      "endLine": 737
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 931,
+      "endLine": 931
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 2077,
+      "endLine": 2077
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 2213,
+      "endLine": 2396
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3123,
+      "endLine": 3152
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3168,
+      "endLine": 3194
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3196,
+      "endLine": 3246
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3248,
+      "endLine": 3258
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3260,
+      "endLine": 3260
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3263,
+      "endLine": 3272
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3275,
+      "endLine": 3284
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3286,
+      "endLine": 3287
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3289,
+      "endLine": 3289
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3292,
+      "endLine": 3293
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3295,
+      "endLine": 3295
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3298,
+      "endLine": 3300
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3302,
+      "endLine": 3303
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3308,
+      "endLine": 3328
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3330,
+      "endLine": 3339
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3345,
+      "endLine": 3345
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3347,
+      "endLine": 3347
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3351,
+      "endLine": 3355
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3357,
+      "endLine": 3364
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3368,
+      "endLine": 3386
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3388,
+      "endLine": 3404
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3408,
+      "endLine": 3408
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3412,
+      "endLine": 3413
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3420,
+      "endLine": 3423
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3426,
+      "endLine": 3427
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3433,
+      "endLine": 3433
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3437,
+      "endLine": 3444
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3448,
+      "endLine": 3480
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3482,
+      "endLine": 3506
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3507,
+      "endLine": 3507
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3509,
+      "endLine": 3509
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3512,
+      "endLine": 3522
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3524,
+      "endLine": 3528
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3530,
+      "endLine": 3530
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3536,
+      "endLine": 3543
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3548,
+      "endLine": 3581
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3583,
+      "endLine": 3583
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3586,
+      "endLine": 3586
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3591,
+      "endLine": 3631
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3635,
+      "endLine": 3645
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3646,
+      "endLine": 3646
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3652,
+      "endLine": 3652
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3654,
+      "endLine": 3654
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3659,
+      "endLine": 3661
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3663,
+      "endLine": 3664
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3671,
+      "endLine": 3671
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3673,
+      "endLine": 3684
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3686,
+      "endLine": 3686
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3690,
+      "endLine": 3792
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3794,
+      "endLine": 3820
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3822,
+      "endLine": 3913
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3915,
+      "endLine": 3924
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3926,
+      "endLine": 3927
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3931,
+      "endLine": 4037
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4040,
+      "endLine": 4040
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4050,
+      "endLine": 4054
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4059,
+      "endLine": 4059
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4061,
+      "endLine": 4069
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4073,
+      "endLine": 4073
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4075,
+      "endLine": 4075
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4086,
+      "endLine": 4086
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4091,
+      "endLine": 4095
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4589,
+      "endLine": 4596
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4716,
+      "endLine": 4716
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10436,
+      "endLine": 10436
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10439,
+      "endLine": 10441
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10443,
+      "endLine": 10474
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10477,
+      "endLine": 10477
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10489,
+      "endLine": 10489
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10492,
+      "endLine": 10493
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 11237,
+      "endLine": 11242
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 11247,
+      "endLine": 11247
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 11266,
+      "endLine": 11268
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 11298,
+      "endLine": 11298
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 11305,
+      "endLine": 11325
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "startLine": 99,
+      "endLine": 99
+    }
+  ],
+  "carried": [],
+  "mergeBase": "6a8941b75fd90a79caff47484440faffe1e226f2"
+}

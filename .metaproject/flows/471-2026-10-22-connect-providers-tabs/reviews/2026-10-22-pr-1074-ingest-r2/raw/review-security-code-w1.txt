@@ -1,0 +1,42 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- PR: #1074 (flow 471), range 6a8941b75fd90a79caff47484440faffe1e226f2..2e1936eeb9760e1bbfb05500bd7479c37d44ba80
+- Slice read in full: slice-02 (agent-commands.ts, agent.ts, shell-types.ts, shell.ts, remote/command-connect.test.ts, remote/command-gateway(.test).ts, remote/command-router.ts, remote/command.test-helpers.ts, remote/shell-bridge.ts, standard/help-groups(.test).ts)
+- Read at the head for context: src/remote/command-gateway.ts (classifyRemoteCommand), src/tui/remote-provider-hooks.ts, the Telegram host wiring in src/tui/tui-shell.ts (listAddableProviders / testProvider / connectWithDeviceLogin, probeProviderConnection), composeReply in src/remote/shell-bridge.ts, commandToken in src/commands/agent-commands.ts.
+- Not covered by this slice: where the key from the TUI Add provider tab is written and its file mode (TUI wizard / connect-modal code is in other slices). I make no claim about it.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas (checked, with the evidence that settled each)
+- Key never typed in chat (flow 387 AC4). command-router.ts connectAddable: for a provider with `deviceLogin: false` it records `needs a key, entered in the shell` and replies with a fixed sentence, with no host call. The picker ignores `/connect` arguments (`picker` kind, `case "connect": return await this.pickProvider(fromId)`), and the record line is `/${command}` without args, so a key pasted after `/connect` is not forwarded into the shell or the event record. Test "[Connect] on a key provider calls no host hook" pins this.
+- REMOTE_REFUSED gateway. Removing `provider` from REMOTE_REFUSED does not open `/provider` remotely: classifyRemoteCommand is default-deny (`if (spec === undefined) { ... return refuse(canonical, "it is not on the list of commands a topic may run; /help shows the list", false); }`), and `provider` is not in REMOTE_COMMANDS. Only the refusal wording changes. `search-provider` and `setup` stay in REMOTE_REFUSED with their reasons.
+- Remote surface carries no key fragment or provider error text. remote-provider-hooks.ts builds every message from a fixed vocabulary (`remoteFailureText`: kind plus HTTP status; the provider's `detail` is dropped; `LOGIN_FAILED_TEXT` etc. for login errors; the catch in connect() returns a fixed text). The router's own catch returns "Device login failed. The details are in the shell." Every reply also passes `compose` (composeReply, redactSensitiveText).
+- [Test] cannot be pointed at an arbitrary provider. The provider id comes from `addable.find((entry) => entry.id === chosen.id)` over the host's own list, not from chat text. With `requireCredential: true` a provider with no credential answers `no-credential` and makes no network call.
+- Device login. Only the verification URI and user code are posted (`notify(\`Open ${challenge.verificationUri} and enter the code ${challenge.userCode}\`)`), tokens stay in the user-global store. Single-flight (`current !== undefined`), 10-minute limit, aborted on `recordOff`, `isBusy` rechecked right before `applyEnv`, so a login cannot change the environment under a running turn. Buttons are bound to `fromId` (forUserId) via pick/ask. Connected providers are not re-logged-in from the topic (`provider.connected` branch).
+- Injection / path / SQL / XSS / crypto / CSRF categories: no occurrence in the slice. `REMOVED_COMMAND_HINTS[commandToken(line)]` is a lookup keyed by a token that keeps its leading `/`, so `__proto__` / `constructor` cannot match a prototype member.
+- Hardcoded secrets: none. Test fixtures use public example values (`WDJB-MJHT`, `https://example.com/login/device`).
+
+### Observations that did not reach `info` (no reachable attack path in the diff)
+- A device code posted to a Telegram topic is usable by anyone who can read the topic and has an account with that provider; this is the usual device-login trade-off and the topic is already the operator's trust boundary (buttons are restricted to the pressing user). Nothing to fix in this diff.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No security findings in slice-02. The Telegram /connect additions keep keys out of chat (key providers get a fixed redirect-to-shell sentence and no host call), send only fixed-vocabulary text for Test and device-login outcomes, post only the public user code and link, and the REMOTE_REFUSED removal of /provider leaves it refused by the default-deny allowlist. Key storage and file mode in the TUI Add provider flow belong to other slices and were not judged here.",
+  "findings": [],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

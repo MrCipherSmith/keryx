@@ -13,7 +13,7 @@
 
 import { findAgentCommand } from "../commands/agent-commands";
 import type { ScheduleHost } from "../trigger/install";
-import { cardSafe } from "../trigger/schedules";
+import { cardSafe } from "../lib/card-safe";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import type { OpsSidebar } from "./ops-sidebar";
 import type { ModalChrome } from "./modal-host";

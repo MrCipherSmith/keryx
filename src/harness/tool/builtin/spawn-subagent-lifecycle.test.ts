@@ -11,6 +11,10 @@
 // approached.
 
 import { expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { isEmptyRecord, splitUsage } from "../../../review/dispatch-usage";
 import { createSpawnSubagentTool, ENV_SUBAGENT_TIMEOUT_MS } from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../../provider/types";
 
@@ -79,6 +83,73 @@ test("a hung subagent is abandoned at its deadline instead of blocking the paren
   } finally {
     if (prev === undefined) delete process.env[ENV_SUBAGENT_TIMEOUT_MS];
     else process.env[ENV_SUBAGENT_TIMEOUT_MS] = prev;
+  }
+});
+
+/** A provider that refuses every request with a normalized error of `kind`. */
+function refusingProvider(kind: "rate_limit" | "overloaded" | "unavailable", retryAfterMs?: number): () => ProviderPort {
+  return () => ({
+    describe: () => DESCRIPTION,
+    stream: (_r, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield {
+          kind: "provider_error",
+          sequence: 0,
+          attemptId: opts.attemptId,
+          error: { kind, retryable: true, message: `429 ${kind}`, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) },
+        };
+      })(),
+  });
+}
+
+test("E5: a rate-limited child is not 'Completed': it reports STATUS: RATE_LIMITED with the provider's retry-after", async () => {
+  const result = await toolWith(refusingProvider("rate_limit", 30_500)).invoke({ task: "review", label: "r1" });
+  expect(result.isError).toBe(true);
+  expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED (retry-after: 31s)");
+});
+
+test("E5: an overloaded child reports STATUS: RATE_LIMITED too; another provider error does not", async () => {
+  const overloaded = await toolWith(refusingProvider("overloaded")).invoke({ task: "review", label: "r2" });
+  expect(overloaded.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
+  const unavailable = await toolWith(refusingProvider("unavailable")).invoke({ task: "review", label: "r3" });
+  expect(unavailable.output).not.toContain("RATE_LIMITED");
+});
+
+test("E5: a rate-limited child hands back the text it produced before the refusal", async () => {
+  const provider = (): ProviderPort => ({
+    describe: () => DESCRIPTION,
+    stream: (_r, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "found the bug in parser.ts" };
+        yield { kind: "provider_error", sequence: 1, attemptId: opts.attemptId, error: { kind: "rate_limit", retryable: true, message: "429" } };
+      })(),
+  });
+  const result = await toolWith(provider).invoke({ task: "review", label: "r4" });
+  expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
+  expect(result.output).toContain("found the bug in parser.ts");
+});
+
+test("E5 / flow 460 (H): a rate-limited child that reported no usage still records its dispatch at save_result_to (LG-002, LG-006)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ratelimit-save-"));
+  try {
+    let seq = 0;
+    const tool = createSpawnSubagentTool({
+      cwd: root,
+      getParentModel: () => ({ providerId: "anthropic", modelId: "claude-sonnet-5" }),
+      makeProvider: refusingProvider("rate_limit"),
+      getDetectedProviders: () => [{ name: "anthropic" }],
+      idSeq: () => `id-${seq++}`,
+      clock: () => "2026-07-21T00:00:00.000Z",
+    });
+    const result = await tool.invoke({ task: "review", label: "r5", save_result_to: "raw/review-logic.txt" });
+    expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect(isEmptyRecord(saved)).toBe(true);
+    // One dispatch, usage unknown (no line states counts), and not a complete result.
+    expect(splitUsage(saved)).toMatchObject({ incomplete: true });
+    expect(splitUsage(saved).usage).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

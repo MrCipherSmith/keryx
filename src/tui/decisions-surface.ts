@@ -6,7 +6,7 @@
 // Opening it never writes: it reads the journal and refuses nothing.
 
 import { findAgentCommand } from "../commands/agent-commands";
-import { ARMS, ARM_FACTORS, annotatedCount, backfilledCount, changeAnswer, decisionCount, giveReason, loadReport, oneLine, reportText, resolveFlowContext } from "../decisions/service";
+import { ARMS, ARM_FACTORS, annotatedCount, backfilledCount, changeAnswer, decisionCount, giveReason, hostQuestionCount, loadReport, oneLine, reportText, resolveFlowContext } from "../decisions/service";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalChrome, type ModalHandle as HostModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -159,6 +159,8 @@ export interface ArmsExtras {
   /** Questions outside the arm comparison (irreversible, an action or a blind.ts match). */
   ineligible: { decisions: number; answered: number } | null;
   progress: { decisions: number; decisionsTarget: number; blind: number; blindTarget: number; threshold: number; counts: Array<[string, number]> } | null;
+  /** Questions answered via the host's own tool: a separate kind, in no arm or match number. */
+  hostQuestions: number;
 }
 
 function whole(value: unknown): number {
@@ -180,7 +182,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** The AC17-AC21 blocks of a report, each one null when the report predates it. */
-function summarizeExtras(report: { reasons?: unknown; ineligible?: unknown; progress?: unknown }): ArmsExtras {
+function summarizeExtras(report: { reasons?: unknown; ineligible?: unknown; progress?: unknown; hostQuestions?: unknown }): ArmsExtras {
   const reasons = isObject(report.reasons)
     ? {
         agreement: readShare(report.reasons["agreement"]),
@@ -205,7 +207,7 @@ function summarizeExtras(report: { reasons?: unknown; ineligible?: unknown; prog
       counts: ARMS.map((arm): [string, number] => [arm, whole(counts[arm])]),
     };
   }
-  return { reasons, ineligible, progress };
+  return { reasons, ineligible, progress, hostQuestions: Array.isArray(report.hostQuestions) ? report.hostQuestions.length : 0 };
 }
 
 function nonNegative(value: unknown): number {
@@ -313,6 +315,7 @@ function extrasLines(extras: ArmsExtras): string[] {
     );
   }
   if (extras.ineligible !== null) lines.push(`Not in the comparison (ineligible): ${extras.ineligible.decisions}, ${extras.ineligible.answered} answered`);
+  if (extras.hostQuestions > 0) lines.push(`Answered via host question (a separate kind, not in the comparison): ${extras.hostQuestions}`);
   if (extras.progress !== null) {
     const p = extras.progress;
     lines.push(
@@ -433,7 +436,11 @@ export function presentDecisions(open: OpenModalFn, otui: unknown, chrome: unkno
   return handle;
 }
 
-export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & { cwd: string };
+export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & {
+  cwd: string;
+  /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers, appended under the report. */
+  confirmationLines?: () => readonly string[];
+};
 
 /** Read the journal and open the modal over what `keryx decisions report` would print. */
 export async function openDecisions(
@@ -441,11 +448,17 @@ export async function openDecisions(
   chrome: Parameters<typeof openModal>[1],
   options: OpenDecisionsOptions,
 ): Promise<HostModalHandle | undefined> {
-  const { cwd, ...rest } = options;
-  const text = await reportText(cwd).catch(() => UNREADABLE);
+  const { cwd, confirmationLines, ...rest } = options;
+  const report = await reportText(cwd).catch(() => UNREADABLE);
+  const text = withConfirmationLines(report, confirmationLines?.() ?? []);
   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text }) as
     | HostModalHandle
     | undefined;
+}
+
+/** The report with the Telegram review cards (waiting, answered) appended under it; unchanged when there are none. */
+export function withConfirmationLines(report: string, cards: readonly string[]): string {
+  return cards.length === 0 ? report : `${report}\n\n${cards.join("\n")}`;
 }
 
 /** Open the same modal over the arm summary (`/decisions arms`, or a click on the arms row). */
@@ -454,7 +467,7 @@ export async function openDecisionsArms(
   chrome: Parameters<typeof openModal>[1],
   options: OpenDecisionsOptions,
 ): Promise<HostModalHandle | undefined> {
-  const { cwd, ...rest } = options;
+  const { cwd, confirmationLines: _cards, ...rest } = options;
   const text = await armsText(cwd);
   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text, tabLabel: "Arms" }) as
     | HostModalHandle
@@ -469,12 +482,13 @@ export interface DecisionsPanelProjection {
 }
 
 /** One row, and only once the journal holds a decision: zero rows otherwise. */
-export function projectDecisionsPanel(count: number, width: number, backfilled = 0, annotated = 0): DecisionsPanelProjection {
-  if (count <= 0 && backfilled <= 0) return { visible: false, text: "" };
-  // live decisions first; the backfilled (historical) ones are shown apart, never added into the live count
+export function projectDecisionsPanel(count: number, width: number, backfilled = 0, annotated = 0, hostQuestions = 0): DecisionsPanelProjection {
+  if (count <= 0 && backfilled <= 0 && hostQuestions <= 0) return { visible: false, text: "" };
+  // live decisions first; the backfilled (historical) ones and the host questions are shown apart, never added into the live count
   const live = count > 0 ? `${count} decision${count === 1 ? "" : "s"}` : "";
   const before = backfilled > 0 ? `${count > 0 ? " + " : ""}${backfilled} before` : "";
-  const label = `${live}${before}`;
+  const via = hostQuestions > 0 ? `${count > 0 || backfilled > 0 ? " + " : ""}${hostQuestions} via host` : "";
+  const label = `${live}${before}${via}`;
   // flow 401: a decision answered in the operator's own words, or carrying a typed reason, is marked ✍N;
   // the modal lists each of them in full
   const marked = annotated > 0 ? `${label} ${OWN_MARK}${annotated}` : label;
@@ -496,6 +510,8 @@ export interface DecisionsSidebarOptions {
   lastDecisionId?: (() => string | undefined) | undefined;
   /** This session's id, so `/decisions reason|change` without an id stays inside this session's decisions. */
   session?: string | undefined;
+  /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers (`pressedBy`). */
+  confirmationLines?: () => readonly string[];
   /** Test seam: how many LIVE decisions the journal holds. */
   count?: () => Promise<number>;
   /** Test seam: how many backfilled (historical) decisions the journal holds. */
@@ -504,6 +520,8 @@ export interface DecisionsSidebarOptions {
   armsReport?: () => Promise<unknown>;
   /** Test seam: how many live decisions carry the operator's own text or a typed reason. */
   annotated?: () => Promise<number>;
+  /** Test seam: how many questions were answered via the host's own tool (a separate kind, in no decision count). */
+  hostQuestions?: () => Promise<number>;
   interval?: (tick: () => Promise<void>, ms: number) => () => void;
   pollMs?: number;
 }
@@ -547,6 +565,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
   const count = options.count ?? (() => decisionCount(options.cwd));
   const backfilledTotal = options.backfilled ?? (() => backfilledCount(options.cwd));
   const annotatedTotal = options.annotated ?? (() => annotatedCount(options.cwd));
+  const hostTotal = options.hostQuestions ?? (() => hostQuestionCount(options.cwd));
   const box = new core.BoxRenderable(r, { id: "sb-decisions", flexDirection: "column", flexShrink: 0 });
   (options.parent as { add(child: unknown): void }).add(box);
   const armsBox = new core.BoxRenderable(r, { id: "sb-decisions-arms", flexDirection: "column", flexShrink: 0 });
@@ -606,6 +625,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     modal?.close({ restoreFocus: false });
     modal = await open(core, chrome, {
       cwd: options.cwd,
+      ...(options.confirmationLines !== undefined ? { confirmationLines: options.confirmationLines } : {}),
       ...(options.onKeypress !== undefined ? { onKeypress: options.onKeypress } : {}),
     });
     return modal;
@@ -634,8 +654,14 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     } catch {
       marked = 0;
     }
+    let viaHost: number;
+    try {
+      viaHost = await hostTotal();
+    } catch {
+      viaHost = 0;
+    }
     if (disposed || generation !== refreshGeneration) return;
-    projected = projectDecisionsPanel(n, options.width, before, marked);
+    projected = projectDecisionsPanel(n, options.width, before, marked, viaHost);
     paint();
     // the arm row reads the report once per poll, and only when the journal holds anything; a failing read hides the row
     let nextArms: ArmsPanelProjection;

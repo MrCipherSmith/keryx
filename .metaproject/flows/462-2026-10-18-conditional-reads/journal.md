@@ -1,0 +1,38 @@
+# Flow Journal
+
+- 2026-10-18T08:31:22.923Z - flow created
+- 2026-10-18T08:46:27.492Z - frozen: 22 criteria; checksum recorded
+- 2026-10-18T08:47:09.797Z - started
+- 2026-10-18T08:47:10.264Z - task-done: T1: Collect remaining context
+- 2026-10-18T08:47:10.722Z - task-done: T2: Implement per plan
+- 2026-10-18T08:47:11.184Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-18T08:47:11.650Z - task-added: T5: S1 references.json schema, loader, section extraction
+- 2026-10-18T08:47:12.107Z - task-added: T6: S2 resolver: task text, promotion, cap, undeclared
+- 2026-10-18T08:47:12.581Z - task-added: T7: S3 output schemas anchor+summary and synced copies
+- 2026-10-18T08:47:13.018Z - task-added: T8: S4 validator: anchor, summary check, drift, enforcement
+- 2026-10-18T08:47:13.474Z - task-added: T9: S5 CLI skills references check|suggest, import hint
+- 2026-10-18T08:47:13.939Z - task-added: T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states
+- 2026-10-18T08:47:14.446Z - task-added: T11: S7 orchestrator and worker skill instructions
+- 2026-10-18T08:47:14.892Z - task-added: T12: S8 docs: README, docs site, CLI reference
+- 2026-10-18T08:47:15.367Z - task-added: T13: S9 e2e fixture, live-run runbook
+- 2026-10-18T08:47:24.446Z - task-depends-set: T4: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13 (was empty) — review follows every implement/test/docs task
+- 2026-10-18T08:47:53.700Z - task-attempt: T5: started (attempt 1) — 462-T5 dispatch
+- 2026-10-18T08:47:54.136Z - task-attempt: T7: started (attempt 1) — 462-T7 dispatch
+- 2026-10-18T08:54:53.493Z - task-done: T5: S1 references.json schema, loader, section extraction
+- 2026-10-18T08:54:53.998Z - task-done: T7: S3 output schemas anchor+summary and synced copies
+- 2026-10-18T08:55:03.924Z - task-attempt: T6: started (attempt 1)
+- 2026-10-18T08:55:04.419Z - task-attempt: T9: started (attempt 1)
+- 2026-10-18T09:02:18.603Z - task-done: T6: S2 resolver: task text, promotion, cap, undeclared
+- 2026-10-18T09:02:24.800Z - task-attempt: T8: started (attempt 1)
+- 2026-10-18T09:12:45.640Z - task-done: T8: S4 validator: anchor, summary check, drift, enforcement
+- 2026-10-18T09:13:13.175Z - task-attempt: T11: started (attempt 1)
+- 2026-10-18T09:18:56.256Z - task-done: T11: S7 orchestrator and worker skill instructions
+- 2026-10-18T09:18:56.790Z - task-done: T9: S5 CLI skills references check|suggest, import hint
+- 2026-10-18T09:19:19.633Z - task-attempt: T10: started (attempt 1)
+- 2026-10-18T09:19:20.174Z - task-attempt: T13: started (attempt 1)
+- 2026-10-18T09:26:59.128Z - task-done: T13: S9 e2e fixture, live-run runbook
+- 2026-10-18T09:30:50.482Z - task-done: T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states
+- 2026-10-18T09:30:51.671Z - task-attempt: T12: started (attempt 1)
+- 2026-10-18T09:36:38.411Z - task-done: T12: S8 docs: README, docs site, CLI reference
+- 2026-10-18T09:57:51.214Z - ac-updated: AC10: "For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least two distinct words of five or more letters that occur in the anchored section (one required when the section has only one such word); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "summary"`]" -> "For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least three distinct words of five or more letters that occur in the anchored section (as many as the section holds when it has fewer than three); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "summary"`]" (Operator decision, poll 213 (2026-10-18): raise the summary vocabulary threshold from two to three distinct words after the e2e test showed a foreign section can share two words)
+- 2026-10-18T14:42:11.357Z - ac-updated: AC3: "`resolve-context` accepts the task text (CLI `--task-text`, and the same field in the MCP and flow-orchestrator call) and records it, truncated to a stated limit, in the last-resolve record. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t "task text"`]" -> "`resolve-context` accepts the task text (CLI `--task-text`, and the same field in the MCP and flow-orchestrator call) and matches it against the declared keywords, cut to a stated limit. The last-resolve record keeps only the length of the task text given and whether it was cut, never the text itself (it may hold secrets; the file is not git-ignored); the matched reasons are already in the recorded result entries. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t "task text"`]" (Operator decision, poll 218 (2026-10-18): the last-resolve record must not hold the task text, which can carry secrets; record its length and the matched reasons only.)

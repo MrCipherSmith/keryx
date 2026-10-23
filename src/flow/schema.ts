@@ -311,7 +311,7 @@ export function flowStateSchema(): Record<string, unknown> {
             additionalProperties: true,
             required: ["mechanism", "tokenRef", "mintedAt", "consumedAt", "boundTo"],
             properties: {
-              mechanism: { type: "string", enum: ["terminal-token"] },
+              mechanism: { type: "string", enum: ["terminal-token", "tui-card-token", "remote-card-token"] },
               tokenRef: { type: "string", description: "A prefix of the stored token hash. Never the token." },
               mintedAt: { type: "string" },
               consumedAt: { type: "string" },
@@ -328,6 +328,8 @@ export function flowStateSchema(): Record<string, unknown> {
                   },
                 },
               },
+              pressedBy: { type: "integer", description: "Flow 464: on a remote-card token, the Telegram user id that pressed the card." },
+              pressedAt: { type: "string", description: "Flow 464: on a remote-card token, the shell's clock when the press arrived." },
             },
           },
         },

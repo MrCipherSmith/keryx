@@ -34,6 +34,7 @@
 // late `phase` for it is a no-op. Once visible, entries behave as before.
 
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
+import { formatDuration } from "./duration-format";
 import type { BackgroundJobEvent, KillReason } from "../harness/tool/builtin/background-job-registry";
 
 export type BackgroundJobStatus = "running" | "completed" | "failed" | "killed";
@@ -90,6 +91,13 @@ export function formatJobRow(entry: BackgroundJobEntry, width = SIDEBAR_TEXT_WID
   return clip(`${glyph} ${cmd}`, width);
 }
 
+/** A finished job's run time, or a running one's time so far (measured to `now`). */
+function formatJobDuration(entry: BackgroundJobEntry, now: number): string {
+  const started = Date.parse(entry.startedAt);
+  const ended = entry.endedAt !== undefined ? Date.parse(entry.endedAt) : now;
+  return formatDuration(ended - started);
+}
+
 export function formatJobMeta(entry: BackgroundJobEntry, now = Date.now()): string {
   const rows: Array<[string, string]> = [
     ["Id", entry.jobId],
@@ -98,12 +106,12 @@ export function formatJobMeta(entry: BackgroundJobEntry, now = Date.now()): stri
     ["Command", entry.command],
     ["Started", entry.startedAt],
     ["Ended", entry.endedAt ?? "—"],
+    ["Duration", formatJobDuration(entry, now)],
     ["Exit code", entry.exitCode !== undefined ? String(entry.exitCode) : "—"],
   ];
   if (entry.killReason !== undefined) {
     rows.push(["Kill reason", entry.killReason]);
   }
-  void now;
   const width = rows.reduce((max, [label]) => Math.max(max, label.length), 0);
   return rows.map(([label, value]) => `${label.padEnd(width)}  ${value}`).join("\n");
 }

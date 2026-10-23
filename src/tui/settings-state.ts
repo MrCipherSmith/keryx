@@ -9,7 +9,8 @@
 import { resolveExternalAgentsCapability } from "../capability/external-agents";
 import { describeReasoningEffortSource } from "../commands/agent";
 import type { PermissionMode } from "../commands/permission-mode";
-import { loadPosture, type PolicyPosture } from "../commands/remote-policy-command";
+import { loadProjectContextStatus } from "../gdskills/project-context-status";
+import { loadPosture,type PolicyPosture } from "../commands/remote-policy-command";
 import { readJevProfileForShell } from "../commands/review-jev-profile";
 import { resolveExternalSetting } from "../lib/external-switch";
 import { getProjectPermissionMode } from "../lib/permission-mode-config";
@@ -86,9 +87,16 @@ function readTelegram(live: LiveSettings, configDir: string | undefined): { post
 export async function loadSettingsSnapshot(cwd: string, live: LiveSettings, configDir?: string): Promise<SettingsSnapshot> {
   const saved = loadShellConfig(configDir);
   const projectMode = getProjectPermissionMode(cwd, configDir);
-  const [externalPrivacy, editGuard, jevProfile, agents] = await Promise.all([
+  const [externalPrivacy, editGuard, projectContext, jevProfile, agents] = await Promise.all([
     orElse(() => resolveExternalSetting({ cwd, ...(configDir !== undefined ? { dir: configDir } : {}) }), { value: "on" as const, source: "default" as const }),
     orElse(async () => (await readJevEditGuardConfig(cwd)).enabled, false),
+    orElse(
+      async () => {
+        const status = await loadProjectContextStatus(cwd);
+        return { enforcement: status.enforcement, maxBytes: status.maxBytes, ...(status.configError !== undefined ? { configError: true } : {}) };
+      },
+      { enforcement: "warn" as const, maxBytes: 131072, configError: true },
+    ),
     orElse(() => readJevProfileForShell(cwd), {} as Record<string, unknown>),
     orElse(() => resolveExternalAgentsCapability({ cwd }), { ok: false as const, reason: "could not be read" }),
   ]);
@@ -98,6 +106,7 @@ export async function loadSettingsSnapshot(cwd: string, live: LiveSettings, conf
     plan: live.plan,
     guard: live.guard ?? saved.turnGuard?.enabled === true,
     editGuard,
+    projectContext,
     routing: live.routing ?? saved.routingClassifier?.enabled === true,
     externalPrivacy,
     reasoning: readReasoning(live.reasoningOverride, saved.reasoningEffort),

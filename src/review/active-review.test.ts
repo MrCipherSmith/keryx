@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
 import { createFlowService } from "../flow/service";
-import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
 import { ACTIVE_REVIEW_DIR, clearActiveReview, resolveActiveReview, writeActiveReview } from "./active-review";
 import { completeManagedReview, createManagedReviewPackage } from "./managed";
 import { orchestratorLogPath, recordActiveCall, startOrchestratorLog } from "./orchestrator-log";
@@ -98,6 +98,7 @@ describe("AC2: the active-review pointer", () => {
       target: { kind: "report", ref: "review.md" },
     });
     writeFileSync(path.join(root, created.path, "research.json"), JSON.stringify(READY));
+    writeFileSync(path.join(root, created.path, "coverage.md"), READY_COVERAGE_MD);
     expect(await startOrchestratorLog(root, created.reviewId, created.path)).toBe(true);
     expect(existsSync(path.join(root, POINTER))).toBe(true);
     await completeManagedReview(root, created.path);

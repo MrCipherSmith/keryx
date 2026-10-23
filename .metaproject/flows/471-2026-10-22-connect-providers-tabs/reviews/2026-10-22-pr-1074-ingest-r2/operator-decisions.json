@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-22-pr-1074-ingest-r2#CP-01",
+      "answer": "dismiss",
+      "reason": "Оператор снял находку в опросе 255",
+      "quote": "Снять (dismiss)",
+      "at": "2026-10-22T17:42:31.272Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "5192f0a033e8d7babbbd12c3f2a1ffa4222dc2ea9353f48ec9668d15f91591d0"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "255-CP-01",
+        "questionText": "CP-01 (command-router.ts): недостижимая защита в pickAddableProvider — оставить как находку (minor) или снять?",
+        "answerText": "Снять (dismiss)",
+        "time": "2026-10-22T17:42:31.272Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-22-pr-1074-ingest-r2#CP-02",
+      "answer": "uphold",
+      "reason": "Оператор оставил находку в опросе 255",
+      "quote": "Оставить находку (uphold) (Рекомендую)",
+      "at": "2026-10-22T17:42:36.971Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "59b45446928c442917d50262e1fa9d36265cde879e2bf9925bb5d003b6ff88eb"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "255-CP-02",
+        "questionText": "CP-02 (command-connect.test.ts): 11 тестов с одинаковой пятистрочной преамбулой — оставить как находку (minor) или снять?",
+        "answerText": "Оставить находку (uphold) (Рекомендую)",
+        "time": "2026-10-22T17:42:36.971Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-22-pr-1074-ingest-r2#CP-03",
+      "answer": "uphold",
+      "reason": "Оператор оставил находку в опросе 255",
+      "quote": "Оставить находку (uphold) (Рекомендую)",
+      "at": "2026-10-22T17:42:37.550Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "13e25028e5310891489c93b92eac30ba22c70bed8dcad8c219fbeac9c4402045"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "255-CP-03",
+        "questionText": "CP-03 (command-router.ts): pickAddableProvider копирует разбор ответа из pickProvider/pickModel/pickSession — оставить или снять?",
+        "answerText": "Оставить находку (uphold) (Рекомендую)",
+        "time": "2026-10-22T17:42:37.550Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-22-pr-1074-ingest-r2#CP-04",
+      "answer": "uphold",
+      "reason": "Оператор оставил находку в опросе 255",
+      "quote": "Оставить находку (uphold) (Рекомендую)",
+      "at": "2026-10-22T17:42:38.131Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "c7f5ca80da1180308bd38fc46eb2f1698a029d9c73d2683a304f43824c0399c7"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "255-CP-04",
+        "questionText": "CP-04 (tui-shell.ts): pickProvidersTabbedStep — замыкание ~400 строк с ~20 вложенными функциями — оставить или снять?",
+        "answerText": "Оставить находку (uphold) (Рекомендую)",
+        "time": "2026-10-22T17:42:38.131Z"
+      }
+    }
+  ]
+}

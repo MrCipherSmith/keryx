@@ -21,6 +21,7 @@
 // hand-copied retrieval-code union would let a transport fork the vocabulary
 // that `src/lib/retrieval-codes.ts` exists to keep single.
 
+import type { ProjectContextResolution } from "../../gdskills/context-resolver";
 import type { RetrievalCode } from "../../lib/retrieval-codes";
 import type { EvidencePackage } from "../../wiki/evidence";
 import type { SectionResolution } from "../../wiki/section-tombstone";
@@ -676,6 +677,13 @@ export interface SkillLoadResult {
   found: boolean;
 }
 
+/**
+ * Structured result of `skillsResolveContext` — skills-resolve-context-result.schema.json
+ * (docs/requirements/keryx-project-implementation-rules/schemas). The same record
+ * `keryx skills resolve-context --json` prints; `error` is set instead of a throw.
+ */
+export type SkillsResolveContextResult = ProjectContextResolution & { error?: string };
+
 /** Structured result of `describeContext` — a lightweight project summary. */
 export interface ContextSummaryResult {
   /** The project root the port is bound to. */
@@ -846,6 +854,14 @@ export interface MetaprojectPort {
   skillsCatalog?(input: Record<string, never>): Promise<SkillsCatalogResult>;
   /** One skill's full SKILL.md body, by name or exact path (gdskills). */
   loadSkill?(input: { name: string }): Promise<SkillLoadResult>;
+  /** The project rules and skills a code-writing or test-writing worker must read for these files (gdskills). */
+  skillsResolveContext?(input: {
+    files: string[];
+    for: "implement" | "test" | "review";
+    taskType?: string;
+    maxBytes?: number;
+    taskText?: string;
+  }): Promise<SkillsResolveContextResult>;
 
   // --- additive OPTIONAL read operation: flow 242 (forgetting) lane C -------
   // Same OPTIONAL contract as every batch above: an absent method is an

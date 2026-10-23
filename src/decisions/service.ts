@@ -12,10 +12,10 @@ export { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
 export type { DecisionSource } from "./sources";
 export type { AskAnswer, AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
 export * from "./arms";
-export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
+export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, isIrreversible, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
-export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";
+export type { HostQuestionRow, AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";
 export { effectiveArm, isLegacy, stampLegacy } from "./legacy";
 export {
   MODEL_LABEL,
@@ -37,12 +37,14 @@ export type { FlowContext, FlowSource } from "./context";
 export { MAX_OPERATOR_TEXT_LENGTH, MAX_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
 export type { ChangeAnswerResult, GiveReasonResult } from "./followup";
+export { hostQuestionLabel, isHostQuestionEntry } from "./types";
 export type {
   AnswerInput,
   AnswerResult,
   DecisionMode,
   DecisionOption,
   DecisionRecommendation,
+  HostQuestionOpen,
   OpenInput,
   OpenResult,
 } from "./types";
@@ -63,9 +65,14 @@ export async function reportLine(cwd: string): Promise<string> {
   return renderReportLine(await loadReport(cwd));
 }
 
-/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
+/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`, the host questions by `hostQuestionCount`. */
 export async function decisionCount(cwd: string): Promise<number> {
   return (await loadReport(cwd)).total;
+}
+
+/** How many questions the host asked through its own tool and a `keryx review` verb recorded: a separate kind, in no decision total. */
+export async function hostQuestionCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).hostQuestions?.length ?? 0;
 }
 
 /** How many live decisions carry the operator's own text or a typed reason (flow 401). */

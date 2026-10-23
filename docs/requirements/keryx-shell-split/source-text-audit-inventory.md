@@ -366,6 +366,14 @@ each call (parse, list, revoke, withheld reason, marker) is tested directly in
 `mcp-servers/approval-render.trust.test.ts` and
 `commands/agent-permission-mode.test.ts`.
 
+### Added by flow 462 (conditional reads), review r02
+
+`tui/project-context-inspector.test.ts` reads `tui-shell.ts` once to pin that the
+renderer's `onDestroy` calls `stopProjectContextFeed?.()` and that the stop
+hook is bound to `projectContextFeed.stop()`. There is no seam that runs
+`launchTuiAgentShell` headlessly; the feed's own polling, in-flight guard and
+stop behaviour are tested directly in the same test file.
+
 ### Added by flow 387 (shell token economy), review r3 F-032
 
 `commands/prune-archive-wiring.test.ts` reads both god-files, three sites in all:
@@ -435,6 +443,40 @@ archive-enabled options branch. They still require `slateSession` and literal
 `pruneArchive: true` together, without fixed character windows that unrelated
 recovery options can outgrow. The three source-reader sites are unchanged.
 
+### Added by flow 454 (source security scan regression)
+
+`security/source-scan.test.ts` reads both god-files at two sites and runs the
+real filesystem security scanner over temporary copies. It checks complete
+coverage, no warnings or findings, and a passing gate, so legitimate environment
+property access does not regress into private-file publication findings.
+
+This is a behavioural scanner test coupled to the two fixture paths, not a
+substring or layout assertion. Cosmetic edits do not break it unless they
+change the scan result. When the shell is split, point it at the resulting
+source modules (or scan their directory) to retain the regression coverage;
+no shell injection seam is needed.
+
+### Added by flow 468 (`/setup` Run)
+
+`commands/shell.test.ts` adds one source reader of `tui/tui-shell.ts`, the "flow 468
+AC10" block. `openSetup` lives inside the `launchTuiAgentShell` closure, so whether the
+shell hands `openSetupModal` the real seams cannot be observed headless. The block pins
+that it does:
+- the session cwd as `projectRoot`, which drives tab detection and is where the run starts;
+- OSC 52 for Copy and `chrome.showToast` for its toast;
+- `confirmOperatorCard` for Run's confirmation;
+- `runSetupSteps` over the session's job registry with `ownKeryxPrefix()`, so keryx
+  runs the steps itself;
+- the one-run-at-a-time guard;
+- no external-agent or main-agent call.
+
+The modal and the runner are covered behaviourally in `tui/setup-modal.test.ts`.
+
+The block slices a fixed 3,500-character window after `openSetupModal(`, which is the
+fragile shape this document describes: a large insertion before the seams pushes them
+out of the window. When the closure becomes mountable, replace it with a test that
+opens `/setup` in a mounted shell and observes the confirm card and the job registry.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -453,17 +495,25 @@ dismiss id as the cancel id. It reads syntax, not offsets or counts, so a mechan
 split that moves a picker together with its call still passes; P2 should point it at
 the new files rather than convert it.
 
+`commands/operator-confirm-rosters.test.ts` (flow 456) reads `commands/shell.ts` once, to
+check that of the two `buildInteractiveAgentTools` calls only the TUI's carries the
+`operatorConfirm` binding and the readline shell's does not. The readline closure is not
+mountable, so the absence of the binding is not observable; when the closure becomes
+mountable, replace it with a roster test on the readline shell.
+
 ```text
+commands/operator-confirm-rosters.test.ts | commands/shell.ts | 1
 commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-starting-line.test.ts | commands/shell.ts | 1
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 5
+commands/shell.test.ts | commands/shell.ts, tui/tui-shell.ts | 6
 decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
+security/source-scan.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2
 tui/busy-dispatch.test.ts | tui/tui-shell.ts | 4
 tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
@@ -473,6 +523,7 @@ tui/external-operator.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1
+tui/project-context-inspector.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
 tui/remote-queue-wiring.test.ts | tui/tui-shell.ts | 1
 tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1

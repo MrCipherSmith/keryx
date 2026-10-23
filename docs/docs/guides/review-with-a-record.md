@@ -29,6 +29,7 @@ Usage:
                      [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
+                      [--premises <file|->]...
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
@@ -579,6 +580,49 @@ recorded and **nothing is removed** — so the drop rate is a measured number be
 it costs a real finding. Every package's `scope.md` carries the stage counts:
 dropped by the pre-filter, refuted by the verifier, retained.
 
+## Ask whether the finding is a defect at all
+
+A finding can reproduce and still be wrong: the code may carry an explicit
+override, an exemption note or a sibling doing the same thing, and accepted
+platform practice may back it (media controls and timelines do not mirror in
+right-to-left layouts). The verifier cannot see that, because it checks facts.
+`review-premise` runs after it, on a clean context, and answers `upheld`,
+`downgraded`, `challenged` or `owner-decision` for each finding. Like the
+verifier it **can only hold or lower**, and it never dismisses anything.
+
+```bash
+keryx review ingest --report round7.md --ref round7 \
+  --verifications verifier-result.json \
+  --premises premise-result.json
+```
+
+`--premises` takes the judge's JSON, or a reply that holds it in one
+`` ```json keryx:premises `` block. A `challenged` or `owner-decision` finding is
+**held**: it is not an open blocker or major, it is not handed to a fixer, the
+verdict lists it as "awaiting operator", and readiness and the flow review gate
+fail until you answer. You decide it with the `review_decide_premise` card. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. Outside keryx shell, at a terminal:
+
+```bash
+keryx review decide-premise --package .metaproject/reviews/round7 \
+  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls"
+```
+
+`--answer uphold` returns the finding to kept at its original severity;
+`--answer dismiss` records it `dismissed-incorrect` with your reason as the
+evidence. Without `--answered-by` the command asks at the
+terminal and is refused without one, so the agent never sends you there from keryx shell; it calls the card.
+
+**Without a card: a host question.** In Claude Code, Codex or another host there is no card. The agent asks you the question with the host's own question tool (or a Telegram poll through Helyx) and offers `uphold` or `dismiss`, naming the finding id in the question; it then records what you chose, with no terminal:
+
+```bash
+keryx review decide-premise --package .metaproject/reviews/round7 \
+  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls" \
+  --answered-by helyx-poll:poll-223/msg-214878 \
+  --answer-text "dismiss" --question-text "LY-003: dismiss or uphold?"
+```
+
+The record carries `confirmedVia: "host-question"`, the question and your answer verbatim, and a `keryx decisions` entry is written. keryx does not verify the answer, so it is a weaker record than a card press: it proves the agent reports that you answered, not that it reported truthfully (see [limitations](../limitations.md#a-host-question-is-a-weaker-proof-than-a-card)). The same holds for `confirm-plan` (the question carries the plan's dispatch count and minutes, or the verb refuses it as stale), `waive-mutation` and `override-reviewers`. A host question is refused in an unattended run and under `KERYX_TOOL_CALL=1`, and for a decline or, on `decide-premise`, words that name the other choice. `review complete` and its waivers still need you at a card or a terminal.
+
 ## Ingest a report someone already wrote
 
 ```bash
@@ -610,7 +654,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -619,9 +663,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.
@@ -697,8 +742,7 @@ the chunk plan next to it, so the waves are one command away. An unattended run
 (`keryx review run --autonomous`) runs every wave without asking, up to the
 25-pass ceiling; an interactive run asks you once before the waves start.
 
-Only you can waive an item, in a terminal, with your own words recorded beside
-the time:
+Only you can waive an item, with your own words recorded beside the time. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. The terminal form is the fallback:
 
 ```bash
 keryx review complete <ref> --waive blast-radius "the cut files are generated code"
@@ -742,7 +786,7 @@ never written to. The tenth readiness item, `memory-outside-stage`, reads that l
 with another query, without `--status accepted`, any other memory command, or a
 stage call stamped before the round started, fails the item; the same query
 repeated does not. It blocks `review complete` and `review publish` like the
-other nine, and only you lift it, in a terminal:
+other nine, and only you lift it, through the `review_waive_readiness` card (see above) or, as the fallback, in a terminal:
 
 ```bash
 keryx review complete <ref> --waive memory-outside-stage "<your own words>"
@@ -788,7 +832,7 @@ visible to the log. Four things the automatic log does not do:
 - **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
 - **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
 - **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
-- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree, and refuses the ingest, naming the finding, when it does not resolve there. The report links the blob at that SHA.
+- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree. A quote absent from that file, or in it more than once, does not refuse the round (flow 460): the finding is kept with no line, never relocated by similarity, flagged `quote_unlocated` (with the candidate lines when ambiguous), listed in scope.md, and readiness item `quotes-located` fails until it has a disposition or the operator waives it. The ingest still refuses, naming the finding, a quote it could not check at all: the commit is not in the checkout, no file is named, or a size bound stopped the match. The report links the blob at that SHA.
 
 ### The one dismissal that teaches something
 
@@ -919,7 +963,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -928,9 +972,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.

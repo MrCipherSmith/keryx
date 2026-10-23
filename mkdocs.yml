@@ -76,6 +76,8 @@ nav:
   - Onboarding: onboarding.md
   - Guides:
       - Give an agent context: guides/give-an-agent-context.md
+      - Diagnose shell startup: guides/shell-startup.md
+      - Make agents follow my project rules: guides/apply-project-rules.md
       - Choose an approval mode (ask, trust, auto): guides/permission-modes.md
       - "Undo a turn with /rewind": guides/rewind.md
       - "Keep a record of what an agent recommended and what you chose": guides/recommendation-journal.md

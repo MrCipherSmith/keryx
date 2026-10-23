@@ -6,9 +6,10 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
 import { pathExists, writeFileAtomic } from "../lib/fs";
-import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan, withChunkStateLock } from "./chunks";
+import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan, readChunkPlan, withChunkStateLock } from "./chunks";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
+import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
 
 export const CHUNK_ESTIMATE_FILE = "chunk-estimate.json";
 /** The file automatic review mode (flow 429) leaves in its package; `commands/automatic-review.ts` takes its name from here. */
@@ -76,8 +77,9 @@ export type ChunkEstimate = {
   limitsWarning?: string;
 };
 
-export async function estimateChunkRun(packageDir: string, projectRoot: string, limits?: ChunkLimits): Promise<ChunkEstimate | null> {
-  const plan = await ensureChunkPlan(packageDir, projectRoot);
+/** `readOnly` reads the plan on disk and never writes `chunks.json`; no plan on disk is null, like no dropped files. */
+export async function estimateChunkRun(packageDir: string, projectRoot: string, limits?: ChunkLimits, options: { readOnly?: boolean } = {}): Promise<ChunkEstimate | null> {
+  const plan = options.readOnly === true ? ((await readChunkPlan(packageDir)) ?? null) : await ensureChunkPlan(packageDir, projectRoot);
   if (plan === null) return null;
   const pass = await computeChunkPass(packageDir);
   const open = new Set((pass?.chunks ?? []).filter((chunk) => chunk.state !== "done").map((chunk) => chunk.id));
@@ -109,7 +111,7 @@ export async function estimateChunkRun(packageDir: string, projectRoot: string, 
 export type ChunkMode = "automatic" | "interactive";
 export type ChunkDecision = "proceed" | "ask-once" | "wait-for-yes";
 
-export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string };
+export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
 export type ChunkEstimateRecord = {
   schemaVersion: 1;
@@ -155,12 +157,12 @@ export function recordChunkEstimate(packageDir: string, estimate: ChunkEstimate,
   });
 }
 
-export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date()): Promise<ChunkEstimateRecord> {
+export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<ChunkEstimateRecord> {
   if (quote.trim() === "") throw new Error("The answer needs the operator's own words (--quote).");
   return withChunkStateLock(packageDir, async () => {
     const previous = await readChunkEstimate(packageDir);
     if (previous === undefined) throw new Error("No chunk estimate is recorded; run `keryx review chunks estimate` first.");
-    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString() } };
+    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString(), ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press) } };
     await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
     return record;
   });
@@ -176,7 +178,7 @@ export async function chunkRunBlocker(packageDir: string, projectRoot: string, k
   const dir = shellWord(path.relative(process.cwd(), packageDir) || ".");
   const size = `${estimate.chunks} passes of at most ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${estimate.files} files) exceed the ceiling of ${estimate.maxPasses} passes (${estimate.ceilingFiles} files)`;
   if (answered?.value === "no") return `${size}, and the operator answered no. Nothing runs.`;
-  return `${size}. Run \`keryx review chunks estimate --package ${dir}\` to record the estimate, then \`keryx review chunks estimate --package ${dir} --answer yes --quote "<operator quote>"\` once the operator agrees.`;
+  return `${size}. In keryx shell, call the \`review_chunks_answer\` tool: the operator answers a card. Outside the shell, run \`keryx review chunks estimate --package ${dir}\` to record the estimate, then \`keryx review chunks estimate --package ${dir} --answer yes --quote "<operator quote>"\` in a terminal once the operator agrees.`;
 }
 
 const money = (usd: number): string => `$${usd.toFixed(2)}`;

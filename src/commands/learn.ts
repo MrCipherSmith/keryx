@@ -539,7 +539,7 @@ async function runPromote(args: readonly string[], deps: LearnCommandDeps): Prom
   if (!terminal) {
     fail(
       "promote needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, an agent's shell, " +
-        "an MCP or ACP client, or an unattended run. Run it yourself, in a terminal. [promote-requires-terminal]",
+        "an MCP or ACP client, or an unattended run. Inside keryx shell, call the learn_promote tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal. [promote-requires-terminal]",
     );
     return;
   }
@@ -605,7 +605,7 @@ async function runGraduateApply(args: readonly string[], deps: LearnCommandDeps)
   if (!terminal) {
     fail(
       "graduate apply needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, an agent's " +
-        "shell, an MCP or ACP client, or an unattended run. Run it yourself, in a terminal. [graduate-apply-requires-terminal]",
+        "shell, an MCP or ACP client, or an unattended run. Inside keryx shell, call the learn_graduate tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal. [graduate-apply-requires-terminal]",
     );
     return;
   }

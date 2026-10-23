@@ -18,6 +18,8 @@ coverage/
 # `.claude/settings.json` stays tracked on purpose, so this is not a blanket
 # `.claude/` ignore.
 .claude/worktrees/
+# Same for the repo-root `.worktrees/` checkouts (also in IGNORE_DIRS).
+.worktrees/
 
 
 

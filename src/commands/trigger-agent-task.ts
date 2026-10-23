@@ -77,7 +77,7 @@ import type {
 import { reserveTriggerSpend } from "../trigger/run";
 export { verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
-import { UNATTENDED_EXCLUDED_TOOLS, unattendedRefusal } from "../trigger/unattended";
+import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
 import {
   createSpendMeter,
   deniedUnattendedApproval,
@@ -544,7 +544,7 @@ async function runLocked(
         ...granted,
         ...(deps.extraTools ?? []),
       ];
-      const offending = tools.filter((t) => UNATTENDED_EXCLUDED_TOOLS.includes(t.definition.name));
+      const offending = tools.filter((t) => isUnattendedExcludedTool(t.definition.name));
       if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);
       const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
       // Flow 306 (W6 T9, AC9): same unattended-untrusted, non-interactive
@@ -575,6 +575,8 @@ async function runLocked(
         unattended: true,
         // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
         maxRounds: resolveAgentMaxRounds(process.env, "ask"),
+        // Nor does it get trust mode's plan follow-through nudges: nobody is there to stop them.
+        planFollowThrough: false,
         hardDeny: unattendedRefusal,
         ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };

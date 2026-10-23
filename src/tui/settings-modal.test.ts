@@ -18,6 +18,7 @@ const STATE: SettingsSnapshot = {
   plan: false,
   guard: false,
   editGuard: false,
+  projectContext: { enforcement: "warn", maxBytes: 131072 },
   routing: false,
   externalPrivacy: { value: "on", source: "user" },
   reasoning: { effort: "off", source: "global" },
@@ -309,7 +310,7 @@ otuiTest("/settings: a short terminal shows a window of rows and scrolls to keep
     const first = h.captureCharFrame();
     expect(first).toContain("Permission mode");
     expect(first).not.toContain("Jev review profile");
-    for (let i = 0; i < 10; i += 1) await h.mockInput.pressKey("ARROW_DOWN");
+    for (let i = 0; i < 11; i += 1) await h.mockInput.pressKey("ARROW_DOWN");
     await settle(h);
     const last = h.captureCharFrame();
     expect(last).toContain("Jev review profile");

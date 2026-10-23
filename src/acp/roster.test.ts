@@ -161,6 +161,7 @@ describe("AC3 — the roster is pinned", () => {
     "shell_exec",
     "skill_load",
     "skills_catalog",
+    "skills_resolve_context",
     "test_related",
     "wiki_ask",
     "wiki_backlinks",

@@ -93,6 +93,8 @@ export interface RemoteApprovalAnswer {
   approvalId?: string;
   /** The Telegram user who pressed; absent when nobody did (timeout, no stream). */
   fromId?: number;
+  /** Flow 464: the question never reached the topic. */
+  undelivered?: true;
 }
 
 export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn" | "stopTelegramTurn">> {
@@ -203,6 +205,7 @@ export function mapApprovalAnswer(got: unknown, offered: boolean): RemoteApprova
     always: o.decision === "always" && offered,
     ...(approvalId === undefined ? {} : { approvalId }),
     ...(fromId === undefined ? {} : { fromId }),
+    ...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),
   };
 }
 
@@ -267,6 +270,33 @@ export function describeApprovalForTopic(
     });
   lines.push(approvalCauseLine(cause));
   return lines.join("\n");
+}
+
+/**
+ * Whether an operator card (`alwaysAsk` + `card`) would be cut by {@link composeApprovalPrompt}. A cut card must
+ * never get remote Yes/No buttons: the operator would be answering a decision they could not read in full.
+ * Exported for the shell and the tests.
+ */
+export function operatorCardTooLongForTopic(
+  tool: string,
+  inputJson: string,
+  meta?: { alwaysAsk?: boolean; card?: readonly string[]; destructive?: boolean; credentials?: boolean; untrustedOrigin?: boolean; cause?: ApprovalCause },
+): boolean {
+  if (meta?.alwaysAsk !== true || meta.card === undefined || meta.card.length === 0) return false;
+  return redactSensitiveText(describeApprovalForTopic(tool, inputJson, meta)).trim().length > MAX_APPROVAL_PROMPT_CHARS;
+}
+
+/** Flow 464 (AC5): the line an operator card carries when its Telegram mirror was not sent. */
+export const MIRROR_NOT_DELIVERED = "Telegram mirror not delivered";
+
+/**
+ * Why a card cannot be mirrored to the topic right now, or undefined when it can. The card is answered in the shell
+ * either way; this only says that nobody can answer it in Telegram.
+ */
+export function mirrorUndeliveredNote(bridge: { readonly active: boolean; readonly connected: boolean } | undefined): string | undefined {
+  if (bridge === undefined || !bridge.active) return `${MIRROR_NOT_DELIVERED}: remote control is not on in this shell. Answer it here.`;
+  if (!bridge.connected) return `${MIRROR_NOT_DELIVERED}: the remote channel is not connected. Answer it here.`;
+  return undefined;
 }
 
 export class RemoteBridge {
@@ -338,6 +368,11 @@ export class RemoteBridge {
         ...(this.host.busyRefusal !== undefined ? { busyRefusal: (line: string) => this.host.busyRefusal!(line) } : {}),
         ...(this.host.listModels !== undefined ? { listModels: (id?: string) => this.host.listModels!(id) } : {}),
         ...(this.host.listProviders !== undefined ? { listProviders: () => this.host.listProviders!() } : {}),
+        ...(this.host.listAddableProviders !== undefined ? { listAddableProviders: () => this.host.listAddableProviders!() } : {}),
+        ...(this.host.testProvider !== undefined ? { testProvider: (id: string) => this.host.testProvider!(id) } : {}),
+        ...(this.host.connectWithDeviceLogin !== undefined
+          ? { connectWithDeviceLogin: (id: string, notify: (text: string) => Promise<void>) => this.host.connectWithDeviceLogin!(id, notify) }
+          : {}),
         ...(this.host.switchModel !== undefined ? { switchModel: (model: string, provider?: string) => this.host.switchModel!(model, provider) } : {}),
         ...(this.host.listSessions !== undefined ? { listSessions: () => this.host.listSessions!() } : {}),
         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
@@ -389,6 +424,11 @@ export class RemoteBridge {
   /** Whether remote control is on (connected or not). */
   get active(): boolean {
     return this.client !== undefined;
+  }
+
+  /** Whether the stream to serve is up right now (flow 464). */
+  get connected(): boolean {
+    return this.client?.connected === true;
   }
 
   /** The running turn came from Telegram. */
@@ -927,7 +967,7 @@ export class RemoteBridge {
     const client = this.client;
     if (client === undefined || !client.connected) {
       this.push("approval", "denied: not connected");
-      return { decision: "deny", always: false };
+      return { decision: "deny", always: false, undelivered: true };
     }
     this.push("approval", "asked in the topic");
     let answer: RemoteApprovalAnswer;
@@ -958,6 +998,19 @@ export class RemoteBridge {
       answer.decision === "allow" ? `${answer.always ? "allowed (always)" : "allowed"} in the topic${by}` : `denied${by === "" ? " (or no answer)" : by}`,
     );
     return answer;
+  }
+
+  /**
+   * Tell the topic that an operator card is too long to answer there: no buttons, the card is answered in the
+   * shell. Best effort; the shell's dialog is unaffected.
+   */
+  async noticeCardTooLong(tool: string): Promise<void> {
+    const client = this.client;
+    if (client === undefined || !client.connected) return;
+    this.push("approval", "operator card too long for the topic; answer it in the shell");
+    await client
+      .reply(composeReply(`The operator card for ${tool} is too long to answer here. Answer it in the shell.`))
+      .catch(() => false);
   }
 
   /**

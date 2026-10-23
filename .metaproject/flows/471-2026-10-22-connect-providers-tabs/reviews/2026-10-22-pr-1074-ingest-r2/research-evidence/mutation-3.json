@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx/.worktrees/connect-providers-tabs",
+  "command": "bun test src/tui/tui-shell src/tui/connect",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 18503
+  },
+  "mutants": [
+    {
+      "id": "w2-M9",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "saveApiKey(envKey, kr.value, deps.configDir); // persist (0600)",
+      "replacement": "void 0; // persist (0600)",
+      "command": "bun test src/tui/tui-shell src/tui/connect",
+      "kind": "behavior",
+      "line": 3829,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 33124
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

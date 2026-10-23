@@ -40,6 +40,7 @@ import type {
 } from "./types";
 import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
 import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
+import { filterSourceMatches } from "./source-context";
 
 /**
  * Validate serialized JSON structurally, or ordinary text without changing its format.
@@ -192,9 +193,14 @@ function ephemeralHashFn(): (value: string) => string {
 export async function analyze(
   cwd: string,
   input: SecurityCheck,
+  opts: { filesystemSourceScan?: boolean } = {},
 ): Promise<AnalysisResult> {
   const config = await loadSecurityConfig(cwd);
-  const matches = await runDetectorsAsync(cwd, input.content, config);
+  const original = await runDetectorsAsync(cwd, input.content, config);
+  const contextual = opts.filesystemSourceScan && input.source === "trusted-project" && input.path
+    ? await filterSourceMatches(input.content, input.path, original)
+    : { matches: original };
+  const matches = contextual.matches;
   const hashFn = await hashFnFor(cwd);
 
   const buildOpts: BuildFindingOptions = {
@@ -234,7 +240,11 @@ export async function analyze(
     decision.action = strongestAction(decision.findings.map((f) => f.action));
   }
 
-  return { decision, warnings: selfProtection.warnings, config };
+  return {
+    decision,
+    warnings: [...selfProtection.warnings, ...(contextual.warning ? [contextual.warning] : [])],
+    config,
+  };
 }
 
 /**
@@ -330,7 +340,7 @@ export async function runScanPath(
         source: input.source,
         path: item.path,
         ...(input.target !== undefined ? { target: input.target } : {}),
-      });
+      }, { filesystemSourceScan: true });
       config ??= result.config;
       findings.push(...result.decision.findings);
       warnings.push(...result.warnings);

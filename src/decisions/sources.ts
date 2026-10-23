@@ -16,6 +16,8 @@ export const DECISION_SOURCES = {
   queueRoute: "tui-queue-route",
   /** The TUI picker for a session that another shell already holds (fork, view, cancel). */
   sessionLease: "tui-session-lease",
+  /** Flow 467: a question the host asked through its own tool, recorded by a `keryx review` verb (decide-premise, confirm-plan, ...). */
+  hostQuestion: "host-question",
 } as const;
 
 export type DecisionSource = (typeof DECISION_SOURCES)[keyof typeof DECISION_SOURCES];

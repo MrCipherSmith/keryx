@@ -1,8 +1,8 @@
 ---
 Title: Module vscode-extension/src
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`vscode-extension/src` groups 22 file(s). Exposes 8 public symbol(s)."
 ---
 
@@ -14,72 +14,52 @@ Summary: "`vscode-extension/src` groups 22 file(s). Exposes 8 public symbol(s)."
 
 ## Overview
 
-The module contains the source code for the VS Code extension. It owns the extension lifecycle entry points and the logic that turns Keryx-related state into user-visible behavior, such as status-bar presentation, initialization prompts, and output messages.
-
-It exposes `activate` and `deactivate` as the extension boundary with VS Code, while separating status interpretation, command-line interaction, audit logging, and output formatting into focused files. The module is internally cohesive with no cross-module imports.
+The module is the source of the Keryx VS Code extension. It owns the activation lifecycle and turns the output of the `keryx` CLI into editor behavior: an initialization prompt, a status-bar item, tree views, a hover provider, an output channel with audit lines, and an advisory version check. `activate` and `deactivate` are the only public boundary with VS Code. Decision logic lives in `*-logic.ts` files that do not import `vscode`, so they can be unit-tested with `bun test`.
 
 ## How it works
 
-`vscode-extension/src` is organized around a small public surface:
+The module is split into three layers.
 
-- **Extension lifecycle**:
-  - `activate` is the public entry point used by VS Code when the extension becomes active.
-  - `deactivate` is the public exit point used when the extension is shut down.
+- **Thin `vscode` shell.** `extension.ts` is the composition point. It wires commands, tree views, the hover provider, the status bar and the output channel, and delegates every decision to the pure modules. Its header notes that it is not exercised by the test suite, so it is backed only by static and manual review.
+- **Pure logic.** `status-logic.ts` holds the status model: `interpretStatus` reads the first line of `keryx status` and maps it to `KeryxStatusState`, with unrecognised output falling back to `"incomplete"`. The same layer contains `status-bar-logic.ts`, `tree-view-logic.ts`, `hover-logic.ts`, `version-logic.ts`, `output-channel-logic.ts` and `audit-log.ts`. `audit-log.ts` owns the one-line audit format through `formatAuditLine`.
+- **CLI I/O seam.** `keryx-cli.ts` exposes `runKeryx`, which runs the `keryx` binary through `execFile`. A non-zero exit comes back as a result with `exitCode`, not as a thrown error, because callers read the exit code as a signal. A missing binary is raised as `KeryxBinaryNotFoundError`, and an aborted call as `KeryxAbortedError`.
 
-- **Status interpretation**:
-  - `KeryxStatusState` represents the observable status state for Keryx-related features.
-  - `interpretStatus` maps raw status information into that domain state.
-  - `status-logic.ts` is a central shared dependency in the module, imported by six files and importing none.
-
-- **Initialization prompting**:
-  - `shouldPromptInit` determines whether the user should be asked to initialize Keryx.
-  - `initPromptMessage` builds the message shown when initialization should be prompted.
-  - `shouldRevealAfterInit` determines whether output or another view should be revealed after an initialization attempt.
-  - `initSucceededButNotReadyMessage` provides the message for the case where initialization succeeded but the environment is still not fully ready.
-
-- **Supporting layers**:
-  - `extension.ts` acts as the main composition point, importing eight internal files and coordinating the public activation path.
-  - `keryx-cli.ts` is used by multiple internal consumers and likely mediates interactions with the Keryx command-line interface.
-  - `audit-log.ts` provides audit-oriented logging and is imported by four files.
-  - `output-channel-logic.ts` supports output presentation or formatting and participates in bidirectional imports with two internal files.
-  - `status-bar.ts` consumes status and presentation dependencies to contribute status-bar behavior.
-
-The code graph indicates a layered but lightweight architecture: `status-logic.ts` and `keryx-cli.ts` are broadly depended on, while `extension.ts` coordinates the module's public behavior.
+The `vscode` adapters sit between these layers. `status-bar.ts` (`KeryxStatusBar`) polls every 60 seconds and skips a tick while a refresh is still running. Each refresh runs three CLI calls (`status`, `health status`, `security status`) and feeds their parsed output into `status-bar-logic.ts`. `tree-view.ts` provides the status, projects and recent-turns tree providers. `output-channel.ts` provides `KeryxOutputChannel`, whose `audit` method writes the audit lines. The registered commands are `keryx.init`, `keryx.refresh` and `keryx.runInTerminal` (`RUN_IN_TERMINAL_COMMAND`), which opens a fresh terminal for each tree-item click.
 
 ## Key concepts
 
-- **Activation**: The lifecycle phase in which VS Code calls `activate` and the extension begins contributing behavior.
-- **Deactivation**: The lifecycle phase in which VS Code calls `deactivate`, allowing the extension to clean up resources.
-- **`KeryxStatusState`**: A public domain state used to describe the current Keryx-related situation for the extension UI.
-- **Status interpretation**: The process of turning lower-level status signals into `KeryxStatusState` through `interpretStatus`.
-- **Initialization prompt**: A decision and message pair produced by `shouldPromptInit` and `initPromptMessage` when the user should start or prepare a Keryx workflow.
-- **Post-initialization guidance**: Behavior governed by `shouldRevealAfterInit` and `initSucceededButNotReadyMessage`, describing what should happen after an initialization attempt succeeds but the system remains not ready.
-- **Output and audit support**: `output-channel-logic.ts` and `audit-log.ts` support user-facing log presentation and internal operational logging, respectively.
+- **Activation and deactivation.** VS Code calls `activate` when the extension starts and `deactivate` on shutdown. `deactivate` clears module state, and disposables are released through `context.subscriptions`.
+- **`KeryxStatusState`.** The three-value readiness model (`"not-initialized"`, `"incomplete"`, `"ready"`) that every status-driven feature reads.
+- **Init prompt.** `shouldPromptInit` is true for `"not-initialized"` and `"incomplete"`, and false for `"ready"`. `initPromptMessage` supplies the text. The extension never runs `keryx init --yes` on its own; it runs only when the user clicks "Run keryx init".
+- **Post-initialization outcome.** `shouldRevealAfterInit` is true only when the init exit code is 0 and the status afterwards is `"ready"`. `initSucceededButNotReadyMessage` covers the case where init exits 0 but the workspace is still not ready, so the user is never left without feedback.
+- **Audit line.** Each mutating action is recorded as one line, `[timestamp] actor=... action=... outcome=...`, with an optional `detail`. The actor is `"user"` or `"extension"`.
+- **Turn-event rendering.** `output-channel-logic.ts` parses SSE bodies (`parseSseBody`) and renders events as single lines (`formatTurnEventLine`).
+- **Version advisory.** `MIN_KERYX_VERSION` is `0.2.0`. A binary below it produces a warning, but activation is never blocked.
 
 ## Main flows
 
 ### Extension activation flow
 
-1. VS Code invokes `activate`.
-2. `extension.ts` coordinates the activation process.
-3. `interpretStatus` produces or derives a `KeryxStatusState`.
-4. `status-bar.ts` can translate the resulting state into status-bar behavior.
-5. `output-channel-logic.ts` can format output-channel content when detailed status or diagnostics are needed.
-6. `audit-log.ts` can record lifecycle or status-related events.
+1. VS Code calls `activate`, which creates the output channel and registers the `keryx.init`, `keryx.refresh` and `keryx.runInTerminal` commands.
+2. If no workspace folder is open, `activate` returns after registering the commands.
+3. Otherwise it registers the hover provider, the tree views and the status bar. `createKeryxStatusBar` runs the first refresh before returning.
+4. `runInitFlow` runs `keryx status` and passes the output to `interpretStatus` to decide whether to prompt.
+5. After the init flow, `checkVersionAndWarn` runs `keryx --version` and warns if the version is below the minimum. A missing binary is reported once, by the init flow.
 
 ### Initialization prompt flow
 
-1. During activation or state observation, the extension evaluates whether initialization should be suggested.
-2. `shouldPromptInit` decides whether to prompt the user.
-3. If prompting is appropriate, `initPromptMessage` provides the message content.
-4. When the user proceeds, `keryx-cli.ts` is likely involved in invoking or coordinating the underlying Keryx command-line workflow.
-5. `audit-log.ts` can record the attempt or its result.
+1. `runInitFlow` calls `interpretStatus` on the output of `keryx status`.
+2. If `shouldPromptInit` is false, the flow ends silently.
+3. Otherwise `initPromptMessage` is shown with the buttons "Run keryx init" and "Not now".
+4. Only the "Run keryx init" choice proceeds. It calls `runKeryx(["init", "--yes"])` from `keryx-cli.ts` and records an audit line for `keryx.init`.
+5. The status is read again, and the new state decides the outcome in the next flow.
 
 ### Post-initialization reveal flow
 
-1. After an initialization-related action completes, the extension evaluates whether additional output should be shown.
-2. `shouldRevealAfterInit` determines whether to reveal output.
-3. If the action succeeded but the environment is still not ready, `initSucceededButNotReadyMessage` provides the user-facing explanation.
+1. `shouldRevealAfterInit` receives the init exit code and the post-init state.
+2. If it is true, the tree providers are refreshed, the status bar is refreshed, and the Keryx view container is revealed.
+3. Otherwise, a non-zero exit shows an error message with the first line of stderr, and the stderr is written to the output channel.
+4. Otherwise, an exit of 0 that still leaves the workspace not ready shows `initSucceededButNotReadyMessage` and writes the same message to the output channel.
 
 ## Public API
 
@@ -87,8 +67,8 @@ The code graph indicates a layered but lightweight architecture: `status-logic.t
 |--------|------|-------------|
 | `activate` | function | Public entry point called by VS Code when the extension activates |
 | `deactivate` | function | Public exit point called by VS Code during extension shutdown |
-| `KeryxStatusState` | interface | Domain state representing the current Keryx-related situation |
-| `interpretStatus` | function | Maps raw status information into `KeryxStatusState` |
+| `KeryxStatusState` | type | The three-value readiness state (`not-initialized`, `incomplete`, `ready`) |
+| `interpretStatus` | function | Maps the first line of `keryx status` output to `KeryxStatusState` |
 | `shouldPromptInit` | function | Determines whether to prompt the user for initialization |
 | `initPromptMessage` | function | Builds the initialization prompt message |
 | `shouldRevealAfterInit` | function | Determines whether to reveal output after initialization |
@@ -111,5 +91,6 @@ The code graph indicates a layered but lightweight architecture: `status-logic.t
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 - Initial draft generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z.
 - 0.1.0 - Enriched and marked accepted.

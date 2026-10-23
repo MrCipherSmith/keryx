@@ -877,7 +877,9 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
     // instead of re-resolving every close (best-effort, never fatal).
     const boundWorkspaceId = resolved.workspaceId;
     try {
+      // Only the binding changes: every other field (Notes, Trail, answers, child dispatches) is kept.
       await writeSlate(input.dir, (prev) => ({
+        ...(prev ?? {}),
         anchors: prev?.anchors ?? { root: "", touched: [] },
         course: prev?.course ?? {},
         seeds: prev?.seeds ?? [],

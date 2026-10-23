@@ -197,5 +197,8 @@ describe("AC3: review start records the clean-context stage", () => {
     const manifest = JSON.parse(readFileSync(path.join(root, pathLine!, "manifest.json"), "utf8"));
     expect(manifest.cleanContext.memoryQuery).toBe("billing retries");
     expect(Number.isNaN(Date.parse(manifest.cleanContext.startedAt))).toBe(false);
+    // Flow 457 round-2 M1: start stamps the manifest with the operator gate, beside run-profile.json.
+    expect(manifest.operatorGate).toBe(1);
+    expect((await validateManagedReviewManifest(root, manifest)).valid).toBe(true);
   });
 });

@@ -123,6 +123,7 @@ test("AC1: an ordinary ingest writes filter_stats into the manifest on disk", as
     "dropped_prefilter",
     "dropped_refuted",
     "dropped_scope_b",
+    "merged_duplicates",
     "not_measured",
     "retained",
     "schema_version",
@@ -138,6 +139,7 @@ test("AC1: the counts come from the stages, not from re-parsing scope.md", async
   // results can get all three right.
   const many: StructuredReviewFinding[] = Array.from({ length: 5 }, (_, index) => ({
     ...FINDING,
+    severity: "info",
     id: `F-${String(index + 1).padStart(3, "0")}`,
   }));
 
@@ -474,6 +476,43 @@ test("the one-line form says `not-measured`, never 0, for an absent count", () =
     ],
   });
   expect(line).toBe(
-    "filter_stats: total=3 prefilter=not-measured low_confidence=not-measured refuted=0 scope_b=not-measured findings_cap=0 dismissed_by_round=not-measured retained=3",
+    "filter_stats: total=3 prefilter=not-measured low_confidence=not-measured refuted=0 scope_b=not-measured findings_cap=0 merged_duplicates=0 dismissed_by_round=not-measured retained=3",
   );
+});
+
+test("flow 460: duplicate merges are part of the arithmetic, so a consistent round raises no problem", () => {
+  // The shape of PR #1045 round 1: 149 reported, 10 screened by scope B, 8 folded into survivors, 131 retained.
+  const round = {
+    schema_version: 1,
+    total: 149,
+    dropped_prefilter: 0,
+    dropped_low_confidence: null,
+    dropped_refuted: 0,
+    dropped_scope_b: 10,
+    dropped_findings_cap: 0,
+    merged_duplicates: 8,
+    retained: 131,
+    dismissed_by_round: null,
+    by_reason: { "scope_b:outside-set": 10 },
+    not_measured: [
+      { stage: "low_confidence", reason: "no such stage" },
+      { stage: "round_dismissed", reason: "no channel" },
+    ],
+  };
+  expect(checkFilterStats(round)).toEqual([]);
+  // The same record without the merge count is the warning that round printed.
+  const { merged_duplicates: _merged, ...older } = round;
+  expect(checkFilterStats(older).map((problem) => problem.code)).toEqual(["arithmetic"]);
+  expect(checkFilterStats({ ...round, merged_duplicates: -1 }).map((problem) => problem.code)).toEqual(["shape"]);
+});
+
+test("flow 460: buildFilterStats records the merges it is given", () => {
+  const stats = buildFilterStats({
+    verification: { mode: "annotate", claims: 0, applied: 0, rejected: 0, capped: 0, confirmed: 0, refuted: 0, unverifiable: 0, unverified: 3, findingsIn: 3, findingsRetained: 3, findingsRefuted: 0 },
+    findingsCap: { counts: { limit: 10, seen: 2, retained: 2, truncated: 0, exempt: 0, reviewersTruncated: 0 }, drops: [] },
+    externalRetained: 0,
+    duplicatesMerged: 1,
+  });
+  expect(stats.merged_duplicates).toBe(1);
+  expect(checkFilterStats(stats)).toEqual([]);
 });

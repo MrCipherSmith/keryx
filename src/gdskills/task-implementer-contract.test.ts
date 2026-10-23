@@ -37,10 +37,14 @@
 // the validator keywords — the assertion is made against the code and the prose
 // is checked for agreement, so neither side can drift alone.
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { skillsCommand } from "../commands/skills";
 import { CONTRACTS, contractPath, validateJson } from "./contracts";
+import { sha256Hex } from "./project-rules";
 
 const REPO_ROOT = path.join(import.meta.dir, "..", "..");
 
@@ -423,5 +427,255 @@ describe("the frontmatter says what is true about the builds", () => {
     for (const file of skillBuilds()) {
       expect(read(file)).toContain('compatible_harnesses: "claude,cursor,codex,zed,opencode"');
     }
+  });
+});
+
+// Flow 461 — the project rules a worker applied, recorded and checked against what
+// the resolver required.
+
+const SHA_A = "a".repeat(64);
+
+function creatorSchema(): Record<string, unknown> {
+  const contract = CONTRACTS.find((entry) => entry.name === "tests-creator-output");
+  if (!contract) throw new Error("not registered: tests-creator-output");
+  return JSON.parse(readFileSync(contractPath(contract), "utf8")) as Record<string, unknown>;
+}
+
+function creatorResult(applied?: unknown): Record<string, unknown> {
+  return {
+    test_case_specs: { framework: "bun:test", test_files: [], run_command: "bun test a", expected_result: "all failing (RED phase)" },
+    status_report: { status: "DONE", tests_written: 1, all_criteria_covered: true },
+    ...(applied === undefined ? {} : { project_context_applied: applied }),
+  };
+}
+
+describe("AC12: project_context_applied and resolved_context_file in the schemas", () => {
+  test("a result that cites a rule with a known `how` and a 64-hex sha256 validates, for both producers", async () => {
+    for (const how of ["read", "followed", "n/a"]) {
+      const applied = [{ path: ".metaproject/rules/project/styling.mdc", sha256: SHA_A, how }];
+      expect(await validateJson({ ...validResult(), project_context_applied: applied }, schema("task-implementer-output"))).toEqual([]);
+      expect(await validateJson(creatorResult(applied), creatorSchema())).toEqual([]);
+    }
+  });
+
+  test("an unknown `how`, a malformed sha256, a missing field and an extra field are each refused", async () => {
+    const output = schema("task-implementer-output");
+    const bad: unknown[] = [
+      [{ path: "a.mdc", sha256: SHA_A, how: "skimmed" }],
+      [{ path: "a.mdc", sha256: "abc", how: "read" }],
+      [{ path: "a.mdc", sha256: "A".repeat(64), how: "read" }],
+      [{ path: "a.mdc", how: "read" }],
+      [{ path: "a.mdc", sha256: SHA_A, how: "read", why: "because" }],
+    ];
+    for (const applied of bad) {
+      expect(await validateJson({ ...validResult(), project_context_applied: applied }, output)).not.toEqual([]);
+      expect(await validateJson(creatorResult(applied), creatorSchema())).not.toEqual([]);
+    }
+  });
+
+  test("the output contract still refuses an unknown top-level field", async () => {
+    expect(await validateJson({ ...validResult(), invented: true }, schema("task-implementer-output"))).not.toEqual([]);
+  });
+
+  test("`resolved_context_file` is accepted in the workspace, and only as a string", async () => {
+    const request = validRequest();
+    (request.workspace as Record<string, unknown>).resolved_context_file = ".metaproject/data/flows/1/task-1.resolved.json";
+    expect(await validateJson(request, schema("task-implementer-input"))).toEqual([]);
+    (request.workspace as Record<string, unknown>).resolved_context_file = 3;
+    expect(await validateJson(request, schema("task-implementer-input"))).not.toEqual([]);
+  });
+
+  test("tests-creator-output is registered and its schema ships beside the skill", () => {
+    const contract = CONTRACTS.find((entry) => entry.name === "tests-creator-output");
+    expect(contract?.sourcePath).toContain("quality/tests-creator/");
+    expect(existsSync(contractPath(contract!))).toBe(true);
+  });
+});
+
+describe("AC13/AC17: contracts validate --resolved", () => {
+  const roots: string[] = [];
+  const originalCwd = process.cwd();
+  const originalExitCode = process.exitCode;
+  let out: string[] = [];
+  let err: string[] = [];
+  let logSpy: ReturnType<typeof spyOn>;
+  let errSpy: ReturnType<typeof spyOn>;
+
+  const STYLING = ".metaproject/rules/project/styling.mdc";
+  const NOTES = ".metaproject/rules/project/notes.mdc";
+
+  async function project(enforcement?: string): Promise<{ root: string; stylingSha: string; notesSha: string }> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-resolved-check-"));
+    roots.push(root);
+    await mkdir(path.join(root, ".metaproject", "rules", "project"), { recursive: true });
+    await writeFile(path.join(root, STYLING), "styling rule\n", "utf8");
+    await writeFile(path.join(root, NOTES), "notes rule\n", "utf8");
+    if (enforcement !== undefined) {
+      await writeFile(path.join(root, ".metaproject/tasks.config.json"), JSON.stringify({ gdskills: { projectContext: { enforcement } } }), "utf8");
+    }
+    return { root, stylingSha: sha256Hex("styling rule\n"), notesSha: sha256Hex("notes rule\n") };
+  }
+
+  async function resolvedFile(root: string, stylingSha: string, notesSha: string): Promise<string> {
+    const resolved = {
+      schema: 1,
+      for: "implement",
+      files: ["src/a.tsx"],
+      entries: [
+        { kind: "rule", source: "project", path: STYLING, sha256: stylingSha, bytes: 13, reason: "glob:src/**", tier: "must_read" },
+        { kind: "rule", source: "project", path: NOTES, sha256: notesSha, bytes: 11, reason: "always", tier: "on_demand" },
+      ],
+      budget: { limitBytes: 131072, usedBytes: 13, exceeded: false, limitSource: "default" },
+      warnings: [],
+    };
+    const file = path.join(root, "resolved.json");
+    await writeFile(file, JSON.stringify(resolved), "utf8");
+    return file;
+  }
+
+  async function resultFile(root: string, applied?: unknown): Promise<string> {
+    const file = path.join(root, "result.json");
+    await writeFile(file, JSON.stringify({ ...validResult(), ...(applied === undefined ? {} : { project_context_applied: applied }) }), "utf8");
+    return file;
+  }
+
+  async function run(root: string, result: string, resolved: string, schemaName = "task-implementer-output"): Promise<void> {
+    process.chdir(root);
+    await skillsCommand(["contracts", "validate", result, "--schema", schemaName, "--resolved", resolved]);
+  }
+
+  beforeEach(() => {
+    out = [];
+    err = [];
+    logSpy = spyOn(console, "log").mockImplementation((...parts: unknown[]) => void out.push(parts.join(" ")));
+    errSpy = spyOn(console, "error").mockImplementation((...parts: unknown[]) => void err.push(parts.join(" ")));
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.chdir(originalCwd);
+    process.exitCode = originalExitCode ?? 0;
+    for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+  });
+
+  test("every must_read entry cited with its sha256 passes cleanly, and an on_demand entry need not be cited", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    await run(root, await resultFile(root, [{ path: STYLING, sha256: stylingSha, how: "read" }]), await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(out.join("\n")).toContain("valid:");
+    expect(err).toEqual([]);
+  });
+
+  test("warn (the default): a must_read entry that is not cited is listed with its reason and the exit code stays 0", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    await run(root, await resultFile(root, []), await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode ?? 0).toBe(0);
+    const text = [...out, ...err].join("\n");
+    expect(text).toContain(STYLING);
+    expect(text).toContain("glob:src/**");
+    expect(text).not.toContain(NOTES);
+  });
+
+  test("a result with no project_context_applied at all misses every must_read entry", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    await run(root, await resultFile(root), await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode ?? 0).toBe(0);
+    expect([...out, ...err].join("\n")).toContain(STYLING);
+  });
+
+  test("a must_read entry cited with a different sha256 is a miss that names both hashes", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    await run(root, await resultFile(root, [{ path: STYLING, sha256: SHA_A, how: "read" }]), await resolvedFile(root, stylingSha, notesSha));
+    const text = [...out, ...err].join("\n");
+    expect(text).toContain(STYLING);
+    expect(text).toContain(stylingSha);
+    expect(text).toContain(SHA_A);
+  });
+
+  test("pin drift: an entry of either tier whose file changed since it was resolved is reported", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    const resolved = await resolvedFile(root, stylingSha, notesSha);
+    const result = await resultFile(root, [{ path: STYLING, sha256: stylingSha, how: "read" }]);
+    await writeFile(path.join(root, NOTES), "notes rule, edited\n", "utf8");
+    await run(root, result, resolved);
+    const text = [...out, ...err].join("\n");
+    expect(text).toContain("drift");
+    expect(text).toContain(NOTES);
+    expect(process.exitCode ?? 0).toBe(0);
+
+    out = [];
+    err = [];
+    await writeFile(path.join(root, STYLING), "styling rule, edited\n", "utf8");
+    await run(root, result, resolved);
+    expect([...out, ...err].join("\n")).toContain(STYLING);
+  });
+
+  test("a resolved file whose entry has since been deleted is drift too", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    const resolved = await resolvedFile(root, stylingSha, notesSha);
+    const result = await resultFile(root, [{ path: STYLING, sha256: stylingSha, how: "read" }]);
+    await rm(path.join(root, NOTES));
+    await run(root, result, resolved);
+    expect([...out, ...err].join("\n")).toContain(NOTES);
+  });
+
+  test("block: a miss exits non-zero and names the missing path", async () => {
+    const { root, stylingSha, notesSha } = await project("block");
+    await run(root, await resultFile(root, []), await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode).toBe(1);
+    expect(err.join("\n")).toContain(STYLING);
+  });
+
+  test("block: pin drift exits non-zero as well", async () => {
+    const { root, stylingSha, notesSha } = await project("block");
+    const resolved = await resolvedFile(root, stylingSha, notesSha);
+    const result = await resultFile(root, [{ path: STYLING, sha256: stylingSha, how: "read" }]);
+    await writeFile(path.join(root, NOTES), "changed\n", "utf8");
+    await run(root, result, resolved);
+    expect(process.exitCode).toBe(1);
+    expect(err.join("\n")).toContain(NOTES);
+  });
+
+  test("block: a complete result passes", async () => {
+    const { root, stylingSha, notesSha } = await project("block");
+    await run(root, await resultFile(root, [{ path: STYLING, sha256: stylingSha, how: "followed" }]), await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  test("an unknown enforcement value reads as warn", async () => {
+    const { root, stylingSha, notesSha } = await project("strict");
+    await run(root, await resultFile(root, []), await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  test("a result that fails its schema exits 1 whatever the enforcement", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    const bad = path.join(root, "bad.json");
+    await writeFile(bad, JSON.stringify({ ...validResult(), project_context_applied: [{ path: STYLING, sha256: "nope", how: "read" }] }), "utf8");
+    await run(root, bad, await resolvedFile(root, stylingSha, notesSha));
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("--resolved on a schema that carries no project_context_applied, or on an unreadable file, is a usage error", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    await run(root, await resultFile(root, []), await resolvedFile(root, stylingSha, notesSha), "review-finding");
+    expect(process.exitCode).toBe(1);
+    expect(err.join("\n")).toContain("--resolved");
+
+    process.exitCode = 0;
+    err = [];
+    await run(root, await resultFile(root, []), path.join(root, "missing.json"));
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("the same check works for a tests-creator result", async () => {
+    const { root, stylingSha, notesSha } = await project();
+    const result = path.join(root, "creator.json");
+    await writeFile(result, JSON.stringify(creatorResult([])), "utf8");
+    await run(root, result, await resolvedFile(root, stylingSha, notesSha), "tests-creator-output");
+    expect(process.exitCode ?? 0).toBe(0);
+    expect([...out, ...err].join("\n")).toContain(STYLING);
   });
 });

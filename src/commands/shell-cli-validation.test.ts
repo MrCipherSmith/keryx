@@ -53,12 +53,13 @@ describe("Shell CLI validation before startup", () => {
   });
 });
 
-test("actual CLI help and errors exit without credentials or Keryx file writes", () => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "keryx-shell-cli-"));
-  try {
-    for (const [args, exitCode] of [
-      [["--help"], 0], [["-h"], 0], [["--provder", "fixture"], 1], [["--provider"], 1],
-    ] as const) {
+// Isolate cold CLI starts rather than sharing the default five-second budget.
+for (const [args, exitCode] of [
+  [["--help"], 0], [["-h"], 0], [["--provder", "fixture"], 1], [["--provider"], 1],
+] as const) {
+  test(`actual CLI ${args.join(" ")} exits without credentials or Keryx file writes`, () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "keryx-shell-cli-"));
+    try {
       const result = spawnSync(process.execPath, [path.resolve(import.meta.dir, "../cli.ts"), "shell", ...args], {
         cwd, encoding: "utf8", timeout: 10_000, input: "",
         env: { PATH: process.env.PATH ?? "", NO_COLOR: "1", XDG_CONFIG_HOME: path.join(cwd, "config"), XDG_CACHE_HOME: path.join(cwd, "cache") },
@@ -70,11 +71,12 @@ test("actual CLI help and errors exit without credentials or Keryx file writes",
       // Keryx configuration/session state and is absent from compiled builds.
       const entries = readdirSync(cwd, { recursive: true }).map(String);
       expect(entries.filter((entry) => entry !== "cache" && entry !== path.join("cache", "bun") && !entry.startsWith(`cache${path.sep}bun${path.sep}`))).toEqual([]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
     }
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
+  // Let the child timeout report its error before the test timeout.
+  }, 11_000);
+}
 
 describe("--debug", () => {
   test("is parsed as a boolean and combines with other flags", () => {

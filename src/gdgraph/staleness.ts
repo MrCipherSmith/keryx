@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { revisionOperand } from "../lib/git-revision";
-import { gitCmd, gitHead, readProvenance } from "../sync/provenance";
+import { gitCmd, readProvenance } from "../sync/provenance";
 
 // W7 AC4 follow-up (flow 304 T8) — a real, previously-latent defect found
 // while wiring up the `modified` bucket below: `gitCmd`/`gitCmdResult`
@@ -35,7 +35,7 @@ import { gitCmd, gitHead, readProvenance } from "../sync/provenance";
 // splitting: an ordinary entry is `XY PATH\0`, but a rename/copy (X or Y is
 // `R`/`C`) is `XY PATH\0ORIG_PATH\0` — TWO NUL-terminated fields, not one —
 // which `categorizeStatusEntries` below accounts for.
-function gitStatusPorcelain(cwd: string): Promise<string | null> {
+export function gitStatusPorcelain(cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
     try {
       const child = spawn("git", ["status", "--porcelain=v1", "-z"], { cwd, stdio: ["ignore", "pipe", "ignore"] });
@@ -258,7 +258,10 @@ async function committedChangedFiles(
  * The structured staleness check (AFC-10). Never throws — a git failure is
  * reported as `status: "unknown"` with a reason, not thrown and not "fresh".
  */
-export async function checkGraphStaleness(cwd: string): Promise<StalenessCheck> {
+export async function checkGraphStaleness(
+  cwd: string,
+  statusObservation?: Promise<string | null>,
+): Promise<StalenessCheck> {
   const nodesStat = await stat(nodesJsonlPath(cwd)).catch(() => null);
   if (!nodesStat) {
     return { status: "stale", reasons: ["graph has not been built yet (no nodes.jsonl)"] };
@@ -303,19 +306,30 @@ export async function checkGraphStaleness(cwd: string): Promise<StalenessCheck> 
   // `unknown` (a weaker claim — "not verified", not "confirmed stale") rather
   // than staying silently fresh.
   let provenanceMissing = false;
-  const head = await gitHead(cwd);
+  // Independent local probes overlap. The shared status belongs to this call
+  // only; standalone checks always obtain a new observation.
+  const [commit, prefix, porcelain, provenance] = await Promise.all([
+    gitCmd(cwd, ["rev-parse", "HEAD"]),
+    gitCmd(cwd, ["rev-parse", "--show-prefix"]),
+    statusObservation ?? gitStatusPorcelain(cwd),
+    readProvenance(cwd, "gdgraph"),
+  ]);
+  const head = commit ? { commit } : null;
   // T19 finding 3: `--show-prefix` is the project root's path relative to the
   // git root (empty string AT the git root) — needed both here (to scope a
   // commit-range diff to real source, excluding the graph's own bookkeeping)
   // and below (the working-tree `.metaproject/` exclusion). Fetched once and
   // reused, so this stays within the module's stated "one or two git calls"
   // budget rather than asking twice.
-  const rootPrefix = head !== null ? ((await gitCmd(cwd, ["rev-parse", "--show-prefix"])) ?? "") : "";
+  const rootPrefix = prefix ?? "";
+  if (prefix === null) {
+    gitFailed = true;
+    reasons.push("git rev-parse --show-prefix failed");
+  }
   if (head === null) {
     gitFailed = true;
     reasons.push("git rev-parse HEAD failed (not a git repository, or git is unavailable)");
   } else {
-    const provenance = await readProvenance(cwd, "gdgraph");
     if (provenance) {
       if (provenance.commit !== head.commit) {
         const changedFiles = await committedChangedFiles(cwd, provenance.commit, head.commit, rootPrefix);
@@ -343,7 +357,6 @@ export async function checkGraphStaleness(cwd: string): Promise<StalenessCheck> 
   }
 
   // --- untracked / deleted / renamed / modified ------------------------------
-  const porcelain = await gitStatusPorcelain(cwd);
   if (porcelain === null) {
     gitFailed = true;
     reasons.push("git status failed");

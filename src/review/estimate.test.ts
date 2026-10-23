@@ -1,8 +1,28 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ASSUMED_PARALLEL_DISPATCHES, CHILD_DEADLINE_MINUTES, TYPICAL_DISPATCH_MINUTES, estimatePackage, estimateRound, renderEstimate } from "./estimate";
+import { reviewCommand } from "../commands/review";
+import {
+  ASSUMED_PARALLEL_DISPATCHES,
+  CHILD_DEADLINE_MINUTES,
+  CONFIRM_PLAN_TOOL,
+  DEFAULT_MAX_DISPATCHES,
+  DEFAULT_MAX_MINUTES,
+  PLAN_CONFIRMATION_FILE,
+  type RoundEstimate,
+  TYPICAL_DISPATCH_MINUTES,
+  estimatePackage,
+  estimateRound,
+  planConfirmationFor,
+  planConfirmed,
+  planGateRefusal,
+  planKeyOf,
+  readPlanConfirmation,
+  readPlanThresholds,
+  renderEstimate,
+  writePlanConfirmation,
+} from "./estimate";
 import type { SliceManifest } from "./slice";
 
 const manifest = (count: number, bytes: number, waveBytes: number): SliceManifest => ({
@@ -91,4 +111,146 @@ test("--manifest and the shell-host default manifest are read, and the estimate 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+const routed = (roles: string[][], bytes = 100, waveBytes = 1000): SliceManifest => {
+  const base = manifest(roles.length, bytes, waveBytes);
+  return { ...base, slices: base.slices.map((slice, i) => ({ ...slice, roles: roles[i]!, depth: roles[i]!.includes("review-security-code") ? "deep" as const : "light" as const })) };
+};
+
+describe("estimateRound honours slice roles", () => {
+  test("a role owns only its routed slices; a routable role with none needs no dispatch", () => {
+    const e = estimateRound(["review-logic", "review-style", "review-security-code"], routed([["review-logic"], ["review-logic", "review-style"], ["review-logic", "review-security-code"]]));
+    expect(e.perRole).toEqual([
+      { role: "review-logic", slices: 3, waves: 1 },
+      { role: "review-style", slices: 1, waves: 1 },
+      { role: "review-security-code", slices: 1, waves: 1 },
+    ]);
+    expect(e.assignments).toBe(5);
+    expect(e.routing).toEqual({ deep: 1, light: 2, audit: 0 });
+    const none = estimateRound(["review-logic", "review-style"], routed([["review-logic"]]));
+    expect(none.routedOut).toEqual(["review-style"]);
+    expect(none.dispatches).toBe(1);
+  });
+
+  test("a manifest with neither size is refused, never estimated as NaN", () => {
+    const unsized = { ...manifest(2, 100, 1000), waveBytes: undefined, maxBytes: undefined } as unknown as SliceManifest;
+    expect(() => estimateRound(["review-logic"], unsized)).toThrow("neither waveBytes nor maxBytes");
+  });
+});
+
+describe("over-threshold plans", () => {
+  test("more dispatches than the threshold, or a longer upper duration, flags the plan", () => {
+    const small = estimateRound(["review-logic"], manifest(10, 100, 100));
+    expect(small).toMatchObject({ dispatches: 10, overThreshold: false, overReasons: [] });
+    const many = estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"], manifest(10, 100, 100));
+    expect(many.dispatches).toBe(50);
+    expect(many.overThreshold).toBe(true);
+    expect(many.overReasons[0]).toBe(`50 dispatches > ${DEFAULT_MAX_DISPATCHES}`);
+    expect(renderEstimate(many)).toContain("over threshold: 50 dispatches > 40");
+    // One role with 20 waves: 20 batches x 5 min = 100 min > 90, though 20 dispatches is under 40.
+    const long = estimateRound(["review-logic"], manifest(20, 100, 100));
+    expect(long.overReasons).toEqual([`up to 100 min > ${DEFAULT_MAX_MINUTES}`]);
+    expect(estimateRound(["review-logic"], manifest(20, 100, 100), "full", { maxDispatches: 40, maxMinutes: 120 }).overThreshold).toBe(false);
+  });
+
+  test("routing.config.json reviewPlan sets the thresholds; a bad field keeps its default", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-plan-thresholds-"));
+    try {
+      expect(await readPlanThresholds(root)).toMatchObject({ maxDispatches: 40, maxMinutes: 90, source: "default" });
+      await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 12, maxMinutes: "x" } }));
+      expect(await readPlanThresholds(root)).toMatchObject({ maxDispatches: 12, maxMinutes: 90, source: "routing.config.json" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the plan key is stable for the same plan and changes with a slice's roles or depth", () => {
+    const a = estimateRound(["review-logic", "review-style"], routed([["review-logic"], ["review-logic", "review-style"]]));
+    const again = estimateRound(["review-style", "review-logic"], routed([["review-logic"], ["review-logic", "review-style"]]));
+    expect(again.planKey).toBe(a.planKey);
+    expect(planKeyOf(a)).toBe(a.planKey);
+    const moved = estimateRound(["review-logic", "review-style"], routed([["review-logic", "review-style"], ["review-logic", "review-style"]]));
+    expect(moved.planKey).not.toBe(a.planKey);
+  });
+});
+
+describe("plan confirmation", () => {
+  const big = (): RoundEstimate => estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"], manifest(10, 100, 100));
+
+  test("an over-threshold plan is refused until a confirmation for exactly this plan is recorded; the refusal names the card and the terminal command", async () => {
+    const pkg = await mkdtemp(path.join(tmpdir(), "keryx-plan-confirm-"));
+    try {
+      const estimate = big();
+      expect(planConfirmed(pkg, estimate)).toBe(false);
+      const refusal = planGateRefusal(estimate, planConfirmed(pkg, estimate), pkg)!;
+      expect(refusal).toContain(CONFIRM_PLAN_TOOL);
+      expect(refusal).toContain(`keryx review estimate --package ${pkg} --confirm --quote`);
+
+      await writePlanConfirmation(pkg, planConfirmationFor(estimate, "go ahead, 50 is fine", "tui-card", new Date("2026-10-16T00:00:00Z")));
+      expect(readPlanConfirmation(pkg)).toEqual({ planKey: estimate.planKey, dispatches: 50, minutes: [estimate.minutes.min, estimate.minutes.max], quote: "go ahead, 50 is fine", confirmedVia: "tui-card", at: "2026-10-16T00:00:00.000Z" });
+      expect(planConfirmed(pkg, estimate)).toBe(true);
+      expect(planGateRefusal(estimate, true, pkg)).toBeUndefined();
+
+      // Another plan (one more role) is not covered by that confirmation.
+      const other = estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance", "review-highload"], manifest(10, 100, 100));
+      expect(planConfirmed(pkg, other)).toBe(false);
+    } finally {
+      await rm(pkg, { recursive: true, force: true });
+    }
+  });
+
+  test("a malformed confirmation, or one without the operator's words, does not count", async () => {
+    const pkg = await mkdtemp(path.join(tmpdir(), "keryx-plan-confirm-"));
+    try {
+      const estimate = big();
+      await writeFile(path.join(pkg, PLAN_CONFIRMATION_FILE), JSON.stringify({ planKey: estimate.planKey, dispatches: 50, minutes: [1, 2], quote: " ", confirmedVia: "terminal", at: "x" }));
+      expect(readPlanConfirmation(pkg)).toBeUndefined();
+      await writeFile(path.join(pkg, PLAN_CONFIRMATION_FILE), JSON.stringify({ planKey: estimate.planKey, dispatches: 50, minutes: [1, 2], quote: "ok", confirmedVia: "agent", at: "x" }));
+      expect(planConfirmed(pkg, estimate)).toBe(false);
+      expect(() => planConfirmationFor(estimate, "  ", "terminal")).toThrow("operator's own words");
+      expect(planGateRefusal(estimateRound(["review-logic"], manifest(2, 100, 100)), false, pkg)).toBeUndefined();
+    } finally {
+      await rm(pkg, { recursive: true, force: true });
+    }
+  });
+
+  test("`keryx review estimate --confirm` records a confirmation only at a terminal", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-plan-cli-"));
+    const cwd = process.cwd();
+    const log = console.log;
+    const error = console.error;
+    const errors: string[] = [];
+    try {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      const pkg = path.join(root, ".metaproject", "reviews", "r1");
+      await mkdir(path.join(pkg, "slices"), { recursive: true });
+      await writeFile(path.join(pkg, "slices", "manifest.json"), JSON.stringify(manifest(3, 100, 1000)));
+      process.chdir(root);
+      console.log = () => {};
+      console.error = (...parts: unknown[]) => { errors.push(parts.map(String).join(" ")); };
+      const args = ["estimate", "--package", pkg, "--confirm", "--quote", "yes, run it"];
+      await reviewCommand(args, { isTerminal: () => false });
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain(`call the ${CONFIRM_PLAN_TOOL} tool`);
+      expect(readPlanConfirmation(pkg)).toBeUndefined();
+      errors.length = 0;
+      process.exitCode = 0;
+      await reviewCommand(["estimate", "--package", pkg, "--confirm"], { isTerminal: () => true });
+      expect(errors.join("\n")).toContain("--quote");
+      expect(readPlanConfirmation(pkg)).toBeUndefined();
+      process.exitCode = 0;
+      await reviewCommand(args, { isTerminal: () => true });
+      expect(process.exitCode).toBe(0);
+      const recorded = readPlanConfirmation(pkg);
+      expect(recorded).toMatchObject({ quote: "yes, run it", confirmedVia: "terminal" });
+      expect(recorded?.planKey).toBe((await estimatePackage(pkg)).planKey);
+    } finally {
+      console.log = log;
+      console.error = error;
+      process.exitCode = 0;
+      process.chdir(cwd);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

@@ -11,6 +11,7 @@ const BASE: SettingsSnapshot = {
   plan: false,
   guard: false,
   editGuard: false,
+  projectContext: { enforcement: "warn", maxBytes: 131072 },
   routing: false,
   externalPrivacy: { value: "on", source: "user" },
   reasoning: { effort: "off", source: "global" },
@@ -39,6 +40,7 @@ describe("buildSettingsRows", () => {
       ["plan", "Safety", "Plan (read-only)", "off", "session"],
       ["guard", "Safety", "Turn guard", "off", "saved"],
       ["editguard", "Safety", "Edit guard", "off", "saved"],
+      ["projectctx", "Safety", "Project rules check", "warn", "saved"],
       ["route", "Routing", "Classifier routing", "off", "saved"],
       ["reasoning", "Routing", "Reasoning effort", "off", "saved"],
       ["think", "Display", "Reasoning display", "auto", "saved"],
@@ -61,6 +63,7 @@ describe("buildSettingsRows", () => {
       plan: "/plan",
       guard: "/guard",
       editguard: "/editguard",
+      projectctx: "/projectctx",
       route: "/route",
       reasoning: "/reasoning",
       think: "/think",
@@ -210,6 +213,20 @@ describe("buildSettingsRows", () => {
 
   test("edit guard says it is per project", () => {
     expect(rowOf(rows, "editguard").detail).toBe("this project");
+  });
+
+  test("project rules check: warn/block buttons follow the mode, and an unreadable config makes the row read-only", () => {
+    const warn = rowOf(rows, "projectctx");
+    expect(warn.detail).toBe("cap 128 KiB, this project");
+    expect(warn.actions.map((a) => [a.label, a.command, a.active])).toEqual([
+      ["Warn", "/projectctx warn", true],
+      ["Block", "/projectctx block", false],
+    ]);
+    const block = rowOf(buildSettingsRows({ ...BASE, projectContext: { enforcement: "block", maxBytes: 8192 } }), "projectctx");
+    expect([block.value, block.actions.map((a) => a.active)]).toEqual(["block", [false, true]]);
+    const broken = rowOf(buildSettingsRows({ ...BASE, projectContext: { enforcement: "warn", maxBytes: 131072, configError: true } }), "projectctx");
+    expect(broken.actions).toEqual([]);
+    expect(broken.detail).toContain("not valid JSON");
   });
 
   test("the Jev profile has no single value, so it is read-only and names the command to run", () => {

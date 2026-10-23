@@ -27,7 +27,7 @@ import { effectiveArm, isLegacy } from "./legacy";
 import { QUALITIES, readQuality, type Quality, type QualityRecord, type Rater } from "./quality";
 import { WORK_DECISION_SOURCES } from "./sources";
 import { readJournal } from "./store";
-import type { AnswerRecord, DecisionRecord, OpenRecord } from "./types";
+import { isHostQuestionEntry, type AnswerRecord, type DecisionRecord, type OpenRecord } from "./types";
 
 export interface ExportRating {
   rater: Rater;
@@ -156,10 +156,13 @@ export interface ExportSummary {
   skipped: number;
   /** Fields of kept records that were present but invalid and were exported as null (or left out). */
   blanked: number;
+  /** Flow 467: questions answered via the host's own tool. A separate kind: counted here, never a row of the arm analysis. */
+  hostQuestions: number;
 }
 
 export function exportSummaryLine(summary: ExportSummary): string {
-  return `Export: ${summary.rows} decision${summary.rows === 1 ? "" : "s"}, ${summary.skipped} skipped, ${summary.blanked} invalid field${summary.blanked === 1 ? "" : "s"} blanked.`;
+  const line = `Export: ${summary.rows} decision${summary.rows === 1 ? "" : "s"}, ${summary.skipped} skipped, ${summary.blanked} invalid field${summary.blanked === 1 ? "" : "s"} blanked.`;
+  return summary.hostQuestions > 0 ? `${line} ${summary.hostQuestions} answered via host question, not exported as rows.` : line;
 }
 
 /** Counts the invalid values met while one export is built. */
@@ -287,7 +290,14 @@ export function buildExportWithSummary(
     }
   }
   const rows: ExportRow[] = [];
+  let hostQuestions = 0;
   for (const open of opens) {
+    if (isHostQuestionEntry(open)) {
+      // no arm, seed or recommendation to analyse: counted in the summary, kept out of the rows
+      const at = toUtcIso(open.at);
+      if (options.since === undefined || (at !== null && Date.parse(at) >= options.since.getTime())) hostQuestions += 1;
+      continue;
+    }
     const arm = exportArm(open);
     if (arm === null || !Array.isArray(open.options) || !Array.isArray(open.order)) {
       check.skipped += 1;
@@ -331,7 +341,7 @@ export function buildExportWithSummary(
       ratings: ratingsOf(open.id, quality, check),
     });
   }
-  return { rows, summary: { rows: rows.length, skipped: check.skipped, blanked: check.blanked } };
+  return { rows, summary: { rows: rows.length, skipped: check.skipped, blanked: check.blanked, hostQuestions } };
 }
 
 function ratingsOf(id: string, quality: readonly QualityRecord[], check: Validator): ExportRating[] {

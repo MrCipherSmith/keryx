@@ -347,16 +347,12 @@ Assign one verdict per comment:
 
 Rules, and each one is a way this step goes wrong:
 
-1. **A verdict carries evidence or it is `unverified`.** The file and line read,
-   the query run, the commit cited, the test executed. A verdict reached by
-   re-reading the comment is not a verdict on the code.
+1. **A verdict carries evidence or it is `unverified`.** The file and line read, the query run, the commit cited, the test executed. A verdict reached by re-reading the comment is not a verdict on the code.
 2. **`disagree` is a claim about the code, not about the reviewer.** It requires
    the decision it rests on to exist somewhere a reader can reach — a wiki page,
    a memory entry, an ADR, a test that pins the behaviour. "It is fine" is
    `unverified`.
-3. **Never lower a comment's severity to make it disappear.** Severity is set by
-   the collector; this step assigns a *verdict*, and a `minor` comment that is
-   `valid` is still fixed.
+3. **Never lower a comment's severity to make it disappear.** Severity is set by the collector; this step assigns a *verdict*, and a `minor` comment that is `valid` is still fixed. The premise judge cannot lower it either (rule 7).
 4. **`needs-clarification` is asked before `--fix` runs, not after.** State both
    readings and what each would change. A guess here produces a fix nobody asked
    for and a reply that answers the wrong question.
@@ -367,6 +363,7 @@ Rules, and each one is a way this step goes wrong:
 6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
    there is nothing to establish. It is still answered in Step 10, because the
    reply pass requires a decision for every comment it sees.
+7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `url` its URL, `reviewer` its author, `source: external`, the comment text and its `file:line` refs (review-premise, `source` row). An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: save the claims object unchanged beside the durable record, as `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json`, apply the merge's refusals by hand (the same `source` row lists them), and record each claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry: it is the one record of it, which a resumed or `--fix` run reads, and the report's Stats count it. An upheld comment is planned and passed in `fix_context.review_feedback`, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
 
 ---
 
@@ -390,6 +387,7 @@ For each comment:
   ```typescript
   // Corrected code example
   ```
+- **Premise** (rule 7): upheld, or held with the judge's question and the operator's answer in their words
 - **Plan item**: P-00N, or "none" with the reason
 - **Confidence**: High | Medium | Low
   - High: reviewer's intent is clear and the fix is straightforward
@@ -453,8 +451,8 @@ it into a fix the reviewer did not ask for.
 
 1. `--fix` was passed explicitly.
 2. Step 3 ran through the CLI and the durable record exists.
-3. No comment is still `needs-clarification`, and none carries an unreviewed
-   `prompt-injection` finding.
+3. No comment is still `needs-clarification` or held without the operator's answer
+   (rule 7), and none carries an unreviewed `prompt-injection` finding.
 4. The working tree is clean and Task Manager is enabled
    (`modules.tasks.enabled: true`).
 5. The reviewed PR is open.
@@ -524,7 +522,7 @@ branch on purpose.
   "operator_confirmed": { "confirmed_by": "<who>", "confirmed_at": "<iso8601>", "plan_digest": "<digest of the plan shown>" },
   "constraints": [
     "pr: open it as a draft, titled 'fix(review): address feedback on #<n>', body linking #<n> and listing which plan item answers which comment.",
-    "review: run review-orchestrator with --all on every round. The loop's exit threshold is the one your own PR review/fix loop defines; do not take it from this string.",
+    "review: run review-orchestrator on every round, starting each round with `keryx review start` (or `keryx review plan`) on the new head: the round, its range and the prior findings come from `round.json`. No own range, no `--all` per round, no whole-branch re-review. The loop's exit threshold is the one your own PR review/fix loop defines; do not take it from this string. Every plan item's comment was premise-checked in review-pr-feedback rule 7 and each held one answered by the operator (its Premise entry; claims in .metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json): do not run review-premise again before freeze.",
     "review: the fix PR is its own conversation — collect and reply on IT as normal. The round MUST NOT run a reply pass against #<n>: a reply there writes the durable record, so the post-merge answer citing the merge SHA is skipped as already-handled and the reviewer is left holding a mid-loop answer that has since stopped being true.",
     "attempt budget: at most <max_fix_rounds> review/fix attempts. This LOWERS your bound and never raises it; absent the value, your own bound stands. The `keryx review loop` repetition check applies either way. Do not raise anything to reach a clean round; escalate instead.",
     "scope: the plan items only. A finding outside them is recorded as follow-up, not fixed in this flow."
@@ -812,7 +810,7 @@ Full markdown report structure:
 
 ## Stats
 - blocker: N / major: N / minor: N / info: N / praise: N
-- verdicts: valid N, already-fixed N, disagree N, out-of-scope N, unverified N
+- verdicts: valid N, already-fixed N, disagree N, out-of-scope N, unverified N; premise: upheld N, held N (each answer is on its Step 7 **Premise** entry)
 
 ## By Author
 ### <reviewer-login> (N comments — REQUEST_CHANGES)

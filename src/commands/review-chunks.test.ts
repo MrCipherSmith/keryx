@@ -10,7 +10,7 @@ describe("review chunks estimate --answer needs a terminal (R3-01)", () => {
   test("refuses the answer when no person is at a terminal, before touching the package", async () => {
     const dir = await mkdtemp(join(tmpdir(), "keryx-chunks-answer-"));
     try {
-      await expect(runChunks(["estimate", "--package", dir, "--answer", "yes", "--quote", "go ahead and run it"], deps, { isTerminal: () => false })).rejects.toThrow(/--answer needs a terminal/);
+      await expect(runChunks(["estimate", "--package", dir, "--answer", "yes", "--quote", "go ahead and run it"], deps, { isTerminal: () => false })).rejects.toThrow(/--answer needs a terminal.*review_chunks_answer/);
       await expect(runChunks(["estimate", "--package", dir, "--answer=yes", "--quote", "go ahead"], deps, { isTerminal: () => false })).rejects.toThrow(/--answer needs a terminal/);
     } finally {
       await rm(dir, { recursive: true, force: true });

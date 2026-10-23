@@ -1060,7 +1060,7 @@ async function runTask(args: string[]): Promise<void> {
     const taskId = positional(args, 2);
     if (!id || !taskId) {
       throw new Error(
-        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"] [--ac AC1,AC2] [--evidence <path|ref>,...]',
+        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"] [--ac AC1,AC2] [--evidence <path|ref>,...] [--result <result.json> --resolved <resolved.json>]',
       );
     }
     const disposition = parseDisposition(optionValue(args, "--disposition"));
@@ -1072,6 +1072,8 @@ async function runTask(args: string[]): Promise<void> {
     // was.
     const acRefs = listOption(args, "--ac");
     const evidenceRefs = listOption(args, "--evidence");
+    const resultFile = optionValue(args, "--result");
+    const resolvedFile = optionValue(args, "--resolved");
     const flow = await getService().taskDone({
       cwd: process.cwd(),
       id,
@@ -1080,6 +1082,7 @@ async function runTask(args: string[]): Promise<void> {
       reason,
       acRefs,
       evidenceRefs,
+      projectContext: { resultFile, resolvedFile },
     });
     const done = flow.tasks.filter((task) => task.status === "done").length;
     console.log(`  ${style.green(symbols.ok)} Task ${style.bold(taskId.toUpperCase())} done ${style.dim(`(${done}/${flow.tasks.length})`)}`);
@@ -1727,7 +1730,7 @@ export async function runConfirm(args: string[], seams: FlowConfirmSeams = {}): 
   if (!terminal) {
     throw new Error(
       "flow confirm: needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, " +
-        "an MCP or ACP client, or an unattended run. Run it yourself, in a terminal.",
+        "an MCP or ACP client, or an unattended run. Inside keryx shell, call the flow_confirm tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
   const flow = await getService().get({ cwd, id });

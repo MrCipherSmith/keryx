@@ -135,7 +135,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/setup",
     group: "Start here",
-    summary: "Same preparation guide, inside the session — prints steps, runs nothing.",
+    summary: "Same preparation guide, inside the session — copy the agent prompt, or let keryx run the steps as background jobs after you confirm.",
   },
 
   // ---- Connect a model provider -------------------------------------------
@@ -157,7 +157,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Connect a model provider",
     summary: "Category -> model routing table (list, set, unset, trust), the model-profile catalogue (profile list, profile set), and real measured task cost (stats).",
   },
-  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
+  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Providers dialog: switch, test or disconnect a connected provider, or add one (Connected / Add provider tabs)." },
   {
     kind: "slash",
     name: "/routing",
@@ -175,12 +175,6 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/search-connect",
     group: "Connect a model provider",
     summary: "Select a connected web search provider.",
-  },
-  {
-    kind: "slash",
-    name: "/provider",
-    group: "Connect a model provider",
-    summary: "Switch provider — /provider <name>, or no arg to re-select.",
   },
   {
     kind: "cli",
@@ -440,6 +434,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/projectctx",
+    group: "Managed work",
+    summary: "Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn|block|refs].",
+  },
+  {
+    kind: "slash",
     name: "/jevprofile",
     group: "Managed work",
     summary: "Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile.",
@@ -573,7 +573,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/decisions",
     group: "Automation",
-    summary: "Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row).",
+    summary: "Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row), and the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete).",
   },
   {
     kind: "slash",
@@ -591,7 +591,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/remote-control",
     group: "Automation",
-    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status].",
+    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed.",
   },
   {
     kind: "slash",

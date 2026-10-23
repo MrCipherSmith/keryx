@@ -79,11 +79,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/connect",
-    description: "Switch provider / API key",
+    description: "Providers — switch, test or disconnect a connected one, or add a new one",
     modes: BOTH,
     modeDescriptions: {
-      agent: "Connect to an already configured provider (interactive picker)",
-      chat: "Switch to a connected provider (picker when available)",
+      agent: "Providers dialog: Connected (switch, Test, Disconnect) and Add provider (key or login)",
+      chat: "Providers picker: switch to a connected provider or add one (picker when available)",
     },
   },
   {
@@ -95,17 +95,6 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     name: "/search-connect",
     description: "Select a connected web search provider",
     modes: AGENT_ONLY,
-  },
-  {
-    name: "/provider",
-    description: "Switch provider — /provider <name>, or no arg to re-select",
-    // Agent mode uses the configuration picker: provider → API-key → model.
-    // Keep `/provider` available there too: it is the discoverable, conventional
-    // command users expect when changing the active provider mid-session.
-    modes: BOTH,
-    modeDescriptions: {
-      agent: "Add or configure a provider (interactive picker)",
-    },
   },
   {
     name: "/think",
@@ -149,7 +138,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/setup",
-    description: "Metaproject preparation guide — /setup [init|refresh|repair] (prints steps, runs nothing)",
+    description: "Metaproject preparation guide — /setup [init|refresh|repair] (copy the agent prompt, or let keryx run the steps as background jobs after you confirm)",
     modes: BOTH,
   },
   {
@@ -184,7 +173,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 376: the Telegram topic for this session. Turning it on is TUI-only (the modal, the
     // sidebar row); the readline agent REPL prints the status as text.
     name: "/remote-control",
-    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default",
+    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default. Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
     modes: AGENT_ONLY,
   },
   {
@@ -301,7 +290,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   {
     // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
     name: "/decisions",
-    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer; also lists the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete)",
     modes: AGENT_ONLY,
   },
   {
@@ -421,6 +410,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // `/guard`/`/route`.
     name: "/editguard",
     description: "Jev EDIT GUARD status/threshold/recent flags, with a toggle — install via keryx review jev-edit-guard install",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 461: project rules and implementation context — the last resolve, the cap,
+    // and whether a missing `project_context_applied` only warns or blocks. TUI-only.
+    name: "/projectctx",
+    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement, conditional references — /projectctx [warn|block|refs]",
     modes: AGENT_ONLY,
   },
   {
@@ -755,6 +751,19 @@ export function describeUnavailableCommand(line: string, mode: ShellMode): strin
     `${command.name} is only available in ${where} — this is ${mode} mode. ` +
     `Type /help for the commands available here.\n`
   );
+}
+
+/**
+ * A command that was folded into another, and what to run instead. `/provider`
+ * (flow 471) is now the "Add provider" tab of `/connect`.
+ */
+const REMOVED_COMMAND_HINTS: Readonly<Record<string, string>> = {
+  "/provider": "/provider was merged into /connect — run /connect (Connected and Add provider tabs).",
+};
+
+/** The hint for a removed command's line, or `undefined` for any other token. Pure. */
+export function removedCommandHint(line: string): string | undefined {
+  return REMOVED_COMMAND_HINTS[commandToken(line)];
 }
 
 /**

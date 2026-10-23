@@ -96,6 +96,20 @@ test("excludes transient .claude worktree checkouts from test discovery", async 
   expect(context.testFiles.some((file) => file.includes(".claude/worktrees"))).toBe(false);
 });
 
+test("excludes repo-root .worktrees checkouts from test discovery", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-dot-worktrees");
+  await reset(root);
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "real.test.ts"), "test.todo('real');\n");
+  await mkdir(path.join(root, ".worktrees", "wt-1", "src"), { recursive: true });
+  await writeFile(path.join(root, ".worktrees", "wt-1", "src", "phantom.test.ts"), "test.todo('phantom');\n");
+
+  const context = await analyzeTestingProject(root);
+
+  expect(context.testFiles).toEqual(["src/real.test.ts"]);
+});
+
 // Narrowness proof (AC2 requirement 3): the `.claude/worktrees` exclusion above must be
 // narrow. A broad "skip any nested directory" rule would also drop an ordinary monorepo
 // package's tests - that is the opposite defect and must not happen.

@@ -1,0 +1,38 @@
+---
+description: Test doctrine: boundary mocks and behaviour assertions
+globs: **/*.test.ts,**/*.test.tsx
+alwaysApply: false
+---
+
+# Testing
+
+1. Assert behaviour a user can see (rule testing-01)
+2. Wait on a condition, never on a timer (rule testing-02)
+3. Co-locate the test with the file it covers (rule testing-03)
+4. Mock the network boundary, not the module under test (rule testing-04)
+5. Assert behaviour a user can see (rule testing-05)
+6. Wait on a condition, never on a timer (rule testing-06)
+7. Co-locate the test with the file it covers (rule testing-07)
+8. Mock the network boundary, not the module under test (rule testing-08)
+9. Assert behaviour a user can see (rule testing-09)
+10. Wait on a condition, never on a timer (rule testing-10)
+11. Co-locate the test with the file it covers (rule testing-11)
+12. Mock the network boundary, not the module under test (rule testing-12)
+13. Assert behaviour a user can see (rule testing-13)
+14. Wait on a condition, never on a timer (rule testing-14)
+15. Co-locate the test with the file it covers (rule testing-15)
+16. Mock the network boundary, not the module under test (rule testing-16)
+17. Assert behaviour a user can see (rule testing-17)
+18. Wait on a condition, never on a timer (rule testing-18)
+19. Co-locate the test with the file it covers (rule testing-19)
+20. Mock the network boundary, not the module under test (rule testing-20)
+21. Assert behaviour a user can see (rule testing-21)
+22. Wait on a condition, never on a timer (rule testing-22)
+23. Co-locate the test with the file it covers (rule testing-23)
+24. Mock the network boundary, not the module under test (rule testing-24)
+25. Assert behaviour a user can see (rule testing-25)
+26. Wait on a condition, never on a timer (rule testing-26)
+27. Co-locate the test with the file it covers (rule testing-27)
+28. Mock the network boundary, not the module under test (rule testing-28)
+29. Assert behaviour a user can see (rule testing-29)
+30. Wait on a condition, never on a timer (rule testing-30)

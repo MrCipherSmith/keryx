@@ -1,0 +1,29 @@
+{
+ "judge": "review-premise",
+ "model": "claude-opus-5-5",
+ "counts": {
+  "judge": "review-premise",
+  "claims": 2,
+  "applied": 2,
+  "rejected": 0,
+  "upheld": 2,
+  "downgraded": 0,
+  "challenged": 0,
+  "ownerDecision": 0,
+  "held": 0,
+  "findingsIn": 2
+ },
+ "rejections": [],
+ "verdicts": [
+  {
+   "id": "F-066",
+   "severity": "major",
+   "verdict": "upheld"
+  },
+  {
+   "id": "F-067",
+   "severity": "major",
+   "verdict": "upheld"
+  }
+ ]
+}

@@ -383,7 +383,7 @@ describe("T-7: stage, channel and model are exported only from a closed vocabula
     }
     const { rows, summary } = buildExportWithSummary(records, ratings);
     expect(rows).toHaveLength(87);
-    expect(summary).toEqual({ rows: 87, skipped: 0, blanked: 0 });
+    expect(summary).toEqual({ rows: 87, skipped: 0, blanked: 0, hostQuestions: 0 });
     for (const text of [renderExport(rows, "jsonl"), renderExport(rows, "json")]) {
       for (const token of tokens) expect(text).not.toContain(token);
       for (const piece of ["HOSTILE", "sk_live", "abc123", "XYZ"]) expect(text).not.toContain(piece);
@@ -419,8 +419,37 @@ describe("S-2: every exported field is validated at run time", () => {
     expect(rows[0]).toMatchObject({ ref: exportRef("edited-1"), openedAt: null, seed: null, preselected: null, answeredAt: null, timeToAnswerMs: null, forced: false, answered: true });
     expect(rows[1]).toMatchObject({ ref: exportRef("fine-1"), openedAt: "2026-10-03T10:00:00.000Z", seed: 7, timeToAnswerMs: 4000 });
     // edited-1: openedAt, seed, preselected, answeredAt, timeToAnswerMs blanked; edited-2: skipped for its arm
-    expect(summary).toEqual({ rows: 2, skipped: 1, blanked: 5 });
+    expect(summary).toEqual({ rows: 2, skipped: 1, blanked: 5, hostQuestions: 0 });
     expect(exportSummaryLine(summary)).toBe("Export: 2 decisions, 1 skipped, 5 invalid fields blanked.");
+  });
+
+  test("flow 467: a host question is its own labelled kind: counted in the summary, never a row of the arm analysis", async () => {
+    await openDecision({
+      cwd: root,
+      id: "ordinary-1",
+      question: "Which approach?",
+      options: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+      recommendation: { optionId: "a", reason: "simplest" },
+      arm: "A",
+      salt: "s",
+      seq: 1,
+    });
+    await answerDecision({ cwd: root, id: "ordinary-1", choice: "a" });
+    await openDecision({
+      cwd: root,
+      id: "host-1",
+      question: "HQSECRET-question?",
+      options: [{ id: "waive", label: "Waive" }, { id: "keep", label: "Keep" }],
+      hostQuestion: { source: "codex", ref: "turn-4", verb: "waive-mutation", answerText: "HQSECRET-answer" },
+    });
+    await answerDecision({ cwd: root, id: "host-1", choice: "waive" });
+    const { rows, summary } = await loadExportWithSummary(root);
+    expect(rows.map((row) => row.ref)).toEqual([exportRef("ordinary-1")]);
+    expect(summary).toEqual({ rows: 1, skipped: 0, blanked: 0, hostQuestions: 1 });
+    expect(exportSummaryLine(summary)).toBe("Export: 1 decision, 0 skipped, 0 invalid fields blanked. 1 answered via host question, not exported as rows.");
+    expect(renderExport(rows, "json")).not.toContain("HQSECRET");
+    const later = await loadExportWithSummary(root, { since: new Date("2999-01-01T00:00:00Z") });
+    expect(later.summary.hostQuestions).toBe(0);
   });
 
   test("numbers must be finite and non-negative integers where they count; timestamps ISO-8601 UTC; enums closed", () => {

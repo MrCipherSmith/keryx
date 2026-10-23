@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -203,6 +203,112 @@ test("apply_patch may write only data files into the package, never a test or a 
     expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/${name}`])).toBe(false);
   }
   expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/mutants.json`, `.metaproject/reviews/${ID}/log.jsonl`])).toBe(true);
+});
+
+test("apply_patch is never approved for the operator's decisions file: only the operator's commands and cards write it", () => {
+  const run = boundRun();
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/findings.json`, `.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
+});
+
+test("the decisions guard folds case and looks at every depth: the same file on APFS/NTFS, or a nested store (review SEC2-001)", () => {
+  const run = boundRun();
+  for (const name of ["Operator-Decisions.json", "OPERATOR-DECISIONS.JSON", "operator-decisions.JSON", "sub/operator-decisions.json", "a/b/Operator-Decisions.json", ".operator-decisions.lock/owner.json", ".Operator-Decisions.LOCK/x.json"]) {
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/${name}`])).toBe(false);
+  }
+  // A name that merely contains the file's name is ordinary package data.
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/notes-on-operator-decisions.json.md`])).toBe(true);
+});
+
+test("a non-ASCII spelling that a filesystem may fold onto the decisions file is never approved (review SEC3-001)", () => {
+  const run = boundRun();
+  const spellings = [
+    "operator-deciſions.json", // U+017F long s: APFS folds it to `s`, toLowerCase leaves it
+    "operator-decısions.json", // U+0131 dotless i: upcases to `I`
+    "operator-décisions.json", // NFD: e + combining acute
+    "operator-décisions.json", // NFC é
+    "ｏperator-decisions.json", // full-width o
+    ".operator-decisions.locK/x.json", // U+212A Kelvin sign: NFKC makes it `K`
+    ".operator-deciſions.lock/x.json",
+    "sub/operator-deciſions.json",
+    "notes-été.md", // any non-ASCII segment, even one that aliases nothing
+  ];
+  for (const name of spellings) {
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/${name}`])).toBe(false);
+  }
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/research-evidence/notes_1.md`])).toBe(true);
+});
+
+test("a long-s spelling of the decisions file is refused before and after it exists on disk (review SEC3-001)", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-fold-"));
+  try {
+    const dir = path.join(cwd, ".metaproject", "reviews", ID);
+    await mkdir(dir, { recursive: true });
+    const run = new AutomaticReviewRun(cwd);
+    run.observe(CREATE, CREATED);
+    const target = `.metaproject/reviews/${ID}/operator-deciſions.json`;
+    expect(run.approvesPatchTargets([target])).toBe(false);
+    await writeFile(path.join(cwd, target), "{}");
+    expect(run.approvesPatchTargets([target])).toBe(false);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("a symlink inside the package that resolves to the decisions file, or out of the package, is not approved", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-link-"));
+  try {
+    const dir = path.join(cwd, ".metaproject", "reviews", ID);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "operator-decisions.json"), "{}");
+    await symlink(path.join(dir, "operator-decisions.json"), path.join(dir, "notes.json"));
+    await symlink(path.join(cwd, "src"), path.join(dir, "out"));
+    const run = new AutomaticReviewRun(cwd);
+    run.observe(CREATE, CREATED);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/ledger.json`])).toBe(true);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/notes.json`])).toBe(false);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/out/a.json`])).toBe(false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("a plain-named symlink inside the package onto a long-s spelling of the decisions file is not approved (review T4-002)", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-link-fold-"));
+  try {
+    const dir = path.join(cwd, ".metaproject", "reviews", ID);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "operator-deciſions.json"), "{}");
+    await symlink(path.join(dir, "operator-deciſions.json"), path.join(dir, "notes.json"));
+    // A non-ASCII target that folds onto nothing: only the real path's plain-segment rule refuses it.
+    await writeFile(path.join(dir, "notes-été.json"), "{}");
+    await symlink(path.join(dir, "notes-été.json"), path.join(dir, "plain.json"));
+    const run = new AutomaticReviewRun(cwd);
+    run.observe(CREATE, CREATED);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/ledger.json`])).toBe(true);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/notes.json`])).toBe(false);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/plain.json`])).toBe(false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("--prior on a create is approved for a review id or a real package directory, never for a directory nested in a package", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-prior-"));
+  try {
+    const real = path.join(cwd, ".metaproject", "reviews", "r1");
+    await mkdir(path.join(real, "x"), { recursive: true });
+    await writeFile(path.join(real, "manifest.json"), "{}");
+    await writeFile(path.join(real, "x", "manifest.json"), "{}");
+    const run = new AutomaticReviewRun(cwd);
+    expect(run.approvesShell(`${CREATE} --prior r1`)).toBe(true);
+    expect(run.approvesShell(`${CREATE} --prior .metaproject/reviews/r1`)).toBe(true);
+    expect(run.approvesShell(`${CREATE} --prior .metaproject/reviews/r1/x`)).toBe(false);
+    expect(run.approvesShell(`${CREATE} --prior /tmp`)).toBe(false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 });
 
 test("mutate --test takes only `bun test` with plain paths and no option that loads code", () => {

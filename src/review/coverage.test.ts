@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, widestDiff } from "./coverage";
+import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 
 let root: string;
 
@@ -430,5 +432,256 @@ describe("light depth cannot be forged", () => {
     const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, packageDir: dir, diffStats: async () => ({ files, changedLines: 10 }) })).join("\n");
     expect(errors).toContain("binds");
     expect(errors).toContain("never run");
+  });
+});
+
+describe("supersedes and overlap groups (flow 458 AC6)", () => {
+  async function installWith(name: string, metadata: string, base: "bundled" | "project" = "bundled", paths?: string): Promise<void> {
+    const dir = base === "bundled" ? path.join(root, ".metaproject", "skills", "gdskills", "review", name) : path.join(root, ".metaproject", "project-skills", "review", name);
+    await mkdir(dir, { recursive: true });
+    const meta = [metadata, paths === undefined ? "" : `  paths: "${paths}"`].filter(Boolean).join("\n");
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\nmetadata:\n${meta}\n---\n`, "utf8");
+  }
+
+  test("a project overlay removes the bundled reviewers it supersedes, recorded as excluded with the reason", async () => {
+    await installWith("acme-frontend", '  supersedes: "review-frontend, review-style"', "project");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).toContain("acme-frontend");
+    expect(need.required).not.toContain("review-frontend");
+    expect(need.required).not.toContain("review-style");
+    expect(need.excluded).toEqual(expect.arrayContaining([
+      { reviewer: "review-frontend", reason: "superseded by acme-frontend" },
+      { reviewer: "review-style", reason: "superseded by acme-frontend" },
+    ]));
+  });
+
+  test("a supersedes naming a reviewer the round does not require changes nothing", async () => {
+    await installWith("acme-frontend", '  supersedes: "review-highload"', "project");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).toContain("review-frontend");
+    expect(need.excluded.some((entry) => entry.reason.startsWith("superseded"))).toBe(false);
+  });
+
+  test("an overlap group keeps its most specific member; a generic member it covers is excluded", async () => {
+    await installWith("review-frontend", '  overlap_group: "frontend"');
+    await installWith("review-frontend-conventions", '  overlap_group: "frontend"\n  overlap_rank: "generic"');
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).toContain("review-frontend");
+    expect(need.required).not.toContain("review-frontend-conventions");
+    expect(need.excluded).toContainEqual({ reviewer: "review-frontend-conventions", reason: "overlap group frontend: review-frontend reads the same lines" });
+  });
+
+  test("a project overlay in the group wins, but a path-gated one that covers only part of the diff leaves the bundled member", async () => {
+    await installWith("review-frontend", '  overlap_group: "frontend"');
+    await installWith("acme-ui", '  overlap_group: "frontend"', "project", "src/ui/**");
+    const partial = await requiredReviewers(root, "all", ["src/ui/a.tsx", "src/app/b.tsx"]);
+    expect(partial.required).toEqual(expect.arrayContaining(["acme-ui", "review-frontend"]));
+    const covered = await requiredReviewers(root, "all", ["src/ui/a.tsx"]);
+    expect(covered.required).toContain("acme-ui");
+    expect(covered.required).not.toContain("review-frontend");
+    expect(covered.excluded).toContainEqual({ reviewer: "review-frontend", reason: "overlap group frontend: acme-ui reads the same lines" });
+  });
+
+  test("M6: a supersedes or overlap group never removes a core role", async () => {
+    await installWith("acme-everything", '  supersedes: "review-logic, review-architecture, review-style"', "project");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    for (const core of ["review-logic", "review-architecture"]) expect(need.required).toContain(core);
+    expect(need.required).not.toContain("review-style");
+    expect(need.excluded.filter((entry) => entry.reason.startsWith("superseded")).map((entry) => entry.reviewer)).toEqual(["review-style"]);
+    expect(need.notes?.join("\n")).toContain("acme-everything supersedes review-logic, review-architecture: ignored");
+    expect(need.notes?.join("\n")).toContain("core roles that always run");
+  });
+
+  test("M6: an overlay this round changes supersedes nothing, with a note; so does one when the changed files are unknown", async () => {
+    await installWith("acme-frontend", '  supersedes: "review-frontend, review-style"', "project");
+    const changed = await requiredReviewers(root, "all", [...frontendFiles, ".metaproject/project-skills/review/acme-frontend/SKILL.md"]);
+    expect(changed.required).toEqual(expect.arrayContaining(["acme-frontend", "review-frontend", "review-style"]));
+    expect(changed.notes?.join("\n")).toContain("acme-frontend supersedes review-frontend, review-style: ignored, acme-frontend is a project overlay this round changes (.metaproject/project-skills/review/acme-frontend/SKILL.md)");
+    const unknown = await requiredReviewers(root, "all", undefined);
+    expect(unknown.required).toContain("review-style");
+    expect(unknown.notes?.join("\n")).toContain("changed files are not recorded");
+  });
+
+  test("a light round raises its conventions pick to the overlap group's top member", async () => {
+    await installWith("review-frontend", '  overlap_group: "frontend"');
+    await installWith("review-frontend-conventions", '  overlap_group: "frontend"\n  overlap_rank: "generic"');
+    const need = await requiredReviewers(root, "all", ["src/app/page.tsx"], { depth: "light" });
+    expect(need.required).toContain("review-frontend");
+    expect(need.required).not.toContain("review-frontend-conventions");
+  });
+});
+
+describe("projectRootOfPackage (flow 458 AC7)", () => {
+  test("a flow-bound package resolves to the project, not to .metaproject/flows", async () => {
+    const flowPackage = path.join(root, ".metaproject", "flows", "458-x", "reviews", "2026-10-16-pr-1");
+    await mkdir(flowPackage, { recursive: true });
+    expect(projectRootOfPackage(flowPackage)).toBe(root);
+    expect(projectRootOfPackage(path.join(root, ".metaproject", "reviews", "r1"))).toBe(root);
+  });
+
+  test("a package outside any .metaproject falls back to the project found from it", async () => {
+    const elsewhere = path.join(root, "tmp", "pkg");
+    await mkdir(elsewhere, { recursive: true });
+    expect(projectRootOfPackage(elsewhere)).toBe(root);
+  });
+
+  test("required reviewers of a flow-bound package read that project's reviewers", async () => {
+    const flowPackage = path.join(root, ".metaproject", "flows", "458-x", "reviews", "p");
+    await mkdir(flowPackage, { recursive: true });
+    const need = await requiredReviewers(projectRootOfPackage(flowPackage), "all", undefined);
+    expect(need.required).toContain("review-logic");
+  });
+});
+
+describe("a pull-request package's diff is read at the repository top level against its base (flow 460 AC1)", () => {
+  const PR = "https://github.com/o/r/pull/7975";
+  const attended = { attended: true, pendingMutants: 3 } as const;
+  const two = ["src/a.ts", "src/b.ts"];
+
+  /** main with two files, a PR branch changing both (and `extra`); returns the PR head. */
+  function repo(extra: Record<string, string> = {}): string {
+    initRepo(root);
+    commitFiles(root, { "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 1;\n" }, "base");
+    git(root, "checkout", "-q", "-b", "pr");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 2;\n", "src/b.ts": "export const b = 2;\n", ...extra }, "pr change");
+    git(root, "checkout", "-q", "main");
+    return head;
+  }
+
+  async function pkgAt(project: string, target: Record<string, unknown>): Promise<string> {
+    const dir = path.join(project, ".metaproject", "reviews", "r1");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ target: { kind: "pr", ref: PR, ...target } }));
+    return dir;
+  }
+
+  async function nestedProject(): Promise<string> {
+    const project = path.join(root, "output", "review-pr-7975");
+    await mkdir(project, { recursive: true });
+    await cp(path.join(root, ".metaproject"), path.join(project, ".metaproject"), { recursive: true });
+    return project;
+  }
+
+  async function lightErrors(pkg: string): Promise<string> {
+    const projectRoot = projectRootOfPackage(pkg);
+    const light = await requiredReviewers(projectRoot, "all", two, { depth: "light" });
+    return (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root: projectRoot, packageDir: pkg, files: two, changedLines: 4, ...attended })).join("\n");
+  }
+
+  test("a light dispatch of a 2-file PR diff is accepted against target.base, never the PR URL", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(root, { base: "main", head }))).toBe("");
+  });
+
+  test("without a recorded base the diff falls back to resolveBase (main here)", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(root, { head }))).toBe("");
+  });
+
+  test("a package under a subdirectory's .metaproject reads the diff at the repository top level", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(await nestedProject(), { base: "main", head }))).toBe("");
+  });
+
+  test("the nested package sees the top-level files: a risk-class path changed at the top makes it a full round", async () => {
+    const head = repo({ "src/core/store.ts": "export const s = 1;\n" });
+    const errors = await lightErrors(await pkgAt(await nestedProject(), { base: "main", head }));
+    expect(errors).toContain("depth light, but the full set applies");
+    expect(errors).toContain("review-core-boundaries");
+  });
+
+  test("when git cannot resolve the diff the refusal names the directory, the base and the head", async () => {
+    repo();
+    const missing = "0123456789abcdef0123456789abcdef01234567";
+    const errors = await lightErrors(await pkgAt(root, { base: "main", head: missing }));
+    expect(errors).toContain("could not be resolved");
+    expect(errors).toContain(`cwd ${realpathSync(root)}`);
+    expect(errors).toContain("base main");
+    expect(errors).toContain(`head ${missing}`);
+    expect(errors).not.toContain(PR);
+  });
+
+  test("an empty range (a merged PR read against its own target branch) refuses the light round instead of passing it on zero files", async () => {
+    repo();
+    const merged = git(root, "rev-parse", "main").trim();
+    const errors = await lightErrors(await pkgAt(root, { head: merged }));
+    expect(errors).toContain("empty review range");
+    expect(errors).toContain("depth light, but the full set applies");
+  });
+
+  test("a branch target without a recorded base resolves a real base, never its own ref (which is the head)", async () => {
+    // `pr...head` is empty (the ref is the head), which would pass a 32-file branch as a zero-line light round.
+    const head = repo(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, `export const m${i} = ${i};\n`])));
+    expect(await lightErrors(await pkgAt(root, { kind: "branch", ref: "pr", head }))).toContain("depth light, but the full set applies");
+  });
+
+  test("a small branch target without a recorded base is measured against main and stays light", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(root, { kind: "branch", ref: "pr", head }))).toBe("");
+  });
+
+  test("a branch target whose head is its base's tip refuses with the empty-range warning", async () => {
+    repo();
+    const merged = git(root, "rev-parse", "main").trim();
+    const errors = await lightErrors(await pkgAt(root, { kind: "branch", ref: "main", head: merged }));
+    expect(errors).toContain("empty review range");
+    expect(errors).toContain("depth light, but the full set applies");
+  });
+
+  test("a recorded base can only widen the check: --base head~1 on a large pull request does not make it light (SEC-001)", async () => {
+    repo();
+    git(root, "checkout", "-q", "pr");
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, `export const m${i} = ${i};\n`]));
+    const bulk = commitFiles(root, many, "a large change");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 3;\n" }, "a small last commit");
+    git(root, "checkout", "-q", "main");
+    const errors = await lightErrors(await pkgAt(root, { base: bulk, head }));
+    expect(errors).toContain("depth light, but the full set applies");
+  });
+
+  test("a pull request's own base widens a narrower --base even where no main/master ref resolves (SEC-001)", async () => {
+    repo();
+    git(root, "branch", "-m", "main", "trunk");
+    git(root, "checkout", "-q", "pr");
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, `export const m${i} = ${i};\n`]));
+    const bulk = commitFiles(root, many, "a large change");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 3;\n" }, "a small last commit");
+    git(root, "checkout", "-q", "trunk");
+    // Without prBase only the narrow --base resolves (no default branch exists), and the round would pass as light.
+    expect(await lightErrors(await pkgAt(root, { base: bulk, head }))).toBe("");
+    const nested = path.join(root, "again");
+    await mkdir(nested, { recursive: true });
+    await cp(path.join(root, ".metaproject"), path.join(nested, ".metaproject"), { recursive: true });
+    expect(await lightErrors(await pkgAt(nested, { base: bulk, prBase: "trunk", head }))).toContain("depth light, but the full set applies");
+  });
+
+  test("a project reached through a symlink still excludes its committed review packages from the measured diff", async () => {
+    // Four committed package files and two source files: six changed files, over the light limit unless the packages are excluded.
+    const head = repo(Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`.metaproject/reviews/old-${i}/manifest.json`, "{}\n"])));
+    const link = `${root}-link`;
+    await symlink(root, link);
+    try {
+      expect(await lightErrors(await pkgAt(link, { base: "main", head }))).toBe("");
+    } finally {
+      await rm(link, { force: true });
+    }
+  });
+
+  test("the widest diff is the widest in each dimension, not the one larger in either", () => {
+    const recorded = { files: Array.from({ length: 10 }, (_, i) => `f${i}`), changedLines: 900 };
+    const fallback = { files: [...recorded.files, "extra"], changedLines: 100 };
+    expect(widestDiff([recorded, fallback])).toEqual({ files: fallback.files, changedLines: 900 });
+    expect(widestDiff([fallback, recorded])).toEqual({ files: fallback.files, changedLines: 900 });
+  });
+
+  test("the light recheck's git diff is remembered per package and head: a second check in the same process runs no git", async () => {
+    const head = repo();
+    const pkg = await pkgAt(root, { base: "main", head });
+    expect(await lightErrors(pkg)).toBe("");
+    // With the repository gone, only the remembered result can answer.
+    await rm(path.join(root, ".git"), { recursive: true, force: true });
+    expect(await lightErrors(pkg)).toBe("");
+    // Another head is another key: it is not answered from the cache.
+    expect(await lightErrors(await pkgAt(root, { base: "main", head: "0123456789abcdef0123456789abcdef01234567" }))).toContain("could not be resolved");
   });
 });

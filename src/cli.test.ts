@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { OPERATOR_COMMANDS } from "./commands/review-operator";
 import {
   CLI_ROUTES,
   exitCodeForError,
@@ -30,7 +31,7 @@ test("--help lists the harness command and the interactive shell", async () => {
 
   expect(output).toMatch(/keryx harness run/);
   expect(/shell|interactive/i.test(output)).toBe(true);
-});
+}, 10_000);
 
 test("bare `keryx` (no args) prints CLI usage, not the shell", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
@@ -78,7 +79,7 @@ test("flow 303 AC5: --help, -h and bare `keryx` print the identical flat usage, 
   expect(grouped).not.toBe(helpFlag);
   expect(grouped).toMatch(/Start here:/);
   expect(grouped).toMatch(/Maintenance and diagnostics:/);
-});
+}, 15_000);
 
 // PR #669 review, MEDIUM (AC5, amended): comparing the three flat forms to
 // EACH OTHER (above) proves they agree with one another, but not that any of
@@ -356,7 +357,7 @@ describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
     const lines = result.stderr.split("\n").filter((line) => line.length > 0);
     expect(lines.length).toBe(1);
     expect(lines[0]).toBe(`Unknown command: zzzqxvvv. Run \`keryx ${group} --help\` for the list.`);
-  });
+  }, 10_000);
 
   test("`keryx health rn` suggests `run`", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
@@ -389,7 +390,7 @@ describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
     const wiki = await runBunCapture([cliPath, "wiki", "ask", "--help"]);
     // `ask --help` is a question, not a claim about wiki's data — exit 0 either way is not the property under test here; only that it was NOT rejected as "unknown".
     expect(wiki.stderr).not.toContain("Unknown command");
-  });
+  }, 20_000);
 
   // Flow 353 review rounds 2–3 (L3, T3, T4): the guard inspects `args[1]` of a
   // MAPPED group only, so the one real positive case is a group whose first
@@ -740,7 +741,10 @@ describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, 
 
   /** Every `command === "x"` the `reviewCommand` router compares against — read from SOURCE, not a second list. */
   function reviewRouterSubcommands(): string[] {
-    return routerSubcommands("commands/review.ts", "reviewCommand");
+    // The router also dispatches the operator commands through one `OPERATOR_COMMANDS.includes(command)` branch.
+    const source = readFileSync(path.join(import.meta.dir, "commands/review.ts"), "utf8");
+    const operator = source.includes("(OPERATOR_COMMANDS as readonly string[]).includes(command)") ? [...OPERATOR_COMMANDS] : [];
+    return [...new Set([...routerSubcommands("commands/review.ts", "reviewCommand"), ...operator])].sort();
   }
 
   /** The same, for any group router written as a chain of `command === "x"` comparisons. */

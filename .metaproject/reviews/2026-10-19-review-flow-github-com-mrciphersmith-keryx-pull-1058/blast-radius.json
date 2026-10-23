@@ -1,0 +1,4053 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+    ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+    "README.md",
+    "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/autonomous-review.md",
+    "docs/docs/guides/review-with-a-record.md",
+    "docs/docs/limitations.md",
+    "docs/requirements/keryx-card-any-host/prd.md",
+    "src/commands/operator-confirm-review.ts",
+    "src/commands/review-host-question.test.ts",
+    "src/commands/review-operator.ts",
+    "src/decisions/journal.ts",
+    "src/decisions/report.ts",
+    "src/decisions/service.ts",
+    "src/decisions/sources.ts",
+    "src/decisions/types.ts",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+    "src/gdskills/contracts/review-finding.schema.json",
+    "src/review/estimate.ts",
+    "src/review/operator-decisions.ts",
+    "src/review/plan-confirmation.ts",
+    "src/review/premise-question.ts",
+    "src/review/premise.ts",
+    "src/review/readiness.ts",
+    "src/review/types.ts",
+    "src/trigger/unattended.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/review.ts",
+      "hop": 1,
+      "fanIn": 51,
+      "via": "src/commands/review-operator.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/commands/review-operator.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/managed.ts",
+      "hop": 1,
+      "fanIn": 33,
+      "via": "src/review/readiness.ts",
+      "path": [
+        "src/review/managed.ts",
+        "src/review/readiness.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "hop": 1,
+      "fanIn": 29,
+      "via": "src/review/operator-decisions.ts",
+      "path": [
+        "src/review/coverage.ts",
+        "src/review/operator-decisions.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "hop": 1,
+      "fanIn": 27,
+      "via": "src/review/operator-decisions.ts",
+      "path": [
+        "src/flow/review-gate.ts",
+        "src/review/operator-decisions.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/store.ts",
+      "hop": 1,
+      "fanIn": 26,
+      "via": "src/decisions/types.ts",
+      "path": [
+        "src/decisions/store.ts",
+        "src/decisions/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/pr-comments.ts",
+      "hop": 1,
+      "fanIn": 23,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/pr-comments.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/decisions/sources.ts",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "src/decisions/service.ts",
+        "src/decisions/sources.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/trigger/granted-tools.ts",
+      "hop": 1,
+      "fanIn": 17,
+      "via": "src/trigger/unattended.ts",
+      "path": [
+        "src/trigger/granted-tools.ts",
+        "src/trigger/unattended.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/trigger/unattended.ts",
+      "path": [
+        "src/commands/trigger-dispatch.ts",
+        "src/trigger/unattended.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/blast-radius.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/blast-radius.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger-agent-task.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/trigger/unattended.ts",
+      "path": [
+        "src/commands/trigger-agent-task.ts",
+        "src/trigger/unattended.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/review/premise.ts",
+      "path": [
+        "src/review/verdict.ts",
+        "src/review/premise.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/commands/operator-confirm-review.ts",
+      "path": [
+        "src/commands/operator-confirm-tools.ts",
+        "src/commands/operator-confirm-review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/premise-fixtures.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/review/operator-decisions.ts",
+      "path": [
+        "src/review/premise-fixtures.ts",
+        "src/review/operator-decisions.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/verification.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/verification.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/estimate.ts",
+      "path": [
+        "src/commands/review-ledger.ts",
+        "src/review/estimate.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/review-panel.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/readiness.ts",
+      "path": [
+        "src/tui/review-panel.ts",
+        "src/review/readiness.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/estimate.ts",
+      "path": [
+        "src/commands/review-slice.ts",
+        "src/review/estimate.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/ask.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/decisions/journal.ts",
+      "path": [
+        "src/decisions/ask.ts",
+        "src/decisions/journal.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/run.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/run.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/publish.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/readiness.ts",
+      "path": [
+        "src/review/publish.ts",
+        "src/review/readiness.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/quality.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/decisions/types.ts",
+      "path": [
+        "src/decisions/quality.ts",
+        "src/decisions/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/metrics.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/metrics.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/loop.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/loop.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-notes.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/review-notes.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/decisions/service.ts",
+      "path": [
+        "src/tui/decisions-surface.ts",
+        "src/decisions/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/decisions.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/decisions/service.ts",
+      "path": [
+        "src/commands/decisions.ts",
+        "src/decisions/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-plan.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/estimate.ts",
+      "path": [
+        "src/commands/review-plan.ts",
+        "src/review/estimate.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/export.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/decisions/sources.ts",
+      "path": [
+        "src/decisions/export.ts",
+        "src/decisions/sources.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/import.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/decisions/types.ts",
+      "path": [
+        "src/decisions/import.ts",
+        "src/decisions/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/legacy.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/decisions/types.ts",
+      "path": [
+        "src/decisions/legacy.ts",
+        "src/decisions/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/research-sync-status.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/decisions/service.ts",
+      "path": [
+        "src/commands/research-sync-status.ts",
+        "src/decisions/service.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/packages.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/packages.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/repair.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/repair.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/post.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/post.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/dedupe.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/publish-guard.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/readiness.ts",
+      "path": [
+        "src/review/publish-guard.ts",
+        "src/review/readiness.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/rebuttal-citation.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/rebuttal-citation.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/decisions/followup.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/decisions/types.ts",
+      "path": [
+        "src/decisions/followup.ts",
+        "src/decisions/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/service.ts",
+      "hop": 2,
+      "fanIn": 99,
+      "via": "src/review/operator-decisions.ts",
+      "path": [
+        "src/flow/service.ts",
+        "src/flow/review-gate.ts",
+        "src/review/operator-decisions.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/operator-confirm-review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildReviewConfirmSpecs, reviewConfirmSpecs} of src/commands/operator-confirm-review.ts (hop 1, from src/commands/operator-confirm-review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {unattendedRefusal} of src/trigger/unattended.ts (hop 1, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {recordOperatorDecision} of src/review/operator-decisions.ts (hop 1, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runOperatorCommand} of src/commands/review-operator.ts (hop 1, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeReadiness} of src/review/readiness.ts (hop 1, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {unattendedRefusal} of src/trigger/unattended.ts (hop 1, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {unattendedRefusal} of src/trigger/unattended.ts (hop 1, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/arms.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/backfill.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/report.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildReport, renderReport, renderReportLine} of src/decisions/report.ts (hop 1, from src/decisions/report.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/decisions.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/service.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/export.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/idempotent-open.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/import.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/interviewer-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DECISION_SOURCES} of src/decisions/sources.ts (hop 1, from src/decisions/sources.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/journal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/quality.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/reasons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/report.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/journal.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/review-fixes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/service.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/round2.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/report.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildReport, renderReport} of src/decisions/report.ts (hop 1, from src/decisions/report.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/round3.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/report.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {renderReport} of src/decisions/report.ts (hop 1, from src/decisions/report.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/round4.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/service.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/confirm-floors.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {unattendedRefusal} of src/trigger/unattended.ts (hop 1, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/review-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runOperatorCommand} of src/commands/review-operator.ts (hop 1, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/blast-radius.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/bot/run.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {recordOperatorDecision} of src/review/operator-decisions.ts (hop 1, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/dispatch-check.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {packagePlanGate, planConfirmationFor, writePlanConfirmation} of src/review/estimate.ts (hop 1, from src/review/estimate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/estimate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {planConfirmationFor, planConfirmed, planGateRefusal, readPlanConfirmation, writePlanConfirmation} of src/review/estimate.ts (hop 1, from src/review/estimate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/operator-confirm-review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildReviewConfirmSpecs} of src/commands/operator-confirm-review.ts (hop 1, from src/commands/operator-confirm-review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/locate-ingest.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/loop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ManagedReviewInput, StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/memory-outside-stage-auto.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeReadiness} of src/review/readiness.ts (hop 1, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/memory-outside-stage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeReadiness, waiveReadiness} of src/review/readiness.ts (hop 1, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/premise-decision.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/premise-question.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {answerPremiseQuestion} of src/review/premise-question.ts (hop 1, from src/review/premise-question.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/premise-embedded.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/prior-round.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/premise-question.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {answerPremiseQuestion} of src/review/premise-question.ts (hop 1, from src/review/premise-question.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeReadiness} of src/review/readiness.ts (hop 1, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeReadiness, waiveReadiness} of src/review/readiness.ts (hop 1, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/rebuttal-citation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/repair-ingest.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ManagedReviewInput, StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/verdict.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {recordPremiseDecision} of src/review/operator-decisions.ts (hop 1, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/verification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/trigger/unattended.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {unattendedShellRefusal} of src/trigger/unattended.ts (hop 1, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openDecision} of src/decisions/service.ts (hop 1, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeReadiness} of src/review/readiness.ts (hop 1, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/decisions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {decisionsCommand} of src/commands/decisions.ts (hop 2, from src/decisions/service.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/memory-orchestrator-log.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {printReviewHelpFor} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-layers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-parity-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runPlan} of src/commands/review-plan.ts (hop 2, from src/review/estimate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runDispatchCheck} of src/commands/review-slice.ts (hop 2, from src/review/estimate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-tty-refusal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {launchTuiAgentShell} of src/tui/tui-shell.ts (hop 2, from src/decisions/sources.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/ask.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {journalAsk} of src/decisions/ask.ts (hop 2, from src/decisions/journal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/own-answer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/report.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {loadReport, renderReport} of src/decisions/service.ts (hop 2, from src/decisions/report.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/review-gate-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {readReviewRounds} of src/flow/review-gate.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runReviewGate} of src/flow/review-gate.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/service.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {readReviewRounds, reviewGate, runReviewGate} of src/flow/review-gate.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/intake/intake-readonly.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {grantedToolProblems} of src/trigger/granted-tools.ts (hop 2, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/metaproject-orchestrator-log.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {completeManagedReview} of src/review/managed.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/bot/metrics.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeBotMetrics} of src/review/bot/metrics.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/bot/post.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {postBotReview} of src/review/bot/post.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/clean-context.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {completeManagedReview} of src/review/managed.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {coverageErrors} of src/review/coverage.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/dispatch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {coverageErrors} of src/review/coverage.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {completeManagedReview} of src/review/managed.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/mutate-not-reached.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {coverageErrors} of src/review/coverage.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/pr-contract.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {coverageErrors} of src/review/coverage.ts (hop 2, from src/review/operator-decisions.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/publish-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewPublishRefusal} of src/review/publish-guard.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/repair.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {repairMechanicalOmissions} of src/review/repair.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {completeManagedReview} of src/review/managed.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-next.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/commands/review-operator.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/second-look.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runLedger} of src/commands/review-ledger.ts (hop 2, from src/review/estimate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/scheduler/digest-tools-readonly.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {grantedToolProblems} of src/trigger/granted-tools.ts (hop 2, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/trigger/config.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {grantedToolProblems} of src/trigger/granted-tools.ts (hop 2, from src/trigger/unattended.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {renderStatus} of src/commands/research-sync-status.ts (hop 2, from src/decisions/service.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {loadReviewDepth} of src/tui/review-panel.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-parity-visibility.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {loadReviewDepth} of src/tui/review-panel.ts (hop 2, from src/review/readiness.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/chunks-estimate.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/review/estimate.ts: run it, it is not read"
+    },
+    {
+      "file": "src/flow/types.ts",
+      "hop": 2,
+      "fanIn": 88,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 55 at hop 2, fan-in 88, reached via src/review/operator-decisions.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "hop": 2,
+      "fanIn": 86,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 55 at hop 2, fan-in 86, reached via src/review/readiness.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/trigger/config.ts",
+      "hop": 2,
+      "fanIn": 40,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 55 at hop 2, fan-in 40, reached via src/trigger/unattended.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 2,
+      "fanIn": 22,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 55 at hop 2, fan-in 22, reached via src/review/readiness.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "hop": 2,
+      "fanIn": 19,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 55 at hop 2, fan-in 19, reached via src/review/operator-decisions.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 55 at hop 2, fan-in 13, reached via src/trigger/unattended.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/research.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 55 at hop 2, fan-in 13, reached via src/review/operator-decisions.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ask-user-bridge.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 55 at hop 2, fan-in 8, reached via src/decisions/journal.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 55 at hop 2, fan-in 7, reached via src/decisions/service.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/research-sync.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/decisions/report.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 55 at hop 2, fan-in 7, reached via src/decisions/report.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/reviews-inspector.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 55 at hop 2, fan-in 7, reached via src/review/readiness.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/prior-round.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 55 at hop 2, fan-in 5, reached via src/review/operator-decisions.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/complete-gated.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 55 at hop 2, fan-in 2, reached via src/review/readiness.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-bot.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 55 at hop 2, fan-in 1, reached via src/review/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 55 at hop 2, fan-in 0, reached via src/decisions/sources.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/decisions/arms.ts",
+      "hop": 1,
+      "fanIn": 17,
+      "via": "src/decisions/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DecisionMode} from src/decisions/types.ts; changed: {DecisionRecord, HostQuestionOpen, OpenInput, OpenRecord}"
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, ConfirmedVia, cardPressFields} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/autonomous-answers.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CANCEL_ANSWER} from src/decisions/service.ts; changed: {AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount}"
+    },
+    {
+      "file": "src/review/caps.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ReviewFindingSeverity} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/commands/automatic-review.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPERATOR_DECISIONS_FILE, OPERATOR_DECISIONS_LOCK, foldFileName} from src/review/operator-decisions.ts; changed: {OperatorDecision, OperatorDecisionVia, OperatorDecisionsFile, PremiseDecisionInput, PremiseQuestionDecision, confirmedDecision, decisionCovers, readOperatorDecisions, readPremiseDecisions, recordOperatorDecision, recordPremiseDecision, recordPremiseDecisionAfter}"
+    },
+    {
+      "file": "src/review/chunks-estimate.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, ConfirmedVia, cardPressFields} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/autonomous-run.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest, ReviewPackageStatus} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/autonomous-summary.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_PACKAGE_STATUSES, ReviewPackageStatus} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/coverage-md.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ReviewCoverageEntry} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ReviewScopeCountsLike, ReviewScopeDropLike} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/verify-run.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {VerificationClaimInput} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/governance/spend.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/wave-drivers.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {roleDispatchWaves} from src/review/estimate.ts; changed: {PlanConfirmation, PlanConfirmedVia, packagePlanGate, planConfirmationFor, planConfirmed, planGateRefusal, readPlanConfirmation, writePlanConfirmation}"
+    },
+    {
+      "file": "src/review/plan-eval.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoundEstimate, estimateRound} from src/review/estimate.ts; changed: {PlanConfirmation, PlanConfirmedVia, packagePlanGate, planConfirmationFor, planConfirmed, planGateRefusal, readPlanConfirmation, writePlanConfirmation}"
+    },
+    {
+      "file": "src/tui/ask-user-transcript.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {storedOperatorText} from src/decisions/service.ts; changed: {AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount}"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPERATOR_COMMANDS} from src/commands/review-operator.ts; changed: {OperatorCommandSeams, printOperatorCommandHelp, runOperatorCommand}"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPERATOR_CONFIRM_TOOL_NAMES} from src/trigger/unattended.ts; changed: {unattendedRefusal, unattendedShellRefusal}"
+    },
+    {
+      "file": "src/commands/research-sync.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {EXPORT_FIELDS, journalFile} from src/decisions/service.ts; changed: {AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount}"
+    },
+    {
+      "file": "src/commands/review-arbiter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CANCEL_ANSWER} from src/decisions/service.ts; changed: {AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount}"
+    },
+    {
+      "file": "src/gdskills/review-pr-feedback-wiring.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {EXTERNAL_TERMINAL_DISPOSITIONS} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/autonomous-answers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CANCEL_ANSWER} from src/decisions/service.ts; changed: {AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount}"
+    },
+    {
+      "file": "src/review/caps.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ReviewFindingSeverity} from src/review/types.ts; changed: {HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/tui/ask-user-bridge-arbiter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CANCEL_ANSWER} from src/decisions/service.ts; changed: {AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount}"
+    },
+    {
+      "file": "src/tui/ask-user-bridge.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/decisions/journal.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REASON_SUBSAMPLE_ENV} from src/decisions/journal.ts; changed: {openDecision}"
+    },
+    {
+      "file": "src/commands/flow.ts",
+      "hop": 2,
+      "fanIn": 34,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {durableExternalCommentsGate} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/intake/poll.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {agentTaskScratchParent, pruneReports, scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/review/chunks.ts",
+      "hop": 2,
+      "fanIn": 14,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BLAST_RADIUS_SCOPE_REVIEWER, BlastRadius, DEFAULT_BLAST_RADIUS_MAX_FILES, isCapDrop} from src/review/blast-radius.ts; changed: {BlastRadiusRejection, BlastRadiusScreenResult, isBlastRadiusScopedFinding, renderBlastRadiusScreenMarkdown, screenBlastRadiusFindings}"
+    },
+    {
+      "file": "src/review/slice-routing.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BUNDLED_PATH_GATES} from src/review/coverage.ts; changed: {coverageErrors, skipDecision}"
+    },
+    {
+      "file": "src/trigger/schedules.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DIGEST_TOOL_IDS, grantedToolSpec} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/scheduler/digest-gh.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runGrantedCommand} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/review/waves.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BUNDLED_PATH_GATES} from src/review/coverage.ts; changed: {coverageErrors, skipDecision}"
+    },
+    {
+      "file": "src/scheduler/digest.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DIGEST_TOOL_IDS} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/commands/review-chunks.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DEFAULT_BLAST_RADIUS_MAX_FILES} from src/review/blast-radius.ts; changed: {BlastRadiusRejection, BlastRadiusScreenResult, isBlastRadiusScopedFinding, renderBlastRadiusScreenMarkdown, screenBlastRadiusFindings}"
+    },
+    {
+      "file": "src/review/review-learning.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PrCommentState, SeenComment, splitSentences} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/commands/schedule.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerHasUsableCredential, providerReportsUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/decisions/blind.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/decisions/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {configFile} from src/decisions/store.ts; changed: {JournalRead, appendRecord, appendRecords, readJournal, readRecords}"
+    },
+    {
+      "file": "src/scheduler/digest-limits.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {defaultArmTimeout} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/flow/check-ac.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/ci-triage.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-edit-guard-config.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/severity-audit.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {packageScopeFiles} from src/review/coverage.ts; changed: {coverageErrors, skipDecision}"
+    },
+    {
+      "file": "src/trigger/digest-config.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DIGEST_TOOL_IDS} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/commands/schedule-tools.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerHasUsableCredential, providerReportsUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/flow/confirm-token.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/intake/events.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {INTAKE_TOOL_IDS, buildGrantedArgv, ghReadOnlyProblem, grantedToolSpec} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/review/conform-report.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/tests-to-run.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BlastRadius, TestToRun} from src/review/blast-radius.ts; changed: {BlastRadiusRejection, BlastRadiusScreenResult, isBlastRadiusScopedFinding, renderBlastRadiusScreenMarkdown, screenBlastRadiusFindings}"
+    },
+    {
+      "file": "src/scheduler/digest-run.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentTaskDeps, AgentTaskResult, agentTaskScratchParent, pruneReports, refusal, scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/trigger/schedule-verify.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {grantedToolSpec} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/tui/schedules-inspector.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {grantedToolSpec} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/commands/review-jev-comments.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SeenComment, prCommentsStatePath, readPrCommentState, unansweredComments} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/tui/review-layers-actions.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ReviewDepthRow} from src/tui/review-panel.ts; changed: {loadReviewDepth}"
+    },
+    {
+      "file": "src/tui/schedule-command.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerHasUsableCredential, providerReportsUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/intake/assess.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createSpendMeter, defaultMakeProvider, guardUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/learning/signals/reviewer-comment.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PrCommentState, splitSentences} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/readiness.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {reviewCompletionBlockers, reviewsRoot} from src/review/managed.ts; changed: {CompleteManagedReviewOptions, completeManagedReview}"
+    },
+    {
+      "file": "src/review/context-collect.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CollectedComment, GitHubPort, callGitHub, collectPrComments} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/flow-move.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {reviewNotesDir} from src/review/review-notes.ts; changed: {DismissibleFinding, attestDismissal, modelErrorSignal, renderReviewNote, writeReviewNotes}"
+    },
+    {
+      "file": "src/review/jev-comments-config.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-contract-config.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-docs-config.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-risk-config.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-scenarios-config.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-select-config.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/scheduler/digest-collect.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DIGEST_TOOL_IDS, buildGrantedArgv, grantedToolSpec} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/scheduler/digest-summary.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scrubThenCap} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {TuiSelection, estimateContextTokens, fmtTokens, modelPickerNotice, modelsForPicker, onKeypress, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/research-sync-panel.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {isFailureStatus, readRunLine} from src/commands/research-sync-status.ts; changed: {StatusInput, renderStatus}"
+    },
+    {
+      "file": "src/commands/review-plan-eval.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {requiredReviewers} from src/review/coverage.ts; changed: {coverageErrors, skipDecision}"
+    },
+    {
+      "file": "src/commands/trigger-review.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentTaskResult} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/review/jev-rules-config.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/review/jev-triage-config.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_GATE_CONFIG_PATH} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/commands/agent-granted-json.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runGrantedCommand, scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {filterConnectedDetectedProviders} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/review-pr-base.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-operator.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {prBaseRef} from src/commands/review.ts; changed: {printReviewHelpFor, reviewCommand}"
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {agentTaskScratchParent, scrubGrantedOutput, scrubThenCap} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/trigger-agent-task.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HealthGateResult, deniedUnattendedApproval, dispatchLockPath, providerReportsUsage, sandboxedHealthGate, triggerDispatchScratchParent} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/docs/part1-materials.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {EXPORT_FIELDS} from src/decisions/export.ts; changed: {buildExport, buildExportWithSummary, loadExport, loadExportWithSummary}"
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_ROUND_CAP} from src/flow/review-gate.ts; changed: {readReviewRounds, reviewGate, runReviewGate}"
+    },
+    {
+      "file": "src/gdskills/reviewer-triggers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {globToRegExp, requiredReviewers} from src/review/coverage.ts; changed: {coverageErrors, skipDecision}"
+    },
+    {
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {withMirrorNote} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/review/context-collect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createFixturePort} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/ledger-follow-ups.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {loadRaws} from src/commands/review-ledger.ts; changed: {runLedger}"
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {loadRaws} from src/commands/review-ledger.ts; changed: {runLedger}"
+    },
+    {
+      "file": "src/review/pr-replay.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/estimate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {loadRaws} from src/commands/review-ledger.ts; changed: {runLedger}"
+    },
+    {
+      "file": "src/review/review-learning.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SeenComment} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/reviewers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/operator-decisions.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {requiredReviewers} from src/review/coverage.ts; changed: {coverageErrors, skipDecision}"
+    },
+    {
+      "file": "src/scheduler/digest-delivery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {dispatchLockPath} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/scheduler/digest-report-locator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/scheduler/scheduled-digest-docs.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DIGEST_TOOL_IDS} from src/trigger/granted-tools.ts; changed: {grantedToolProblems}"
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/trigger/unattended.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {dispatchLockPath} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {onKeypress} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {modelPickerNotice, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {pickModelInTui, pickSessionInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/operator-confirmations.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/service.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {presentDecisions, withConfirmationLines} from src/tui/decisions-surface.ts; changed: {mountDecisionsSidebar}"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {endpointMayBeAtFault, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createTuiAgentIo} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/reviews-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BotMetrics, ReviewRow, renderBotMetrics} from src/review/bot/metrics.ts; changed: {computeBotMetrics}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {freshSlateSessionRef, sessionPickerOptions, startupSessionChoices} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BlockSink, SIDE_WORKER_DENIED_TOOL_NAMES, adaptiveSelectHeight, applyRuntimeSwitchToSlate, attachBlockIo, attachUsageIo, createTuiAgentIo, describeModePickerOption, describeModeRow, estimateContextTokens, filterConnectedDetectedProviders, fmtTokens, freshSlateSessionRef, isShellApproved, isToolAvailableToSideWorker, isUserPromptApprovalCard, mountCwdPanel, mountTitlePanel, onKeypress, pickSearchProviderStep, pickShellApproval, recordTurnTaskCostBestEffort, resolveSidebarMetadata, searchProviderWizardInTui, selectBoxHeight, selectSearchProviderAndReport, shortenCwd, shouldAutoApproveReadOnlySpawn} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/decisions/sources.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {searchProviderWizardInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/autonomous-review.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/limitations.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-card-any-host/prd.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 40,
+    "changedFilesResolved": 16,
+    "changedFilesUnresolved": 24,
+    "candidates": 174,
+    "retained": 40,
+    "droppedByCap": 15,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 109,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 119,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 1,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 39,
+      "2": 1
+    }
+  },
+  "graph": {
+    "nodes": 3268,
+    "edges": 11717
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "names": [
+          "buildReviewConfirmSpecs",
+          "reviewConfirmSpecs"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: buildReviewConfirmSpecs, reviewConfirmSpecs"
+      },
+      {
+        "file": "src/commands/review-host-question.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/review-operator.ts",
+        "names": [
+          "OperatorCommandSeams",
+          "printOperatorCommandHelp",
+          "runOperatorCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: OperatorCommandSeams, printOperatorCommandHelp, runOperatorCommand"
+      },
+      {
+        "file": "src/decisions/journal.ts",
+        "names": [
+          "openDecision"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: openDecision"
+      },
+      {
+        "file": "src/decisions/report.ts",
+        "names": [
+          "DecisionsReport",
+          "HostQuestionRow",
+          "buildReport",
+          "renderReport",
+          "renderReportLine"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: DecisionsReport, HostQuestionRow, buildReport, renderReport, renderReportLine"
+      },
+      {
+        "file": "src/decisions/service.ts",
+        "names": [
+          "AnnotatedRow",
+          "AnswerInput",
+          "AnswerResult",
+          "ArmRow",
+          "BackfilledReport",
+          "ChannelReport",
+          "ChannelRow",
+          "DecisionMode",
+          "DecisionOption",
+          "DecisionRecommendation",
+          "DecisionsReport",
+          "DeviationRow",
+          "HostQuestionOpen",
+          "HostQuestionRow",
+          "IneligibleReport",
+          "LegacyReport",
+          "OpenInput",
+          "OpenResult",
+          "ProgressReport",
+          "ReasonShare",
+          "ReasonStats",
+          "ReportOptions",
+          "SettingsReport",
+          "Tally",
+          "TimingStats",
+          "decisionCount"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: AnnotatedRow, AnswerInput, AnswerResult, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionMode, DecisionOption, DecisionRecommendation, DecisionsReport, DeviationRow, HostQuestionOpen, HostQuestionRow, IneligibleReport, LegacyReport, OpenInput, OpenResult, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats, decisionCount"
+      },
+      {
+        "file": "src/decisions/sources.ts",
+        "names": [
+          "DECISION_SOURCES",
+          "DecisionSource",
+          "WORK_DECISION_SOURCES"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: DECISION_SOURCES, DecisionSource, WORK_DECISION_SOURCES"
+      },
+      {
+        "file": "src/decisions/types.ts",
+        "names": [
+          "DecisionRecord",
+          "HostQuestionOpen",
+          "OpenInput",
+          "OpenRecord"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: DecisionRecord, HostQuestionOpen, OpenInput, OpenRecord"
+      },
+      {
+        "file": "src/review/estimate.ts",
+        "names": [
+          "PlanConfirmation",
+          "PlanConfirmedVia",
+          "packagePlanGate",
+          "planConfirmationFor",
+          "planConfirmed",
+          "planGateRefusal",
+          "readPlanConfirmation",
+          "writePlanConfirmation"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: PlanConfirmation, PlanConfirmedVia, packagePlanGate, planConfirmationFor, planConfirmed, planGateRefusal, readPlanConfirmation, writePlanConfirmation"
+      },
+      {
+        "file": "src/review/operator-decisions.ts",
+        "names": [
+          "OperatorDecision",
+          "OperatorDecisionVia",
+          "OperatorDecisionsFile",
+          "PremiseDecisionInput",
+          "PremiseQuestionDecision",
+          "confirmedDecision",
+          "decisionCovers",
+          "readOperatorDecisions",
+          "readPremiseDecisions",
+          "recordOperatorDecision",
+          "recordPremiseDecision",
+          "recordPremiseDecisionAfter"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: OperatorDecision, OperatorDecisionVia, OperatorDecisionsFile, PremiseDecisionInput, PremiseQuestionDecision, confirmedDecision, decisionCovers, readOperatorDecisions, readPremiseDecisions, recordOperatorDecision, recordPremiseDecision, recordPremiseDecisionAfter"
+      },
+      {
+        "file": "src/review/plan-confirmation.ts",
+        "names": [
+          "PlanConfirmation",
+          "readPlanConfirmation",
+          "recordPlanConfirmation"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: PlanConfirmation, readPlanConfirmation, recordPlanConfirmation"
+      },
+      {
+        "file": "src/review/premise-question.ts",
+        "names": [
+          "PremiseAnswer",
+          "answerPremiseQuestion"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: PremiseAnswer, answerPremiseQuestion"
+      },
+      {
+        "file": "src/review/premise.ts",
+        "names": [
+          "applyPremiseDecision",
+          "applyPremiseDecisions"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: applyPremiseDecision, applyPremiseDecisions"
+      },
+      {
+        "file": "src/review/readiness.ts",
+        "names": [
+          "computeReadiness",
+          "waiveReadiness"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: computeReadiness, waiveReadiness"
+      },
+      {
+        "file": "src/review/types.ts",
+        "names": [
+          "HOST_QUESTION_SOURCES",
+          "HostQuestion",
+          "HostQuestionSource",
+          "ManagedReviewInput",
+          "NormalizedReviewFinding",
+          "PremiseOperatorAnswer",
+          "ReviewFindingPremise",
+          "ReviewFindingsSource",
+          "ReviewerResultLike",
+          "StructuredReviewFinding"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: HOST_QUESTION_SOURCES, HostQuestion, HostQuestionSource, ManagedReviewInput, NormalizedReviewFinding, PremiseOperatorAnswer, ReviewFindingPremise, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding"
+      },
+      {
+        "file": "src/trigger/unattended.ts",
+        "names": [
+          "unattendedRefusal",
+          "unattendedShellRefusal"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: unattendedRefusal, unattendedShellRefusal"
+      }
+    ],
+    "barrels": [
+      "src/decisions/service.ts"
+    ],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/commands/decisions.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "decisionsCommand"
+      ],
+      "via": "src/decisions/service.ts"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/memory-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildReviewConfirmSpecs",
+        "reviewConfirmSpecs"
+      ],
+      "via": "src/commands/operator-confirm-review.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "unattendedRefusal"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "printReviewHelpFor"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-layers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "recordOperatorDecision"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runOperatorCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-parity-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeReadiness"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runPlan"
+      ],
+      "via": "src/review/estimate.ts"
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runDispatchCheck"
+      ],
+      "via": "src/review/estimate.ts"
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review-tty-refusal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "unattendedRefusal"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "launchTuiAgentShell"
+      ],
+      "via": "src/decisions/sources.ts"
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "unattendedRefusal"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/decisions/arms.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/ask.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "journalAsk"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/backfill.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildReport",
+        "renderReport",
+        "renderReportLine"
+      ],
+      "via": "src/decisions/report.ts"
+    },
+    {
+      "file": "src/decisions/coverage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/decisions.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/export.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/idempotent-open.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/import.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/interviewer-path.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DECISION_SOURCES"
+      ],
+      "via": "src/decisions/sources.ts"
+    },
+    {
+      "file": "src/decisions/journal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/own-answer.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "loadReport",
+        "renderReport"
+      ],
+      "via": "src/decisions/report.ts"
+    },
+    {
+      "file": "src/decisions/quality.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/reasons.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/report.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/review-fixes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/decisions/round2.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildReport",
+        "renderReport"
+      ],
+      "via": "src/decisions/report.ts"
+    },
+    {
+      "file": "src/decisions/round3.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "renderReport"
+      ],
+      "via": "src/decisions/report.ts"
+    },
+    {
+      "file": "src/decisions/round4.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/flow/confirm-floors.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "unattendedRefusal"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/flow/review-gate-coverage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "readReviewRounds"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runReviewGate"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/flow/review-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runOperatorCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/flow/service.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "readReviewRounds",
+        "reviewGate",
+        "runReviewGate"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/intake/intake-readonly.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "grantedToolProblems"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/mcp/metaproject-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "completeManagedReview"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/blast-radius.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/bot/metrics.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeBotMetrics"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/bot/post.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "postBotReview"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/bot/run.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/chunks-estimate.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/review/estimate.ts"
+    },
+    {
+      "file": "src/review/clean-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "recordOperatorDecision"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "completeManagedReview"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "coverageErrors"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/dispatch-check.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "packagePlanGate",
+        "planConfirmationFor",
+        "writePlanConfirmation"
+      ],
+      "via": "src/review/estimate.ts"
+    },
+    {
+      "file": "src/review/dispatch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "coverageErrors"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/review/estimate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "planConfirmationFor",
+        "planConfirmed",
+        "planGateRefusal",
+        "readPlanConfirmation",
+        "writePlanConfirmation"
+      ],
+      "via": "src/review/estimate.ts"
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "completeManagedReview"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildReviewConfirmSpecs"
+      ],
+      "via": "src/commands/operator-confirm-review.ts"
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/locate-ingest.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/loop.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ManagedReviewInput",
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/memory-outside-stage-auto.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeReadiness"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/memory-outside-stage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeReadiness",
+        "waiveReadiness"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/mutate-not-reached.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "coverageErrors"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HOST_QUESTION_SOURCES",
+        "HostQuestion",
+        "HostQuestionSource",
+        "ManagedReviewInput",
+        "NormalizedReviewFinding",
+        "PremiseOperatorAnswer",
+        "ReviewFindingPremise",
+        "ReviewFindingsSource",
+        "ReviewerResultLike",
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/pr-contract.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "coverageErrors"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/review/premise-decision.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "answerPremiseQuestion"
+      ],
+      "via": "src/review/premise-question.ts"
+    },
+    {
+      "file": "src/review/premise-embedded.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/prior-round.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "answerPremiseQuestion"
+      ],
+      "via": "src/review/premise-question.ts"
+    },
+    {
+      "file": "src/review/publish-guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewPublishRefusal"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeReadiness"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeReadiness",
+        "waiveReadiness"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/rebuttal-citation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/repair-ingest.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/repair.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "repairMechanicalOmissions"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "completeManagedReview"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/review/review-next.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review-operator.ts"
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ManagedReviewInput",
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/second-look.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runLedger"
+      ],
+      "via": "src/review/estimate.ts"
+    },
+    {
+      "file": "src/review/verdict.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "recordPremiseDecision"
+      ],
+      "via": "src/review/operator-decisions.ts"
+    },
+    {
+      "file": "src/review/verification.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/scheduler/digest-tools-readonly.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "grantedToolProblems"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/trigger/config.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "grantedToolProblems"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/trigger/unattended.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "unattendedShellRefusal"
+      ],
+      "via": "src/trigger/unattended.ts"
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openDecision"
+      ],
+      "via": "src/decisions/journal.ts"
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "renderStatus"
+      ],
+      "via": "src/decisions/service.ts"
+    },
+    {
+      "file": "src/tui/review-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "loadReviewDepth"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/tui/review-parity-visibility.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "loadReviewDepth"
+      ],
+      "via": "src/review/readiness.ts"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeReadiness"
+      ],
+      "via": "src/review/readiness.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

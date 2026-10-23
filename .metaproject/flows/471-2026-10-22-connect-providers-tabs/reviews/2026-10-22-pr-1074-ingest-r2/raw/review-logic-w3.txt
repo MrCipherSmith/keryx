@@ -1,0 +1,133 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-03 (tui-shell.ts, remote-provider-hooks.ts, modal-host.ts, queue-nav.ts and comment-only edits) read in full. No blocker or major. The tab state machine, the closedByStep guard, armed-disconnect key ordering, empty-list navigation, OAuth classification in Test, and the fixed-vocabulary remote texts all hold. One minor: the connect and custom branches of runProvidersModal treat 'no failure and at least one model' as connected, but resolveModelsForPicker returns an unverified fallback list with no failure for any provider that is not in the registry, so a removed custom provider (stale Add-tab snapshot) or a non-registry provider is reported as connected without any /models check. The rest are info-level observations with no reproducible failing path.",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "if (result.models.failure === undefined && result.models.models.length > 0) {",
+      "problem": "runProvidersModal decides 'connected' from `failure === undefined && models.length > 0`. For a provider that providerByName does not know, resolveModelsForPicker returns `{ models: [...provider.models], source: \"fallback\" }` with no failure, so the check passes without any /models call. The same condition guards both the connect branch and the custom branch. Reproducible path: Connected tab, Disconnect a custom provider (removeCustomCompatProvider); switch to Add provider (the `all` snapshot is not pruned in armOrConfirmDisconnect, so the removed provider is still listed); [Connect] it; the base-URL step writes an orphan baseUrls override; the picker falls back to the stale provider.models; the modal shows 'connected - N model(s)' and upserts a phantom row on the Connected tab. Picking that row would switch the session to a provider that no longer exists. Non-registry providers (e.g. ollama, anthropic) take the same path, whereas Add-tab [Test] answers 'unknown provider - cannot test' for them, so the two buttons disagree.",
+      "impact": "Silently wrong success message and a phantom Connected row for a narrow sequence (disconnect a custom provider, then re-connect it from the stale Add list) and for non-registry providers. AC5/AC6 say [Connect] checks /models and returns to Connected only on success; here the check is skipped.",
+      "suggested_fix": "Require `result.models.source === \"live\"` (or re-check providerByName) before marking the provider connected, in both the connect and custom branches. Also drop the provider from `all` when disconnectProvider returns kind `custom`, so the Add tab cannot offer a removed provider.",
+      "evidence": "src/commands/providers.ts resolveModelsForPicker: registry providers go through fetchOpenAiCompatModelsDetailed (empty models plus a failure on rejected/http/unreachable/empty); providerByName undefined returns the fallback list with no failure. tui-shell.ts runProvidersModal connect and custom branches use the condition quoted above.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "providers-modal-unverified-fallback-marked-connected",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L2",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": null,
+      "problem": "AC6 says a rejected key is re-asked, but the connect sequence asks once and then reports the failure; a key saved before the /models check stays persisted after a failed attempt or Esc (this persistence pre-dates the PR).",
+      "impact": "Possible mismatch with AC6 wording and a rejected key left in the store. No new failing path introduced by the diff; the operator can overwrite or Disconnect it.",
+      "suggested_fix": "Either re-ask once on a 401/403 rejection or word AC6 as 'ask once'; consider not persisting before the check.",
+      "evidence": "runProviderConnectSequence in slice-03: single requireKey/key prompt, then probe; saved-key write precedes the probe (unchanged from the former /provider flow).",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "dedupe_key": "connect-rejected-key-persisted",
+      "blocking_merge": false,
+      "location_class": "pre-existing",
+      "publication": "question"
+    },
+    {
+      "id": "L3",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": null,
+      "problem": "createRemoteDeviceLogin reports 'connected.' after the device login succeeds without a /models check and without picking up a base-URL override; the TUI path checks /models.",
+      "impact": "Telegram can say connected for a login whose provider endpoint is unreachable. AC8 does not require the check, so not a defect against the stated criteria.",
+      "suggested_fix": "Optionally run the same probe after login and answer with the fixed-vocabulary failure text on a miss.",
+      "evidence": "remote-provider-hooks.ts createRemoteDeviceLogin versus tui-shell.ts probeProviderConnection.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "dedupe_key": "remote-login-no-models-check",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "L4",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": null,
+      "problem": "createConnectedProvidersCache is not invalidated when a custom provider is saved but its probe fails, and a late Test result can write a status line for a row that was meanwhile removed.",
+      "impact": "Stale list for up to the cache lifetime (about 15 s) and a cosmetic stale status. Self-heals; no durable state affected.",
+      "suggested_fix": "Invalidate the cache after any save or disconnect, and ignore a Test result whose row id is gone.",
+      "evidence": "slice-03: cache TTL logic and runTest completion handler.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "dedupe_key": "connected-cache-and-late-test-stale",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L5",
+      "severity": "info",
+      "file": "src/tui/modal-host.ts",
+      "line": null,
+      "quote": null,
+      "problem": "footerFor(tabId) replaces the shared footer, so the per-tab footers drop the tab-switch hint unless each footer repeats it. Also the TUI Add tab lists the fake provider while the Telegram Add list filters it out.",
+      "impact": "Discoverability only; two surfaces list slightly different providers.",
+      "suggested_fix": "Include the tab-switch key in each per-tab footer and share one provider filter between the surfaces.",
+      "evidence": "modal-host.ts mountTab: paintFooter(state, input.footerFor(tabId) ?? input.footer); listAddableProviders in tui-shell.ts remote hooks.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "dedupe_key": "footer-tab-hint-and-fake-provider-parity",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L6",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": null,
+      "problem": "Providers that share a credential (sharedWith) stay listed as connected after one of them is disconnected, and are not marked connected after connecting a sibling that uses the same env key.",
+      "impact": "Display inconsistency only; behaviour is unchanged from the former modal.",
+      "suggested_fix": "Recompute the connected set from classifyProviderConnection after each action.",
+      "evidence": "armOrConfirmDisconnect and the connect branch update `connected` incrementally via upsertProvider.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "dedupe_key": "sharedwith-connected-state",
+      "blocking_merge": false,
+      "location_class": "pre-existing"
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 5 }
+}
+```
+
+## Review Scope
+Reviewer review-logic, wave 3 of 4, slice-03 only (src/tui/tui-shell.ts, src/tui/remote-provider-hooks.ts, src/tui/modal-host.ts, src/tui/queue-nav.ts, comment-only edits in balance-panel.ts, chat-shell.ts, game-modal.ts, games/model-turn.ts). Diff-only review of PR #1074 (flow 471) against AC1-AC12.
+
+## Summary
+No blocker or major. One minor (L1): the Add-tab connect and custom branches mark a provider connected when no failure is reported, but non-registry providers return an unverified fallback list without a failure, so no /models check happens for them (including a removed custom provider offered from a stale Add snapshot). Five info items follow.
+
+## Stats
+blocker 0, major 0, minor 1, info 5.
+
+## Verified without findings
+- No TDZ hazard with surface, unsub or focusApplied.
+- closedByStep prevents a re-entrant onClose when a step closes the modal.
+- Armed-disconnect Esc and key ordering works on both the modal and the overlay path.
+- Empty-list navigation is safe (stepQueueNavIndex and clampQueueNavIndex return 0 for count <= 0).
+- classifyProviderConnection covers OAuth grant, saved key, env var, custom and no credential, so Add-tab [Test] is not falsely 'no credential'.
+- selectProviderModelInTui refactor is equivalent for the non-onlyConnected path.
+- Remote failure texts come from a fixed vocabulary (no key or URL leakage); a key is never typed in chat.
+- isBusy is checked before an OAuth token is applied.
+
+/home/altsay/keryx/.worktrees/connect-providers-tabs/.metaproject/reviews/2026-10-22-review-flow-github-com-mrciphersmith-keryx-pull-1074/raw/review-logic-w3.txt STATUS: DONE

@@ -183,7 +183,8 @@ beforeEach(async () => {
     errored.push(parts.map(String).join(" "));
   };
   process.exitCode = 0;
-});
+  // Real git commits and flow init must finish before a test can use this fixture.
+}, 30_000);
 
 afterEach(async () => {
   console.log = realLog;
@@ -193,7 +194,8 @@ afterEach(async () => {
   else process.env["XDG_DATA_HOME"] = savedXdg;
   await rm(root, { recursive: true, force: true });
   await rm(path.join(root, "..", `${path.basename(root)}-wt`), { recursive: true, force: true });
-});
+  // Let worktree cleanup finish before the next fixture reuses module state.
+}, 30_000);
 
 describe("AC1/AC2/AC5/AC6: a dispatch drives the next task from never-started to done", () => {
   test("success: attempt started before the model, task done with a runLink, commit on trigger/<flow>-<task>, cost recorded, AC untouched", async () => {
@@ -295,7 +297,7 @@ describe("AC1/AC2/AC5/AC6: a dispatch drives the next task from never-started to
     const t1 = ((await flowJson())["tasks"] as { id: string; status: string; attempts?: { log: { outcome: string }[] } }[]).find((t) => t.id === "T1")!;
     expect(t1.status).not.toBe("done");
     expect(t1.attempts?.log.map((e) => e.outcome)).toEqual(["started", "failed"]);
-  });
+  }, 15_000);
 
   test("timeout: the wall-clock limit aborts the turn; attempt failed as timed out", async () => {
     await writeTriggers([dispatchEntry({ maxSeconds: 5 })]);
@@ -597,6 +599,39 @@ describe("AC13: trust never runs uncontained; ask is read-only", () => {
     const t1 = ((await flowJson())["tasks"] as { id: string; attempts?: { count: number } }[]).find((t) => t.id === "T1")!;
     expect(t1.attempts?.count ?? 0).toBe(0);
     expect(git(root, ["worktree", "list"]).split("\n")).toHaveLength(1);
+  });
+
+  test("flow 457 B1: a review task takes the same containment path — trust with no sandbox refuses it before any reservation or attempt", async () => {
+    const flow = await flowJson();
+    (flow["tasks"] as { id: string; kind: string }[]).find((t) => t.id === "T1")!.kind = "review";
+    await writeFile(path.join(root, flowDir, "flow.json"), `${JSON.stringify(flow, null, 2)}\n`, "utf8");
+    await writeTriggers([dispatchEntry({ permissionMode: "trust" })]);
+    const provider = scripted([]);
+    await run(provider, { planSandbox: () => NO_SANDBOX });
+    const record = await lastRecord();
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.dispatch?.refusal).toBe("sandbox-unavailable");
+    expect((await records()).some((r) => r.outcome === "reserved")).toBe(false);
+    expect(record.detail).not.toContain("review run --autonomous");
+  });
+
+  test("flow 457 B1: a contained review task reserves spend and records its attempt before the model, like any task", async () => {
+    const flow = await flowJson();
+    (flow["tasks"] as { id: string; kind: string }[]).find((t) => t.id === "T1")!.kind = "review";
+    await writeFile(path.join(root, flowDir, "flow.json"), `${JSON.stringify(flow, null, 2)}\n`, "utf8");
+    await writeTriggers([dispatchEntry({ permissionMode: "trust" })]);
+    let attemptsWhenModelCalled = -1;
+    const provider = scripted([
+      async () => {
+        const tasks = (await flowJson())["tasks"] as { id: string; attempts?: { count: number } }[];
+        attemptsWhenModelCalled = tasks.find((t) => t.id === "T1")?.attempts?.count ?? 0;
+        return [USAGE_NONE, { kind: "text_delta", text: "cannot dispatch reviewers" }, { kind: "model_end" }];
+      },
+    ]);
+    await run(provider);
+    expect(provider.calls()).toBeGreaterThan(0);
+    expect(attemptsWhenModelCalled).toBe(1);
+    expect((await records()).some((r) => r.outcome === "reserved")).toBe(true);
   });
 
   test("ask with no sandbox runs, but every command and patch is refused — nothing lands", async () => {
@@ -947,6 +982,9 @@ describe("Flow 301 AC12: flow-next worktrees get the same scratch-parent protect
 });
 
 describe("R700-01/D9: project-hook trust is looked up under the main project root, not the worktree", () => {
+  // These cases also build and run real project hooks across a Git worktree.
+  // Allow that integration to finish before teardown removes its flow package.
+  const projectHookIntegrationTimeoutMs = 15_000;
   function committedHookDoc(): Record<string, unknown> {
     return {
       schemaVersion: "1.0.0",
@@ -973,6 +1011,7 @@ describe("R700-01/D9: project-hook trust is looked up under the main project roo
     try {
       const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
       await run(provider);
+      expect((await lastRecord()).outcome).toBe("ok");
       const noticeText = errored.join("\n");
       expect(noticeText).toContain("not trusted");
       expect(noticeText).toContain("release-hardening-poc");
@@ -981,7 +1020,7 @@ describe("R700-01/D9: project-hook trust is looked up under the main project roo
       if (savedHooks === undefined) delete process.env["KERYX_HOOKS"];
       else process.env["KERYX_HOOKS"] = savedHooks;
     }
-  });
+  }, projectHookIntegrationTimeoutMs);
 
   test("trust recorded for the MAIN root (not the per-run worktree) is honoured — the dispatch runs against a worktree, but the notice is gone", async () => {
     await writeTriggers([dispatchEntry()]);
@@ -1003,11 +1042,12 @@ describe("R700-01/D9: project-hook trust is looked up under the main project roo
 
       const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
       await run(provider);
+      expect((await lastRecord()).outcome).toBe("ok");
       expect(errored.some((line) => line.includes("not trusted"))).toBe(false);
     } finally {
       if (savedHooks === undefined) delete process.env["KERYX_HOOKS"];
       else process.env["KERYX_HOOKS"] = savedHooks;
       await rm(config, { recursive: true, force: true });
     }
-  });
+  }, projectHookIntegrationTimeoutMs);
 });

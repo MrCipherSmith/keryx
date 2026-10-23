@@ -14,7 +14,9 @@
 //
 // Two rules keep the matcher from becoming a second guesser:
 //
-//   - Exact first, whitespace-normalised second, then give up. Nothing fuzzy.
+//   - Exact first, whitespace-normalised second, then (one-line quotes only) an
+//     exact substring of exactly one file line, then give up. Nothing fuzzy:
+//     no similarity, no proximity to the reported line.
 //     A near-match confidently anchored to the wrong site is worse than an
 //     honest `unlocatable`, because a wrong anchor is acted on and an admitted
 //     one is investigated.
@@ -49,14 +51,28 @@ export const MAX_LOCATE_FILE_LINES = 50_000;
 /** Read bound for the same reason, applied before the file reaches the matcher. */
 export const MAX_LOCATE_FILE_BYTES = 4_000_000;
 
-/** How a finding's `line` was arrived at. */
+/**
+ * Why a quote was not placed, as a word a gate can branch on (flow 460): `absent` (the file is there, the quote is
+ * not), `ambiguous` (it is there more than once; `candidates` are the lines it matched, bounded by the scan), `bound`
+ * (a size limit stopped the match) and `empty`. Never persisted inside `locator`: `review ingest` turns `absent` and
+ * `ambiguous` into the finding's `quote_unlocated` flag.
+ */
+export type UnlocatableKind = "absent" | "ambiguous" | "bound" | "empty";
+
+/**
+ * How a quote was placed. `substring` (flow 460): a one-line quote, edges trimmed, that is an exact substring of exactly
+ * one line of the file — a reviewer quoting the middle of a long line. Still exact text, never a near-match.
+ */
+export type LocateMethod = "exact" | "whitespace-normalised" | "substring";
+
+/** How a finding's `line` was arrived at: placed from its quote (`derived`), or why it could not be (`unlocatable`). */
 export type LocatorRecord =
-  | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number; reported_line?: number | null }
-  | { state: "unlocatable"; reason: string; reported_line?: number | null };
+  | { state: "derived"; method: LocateMethod; line: number; reported_line?: number | null }
+  | { state: "unlocatable"; reason: string; reported_line?: number | null; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
 
 export type LocateOutcome =
-  | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number }
-  | { state: "unlocatable"; reason: string };
+  | { state: "derived"; method: LocateMethod; line: number }
+  | { state: "unlocatable"; reason: string; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
 
 /** Lines of `quote`, with blank edges dropped and common indentation removed. */
 export function quoteLines(quote: string): string[] {
@@ -96,15 +112,6 @@ function deindent(lines: readonly string[]): string[] {
 }
 
 /**
- * Every 1-based line where `needle` runs contiguously through `haystack`.
- *
- * `shape` is applied to the candidate WINDOW rather than to the whole file,
- * which is what lets a quote be compared against the file at its own
- * indentation: the window is de-indented the same way the quote was, so a
- * snippet that lost its leading spaces on the way through a code fence still
- * matches the indented original, and one that kept them matches too.
- */
-/**
  * Two hits are as informative as twenty thousand.
  *
  * The scan stops at this many, because the only question it answers is "none,
@@ -116,6 +123,22 @@ function deindent(lines: readonly string[]): string[] {
  */
 const MAX_HITS = 2;
 
+/**
+ * The shortest one-line quote placed as a substring of a line. A shorter one (`x`, `)`, `return`) is in many lines by
+ * chance, and in exactly one only by luck: placing it would anchor a finding to a coincidence. It is still placed when
+ * it is a whole line (the exact passes).
+ */
+export const MIN_SUBSTRING_QUOTE_CHARS = 12;
+
+/**
+ * Every 1-based line where `needle` runs contiguously through `haystack`.
+ *
+ * `shape` is applied to the candidate WINDOW rather than to the whole file,
+ * which is what lets a quote be compared against the file at its own
+ * indentation: the window is de-indented the same way the quote was, so a
+ * snippet that lost its leading spaces on the way through a code fence still
+ * matches the indented original, and one that kept them matches too.
+ */
 function findRuns(
   haystack: readonly string[],
   needle: readonly string[],
@@ -137,11 +160,30 @@ function findRuns(
   return hits;
 }
 
+/** Every 1-based line that holds `part` as an exact substring, stopping at {@link MAX_HITS}. */
+function findSubstring(haystack: readonly string[], part: string): number[] {
+  const hits: number[] = [];
+  if (part === "") {
+    return hits;
+  }
+  for (let index = 0; index < haystack.length; index += 1) {
+    if ((haystack[index] as string).includes(part)) {
+      hits.push(index + 1);
+      if (hits.length >= MAX_HITS) {
+        return hits;
+      }
+    }
+  }
+  return hits;
+}
+
 /** "at least 2 places (lines 1, 2)" — bounded, and honest that it stopped counting. */
 function ambiguity(hits: readonly number[], pass: string): LocateOutcome {
   return {
     state: "unlocatable",
     reason: `the quote matches at least ${hits.length} places${pass}(lines ${hits.join(", ")}, and the scan stopped there); an anchor chosen among them would be a guess`,
+    kind: "ambiguous",
+    candidates: [...hits],
   };
 }
 
@@ -154,12 +196,13 @@ function ambiguity(hits: readonly number[], pass: string): LocateOutcome {
 export function locateQuote(fileText: string, quote: string): LocateOutcome {
   const needle = quoteLines(quote);
   if (needle.length === 0) {
-    return { state: "unlocatable", reason: "the quote is empty" };
+    return { state: "unlocatable", reason: "the quote is empty", kind: "empty" };
   }
   if (needle.length > MAX_QUOTE_LINES) {
     return {
       state: "unlocatable",
       reason: `the quote is ${needle.length} lines, past the ${MAX_QUOTE_LINES}-line bound; quote the few lines the finding is about`,
+      kind: "bound",
     };
   }
   const haystack = fileText.replace(/\r\n/g, "\n").split("\n");
@@ -167,6 +210,7 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
     return {
       state: "unlocatable",
       reason: `the file is ${haystack.length} lines, past the ${MAX_LOCATE_FILE_LINES}-line bound for locating`,
+      kind: "bound",
     };
   }
 
@@ -192,7 +236,23 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
   if (loose.length > 1) {
     return ambiguity(loose, " once whitespace is normalised ");
   }
-  return { state: "unlocatable", reason: "the quote does not appear in the file" };
+
+  // Flow 460: a one-line quote lifted out of the middle of a line (19 of 21 unlocated quotes of one recorded round were
+  // exactly that). Placed only when it is an exact substring of ONE line; two lines holding it is `ambiguous`, as above.
+  if (needle.length === 1) {
+    const part = (needle[0] as string).trim();
+    const within = findSubstring(haystack, part);
+    if (within.length > 1) {
+      return ambiguity(within, " as a substring of a line ");
+    }
+    if (within.length === 1 && part.length < MIN_SUBSTRING_QUOTE_CHARS) {
+      return { state: "unlocatable", reason: `the quote is not a whole line of the file, and at ${part.length} characters it is too short (under ${MIN_SUBSTRING_QUOTE_CHARS}) to place inside one; quote the whole line`, kind: "absent" };
+    }
+    if (within.length === 1) {
+      return { state: "derived", method: "substring", line: within[0] as number };
+    }
+  }
+  return { state: "unlocatable", reason: "the quote does not appear in the file", kind: "absent" };
 }
 
 /**
@@ -222,5 +282,11 @@ export async function locateFinding(
   const outcome = locateQuote(text, quote);
   return outcome.state === "derived"
     ? { state: "derived", method: outcome.method, line: outcome.line, reported_line: reported }
-    : { state: "unlocatable", reason: outcome.reason, reported_line: reported };
+    : {
+        state: "unlocatable",
+        reason: outcome.reason,
+        reported_line: reported,
+        ...(outcome.kind === undefined ? {} : { kind: outcome.kind }),
+        ...(outcome.candidates === undefined ? {} : { candidates: outcome.candidates }),
+      };
 }

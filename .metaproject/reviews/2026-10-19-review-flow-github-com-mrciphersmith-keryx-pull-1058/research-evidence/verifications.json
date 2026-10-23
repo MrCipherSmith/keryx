@@ -1,0 +1,38 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "5 majors checked: 3 executed (confirmed), 2 site-checked (confirmed), 0 refuted",
+  "verifications": [
+    {
+      "finding": "HQ-01",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-HQ-01-1.txt (bun repro-hq.ts, exit 0): waive-mutation with --answer-text 'Keep: run the mutation pass' -> ACCEPTED exit 0, 'mutation-waiver recorded (host-question ...)'; override-reviewers with 'what does that mean?' -> ACCEPTED exit 0; waive-mutation with 'I do not want to waive it' -> ACCEPTED exit 0. Free text recorded as a yes on a decline, a non-answer and a negation."
+    },
+    {
+      "finding": "HQ-02",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-HQ-02-1.txt (bun repro-hq.ts, exit 0): waive-mutation with --answer-text 'yes, waive it' and --question-text 'Is the sky blue?' -> ACCEPTED exit 0, 'mutation-waiver recorded (host-question ...)'. The question text need not name the subject."
+    },
+    {
+      "finding": "HQ-03",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-HQ-03-1.txt (bun repro-hq.ts, exit 0): unattendedShellRefusal on 'keryx review waive-mutation --package P --answered\\<newline>-by claude-code:q' -> allowed (bypass by backslash-newline); on \"echo 'review waive-mutation' | grep -e --answered-by\" -> refused (over-match). The ANSI-C spelling $'waive-mutation' was still refused, so that one example of the problem does not reproduce; the bypass and the over-match do."
+    },
+    {
+      "finding": "HQ-04",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "research-evidence/verify-HQ-04-1.txt (sed -n '60,72p' src/decisions/service.ts): decisionCount returns report.total + (report.hostQuestions?.length ?? 0) while its doc comment reads 'How many LIVE decisions the journal holds'. The count and the comment disagree at the cited site; the export/report/TUI consumers were not executed."
+    },
+    {
+      "finding": "HQ-05",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "research-evidence/verify-HQ-05-1.txt (rg for 'terminal'): flow-orchestrator/SKILL.md:440 'then the exact keryx review decide-premise command for them to run in their terminal'; src/review/operator-decisions.ts:309-313 and src/review/readiness.ts:266 name only the card and the terminal. review-orchestrator/SKILL.md:124 (read directly) still says 'review_override_reviewers, or keryx review override-reviewers in their terminal'. The stale terminal-only wording exists at the named sites."
+    }
+  ],
+  "stats": { "confirmed": 5, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}

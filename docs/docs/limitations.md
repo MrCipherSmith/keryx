@@ -184,7 +184,7 @@ person answers over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or locall
 with `keryx approvals` (see [Answer a remote approval](guides/answer-remote-approvals.md)).
 Unanswered approvals deny at expiry. But the stock listener registers no tools, so
 it raises no approvals today; they become reachable when a tool registry is
-injected into the turn. A Telegram or web card for these approvals, session-wide
+injected into the turn. A Telegram or web card for these approvals (the review acts `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage` and `review_complete` already have one in a shell driven from a topic: a Telegram press proves an allowed account pressed this card, not that no one else holds the bot token or can write the stores as the same OS user; see decision TM-04), session-wide
 grants from a remote answer, and approvals for unattended trigger runs are not
 built. (A `keryx shell` session driven from a Telegram topic with `/remote-control`
 has its own Allow/Always/Deny buttons in the topic; that path has been exercised only
@@ -206,6 +206,19 @@ Boundaries that hold:
   a weaker remote profile is refused rather than accepted.
 - Authentication happens *before* routing, so an unauthenticated caller cannot
   distinguish a known path from an unknown one.
+
+## A host question is a weaker proof than a card
+
+Four review acts (`keryx review decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers`) can be recorded without a card and without a terminal: the agent asks the operator with the host's own question tool (Claude Code's, Codex's, a Telegram poll through Helyx) and passes the answer with `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. The source is `claude-code` or `codex` for the host harness's own question tool, `helyx-poll` (ref `<poll-id>[:<message-id>]`) for a Telegram poll, `keryx-shell` only for a plain question the shell itself asked (inside keryx shell the card comes first) or `other`. The record carries `confirmedVia: "host-question"`, the source, the ref and the verbatim question and answer, and a `keryx decisions` entry is written. The operator chose this trade on 2026-10-19 (polls 225 and 227), the one already made for `flow ac confirm`.
+
+There are now two kinds of record, and a record says which it is. A card press (`tui-card`, `remote-card`) is verified by keryx: a person pressed yes on a card keryx built, with a single-use token. A host question is not: keryx never sees the question or the answer, only what the agent reports.
+
+- **keryx cannot verify the agent reported them truthfully.** An agent can invent an answer, or record a different question from the one it asked. The record keeps the question, the answer and the poll or message id so a reviewer can check them against the host's own log; keryx cannot.
+- **It does not prove a person answered.** The answer can come from a hook, an answers file, review-auto, the arbiter or the model itself, the gap TM-04 section 5 named when it refused `ask_user` as proof. Section 6b of TM-04 reverses that, for these four acts only.
+- **The old limits are unchanged.** Nothing identifies who answered, and an agent running as the same OS user can still write the stores directly (TM-03 section 5, TM-04 section 4).
+- **What is refused.** An answer that is not one of the verb's options (free text is not a decision), a decline, `decide-premise` words that name the other choice or none, an empty answer or question, a malformed `--answered-by`, an unknown package or finding, a plan whose current numbers the question does not show, or a missing `--reason` records nothing. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag. `review complete`, `--waive` and `--waive-coverage` do not accept it.
+
+A card stays the first choice wherever one is available. See [the review verbs](cli-reference.md#review) and decision TM-04 section 6b.
 
 ## Harness gaps
 

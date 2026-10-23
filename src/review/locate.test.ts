@@ -66,6 +66,8 @@ describe("locateQuote", () => {
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("lines 2, 10");
+    // Flow 460: the candidates are recorded as data, so ingest can list them without parsing the reason.
+    expect(outcome).toMatchObject({ kind: "ambiguous", candidates: [2, 10] });
   });
 
   test("AMBIGUITY — the same rule holds for the whitespace-normalised pass", () => {
@@ -78,27 +80,30 @@ describe("locateQuote", () => {
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("whitespace");
+    expect(outcome).toMatchObject({ kind: "ambiguous", candidates: [1, 3] });
   });
 
   test("a quote past the line bound is refused rather than matched slowly", () => {
     const outcome = locateQuote("a\n".repeat(10), `${"x\n".repeat(MAX_QUOTE_LINES + 1)}`);
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain(`${MAX_QUOTE_LINES}-line bound`);
+    expect(outcome).toMatchObject({ kind: "bound" });
   });
 
   test("a file past the line bound is refused rather than matched slowly", () => {
     const outcome = locateQuote("a\n".repeat(MAX_LOCATE_FILE_LINES + 1), "a");
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("bound for locating");
+    expect(outcome).toMatchObject({ kind: "bound" });
   });
 
   test("a quote that is not in the file says so", () => {
     const outcome = locateQuote(FILE, "  return `howdy ${trimmed}`;");
-    expect(outcome).toEqual({ state: "unlocatable", reason: "the quote does not appear in the file" });
+    expect(outcome).toEqual({ state: "unlocatable", reason: "the quote does not appear in the file", kind: "absent" });
   });
 
   test("an empty quote is unlocatable rather than matching everything", () => {
-    expect(locateQuote(FILE, "   \n  \n")).toEqual({ state: "unlocatable", reason: "the quote is empty" });
+    expect(locateQuote(FILE, "   \n  \n")).toEqual({ state: "unlocatable", reason: "the quote is empty", kind: "empty" });
   });
 
   test("CRLF on either side does not defeat the match", () => {
@@ -165,5 +170,45 @@ describe("locateFinding", () => {
     // nothing to quote, and inventing a locator for it would be noise.
     expect(await locateFinding({ file: "src/greet.ts", line: 6 }, reader(FILE))).toBeUndefined();
     expect(await locateFinding({ file: "src/greet.ts", quote: "   ", line: 6 }, reader(FILE))).toBeUndefined();
+  });
+});
+
+describe("locateQuote — a one-line quote inside a line (flow 460)", () => {
+  test("an exact substring of exactly one line is located at that line", () => {
+    expect(locateQuote(FILE, "`hello ${trimmed}`")).toEqual({ state: "derived", method: "substring", line: 6 });
+  });
+
+  test("whitespace around the substring is trimmed before the exact match", () => {
+    expect(locateQuote(FILE, "  farewell(name  ")).toEqual({ state: "derived", method: "substring", line: 9 });
+  });
+
+  test("a substring several lines hold stays ambiguous, never the first hit", () => {
+    expect(locateQuote(FILE, "name.trim()")).toMatchObject({ state: "unlocatable", kind: "ambiguous", candidates: [2, 10] });
+    expect(locateQuote(FILE, "(name: string): string {")).toMatchObject({ state: "unlocatable", kind: "ambiguous", candidates: [1, 9] });
+  });
+
+  test("a short substring that one line holds by chance is not placed: a one-token anchor is a coincidence (SEC-R2-002)", () => {
+    const outcome = locateQuote(FILE, "farewell");
+    expect(outcome).toMatchObject({ state: "unlocatable", kind: "absent" });
+    expect(outcome.state === "unlocatable" && outcome.reason).toContain("too short");
+  });
+
+  test("never similarity: a near-substring is absent", () => {
+    expect(locateQuote(FILE, "`helo ${trimmed}`")).toMatchObject({ state: "unlocatable", kind: "absent" });
+    // Spacing inside the substring is not normalised.
+    expect(locateQuote(FILE, "`hello  ${trimmed}`")).toMatchObject({ state: "unlocatable", kind: "absent" });
+  });
+
+  test("a multi-line quote is never matched as a substring", () => {
+    expect(locateQuote(FILE, "`hello ${trimmed}`;\n}\n\nexport function farew")).toMatchObject({ state: "unlocatable", kind: "absent" });
+  });
+
+  test("the size bounds still apply before the substring pass", () => {
+    const big = Array.from({ length: MAX_LOCATE_FILE_LINES + 1 }, (_, index) => `line ${index}`).join("\n");
+    expect(locateQuote(big, "line 7")).toMatchObject({ state: "unlocatable", kind: "bound" });
+  });
+
+  test("locateFinding records the substring method", async () => {
+    expect(await locateFinding({ file: "src/greet.ts", quote: "farewell(name", line: 40 }, async () => FILE)).toEqual({ state: "derived", method: "substring", line: 9, reported_line: 40 });
   });
 });

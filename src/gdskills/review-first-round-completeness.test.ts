@@ -97,10 +97,14 @@ describe("AC2: the counterpart is re-read every round, and asked for when it can
 });
 
 describe("AC3: a gating round never reviews alone", () => {
-  test("a host without a dispatch tool returns BLOCKED with nested_dispatch_unavailable", () => {
+  // Flow 457 (AC9): a host with no spawn tool now hands the round to `keryx review run --autonomous`;
+  // only a nested session at the depth limit still returns BLOCKED nested_dispatch_unavailable.
+  test("a host without a dispatch tool runs the autonomous runner; the depth limit returns BLOCKED", () => {
     const dispatching = section(SKILL, "## Dispatching Reviewers");
-    expect(dispatching).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) and never reviews alone");
-    expect(START_MAIN).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) instead of reviewing alone");
+    expect(dispatching).toContain("a host without a dispatch tool runs `keryx review run --autonomous`");
+    expect(dispatching).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`), and neither reviews alone");
+    expect(START_MAIN).toContain("a host with no spawn tool runs `keryx review run --autonomous`");
+    expect(START_MAIN).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`), instead of reviewing alone");
     expect(DEPTH).toContain("**No dispatch tool, no review.**");
     expect(DEPTH).toContain("A gating round runs the composition the start questions\nselected.");
   });

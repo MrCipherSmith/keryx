@@ -34,6 +34,9 @@ export interface CommandHarnessOptions {
   listModels?: RemoteBridgeHost["listModels"];
   switchModel?: RemoteBridgeHost["switchModel"];
   listProviders?: RemoteBridgeHost["listProviders"];
+  listAddableProviders?: RemoteBridgeHost["listAddableProviders"];
+  testProvider?: RemoteBridgeHost["testProvider"];
+  connectWithDeviceLogin?: RemoteBridgeHost["connectWithDeviceLogin"];
   listSessions?: RemoteBridgeHost["listSessions"];
   resumeSession?: RemoteBridgeHost["resumeSession"];
   choiceTimeoutMs?: number;
@@ -81,6 +84,9 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
     ...(opts.listModels !== undefined ? { listModels: opts.listModels } : {}),
     ...(opts.switchModel !== undefined ? { switchModel: opts.switchModel } : {}),
     ...(opts.listProviders !== undefined ? { listProviders: opts.listProviders } : {}),
+    ...(opts.listAddableProviders !== undefined ? { listAddableProviders: opts.listAddableProviders } : {}),
+    ...(opts.testProvider !== undefined ? { testProvider: opts.testProvider } : {}),
+    ...(opts.connectWithDeviceLogin !== undefined ? { connectWithDeviceLogin: opts.connectWithDeviceLogin } : {}),
     ...(opts.listSessions !== undefined ? { listSessions: opts.listSessions } : {}),
     ...(opts.resumeSession !== undefined ? { resumeSession: opts.resumeSession } : {}),
   };

@@ -15,7 +15,7 @@ import path from "node:path";
 import { completionSignatureNotes, flowCommand, runConfirm } from "../commands/flow";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { buildGovernanceReport, renderGovernanceMarkdown } from "../governance/report";
-import { CONFIRMATION_CAVEAT, CONFIRMATION_TOKEN_TTL_MS, confirmTokenPath } from "./confirm-token";
+import { CONFIRMATION_CAVEAT, CONFIRMATION_TOKEN_TTL_MS, confirmTokenPath, describeConfirmationFailure } from "./confirm-token";
 import { flowStateSchema } from "./schema";
 import { createFlowService } from "./service";
 import { writeCleanReviewPackage } from "./review-fixtures";
@@ -454,4 +454,57 @@ test("review #661: token_other_flow accepts flow ids of any length, not just thr
     clock,
   );
   expect(check).toEqual({ ok: false, reason: "token_other_flow" });
+});
+
+// --- flow 456: card-minted tokens ------------------------------------------------
+
+test("456: confirmMint with `expect` refuses, minting nothing, when the criteria checksum or the target moved since the card", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const flow = await service.get({ cwd: ROOT, id });
+  await expect(
+    service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: "0".repeat(64), target: `pr:${PR}` } }),
+  ).rejects.toThrow(/acceptance criteria changed after the confirmation card/);
+  await expect(
+    service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: "pr:https://github.com/acme/app/pull/999" } }),
+  ).rejects.toThrow(/completion target changed after the confirmation card/);
+  await expect(readFile(confirmTokenPath(ROOT, dir), "utf8")).rejects.toThrow();
+  const ok = await service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: `pr:${PR}` } });
+  expect(ok.token.length).toBeGreaterThan(0);
+});
+
+test("456: a card-minted token is spent with a card mechanism in the signature", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const minted = await service.confirmMint({ cwd: ROOT, id, confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes" } });
+  clock = new Date(clock.getTime() + 60_000);
+  const result = await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+  expect(result.passed).toBe(true);
+  const flow = await onDisk(dir);
+  expect(flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation?.mechanism).toBe("remote-card-token");
+  expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
+});
+
+test("464: a remote-card token carries who pressed the card and when into the signature", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const minted = await service.confirmMint({
+    cwd: ROOT,
+    id,
+    confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" },
+  });
+  clock = new Date(clock.getTime() + 60_000);
+  await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+  const flow = await onDisk(dir);
+  const confirmation = flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation;
+  expect(confirmation).toMatchObject({ mechanism: "remote-card-token", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" });
+  expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
+});
+
+test("456: the refusal text names the flow_confirm tool in keryx shell and the terminal outside it", () => {
+  for (const reason of ["token_required", "token_not_minted", "token_expired", "token_target_mismatch"] as const) {
+    const text = describeConfirmationFailure(reason, "42");
+    expect(text).toContain("`flow_confirm` tool inside keryx shell");
+    expect(text).toContain("from a terminal outside it: `keryx flow confirm 42`");
+  }
 });

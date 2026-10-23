@@ -77,6 +77,7 @@ const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   health_status: "read",
   skills_catalog: "read",
   skill_load: "read",
+  skills_resolve_context: "read",
   repomap: "read",
   // The client's own MCP servers (flow 287).
   search_tool: "search",

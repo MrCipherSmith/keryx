@@ -18,9 +18,18 @@
 // wired to, so the two tests together cover AC2 end to end without a real
 // renderer.
 
-import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterEach, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { detectProviders } from "../commands/select";
+import { loadOrRefreshProviderCatalogFromDetected } from "../harness/provider-catalog";
+
+const roots: string[] = [];
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
 
 const SOURCE = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 const FN_START = SOURCE.indexOf("export async function launchTuiAgentShell(opts: {");
@@ -35,10 +44,9 @@ test("flow 309 AC2: the spinner names the provider-catalog refresh during startu
 });
 
 test("flow 309 AC2: the catalog refresh is captured as a promise, not awaited inline, before the composer/chrome mounts", () => {
-  const declAt = SOURCE.indexOf(
-    "const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {",
-    FN_START,
-  );
+  // Anchored on the declaration, not on the exact call text: which function and
+  // arguments feed it is pinned behaviourally by the flow 468 AC1 tests below.
+  const declAt = SOURCE.indexOf("const providerCatalogReady: Promise<ProviderCatalog> =", FN_START);
   expect(declAt).toBeGreaterThan(FN_START);
 
   // Not `await`ed at the declaration itself — a `const x = await f()` would
@@ -82,4 +90,36 @@ test("flow 309 review F-006: the startup-notice reaction returns before painting
   const guardAt = reactionBody.indexOf("if (destroyed) return;");
   expect(guardAt).toBeGreaterThan(-1);
   expect(guardAt).toBeLessThan(reactionBody.indexOf("announceStartupNotice("));
+});
+
+// --- flow 468 AC1: an empty startup `detected` is never turned into an empty catalog ---
+
+test("flow 468 AC1: with detected: [] at startup the refresh is handed a real detection and saves its providers", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keryx-catalog-startup-"));
+  roots.push(dir);
+  const fetchFn = (async (url: string) => {
+    if (url.includes("/api/tags") || url.includes("/user/balance")) return { ok: false } as Response;
+    if (url.includes("deepseek")) return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
+    throw new Error(`unexpected fetch: ${url}`);
+  }) as unknown as typeof fetch;
+  const env = { DEEPSEEK_API_KEY: "sk-fake-deepseek" };
+  let detections = 0;
+  // Test seam `redetect`: the same live detection `tui-shell.ts` already holds as `opts.redetect` (the path `/model` uses).
+  const redetect = async () => {
+    detections += 1;
+    return detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+  };
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected([], { fetch: fetchFn, env, dir, platform: "linux", redetect });
+
+  expect(detections).toBe(1);
+  expect(catalog.providers.deepseek?.models).toEqual(["deepseek-chat"]);
+});
+
+test("flow 468 AC1: launchTuiAgentShell hands its redetect to the startup catalog refresh", () => {
+  // The one wiring fact a headless test cannot reach (the launcher declines without a TTY): the kickoff passes `opts.redetect` along.
+  const declAt = SOURCE.indexOf("const providerCatalogReady: Promise<ProviderCatalog> =", FN_START);
+  expect(declAt).toBeGreaterThan(FN_START);
+  const kickoff = SOURCE.slice(declAt, SOURCE.indexOf(".catch(", declAt));
+  expect(kickoff).toContain("redetect");
 });

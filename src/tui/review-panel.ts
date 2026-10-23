@@ -12,6 +12,7 @@ import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, required
 import { computeChunkPass, hasChunkPlan, type ChunkPass } from "../review/chunks";
 import { computeCoverage, coverageLine, readCoverageWaiver, type CoverageWaiver } from "../review/coverage-complete";
 import { readLayers, type LayersFile } from "../review/layers";
+import { dispatchRunRecords } from "../review/record";
 import { layersDetailLines, layersSummaryLine } from "../review/layers-view";
 import { LAYER_NAMES, summarizeLayersUsage, type LayersUsageSummary } from "../review/layers-usage";
 import { EVIDENCE_DIR, pendingMutants, type MutantStatus, type MutationRecord } from "../review/mutate";
@@ -93,7 +94,7 @@ async function mutationOf(packageDir: string): Promise<ReviewDepthMutation> {
 }
 
 async function layersViewOf(dir: string, dispatch: Record<string, unknown> | undefined): Promise<ReviewLayersView> {
-  const runs = Array.isArray(dispatch?.runs) ? dispatch.runs.filter((run): run is Record<string, unknown> => run !== null && typeof run === "object") : [];
+  const runs = dispatchRunRecords(dispatch);
   const coverage = await computeCoverage(dir).catch(() => undefined);
   return {
     dir,

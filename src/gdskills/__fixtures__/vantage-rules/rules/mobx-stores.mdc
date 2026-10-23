@@ -1,0 +1,38 @@
+---
+description: Store actions, computed values and async handling
+globs: src/**/*Store.ts
+alwaysApply: false
+---
+
+# MobX stores
+
+1. Wrap async continuations in runInAction (rule mobx-stores-01)
+2. Expose derived data as computed (rule mobx-stores-02)
+3. Dispose every reaction in the store dispose method (rule mobx-stores-03)
+4. Mutate observables only inside an action (rule mobx-stores-04)
+5. Wrap async continuations in runInAction (rule mobx-stores-05)
+6. Expose derived data as computed (rule mobx-stores-06)
+7. Dispose every reaction in the store dispose method (rule mobx-stores-07)
+8. Mutate observables only inside an action (rule mobx-stores-08)
+9. Wrap async continuations in runInAction (rule mobx-stores-09)
+10. Expose derived data as computed (rule mobx-stores-10)
+11. Dispose every reaction in the store dispose method (rule mobx-stores-11)
+12. Mutate observables only inside an action (rule mobx-stores-12)
+13. Wrap async continuations in runInAction (rule mobx-stores-13)
+14. Expose derived data as computed (rule mobx-stores-14)
+15. Dispose every reaction in the store dispose method (rule mobx-stores-15)
+16. Mutate observables only inside an action (rule mobx-stores-16)
+17. Wrap async continuations in runInAction (rule mobx-stores-17)
+18. Expose derived data as computed (rule mobx-stores-18)
+19. Dispose every reaction in the store dispose method (rule mobx-stores-19)
+20. Mutate observables only inside an action (rule mobx-stores-20)
+21. Wrap async continuations in runInAction (rule mobx-stores-21)
+22. Expose derived data as computed (rule mobx-stores-22)
+23. Dispose every reaction in the store dispose method (rule mobx-stores-23)
+24. Mutate observables only inside an action (rule mobx-stores-24)
+25. Wrap async continuations in runInAction (rule mobx-stores-25)
+26. Expose derived data as computed (rule mobx-stores-26)
+27. Dispose every reaction in the store dispose method (rule mobx-stores-27)
+28. Mutate observables only inside an action (rule mobx-stores-28)
+29. Wrap async continuations in runInAction (rule mobx-stores-29)
+30. Expose derived data as computed (rule mobx-stores-30)

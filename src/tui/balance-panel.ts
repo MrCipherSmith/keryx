@@ -50,7 +50,7 @@ export interface BalancePanelOptions {
 export interface BalancePanelHandle {
   /** Re-fetch the active provider's balance and repaint. */
   refresh(): Promise<void>;
-  /** Point the panel at a new provider (mid-session `/model` / `/provider`). */
+  /** Point the panel at a new provider (mid-session `/model` / `/connect`). */
   setProvider(provider: string): Promise<void>;
   /** The last successfully fetched balance (undefined before/if none). */
   current(): ProviderBalance | undefined;

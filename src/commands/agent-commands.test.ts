@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   AGENT_SLASH_COMMANDS,
   DELEGATE_USAGE,
@@ -10,6 +10,7 @@ import {
   findAgentCommand,
   isCommandInMode,
   parseDelegateCommand,
+  removedCommandHint,
   renderCommandHelp,
 } from "./agent-commands";
 
@@ -28,7 +29,6 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/connect",
     "/search-provider",
     "/search-connect",
-    "/provider",
     "/think",
     "/expand",
     "/copy",
@@ -76,6 +76,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/guard",
     "/route",
     "/editguard",
+    "/projectctx",
     "/external",
     "/external-agents",
     "/external-diff",
@@ -169,7 +170,6 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/connect",
     "/search-provider",
     "/search-connect",
-    "/provider",
     "/think",
     "/expand",
     "/copy",
@@ -217,6 +217,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/guard",
     "/route",
     "/editguard",
+    "/projectctx",
     "/external",
     "/external-agents",
     "/external-diff",
@@ -248,7 +249,6 @@ test("commandsForMode: chat gets its commands and none of the agent-only trio", 
     "/model",
     "/models",
     "/connect",
-    "/provider",
     "/new",
     "/status",
     "/flows",
@@ -285,7 +285,7 @@ test("/status and /flows are available in both modes; old aliases are gone", () 
   expect(findAgentCommand("/info", "agent")).toBeUndefined();
 });
 
-test("/expand, /think and /copy are agent-only; /models is chat-only; /provider is available in both modes", () => {
+test("/expand, /think and /copy are agent-only; /models is chat-only; /connect is available in both modes", () => {
   for (const name of ["/expand", "/think", "/copy"]) {
     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
     expect(command?.modes).toEqual(["agent"]);
@@ -294,8 +294,29 @@ test("/expand, /think and /copy are agent-only; /models is chat-only; /provider 
     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
     expect(command?.modes).toEqual(["chat"]);
   }
-  const provider = AGENT_SLASH_COMMANDS.find((c) => c.name === "/provider");
-  expect(provider?.modes).toEqual(["chat", "agent"]);
+  const connect = AGENT_SLASH_COMMANDS.find((c) => c.name === "/connect");
+  expect(connect?.modes).toEqual(["chat", "agent"]);
+});
+
+// Flow 471 (AC1): the add/reconfigure command was folded into `/connect`.
+// The removed name is built from parts so this file names it nowhere literally.
+describe("the removed provider command (flow 471, AC1)", () => {
+  const removed = `/${"provider"}`;
+
+  test("is not registered in any mode and does not resolve", () => {
+    expect(AGENT_SLASH_COMMANDS.some((c) => c.name === removed)).toBe(false);
+    expect(findAgentCommand(removed, "agent")).toBeUndefined();
+    expect(findAgentCommand(removed, "chat")).toBeUndefined();
+    expect(filterCommands(removed, "agent")).toEqual([]);
+    expect(filterCommands(removed, "chat")).toEqual([]);
+  });
+
+  test("falls through to Unknown command, with a /connect hint", () => {
+    const hint = removedCommandHint(`${removed} openai`);
+    expect(hint).toContain("/connect");
+    expect(removedCommandHint("/connect")).toBeUndefined();
+    expect(removedCommandHint("/nope")).toBeUndefined();
+  });
 });
 
 test("/model and /connect carry PER-MODE descriptions, not one flattened entry (R4)", () => {
@@ -311,9 +332,10 @@ test("/model and /connect carry PER-MODE descriptions, not one flattened entry (
   // chat's /model takes an argument and opens no picker; the TUI's opens one.
   expect(describeCommand(model, "chat")).toContain("<name>");
   expect(describeCommand(model, "agent")).toContain("picker");
-  // chat's /connect is a connected-only switch; agent wording names the picker.
+  // chat's /connect is a connected-only switch; agent wording names the two tabs.
   expect(describeCommand(connect, "chat")).toContain("connected");
-  expect(describeCommand(connect, "agent")).toContain("picker");
+  expect(describeCommand(connect, "agent")).toContain("Connected");
+  expect(describeCommand(connect, "agent")).toContain("Add provider");
 });
 
 test("isCommandInMode reflects the declared modes", () => {
@@ -333,7 +355,6 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/connect",
     "/search-provider",
     "/search-connect",
-    "/provider",
     "/think",
     "/expand",
     "/copy",
@@ -381,6 +402,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/guard",
     "/route",
     "/editguard",
+    "/projectctx",
     "/external",
     "/external-agents",
     "/external-diff",
@@ -408,7 +430,6 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/model",
     "/models",
     "/connect",
-    "/provider",
     "/new",
     "/status",
     "/flows",
@@ -478,8 +499,8 @@ test("filterCommands: prefix narrows the set (agent)", () => {
 
 test("filterCommands: prefix narrows the set (chat)", () => {
   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
-  expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
-  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/permissions", "/plan"]);
+  expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual([]);
+  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/product", "/permissions", "/projectctx", "/plan"]);
   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
     "/connect",
@@ -545,7 +566,7 @@ test("renderCommandHelp lists the mode's commands with the mode's descriptions",
   expect(chat).not.toContain("/expand");
   const agent = renderCommandHelp("agent");
   expect(agent).toContain("/expand");
-  expect(agent).toContain("/provider");
+  expect(agent).toContain("/connect");
 });
 
 test("renderCommandHelp `only` restricts the list to a surface's subset", () => {

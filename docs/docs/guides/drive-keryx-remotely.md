@@ -521,7 +521,7 @@ repeat of one it already handled, and does not apply a repeat twice. While an ac
 has not gone through, `/remote-control` shows "Approvals not confirmed: N" and the
 sidebar row reads "<topic> · N unconfirmed".
 
-**These commands stay in the shell.** `/exit`, `/quit`, `/channels`, `/provider`,
+**These commands stay in the shell.** `/exit`, `/quit`, `/channels`,
 `/search-provider`, `/search-connect`, `/remote-control`, `/integrate`, `/copy`,
 `/game`, `/setup`, `/mcp`, `/guard`, `/route`, `/editguard`, `/settings`, `/bus`,
 `/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt` (use `/stop`),

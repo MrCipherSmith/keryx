@@ -192,9 +192,11 @@ export function classifyBusyDispatch(params: {
 /**
  * Commands that swap the session out from under the main turn and the questions queued behind it, so
  * a deferred line of this kind is refused rather than queued: run later, it would rewrite the history
- * those queued questions were typed against.
+ * those queued questions were typed against. Keep it in step with tui-shell.ts's session-replacing handlers:
+ * `/clear` and `/new` start a fresh session, `/resume` and its alias `/sessions` swap in another one, and
+ * `/rewind` cuts the history back to an earlier turn.
  */
-export const BUSY_REFUSED_COMMANDS: ReadonlySet<string> = new Set(["/new", "/clear", "/resume"]);
+export const BUSY_REFUSED_COMMANDS: ReadonlySet<string> = new Set(["/new", "/clear", "/resume", "/sessions", "/rewind"]);
 
 /** What `runLine` does with a line classified `"deferred"`: queue it for the turn's end, or refuse it. */
 export function deferredBusyAction(line: string, commandName: string | undefined): "queue" | "refuse" {

@@ -65,6 +65,25 @@
       "description": "What was assumed where the task did not say. A wrong assumption is the usual cause of a rejected result, so these are the first thing a reviewer should check. Read only by a human — nothing in the result or the request can confirm an assumption, so this is deliberately an array of sentences rather than a structure that would imply a check nobody performs.",
       "items": { "type": "string", "minLength": 1 }
     },
+    "behavior_changes": {
+      "type": "array",
+      "description": "Behavior the implementer chose where the task and the plan's state × event matrix did not decide it. Every user-visible tradeoff (message wording, error placement, which state resets or survives) is listed with `user_visible: true, needs_operator: true`; flow-orchestrator Phase 2 asks the operator before accepting a result carrying such an entry, so a tradeoff recorded only in `assumptions` or `notes` is one nobody decided.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "user_visible", "needs_operator"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1, "description": "What now behaves differently, stated as the user or caller would observe it" },
+          "user_visible": { "type": "boolean", "description": "A user of the product can see the difference" },
+          "needs_operator": { "type": "boolean", "description": "The choice is a product decision the operator must confirm before the result is accepted" },
+          "alternatives": {
+            "type": "array",
+            "description": "The options not taken, so the operator chooses between real alternatives rather than approving the one shown",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
     "not_touched": {
       "type": "array",
       "description": "Files a reader would expect in `files_modified` and will not find there, each with the reason. `path` is a separate field because this is machine-checkable: a reader holding the request can subtract `files_modified`/`files_created`/`files_deleted` and this list from `task.target_files` and flag whatever is left as an unexplained omission.",
@@ -75,6 +94,22 @@
         "properties": {
           "path": { "type": "string", "minLength": 1 },
           "reason": { "type": "string", "minLength": 1, "description": "Why it was left alone — 'already correct', 'out of scope', 'blocked by <x>'" }
+        }
+      }
+    },
+    "project_context_applied": {
+      "type": "array",
+      "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "how"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
+          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
+          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
         }
       }
     },

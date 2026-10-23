@@ -28,7 +28,7 @@ test("the refresh is bounded, so a silent network cannot hang a scripted run (re
 
 test("readline provider detection reads saved keys itself, not through a shell_exec side effect (review F-003)", () => {
   // `resolveShellEnv` used to load saved keys into `process.env`, so a provider
-  // configured only by a saved key appeared in readline `/provider` once any
+  // configured only by a saved key appeared in the old /provider (now /connect) readline picker once any
   // command had run. It no longer does (K-015); the selector reads them directly.
   const start = source.indexOf("function realSelectProviderModel(");
   const body = source.slice(start, source.indexOf("\n}\n", start));

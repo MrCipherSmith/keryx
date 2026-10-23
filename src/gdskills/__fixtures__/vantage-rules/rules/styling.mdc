@@ -1,0 +1,42 @@
+---
+description: Design tokens and class conventions for stylesheets and className strings
+globs: src/**/*.{tsx,css}
+alwaysApply: false
+---
+
+# Styling
+
+1. Never write a hex color or a pixel literal in a className (rule styling-01)
+2. Compose classes with the shared helper, not template strings (rule styling-02)
+3. Keep the 12px type floor in dense tables (rule styling-03)
+4. Do not override a token inside a component stylesheet (rule styling-04)
+5. Use a theme token for every color, spacing and radius value (rule styling-05)
+6. Never write a hex color or a pixel literal in a className (rule styling-06)
+7. Compose classes with the shared helper, not template strings (rule styling-07)
+8. Keep the 12px type floor in dense tables (rule styling-08)
+9. Do not override a token inside a component stylesheet (rule styling-09)
+10. Use a theme token for every color, spacing and radius value (rule styling-10)
+11. Never write a hex color or a pixel literal in a className (rule styling-11)
+12. Compose classes with the shared helper, not template strings (rule styling-12)
+13. Keep the 12px type floor in dense tables (rule styling-13)
+14. Do not override a token inside a component stylesheet (rule styling-14)
+15. Use a theme token for every color, spacing and radius value (rule styling-15)
+16. Never write a hex color or a pixel literal in a className (rule styling-16)
+17. Compose classes with the shared helper, not template strings (rule styling-17)
+18. Keep the 12px type floor in dense tables (rule styling-18)
+19. Do not override a token inside a component stylesheet (rule styling-19)
+20. Use a theme token for every color, spacing and radius value (rule styling-20)
+21. Never write a hex color or a pixel literal in a className (rule styling-21)
+22. Compose classes with the shared helper, not template strings (rule styling-22)
+23. Keep the 12px type floor in dense tables (rule styling-23)
+24. Do not override a token inside a component stylesheet (rule styling-24)
+25. Use a theme token for every color, spacing and radius value (rule styling-25)
+26. Never write a hex color or a pixel literal in a className (rule styling-26)
+27. Compose classes with the shared helper, not template strings (rule styling-27)
+28. Keep the 12px type floor in dense tables (rule styling-28)
+29. Do not override a token inside a component stylesheet (rule styling-29)
+30. Use a theme token for every color, spacing and radius value (rule styling-30)
+31. Never write a hex color or a pixel literal in a className (rule styling-31)
+32. Compose classes with the shared helper, not template strings (rule styling-32)
+33. Keep the 12px type floor in dense tables (rule styling-33)
+34. Do not override a token inside a component stylesheet (rule styling-34)

@@ -1,10 +1,14 @@
-// Flow 299 (AC1-AC3): a completion confirmation token that no agent TOOL can
-// mint.
+// Flow 299 (AC1-AC3): a completion confirmation token that no unconfirmed agent
+// action can mint.
 //
 // The mechanism is SAC's `review-confirm-token.ts` pattern, applied to
 // `flow complete`:
 // - `keryx flow confirm <id>` mints the token. It is a separate CLI verb that
 //   requires a terminal and a challenge typed back via `/dev/tty`.
+// - Flow 456 (TM-04): inside `keryx shell` the `flow_confirm` tool mints it in
+//   process after the operator presses yes on a card (`confirmedVia: tui-card`,
+//   or `remote-card` from the session's topic). The tool returns the token to
+//   the agent, so the agent can see it; that is delegation, as in TM-03 section 4.
 // - Only the token's sha256 reaches disk, bound to the flow, the completion
 //   kind and the AC checksum in force. It lives in `confirm-token.json` in the
 //   flow's own directory, where `isManagedFlowFile` already refuses
@@ -61,6 +65,16 @@ export type StoredConfirmationToken = {
   mintedAt: string;
   expiresAt: string;
   usedAt?: string | undefined;
+  /**
+   * Flow 456: how the operator's yes arrived when it was not the terminal challenge — `tui-card`
+   * for the shell's yes/no card — and the card text that answer was given to. Absent on a token
+   * minted by `keryx flow confirm` in a terminal, and on every token minted before flow 456.
+   */
+  confirmedVia?: string | undefined;
+  confirmationQuote?: string | undefined;
+  /** Flow 464: the Telegram user id that pressed the remote card and the shell's clock when the press arrived. */
+  pressedBy?: number | undefined;
+  pressedAt?: string | undefined;
 };
 
 export type ConfirmationTokenFailure =
@@ -103,7 +117,7 @@ function sha256(text: string): string {
 export async function mintConfirmationToken(
   cwd: string,
   dir: string,
-  binding: { flowId: string; acChecksum: string; target: string },
+  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string; pressedBy?: number; pressedAt?: string },
   deps: { now: () => Date; randomToken?: () => string },
 ): Promise<{ token: string; stored: StoredConfirmationToken }> {
   // The flow id is the token's visible prefix, so a token pasted into the wrong
@@ -121,6 +135,10 @@ export async function mintConfirmationToken(
     target: binding.target,
     mintedAt: mintedAt.toISOString(),
     expiresAt: new Date(mintedAt.getTime() + CONFIRMATION_TOKEN_TTL_MS).toISOString(),
+    ...(binding.confirmedVia !== undefined ? { confirmedVia: binding.confirmedVia } : {}),
+    ...(binding.confirmationQuote !== undefined ? { confirmationQuote: binding.confirmationQuote } : {}),
+    ...(binding.pressedBy !== undefined ? { pressedBy: binding.pressedBy } : {}),
+    ...(binding.pressedAt !== undefined ? { pressedAt: binding.pressedAt } : {}),
   };
   await writeFileAtomic(confirmTokenPath(cwd, dir), `${JSON.stringify(stored, null, 2)}\n`);
   return { token, stored };
@@ -205,18 +223,25 @@ export async function consumeConfirmationToken(
     confirmTokenPath(cwd, dir),
     `${JSON.stringify({ ...stored, usedAt: consumedAt }, null, 2)}\n`,
   );
+  // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token".
+  const mechanism: SignatureConfirmation["mechanism"] =
+    stored.confirmedVia === "tui-card" ? "tui-card-token" : stored.confirmedVia === "remote-card" ? "remote-card-token" : "terminal-token";
   return {
-    mechanism: "terminal-token",
+    mechanism,
     tokenRef: stored.tokenRef,
     mintedAt: stored.mintedAt,
     consumedAt,
     boundTo: { kind: stored.kind, acChecksum: stored.acChecksum, target: stored.target },
+    ...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),
+    ...(stored.pressedAt !== undefined ? { pressedAt: stored.pressedAt } : {}),
   };
 }
 
 /** One operator-facing sentence per refusal. Never echoes the token. */
 export function describeConfirmationFailure(reason: ConfirmationTokenFailure, flowId: string): string {
-  const mint = `mint one from a terminal: \`keryx flow confirm ${flowId}\``;
+  const mint =
+    "mint one with the `flow_confirm` tool inside keryx shell (the operator presses yes on a card), " +
+    `or from a terminal outside it: \`keryx flow confirm ${flowId}\``;
   switch (reason) {
     case "token_required":
       return `this flow requires a confirmation token, passed as --confirm-token; ${mint}`;

@@ -20,6 +20,7 @@ Resolution order:
 - User asks which project skill applies to a file/task: run `keryx skills route <query-or-target>` before reading broad files.
 - User asks whether a project skill is still valid: run `keryx skills verify <skill-or-target>`.
 - User asks to create/update a Metaproject requirements package, PRD/spec package, or `docs/requirements/<name>` documentation: load `gdskills/planning/docpack-orchestrator/SKILL.md`; use `autodoc-orchestrator` instead only for reverse-engineering documentation from the current codebase.
+- Orchestrators: The orchestrators (`review-orchestrator`, `flow-orchestrator`, `job-orchestrator`, `autodoc-orchestrator`) run in the main session: the main agent reads the SKILL.md and runs it inline, and never hands a whole orchestrator to a subagent, because a subagent cannot spawn the reviewers and workers the orchestrator dispatches.
 
 | Skill | Category | Purpose | Entry |
 |---|---|---|---|
@@ -106,8 +107,9 @@ Resolution order:
 | review-logic | review | Review logic correctness, contracts, edge cases, nullability, and async behavior. | gdskills/review/review-logic/SKILL.md |
 | review-orchestrator | review | Route review requests to specialized reviewers and consolidate findings. | gdskills/review/review-orchestrator/SKILL.md |
 | review-performance | review | Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk. | gdskills/review/review-performance/SKILL.md |
-| review-pr-feedback | review | Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer. | gdskills/review/review-pr-feedback/SKILL.md |
 | review-pr-contract | review | Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale. | gdskills/review/review-pr-contract/SKILL.md |
+| review-pr-feedback | review | Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer. | gdskills/review/review-pr-feedback/SKILL.md |
+| review-premise | review | Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only. | gdskills/review/review-premise/SKILL.md |
 | review-regression | review | Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round. | gdskills/review/review-regression/SKILL.md |
 | review-security-code | review | Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure. | gdskills/review/review-security-code/SKILL.md |
 | review-style | review | Review naming, readability, duplication, dead code, and maintainability. | gdskills/review/review-style/SKILL.md |

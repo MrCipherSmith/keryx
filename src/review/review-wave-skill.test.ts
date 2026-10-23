@@ -15,7 +15,10 @@ describe("AC5: the orchestrator skill tells the dispatcher to pass review_wave",
   for (const [label, file] of [["bundled", BUNDLED], ["project copy", LOCAL]] as const) {
     test(`${label} copy names review_wave with package and pass, the round, and the per-wave count`, () => {
       const text = readFileSync(file, "utf8");
-      const line = text.split("\n").find((l) => l.includes("review_wave"));
+      // Flow 457: the round step names review_wave with the round's `<package>` placeholder; the chunk pass keeps `${PKG}`.
+      const round = text.split("\n").find((l) => l.includes("review_wave") && l.includes("One batch"));
+      expect(round).toContain('`review_wave: {"package": "<package>", "pass": "round"}`');
+      const line = text.split("\n").find((l) => l.includes("review_wave") && l.includes('"pass": "<chunk id>"'));
       expect(line).toBeDefined();
       expect(line).toContain("`spawn_subagent`");
       expect(line).toContain('"package": "${PKG}"');

@@ -56,7 +56,9 @@ import {
 } from "./confirm-token";
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
-export { CONFIRMATION_CAVEAT } from "./confirm-token";
+export { CONFIRMATION_CAVEAT, completionTarget } from "./confirm-token";
+// Flow 456: the shell's operator card tools reach the GitHub adapter through this facade, not the zone's internals.
+export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github";
 // Flow 328: re-exported so `keryx flow check-ac`'s adapter
 // (`src/commands/flow-check-ac.ts`), the AC5/AC6 callers
 // (`src/commands/flow.ts`/`src/commands/review.ts`) and the AC7 TUI reader
@@ -173,6 +175,7 @@ import {
   renderTasksDoc,
 } from "./templates";
 import type { NextTaskDecision } from "./machine";
+import { checkTaskProjectContext } from "./task-project-context";
 import type {
   FlowCheckResult,
   FlowCompleteResult,
@@ -1142,13 +1145,22 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async taskDone({ cwd, id, taskId, disposition, reason, acRefs, evidenceRefs, runLink }): Promise<FlowState> {
+    async taskDone({ cwd, id, taskId, disposition, reason, acRefs, evidenceRefs, runLink, projectContext }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
       const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
       if (!task) {
         throw new Error(`Task not found: ${taskId}. Known: ${flow.tasks.map((t) => t.id).join(", ")}`);
       }
+      // Before any change to the task, so a refusal leaves the record as found.
+      const contextCheck = await checkTaskProjectContext({
+        taskId: task.id,
+        kind: task.kind,
+        disposition: disposition ?? task.disposition ?? "completed",
+        projectRoot: cwd,
+        resultFile: projectContext?.resultFile,
+        resolvedFile: projectContext?.resolvedFile,
+      });
       task.status = "done";
       // Disposition is distinct from status (TM-01 §6). Honor an explicit
       // disposition; otherwise default a completed task to "completed".
@@ -1208,7 +1220,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (task.disposition === "failed" || task.disposition === "blocked") {
         recordAttempt(task, task.disposition, now(), task.dispositionReason);
       }
-      return save(cwd, dir, flow, "task-done", `${task.id}: ${task.title}`);
+      return save(cwd, dir, flow, "task-done", `${task.id}: ${task.title}${contextCheck.journal ? ` — ${contextCheck.journal}` : ""}`);
       });
     },
 
@@ -1634,7 +1646,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async confirmMint({ cwd, id, merged }): Promise<FlowConfirmMintResult> {
+    async confirmMint({ cwd, id, merged, confirmation, expect }): Promise<FlowConfirmMintResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
         let flow = await readFlow(cwd, dir);
@@ -1643,6 +1655,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           throw new Error(refusal ?? `flow confirm: flow ${flow.id}'s acceptance criteria are not frozen.`);
         }
         await assertAcIntact(cwd, dir, flow);
+        if (expect !== undefined) {
+          const nowTarget = completionTarget({ merged: merged === true, prUrl: flow.pr.url });
+          if (flow.acChecksum !== expect.acChecksum || nowTarget !== expect.target) {
+            throw new Error(
+              `flow confirm: flow ${flow.id}'s ${flow.acChecksum !== expect.acChecksum ? "acceptance criteria" : "completion target"} ` +
+                "changed after the confirmation card was shown; no token was minted. Ask for a new card.",
+            );
+          }
+        }
         const criteria = await readAcCriteria(cwd, dir);
         const { token, stored } = await mintConfirmationToken(
           cwd,
@@ -1653,6 +1674,14 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             // The target the CLI just showed the operator (security review of
             // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
             target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+            ...(confirmation !== undefined
+              ? {
+                  confirmedVia: confirmation.confirmedVia,
+                  confirmationQuote: confirmation.quote,
+                  ...(confirmation.pressedBy !== undefined ? { pressedBy: confirmation.pressedBy } : {}),
+                  ...(confirmation.pressedAt !== undefined ? { pressedAt: confirmation.pressedAt } : {}),
+                }
+              : {}),
           },
           { now: deps.now },
         );

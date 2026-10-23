@@ -173,7 +173,7 @@ export type FlowGates = {
  * this AC checksum. It does not say who ran that step (see TM-03).
  */
 export type SignatureConfirmation = {
-  mechanism: "terminal-token";
+  mechanism: "terminal-token" | "tui-card-token" | "remote-card-token";
   /** A prefix of the stored hash, for correlation. Never the token. */
   tokenRef: string;
   mintedAt: string;
@@ -184,6 +184,9 @@ export type SignatureConfirmation = {
    * written before it existed still reads.
    */
   boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
+  /** Flow 464: for a remote-card token, the Telegram user id that pressed the card and the shell's clock when the press arrived. */
+  pressedBy?: number | undefined;
+  pressedAt?: string | undefined;
 };
 
 /**
@@ -660,6 +663,8 @@ export interface FlowService {
     /** Acceptance-criterion ids this task addresses (v2 field, previously unwritable). */
     acRefs?: string[] | undefined;
     runLink?: TaskRunLink | undefined;
+    /** The worker's result and the resolve-context output it was dispatched with; checked for implement/test tasks. */
+    projectContext?: { resultFile?: string | undefined; resolvedFile?: string | undefined } | undefined;
   }): Promise<FlowState>;
   /**
    * Record one execution attempt against a task: increments `attempts.count`
@@ -772,7 +777,18 @@ export interface FlowService {
    * requirements, which the service cannot observe. Returns the plaintext
    * token once; only its hash is stored.
    */
-  confirmMint(input: { cwd: string; id: string; merged?: boolean | undefined }): Promise<FlowConfirmMintResult>;
+  confirmMint(input: {
+    cwd: string;
+    id: string;
+    merged?: boolean | undefined;
+    /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
+    confirmation?: { confirmedVia: string; quote: string; pressedBy?: number | undefined; pressedAt?: string | undefined } | undefined;
+    /**
+     * Flow 456: the criteria checksum and completion target the operator was SHOWN on the card. Checked
+     * under the flow lock; if either changed since, nothing is minted.
+     */
+    expect?: { acChecksum: string; target: string } | undefined;
+  }): Promise<FlowConfirmMintResult>;
   /**
    * Move a flow stuck in `completing` back to `in-progress` (flow 299, AC6),
    * recording why. Refuses from any other status, and while another process

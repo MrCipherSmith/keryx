@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
 import { completeHeadGate, type PrLookup } from "./complete-head-gate";
 import { completeManagedReview, createManagedReviewPackage } from "./managed";
 
@@ -19,6 +19,7 @@ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 async function ingest(report: string, target: { kind: "pr" | "report"; ref: string; head?: string }): Promise<string> {
   const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `${report}\n${EVIDENCE}\n`, reviewId: "head-gate", target });
   await writeFile(path.join(path.resolve(dir, result.path), "research.json"), JSON.stringify(ready));
+  await writeFile(path.join(path.resolve(dir, result.path), "coverage.md"), READY_COVERAGE_MD);
   return result.path;
 }
 
@@ -167,6 +168,7 @@ test("--head must be a commit SHA and needs a pull request package", async () =>
   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "abc" })).rejects.toThrow(/not a commit SHA/);
   const report = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `# R\nNo findings.\n${EVIDENCE}\n`, reviewId: "head-report", target: { kind: "report", ref: "review.md" } });
   await writeFile(path.join(path.resolve(dir, report.path), "research.json"), JSON.stringify(ready));
+  await writeFile(path.join(path.resolve(dir, report.path), "coverage.md"), READY_COVERAGE_MD);
   await expect(completeManagedReview(dir, report.path, { head: HEAD })).rejects.toThrow(/pull request package/);
 });
 

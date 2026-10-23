@@ -12,7 +12,6 @@ const REFUSED_LINES: Array<[string, string]> = [
   ["/exit", "exit"],
   ["/quit", "quit"],
   ["/channels", "channels"],
-  ["/provider", "provider"],
   ["/search-provider", "search-provider"],
   ["/search-connect", "search-connect"],
   ["/remote-control off", "remote-control"],

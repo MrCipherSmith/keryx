@@ -68,3 +68,15 @@ export function stepConnectNavAction(selected: ConnectNavAction, direction: "lef
   const nextIdx = direction === "left" ? (idx > 0 ? idx - 1 : count - 1) : idx < count - 1 ? idx + 1 : 0;
   return CONNECT_NAV_ACTIONS[nextIdx]!;
 }
+
+/**
+ * The two per-row targets the "Add provider" tab of `/connect` cycles ←/→
+ * through (flow 471): `"connect"` is the default — Enter on it starts the
+ * connect sequence — and `"test"` fires the row's `[Test]` button.
+ */
+export type AddNavAction = "connect" | "test";
+
+/** Move the highlighted column left/right between Connect and Test, wrapping. */
+export function stepAddNavAction(selected: AddNavAction, _direction: "left" | "right"): AddNavAction {
+  return selected === "connect" ? "test" : "connect";
+}

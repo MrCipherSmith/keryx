@@ -32,6 +32,8 @@ const EXEMPT: Record<string, string> = {
     "reports on other people's findings rather than raising its own into the review pipeline, so it emits no finding that could carry a `class_scope` object. It does enumerate classes — Step 8 requires every plan item to name the shape and every site holding it, with how they were enumerated — but in plan items, under different field names, which this schema-field contract does not reach",
   "review-verifier":
     "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so it produces no finding whose class it could enumerate; it READS class_scope to check that the named sites exist",
+  "review-premise":
+    "judges the premise of findings raised by other reviewers and can only lower, hold or leave them — it cannot add a finding, raise a severity, or change a finding's text (flow 459) — so it produces no finding whose class it could enumerate; it reads class_scope and the sibling sites as intent evidence",
 };
 
 /** Markers the contract section must carry. Both, so a passing mention does not count. */
@@ -69,9 +71,10 @@ describe("the orchestrator collects context and records rounds", () => {
     expect(skill).toContain("### Memory (required)");
   });
 
-  test("a fix round is scoped to the branch, not to the fix commit", () => {
+  test("a fix round takes its round from `review start`, not from its own range", () => {
     expect(skill).toContain("is_fix_round");
-    expect(skill).toMatch(/merge-base\.\.HEAD`?, never the fix commit alone/);
+    expect(skill).toMatch(/you never pick a range/);
+    expect(skill).toMatch(/`fallback-first` round/);
     // The second half — enumerating what NAMES the changed thing — is the part
     // that would have caught one instruction of four.
     expect(skill).toMatch(/Enumerate what NAMES the thing the fix changed/);

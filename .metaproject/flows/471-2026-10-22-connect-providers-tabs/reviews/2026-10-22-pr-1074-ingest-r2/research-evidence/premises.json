@@ -1,0 +1,106 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "CP-01",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/remote/command-router.ts:565 (blame 805714edc2, 2026-10-02, predates the PR)",
+          "says": "pickModel re-checks host.listModels/host.switchModel at its own top even though its caller pickProvider (line 607) already checked the same capabilities before calling it at line 635: private pickers self-guard their own optional host capability."
+        },
+        {
+          "ref": "src/remote/command-router.ts:642-646",
+          "says": "the guard in pickAddableProvider is also what narrows the optional host.listAddableProviders for the call at 646 without a non-null assertion; it follows the same per-picker idiom as pickModel and pickSession."
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "TypeScript handbook - Narrowing (optional members and truthiness/undefined checks)",
+          "says": "an optional member is narrowed by a check in the same scope; a caller's check does not narrow it in a separate method, so a self-contained guard is the idiomatic way to call it."
+        }
+      ],
+      "reasoning": "The fact reproduces (both callers pass canAdd first), but an unreachable-by-construction self-guard on an optional host capability is the file's established idiom since 2026-10-02 and also does the type narrowing. The suggested fix (pass the function in) is workable but changes the idiom at one site only, making it differ from pickModel, pickProvider and pickSession.",
+      "question": "The guard in pickAddableProvider matches how pickModel and pickSession already self-guard their optional host capability. Keep it as is, or pass the already-checked function in and drop the guard?",
+      "options": [
+        "dismiss - keep the self-guard, as the sibling pickers do",
+        "uphold - pass listAddableProviders in and remove the guard"
+      ]
+    },
+    {
+      "finding_id": "CP-02",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/remote/command-connect.test.ts:28-97 (blame 805714edc2, before the PR)",
+          "says": "the flow 387 tests in the same file repeat the same inline say('/connect') / waitFor(choices.length) / answer(index) preamble with no helper"
+        },
+        {
+          "ref": "src/remote/command-connect.test.ts:141-163",
+          "says": "addRig already shares the harness setup; the per-test steps were left inline so each test shows its own button presses"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "Software Engineering at Google, ch. 12 'Unit Testing', section 'Tests and Code Sharing: DAMP, Not DRY'",
+          "says": "tests favour descriptive, self-contained steps over factoring every repeated line into helpers; some repetition is acceptable when it keeps cause and effect readable"
+        }
+      ],
+      "reasoning": "The repetition matches the file's established style and the documented DAMP practice for tests. A helper that hides which button is pressed would make the sequence of presses, which is the behaviour under test, harder to read.",
+      "question": "The Add provider tests repeat the same press sequence inline, as the file's earlier tests do. Keep it, or add a pressAddProvider helper?",
+      "options": [
+        "dismiss - keep the inline sequence, as the file's earlier tests and DAMP practice do",
+        "uphold - add a helper to drive /connect to the Test / Connect step"
+      ]
+    },
+    {
+      "finding_id": "CP-03",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/remote/command-router.ts:578-584 (blame 8b5fb6a501 / 805714edc2, before the PR)",
+          "says": "pickModel carries the same refused / not-answered pair with its own record string"
+        },
+        {
+          "ref": "src/remote/command-router.ts:626-632",
+          "says": "pickProvider carries the same pair; written before the PR"
+        },
+        {
+          "ref": "src/remote/command-router.ts:742-748",
+          "says": "pickSession carries the same pair; written before the PR"
+        }
+      ],
+      "reasoning": "Every picker in the router already follows this shape, so pickAddableProvider is consistent with its siblings. A helper used only for /connect would make one picker differ from the others, and the reviewer states the change is not required for this PR.",
+      "question": "pickAddableProvider repeats the refused / not-answered handling that pickModel, pickProvider and pickSession already use. Keep the shared shape, or extract a helper for all pickers?",
+      "options": [
+        "dismiss - keep the shape every picker uses",
+        "uphold - extract a helper for the refused / not-answered pair"
+      ]
+    },
+    {
+      "finding_id": "CP-04",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "29417a4fe^:src/tui/tui-shell.ts:2962-3248",
+          "says": "the previous pickConnectedProviderStep was already a single ~290-line closure with nested row builders and mutable lets, from flows 304 and 309"
+        },
+        {
+          "ref": "src/tui/tui-shell.ts:3261-3262, 3285-3294, 3407 (blame e04715a209)",
+          "says": "the Promise closure, the RowBlock type and armOrConfirmDisconnect inside pickProvidersTabbedStep are inherited from flow 304, not written by this PR"
+        },
+        {
+          "ref": "29417a4fe^:src/tui/tui-shell.ts:2735, 2885",
+          "says": "sibling steps pickAuthMethodStep and pickProviderStep use the same one-closure step shape"
+        }
+      ],
+      "reasoning": "The closure shape is the established pattern for every modal step in this file, and this PR merged two such steps into one. Splitting only this step would make it differ from its siblings; a split belongs in a refactor that covers all steps.",
+      "question": "pickProvidersTabbedStep is one ~400-line closure, as the modal steps it replaced were. Keep the established step shape, or split this one now?",
+      "options": [
+        "dismiss - keep the step shape used by the other modal steps; refactor all of them separately",
+        "uphold - split this step into row builders and a key handler now"
+      ]
+    }
+  ]
+}

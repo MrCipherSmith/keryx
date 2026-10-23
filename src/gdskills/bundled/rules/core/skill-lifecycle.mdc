@@ -14,6 +14,15 @@ with context. It is NOT a git hook — the `gdskills` post-commit hook only runs
 `skills verify --all --dry-run` as an advisory staleness signal and never
 mutates.
 
+## Project rules — read first, then say so
+
+Before writing code or tests, run `keryx skills resolve-context --files <files>
+--for implement|test`. The `must_read` list puts project rules and project
+skills ahead of the bundled ones. Read every entry, then return
+`project_context_applied` with each path and its `sha256`. A missing entry is a
+warning by default and a refusal under `gdskills.projectContext.enforcement:
+block`.
+
 ## Verify — cheap, inline, before you trust a skill
 
 Whoever is about to rely on a project-skill verifies it first:

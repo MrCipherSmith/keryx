@@ -8,6 +8,7 @@ import { createSession, persistHistory } from "../../../session/store";
 import { sessionDir } from "../../../session/paths";
 import { localWorkspaceAuthorizationServer, WorkspaceService } from "../../../sac/workspace-service";
 import { buildToolRegistry } from "../../../mcp/tools";
+import { readSlate, writeSlate } from "../../../session/slate";
 
 function mcpTool(name: string) {
   const found = buildToolRegistry().find((entry) => entry.name === name);
@@ -48,6 +49,27 @@ describe("workspaceCreateTool", () => {
     const result = await workspaceCreateTool(cwd).invoke({});
     expect(result.isError).toBe(true);
     expect(result.output).toContain("title");
+  });
+
+  test("binding the new workspace to the session slate keeps its Notes, Trail and answers", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "keryx-workspace-bind-"));
+    const ts = "2026-10-16T00:00:00.000Z";
+    await writeSlate(dir, () => ({
+      anchors: { root: cwd, touched: [] },
+      course: {},
+      seeds: [],
+      notes: { plan: { text: "keep me", ts } },
+      trail: [{ step: 1, tool: "read_file", digest: "a.ts", outcome: "ok", ts }],
+      answers: { "answer.0123456789ab": { text: "Q: q\nA: a", ts, source: "operator" } },
+    }));
+    const result = await workspaceCreateTool(cwd, () => dir).invoke({ title: "Bind me" });
+    expect(result.isError).toBe(false);
+    const slate = await readSlate(dir);
+    expect(slate?.workspaceId).toBe((JSON.parse(result.output) as { id: string }).id);
+    expect(slate?.notes?.plan?.text).toBe("keep me");
+    expect(slate?.trail).toHaveLength(1);
+    expect(Object.keys(slate?.answers ?? {})).toEqual(["answer.0123456789ab"]);
+    await rm(dir, { recursive: true, force: true });
   });
 
   test("creates a real, listable workspace", async () => {

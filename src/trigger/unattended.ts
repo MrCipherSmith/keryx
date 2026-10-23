@@ -31,6 +31,7 @@
 // Pure: no I/O, no clock, no env.
 
 import { parsePatchTargets } from "../lib/patch-risk";
+import { HOST_QUESTION_VERBS } from "../review/host-question-verbs";
 import { commandWord, splitSegments, stripAssignments } from "../lib/shell-syntax";
 import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } from "../lib/command-risk";
 
@@ -38,7 +39,8 @@ import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } f
  * Tools an unattended run is never offered in this version (AC5). The web and
  * MCP tools bring third-party content that cannot authorize anything; a
  * subagent would be a second agent outside this run's floor and spend cap;
- * `ask_user` has nobody to ask.
+ * `ask_user` has nobody to ask. The operator-confirmed gates are excluded too,
+ * through {@link isUnattendedExcludedTool}: check membership with that, not this list.
  */
 export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   "web_fetch",
@@ -50,6 +52,41 @@ export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   // Flow 295 (AC7): creating a schedule needs an operator's confirmation, and an unattended run has none.
   "schedule_create",
 ];
+
+/**
+ * Flow 456 (AC1): the operator-confirmed gates (`../commands/operator-confirm-tools.ts`). Listed here, not
+ * imported, because a core owner must not import a command module; `operator-confirm-rosters.test.ts` fails
+ * when this list and the registry differ, so a new gate is excluded the moment it is registered.
+ * Flow 464: the review acts `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`,
+ * `review_waive_coverage` and `review_complete` are answered as cards (in the shell or the Telegram topic). An
+ * unattended run has nobody to answer them: it never sends the operator to a terminal and records the item as Not run.
+ */
+export const OPERATOR_CONFIRM_TOOL_NAMES: readonly string[] = [
+  "review_chunks_answer",
+  "review_publish",
+  "review_waive_coverage",
+  "review_waive_readiness",
+  "review_waive_mutation",
+  "review_override_reviewers",
+  "review_comments_reply",
+  "review_confirm_plan",
+  "review_decide_premise",
+  "review_complete",
+  "flow_confirm",
+  "external_apply",
+  "learn_accept",
+  "learn_promote",
+  "learn_graduate",
+  "schedule_resume",
+  "schedule_run",
+  "schedule_pause",
+  "schedule_remove",
+];
+
+/** Whether an unattended run may never be offered `toolName`: the fixed list above plus every operator-confirmed gate. */
+export function isUnattendedExcludedTool(toolName: string): boolean {
+  return UNATTENDED_EXCLUDED_TOOLS.includes(toolName) || OPERATOR_CONFIRM_TOOL_NAMES.includes(toolName);
+}
 
 /** `keryx flow` verbs only an operator (or the dispatcher itself) may run. */
 const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
@@ -76,6 +113,44 @@ const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
   /\blaunchctl\b/,
   /\bloginctl\b/,
 ];
+
+/**
+ * Flow 467: the four review verbs that take the operator's answer to a question the host asked (`--answered-by`). An
+ * unattended run has no operator to ask, so it never records one. The run's own environment refuses it too
+ * (`runOperatorCommand`); this is the floor under a command that never reaches that check.
+ */
+const HOST_QUESTION_VERB_SET: ReadonlySet<string> = new Set(HOST_QUESTION_VERBS);
+const KERYX_ENTRY = /(?:^|\/)(?:keryx|cli\.[cm]?[jt]s)$/;
+const SHELL_WRAPPERS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "dash", "ksh", "eval"]);
+const PRINTING_COMMANDS: ReadonlySet<string> = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "cat"]);
+
+/**
+ * True when one `keryx review <verb>` invocation in `text` carries `--answered-by` in its own arguments, however quoted,
+ * line-wrapped (`\<newline>`), ANSI-C quoted (`$'…'`) or wrapped in `sh -c`. A mention of the verb and the flag in
+ * different commands, or as an argument of echo/grep/rg, is not one. A flag held in a variable (`$FLAG`) cannot be seen here.
+ */
+function recordsHostQuestion(text: string, depth = 0): boolean {
+  const joined = text.replace(/\\\r?\n/g, "").replace(/\$(?=["'])/g, "");
+  const segments = splitSegments(joined);
+  const feedsShell = segments.some((s) => s.precededBy === "|" && SHELL_WRAPPERS.has(commandWord(s.words)));
+  const inner = (words: readonly string[]): boolean => depth < 3 && words.some((w) => /\s/.test(w) && recordsHostQuestion(w, depth + 1));
+  for (const segment of segments) {
+    const words = stripAssignments(segment.words).map((w) => w.replace(/\\/g, "").replace(/^[$(`{]+/, ""));
+    const cmd = commandWord(words);
+    if (PRINTING_COMMANDS.has(cmd)) {
+      if (feedsShell && inner(words)) return true;
+      continue;
+    }
+    if (SHELL_WRAPPERS.has(cmd) && inner(words)) return true;
+    const reviewAt = words.findIndex((w, i) => w === "review" && words.slice(0, i).some((p) => KERYX_ENTRY.test(p)));
+    if (reviewAt < 0) continue;
+    const args = words.slice(reviewAt + 1);
+    const verbAt = args.findIndex((w) => !w.startsWith("-"));
+    if (verbAt < 0 || !HOST_QUESTION_VERB_SET.has(args[verbAt]!)) continue;
+    if (args.slice(verbAt + 1).some((w) => w === "--answered-by" || w.startsWith("--answered-by="))) return true;
+  }
+  return false;
+}
 
 /** Git subcommands that move shared history, rewrite refs directly, or publish. */
 const FORBIDDEN_GIT_VERBS = new Set(["push", "merge", "tag", "update-ref"]);
@@ -122,6 +197,10 @@ export function isUnattendedProtectedPath(p: string): boolean {
 export function unattendedShellRefusal(command: string): string | undefined {
   const text = command.trim();
   if (text.length === 0) return undefined;
+
+  if (recordsHostQuestion(text)) {
+    return "`--answered-by` records the operator's answer to a question the host asked — an unattended run has no operator to ask, so it never records one";
+  }
 
   for (const pattern of FORBIDDEN_FLOW_VERBS) {
     const match = pattern.exec(text);
@@ -202,7 +281,7 @@ export function unattendedPatchRefusal(patch: string): string | undefined {
  * has no objection here (the permission mode still governs it).
  */
 export function unattendedRefusal(toolName: string, input: Record<string, unknown>): string | undefined {
-  if (UNATTENDED_EXCLUDED_TOOLS.includes(toolName)) {
+  if (isUnattendedExcludedTool(toolName)) {
     return `\`${toolName}\` is not offered to an unattended run`;
   }
   if (toolName === "shell_exec") {

@@ -12,6 +12,7 @@
 // process's life: nothing ever called `clear()` or emitted `remove`.
 
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
+import { formatDuration } from "./duration-format";
 import { humanFleetPhase, type FleetWorkerStatus } from "./worker-fleet";
 import type { SubagentFleetEvent, SubagentRuntimeKind, SubagentWorkKind } from "./subagent-bridge";
 
@@ -89,24 +90,7 @@ function clip(s: string, max: number): string {
 }
 
 export function formatElapsed(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) {
-    return "—";
-  }
-  const sec = Math.round(ms / 1000);
-  if (sec < 1) {
-    return "<1s";
-  }
-  if (sec < 60) {
-    return `${sec}s`;
-  }
-  const min = Math.floor(sec / 60);
-  const rem = sec % 60;
-  if (min < 60) {
-    return rem === 0 ? `${min}m` : `${min}m ${rem}s`;
-  }
-  const hours = Math.floor(min / 60);
-  const minRem = min % 60;
-  return minRem === 0 ? `${hours}h` : `${hours}h ${minRem}m`;
+  return formatDuration(ms);
 }
 
 export function formatSubagentRow(session: SubagentSession, width = SIDEBAR_TEXT_WIDTH): string {

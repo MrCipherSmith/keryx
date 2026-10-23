@@ -84,7 +84,12 @@ export interface NormalizedError {
    * stream ended mid tool-call — a `malformed` EOF, never a completed
    * `tool_call_end`. Absent for every other error.
    */
-  detail?: { pendingToolCallId?: string; incompleteStream?: boolean };
+  detail?: {
+    pendingToolCallId?: string;
+    incompleteStream?: boolean;
+    /** Exact OpenAI HTTP 403 overload response; interactive recovery is bounded. */
+    transientOverload403?: boolean;
+  };
 }
 
 /**

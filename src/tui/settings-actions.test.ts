@@ -20,6 +20,7 @@ const STATE: SettingsSnapshot = {
   plan: false,
   guard: false,
   editGuard: false,
+  projectContext: { enforcement: "warn", maxBytes: 131072 },
   routing: false,
   externalPrivacy: { value: "on", source: "user" },
   reasoning: { effort: "off", source: "global" },
@@ -39,6 +40,7 @@ function recorder(overrides: Partial<SettingsActionHandlers> = {}) {
     plan: (line) => void calls.push(`plan:${line}`),
     guard: (on) => void calls.push(`guard:${on}`),
     editGuard: async (on) => void calls.push(`editguard:${on}`),
+    projectContext: async (mode) => void calls.push(`projectctx:${mode}`),
     route: (on) => void calls.push(`route:${on}`),
     external: async (value) => void calls.push(`external:${value}`),
     externalAgents: async (arg) => {
@@ -68,6 +70,8 @@ test("every line the rows can produce reaches exactly one handler", async () => 
   expect(r.calls).toContain("plan:/plan on");
   expect(r.calls).toContain("guard:true");
   expect(r.calls).toContain("editguard:false");
+  expect(r.calls).toContain("projectctx:warn");
+  expect(r.calls).toContain("projectctx:block");
   expect(r.calls).toContain("route:false");
   expect(r.calls).toContain("external:on");
   expect(r.calls).toContain("external-agents:on");

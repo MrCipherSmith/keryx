@@ -1,0 +1,69 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-01 holds no production source: it is the flow 471 folder, gdgraph artifacts, README and docs edits, the release bump, and test updates (agent-commands, shell, shell-slash-registry, shell-subscription-selection, shell-grant-refresh, providers.models-failure). Read in full. No layer, dependency-direction, module-boundary or SOLID violation is introduced by the diff. For context I checked the merged code the slice's tests and docs lean on: the removed command is handled by one table (removedCommandHint in agent-commands.ts, used by both shell.ts and tui-shell.ts), modal-host's footerFor is optional and falls back to footer, and the Telegram router still refuses the removed command as unknown. The modal, remote-host and router code are in other slices and were not reviewed here. One info observation on the readline (--no-tui) /connect surface.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/commands/shell.ts",
+      "line": null,
+      "quote": "await selectAndApply({ onlyConnected: true });",
+      "problem": "With /provider removed, the readline chat shell (--no-tui --chat) has no in-session way to add or reconfigure a provider: /connect passes onlyConnected: true, and when no selector is injected it prints CONNECT_GUIDANCE, which only explains exporting ANTHROPIC_API_KEY. The two-tab Add provider surface exists only in the TUI. This is a consequence of the operator-approved merge (AC9 asks the non-TUI shell to name only /connect), not a layering defect.",
+      "impact": "A readline-only user whose provider is not connected can no longer reach the add wizard from /connect, and README and docs/docs/onboarding.md say 'Inside a running session, /connect opens one Providers dialog with two tabs' without saying that holds for the TUI only. What would settle it: whether a readline user is expected to use `keryx auth login` / `keryx providers` outside the session, and whether the docs should say so.",
+      "suggested_fix": "If intended, qualify the README and onboarding sentence with 'in the full-screen shell' and point the readline shell at `keryx auth login <provider>`. If not intended, extend CONNECT_GUIDANCE to name that command.",
+      "evidence": "src/commands/shell.ts line 1177 at the head commit: `await selectAndApply({ onlyConnected: true });` under `if (command === \"/connect\")`; CONNECT_GUIDANCE (line 240) mentions only ANTHROPIC_API_KEY. README.md and docs/docs/onboarding.md in this slice describe the two tabs without a TUI qualifier.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "readline-connect-no-add-path",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2`, head `2e1936eeb9760e1bbfb05500bd7479c37d44ba80`
+- Scope mode: diff, slice-01 only (supplied text, no diff rebuilt)
+- Stack detected: generic-ts (Bun, OpenTUI shell, remote command router)
+
+### Summary
+slice-01 carries no structural change to production code. The assigned files are flow records, graph artifacts, docs, the version bump and tests. The tests pin the intended boundary: one registry (`AGENT_SLASH_COMMANDS`) without the removed command, and one `removedCommandHint` table feeding both the readline and TUI shells. The remaining slices (modal, router, hooks, modal-host) were not read by this reviewer.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+### Suggested Patches
+None.
+
+### Routing audit
+graph_used: no (not-relevant: slice holds no source whose callers were in question); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg`); raw_rg_used: no.
