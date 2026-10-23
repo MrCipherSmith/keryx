@@ -1,4 +1,4 @@
-// "(no models found)" was the only thing `/provider` could say.
+// "(no models found)" was the only thing the old /provider (now /connect) could say.
 //
 // The operator picked a provider, was asked nothing, and got an empty list.
 // What had actually happened was that `api.x.ai` answered 403 — the stored

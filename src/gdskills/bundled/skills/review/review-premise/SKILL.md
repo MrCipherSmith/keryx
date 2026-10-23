@@ -96,7 +96,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 
 `challenged` and `owner-decision` **hold** the finding: it does not count as an open
 blocker or major, it is not sent to a fixer, and the verdict lists it as awaiting the
-operator, who answers with the `review_decide_premise` card in keryx shell (never send them to a terminal) or `keryx review decide-premise` outside it (`uphold` or `dismiss`). You never
+operator, who answers with the `review_decide_premise` card in keryx shell (the stronger path) or, elsewhere, to the host's own question tool (`uphold` or `dismiss`), which the caller records with `keryx review decide-premise --answered-by …` (a host question; never a terminal). You never
 dismiss. `upheld` is the normal answer: a finding with a trigger, an outcome, no intent
 signal and no practice source against it is upheld.
 
@@ -165,7 +165,7 @@ question, and the signals or sources behind it.
 | Lowering a severity, holding a finding for the operator | YES | — |
 | Whether a finding reproduces | NO | `review-verifier` |
 | Adding a finding, raising a severity, editing one | **NO** | a domain reviewer in a new round |
-| Dismissing a finding | NO | the operator: `keryx review decide-premise --answer dismiss` |
+| Dismissing a finding | NO | the operator, by card or host question: `keryx review decide-premise --answer dismiss` |
 
 ## Red Flags
 

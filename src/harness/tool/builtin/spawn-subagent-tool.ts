@@ -1485,7 +1485,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // blocked provider/model falls through with a notice, never silently.
         const external = await resolveExternalSetting({ cwd: deps.cwd });
         const { config: externalConfig } = loadExternalProvidersConfig();
-        const connected = externalAllowedConnectedPredicate(connectedPredicateFrom(catalog), external.value === "on", externalConfig);
+        // Flow 468: the session's own provider/model counts as connected even
+        // when `catalog` lacks it, so an assignment to the model the session
+        // runs on is not rejected into a runtime fallback.
+        const connected = externalAllowedConnectedPredicate(
+          connectedPredicateFrom(catalog, { providerId: session.providerId, modelId: session.modelId }),
+          external.value === "on",
+          externalConfig,
+        );
         const resolved = resolveCategoryDetailed("subagents", { project: projectRouting.table, user: userRouting.table }, connected);
         if (resolved.rejected !== undefined) {
           emitFleetEvent({

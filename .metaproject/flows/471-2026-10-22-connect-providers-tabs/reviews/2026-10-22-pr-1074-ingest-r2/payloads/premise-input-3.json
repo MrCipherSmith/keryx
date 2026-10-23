@@ -1,0 +1,160 @@
+{
+ "judge": "review-premise",
+ "source": "round",
+ "findings": [
+  {
+   "id": "review-pr-contract-w1:PC-003",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "CHANGELOG.md",
+   "line": null,
+   "quote": "`/connect` and `/providers` are one command and one modal with two tabs.",
+   "problem": "The 0.3.130 entry names the merged commands as `/connect` and `/providers`. pr-context.md and the flow's AC1 name the removed command `/provider` (singular): \"`/provider` is removed (registry, menu, help, README, docs, init hint)\". The slice's agent-commands.test.ts registry lists contain no `/providers`, and the same changelog section says two bullets later \"`/provider` is gone. Use `/connect`.\"",
+   "suggested_fix": "Write `/connect` and `/provider` in the first bullet (the CLI command `keryx providers` is a different thing and should not be mixed in)."
+  },
+  {
+   "id": "review-pr-contract-w1:PC-004",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+   "line": null,
+   "quote": "Live run 2026-10-22 in tmux, bun src/cli.ts shell, XDG_DATA_HOME empty",
+   "problem": "The PR body leaves the box unticked: \"- [ ] AC12 live run in a real `keryx shell` with an empty config dir (frames and config file mode go into the flow journal)\". The same diff's flow.json (acConfirmed.AC12) and journal.md (2026-10-22T12:09:32.187Z, ac-confirmed AC12) record that the live run was done on 2026-10-22 and confirmed before the PR was marked implemented. Also, the box promises \"frames\" in the journal; the journal line holds a prose summary (provider added, Test = ok 2 model(s), dir 700, files 600) and no frames.",
+   "suggested_fix": "Tick the AC12 box (the merged PR body is the claim; the flow record is the evidence), or note why it stayed open. If frames are wanted, attach them to the journal as the box says."
+  },
+  {
+   "id": "review-pr-contract-w2:PC-101",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "docs/docs/guides/drive-keryx-remotely.md",
+   "line": null,
+   "quote": "`/connect` shows providers that are already connected, then their models. No key or address is shown.",
+   "problem": "The PR changes Telegram /connect: the diff adds an 'Add provider' button to the connected picker (src/remote/command-router.ts: `options.push({ id: ADD_PROVIDER_ID, label: \"Add provider\" })`), an Add list with [Test] / [Connect], and a device-login flow that posts a user code and link to the topic; the gateway menu text becomes 'Switch to a connected provider with buttons; also add a provider (device login only) and test it' (src/remote/command-gateway.ts). PR body: 'Telegram `/connect` gains an \"Add provider\" button, a [Test] per provider, and [Connect] by device login only.' The Telegram guide's Buttons row (line 429) was left describing only 'providers that are already connected, then their models'. The PR did edit this same file (line 521, dropping /provider from the stay-in-the-shell list) but not this row. 'No key or address is shown' also omits that a device code and verification link are now posted.",
+   "suggested_fix": "Extend the line-429 row: /connect also offers an Add provider button with [Test] and, for device-login providers only, [Connect], which posts the code and link; key providers send the operator to the shell. Check line 539 ('/connect' refused while a turn runs) still matches: the busy check now also guards the device login branch."
+  },
+  {
+   "id": "review-pr-contract-w2:PC-102",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/agent-commands.ts",
+   "line": null,
+   "quote": "chat: \"Providers picker: switch to a connected provider or add one (picker when available)\",",
+   "problem": "PR body: '`/connect` is the only command ... \"Add provider\" lists every known provider with [Connect] and [Test]' and '[Connect] runs the base-URL, key or device-login steps'. The diff gives the readline chat-mode /connect the registry wording 'switch to a connected provider or add one', and rewrites the ShellDeps comment to '`/connect` passes `{ onlyConnected: true }` (the Providers dialog: switch among live providers, or add one)'. The chat handler itself is unchanged (`await selectAndApply({ onlyConnected: true });`), and the readline selector it calls, `realSelectProviderModel` (src/commands/shell.ts:1363-1389), never reads `opts.onlyConnected`: it runs `detectProviders`, then `pickProviderModel` over the detected providers. There is no Add provider tab, key or base-URL step in that path. Before the PR `/provider` (no arg) called the same selector with `{}` and `/provider <name>` switched by name; both are removed, so the readline chat surface now has fewer ways to reach a provider than before, while its help text says it can add one.",
+   "suggested_fix": "Make the chat description say what the readline picker does (switch among detected providers; adding a provider is the TUI's Add provider tab or `keryx auth`), and trim the ShellDeps comment the same way; or state in the PR that chat mode keeps the old picker."
+  },
+  {
+   "id": "review-pr-contract-w3:PC-201",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/remote-provider-hooks.ts",
+   "line": null,
+   "quote": "export const NO_CREDENTIAL_TEXT = \"no credential, Connect first\";",
+   "problem": "PR body: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect] by device login only. A key is never typed in chat (flow 387 AC4).\" The diff reuses one string, NO_CREDENTIAL_TEXT, for the TUI Add tab and for Telegram: `testProviderForRemote` returns `{ ok: false, message: NO_CREDENTIAL_TEXT }` for every provider that has no credential, including key-only providers, and tui-shell.ts wires it as `testProvider: (providerId) => testProviderForRemote(providerId, { probe: (id) => probeProviderConnection(id, { requireCredential: true }) })`. In the same file `createRemoteDeviceLogin.connect` answers a provider without a device login with \"this provider has no device login; its key is entered in the shell with /connect\". So in the topic, [Test] on a key-only provider says \"Connect first\", while [Connect] from chat is refused for that provider. Whether the topic shows a [Connect] button for key-only providers is decided in the command router (another slice, not read here); the text is wrong either way, because Connect cannot finish in chat for them.",
+   "suggested_fix": "Make the Telegram wording depend on `deviceLogin`: for a provider without a device login say the key is entered in the shell with /connect; keep \"Connect first\" for device-login providers. Or word the shared text so it is true on both surfaces."
+  },
+  {
+   "id": "review-pr-contract-w4:PC-301",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/connect-modal.test.ts",
+   "line": null,
+   "quote": "describe(\"review round 2 — the Add tab's other paths\", () => {",
+   "problem": "pr-context.md Test plan line 23: `- [ ] Review round` (unticked). The diff of this slice adds tests that name review rounds already run on this change: `describe(\"review round 2 — the Add tab's other paths\"` in src/tui/connect-modal.test.ts, and `// Flow 471 (AC8, review F-001, F-002, F-003, F-007): the provider hooks Telegram's /connect calls.` in src/tui/remote-provider-hooks.test.ts. If the box were true, the diff would hold the fixes a review round produced; it holds them (round 2 and findings F-001, F-002, F-003, F-007), so the box is stale or means a different review than the one the tests cite.",
+   "suggested_fix": "Tick the box, or reword it to say which review it still awaits (the post-merge managed review of #1074), so the body and the test comments agree."
+  },
+  {
+   "id": "review-regression-w2:F-001",
+   "reviewer": "review-regression",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "const all = [...detected];",
+   "problem": "runProvidersModal (new in flow 471) snapshots `all` from `detected` once and never prunes it. A Disconnect on the Connected tab removes the row from `connected` (spliced in place by armOrConfirmDisconnect) and, for a custom provider, deletes its llm-providers.json entry via disconnectProvider -> removeCustomCompatProvider, but the provider stays in `all`, so the Add provider tab still lists it with [Connect] for the rest of the dialog loop. [Connect] on it runs runProviderConnectSequence (setup=true): it writes a baseUrls override for a provider that no longer exists, probes the endpoint, and on a live /models answer upserts the phantom into `connected`, calls options.onConnected and shows '<label> connected - N model(s)'. [Test] on the same row answers 'unknown provider, cannot test' because connectionProviderByName no longer resolves it.",
+   "suggested_fix": "On a successful disconnect of a provider whose classification kind is 'custom' (disconnectProvider returns kind 'custom'), remove it from `all` as well as `connected`; or rebuild `all` from a fresh redetect each time the dialog reopens. Alternatively have runAddSelection re-resolve the provider with connectionProviderByName before starting the sequence and answer 'no longer exists' when it is gone."
+  },
+  {
+   "id": "review-style-w1:F-001",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/shell.test.ts",
+   "line": null,
+   "quote": "//     a full re-detection/pick across all providers; same update-then-use",
+   "problem": "The pinned-contract header comment was edited from `/provider` to `/connect` on one line only. The edited bullet now reads `/connect` calls `selectProviderModel?.(io, { onlyConnected: true })` followed by 'a full re-detection/pick across all providers', which is the removed /provider behaviour and contradicts onlyConnected: true. The next-but-one bullet still says '`/connect` needs NO new deps: it writes STATIC guidance mentioning `ANTHROPIC_API_KEY`', which contradicts the bullet above it and the tests in this file that drive /connect through selectProviderModel.",
+   "suggested_fix": "Rewrite the two bullets to one statement: `/connect` calls `deps.selectProviderModel?.(io, { onlyConnected: true })`, offers only connected providers, and applies the result like /models does. Delete the 'STATIC guidance' bullet or mark it as the pre-flow-304 behaviour."
+  },
+  {
+   "id": "review-style-w1:F-002",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "CHANGELOG.md",
+   "line": null,
+   "quote": "- **Changed:** `/connect` and `/providers` are one command and one modal with two tabs.",
+   "problem": "The 0.3.130 entry says `/connect` and `/providers` were merged. No `/providers` slash command is registered; the command removed in this PR is `/provider` (the next bullet and the PR body say so). A search of CHANGELOG.md, README.md, docs/docs/cli-reference.md, src/commands/agent-commands.ts and src/standard/help-groups.ts finds `/providers` only on this line. The wording comes from the operator's message, not from the code. The Telegram bullet also says 'the same modal opens' in Telegram; Telegram gets buttons (AC8, README), not a modal.",
+   "suggested_fix": "Write 'The `/provider` wizard and `/connect` are one command and one modal with two tabs.' and 'in Telegram `/connect` gets an Add provider button and a [Test] on each row.'"
+  },
+  {
+   "id": "review-style-w2:F-001",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-connect.test.ts",
+   "line": null,
+   "quote": "it(\"keeps that refusal when the shell cannot list addable providers\", async () => {",
+   "problem": "This test is a near-copy of the test directly above it, \"sends the operator to the shell when no provider is connected\". Both build the harness with listProviders returning [], no listAddableProviders, send /connect, and expect no choices and a \"No provider is connected\" reply. The new one asserts a strict subset of the old one, so it adds no coverage.",
+   "suggested_fix": "Delete the new test, or fold its intent into the older test's name (\"... and when the shell cannot list addable providers\"). If the point is to pin that listAddableProviders is absent, say so in the old test's setup comment."
+  },
+  {
+   "id": "review-style-w2:F-002",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-connect.test.ts",
+   "line": null,
+   "quote": "describe(\"/connect: Add provider (AC8)\", () => {",
+   "problem": "Eleven tests in this block open with the same five-line preamble: enable the bridge, say \"/connect\", waitFor choices.length === 1, answer an index, waitFor choices.length === 2 (then repeat for the Test/Connect step). Only the answer indices and the harness options differ.",
+   "suggested_fix": "Add a helper next to addRig, for example `async function pressAddProvider(h, index, action)` that drives /connect to the Test / Connect step for the provider at `index` and returns, so each test reads as setup, one call, assertions."
+  },
+  {
+   "id": "review-style-w2:F-003",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-router.ts",
+   "line": null,
+   "quote": "const action = await this.ask(\"connect\", this.ctx.compose(`${provider.label}: test the stored credential, or connect it?`), [[\"Test\", \"Connect\"]], fromId);",
+   "problem": "pickAddableProvider copies the shape that pickProvider (and pickModel, pickSession) already carry: ask, then `if (x === \"refused\") return \"failed\"`, then `if (x === undefined) { record(\"/connect not answered in time; nothing changed\"); return \"failed\"; }`. The record string now appears three times for /connect (pickProvider once, pickAddableProvider twice), and \"/connect is not available from this shell.\" twice.",
+   "suggested_fix": "Extract a private helper, for example `private async settle(command: string, answer: unknown): Promise<\"failed\" | undefined>` that handles the refused/not-answered pair, or a const for the repeated record text. Not required for this PR; worth doing before a fifth step is added."
+  },
+  {
+   "id": "review-style-w3:F-001",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: ProvidersTabbedStepOptions): Promise<ProvidersTabAction> {",
+   "problem": "pickProvidersTabbedStep is a single closure of roughly 400 lines holding about 20 nested functions and a dozen mutable lets (tab, selected, windowStart, connectAction, addAction, pendingDisconnect, notice, nextNotice, rendered, bodyBox, addHint, statuses, blocks). paint() and the onKeypress handler each carry well over 10 decision branches (tab === connected/add, notice, empty, window math, per-tab button wiring; up/down, left/right, return, 'a', escape, armed state).",
+   "suggested_fix": "Split by responsibility: pull the per-tab row builders (connected row, add row) and the key handler into named functions or a small state object, or give each tab its own object with `rows`, `buildRow`, `onEnter`, `onArrow`, so the shared loop does not branch on `tab` five times."
+  },
+  {
+   "id": "review-style-w3:F-002",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "if (result.models.failure === undefined && result.models.models.length > 0) {",
+   "problem": "runProvidersModal repeats the same 'connected or not' block twice: after the connect sequence (action.kind === \"connect\") and after the custom-provider wizard (action.kind === \"custom\"). Each does: succeed when no failure and models > 0 -> upsertProvider(connected, ...), options.onConnected?.(name), tab = \"connected\", ok notice `<label> connected — N model(s)`; otherwise error notice from modelsFailureLine(...) or `<label>: no models returned`.",
+   "suggested_fix": "Extract one helper, for example `settleConnected(entry: DetectedProvider, label: string, probe: ModelsResolveResult): { tab: ProvidersTabId; notice: ProvidersNotice }`, that does the upsert, calls onConnected and builds the notice; call it from both branches."
+  }
+ ]
+}

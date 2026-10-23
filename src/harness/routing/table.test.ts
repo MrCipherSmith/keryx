@@ -5,14 +5,18 @@
 import { expect, test } from "bun:test";
 import {
   connectedPredicateFrom,
+  connectVerdict,
   describeAssignment,
   describeFallbackNotice,
+  describeNotConnectedReason,
+  describeRejectionNotice,
   flatModelOptions,
   isRoutingCategory,
   parseAssignmentTarget,
   resolveCategory,
   resolveCategoryDetailed,
   ROUTING_CATEGORIES,
+  sessionDerivationModels,
   WIRED_ROUTING_CATEGORIES,
 } from "./table";
 
@@ -203,4 +207,156 @@ test("describeFallbackNotice: AC10's exact wording", () => {
       { kind: "session-default" },
     ),
   ).toBe("anthropic/claude-x - not connected, falling back to session default");
+});
+
+// --- flow 468 AC3: the session's own provider/model is always connected and pickable ---
+// `connectedPredicateFrom` and `flatModelOptions` take an optional trailing `session: {providerId, modelId}`.
+
+const SESSION = { providerId: "openai-codex", modelId: "gpt-test" } as const;
+
+test("flow 468 AC3: connectedPredicateFrom counts the session's provider (and model) as connected even when the list lacks it", () => {
+  const connected = connectedPredicateFrom([{ name: "deepseek", models: ["deepseek-chat"] }], SESSION);
+  expect(connected("openai-codex", "gpt-test")).toBe(true);
+  expect(connected("openai-codex")).toBe(true);
+  // Only the session's own provider is added, not everything.
+  expect(connected("anthropic", "claude-x")).toBe(false);
+  expect(connected("deepseek", "deepseek-chat")).toBe(true);
+});
+
+test("flow 468 AC3: resolution keeps an assignment to the session's model when the provider list is empty", () => {
+  const user = { coding: { kind: "model" as const, providerId: "openai-codex", modelId: "gpt-test" } };
+  const connected = connectedPredicateFrom([], SESSION);
+  const result = resolveCategoryDetailed("coding", { user }, connected);
+  expect(result.assignment).toEqual({ kind: "model", providerId: "openai-codex", modelId: "gpt-test" });
+  expect(result.source).toBe("user");
+  expect(result.rejected).toBeUndefined();
+});
+
+test("flow 468 AC3: flatModelOptions lists the session's provider/model labelled `(current session)` even when the catalog lacks it", () => {
+  const options = flatModelOptions([{ name: "deepseek", models: ["deepseek-chat"] }], SESSION);
+  const row = options.find((o) => o.label.includes("openai-codex/gpt-test"));
+  expect(row).toBeDefined();
+  expect(row?.label).toContain("(current session)");
+  expect(row?.assignment).toEqual({ kind: "model", providerId: "openai-codex", modelId: "gpt-test" });
+  // The ordinary rows are untouched.
+  expect(options.map((o) => o.label)).toContain("deepseek/deepseek-chat");
+  expect(options[0]?.label).toBe("session default");
+});
+
+test("flow 468 AC3: flatModelOptions does not list the session's model twice when the catalog already has it", () => {
+  const options = flatModelOptions([{ name: "openai-codex", models: ["gpt-test", "gpt-other"] }], SESSION);
+  const rows = options.filter((o) => o.assignment.kind === "model" && o.assignment.providerId === "openai-codex" && o.assignment.modelId === "gpt-test");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.label).toContain("(current session)");
+  expect(options.map((o) => o.label)).toContain("openai-codex/gpt-other");
+});
+
+test("flow 468 AC3: the session provider is listed but lacks the session model — the session model is still a `(current session)` row, once", () => {
+  const options = flatModelOptions([{ name: "openai-codex", models: ["gpt-other"] }], SESSION);
+  const rows = options.filter((o) => o.assignment.kind === "model" && o.assignment.providerId === "openai-codex" && o.assignment.modelId === "gpt-test");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.label).toContain("(current session)");
+  // The provider's own listed model is untouched.
+  expect(options.map((o) => o.label)).toContain("openai-codex/gpt-other");
+});
+
+test("flow 468 AC3: connectedPredicateFrom — the session provider is connected for the session model only, never for another model it lacks", () => {
+  const connected = connectedPredicateFrom([{ name: "openai-codex", models: ["gpt-other"] }], SESSION);
+  expect(connected("openai-codex", "gpt-test")).toBe(true);
+  expect(connected("openai-codex", "gpt-other")).toBe(true);
+  // A different model id of the session provider falls to the list: absent from it, so not connected.
+  expect(connected("openai-codex", "gpt-missing")).toBe(false);
+  // With no list entry at all the provider is connected for itself and the session model, not for others.
+  const bare = connectedPredicateFrom([], SESSION);
+  expect(bare("openai-codex", "gpt-test")).toBe(true);
+  expect(bare("openai-codex", "gpt-missing")).toBe(false);
+});
+
+test("flow 468 AC3: connectedPredicateFrom — the session provider stays connected when the list holds it only as auth-failed", () => {
+  const connected = connectedPredicateFrom([{ name: "openai-codex", models: [], authFailed: true }], SESSION);
+  expect(connected("openai-codex", "gpt-test")).toBe(true);
+  expect(connected("openai-codex")).toBe(true);
+  // Another model of that provider is not rescued by the session shortcut.
+  expect(connected("openai-codex", "gpt-other")).toBe(false);
+});
+
+test("flow 468 AC3: sessionDerivationModels falls back to the session model for an auth-failed, unlisted or absent session provider", () => {
+  expect(sessionDerivationModels([{ name: "openai-codex", models: [], authFailed: true }], SESSION)).toEqual(["gpt-test"]);
+  expect(sessionDerivationModels([{ name: "openai-codex", models: [], listUnavailable: "unreachable" }], SESSION)).toEqual(["gpt-test"]);
+  expect(sessionDerivationModels([], SESSION)).toEqual(["gpt-test"]);
+  // A connectable provider keeps its own list, as before.
+  expect(sessionDerivationModels([{ name: "openai-codex", models: ["gpt-a", "gpt-b"] }], SESSION)).toEqual(["gpt-a", "gpt-b"]);
+});
+
+// --- flow 468 AC4: one verdict decides connected, the reason text and the picker rows ---
+
+test("flow 468 AC4: connectVerdict names each way a provider/model is not connected", () => {
+  const providers = [
+    { name: "alpha", models: ["a1"] },
+    { name: "beta", models: [], authFailed: true },
+    { name: "gamma", models: [], listUnavailable: "timed out" },
+  ];
+  expect(connectVerdict(providers, "alpha", "a1")).toBe("connected");
+  expect(connectVerdict(providers, "alpha")).toBe("connected");
+  expect(connectVerdict(providers, "alpha", "gone")).toBe("model-absent");
+  expect(connectVerdict(providers, "alpha", "gpt-6-astra")).toBe("model-denied");
+  expect(connectVerdict(providers, "beta")).toBe("provider-auth-failed");
+  expect(connectVerdict(providers, "gamma", "g1")).toBe("provider-unlisted");
+  expect(connectVerdict(providers, "delta")).toBe("provider-absent");
+});
+
+test("flow 468 AC4: describeNotConnectedReason uses the Model tab's five words, by the load state", () => {
+  const model = (providerId: string, modelId: string) => ({ kind: "model" as const, providerId, modelId });
+  const listed = { providers: [{ name: "alpha", models: ["a1"] }, { name: "beta", models: [], authFailed: true }] };
+  // The load failed or timed out: the list says nothing.
+  expect(describeNotConnectedReason(model("alpha", "a1"), { providers: [], unavailable: true })).toBe("provider list unavailable");
+  // The load succeeded and found nothing.
+  expect(describeNotConnectedReason(model("alpha", "a1"), { providers: [] })).toBe("no providers connected");
+  expect(describeNotConnectedReason(model("delta", "d1"), listed)).toBe("provider not connected");
+  expect(describeNotConnectedReason(model("beta", "b1"), listed)).toBe("provider auth failed");
+  expect(describeNotConnectedReason({ kind: "provider-default", providerId: "beta" }, listed)).toBe("provider auth failed");
+  expect(describeNotConnectedReason(model("alpha", "gone"), listed)).toBe("model not in alpha's list");
+  // A list holding only auth-failed providers is loaded and non-empty: an assignment to another provider is "not connected", not "unavailable".
+  expect(describeNotConnectedReason(model("alpha", "a1"), { providers: [{ name: "beta", models: [], authFailed: true }] })).toBe("provider not connected");
+  // A provider shown on the Model tab as "model list unavailable (<reason>)" falls back with those words.
+  expect(describeNotConnectedReason(model("gamma", "g1"), { providers: [{ name: "gamma", models: [], listUnavailable: "unreachable" }] })).toBe("model list unavailable (unreachable)");
+  // A denied model and a session default have no word of their own: the generic text.
+  expect(describeNotConnectedReason(model("alpha", "gpt-6-astra"), listed)).toBe("not connected");
+  expect(describeNotConnectedReason({ kind: "session-default" }, listed)).toBe("not connected");
+});
+
+test("flow 468 AC4: describeRejectionNotice without a list keeps the plain `not connected` wording; with one it carries the reason", () => {
+  const rejected = { assignment: { kind: "model" as const, providerId: "alpha", modelId: "gone" } };
+  const resolved = { kind: "session-default" as const };
+  expect(describeRejectionNotice(rejected, resolved)).toBe("alpha/gone - not connected, falling back to session default");
+  expect(describeRejectionNotice(rejected, resolved, { providers: [{ name: "alpha", models: ["a1"] }] })).toBe(
+    "alpha/gone - model not in alpha's list, falling back to session default",
+  );
+});
+
+test("flow 468 AC4: the picker never offers what resolution would reject — auth-failed, list-unavailable providers and denied models are skipped", () => {
+  const providers = [
+    { name: "alpha", models: ["a1", "gpt-6-astra"] },
+    { name: "beta", models: [], authFailed: true },
+    { name: "gamma", models: [], listUnavailable: "timed out" },
+  ];
+  const options = flatModelOptions(providers);
+  const labels = options.map((o) => o.label);
+  expect(labels).toEqual(["session default", "alpha (provider default)", "alpha/a1"]);
+  // Every offered row is one the shared predicate accepts.
+  const connected = connectedPredicateFrom(providers);
+  for (const option of options) {
+    if (option.assignment.kind === "model") expect(connected(option.assignment.providerId, option.assignment.modelId)).toBe(true);
+    if (option.assignment.kind === "provider-default") expect(connected(option.assignment.providerId)).toBe(true);
+  }
+});
+
+test("flow 468 AC3: the injected session row sits right after `session default`, ahead of every provider row", () => {
+  const options = flatModelOptions([{ name: "deepseek", models: ["deepseek-chat"] }], SESSION);
+  expect(options.map((o) => o.label)).toEqual([
+    "session default",
+    "openai-codex/gpt-test (current session)",
+    "deepseek (provider default)",
+    "deepseek/deepseek-chat",
+  ]);
 });

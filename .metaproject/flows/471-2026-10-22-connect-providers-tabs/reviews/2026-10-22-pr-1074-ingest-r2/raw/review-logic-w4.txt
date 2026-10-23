@@ -1,0 +1,80 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/connect-modal.test.ts:733",
+      "title": "Several assertions in the key-secrecy tests cannot fail",
+      "problem": "In 'the typed key is on no channel the shell shows' the test mounts selectProviderModelInTui directly, never the /connect handler inside launchTuiAgentShell (tui-shell.ts:10436) that is the code which toasts, prints system lines and writes the transcript. So transcriptText(h.chrome) not containing the key, and the toast/status/header/title spy collecting nothing secret, only prove that the picker function itself does not write there; the shell-side half is not exercised. Also `expect(existsSync(configDir)).toBe(true)` is true by construction (mkdtempSync in beforeEach), and `expect(settled).toBe(true)` at line 367 directly follows `await pending` and is tautological.",
+      "why_it_matters": "AC7 says the key appears nowhere else (transcript, toasts, journal, flow log). The test name and its channel list read as if the shell was covered; a future leak added in the /connect handler (for example echoing the base URL or key in a system line) would not fail this test. The behaviour today is correct; the cost is false assurance.",
+      "suggested_fix": "Drop the tautological assertions, and either narrow the test title to 'the picker writes the key to no chrome channel' or add a source-text audit like the AC7 block in connect-provider-buttons.test.ts for the /connect handler. AC7's journal and flow-log clauses are verified by no test in this slice at all (see F-002)."
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/connect-modal.test.ts:319",
+      "title": "AC7 'journal, test output, flow log' clauses have no test in this slice",
+      "problem": "AC7's [verify: exec bun test src/tui/connect-modal.test.ts] can only be satisfied for frames, the stored file (single occurrence, mode 0600), chrome channels and transcript text. The journal and the flow log are written by the flow CLI, which these tests never touch.",
+      "why_it_matters": "Nothing observable is broken: the picker never writes to a journal. This is only a gap between the criterion's wording and what its verify command proves. It would be settled by the AC12 live run recording the config file and a grep of the journal for the key.",
+      "suggested_fix": "None needed in code; confirm AC7 with that scope stated, or add the journal grep to the AC12 live-run checklist."
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.test.ts:1193",
+      "title": "One-at-a-time login test depends on connect() reaching login() synchronously",
+      "problem": "After `first` resolves, `rig.hook.connect(...)` is called and `release?.()` is invoked on the next line, expecting `release` to already point at the NEW pending promise and `rig.calls.length` to be 2. That holds only while connect() calls the injected login before its first await; if the hook ever awaits something earlier (a config read, a lock), `release` is still the old, already-resolved closure, `calls.length` is 1, and `await third` hangs until the test timeout.",
+      "why_it_matters": "It passes in CI today (typecheck-and-tests green), so there is no defect; it is a brittleness note for the next editor of createRemoteDeviceLogin. What would settle it: yielding with `await Promise.resolve()` before the `release?.()` calls.",
+      "suggested_fix": "Add a microtask yield before the first `release?.()` at line 1194 so the test does not encode the synchronous-start assumption."
+    }
+  ],
+  "prior_dispositions": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2` (PR head `2e1936eeb`)
+- Scope mode: explicit commit range, slice-04 only (TUI tests: connect-modal, connect-provider-buttons, modal-host, model-picker-notice, provider-endpoint-retry, provider-probe, queue-nav, remote-provider-hooks, wizard-modal)
+- Spec compliance gate: ran against acceptance-criteria.md for the criteria whose verify command is in this slice (AC2, AC4, AC5, AC6, AC7, AC11, AC3 annotation)
+
+### Summary
+The slice is tests only. I traced each scenario against the behaviour the AC file specifies (tab selection, Esc at each step, rejected key retry, unreachable endpoint retry, skipped key step, footerFor fallback, Connect/Test toggle, remote device-login hooks and cache) and found no assertion that contradicts the specified behaviour or that would pass for the wrong reason in a way that hides a live defect. The only weaknesses are a few assertions that cannot fail and an AC7 clause that no test in this slice covers.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 2
+
+### Spec Gaps (blocker)
+None detected. AC7's journal/flow-log clause is noted as info (F-002), not a gap in the implementation.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected (F-003 is a brittleness note).
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Suggested Patches
+None.
+
+Not read: the production code under test beyond a git grep of tui-shell.ts for the /connect handler and toast call shape; no `layers` block was in the payload.

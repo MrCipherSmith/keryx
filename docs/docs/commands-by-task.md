@@ -19,7 +19,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `/help` | Show available commands, grouped by task. |
 | `/doctor` | Same one-page health check, inside the session. |
-| `/setup` | Same preparation guide, inside the session — prints steps, runs nothing. |
+| `/setup` | Same preparation guide, inside the session — copy the agent prompt, or let keryx run the steps as background jobs after you confirm. |
 
 ## Connect a model provider
 
@@ -32,11 +32,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 
 | Shell command | Summary |
 |---|---|
-| `/connect` | Switch provider; row buttons test/disconnect it. |
+| `/connect` | Providers dialog: switch, test or disconnect a connected provider, or add one (Connected / Add provider tabs). |
 | `/routing` | Route task categories to models — a flat, searchable list across every connected provider. |
 | `/search-provider` | Configure and test a web search provider. |
 | `/search-connect` | Select a connected web search provider. |
-| `/provider` | Switch provider — /provider <name>, or no arg to re-select. |
 | `/external` | Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on\|off]. |
 
 ## Look and feel

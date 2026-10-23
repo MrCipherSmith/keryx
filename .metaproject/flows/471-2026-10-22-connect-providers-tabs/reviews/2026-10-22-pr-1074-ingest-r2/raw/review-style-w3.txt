@@ -1,0 +1,266 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-03 (balance-panel, chat-shell, game-modal, model-turn, modal-host, queue-nav, remote-provider-hooks, tui-shell) is readable and consistently commented; the /provider -> /connect text renames are clean. No major style issues. Findings are minor/info: the new tabbed Providers step is one very large closure, two near-duplicate result blocks and one repeated credential predicate, unnamed layout constants, two positional booleans at a call site, and a few small naming/ordering nits.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: ProvidersTabbedStepOptions): Promise<ProvidersTabAction> {",
+      "problem": "pickProvidersTabbedStep is a single closure of roughly 400 lines holding about 20 nested functions and a dozen mutable lets (tab, selected, windowStart, connectAction, addAction, pendingDisconnect, notice, nextNotice, rendered, bodyBox, addHint, statuses, blocks). paint() and the onKeypress handler each carry well over 10 decision branches (tab === connected/add, notice, empty, window math, per-tab button wiring; up/down, left/right, return, 'a', escape, armed state).",
+      "impact": "Hard to read and to change one tab without touching the other; the per-tab branches (`if (tab === \"connected\") ... else ...`) repeat in applyHighlight, paint, the arrow handler, the keypress handler and labelContent.",
+      "suggested_fix": "Split by responsibility: pull the per-tab row builders (connected row, add row) and the key handler into named functions or a small state object, or give each tab its own object with `rows`, `buildRow`, `onEnter`, `onArrow`, so the shared loop does not branch on `tab` five times.",
+      "evidence": "The slice shows paint() and the keypress handler (diff lines about 1651-1796 and 1855-1927) each branching on `tab` and on the armed-disconnect state; the previous pickConnectedProviderStep had one tab and about half the branches.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:providers-step-complexity",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "if (result.models.failure === undefined && result.models.models.length > 0) {",
+      "problem": "runProvidersModal repeats the same 'connected or not' block twice: after the connect sequence (action.kind === \"connect\") and after the custom-provider wizard (action.kind === \"custom\"). Each does: succeed when no failure and models > 0 -> upsertProvider(connected, ...), options.onConnected?.(name), tab = \"connected\", ok notice `<label> connected — N model(s)`; otherwise error notice from modelsFailureLine(...) or `<label>: no models returned`.",
+      "impact": "Two ~10-line copies; a wording or rule change (for example what counts as connected) has to be made twice and the two can drift. Sites: connect branch and custom branch of runProvidersModal.",
+      "suggested_fix": "Extract one helper, for example `settleConnected(entry: DetectedProvider, label: string, probe: ModelsResolveResult): { tab: ProvidersTabId; notice: ProvidersNotice }`, that does the upsert, calls onConnected and builds the notice; call it from both branches.",
+      "evidence": "Slice lines 2226-2237 (connect) and 2247-2258 (custom) share the same condition shape, the same two notice texts and the same upsert + onConnected calls.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:connected-result-dup",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "deps.requireCredential && (provider.requiresApiKey ?? true)",
+      "problem": "The rule 'a provider that needs a key and has none' is spelled out twice with the same three-part condition: in probeProviderConnection (`requireCredential && (provider.requiresApiKey ?? true) && classifyProviderConnection(name, env, configDir).kind === \"no-credential\"`) and in runProviderConnectSequence's collectCredential (`requireKey && (connectionProviderByName(...)?.requiresApiKey ?? true) && classifyProviderConnection(...).kind === \"no-credential\"`).",
+      "impact": "Both implement one product rule (AC: no anonymous request, no 'connected' without a key). Keeping two inline copies lets the Test and Connect meanings of 'no credential' drift apart.",
+      "suggested_fix": "Add `function lacksRequiredCredential(name: string, env: Record<string, string | undefined>, configDir?: string): boolean` next to probeProviderConnection and call it from both sites.",
+      "evidence": "Slice lines 1264 and 2064-2069.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:no-credential-predicate-dup",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "else if (!addCustomRowSelected()) addAction = stepAddNavAction(addAction, direction);",
+      "problem": "Two small duplications in the new tabbed code. (1) The left/right stepping `if (tab === \"connected\") connectAction = stepConnectNavAction(...); else if (!addCustomRowSelected()) addAction = stepAddNavAction(...)` appears in the surface's onArrowKeys and again in the onKeypress left/right branch. (2) Tab cycling to the next tab (`tabIds[(at + 1) % length]`) appears in the ModalHost claimKey and in the overlay's cycle().",
+      "impact": "Three-line copies; low risk now, but the armed-disconnect path and the unarmed path must stay in step.",
+      "suggested_fix": "Extract `stepRowAction(direction)` for (1) and a shared `nextTabId(tabs, active)` for (2).",
+      "evidence": "Slice lines 1840-1843 and 1881-1885; 1001-1006 and 1070-1074.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:arrow-step-dup",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const result = await runProviderConnectSequence(otui, target, action.provider, deps, true, true);",
+      "problem": "runProviderConnectSequence takes two positional booleans (`setup`, `requireKey = false`); the call sites read `(…, deps, true, true)` and `(…, deps, false)` and `(…, deps, true)`, so a reader cannot tell which flag is which without opening the signature.",
+      "impact": "Readability and easy swap mistakes; the second flag changes persistence behaviour (a skipped key stops the sequence).",
+      "suggested_fix": "Pass an options object `{ setup: true, requireKey: true }`, or two named wrappers (`connectForAddTab`, `pickConnected`).",
+      "evidence": "Signature and three call sites in slice lines 1975-1987, 2209, 2219, 2517.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:boolean-params-connect-sequence",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/queue-nav.ts",
+      "line": null,
+      "quote": "export function stepAddNavAction(selected: AddNavAction, _direction: \"left\" | \"right\"): AddNavAction {",
+      "problem": "`_direction` is unused: with two targets, left and right are the same move, so the function is a toggle. The underscore marks it as deliberate, and it keeps the shape of the two sibling steppers, so this is an observation, not a defect.",
+      "impact": "A reader may look for direction handling that is not there.",
+      "suggested_fix": "Optionally add one sentence to the doc comment: 'two targets, so both directions toggle; the parameter keeps the sibling signature'.",
+      "evidence": "Function body `return selected === \"connect\" ? \"test\" : \"connect\";`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:unused-direction",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "return clipText(full, bodyWidth - 24 - labelOf(d).length);",
+      "problem": "Layout numbers are inline literals with their meaning only in a nearby comment: `bodyWidth - 24` (noteOf) and `bodyWidth - 24 ... (isConnected ? 13 : 0)` (addNoteOf) for the button columns, `Math.min(24, rowCount * 2 + 3)` for contentRows, `let bodyWidth = 70; let bodyHeight = 15;`, `bodyHeight - 2` in capacityRows, and in the overlay fallback `Math.max(20, r.width - 4)` and `r.height - 6`. The comments say the buttons take '~22 columns' while the code subtracts 24.",
+      "impact": "The same 24 is used in two places and the comment and constant disagree slightly; changing a button label means hunting literals.",
+      "suggested_fix": "Name them once: `ROW_BUTTON_COLS = 24`, `CONNECTED_BADGE_COLS = 13`, `ROW_LINES = 2`, `HEADER_AND_SPARE_ROWS = 2`, `DEFAULT_BODY_WIDTH/HEIGHT`, `OVERLAY_GUTTER_COLS/ROWS`, and align the comment with the value.",
+      "evidence": "Slice lines 1431, 1436, 1348-1349, 1640, 1837, 1068.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:layout-magic-numbers",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-008",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "first: { box: Box; setActive: (active: boolean) => void };",
+      "problem": "RowBlock's buttons are named `first` and `second`, whose meaning flips by tab (Test/Disconnect on Connected, Connect/Test on Add) and which can be undefined for the custom row. Elsewhere `all` (`opts.all`, `const all = [...detected]`) is a vague name for 'every detected provider'.",
+      "impact": "Call sites such as `block.first.setActive(active && (addAction === \"connect\" || block.second === undefined))` need the tab context to be read correctly; the previous `test`/`disconnect` fields were self-describing.",
+      "suggested_fix": "Name by role (`primary`/`secondary`) with a doc comment per tab, or keep a discriminated block type per tab; rename `all` to `allProviders`/`detectedProviders`.",
+      "evidence": "RowBlock interface and applyHighlight, slice lines 1351-1363 and 1491-1497.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:rowblock-naming",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-009",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const surface: TabbedSurface | undefined = openTabbedSurface(otui, target, {",
+      "problem": "`surface` is a `const` typed `TabbedSurface | undefined` and used as `surface?.close()` / `surface?.setTab(id)`, with a comment saying renderTab runs 'before `surface` is assigned'. For a `const`, reading it before the assignment completes throws a TDZ ReferenceError rather than yielding undefined, so the `| undefined` and the optional chaining suggest a behaviour the language does not give. Not shown to be reachable: renderTab -> paint() only builds buttons whose callbacks run later.",
+      "impact": "Misleading type/comment for the next editor; becomes a real bug only if something called synchronously from renderTab reaches switchTab/finish.",
+      "suggested_fix": "Either declare `let surface: TabbedSurface | undefined;` and assign after open (what the optional chaining implies), or drop `| undefined` and the `?.` and reword the comment. What would settle it: whether any path from renderTab during the synchronous open calls switchTab or finish.",
+      "evidence": "Slice lines 1520-1523, 1619-1621, 1803-1805, 1831.",
+      "confidence": "low",
+      "reviewer": "review-style",
+      "dedupe_key": "style:surface-tdz-typing",
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "F-010",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "  removedCommandHint,",
+      "problem": "In the `../commands/agent-commands` import list (commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, parseDelegateCommand, parseDemoteCommand, renderCommandHelp), `removedCommandHint` is inserted between `describeUnavailableCommand` and `filterCommands`, breaking the alphabetical order the rest of the list keeps.",
+      "impact": "Cosmetic; the next import lands in the wrong place too.",
+      "suggested_fix": "Move `removedCommandHint,` between `parseDemoteCommand,` and `renderCommandHelp,`.",
+      "evidence": "Slice lines 708-717.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:import-order-removedCommandHint",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-011",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": "return { ok: false, message: \"signed in, but main is busy, so the login was not applied to this session; run /connect in the shell when it is idle\" };",
+      "problem": "User-facing outcome texts in createRemoteDeviceLogin are inconsistent: four are named constants (LOGIN_FAILED_TEXT, LOGIN_NOT_APPLIED_TEXT, LOGIN_TIMED_OUT_TEXT, LOGIN_ABORTED_TEXT) while this one and 'a device login is already running', 'this provider has no device login; ...' and 'connected. The session and model are unchanged.' are inline; casing differs ('Device login failed.' / 'Signed in, but...' vs 'signed in, but...' / 'connected.'), and 'main is busy' is internal vocabulary in a chat message.",
+      "impact": "Inconsistent wording in the Telegram chat and harder to test or translate the messages in one place.",
+      "suggested_fix": "Move all outcome texts into the constant block with one casing convention, and say 'the shell is busy' (or the project's own term for the main agent) in the busy text.",
+      "evidence": "Slice lines 515-518 versus 546, 549, 579, 583.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:remote-login-messages",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-012",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "function openTabbedSurface(otui: OpenTui, target: StepTarget, opts: TabbedSurfaceOptions): TabbedSurface {",
+      "problem": "The PR adds a self-contained generic tabbed-surface component (about 180 lines with its types and the overlay fallback), the Providers tabbed step (about 400 lines), runProviderConnectSequence and runProvidersModal (about 250 lines) to src/tui/tui-shell.ts, which the slice's own hunk offsets put at more than 11,000 lines. The same PR extracts the Telegram hooks to `remote-provider-hooks.ts` precisely to keep them out of this file.",
+      "impact": "File is well over the 800-line guideline and grows further; the generic parts (TabbedSurface, tabDigit) have no dependency on the shell and are natural neighbours of `modal-host.ts`.",
+      "suggested_fix": "Move openTabbedSurface/TabbedSurface/tabDigit into a `tabbed-surface.ts` (or into modal-host.ts) and the /connect Providers step and connect sequence into `providers-modal.ts`; leave `selectProviderModelInTui` as the entry point.",
+      "evidence": "Slice hunks for tui-shell.ts reach offsets beyond 11,000 (for example '@@ 11217,11345 @@'); additions in slice lines 936-1118, 1163-1929, 1931-2266.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:tui-shell-file-length",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-013",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "interface TabbedSurfaceTab {",
+      "problem": "`TabbedSurfaceTab` is `{ id: string; label: string }`, identical to `ModalTab` exported by modal-host.ts (shown in this same slice), and openTabbedSurface passes it straight to openModal as `tabs`. The module already imports from modal-host.",
+      "impact": "Two names for one shape; they can drift.",
+      "suggested_fix": "Import `type ModalTab` and use it in TabbedSurfaceOptions; delete TabbedSurfaceTab.",
+      "evidence": "modal-host.ts hunk: `export type ModalTab = { id: string; label: string };`; slice lines 936-940.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:duplicate-tab-type",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-014",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const theme = (): ReturnType<typeof getTheme> => getTheme();",
+      "problem": "A local alias that only forwards to getTheme(); the rest of the file calls `getTheme()` directly (including in the same function's neighbours).",
+      "impact": "One extra indirection and an extra name for no gain.",
+      "suggested_fix": "Replace `theme().focus` / `theme().muted` with `getTheme().focus` / `getTheme().muted` and drop the alias.",
+      "evidence": "Slice lines 1032 and 1055.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:theme-alias",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-015",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const focusApplied = new Set<ProvidersTabId>();",
+      "problem": "`focusApplied` is declared after the `renderTab` function that reads and writes it, in the middle of the setup between function declarations and the `openTabbedSurface` call. It works because renderTab runs only after this line, but a reader meets the use before the declaration.",
+      "impact": "Minor readability; the other mutable state of the step is declared at the top.",
+      "suggested_fix": "Declare it with the other lets at the top of the Promise executor.",
+      "evidence": "Slice lines 1805-1828.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:declare-before-use",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 9, "info": 6 },
+  "slices": ["slice-03"]
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Naming of the new helpers (`createRemoteDeviceLogin`, `createConnectedProvidersCache`, `ProvidersTabAction`) is clear, comments explain the why, and the /provider -> /connect renames are consistent across balance-panel, chat-shell, game-modal and model-turn. The main style cost is size: the tabbed Providers step is one large closure, and tui-shell.ts keeps growing. No console usage, no dead imports found, no blocker or major issues.
+
+## Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2`
+- Scope mode: explicit-hash-range (supplied slice)
+- Slices read in full: slice-03
+
+## Stats
+- major: 0
+- minor: 9
+- info: 6
+
+## Positive Notes
+- `remote-provider-hooks.ts` states its no-secrets vocabulary rule up front and keeps each hook injectable.
+- The shared `probeProviderConnection` and `runProviderConnectSequence` replace two copies of the old inline test and credential code (net DRY gain).
+- Comments referencing flow numbers and the reason for each guard are specific and still accurate after the rewrite.
+
+Parent follow-up: none.

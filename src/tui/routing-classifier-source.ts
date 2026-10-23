@@ -19,6 +19,7 @@ import {
   describeRejectionNotice,
   resolveCategoryDetailed,
   ROUTING_CATEGORIES,
+  sessionDerivationModels,
   type CategoryAssignment,
   type FlatPickerProvider,
   type RoutingCategory,
@@ -212,8 +213,7 @@ export async function runRoutingClassifierForTurn(
   // Flow 327's `derived` layer, built from the SAME provider list already on
   // hand (`providers`, shared with the picker) against the session's own
   // provider/model — the same shape `keryx routing list` and `/routing` use.
-  const sessionProvider = providers.find((p) => p.name === opts.sessionProvider);
-  const models = sessionProvider?.models ?? [opts.sessionModel];
+  const models = sessionDerivationModels(providers, { providerId: opts.sessionProvider, modelId: opts.sessionModel });
   const derived: RoutingTable = deriveDefaultTable(opts.sessionProvider, models, profiles, opts.sessionModel);
   const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connectedForTurn, available);
   fallbackReason ??= resolved.rejected === undefined ? skippedJev : describeRejectionNotice(resolved.rejected, resolved.assignment);

@@ -368,6 +368,11 @@ export class RemoteBridge {
         ...(this.host.busyRefusal !== undefined ? { busyRefusal: (line: string) => this.host.busyRefusal!(line) } : {}),
         ...(this.host.listModels !== undefined ? { listModels: (id?: string) => this.host.listModels!(id) } : {}),
         ...(this.host.listProviders !== undefined ? { listProviders: () => this.host.listProviders!() } : {}),
+        ...(this.host.listAddableProviders !== undefined ? { listAddableProviders: () => this.host.listAddableProviders!() } : {}),
+        ...(this.host.testProvider !== undefined ? { testProvider: (id: string) => this.host.testProvider!(id) } : {}),
+        ...(this.host.connectWithDeviceLogin !== undefined
+          ? { connectWithDeviceLogin: (id: string, notify: (text: string) => Promise<void>) => this.host.connectWithDeviceLogin!(id, notify) }
+          : {}),
         ...(this.host.switchModel !== undefined ? { switchModel: (model: string, provider?: string) => this.host.switchModel!(model, provider) } : {}),
         ...(this.host.listSessions !== undefined ? { listSessions: () => this.host.listSessions!() } : {}),
         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),

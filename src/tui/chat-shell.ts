@@ -305,7 +305,7 @@ export interface ChatShellOptions {
   /** The driver. Injected to keep `commands/shell.ts` ↔ this module acyclic. */
   runShell: (io: ShellIO, deps: ShellDeps) => Promise<void>;
   /**
-   * TUI picker for `/models` (with `onlyProvider`) and `/provider`. Injected as
+   * TUI picker for `/models` (with `onlyProvider`) and `/connect`. Injected as
    * `deps.selectProviderModel` so those commands open an overlay instead of
    * consuming the next composer submissions as text-menu answers. `undefined`
    * from the picker = cancelled: the current selection is kept.
@@ -466,7 +466,7 @@ export async function mountChatShell(
     },
   });
 
-  // `/models` and `/provider` route through the TUI picker (inside the chrome's
+  // `/models` and `/connect` route through the TUI picker (inside the chrome's
   // overlay guard, so the `/`-menu key router stays inert while it is up) rather
   // than through `pickProviderModel`, which would read the next composer
   // submissions as answers to a numbered text menu.
@@ -597,7 +597,7 @@ export async function mountChatShell(
 export async function launchTuiChatShell(opts: {
   detected: DetectedProvider[];
   initial?: TuiSelection;
-  /** Re-probe providers for `/provider` and `/models` (fresh detection). */
+  /** Re-probe providers for `/connect` and `/models` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   /** Build `runShell`'s deps once the provider/model is resolved. */
   makeShellDeps: (sel: TuiSelection) => ShellDeps;
@@ -643,8 +643,8 @@ export async function launchTuiChatShell(opts: {
     handle = await mountChatShell(otui, r, {
       deps: opts.makeShellDeps(sel),
       runShell: opts.runShell,
-      // `/models` → model picker; `/provider` → configure wizard; `/connect` →
-      // already-connected providers only. Same pickers as the agent shell.
+      // `/models` → model picker; `/connect` → the Providers dialog (connected
+      // providers, plus an Add provider tab). Same pickers as the agent shell.
       pickSelection: async (pickOpts) => {
         const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
         if (pickOpts?.onlyConnected === true) {

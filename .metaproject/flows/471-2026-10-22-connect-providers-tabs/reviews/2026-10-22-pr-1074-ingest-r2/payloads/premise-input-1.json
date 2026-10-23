@@ -1,0 +1,160 @@
+{
+ "judge": "review-premise",
+ "source": "round",
+ "findings": [
+  {
+   "id": "review-architecture-w2:F-001",
+   "reviewer": "review-architecture",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/shell.ts",
+   "line": null,
+   "quote": "${removedCommandHint(command) ?? \"Type /help.\"}",
+   "problem": "removedCommandHint answers a typed /provider in the readline AGENT REPL with 'run /connect', but that REPL implements no /connect: READLINE_AGENT_COMMANDS (shell.ts ~272) omits it, and its own comment says /model and /connect are 'TUI pickers ... that have no readline equivalent'. The hint is added to the readline agent unknown-command branch and the registry helper is surface-agnostic.",
+   "suggested_fix": "Give the hint only where /connect exists: either pass the surface to removedCommandHint (or have the readline agent branch use the plain 'Type /help.' text), or word the hint surface-neutrally ('use the Providers dialog in the TUI, /connect in chat')."
+  },
+  {
+   "id": "review-architecture-w2:F-002",
+   "reviewer": "review-architecture",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/agent-commands.ts",
+   "line": null,
+   "quote": "Providers picker: switch to a connected provider or add one (picker when available)",
+   "problem": "The chat-mode registry text says /connect can 'add one', and /provider was removed on the grounds that /connect now covers it. In the readline chat loop /connect is selectAndApply({ onlyConnected: true }) -> realSelectProviderModel (shell.ts ~1363-1391), which ignores onlyConnected and runs pickProviderModel over already detected providers only; there is no add/key/login step. The removed chat branch also carried /provider <name> (a by-name switch that kept model and base URL) and /provider openai-codex (selectAndApply({ onlyProvider: 'openai-codex' })), and neither has a /connect equivalent in this loop. Whether detectProviders still lists openai-codex without the removed entry was not checked here.",
+   "suggested_fix": "Either reword the chat description to what the readline picker does ('Providers picker: switch among detected providers'), or add the missing arguments to chat /connect (/connect <name>, /connect openai-codex) before dropping /provider. Also fix the stale JSDoc in shell-types.ts, which says /connect 'switch among live providers' while the real selector does not filter on onlyConnected."
+  },
+  {
+   "id": "review-architecture-w2:F-003",
+   "reviewer": "review-architecture",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/shell.ts",
+   "line": null,
+   "quote": "logs, or echoes the key. Then run /connect to pick the anthropic provider.",
+   "problem": "CONNECT_GUIDANCE is what /connect prints when deps.selectProviderModel is undefined (the 'not available' path). The rewrite turns its last sentence from 'run /provider' into 'run /connect', so the guidance printed by /connect tells the user to run /connect.",
+   "suggested_fix": "End the guidance with a way that works without the picker, e.g. 'Then restart keryx and pick the provider with /connect' or name the CLI route (keryx auth / the env var in the next launch)."
+  },
+  {
+   "id": "review-architecture-w3:F-001",
+   "reviewer": "review-architecture",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: ProvidersTabbedStepOptions): Promise<ProvidersTabAction> {",
+   "problem": "pickProvidersTabbedStep holds, in one closure of roughly 350 lines, the view (row/button/notice rendering, window scrolling), the tab/selection/nav state machine, the keypress router, and persistence/network effects (disconnectProvider, probeProviderConnection, catalog-cache reads). The step contract says it 'only reports what was chosen', but it also performs Disconnect and Test itself. The Add tab added a second row layout, a second nav state (addAction), per-tab selection/window records and a notice channel on top of the Connected tab's logic.",
+   "suggested_fix": "Extract the tab/selection/pending-disconnect state and the effects (test, disconnect) into a small controller object with injected effect functions, leaving the step to render and route keys. Not required for this PR."
+  },
+  {
+   "id": "review-architecture-w3:F-002",
+   "reviewer": "review-architecture",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "classifyProviderConnection(prov.name, deps.env ?? process.env, deps.configDir).kind === \"no-credential\"",
+   "problem": "The rule 'this provider needs a key and has none' is written twice: in runProviderConnectSequence (skip branch, with `requireKey`) as `(connectionProviderByName(prov.name, deps.configDir)?.requiresApiKey ?? true) && classifyProviderConnection(...).kind === \"no-credential\"`, and in probeProviderConnection as `deps.requireCredential && (provider.requiresApiKey ?? true) && classifyProviderConnection(...).kind === \"no-credential\"`. The two share a purpose (Add tab [Connect] and [Test] must agree on what counts as 'no credential') but not an implementation.",
+   "suggested_fix": "Add one helper, e.g. `providerLacksRequiredCredential(name, env, configDir): boolean`, next to classifyProviderConnection and call it from both sites."
+  },
+  {
+   "id": "review-architecture-w3:F-003",
+   "reviewer": "review-architecture",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "if (options.onlyConnected) {",
+   "problem": "`onlyConnected: true` used to mean 'list only connected providers'. It now selects the whole two-tab Providers dialog, whose Add tab lists every detected provider, connected or not, and which can connect new ones. The flag name, `SelectProviderModelOptions.onlyConnected`, `ChatShellOptions.pickSelection({ onlyConnected })` and the chat-shell/agent-shell callers still carry the old meaning; only a comment says otherwise.",
+   "suggested_fix": "Rename the option to the intent (e.g. `providersDialog: true` / `mode: \"manage\"`) at the three sites, or document the new meaning on the option's JSDoc where it is declared."
+  },
+  {
+   "id": "review-clean-code-w1:F-001",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-router.ts",
+   "line": null,
+   "quote": "    if (action === undefined) {\n      this.ctx.record(\"/connect not answered in time; nothing changed\");",
+   "problem": "The picker-answer guard `if (x === \"refused\") return \"failed\"; if (x === undefined) { record(\"... not answered in time; nothing changed\"); return \"failed\"; }` is now written five times in this class. The diff adds two new copies in pickAddableProvider (after `this.pick(...)` and after `this.ask(...)`), next to the existing ones in pickModel, pickProvider and pickSession. The string \"/connect not answered in time; nothing changed\" alone appears three times inside the /connect flow.",
+   "suggested_fix": "Extract one private helper, e.g. `settledOrFailed(answer, command)`, that returns true when the caller should stop, records the timeout text and handles \"refused\"; call it at all five sites."
+  },
+  {
+   "id": "review-clean-code-w1:F-002",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-router.ts",
+   "line": null,
+   "quote": "    if (host.listAddableProviders === undefined) {\n      await this.ctx.reply(\"/connect is not available from this shell.\").catch(() => false);",
+   "problem": "This guard in pickAddableProvider cannot be reached. The method is private and has exactly two callers, both in pickProvider (lines 616 and 634), and both run only when `canAdd` (`host.listAddableProviders !== undefined`) is true. The check and its reply are dead code, and the reply text reads as though the path exists.",
+   "suggested_fix": "Pass the already-checked `listAddableProviders` function (or the host method) into pickAddableProvider as a parameter, or use a non-optional host type there, and delete the guard."
+  },
+  {
+   "id": "review-clean-code-w1:F-003",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-router.ts",
+   "line": null,
+   "quote": "  private async connectAddable(provider: AddableProvider): Promise<AskResult> {",
+   "problem": "connectAddable is 41 lines and mixes levels: three refusal branches (already connected, key provider, host hook missing), a busy check, the notify closure, a try/catch around the host call, and the result post. The refusal branches repeat the same record + compose + reply + return \"failed\" shape (691-693, 697-701, 709-712).",
+   "suggested_fix": "Split a pure `connectRefusal(provider, host)` that returns the refusal text or undefined, and keep connectAddable as: refusal check, busy check, run login, post result."
+  },
+  {
+   "id": "review-clean-code-w1:F-004",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/shell.ts",
+   "line": null,
+   "quote": "// calling them unknown. Anything else falls back to the old message.",
+   "problem": "Stale comment. The diff changed its first line from `/models` / `/provider` are chat-mode commands to `/models` is a chat-mode command, but the continuation still says `calling them unknown`. It also now sits above a fallback that appends removedCommandHint, which the comment does not mention.",
+   "suggested_fix": "Reword: `/models` is a chat-mode command: say so instead of calling it unknown. A removed command gets its hint; anything else falls back to the old message."
+  },
+  {
+   "id": "review-clean-code-w2:CC-1",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3260,
+   "quote": null,
+   "problem": "pickProvidersTabbedStep is about 440 lines (3260-3700). One closure holds row layout (RowBlock, labelOf, mark text), highlight, key handling, tab switching, painting (paint is ~110 lines), capacity maths and the surface wiring.",
+   "suggested_fix": "Extract row building and painting into pure helpers taking the state they read (rows, selected, tab, width), and keep the step function as wiring. Not needed for this PR; do it when the next tab is added."
+  },
+  {
+   "id": "review-clean-code-w2:CC-2",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3746,
+   "quote": null,
+   "problem": "runProviderConnectSequence(otui, target, prov, deps, setup, requireKey = false) has six parameters, two of them booleans. The call at 3980 reads `runProviderConnectSequence(otui, target, action.provider, deps, true, true)`, and the pick call at 3970 ends `deps, false)`; the meaning of each bare boolean is invisible at the call site.",
+   "suggested_fix": "Take an options object `{ setup, requireKey }` (or a named mode such as `\"add\" | \"first-run\"` if the two always travel together)."
+  },
+  {
+   "id": "review-clean-code-w2:CC-3",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3945,
+   "quote": null,
+   "problem": "The same dependency object is rebuilt by spreading modelDeps three times: in runProvidersModal (3945-3949), in runProviderConnectSequence (3851-3855) and in selectProviderModelInTui (~4085-4089). Each adds the same couple of fields to the shared base.",
+   "suggested_fix": "Build the extended deps once (a small `withConnectDeps(modelDeps)` helper) and pass it down."
+  },
+  {
+   "id": "review-clean-code-w2:CC-4",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 4050,
+   "quote": null,
+   "problem": "The option `onlyConnected` (SelectProviderModelOptions, chat-shell.ts pickSelection type ~314-317 and use ~650-652, /connect handler 10444) now means \"open the Providers modal\", not \"list only connected providers\". `selectProviderModelInTui` returns `runProvidersModal(...)` early when it is set, and the modal opens on the Add provider tab when nothing is connected.",
+   "suggested_fix": "Rename to something like `providersModal` (or `mode: \"providers\"`) in all three places in one commit."
+  }
+ ]
+}

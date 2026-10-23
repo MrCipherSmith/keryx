@@ -10,7 +10,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { readPremiseDecisions, recordPremiseDecision, recordPremiseDecisionAfter, type AppliedFirst, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
 import { isReviewPackageDir } from "./package-location";
-import { cardPressFields, type CardPress } from "./types";
+import { cardPressFields, type CardPress, type HostQuestion } from "./types";
 import { applyPremiseDecision, isHeldVerdict, latestPremiseDecision, premiseHoldState, premiseSubjectOf } from "./premise";
 import { recordFinishedRound, registryVouchesPackage } from "./round-registry";
 
@@ -129,6 +129,8 @@ export type PremiseAnswer = {
   quote: string;
   at: string;
   confirmedVia: OperatorDecisionVia;
+  /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
+  hostQuestion?: HostQuestion | undefined;
 } & CardPress;
 
 /**
@@ -157,7 +159,7 @@ const registryPlace = (registry: RegistryOptions): { cwd?: string; dir?: string 
 export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer, registry: RegistryOptions = {}): Promise<PremiseQuestionDecision> {
   const { decision, applied: vouched } = await recordPremiseDecisionAfter(
     packageDir,
-    { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, ...cardPressFields(input), subject: input.finding.subject },
+    { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, ...cardPressFields(input), subject: input.finding.subject, ...(input.hostQuestion === undefined ? {} : { hostQuestion: input.hostQuestion }) },
     (kept) => applyAnswerToFindings(packageDir, kept, registry),
   );
   if (vouched === true) reRecordRegistry(packageDir, registry);

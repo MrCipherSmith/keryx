@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "for": "test",
+  "files": [
+    "src/commands/setup-guide.ts",
+    "src/tui/action-button.ts",
+    "src/tui/modal-host.ts",
+    "src/tui/setup-modal.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "entries": [
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "bytes": 3891,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    }
+  ],
+  "budget": {
+    "limitBytes": 131072,
+    "usedBytes": 0,
+    "exceeded": false,
+    "limitSource": "default"
+  },
+  "warnings": []
+}

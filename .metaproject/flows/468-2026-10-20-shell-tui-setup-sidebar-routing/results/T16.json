@@ -1,0 +1,125 @@
+{
+  "task_id": "task-16",
+  "task_name": "C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "New src/tui/sidebar-cards.ts: SIDEBAR_CARD_IDS, SIDEBAR_SECTION_IDS/SIDEBAR_SECTION_CARD, pure buildSidebarCards(snapshot), mountSidebarCards (seven fixed slots sb-card-<id>, patched in place, clicked via the slot Box, repainted on geometry and theme change through guardedThemeRepaint), openSidebarCard (openModal with one tab per former section, Enter on a tab with a command closes the modal and calls runCommand), collectRenderableText. tui-shell: the ~30 sections still mount (they own polling, state and click inspectors) but into the hidden sb-legacy box with a detail-width text budget (100); a SIDEBAR_SECTION_SOURCES map names the node each former section painted; sidebarSnapshot() reads them with collectRenderableText plus approvals pending (ApprovalsSidebar.pending), the hold banner (leaseView), the version-check latestVersion and ReviewsPanelHandle.notReadyCount; a 400 ms unref'd tick compares the snapshot JSON and refreshes the cards only on change; a click opens openSidebarCard with runCommand = runLine. The refit pass is gone (width is constant), offSidebarGeometry now stops the tick and destroys the cards. shell-chrome hides the pinned version-update notice in rail (the Session badge stands for it). Docs: cli-reference gains a sidebar bullet; Governance/Triggers bullets name the Ops card.",
+  "files_modified": [
+    "src/tui/tui-shell.ts",
+    "src/tui/shell-chrome.ts",
+    "src/tui/approvals-sidebar.ts",
+    "src/tui/reviews-inspector.ts",
+    "src/commands/shell-pty-launch.smoke.test.ts",
+    "docs/docs/cli-reference.md"
+  ],
+  "files_created": [
+    "src/tui/sidebar-cards.ts",
+    "src/tui/sidebar-cards-read.test.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass (npx eslint on sidebar-cards.ts, sidebar-cards-read.test.ts, tui-shell.ts, shell-chrome.ts, approvals-sidebar.ts, reviews-inspector.ts, shell-pty-launch.smoke.test.ts)",
+  "type_check_result": "pass (bun run typecheck)",
+  "test_result": "pass: sidebar-cards (21), sidebar-geometry, modal-host, shell-chrome, tui-shell, capability tui-layout and no-optional-imports, shell-source-audits, verify-exec-files, cli-reference-coverage (330 total); 65 per-panel/surface/inspector/wiring/theme/chat-shell test files (963); 14 further files that import tui-shell or the wizards (212); sidebar-cards-read (2); pty smoke with KERYX_ALLOW_REAL_SUBPROCESS=1: 5 of 5 pass including the AC16 80x24 Session/Work/toast test; check:doc-links 0 broken.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all: AC12, AC13 (card part; modal width done in T15), AC16 (card visibility), AC17; AC14 kept green.",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
+      "how": "followed"
+    }
+  ],
+  "noticed_not_touched": [
+    {
+      "what": "The legacy sections keep polling (governance report, schedules, reviews, approvals every 3 s) while being invisible; they are the data sources for the cards. A later cleanup could give each a headless data API and drop the hidden renderables.",
+      "where": "src/tui/tui-shell.ts sidebarLegacy and the mount* calls"
+    },
+    {
+      "what": "At 80x24 in default mode only Session, Workspace and Work (plus part of Reviews) fit; Remote, whose attention badge matters most, is below the fold of the scrolling sidebar. Rail shows all seven rows.",
+      "where": "src/tui/sidebar-cards.ts card order, src/tui/shell-chrome.ts sb-top"
+    },
+    {
+      "what": "The boot splash and subagent/job inspector width defaults still assume the 34/30 column sidebar (T15 note); unchanged.",
+      "where": "src/tui/boot-animation.ts:346"
+    },
+    {
+      "what": "mountCwdPanel's refit and the sidebar-text-width getters in several panels are now unused by the shell (width is the constant 100) but stay exported for their own tests.",
+      "where": "src/tui/tui-shell.ts mountCwdPanel"
+    }
+  ],
+  "assumptions": [
+    "The hidden legacy sections feed the cards by their painted text (plainText of the node named in SIDEBAR_SECTION_SOURCES, label rows ending -k and hidden nodes skipped); the plan said 'a snapshot built from the same live sources', and the painted nodes are those sources.",
+    "A 400 ms snapshot-compare tick is the change signal; panels do not push changes to the cards.",
+    "Cards show at most 3 value rows (4 lines): seven 4-line cards plus gaps fit the 40-row terminal of the theme-switch test; 5-line cards did not.",
+    "Tab commands are the bare read-only inspectors; ambiguous ones use an explicit read-only argument ('/remote-control status', '/channels status', '/intake status'). Sections without a read-only inspector (usage, context, balance, directory, branch, pr, status, plan, subagents, jobs, autoreview, hold, research-sync) have no command: their rows keep their own click handlers only in the hidden legacy copy."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Card icons (single cell, ASCII fallback): Session ◉ (S), Workspace ▣ (W), Work ▸ (T), Reviews ◈ (R), Ops ◧ (O), Policy ◇ (P), Remote ◎ (@). Version-update badge ↑, hold badge !, counts for approvals and not-ready reviews (capped at 99).",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": [
+        "other glyph set (e.g. letters only)",
+        "word badges such as 'new' and 'held' in wide mode only"
+      ]
+    },
+    {
+      "description": "What each card's summary rows show (title row plus up to three value rows, first line of each section, joined with ' · '): Session: model; mode · usage; context · balance (update version first when one is available). Workspace: directory; branch · PR; SAC workspace. Work: status; plan; subagents · jobs. Reviews: findings; catch-up · external diff; autoreview. Ops: governance; triggers · schedules; intake · decisions · research sync. Policy: route; guard · edit-guard · rewind; external · tools · project rules. Remote: remote; telegram; approvals · hold. A required row with nothing to say shows a short fallback ('no model', 'idle', 'no workers', 'triggers —', 'remote off'...).",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": [
+        "labelled rows ('Model  x')",
+        "4 value rows (5-line cards; do not fit 40 rows with gaps)"
+      ]
+    },
+    {
+      "description": "Clicking a card opens its detail modal with one tab per former section (labels Model, Mode, Usage, Context, Balance, Directory, Branch, PR, Workspace, Status, Plan, Subagents, Jobs, Review, Findings, Autoreview, Ext diff, Governance, Triggers, Schedules, Intake, Decisions, Research, Route, Guard, EditGuard, Rewind, Project, External, Tools, Remote, Telegram, Approvals, Hold). Enter on a tab with an inspector closes the card modal and runs the command through runLine; the tab body shows the section's whole value wrapped to the modal and an 'Enter opens <command>' hint.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": [
+        "mount the existing inspectors inside the tab body",
+        "keep the card modal open under the inspector"
+      ]
+    },
+    {
+      "description": "The 30-odd sidebar sections are no longer drawn at all, in any mode; the cards replace them. Per-section direct clicks (Tools, Workspace, Plan, subagent and job rows, Reviews, Remote...) now go through the card's modal and its Enter command, or through the typed command.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "keep the sections visible below the cards in wide mode"
+      ]
+    },
+    {
+      "description": "The pinned version-update notice is hidden in rail mode (3 cells cannot show it); the Session card carries the ↑ badge in all modes. It stays a pinned row in default and wide.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "leave it clipped in rail"
+      ]
+    },
+    {
+      "description": "The three pty smoke tests that asserted Model/Context/Tools/Status/Ready now assert the cards: TUI_ONLY_LABELS = Workspace, Ready (words the readline shell never prints, used by the 'no TUI' discriminator) and SIDEBAR_CARD_LABELS = those plus Session and Work for the two positive tests.",
+      "user_visible": false,
+      "needs_operator": false
+    }
+  ],
+  "not_touched": [
+    {
+      "path": "docs/requirements/keryx-shell-split/source-text-audit-inventory.md",
+      "reason": "No source-text audit was added or broken; shell-source-audits stays green and the sb-mode-v / sb-hold-v ids that tui-hold and tui-shell tests pin are unchanged."
+    }
+  ],
+  "notes": "Test edits: src/commands/shell-pty-launch.smoke.test.ts only: (1) TUI_ONLY_LABELS changed from [Model, Context, Tools, Status, Ready] to [Workspace, Ready] with a comment, because 'Session' appears in the readline header ('Session <id>') and so cannot serve the negative discriminator; (2) new SIDEBAR_CARD_LABELS = [Workspace, Ready, Session, Work]; (3) the first pty test and the flow 300 AC10 80x24 test loop over SIDEBAR_CARD_LABELS instead of TUI_ONLY_LABELS; (4) the flow 300 test title now names the cards. What they guard (the sidebar drawn and readable at 80x24 with governance + triggers present, and absent in --no-tui) is unchanged. No red test was edited; no tui.json or ~/.keryx path is read. Mouse-down on a card's Text row bubbles to its slot Box (a handler on both opened the card twice), so only the Box has the handler. Routing audit: graph_used no (known file set), wiki_used not-relevant, ctx_used yes, raw_rg_used no."
+}

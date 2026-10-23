@@ -1,0 +1,162 @@
+[
+  {
+    "review_context": {
+      "request": {
+        "raw": "Managed review of merged PR #1074 (flow 471): one /connect modal with Connected and Add provider tabs; /provider removed; Telegram Add provider/Test buttons",
+        "mode": "diff",
+        "flags": [],
+        "commit_range": "6a8941b75fd90a79caff47484440faffe1e226f2..2e1936eeb9760e1bbfb05500bd7479c37d44ba80"
+      },
+      "git": {
+        "repo": "MrCipherSmith/keryx",
+        "base": "6a8941b75fd90a79caff47484440faffe1e226f2",
+        "head": "2e1936eeb9760e1bbfb05500bd7479c37d44ba80",
+        "branch": "feat/connect-providers-tabs",
+        "merge_commit": "3d50557c53abed90a35cf1565e8779217259d333"
+      },
+      "pr": {
+        "number": 1074,
+        "url": "https://github.com/MrCipherSmith/keryx/pull/1074",
+        "title": "feat: one /connect modal with Connected and Add provider tabs",
+        "body": "## Summary\n- `/connect` is the only command: one \"Providers\" modal with two tabs. \"Connected\" is today's rows with [Test] and [Disconnect], plus an [Add provider] button. \"Add provider\" lists every known provider with [Connect] and [Test].\n- [Connect] runs the base-URL, key or device-login steps, checks `/models`, returns to \"Connected\" and does not switch the session. With nothing connected the modal opens on \"Add provider\".\n- `/provider` is removed (registry, menu, help, README, docs, init hint). Typing it answers with a hint to use `/connect`.\n- Telegram `/connect` gains an \"Add provider\" button, a [Test] per provider, and [Connect] by device login only. A key is never typed in chat (flow 387 AC4).\n- `modal-host` gets an optional `footerFor(tabId)` so the footer lists the keys of the active tab.\n\nFlow 471. Operator decisions: polls 248 and 249 (Telegram message 219474).\n\n## Test plan\n- [x] `bun test` on connect-modal, connect-provider-buttons, agent-commands, help-groups, shell, modal-host, queue-nav, remote (1327 pass), provider-probe\n- [x] `bunx tsc --noEmit -p .`\n- [x] AC10 invariant: no `/provider` in README, docs/docs, src/standard, init.ts\n- [ ] AC12 live run in a real `keryx shell` with an empty config dir (frames and config file mode go into the flow journal)\n- [ ] Review round\n",
+        "state": "merged",
+        "base": "main",
+        "head": "2e1936eeb9760e1bbfb05500bd7479c37d44ba80"
+      },
+      "scope": {
+        "mode": "diff",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/gdgraph/artifacts/module-map.json",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md",
+          "CHANGELOG.md",
+          "README.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/commands-by-task.md",
+          "docs/docs/guides/drive-keryx-remotely.md",
+          "docs/docs/harness.md",
+          "docs/docs/hooks.md",
+          "docs/docs/onboarding.md",
+          "package.json",
+          "src/commands/agent-commands.test.ts",
+          "src/commands/providers.models-failure.test.ts",
+          "src/commands/shell-grant-refresh.test.ts",
+          "src/commands/shell-slash-registry.test.ts",
+          "src/commands/shell-subscription-selection.test.ts",
+          "src/commands/shell.test.ts",
+          "src/commands/agent-commands.ts",
+          "src/commands/agent.ts",
+          "src/commands/shell-types.ts",
+          "src/commands/shell.ts",
+          "src/remote/command-connect.test.ts",
+          "src/remote/command-gateway.test.ts",
+          "src/remote/command-gateway.ts",
+          "src/remote/command-router.ts",
+          "src/remote/command.test-helpers.ts",
+          "src/remote/shell-bridge.ts",
+          "src/standard/help-groups.test.ts",
+          "src/standard/help-groups.ts",
+          "src/tui/balance-panel.ts",
+          "src/tui/chat-shell.ts",
+          "src/tui/game-modal.ts",
+          "src/tui/games/model-turn.ts",
+          "src/tui/modal-host.ts",
+          "src/tui/queue-nav.ts",
+          "src/tui/remote-provider-hooks.ts",
+          "src/tui/tui-shell.ts",
+          "src/tui/connect-modal.test.ts",
+          "src/tui/connect-provider-buttons.test.ts",
+          "src/tui/modal-host.test.ts",
+          "src/tui/model-picker-notice.test.ts",
+          "src/tui/provider-endpoint-retry.test.ts",
+          "src/tui/provider-probe.test.ts",
+          "src/tui/queue-nav.test.ts",
+          "src/tui/remote-provider-hooks.test.ts",
+          "src/tui/wizard-modal.test.ts"
+        ],
+        "changed_lines": null,
+        "risk_areas": [
+          "remote command gateway (REMOTE_REFUSED, key never typed in chat)",
+          "TUI modal key handling and tab state",
+          "provider key/login persistence before /models check"
+        ]
+      },
+      "requirements": {
+        "acceptance_criteria": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+        "description": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md"
+      },
+      "rules": [
+        ".metaproject/rules/core"
+      ],
+      "memory": {
+        "query": "providers connect modal tabs remote command gateway TUI tabbed surface",
+        "status_filter": "accepted",
+        "entries": [],
+        "searched": true
+      },
+      "routing": {
+        "selected_reviewers": [
+          "review-architecture",
+          "review-clean-code",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ],
+        "reasons": {
+          "all": "keryx review required --depth auto, plan.json"
+        }
+      },
+      "token_policy": {
+        "context_mode": "light",
+        "omissions": [
+          "data ledger .metaproject/data/wiki/freshness-queue.jsonl not reviewed (data-ledger)"
+        ]
+      }
+    },
+    "reviewer": "review-pr-contract",
+    "skill_path": "/home/altsay/keryx/.worktrees/connect-providers-tabs/.metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+    "scope_mode": "diff",
+    "slices": [
+      "slice-04"
+    ],
+    "model": {
+      "tier": "standard",
+      "tier_reasons": [
+        "base:standard",
+        "resolve:ranking-refused"
+      ],
+      "inherit": true,
+      "tier_resolution": "session-fallback",
+      "model_discovery": {
+        "provider": "",
+        "candidates": [],
+        "ranked": [],
+        "session_rank": null,
+        "fallback_reason": "the session names no model to anchor the ranking on"
+      }
+    },
+    "budget": {
+      "max_findings": 25
+    },
+    "branch": "feat/connect-providers-tabs",
+    "base_sha": "6a8941b75fd90a79caff47484440faffe1e226f2",
+    "pr_context": "/home/altsay/keryx/.worktrees/connect-providers-tabs/.metaproject/reviews/2026-10-22-review-flow-github-com-mrciphersmith-keryx-pull-1074/pr-context.md",
+    "round": 1,
+    "is_fix_round": false,
+    "allowed_tools": "read-only",
+    "exec_budget_s": 0
+  }
+]

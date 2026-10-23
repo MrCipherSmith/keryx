@@ -1,0 +1,163 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-03 (src/tui: modal-host footerFor, queue-nav AddNavAction, remote-provider-hooks.ts, tui-shell.ts tabbed /connect dialog, connect sequence extraction, Telegram host hooks) is structurally sound. Dependency direction is clean (remote-provider-hooks takes every effect as a parameter, tui-shell stays the composition root, no new import cycle, the connect sequence is now one shared function instead of two copies). Remaining items are minor/info: the tabbed step is a large view+state+effects function, the same 'needs a key and has none' rule is written at two sites, and `onlyConnected` now names a dialog that lists unconnected providers too. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: ProvidersTabbedStepOptions): Promise<ProvidersTabAction> {",
+      "problem": "pickProvidersTabbedStep holds, in one closure of roughly 350 lines, the view (row/button/notice rendering, window scrolling), the tab/selection/nav state machine, the keypress router, and persistence/network effects (disconnectProvider, probeProviderConnection, catalog-cache reads). The step contract says it 'only reports what was chosen', but it also performs Disconnect and Test itself. The Add tab added a second row layout, a second nav state (addAction), per-tab selection/window records and a notice channel on top of the Connected tab's logic.",
+      "impact": "Code is correct and covered by connect-modal tests; the cost falls on whoever changes the next tab or row action: every change touches shared closure state (selected, windowStart, pendingDisconnect, statuses, notice/nextNotice) and the TDZ-sensitive order of declarations (renderTab runs synchronously inside openTabbedSurface before `surface` and `unsub` are assigned).",
+      "suggested_fix": "Extract the tab/selection/pending-disconnect state and the effects (test, disconnect) into a small controller object with injected effect functions, leaving the step to render and route keys. Not required for this PR.",
+      "evidence": "Diff hunk at tui-shell.ts ~3103-4115: pickProvidersTabbedStep declares paint, renderTab, runTest, armOrConfirmDisconnect (calls disconnectProvider), moveSelection, capacityRows, and the onKeypress router in one scope; `const surface` and `const unsub` are assigned after renderTab has already run once.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-tabbed-step-srp"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "classifyProviderConnection(prov.name, deps.env ?? process.env, deps.configDir).kind === \"no-credential\"",
+      "problem": "The rule 'this provider needs a key and has none' is written twice: in runProviderConnectSequence (skip branch, with `requireKey`) as `(connectionProviderByName(prov.name, deps.configDir)?.requiresApiKey ?? true) && classifyProviderConnection(...).kind === \"no-credential\"`, and in probeProviderConnection as `deps.requireCredential && (provider.requiresApiKey ?? true) && classifyProviderConnection(...).kind === \"no-credential\"`. The two share a purpose (Add tab [Connect] and [Test] must agree on what counts as 'no credential') but not an implementation.",
+      "impact": "If the definition changes (a provider that needs a login rather than a key, a new credential source), one site can be updated and the other left, so [Test] would say 'no credential, Connect first' for a provider that [Connect] treats as connected, or the reverse.",
+      "suggested_fix": "Add one helper, e.g. `providerLacksRequiredCredential(name, env, configDir): boolean`, next to classifyProviderConnection and call it from both sites.",
+      "evidence": "Both snippets are in the slice diff (collectCredential in runProviderConnectSequence; probeProviderConnection). Two sites found by reading the slice; the same expression is not present elsewhere in the hunks reviewed.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-no-credential-rule-dup"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "if (options.onlyConnected) {",
+      "problem": "`onlyConnected: true` used to mean 'list only connected providers'. It now selects the whole two-tab Providers dialog, whose Add tab lists every detected provider, connected or not, and which can connect new ones. The flag name, `SelectProviderModelOptions.onlyConnected`, `ChatShellOptions.pickSelection({ onlyConnected })` and the chat-shell/agent-shell callers still carry the old meaning; only a comment says otherwise.",
+      "impact": "A reader of `selectProviderModelInTui(..., { onlyConnected: true })` or of the picker contract cannot tell that a connect/add flow is reachable; a future caller who wants a real 'connected only' pick would reuse a flag that now opens the Add tab.",
+      "suggested_fix": "Rename the option to the intent (e.g. `providersDialog: true` / `mode: \"manage\"`) at the three sites, or document the new meaning on the option's JSDoc where it is declared.",
+      "evidence": "tui-shell.ts selectProviderModelInTui early return into runProvidersModal; chat-shell.ts pickSelection branch `if (pickOpts?.onlyConnected === true)` still routes to selectProviderModelInTui with onlyConnected; its comment was updated to 'the Providers dialog' but the field name was not.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-onlyconnected-naming"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const cycle = (): void => {",
+      "problem": "openTabbedSurface's overlay branch re-implements ModalHost's tab strip, Tab cycling, digit jumps, Esc/`x` close and strip mouse handling for the bare-renderer case. The two branches differ in small ways already: the modal path wraps Tab through `claimKey` while the host itself handles shift+Tab only on the strip; the overlay cycles forward on any Tab and ignores shift. This is the same two-path shape the repo already uses for single-step surfaces (openStepSurface), so it follows an existing decision, and the PR comment states why (chat shell and startup picker have no chrome).",
+      "impact": "Behaviour can drift between the two surfaces over time (for example shift+Tab, or a key added to the host later). Not a defect in the diff.",
+      "suggested_fix": "None needed now. If a third tabbed screen appears, move the overlay branch into a shared helper next to modal-host and test both branches with one scenario table.",
+      "evidence": "openTabbedSurface in the diff: overlay branch handlers vs the `claimKey` Tab wrap and modal-host.ts lines handling `left`/`right`/`tab`/digits.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-tabbed-surface-two-paths"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "export async function probeProviderConnection(",
+      "problem": "probeProviderConnection is UI-free provider logic (credential pre-check, probe, profile-store refresh via testProviderConnection) that is exported from the 11k-line tui-shell.ts so Telegram's testProvider can call it. Its result type, ProviderProbeOutcome, lives in the new remote-provider-hooks.ts, which the PR created precisely to keep such logic out of tui-shell.ts. The dependency is one-way (tui-shell imports remote-provider-hooks) and there is no cycle, so this is placement only.",
+      "impact": "The remote hooks file cannot own the full test path, and any future non-TUI caller must import the shell module to reach a probe.",
+      "suggested_fix": "Move probeProviderConnection beside ProviderProbeOutcome (remote-provider-hooks.ts, or a provider-probe module) and let tui-shell import it. Optional.",
+      "evidence": "remote-provider-hooks.ts defines ProviderProbeOutcome and testProviderForRemote({ probe }); tui-shell.ts defines and exports the only implementation of the probe and wires it at `testProvider: (providerId) => testProviderForRemote(providerId, { probe: ... })`.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-probe-placement"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": ".filter((prov) => prov.name !== \"fake\")",
+      "problem": "The shell's listAddableProviders hides the test provider by comparing against the literal id \"fake\" in production wiring, instead of using a flag on the detected entry or the registry. The TUI Add tab (`all`) has no such filter, so the two surfaces list different sets.",
+      "impact": "Telegram's Add provider list and the TUI's Add provider tab can disagree about which providers exist; a rename of the fake provider silently re-exposes it in chat.",
+      "suggested_fix": "Filter in one place (a `detectAddable` helper or a `hidden` property on the entry) used by both the TUI Add tab and listAddableProviders.",
+      "evidence": "tui-shell.ts `listAddableProviders` hunk vs `runProvidersModal`, which builds `all = [...detected]` unfiltered.",
+      "confidence": "low",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-fake-filter"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "if (at >= 0) connected.splice(at, 1);",
+      "problem": "The `connected` array is owned by runProvidersModal and passed into the step, which mutates it in place on Disconnect, while runProvidersModal mutates the same array on Connect (upsertProvider). The step's option doc states this ('Shared with the caller and shrunk in place'), so it is a deliberate choice, not an oversight. Two modules mutating one list is the coupling a later change has to keep in mind.",
+      "impact": "None today; it only matters if the step is ever reused with a list another consumer also holds.",
+      "suggested_fix": "None needed. If it grows, return the disconnected name in the action and let the caller update its own list.",
+      "evidence": "ProvidersTabbedStepOptions.connected doc comment; armOrConfirmDisconnect splice; runProvidersModal upsertProvider(connected, ...).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-shared-mutable-connected"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "requireKey = false,",
+      "problem": "runProviderConnectSequence now takes two positional booleans after `deps` (`setup`, `requireKey`); the call sites read `runProviderConnectSequence(otui, target, prov, deps, true, true)` and `(…, false)`. The sequence also behaves differently per caller (startup/chat shell keep a keyless skip, the Add tab does not).",
+      "impact": "Call sites are hard to read and an argument swap compiles. Small, local.",
+      "suggested_fix": "Pass an options object: `{ setup: true, requireKey: true }`.",
+      "evidence": "Signature and the three call sites in runProvidersModal and selectProviderModelInTui.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-boolean-params"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 5 },
+  "slices": ["slice-03"]
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2`, head `2e1936eeb9760e1bbfb05500bd7479c37d44ba80`
+- Scope mode: explicit-hash-range, slice-03 only (src/tui/*, fully read)
+- Stack detected: generic-ts (OpenTUI shell, no NestJS/MobX)
+
+### Summary
+The PR extracts one shared connect sequence, adds a tabbed Providers dialog and a Telegram host surface, and keeps effects injectable in the new `remote-provider-hooks.ts`. Dependency direction is clean and no import cycle is introduced. Findings are limited to size/placement/naming of the tabbed step and two small duplications; none blocks.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 5
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. (tui-shell -> remote-provider-hooks -> commands/providers, lib/oauth, remote/command-router types only; no back edge.)
+
+### Module Boundary Violations
+F-005 (info): probe logic placed in tui-shell.ts while its result type lives in remote-provider-hooks.ts. F-006 (info): "fake" filter differs between surfaces.
+
+### Design Pattern Misuse
+F-002 (minor): the no-credential rule is duplicated. F-008 (info): positional boolean flags.
+
+### SOLID Violations
+F-001 (minor): pickProvidersTabbedStep mixes view, state machine and effects.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A, not detected in stack. OpenTUI-specific notes: F-003 (flag naming), F-004 (two key-handling paths), F-007 (shared mutable list).
+
+### Suggested Patches
+None warranted.
+
+Notes: no `layers` block was in the payload and no commands beyond one read-only `git show` of modal-host.ts at head were run. History of the deliberate choices (shared `connected` array, overlay fallback) was taken from the comments in the diff, not from `git log`.

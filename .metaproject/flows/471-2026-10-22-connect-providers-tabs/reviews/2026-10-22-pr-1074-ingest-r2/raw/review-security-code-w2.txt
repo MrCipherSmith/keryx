@@ -1,0 +1,72 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice-03 (balance-panel, chat-shell, game-modal, model-turn, modal-host, queue-nav, remote-provider-hooks.ts, tui-shell.ts) read in full. No exploitable vulnerability found. The Telegram surface keeps its stated invariant: remote-provider-hooks.ts builds every chat-bound text from a fixed vocabulary (failure kind + HTTP status, never a provider's detail, a thrown error's message, a token or a key); [Connect] from Telegram is device login only and gated by catalogAllows(providerId, 'device-code'); the provider id from the chat only selects among already-configured providers (no URL, header or key comes from chat), so there is no SSRF or injection path; the login is single-flight, time-limited (10 min), aborted on remote off / shell close, and re-checks busy before it touches process.env. In the TUI, the key step still runs with the dialog closed, so tab-switch digits and 'x' cannot read or swallow secret keystrokes. Two info observations: the Add tab now reaches the endpoint-edit step for an already-connected provider, and a device-login grant is persisted even when it is not applied. Neither has an attacker beyond the operator or a topic member who already controls the shell.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "saveProviderBaseUrl(prov.name, selectedBaseUrl, deps.configDir);",
+      "problem": "The Add provider tab lists every detected provider, including ones already marked '✓ connected', and [Connect] runs runProviderConnectSequence(..., setup=true, requireKey=true). For a connected provider the base-URL step is shown and saved before the credential step, and collectCredential then returns 'ok' without asking because a key already exists, so the stored key is sent to whatever endpoint was just typed by the /models check. The removed code documented the opposite for /connect ('only switches: never edit the endpoint or collect a key'); that guarantee now holds only for the Connected-tab label pick (setup=false).",
+      "impact": "No attacker in the diff: the operator types the URL and the step shows the current value. The residual risk is a mistyped or pasted wrong endpoint receiving the saved bearer key (key sent over the wire to a host the operator did not intend). The same wizard behaviour existed under /provider; it is now reachable from /connect for providers that already hold a key.",
+      "suggested_fix": "Optional hardening: when the provider is already connected and the operator edits its base URL on the Add tab, either keep the key out of the probe until the new URL is confirmed, or show the host the existing key will be sent to in the URL step's note. No change needed if re-pointing a connected provider is the intended meaning of [Connect] on a connected row.",
+      "evidence": "pickProvidersTabbedStep renders rows from [...opts.all, CUSTOM_ADD_ENTRY] and marks connected ones via isConnected; runProvidersModal calls runProviderConnectSequence(otui, target, action.provider, deps, true, true); in runProviderConnectSequence the guard is 'setup && !lockDiscoveredHost' (lockDiscoveredHost is only github-copilot/openai/openai-codex), then promptBaseUrlStep + saveProviderBaseUrl, and collectCredential short-circuits on an existing key (existingKey or hasOauth) before modelsForPicker(selectedProvider, ...) sends it. Attack vector: none beyond operator error (security-specific law: no attacker, so info).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "connect-add-tab-edits-endpoint-of-connected-provider",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": "// The grant is already saved; only this session did not pick it up.",
+      "problem": "loginDeviceCode saves the OAuth grant (saveOAuthGrant in src/lib/oauth/login.ts) before createRemoteDeviceLogin decides whether to apply it. Two post-login branches return a failure while the grant stays on disk: the controller was aborted after the token arrived (remote control went off or the shell closed), and the shell was busy. The chat is told 'not applied to this session' in both cases, which is accurate, but nothing says the login remains saved and will be picked up on the next start.",
+      "impact": "A device login completed by whoever entered the user code (the code is posted in the topic) ends up stored in the user-global auth store even though the operator turned remote control off in the meantime. Reachable only by a topic member, who already has full remote control of the shell (they can run turns), so no privilege is gained. The cost is a surprising persisted credential, not a vulnerability.",
+      "suggested_fix": "Optional: on the aborted-after-save branch, delete the grant (logoutProvider) when it did not exist before the login, or add 'the login is saved' to LOGIN_NOT_APPLIED_TEXT so the operator can revoke it. Leave as is if keeping the grant is the intended behaviour.",
+      "evidence": "createRemoteDeviceLogin.connect: after 'const result = await login(...)', 'if (controller.signal.aborted)' and 'if (deps.isBusy?.() === true)' return ok:false without removing the grant; abort() is also called from recordOff and onDestroy. Attack vector: a topic member authorizes a different account via the posted code, then remote control is switched off before apply; the persisted grant belongs to that account. No path beyond what topic membership already grants.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "remote-device-login-grant-persists-when-not-applied",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+## Security Review
+
+### Scope
+- Branch: `feat/connect-providers-tabs`, base `6a8941b75fd90a79caff47484440faffe1e226f2`, head `2e1936eeb9760e1bbfb05500bd7479c37d44ba80`
+- Scope mode: diff (supplied slice-03, read in full, 2915 lines)
+- Files in slice: balance-panel.ts, chat-shell.ts, game-modal.ts, games/model-turn.ts, modal-host.ts, queue-nav.ts, remote-provider-hooks.ts (new), tui-shell.ts
+- Context read: src/lib/oauth/login.ts (to confirm the grant is saved only after a successful login and that the signal is honoured)
+- Layers (graph/test/wiki/memory) not consulted: the payload carried no layers block and no command was allowed.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 2
+
+### Findings
+See REVIEW_RESULT. F-001 (Add tab reaches the endpoint-edit step for a connected provider), F-002 (device-login grant persists when not applied).
+
+### Clean Areas
+- Injection, command, SSTI, eval: none introduced; all new strings are rendered as text chunks.
+- Auth/authz: the Telegram hooks (testProvider, connectWithDeviceLogin, listAddableProviders) are thin wrappers; who may call them is decided by the gateway in other slices (not reviewed here). Within this slice, [Connect] from the chat cannot take a key: connect() refuses any provider where catalogAllows(id, 'device-code') is false.
+- Secrets: no key, token, address or env-var name reaches the chat. remoteFailureText drops ModelsFailure.detail; the catch in createRemoteDeviceLogin returns fixed texts; the TUI's catch in runProvidersModal prints error.name only. The user code and verification URI are the only login values sent, and they are public by design.
+- SSRF / path traversal / open redirect: the chat supplies only a provider id, looked up with connectionProviderByName / the catalog; unknown ids return 'unknown provider'. The verification URI comes from the catalog's fixed device endpoints.
+- Secret keystroke handling (TUI): the Providers dialog is closed (finish -> surface.close) before the key step opens, and unsub() removes the dialog's keypress handler first, so the 1/2/Tab/x/a shortcuts cannot swallow or log typed key characters. ownsKeys() holds every key while a Disconnect is armed.
+- Credential persistence: keys are still saved through saveApiKey (0600) and process.env only after the operator submits one; Esc at the key step saves nothing. The key is saved before the /models check by design (documented IMPORTANT note, unchanged).
+- Concurrency: remote device login is single-flight (current !== undefined), time-limited, aborted on recordOff/onDestroy, and re-checks shellIsBusy() immediately before applyEnv so the environment is not changed under a running turn. connectedProviders cache is invalidated on connect, disconnect and device login; a failed load is not cached.
+- Crypto, CSRF, React patterns, DoS caps: not applicable to the changed code.

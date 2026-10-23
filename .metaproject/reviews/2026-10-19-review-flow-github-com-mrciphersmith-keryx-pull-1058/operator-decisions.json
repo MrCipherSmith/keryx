@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058#HQ-02",
+      "answer": "uphold",
+      "reason": "привязка к предмету требуется (оператор, опрос 230)",
+      "quote": "Uphold: находка верна, привязку требовать (рекомендую)",
+      "at": "2026-10-19T21:29:26.773Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "major",
+        "verdict": "owner-decision",
+        "problemSha256": "7fa5fe19f5e34aa8d79eb6d2be41c57e5a89a89fa54db6630b2eaeb6c98ccc50"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "poll-230",
+        "questionText": "HQ-02 (PR 1058): запись ответа привязана к предмету, вопрос называет id находки, мутантов, ревьюеров?",
+        "answerText": "Uphold: находка верна, привязку требовать (рекомендую)",
+        "time": "2026-10-19T21:29:26.773Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058#HQ-04",
+      "answer": "uphold",
+      "reason": "отдельный размеченный вид в журнале (оператор, опрос 230)",
+      "quote": "Uphold: находка верна, отдельный вид (рекомендую)",
+      "at": "2026-10-19T21:29:27.324Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "major",
+        "verdict": "owner-decision",
+        "problemSha256": "cacb1bb84bb72da1d12aaccd44ba2827b3af854702f632e84ff6d8edbb1d9aa1"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "poll-230",
+        "questionText": "HQ-04 (PR 1058): записи host-question в журнале решений идут отдельным размеченным видом?",
+        "answerText": "Uphold: находка верна, отдельный вид (рекомендую)",
+        "time": "2026-10-19T21:29:27.324Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058#HQ-07",
+      "answer": "uphold",
+      "reason": "текст поправлен, источник keryx-shell оставлен (оператор, опрос 230)",
+      "quote": "Uphold: находка верна, текст поправить, источник оставить (рекомендую)",
+      "at": "2026-10-19T21:29:27.870Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "cd0d0e831125c9041e1ce4c53a590de724459a92909ef00cc0080dc502dcc7a2"
+      },
+      "hostQuestion": {
+        "source": "helyx-poll",
+        "ref": "poll-230",
+        "questionText": "HQ-07 (PR 1058): источник keryx-shell в --answered-by остаётся, в тексте сначала карточка?",
+        "answerText": "Uphold: находка верна, текст поправить, источник оставить (рекомендую)",
+        "time": "2026-10-19T21:29:27.870Z"
+      }
+    }
+  ]
+}

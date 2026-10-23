@@ -1,0 +1,166 @@
+{
+  "v": 1,
+  "package": "/home/altsay/keryx/.worktrees/connect-providers-tabs/.metaproject/reviews/2026-10-22-review-flow-github-com-mrciphersmith-keryx-pull-1074",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1074",
+    "base": "6a8941b75fd90a79caff47484440faffe1e226f2",
+    "head": "2e1936eeb9760e1bbfb05500bd7479c37d44ba80"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "6a8941b75fd90a79caff47484440faffe1e226f2",
+      "head": "2e1936eeb9760e1bbfb05500bd7479c37d44ba80"
+    },
+    "fixHunks": 0,
+    "newHunks": 201,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/gdgraph/artifacts/module-map.json",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md",
+          ".metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md",
+          "CHANGELOG.md",
+          "README.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/commands-by-task.md",
+          "docs/docs/guides/drive-keryx-remotely.md",
+          "docs/docs/harness.md",
+          "docs/docs/hooks.md",
+          "docs/docs/onboarding.md",
+          "package.json",
+          "src/commands/agent-commands.test.ts",
+          "src/commands/providers.models-failure.test.ts",
+          "src/commands/shell-grant-refresh.test.ts",
+          "src/commands/shell-slash-registry.test.ts",
+          "src/commands/shell-subscription-selection.test.ts",
+          "src/commands/shell.test.ts"
+        ],
+        "depth": "light",
+        "roles": [
+          "review-architecture",
+          "review-logic",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "src/commands/agent-commands.ts",
+          "src/commands/agent.ts",
+          "src/commands/shell-types.ts",
+          "src/commands/shell.ts",
+          "src/remote/command-connect.test.ts",
+          "src/remote/command-gateway.test.ts",
+          "src/remote/command-gateway.ts",
+          "src/remote/command-router.ts",
+          "src/remote/command.test-helpers.ts",
+          "src/remote/shell-bridge.ts",
+          "src/standard/help-groups.test.ts",
+          "src/standard/help-groups.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/tui/balance-panel.ts",
+          "src/tui/chat-shell.ts",
+          "src/tui/game-modal.ts",
+          "src/tui/games/model-turn.ts",
+          "src/tui/modal-host.ts",
+          "src/tui/queue-nav.ts",
+          "src/tui/remote-provider-hooks.ts",
+          "src/tui/tui-shell.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-04",
+        "files": [
+          "src/tui/connect-modal.test.ts",
+          "src/tui/connect-provider-buttons.test.ts",
+          "src/tui/modal-host.test.ts",
+          "src/tui/model-picker-notice.test.ts",
+          "src/tui/provider-endpoint-retry.test.ts",
+          "src/tui/provider-probe.test.ts",
+          "src/tui/queue-nav.test.ts",
+          "src/tui/remote-provider-hooks.test.ts",
+          "src/tui/wizard-modal.test.ts"
+        ],
+        "depth": "light",
+        "roles": [
+          "review-logic",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "dispatches": 22,
+  "minutes": {
+    "min": 12,
+    "max": 30
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "fdd8b3b5f475d1e8",
+  "warnings": [],
+  "next": "dispatch"
+}

@@ -1,0 +1,118 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Read pr-context.md and all of slice-01 (2795 lines). The PR body has no Documentation, Tests-updated, Breaking-change or Screenshots box; its checklist is the Test plan (5 rows) plus the Summary claims, all worked as rows (see below). Four minor disagreements and three info items, no blocker or major. Documentation read outside the slice: only docs/docs/guides/drive-keryx-remotely.md and CHANGELOG.md at the worktree head (both touched by the diff).\n\nChecklist rows (box or claim | state | diff signal | verdict):\n1. `bun test on connect-modal, connect-provider-buttons, agent-commands, help-groups, shell, modal-host, queue-nav, remote (1327 pass), provider-probe` | ticked | slice-01 has src/commands/agent-commands.test.ts, shell.test.ts, shell-slash-registry.test.ts, shell-subscription-selection.test.ts (other test files are in other slices) | consistent.\n2. `bunx tsc --noEmit -p .` | ticked | not a diff property | not settled here, CI typecheck-and-tests passing.\n3. `AC10 invariant: no /provider in README, docs/docs, src/standard, init.ts` | ticked | every /provider line in README.md and docs/docs in slice-01 is removed or reworded | consistent for the diffed files; the rest of docs/docs unverified (PC-007).\n4. `AC12 live run in a real keryx shell with an empty config dir (frames and config file mode go into the flow journal)` | unticked | flow.json acConfirmed.AC12 and journal.md record a live run | disagreement (PC-004).\n5. `Review round` | unticked | flow.json completion-failed: no review package | consistent.\nSummary claims: `/provider is removed (registry, menu, help, README, docs, init hint)` consistent in slice-01 (agent-commands.test.ts drops /provider from every ordered list, adds removedCommandHint test); `Typing it answers with a hint to use /connect` consistent (shell.test.ts asserts Unknown command + /connect); `Telegram /connect gains an Add provider button, a [Test] per provider, and [Connect] by device login only` contradicted by an untouched doc row (PC-001); `modal-host gets an optional footerFor(tabId)` not in slice-01.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "line": null,
+      "quote": "`/connect` shows providers that are already connected, then their models. No key or address is shown.",
+      "problem": "pr-context.md claims: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect] by device login only.\" The page that describes Telegram commands, drive-keryx-remotely.md (touched by this diff only to drop `/provider` from the stay-in-shell list), still says in the Buttons row of the \"Commands from the topic\" table: \"`/connect` shows providers that are already connected, then their models. No key or address is shown.\" It names none of the new Add provider list, the per-row Test, or the device-login Connect (code and link posted to the chat).",
+      "impact": "An operator reading the remote-control guide does not learn that Add provider, Test and device-login Connect exist in Telegram, or that a user code and verification link now appear in the topic. The code is right; the page describes the old two-step picker.",
+      "suggested_fix": "Extend that row: after the connected list and models, an Add provider button lists every provider with Test and, where the provider offers a device login, Connect (code and link are posted to the chat); a provider that needs a key says to enter it in the shell. Keep the line that no key is typed in chat.",
+      "evidence": "pr-context.md:13 (Summary bullet 4) vs docs/docs/guides/drive-keryx-remotely.md:429. The README (`/model` and `/connect` as buttons) and cli-reference.md (`button pickers (`/model`, `/connect`, `/resume`)`) say only that /connect is a button picker and are not contradicted.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:telegram-connect-docs-stale"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "in Telegram the same modal opens, with Add provider and a [Test] on each row.",
+      "problem": "The 0.3.130 entry says \"in Telegram the same modal opens\". pr-context.md describes Telegram as buttons, not a modal: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect] by device login only\"; description.md in the diff says \"Telegram gets the same two-part flow with buttons\"; and the drive-keryx-remotely.md row calls it a picker. A Telegram chat has no ModalHost modal.",
+      "impact": "A reader of the release notes expects a modal with two tabs in Telegram.",
+      "suggested_fix": "Reword the bullet: in Telegram, `/connect` shows the connected providers as buttons and an Add provider button; each row in the list has Test, and Connect where the provider has a device login.",
+      "evidence": "CHANGELOG.md:14 vs pr-context.md:13 and .metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md (Expected Outcome).",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:changelog-telegram-modal"
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "`/connect` and `/providers` are one command and one modal with two tabs.",
+      "problem": "The 0.3.130 entry names the merged commands as `/connect` and `/providers`. pr-context.md and the flow's AC1 name the removed command `/provider` (singular): \"`/provider` is removed (registry, menu, help, README, docs, init hint)\". The slice's agent-commands.test.ts registry lists contain no `/providers`, and the same changelog section says two bullets later \"`/provider` is gone. Use `/connect`.\"",
+      "impact": "A reader looks for a `/providers` command that is not in the registry, and the bullets disagree on which command was removed.",
+      "suggested_fix": "Write `/connect` and `/provider` in the first bullet (the CLI command `keryx providers` is a different thing and should not be mixed in).",
+      "evidence": "CHANGELOG.md:11 and :13 vs pr-context.md:12.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:changelog-providers-name"
+    },
+    {
+      "id": "PC-004",
+      "severity": "minor",
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+      "line": null,
+      "quote": "Live run 2026-10-22 in tmux, bun src/cli.ts shell, XDG_DATA_HOME empty",
+      "problem": "The PR body leaves the box unticked: \"- [ ] AC12 live run in a real `keryx shell` with an empty config dir (frames and config file mode go into the flow journal)\". The same diff's flow.json (acConfirmed.AC12) and journal.md (2026-10-22T12:09:32.187Z, ac-confirmed AC12) record that the live run was done on 2026-10-22 and confirmed before the PR was marked implemented. Also, the box promises \"frames\" in the journal; the journal line holds a prose summary (provider added, Test = ok 2 model(s), dir 700, files 600) and no frames.",
+      "impact": "A reader of the PR body sees AC12 as still open while the flow has it confirmed, so the box cannot be trusted either way; the evidence the box promises (frames) is not in the journal.",
+      "suggested_fix": "Tick the AC12 box (the merged PR body is the claim; the flow record is the evidence), or note why it stayed open. If frames are wanted, attach them to the journal as the box says.",
+      "evidence": "pr-context.md:22 vs flow.json acConfirmed.AC12 and journal.md line for AC12 in slice-01.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:ac12-box-vs-flow"
+    },
+    {
+      "id": "PC-005",
+      "severity": "info",
+      "file": "package.json",
+      "line": null,
+      "quote": "\"version\": \"0.3.130\",",
+      "problem": "description.md in the diff says: \"Release: a separate release right after merge (operator, poll 249).\" The diff carries a package.json bump 0.3.128 to 0.3.130 and a CHANGELOG `## [0.3.130] - 2026-10-22` section written about this change, and neither the PR body nor its Summary mentions a version bump. The same diff also holds unrelated regenerated gdgraph entries (module-map.json adds review-host-question, sidebar-cards, setup-run and others) and a 0.3.128 changelog context line, so part of the range may come from main merged into the head. Unverified: which of these commits belong to the PR.",
+      "impact": "A reader expecting a feature-only PR (body, description.md) gets a release bump in the same range; the claim that the release is separate is not what the range holds.",
+      "suggested_fix": "State in the PR body that the range includes the 0.3.130 release commit, or confirm it came from main; `git log --first-parent 6a8941b75fd90a79caff47484440faffe1e226f2..2e1936eeb9760e1bbfb05500bd7479c37d44ba80 -- package.json CHANGELOG.md` settles it.",
+      "evidence": "description.md (Expected Outcome, last paragraph) vs package.json hunk and CHANGELOG.md hunk in slice-01. Unverified; I ran no git command.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:release-bump-in-range",
+      "publication": "question"
+    },
+    {
+      "id": "PC-006",
+      "severity": "info",
+      "file": "docs/docs/harness.md",
+      "line": null,
+      "quote": "shared contract test (`stream-contract.test.ts` in the harness provider directory) pins",
+      "problem": "The PR body says `/provider` is removed from \"docs\". docs/docs/harness.md and docs/docs/hooks.md also change lines that are not about the command: harness.md drops the exact path `src/harness/provider/stream-contract.test.ts` for a prose description, and hooks.md rewrites `a real sink/provider` to `a real sink or provider`. The edits look driven by the AC10 pattern (`/provider\\b` also matches a path segment and a slash), not by the behaviour change, and the PR body does not say so.",
+      "impact": "The harness page lost a copy-pasteable path to satisfy a text check. Low cost; the contract-test location is still findable.",
+      "suggested_fix": "Keep the path (for instance `src/harness/provider/stream-contract.test.ts` inside a code span the pattern does not match, or narrow the AC10 pattern to a leading space or backtick) and mention in the PR body that AC10 forced these edits.",
+      "evidence": "pr-context.md:12 and :21 vs docs/docs/harness.md and docs/docs/hooks.md hunks in slice-01.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:docs-edits-for-ac10-regex"
+    },
+    {
+      "id": "PC-007",
+      "severity": "info",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "Unverified: the ticked box \"- [x] AC10 invariant: no `/provider` in README, docs/docs, src/standard, init.ts\". Slice-01 shows every /provider occurrence it contains removed from README.md and the docs/docs files in the diff (cli-reference.md, commands-by-task.md, drive-keryx-remotely.md, onboarding.md, harness.md, hooks.md). docs/docs files outside the diff, src/standard and src/commands/init.ts were not supplied to this reader, and I ran no search.",
+      "impact": "If one doc outside the diff still names `/provider`, the box is wrong and a reader is sent to a command that answers Unknown command.",
+      "suggested_fix": "Run `keryx ctx rg \"/provider\\b\" README.md docs/docs src/standard src/commands/init.ts` and expect no output (the AC10 command is `! rg -n ...`).",
+      "evidence": "pr-context.md:21; journal.md AC10 line records 0 matches at 12:09 but later commits are not covered by that run.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:ac10-unverified",
+      "publication": "question"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 3},
+  "slices": ["slice-01"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Summary: no blocker or major. The PR body has no Documentation, Tests-updated, Breaking-change or Screenshots box, so the checks reduce to the Test plan boxes and the Summary claims. Four minor disagreements: one untouched Telegram doc row that still describes the old /connect picker (PC-001), two CHANGELOG wording mismatches (PC-002, PC-003), and the AC12 box left unticked while the flow record confirms the live run (PC-004). Three info items: the release bump in the range versus "a separate release" (PC-005), docs edits made only to satisfy the AC10 pattern (PC-006), and the AC10 invariant not settled for files outside the diff (PC-007). Read outside the slice: docs/docs/guides/drive-keryx-remotely.md and CHANGELOG.md at the worktree head; both are in the diff.

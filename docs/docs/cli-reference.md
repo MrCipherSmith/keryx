@@ -223,18 +223,49 @@ keryx setup [init|refresh|repair]
 | Argument | What it prints |
 |---|---|
 | _(none)_ | All three scenarios. |
-| `init` | From scratch: scaffold, graph, health, wiki drafts, memory index, gates. |
-| `refresh` | After a pull: refresh service files and rebuild only stale layers. |
-| `repair` | Partial or stale: read `standard doctor` first, then idempotent rebuild. |
+| `init` | From scratch: scaffold, graph and the Standard and security-policy gates; wiki drafts, memory index, health and hooks as optional steps. |
+| `refresh` | After a pull: refresh service files, rebuild only stale layers, re-check the wiki and the Standard. |
+| `repair` | Partial or stale: read `standard doctor`, `status` and `modules status` first, then idempotent rebuild and every completion gate. |
 
-Each scenario shows the CLI lines and a prompt to paste to a coding agent.
-An unknown argument, or more than one, exits non-zero and names the three
-choices.
+Each scenario lists its steps, one `keryx` command per step. A step is marked
+`[required]` or `[optional]` and carries the reason it is in the plan. The guide
+ends with the prompt for a coding agent, generated from those steps: the project
+root, "read `.metaproject/index.md` first", the required steps and the optional
+ones, and the rules (stop at the first failed required step, stop and ask when
+`keryx update` reports divergent files, never delete `.metaproject` or accepted
+content, no `--force` beyond the listed commands, no commit or push). An unknown
+argument, or more than one, exits non-zero and names the three choices.
 
-In `keryx shell`, `/setup` opens the same guide. The TUI shows one tab per
-scenario; readline prints the text. `/setup init` opens that scenario, and an
-unknown or extra argument prints the same error instead of the guide.
-Neither form runs the commands.
+In `keryx shell`, `/setup` opens the same guide in the TUI, one tab per scenario,
+on the tab that fits the project: no `.metaproject/index.md` opens Init, a complete
+workspace opens Refresh, a partial one opens Repair. `/setup init` opens that
+scenario instead, and an unknown or extra argument prints the same error instead of
+the guide. Readline prints the text. The TUI also has three keys and buttons:
+
+| Key | Button | What it does |
+|---|---|---|
+| `c` | `[Copy prompt]` | Copies the generated prompt to the clipboard. |
+| `o` | `[Optional: off]` / `[Optional: on]` | Adds or removes the optional steps in the list and in the prompt. |
+| `r` | `[Run]` | Shows a confirmation card (scenario, the exact commands that will run), and on yes keryx runs the steps itself. |
+
+Run needs no model and no external agent. On yes, keryx runs the listed steps in
+order, in the project root, each as a background job with a description
+(`setup 2/8: keryx sync --apply`) that shows in Background Jobs, so the composer
+stays usable. Each step runs with the same keryx the shell is running on (its own
+interpreter and entry script, never a `keryx` found on `PATH`). Optional steps run
+only when Optional is on. A step whose command holds a placeholder
+(`keryx integrate <editor>`, `keryx modules enable <name>`) needs a value from you,
+so the card lists it as skipped and it never runs.
+
+The transcript gets one line when the run starts, one line per step (`✓` or `✗` and
+the command) and a summary. A failed required step stops the run; a failed optional
+step is reported and the run continues. A `keryx update` that stops on a version
+divergence ends the run and tells you to rerun that step by hand with
+`--accept-version` or `--keep-existing`; the run never picks one. Killing a step's
+job (Background Jobs, `/interrupt`) stops the run and says so. A second Run while
+one is active is refused. The steps start through the session's job registry, so the
+same OS sandbox posture as `shell_exec` applies. `keryx setup` and the readline form
+never run anything.
 
 ---
 
@@ -773,6 +804,27 @@ Refusals print their code and exit non-zero (except where noted):
 
 ### Interactive behavior
 
+- **The sidebar** is seven cards, always in the same order: **Session** (model,
+  mode, usage, context, balance), **Workspace** (directory, branch, PR, SAC
+  workspace), **Work** (status, plan, subagents, background jobs), **Reviews**
+  (catch-up, findings, autonomous review, external diffs), **Ops** (governance,
+  triggers, schedules, intake, decisions, research sync), **Policy** (route,
+  guards, rewind, project rules, external providers, tools) and **Remote**
+  (remote control, Telegram, approvals, hold). Each card is three to four lines
+  and shows only the headline of its sections. Click a card to open its detail
+  modal: one tab per section with the whole value, and `Enter` on a tab that has
+  an inspector (Route opens `/routing`, Model opens `/model`, Findings opens
+  `/reviews`, and so on) runs that command. `←/→` switch tabs, `Esc` closes.
+  A pending remote approval, a hold, an available version update and a review
+  that is not ready raise their card (Remote, Remote, Session, Reviews) to the
+  attention colour and put a badge on its title line, in every mode, without
+  opening anything. The pinned header at the top holds the version and two
+  buttons for the sidebar modes the sidebar is not set to: **default**, **wide**
+  (twice as wide, never more than half the terminal, and only on terminals of at
+  least 100 columns; narrower terminals show default and return to wide when
+  there is room) and **rail** (one glyph and badge per card). `Ctrl+L` cycles
+  the modes. The choice is saved in `tui.json` under `sidebar`. A wide sidebar
+  never squeezes a modal: modals stay at least 72 columns wide.
 - `/help` lists every slash command available in the current mode
   (`agent` vs `chat`). The registry is `AGENT_SLASH_COMMANDS`.
 - `/status` (chat and agent) opens a read-only inspector. The TUI modal
@@ -797,7 +849,7 @@ Refusals print their code and exit non-zero (except where noted):
   run` appear there too. They are marked `acp:<agent>` in the row's description,
   and typing `acp` in the filter finds them. `keryx shell -c` never continues
   one: it continues the newest session of the shell's own kind.
-- **Governance** (TUI sidebar, always present, below Jobs). The row shows one of
+- **Governance** (TUI sidebar, Ops card, Governance tab; always present). The row shows one of
   five states:
   - `no report — click to run`: there is no stored report.
   - `unreadable — click for reason`: a stored report exists but is malformed or
@@ -843,7 +895,7 @@ Refusals print their code and exit non-zero (except where noted):
   the reason and offers `r` to rebuild it. A report
   written by another process after a failed run replaces the `failed` state.
   Both artifacts are replaced atomically, `latest.json` last.
-- **Triggers** (TUI sidebar, below Governance). The section is hidden when
+- **Triggers** (TUI sidebar, Ops card, Triggers tab). The section is hidden when
   `.metaproject/triggers.json` does not exist, and shows one error row when the
   file, or the ledger, cannot be read. Row ages are repainted at least once a
   minute. It shows:
@@ -977,7 +1029,7 @@ Refusals print their code and exit non-zero (except where noted):
   (`/mode trust|auto`, `/plan off` (bare `/plan` shows the mode and does not ask),
   and `/delegate`, `/external` and `/external-agents`, which name the agent and say
   it is external and paid). The rest, for example `/mcp`, `/guard`, `/route`,
-  `/editguard`, `/provider`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
+  `/editguard`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
   bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
   the shell) and are refused in the topic with the reason. A command from the topic
   never cancels the turn running in the shell; `/stop` in the topic ends the run
@@ -1154,7 +1206,7 @@ lists each provider with the environment variable it reads.
 
 Operator-defined OpenAI-compatible providers can be added on top of that list
 by registering them in `~/.local/share/keryx/llm-providers.json`; the
-`/provider` wizard in `keryx shell` has an "add custom provider" entry that
+Add provider tab of `/connect` in `keryx shell` has an "add custom provider" entry that
 writes this file for you (name → URL → key → models → temperature (optional)
 → max output tokens (optional) → request timeout ms (optional)). A custom
 name colliding with a built-in provider is rejected. Custom providers may
@@ -1431,11 +1483,11 @@ keryx auth status <provider> [--json]
 | `logout` | `<provider>` | Discard the stored grant. |
 | `status` | `<provider>`, `--json` | Method, state, expiry, refreshability — never the secret. |
 
-`/provider` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
+The Add provider tab of `/connect` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
 
 ### OpenAI API and ChatGPT subscriptions
 
-`/provider` offers two independent entries:
+The Add provider tab of `/connect` offers two independent entries:
 
 | Entry | Provider ID | Credential and usage |
 |---|---|---|
@@ -1443,11 +1495,11 @@ keryx auth status <provider> [--json]
 | ChatGPT / Codex | `openai-codex` | ChatGPT subscription login, using the account's Codex access and limits. |
 
 For a ChatGPT subscription, enable device-code login in your ChatGPT security
-settings, then choose **ChatGPT / Codex** in `/provider`. Keryx displays a
+settings, then open `/connect`, switch to Add provider and choose **ChatGPT / Codex**. Keryx displays a
 verification URL and a one-time code and opens the browser when available.
 Sign in to your account in that browser and enter the code. On a headless
 machine, open the displayed URL on another device. Escape cancels the Shell
-login. The command is `/provider`, not `/provide`.
+login and returns to the list.
 
 The same login can be started before opening Shell:
 
@@ -1457,9 +1509,8 @@ keryx auth status openai-codex
 keryx shell
 ```
 
-Then choose `/provider` → **ChatGPT / Codex** and a model returned by the
-subscription service. `/connect` lists connected providers and offers Test and
-Disconnect; CLI equivalents are `keryx providers test openai-codex` and
+Then open `/connect`: the Connected tab lists **ChatGPT / Codex** and a model returned by the
+subscription service, with Test and Disconnect buttons; CLI equivalents are `keryx providers test openai-codex` and
 `keryx providers remove openai-codex`. A successful model-list probe verifies
 authentication and discovery; send a short prompt to verify inference too.
 
@@ -1528,6 +1579,25 @@ same cache instead of a stale, hardcoded model list. The cache lives at
 `provider-catalog.json` in the per-user keryx config directory, mode `0600`,
 and never carries a credential — only `name`/`status`/`models`/`balance`/
 `fetchedAt`.
+
+A catalog with zero providers is never served as fresh and never saved as
+fresh, and a refresh that finds zero providers deletes the cache file, so an
+older non-empty file is not served after the last provider is disconnected
+(this includes `keryx providers status --refresh`). When `keryx shell` starts
+with a saved provider and model (so startup detected nothing), the refresh runs
+a live detection first, and `/routing` does the same when the cache is empty.
+
+`/routing` shows why a list is short. Above the picker, the Model tab has one
+status row per problem: "no providers connected" with a `/connect` hint, "model
+list unavailable (<reason>)" when the whole load failed or timed out (it never
+stays on "Reading routing table…"), and per provider `auth failed`, `0 models`,
+or "model list unavailable (<reason>)" for an unreachable, timed-out or
+unsupported provider with no offline list. Those providers are shown but cannot
+be picked. The session's own model is always listed as `(current session)`. A
+category that falls back names one of six reasons, in the same words: "no
+providers connected", "provider list unavailable", "provider not connected",
+"provider auth failed", "model list unavailable (<reason>)" or "model not in
+<provider>'s list".
 
 ### Cross-family review
 
@@ -4890,11 +4960,14 @@ keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>]
 keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
 keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
 keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
-keryx review confirm-plan --package <review-dir>                                     (fallback outside keryx shell; card review_confirm_plan)
-keryx review waive-mutation --package <review-dir> --reason "<why>"                  (terminal; card review_waive_mutation)
-keryx review override-reviewers --package <review-dir> --reason "<why>"              (terminal; card review_override_reviewers)
-keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
-                                                                                     (fallback outside keryx shell; card review_decide_premise)
+keryx review confirm-plan --package <review-dir> [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
+                                                                                     (terminal or host question; card review_confirm_plan)
+keryx review waive-mutation --package <review-dir> --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
+                                                                                     (terminal or host question; card review_waive_mutation)
+keryx review override-reviewers --package <review-dir> --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
+                                                                                     (terminal or host question; card review_override_reviewers)
+keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
+                                                                                     (terminal or host question; card review_decide_premise)
 keryx review verify-run --package <review-dir> --finding <id> [--timeout <s>] -- <command…>
 keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
@@ -4918,7 +4991,9 @@ keryx review readiness <review-id-or-path> [--json]
 keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
 ```
 
-The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal; plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
+The operator-only steps here (`confirm-plan`, `waive-mutation`, `override-reviewers`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal, except that the first four also accept a host question (below); plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
+
+**A host question.** Outside keryx shell there is no card tool. For four acts the agent asks the operator with the host's own question tool (Claude Code's question tool, Codex's, a Telegram poll through Helyx), offering the verb's options (`yes` or `no` for `confirm-plan`, `waive` or `keep`, `override` or `keep`, `uphold` or `dismiss`) and naming the subject in the question (the plan numbers, the mutant ids or their count, the reviewer names, the finding id), and records the answer with `confirm-plan`, `waive-mutation`, `override-reviewers` or `decide-premise` and, with no terminal, `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. `<source>` is `claude-code` or `codex` for the host harness's own question tool (`<ref>` its question id), `helyx-poll` for a Telegram poll (`<ref>` is `<poll-id>[:<message-id>]`), `keryx-shell` only for a plain question the shell itself asked (in keryx shell use the card first) or `other` (`<ref>` a message id or a short label). `decide-premise` still takes `--answer uphold|dismiss --reason "<why>"`; the other two still take `--reason`. `confirm-plan` refuses a stale plan: `--question-text` must show the plan's current dispatch count and minute range (as `keryx review estimate` prints them), otherwise ask the operator again with the current numbers. The record carries `confirmedVia: "host-question"` with the source, ref, question and answer, and a `keryx decisions` entry is written; the review report and `/decisions` show it apart from a card. keryx does not verify the answer: a host question is weaker than a card press (`tui-card`, `remote-card`), which stays the first choice where a card is available (TM-04 section 6b, [limitations](limitations.md)). Nothing is recorded, and the command exits non-zero, for an answer that is not one of the verb's options (free text is not a decision), a decline (words or `--answer`), `decide-premise` words that name the other choice or none, an empty answer or question, a malformed `--answered-by`, an unknown package, a finding that is not held, a stale plan or a missing `--reason`. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag. `review complete` and its `--waive` and `--waive-coverage` flags refuse these flags and stay on the terminal and card path. Without `--answered-by` the four verbs behave as before: a terminal question, refused without a TTY. `keryx review <verb> --help` prints the flags and names the card as the stronger path.
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
 flag that is silently dropped writes nothing and still reports success.
@@ -4991,8 +5066,8 @@ wider one counts. `KERYX_REVIEW_PR_BASE=off` skips the `gh` read.
 | `plan` | The round plan in one command, without dispatching (`keryx review plan --target <pr-url\|branch> [--ref <base>] [--head <sha>] [--host <host>] [--json]`): `review start` (which finds the previous round of the target in the local packages, git history, the PR's round block and comments, and the flow, and writes `round.json`), `scope`, `blast-radius --package`, `slice --package` (a delta round slices only prevHead..head; the lines in a fix hunk are cut apart from every other changed line, even in the same file; a slice of fix lines is `kind: fix` with its `findingIds`, read deep by review-logic, review-regression, the reviewers that authored those findings, review-security-code when one is a security finding, and the roles its own changed lines route by content (review-security-code for a fix that spawns a process); every other slice is `kind: new`, routed as in round 1), `required --depth auto --scope --package` and `estimate`. Writes `<review-dir>/plan.json` (round, slices by kind, roster, dispatches, minutes, `overThreshold`, `next`: `dispatch`, or confirm the plan with the `review_confirm_plan` card / `keryx review confirm-plan`) and prints a short summary. A fix slice is covered once every reviewer on its roster read it and every finding attached to it has a disposition (`closed`, `open`, `partial`, `regressed` or `withdrawn`, in the `prior_dispositions` of a finished result of that roster); findings carried over from the previous round keep their recorded disposition but cover no fix slice. A previous round is cut from only when it is ours and finished — a round block from our own login, or a package with completion evidence (published.json, a scopeReviewed ledger, a closed status) that no commit of merge-base..head added or changed; anything else is a full round with its findings as context. `--memory-query` and `--unattended` are passed to `review start`. |
 | `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
 | `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
-| `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead and never sends the operator to a terminal. |
-| `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_decide_premise` card and never sends the operator to a terminal. |
+| `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY, unless `--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"` records the operator's answer to a host question (`confirmedVia: "host-question"`, weaker than a card); inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead, the stronger path, and never sends the operator to a terminal. |
+| `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY, unless `--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"` records the operator's answer to a host question (`uphold` or `dismiss`; `confirmedVia: "host-question"`, weaker than a card); inside keryx shell the agent calls the `review_decide_premise` card, the stronger path, and never sends the operator to a terminal. |
 | `verify-run` | Run a verification command in the parent session and save its stdout, stderr and exit status to `<review-dir>/research-evidence/verify-<id>-<n>.txt`, for the verifier to cite as executed evidence. |
 | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
 | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |

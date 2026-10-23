@@ -1,0 +1,160 @@
+STATUS: DONE_WITH_CONCERNS
+
+Concern: the mutation pass was NOT run. The payload says `allowed_tools: "read-only"` and `exec_budget_s: 0`, so no suite could be executed. Per the skill, no mutation result is reported below; the candidates are listed in `mutant_candidates` for the main session to run. Mutated: 0. Not reached: all 12 candidates.
+
+Mutation table: not run (read-only dispatch, exec budget 0). No row would be anything but invented, so there is none.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slices 02 and 04 (remote /connect Add provider tests, connect-modal TUI tests, remote-provider-hooks tests, modal-host footerFor, help-groups, queue-nav, probe) read in full. The suites are offline (injected fetch, temp config dir, injected clocks), the key-never-in-chat contract is checked from several sides, and the remote Add flow pins its main branches through the real bridge. Weaknesses are all minor: the TUI helper `waitFor` never fails on timeout, so several Esc-step tests and the Tab-cycle check can pass without the step they name ever opening; the key-leak tests rely on a spy and on sampled frames that have no positive proof; a few router branches (not-answered Add list, refused picks, throwing/absent device-login hook) have no assertion; two fixtures carry shapes the producer cannot emit. The mutation pass was not run (read-only dispatch, exec budget 0).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/connect-modal.test.ts",
+      "line": null,
+      "quote": "await waitFor(h, (f) => f.includes(\"Device login\"));",
+      "problem": "`waitFor` returns the last frame when its deadline passes; it never throws. Four 'Esc at the X step returns to the Add tab and saves nothing' tests discard the result of the waitFor that proves the step opened (`API key`, `endpoint URL`, `Device login`, `Provider name`). Every assertion after Esc is then negative (no key saved, no file written, `calls()` is 0, text absent) or holds on the Add tab whether or not the step ever opened (`Add custom provider && !<step label>`, `[Connect]`). If Enter on the row did nothing, each test still passes, after a 5 s stall.",
+      "impact": "The device-login case is the one with no other TUI coverage: `Device login` appears in no other test in slices 02 or 04. A regression where Connect on a device-login provider never opens the step would leave `Esc at the device-login step` green. Same for the base-URL and custom-wizard Esc paths, which no other test enters. AC6 ('Esc at any step returns to Add provider') is only as strong as its positive artifact, and here the positive artifact is not asserted.",
+      "suggested_fix": "Assert the step frame: `expect(await waitFor(h, (f) => f.includes(\"Device login\"))).toContain(\"Device login\")` (same for `API key`, `endpoint URL`, `Provider name`). Better, make `waitFor` throw on deadline with the predicate's description, so every call site is checked and the 5 s stall becomes a failure.",
+      "evidence": "waitFor: `if (predicate(frame) || Date.now() >= until) return frame;`. Discarded positive waits at connect-modal.test.ts ~416 (API key), ~571 (endpoint URL), ~593 (Device login), ~618 (Provider name), read from slice-04. Downstream assertions at the same tests: `readdirSync(configDir)` equals [], `not.toContain(...)`, `calls()` is 0, `frame.toContain(\"[Connect]\")`. Not run; reading only.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:connect-modal:esc-step-positive-wait-discarded"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/connect-modal.test.ts",
+      "line": null,
+      "quote": "h.mockInput.pressTab(); // cycles to the next tab",
+      "problem": "The test named 'digits, Tab and the mouse switch tabs' presses Tab twice and discards both waitFor results (`frame = await waitFor(...)` is reassigned, never asserted). With Tab doing nothing, the first wait times out silently on the Connected frame, the second wait is already satisfied by `[Disconnect]`, and the test goes on to the mouse-click step, which only needs the Connected frame. Digits and the mouse are asserted (`not.toContain(\"Add custom provider\")`, `toContain(\"[Connect]\")`); Tab is not.",
+      "impact": "Tab cycling and wrap-around is named in the test and in the footer, but a regression there stays green. Tab handling lives in modal-host, so another suite may cover it; this one claims to and does not.",
+      "suggested_fix": "After the first Tab: `expect(frame).toContain(\"Add custom provider\")`. After the second: `expect(frame).not.toContain(\"Add custom provider\")`. Or fold the check into the throwing `waitFor` from F-001.",
+      "evidence": "connect-modal.test.ts 155-158 (slice-04 lines 157-160). Same `waitFor` behaviour as F-001. Not run; reading only.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:connect-modal:tab-cycle-unasserted"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/connect-modal.test.ts",
+      "line": null,
+      "quote": "for (const text of channels) expect(text).not.toContain(SECRET);",
+      "problem": "AC7 ('the key appears nowhere else') is pinned by two negative-only checks that have no positive proof. (a) `spyOnChrome` replaces `showToast`, `setStatus`, `setHeaderMeta` and `setTitle` on the chrome object after it was created, and `channels` is never asserted non-empty. If the code under test holds a reference taken before the spy was installed, or never calls these methods on this path, the loop is vacuous. `transcriptText` likewise has no assertion that the walker finds any text at all. (b) The first AC6 test says 'every frame AFTER Enter must be free of it' but samples three frames: the Add tab, the key step before typing, and the final Connected frame. No frame is captured between Enter and completion, which is where an in-flight 'checking' or error line would show a key.",
+      "impact": "A regression that echoes the key into a toast, the status line or a transient frame during the /models check would pass if the spy is not wired the way the test assumes, or if the transient frame is not sampled. The key-leak contract is the flow's main risk area (flow 387 AC4).",
+      "suggested_fix": "Add one positive artifact per channel, for example assert `channels` contains the expected non-secret toast or status text, or fire `chrome.showToast('probe')` once and assert the spy saw it. Assert `transcriptText(h.chrome).length > 0` after some known text is added. For frames, sample on every poll in a loop between Enter and the connected frame (collect inside `waitFor`) and assert none holds SECRET.",
+      "evidence": "spyOnChrome and transcriptText definitions and the 'typed key is on no channel' test (slice-04 lines 457-482, 708-737); `seen` is filled only by explicit `snap` calls (slice-04 lines 328-363). Not run; reading only. A real check is mutant M9 below.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:connect-modal:key-leak-negative-only"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/remote/command-connect.test.ts",
+      "line": null,
+      "quote": "it(\"keeps that refusal when the shell cannot list addable providers\", async () => {",
+      "problem": "Three gaps in the remote Add flow's tests. (1) The new test 'keeps that refusal when the shell cannot list addable providers' uses the same fixture as the existing 'sends the operator to the shell when no provider is connected' (`listProviders: []`, no `listAddableProviders`) and asserts a subset of what that one asserts; it adds no coverage. (2) 'changes nothing when the Add list or Test / Connect is not answered' exercises only the second picker (`choices[1].answer(undefined)`); the Add list not-answered path is only touched by two tests that answer `undefined` for cleanup and assert nothing afterwards. No test drives `refuseChoice` through the Add list or the Test/Connect question, so the `chosen === \"refused\"` and `action === \"refused\"` branches of `pickAddableProvider` are unasserted. (3) `connectAddable`'s catch (host throws, topic gets 'Device login failed. The details are in the shell.'), the missing `connectWithDeviceLogin` hook message, and the `addable.length === 0` message have no test.",
+      "impact": "Each is a gate the diff added. Their absence is tolerated by the suite, so the next edit to them is unprotected. In (2) the title claims coverage the body does not provide.",
+      "suggested_fix": "Delete the duplicate test (or give it a fixture that differs: `listAddableProviders` present but returning []) and assert 'There are no providers to add from this shell.'. In the not-answered test, answer `undefined` at the Add list too and assert `replies` is []. Add a case with `refuseChoice` and a case where `connectWithDeviceLogin` throws, asserting the fixed failure text and that the thrown text is not relayed.",
+      "evidence": "command-connect.test.ts 93-118 (existing refusal test and the new duplicate), 268-281 (not-answered test), 176-184 (add-list tests that end with `answer(undefined)` and no assertion). Producer branches: command-router.ts `pickAddableProvider` (`chosen === \"refused\"`, `chosen === undefined`, `action === \"refused\"`), `connectAddable` (`host.connectWithDeviceLogin === undefined`, try/catch). Not run; reading only. See M1, M5, M6, M7 below.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:remote-connect:add-flow-branches-unpinned"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/tui/remote-provider-hooks.test.ts",
+      "line": null,
+      "quote": "{ kind: \"empty\", detail: MASKED.join(\" \") },",
+      "problem": "Two fixtures carry a shape the producer cannot emit, hidden by casts. (1) `ModelsFailure`'s `empty` variant is `{ kind: \"empty\" }` with no `detail` (src/commands/providers.ts:536-537); the test builds `{ kind: \"empty\", detail: MASKED... }` and casts the array `as ModelsFailure[]`. It pins a state that does not exist, so the 'never relays a provider's error text' check for `empty` proves nothing about the real value. (2) `SUCCESS = { ok: true } as unknown as DeviceLoginResult`, but the producer's success is `{ ok: true; provider: string }` (src/lib/oauth/login.ts:41). `CHALLENGE as never` also bypasses the `LoginChallenge` type.",
+      "impact": "If `createRemoteDeviceLogin` ever reads `result.provider` (to name the provider in the success text or to pass to `onConnected`), these tests keep passing with `undefined`. The casts remove the compiler's check that would have flagged both.",
+      "suggested_fix": "Use `{ kind: \"empty\" }` for that case, and build the success as `{ ok: true, provider: \"copilot\" }` and the challenge as a full `LoginChallenge` without `as never` / `as unknown as`.",
+      "evidence": "ModelsFailure at src/commands/providers.ts:529-537; DeviceLoginResult at src/lib/oauth/login.ts:41; fixtures at remote-provider-hooks.test.ts (slice-04 lines 1071-1076, 1122, 1127). Not run; reading only.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:remote-provider-hooks:fixture-shape-vs-producer"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.test.ts",
+      "line": null,
+      "quote": "const third = rig.hook.connect(\"copilot\", rig.notify);",
+      "problem": "The 'one login at a time' test depends on `connect` calling the injected login synchronously: `release` is reassigned only when the login promise's executor runs, and the test calls `release?.()` right after `connect` and checks `rig.calls.length` without awaiting. If that ordering changes (an `await` before the login call), `release` is still the already-fired first one and `await third` hangs until the test timeout. The extra `release?.()` between `expect(rig.calls.length).toBe(2)` and `await third` is redundant. The first test also waits for `notify` with `await Promise.resolve()`, a single microtask yield, rather than an event.",
+      "impact": "Deterministic today; fragile to an unrelated refactor of `connect`, and it would then fail as a hang rather than a message.",
+      "suggested_fix": "Capture each login's resolver in an array pushed by the login stub and release by index, and await `rig.calls.length` (or a settle helper) instead of relying on synchronous start.",
+      "evidence": "slice-04 lines 1177-1198 and 1125-1138. Reading only.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:remote-provider-hooks:sync-start-coupling",
+      "publication": "omit"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/tui/provider-probe.test.ts",
+      "line": null,
+      "quote": "answers unknown for a name nobody registered",
+      "problem": "`provider-probe.test.ts` is the only unit file for `probeProviderConnection` and covers two outcomes (`no-credential`, `unknown`). The `live` and `failed` outcomes and `requireCredential: false` are reached only through the TUI end-to-end tests in connect-modal.test.ts (Add tab Test with a stored credential), and only with `requireCredential: true`.",
+      "impact": "The `requireCredential: false` branch (the Connected tab's Test, if it shares this probe) is not pinned here; whether another suite covers it was not checked in these slices.",
+      "suggested_fix": "Add one case per outcome with an injected fetch (live with N models, 401, unreachable) and one with `requireCredential: false`.",
+      "evidence": "slice-04 lines 950-987. Reading only; `keryx test related src/tui/tui-shell.ts` would settle whether connect-provider-buttons.test.ts covers the false branch.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:provider-probe:outcome-coverage",
+      "publication": "omit"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/remote/command-gateway.test.ts",
+      "line": null,
+      "quote": "[\"/provider\", \"provider\"],",
+      "problem": "The AC8 table no longer has a `/provider` row and `REMOTE_REFUSED.provider` is gone. `/provider` from a Telegram topic now falls into the generic 'not on the list of commands a topic may run' refusal (`known: false`). That still refuses it and runs nothing, but no test asserts it, and the topic gets the generic text, not the hint toward `/connect` that the shell gives.",
+      "impact": "None on safety (nothing runs). If someone later adds a `provider` entry to REMOTE_COMMANDS, no remote test notices that a key-asking command became runnable from a chat.",
+      "suggested_fix": "Keep `/provider` in an 'unknown, refused, runs nothing' case (for example next to `/definitely-not-a-command`), so the removal is pinned rather than just untested.",
+      "evidence": "command-gateway.ts classifyRemoteCommand: `spec === undefined` then `refusedReason` undefined gives `refuse(canonical, 'it is not on the list...', false)`; test diff removes the row (slice-02 lines 859-866, 937-942). Reading only.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:command-gateway:provider-refusal-unpinned",
+      "publication": "omit"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "M1", "file": "src/remote/command-router.ts", "anchor": "if (chosen === undefined) {\n      this.ctx.record(\"/connect not answered in time; nothing changed\");\n      return \"failed\";\n    }\n    const provider = addable.find(", "replacement": "(delete the whole if block)", "kind": "behavior", "note": "Add list not answered. Test 'goes straight to the Add provider list' answers undefined and asserts nothing after it; expect survivor or a TypeError on `chosen.id`." },
+    { "id": "M2", "file": "src/remote/command-router.ts", "anchor": "if (provider.connected) {", "replacement": "if (false) {", "kind": "behavior", "note": "Expected red: '[Connect] on a provider shown as connected starts no login'." },
+    { "id": "M3", "file": "src/remote/command-router.ts", "anchor": "if (!provider.deviceLogin) {", "replacement": "if (false) {", "kind": "behavior", "note": "Expected red: '[Connect] on a key provider calls no host hook'. Key-never-in-chat gate (AC8)." },
+    { "id": "M4", "file": "src/remote/command-router.ts", "anchor": "const busy = this.busyReason(\"/connect\", \"connect\");", "replacement": "const busy = undefined;", "kind": "behavior", "note": "Expected red: 'does not start a device login while the shell is busy'." },
+    { "id": "M5", "file": "src/remote/command-router.ts", "anchor": "outcome = { ok: false, message: \"Device login failed. The details are in the shell.\" };", "replacement": "throw new Error(\"x\");", "kind": "behavior", "note": "No router test makes connectWithDeviceLogin throw; expect survivor." },
+    { "id": "M6", "file": "src/remote/command-router.ts", "anchor": "if (host.connectWithDeviceLogin === undefined) {", "replacement": "if (false) {", "kind": "behavior", "note": "Hook-absent message; no test omits only this hook on a deviceLogin provider; expect survivor (would throw a TypeError on call)." },
+    { "id": "M7", "file": "src/remote/command-router.ts", "anchor": "if (addable.length === 0) {", "replacement": "if (false) {", "kind": "behavior", "note": "Empty Add list message; no test returns []; expect survivor." },
+    { "id": "M8", "file": "src/remote/command-router.ts", "anchor": "const canAdd = host.listAddableProviders !== undefined;", "replacement": "const canAdd = true;", "kind": "behavior", "note": "Expected red: refusal tests that omit the hook." },
+    { "id": "M9", "file": "src/tui/tui-shell.ts", "anchor": "(a toast or status write that includes the typed key, on the connect-success path)", "replacement": "add chrome.showToast(key) after saveApiKey", "kind": "behavior", "note": "Checks F-003: does the key-on-no-channel test fail when the key is leaked to a toast. Main session to place it at the save site." },
+    { "id": "M10", "file": "src/tui/modal-host.ts", "anchor": "(the Tab key branch that cycles tabs)", "replacement": "delete the branch", "kind": "behavior", "note": "Checks F-002: connect-modal 'digits, Tab and the mouse' vs modal-host's own tests." },
+    { "id": "M11", "file": "src/remote/shell-bridge.ts", "anchor": "...(this.host.connectWithDeviceLogin !== undefined", "replacement": "...(false", "kind": "behavior", "note": "Expected red through commandHarness (device-login tests)." },
+    { "id": "M12", "file": "src/remote/command-router.ts", "anchor": "options.push({ id: ADD_PROVIDER_ID, label: \"Add provider\" });", "replacement": "(delete the statement)", "kind": "behavior", "note": "Expected red: 'adds an Add provider button after the connected providers'." }
+  ],
+  "follow_ups": [
+    "Run M1, M5, M6, M7, M9 and M10 first: they are the candidates the reading above says have no assertion. M2, M3, M4, M8, M11 and M12 are expected red and make the table's reds. None of the 12 was run by this reviewer (read-only dispatch, exec budget 0)."
+  ],
+  "slices": ["slice-02", "slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 3 }
+}
+```
+
+Summary (markdown)
+
+Read in full: slice-02 (agent-commands, shell, remote command-connect tests, gateway, router, bridge, help-groups) and slice-04 (connect-modal, connect-provider-buttons, modal-host, queue-nav, provider-probe, remote-provider-hooks, wizard-modal tests). Judged by reading only; no command was run.
+
+What is sound: every suite is offline (injected fetch, temp config dir, injected clocks and probes); the remote Add flow runs through the real bridge via `commandHarness`; the key-never-in-chat contract has a rows/text regex check, a no-host-call check and redaction tests with masked fragments; `footerFor` is tested with a tab that returns undefined; the help-groups and queue-nav changes pin both directions.
+
+What is weak, by value: (1) F-001 and F-002, `waitFor` never fails, so Esc-step and Tab tests can pass without the step opening, the device-login Esc path having no other TUI test; (2) F-003, the key-leak checks are negative-only with a spy and sampled frames that nothing proves are live; (3) F-004, remote Add-flow branches with no assertion plus a duplicate test with an over-claiming sibling title; (4) F-005, fixtures with a shape the producer cannot emit, hidden by casts. F-006 to F-008 are info.
+
+Mutation pass: not run (read-only dispatch, exec budget 0); 12 candidates handed back, 0 mutated, 12 not reached.

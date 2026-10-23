@@ -1,0 +1,1022 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "468",
+  "slug": "shell-tui-setup-sidebar-routing",
+  "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
+  "status": "in-progress",
+  "createdAt": "2026-10-20T07:58:41.266Z",
+  "updatedAt": "2026-10-20T21:08:24.800Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:10da106f8df456a27cdaf530dfbdabdf2bf21c5c6fd98fa204978fa83d87355d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "Я прикрепил скриншоты с багами в keryx shell tui. Создай flow , изучи проблемы, подготовь план. Проверка - ручное тестирование, эффект - удобное обновление metaproject в проекте, удобый сайдбар, а так же роутинг должен работать.",
+    "source": "claude-code desktop chat, 2026-10-20, message with 5 screenshots"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-phase implement tasks (routing, setup, sidebar) added after the investigation"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-phase test tasks written red-first for each PR"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-phase review-and-merge tasks, one per PR"
+    },
+    {
+      "id": "T5",
+      "title": "A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T08:17:24.983Z",
+            "outcome": "started",
+            "detail": "468-T5 tests-creator dispatch (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T08:27:13.753Z",
+            "outcome": "started",
+            "detail": "468-T6 task-implementer dispatch (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "A routing: operator manual check on the branch build in a throwaway project (pick persists globally)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "operator 2026-10-20: no manual check on a branch build; replaced by T20, the check after the PR 1 release"
+    },
+    {
+      "id": "T8",
+      "title": "A routing: PR 1 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T12:26:11.785Z",
+            "outcome": "started",
+            "detail": "468-T9 tests-creator dispatch (sonnet), phase B setup"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T12:45:23.254Z",
+            "outcome": "started",
+            "detail": "468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T12:45:24.265Z",
+            "outcome": "started",
+            "detail": "468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "model-free Run step runner, modal layout/scroll/Copy/Optional/Run; 272 tests pass, tsc clean; operator accepted 30-min idle timeout and Run wording"
+    },
+    {
+      "id": "T12",
+      "title": "B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "operator 2026-10-20: no manual check on a branch build; replaced by T21, the check after the PR 2 release"
+    },
+    {
+      "id": "T13",
+      "title": "B setup: PR 2 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 1068 merged on green required checks (f6c66ac28); dependency-audit red only from the unrelated hono advisory; no release per operator cadence"
+    },
+    {
+      "id": "T14",
+      "title": "C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T17:37:10.616Z",
+            "outcome": "started",
+            "detail": "468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "red tests for AC12-AC17; operator accepted Ctrl+L, 100-col wide threshold, Tools on Policy, update->Session and review->Reviews"
+    },
+    {
+      "id": "T15",
+      "title": "C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T18:49:59.964Z",
+            "outcome": "started",
+            "detail": "468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "geometry store, pinned header with two separate mode buttons (operator), Ctrl+L, tui.json merge, live widths, modal over wide sidebar; AC16 card tests wait for T16"
+    },
+    {
+      "id": "T16",
+      "title": "C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T19:44:28.052Z",
+            "outcome": "started",
+            "detail": "468-T16 task-implementer dispatch (sonnet), phase C seven cards"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "seven cards, detail modals, badges, rail glyphs, theme repaint, docs; 377 tests + pty smoke pass; operator accepted icons, 4-line cards, click->modal->Enter"
+    },
+    {
+      "id": "T17",
+      "title": "C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split: the pty smoke moved to T22 (pre-merge), the operator check to T23 (after the PR 3 release)"
+    },
+    {
+      "id": "T18",
+      "title": "C sidebar: PR 3 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 1070 merged on fully green CI (19/19); no separate review round per operator cadence"
+    },
+    {
+      "id": "T19",
+      "title": "Final: operator check in vantage-frontend on the released npm keryx (setup Refresh run, sidebar modes, routing pick)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T20",
+      "title": "A routing: operator check after the PR 1 release, keryx installed from npm",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T21",
+      "title": "B setup: operator check after the PR 2 release, keryx installed from npm",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T22",
+      "title": "C sidebar: run the 80x24 pty smoke locally before merge",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T16",
+        "T26"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "80x24 pty smoke run locally on darwin with KERYX_ALLOW_REAL_SUBPROCESS=1 after T16 and T26: 5 pass, including flow 468 AC16 (Session card, Work card, toast visible)"
+    },
+    {
+      "id": "T23",
+      "title": "C sidebar: operator check after the PR 3 release on a laptop screen, keryx installed from npm",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T24",
+      "title": "A routing: PR 1063 round-1 fixes (upheld C-01..C-04, C-06..C-16; red CI wiring and verify-exec tests)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T10:16:32.224Z",
+            "outcome": "started",
+            "detail": "468-T24 task-implementer fix dispatch (sonnet), PR 1063 round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T17:37:11.435Z",
+            "outcome": "started",
+            "detail": "468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "20 red tests for AC20/AC21, red for the right reasons; operator chose the proposed footer wording and a Duration row"
+    },
+    {
+      "id": "T26",
+      "title": "C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T25"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T18:00:40.221Z",
+            "outcome": "started",
+            "detail": "468-T26 task-implementer dispatch (sonnet), phase C chrome"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "busy footer and one duration formatter; two T25 tests corrected to assert no 'queue <n>' count; operator accepted hint shortening on narrow terminals"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-20T07:58:41.266Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-20T08:12:40.566Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-20T08:12:41.323Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-20T08:12:42.135Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-20T08:12:42.946Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-20T08:12:46.279Z",
+      "event": "task-added",
+      "detail": "T5: A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state"
+    },
+    {
+      "at": "2026-10-20T08:12:49.686Z",
+      "event": "task-added",
+      "detail": "T6: A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs"
+    },
+    {
+      "at": "2026-10-20T08:12:53.085Z",
+      "event": "task-added",
+      "detail": "T7: A routing: operator manual check on the branch build in a throwaway project (pick persists globally)"
+    },
+    {
+      "at": "2026-10-20T08:12:56.545Z",
+      "event": "task-added",
+      "detail": "T8: A routing: PR 1 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T08:13:00.195Z",
+      "event": "task-added",
+      "detail": "T9: B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run"
+    },
+    {
+      "at": "2026-10-20T08:13:03.553Z",
+      "event": "task-added",
+      "detail": "T10: B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output"
+    },
+    {
+      "at": "2026-10-20T08:13:07.206Z",
+      "event": "task-added",
+      "detail": "T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs"
+    },
+    {
+      "at": "2026-10-20T08:13:10.666Z",
+      "event": "task-added",
+      "detail": "T12: B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)"
+    },
+    {
+      "at": "2026-10-20T08:13:13.903Z",
+      "event": "task-added",
+      "detail": "T13: B setup: PR 2 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T08:13:17.857Z",
+      "event": "task-added",
+      "detail": "T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width"
+    },
+    {
+      "at": "2026-10-20T08:13:21.348Z",
+      "event": "task-added",
+      "detail": "T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing"
+    },
+    {
+      "at": "2026-10-20T08:13:24.770Z",
+      "event": "task-added",
+      "detail": "T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs"
+    },
+    {
+      "at": "2026-10-20T08:13:28.788Z",
+      "event": "task-added",
+      "detail": "T17: C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen"
+    },
+    {
+      "at": "2026-10-20T08:13:32.157Z",
+      "event": "task-added",
+      "detail": "T18: C sidebar: PR 3 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T08:13:35.604Z",
+      "event": "task-added",
+      "detail": "T19: Final: operator check in vantage-frontend on the released npm keryx (setup Refresh run, sidebar modes, routing pick)"
+    },
+    {
+      "at": "2026-10-20T08:16:54.973Z",
+      "event": "frozen",
+      "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-20T08:16:59.602Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-20T08:17:24.983Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 468-T5 tests-creator dispatch (sonnet)"
+    },
+    {
+      "at": "2026-10-20T08:27:09.507Z",
+      "event": "task-done",
+      "detail": "T5: A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state"
+    },
+    {
+      "at": "2026-10-20T08:27:13.753Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 468-T6 task-implementer dispatch (sonnet)"
+    },
+    {
+      "at": "2026-10-20T08:37:49.287Z",
+      "event": "task-done",
+      "detail": "T6: A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs"
+    },
+    {
+      "at": "2026-10-20T08:47:13.037Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"(operator-only) On the branch build in a throwaway project, the operator opens `/routing`, sees openai-codex and the other connected providers with their models, picks a model for `coding`, and sees the category show it after reopening. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 1 is released and keryx is installed from npm (`keryx --version` shows that release), the operator opens `/routing` in a real project, sees openai-codex and the other connected providers with their models, picks a model for `coding`, and sees the category show it after reopening. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: manual checks happen only after release and npm install, not on a branch build)"
+    },
+    {
+      "at": "2026-10-20T08:47:17.293Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(operator-only) On the branch build in a throwaway project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 2 is released and keryx is installed from npm, in a project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: manual checks happen only after release and npm install, not on a branch build)"
+    },
+    {
+      "at": "2026-10-20T08:47:21.387Z",
+      "event": "ac-updated",
+      "detail": "AC18: \"(operator-only) On a laptop screen with the branch build, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 3 is released and keryx is installed from npm, on a laptop screen, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: manual checks happen only after release and npm install, not on a branch build)"
+    },
+    {
+      "at": "2026-10-20T08:47:25.090Z",
+      "event": "task-added",
+      "detail": "T20: A routing: operator check after the PR 1 release, keryx installed from npm"
+    },
+    {
+      "at": "2026-10-20T08:47:25.837Z",
+      "event": "task-added",
+      "detail": "T21: B setup: operator check after the PR 2 release, keryx installed from npm"
+    },
+    {
+      "at": "2026-10-20T08:47:26.843Z",
+      "event": "task-added",
+      "detail": "T22: C sidebar: run the 80x24 pty smoke locally before merge"
+    },
+    {
+      "at": "2026-10-20T08:47:27.604Z",
+      "event": "task-added",
+      "detail": "T23: C sidebar: operator check after the PR 3 release on a laptop screen, keryx installed from npm"
+    },
+    {
+      "at": "2026-10-20T08:47:31.094Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T6 (was T7) — operator 2026-10-20: no manual check on the branch build; PR 1 review follows the implementation directly"
+    },
+    {
+      "at": "2026-10-20T08:47:31.970Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T11 (was T12) — operator 2026-10-20: no manual check on the branch build; PR 2 review follows the implementation directly"
+    },
+    {
+      "at": "2026-10-20T08:47:32.840Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T22 (was T17) — the 80x24 pty smoke (T22) stays a pre-merge gate; the operator's manual check moved after the release (T23)"
+    },
+    {
+      "at": "2026-10-20T08:47:33.590Z",
+      "event": "task-depends-set",
+      "detail": "T19: dependsOn T23 (was T18) — the final vantage-frontend check follows the post-release sidebar check"
+    },
+    {
+      "at": "2026-10-20T08:47:37.064Z",
+      "event": "task-done",
+      "detail": "T7: A routing: operator manual check on the branch build in a throwaway project (pick persists globally)"
+    },
+    {
+      "at": "2026-10-20T08:47:37.863Z",
+      "event": "task-done",
+      "detail": "T12: B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)"
+    },
+    {
+      "at": "2026-10-20T08:47:38.762Z",
+      "event": "task-done",
+      "detail": "T17: C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen"
+    },
+    {
+      "at": "2026-10-20T10:15:57.347Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"A shell that starts with a saved provider and model (or `--provider/--model`), so startup `detected` is empty, still refreshes the provider catalog from a real detection. The saved catalog holds every provider that has a stored grant or key. Reproduction: today it saves `{providers: {}}`. [verify: exec `bun test src/harness/provider-catalog.test.ts src/tui/provider-catalog-startup.test.ts -t AC1`]\" -> \"A shell that starts with a saved provider and model (or `--provider/--model`), so startup `detected` is empty, still refreshes the provider catalog from a real detection. The saved catalog holds every provider that has a stored grant or key. Reproduction: today it saves `{providers: {}}`. [verify: exec `bun test src/harness/provider-catalog.test.ts src/tui/provider-catalog-startup.test.ts -t \"flow 468 AC1\"`]\" (PR 1063 round 1, C-10 (upheld): -t AC1 also selected flow 309's (AC1) tests; flow 468 tests are prefixed 'flow 468' and the command selects only them)"
+    },
+    {
+      "at": "2026-10-20T10:16:02.494Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"Failure scenario: a catalog with zero providers is never served as fresh from the cache and is never saved as fresh. A fresh-but-empty cache file on disk triggers a refresh. [verify: exec `bun test src/harness/provider-catalog.test.ts src/harness/provider-catalog-cache.test.ts -t AC2` · sensitive: failure-scenario]\" -> \"Failure scenario: a catalog with zero providers is never served as fresh from the cache and is never saved as fresh. A fresh-but-empty cache file on disk triggers a refresh. [verify: exec `bun test src/harness/provider-catalog.test.ts src/harness/provider-catalog-cache.test.ts -t \"flow 468 AC2\"` · sensitive: failure-scenario]\" (PR 1063 round 1, C-10 (upheld): -t AC2 also selected flow 309's (AC2) tests; flow 468 tests are prefixed 'flow 468' and the command selects only them)"
+    },
+    {
+      "at": "2026-10-20T10:16:04.466Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"The `/routing` Model tab lists every connected provider with its models. The provider and model the session runs on are always listed and labelled `(current session)`, even when the catalog lacks them, and routing resolution treats that provider as connected. Enter saves the pick to the user layer, and the Categories tab shows it. [verify: exec `bun test src/tui/routing-inspector.test.ts src/harness/routing/table.test.ts -t AC3`]\" -> \"The `/routing` Model tab lists every connected provider with its models. The provider and model the session runs on are always listed and labelled `(current session)`, even when the catalog lacks them, and routing resolution treats that provider as connected. Enter saves the pick to the user layer, and the Categories tab shows it. [verify: exec `bun test src/tui/routing-inspector.test.ts src/harness/routing/table.test.ts -t \"flow 468 AC3\"`]\" (PR 1063 round 1, C-10 (upheld): flow 468 tests are prefixed 'flow 468' so the selector cannot pick up another flow's AC3 tests in the same files)"
+    },
+    {
+      "at": "2026-10-20T10:16:08.225Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"Failure scenario: each failure shows its own visible text, never a silent list that holds only \"session default\": no provider connected (with a `/connect` hint); catalog unavailable or timed out (with its reason, offline list tagged); a provider whose auth failed, or one with 0 models. A category whose assignment falls back says why: \"provider list unavailable\", \"provider not connected\" or \"model not in <provider>'s list\". If loading the providers rejects or hangs, the modal leaves \"Reading routing table…\" within the timeout. [verify: exec `bun test src/tui/routing-inspector.test.ts -t AC4` · sensitive: failure-scenario]\" -> \"Failure scenario: each failure shows its own visible text, never a silent list that holds only \"session default\": no provider connected (with a `/connect` hint); catalog unavailable or timed out (with its reason, offline list tagged); a provider whose auth failed, one with 0 models, or one that is unreachable, timed out or unsupported with no offline list. A category whose assignment falls back says why, in the same words as the Model tab: \"no providers connected\" (the list loaded and is empty), \"provider list unavailable\" (the load failed or timed out), \"provider not connected\", \"provider auth failed\" or \"model not in <provider>'s list\". If loading the providers rejects or hangs, the modal leaves \"Reading routing table…\" within the timeout. [verify: exec `bun test src/tui/routing-inspector.test.ts -t \"flow 468 AC4\"` · sensitive: failure-scenario]\" (PR 1063 round 1: C-07 upheld by the operator (categories use the Model tab's words: add 'no providers connected' and 'provider auth failed'); C-09 upheld (an unreachable/timeout/unsupported provider without an offline list is shown, not dropped); C-10 upheld (selector narrowed to flow 468 tests))"
+    },
+    {
+      "at": "2026-10-20T10:16:26.068Z",
+      "event": "task-added",
+      "detail": "T24: A routing: PR 1063 round-1 fixes (upheld C-01..C-04, C-06..C-16; red CI wiring and verify-exec tests)"
+    },
+    {
+      "at": "2026-10-20T10:16:32.224Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 468-T24 task-implementer fix dispatch (sonnet), PR 1063 round 1"
+    },
+    {
+      "at": "2026-10-20T10:26:43.148Z",
+      "event": "ac-updated",
+      "detail": "AC20: \"(new)\" -> \"While a turn runs, the busy line (spinner, phase, timer) appears once, above the composer; the footer no longer repeats it in the attention colour. Instead the footer shows, fitted to its width by priority and with nothing shown for an empty part: key hints (Esc interrupt, Enter queue, / commands), the turn's tokens in and out with its cost when the price is known, context fill, and the queue, background-job and subagent counts when non-zero. Idle, the footer shows its idle hint and status as today. [verify: exec `bun test src/tui/shell-chrome.test.ts -t \"flow 468 AC20\"`]\" (operator 2026-10-20 (screenshot 6 + question tool): remove the duplicated waiting-for-model line from the footer and show key hints, turn tokens/cost, context fill and queue/background there; goes into PR 3 with the sidebar)"
+    },
+    {
+      "at": "2026-10-20T10:26:45.680Z",
+      "event": "ac-updated",
+      "detail": "AC21: \"(new)\" -> \"Every duration the TUI shows goes through one formatter: under a minute \"58.3s\", under an hour \"12:04.5\", from an hour \"1:02:15.4\" (no leading zero on the largest unit, tenths of a second kept). This covers the busy timer, \"worked for\" after a turn, subagent elapsed time and background jobs; no TUI surface prints raw seconds such as \"3600.0s\". [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/subagent-session.test.ts src/tui/background-job-inspector.test.ts -t \"flow 468 AC21\"`]\" (operator 2026-10-20: the timer showed raw seconds (3600s); compact format chosen with the question tool, applied everywhere in the TUI, in PR 3)"
+    },
+    {
+      "at": "2026-10-20T10:26:47.803Z",
+      "event": "ac-updated",
+      "detail": "AC18: \"(operator-only) After PR 3 is released and keryx is installed from npm, on a laptop screen, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 3 is released and keryx is installed from npm, on a laptop screen, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete; during a running turn the waiting line appears once, the footer shows the useful bar instead, and long timers read like 1:02:15.4. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20 added the busy-footer and timer-format request to PR 3; the post-release manual check covers it)"
+    },
+    {
+      "at": "2026-10-20T10:26:55.307Z",
+      "event": "task-added",
+      "detail": "T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter"
+    },
+    {
+      "at": "2026-10-20T10:26:59.072Z",
+      "event": "task-added",
+      "detail": "T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI"
+    },
+    {
+      "at": "2026-10-20T10:27:03.351Z",
+      "event": "task-depends-set",
+      "detail": "T22: dependsOn T16, T26 (was T16) — operator 2026-10-20 added the busy footer and timer work (T25/T26) to PR 3; the 80x24 pty smoke must cover it before merge"
+    },
+    {
+      "at": "2026-10-20T10:36:20.251Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"Failure scenario: each failure shows its own visible text, never a silent list that holds only \"session default\": no provider connected (with a `/connect` hint); catalog unavailable or timed out (with its reason, offline list tagged); a provider whose auth failed, one with 0 models, or one that is unreachable, timed out or unsupported with no offline list. A category whose assignment falls back says why, in the same words as the Model tab: \"no providers connected\" (the list loaded and is empty), \"provider list unavailable\" (the load failed or timed out), \"provider not connected\", \"provider auth failed\" or \"model not in <provider>'s list\". If loading the providers rejects or hangs, the modal leaves \"Reading routing table…\" within the timeout. [verify: exec `bun test src/tui/routing-inspector.test.ts -t \"flow 468 AC4\"` · sensitive: failure-scenario]\" -> \"Failure scenario: each failure shows its own visible text, never a silent list that holds only \"session default\": no provider connected (with a `/connect` hint); catalog unavailable or timed out (with its reason, offline list tagged); a provider whose auth failed, one with 0 models, or one that is unreachable, timed out or unsupported with no offline list. A category whose assignment falls back says why, in the same words as the Model tab: \"no providers connected\" (the list loaded and is empty), \"provider list unavailable\" (the load failed or timed out), \"provider not connected\", \"provider auth failed\", \"model list unavailable (<reason>)\" (the provider is listed but unreachable, timed out or unsupported) or \"model not in <provider>'s list\". If loading the providers rejects or hangs, the modal leaves \"Reading routing table…\" within the timeout. [verify: exec `bun test src/tui/routing-inspector.test.ts -t \"flow 468 AC4\"` · sensitive: failure-scenario]\" (operator 2026-10-20 (question tool, T24 behavior_change): a category on an unreachable/timed-out provider says 'model list unavailable (<reason>)', the Model tab's words, instead of reusing 'provider not connected')"
+    },
+    {
+      "at": "2026-10-20T10:58:35.446Z",
+      "event": "task-done",
+      "detail": "T24: A routing: PR 1063 round-1 fixes (upheld C-01..C-04, C-06..C-16; red CI wiring and verify-exec tests)"
+    },
+    {
+      "at": "2026-10-20T12:01:56.837Z",
+      "event": "task-done",
+      "detail": "T8: A routing: PR 1 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T12:26:11.786Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 468-T9 tests-creator dispatch (sonnet), phase B setup"
+    },
+    {
+      "at": "2026-10-20T12:45:12.820Z",
+      "event": "task-done",
+      "detail": "T9: B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run"
+    },
+    {
+      "at": "2026-10-20T12:45:23.254Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+    },
+    {
+      "at": "2026-10-20T12:45:24.265Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+    },
+    {
+      "at": "2026-10-20T13:15:15.290Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"Run (button on the right, or `r`) opens a confirmation card naming the scenario, the steps that will run and the agent. On yes, the external agent starts with the generated prompt in the project root, appears in the fleet, and the composer stays usable; its report lands in the transcript. On no, nothing starts. With no external agent configured or allowed, the card says so and offers the session's main agent instead; the run never falls back silently. [verify: exec `bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10`]\" -> \"Run (button on the right, or `r`) opens a confirmation card naming the scenario and the commands that will run. On yes, keryx itself runs the steps in order as background jobs, visible in Background Jobs, and the composer stays usable. Optional steps run only when Optional is on. The run stops at the first failed required step, and at a `keryx update` version divergence, then says in the transcript which step stopped it and why. On no, nothing starts. [verify: exec `bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10`]\" (operator 2026-10-20 (question tool): external agents run read-only (OPERATOR_SANDBOX, D-04), so they cannot run init/update/sync; Run executes the steps itself without a model («Шаги без модели (Recommended)»))"
+    },
+    {
+      "at": "2026-10-20T13:15:16.780Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(operator-only) After PR 2 is released and keryx is installed from npm, in a project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After the release is installed from npm, in a project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the required steps complete as background jobs, or the run stops with a visible reason. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: Run executes the steps without a model (external agents are read-only under D-04); one combined release at the end instead of per-PR releases)"
+    },
+    {
+      "at": "2026-10-20T13:15:25.454Z",
+      "event": "task-done",
+      "detail": "T10: B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output"
+    },
+    {
+      "at": "2026-10-20T17:33:26.068Z",
+      "event": "task-done",
+      "detail": "T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs"
+    },
+    {
+      "at": "2026-10-20T17:37:10.616Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+    },
+    {
+      "at": "2026-10-20T17:37:11.435Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+    },
+    {
+      "at": "2026-10-20T17:51:11.552Z",
+      "event": "task-done",
+      "detail": "T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter"
+    },
+    {
+      "at": "2026-10-20T17:58:01.261Z",
+      "event": "task-done",
+      "detail": "T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width"
+    },
+    {
+      "at": "2026-10-20T18:00:40.221Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 468-T26 task-implementer dispatch (sonnet), phase C chrome"
+    },
+    {
+      "at": "2026-10-20T18:47:26.088Z",
+      "event": "task-done",
+      "detail": "T13: B setup: PR 2 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T18:49:37.417Z",
+      "event": "task-done",
+      "detail": "T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI"
+    },
+    {
+      "at": "2026-10-20T18:49:59.964Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing"
+    },
+    {
+      "at": "2026-10-20T19:37:03.908Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"Three icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" -> \"Two icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch to the two modes the sidebar is not set to, among default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). Each button is its own mouse target, at least three cells wide, with a visible gap between the two, so a click lands on the intended one; after a switch the pair shows the two other modes. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" (operator 2026-10-20 (question tool, T15 behavior change): «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»)"
+    },
+    {
+      "at": "2026-10-20T19:44:15.328Z",
+      "event": "task-done",
+      "detail": "T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing"
+    },
+    {
+      "at": "2026-10-20T19:44:28.053Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards"
+    },
+    {
+      "at": "2026-10-20T20:45:23.628Z",
+      "event": "task-done",
+      "detail": "T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs"
+    },
+    {
+      "at": "2026-10-20T20:45:28.371Z",
+      "event": "task-done",
+      "detail": "T22: C sidebar: run the 80x24 pty smoke locally before merge"
+    },
+    {
+      "at": "2026-10-20T21:08:24.800Z",
+      "event": "task-done",
+      "detail": "T18: C sidebar: PR 3 review rounds, merge into main, release"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/harness/provider-catalog.test.ts src/tui/provider-catalog-startup.test.ts -t \"flow 468 AC1\""
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/provider-catalog.test.ts src/harness/provider-catalog-cache.test.ts -t \"flow 468 AC2\"",
+      "sensitivity": "failure-scenario"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/tui/routing-inspector.test.ts src/harness/routing/table.test.ts -t \"flow 468 AC3\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/tui/routing-inspector.test.ts -t \"flow 468 AC4\"",
+      "sensitivity": "failure-scenario"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts -t AC6"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/commands/setup-guide.test.ts -t AC7"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts -t AC8"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/tui/setup-modal.test.ts -t AC9"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10"
+    },
+    "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-cards.test.ts -t AC12"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-cards.test.ts src/tui/modal-host.test.ts -t AC13"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-geometry.test.ts src/tui/theme.test.ts -t AC15",
+      "sensitivity": "failure-scenario"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-geometry.test.ts src/commands/shell-pty-launch.smoke.test.ts -t AC16"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-cards.test.ts src/tui/shell-chrome.test.ts -t AC17"
+    },
+    "AC18": {
+      "kind": "judged"
+    },
+    "AC19": {
+      "kind": "judged"
+    },
+    "AC20": {
+      "kind": "exec",
+      "check": "bun test src/tui/shell-chrome.test.ts -t \"flow 468 AC20\""
+    },
+    "AC21": {
+      "kind": "exec",
+      "check": "bun test src/tui/shell-chrome.test.ts src/tui/subagent-session.test.ts src/tui/background-job-inspector.test.ts -t \"flow 468 AC21\""
+    }
+  }
+}

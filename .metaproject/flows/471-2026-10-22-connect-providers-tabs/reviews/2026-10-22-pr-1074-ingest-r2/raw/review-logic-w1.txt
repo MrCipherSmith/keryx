@@ -1,0 +1,38 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-01"],
+  "summary": "slice-01 (docs, tests, generated and flow metadata, 26 files) read in full. The test updates match the new behaviour: /provider is absent in every mode, removedCommandHint returns a /connect hint, /connect passes onlyConnected: true, and the Unknown command text carries the /connect hint. I found no logic bug, no assertion that passes vacuously and no spec gap against AC1-AC12 inside this slice. The runtime logic (modal tab state, remote gateway, key persistence) is in slice-02 and slice-03 and is not judged here. Two info findings: a wording error in the CHANGELOG, and docs that do not describe the new Telegram buttons.",
+  "findings": [
+    {
+      "id": "LOGIC-1",
+      "severity": "info",
+      "problem": "The 0.3.130 CHANGELOG entry says '/connect and /providers are one command and one modal'. There was never a /providers slash command. The command removed by this PR is /provider, and the Removed bullet of the same entry names it correctly.",
+      "impact": "A reader of the release notes looks for a /providers command that does not exist, and the entry contradicts itself about which command was removed. Documentation only, no runtime effect.",
+      "suggested_fix": "Reword the Changed bullet to say that /connect replaces both the old /connect picker and /provider, for example '/connect is one command and one modal with two tabs; /provider is merged into it'.",
+      "evidence": "CHANGELOG.md:11 names /providers; CHANGELOG.md:13 names /provider as removed.",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "`/connect` and `/providers` are one command and one modal with two tabs.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LOGIC-2",
+      "severity": "info",
+      "problem": "The CHANGELOG announces Telegram behaviour (an Add provider button, a [Test] per provider, device-login-only Connect, a key-needed provider told to enter it in the shell). The Telegram section of the remote guide in this slice still describes /connect only as a picker of connected providers and their models, and does not mention these buttons.",
+      "impact": "Users of the remote guide are not told that Add provider, [Test] and device-login Connect exist in chat, or that a key can only be entered in the shell. AC10 in this flow only required removing /provider, so this is not a spec failure. Whether other docs cover it is not pinned here.",
+      "suggested_fix": "Add one sentence to the Buttons row of the remote guide that names the Add provider button, [Test], device-login Connect and the rule that a key is entered in the shell, or confirm that another page already covers it.",
+      "evidence": "docs/docs/guides/drive-keryx-remotely.md:429 describes the /connect picker without the new buttons.",
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "line": null,
+      "quote": "`/connect` shows providers that are already connected, then their models. No key or address is shown.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}

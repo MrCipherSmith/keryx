@@ -1,0 +1,121 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "HQ-01",
+      "verdict": "upheld",
+      "reasoning": "The operator's frozen scope says 'A free-text answer is never a decision' (acceptance-criteria.md:14), and decide-premise already requires a positive match (refuseOtherChoice). The other three verbs check only a lead-word deny-list, so the verb's own decline label 'Keep: run the mutation pass' records a waiver. 'keryx does not verify the answer' means keryx cannot check that the agent reported truthfully. It does not mean keryx should record text that states the opposite choice. The sibling verb shows the intended check."
+    },
+    {
+      "finding_id": "HQ-02",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "acceptance-criteria.md:14 (flow 467, poll 227)",
+          "says": "operator scope: plain host question + keryx command without TTY; keryx does not verify the answer"
+        },
+        {
+          "ref": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md §6b",
+          "says": "an agent can invent either one, or ask a different question from the one it records; keryx does not verify them"
+        }
+      ],
+      "reasoning": "The fact reproduces, but the operator explicitly accepted an unverified, agent-reported record ('it should be just a question'). A check that the question text names the finding id or every unrun mutant id only constrains an honest agent. It forces machine ids into a plain question, which works against the stated intent. confirm-plan's number binding protects against staleness, not against misbinding. Whether to add subject binding is the operator's trade, not a defect the code can settle.",
+      "question": "Should a host-question answer be refused unless the recorded question text names its subject (finding id, unrun mutant ids, left-out reviewers), or is the unverified plain question you accepted enough?",
+      "options": [
+        "dismiss — keep the plain question as accepted; keryx does not bind or verify it",
+        "uphold — require the question text to name the subject before recording"
+      ]
+    },
+    {
+      "finding_id": "HQ-03",
+      "verdict": "upheld",
+      "reasoning": "A security finding: held or upheld only. The floor is defence in depth (the verb itself refuses on the unattended env), and sibling floors are raw-text regexes too. Even so, the merged finding includes tests at review-host-question.test.ts:342/349 that state a contract the code keeps in neither direction, and a retyped verb list that can drift from OPERATOR_COMMANDS. No intent signal argues against fixing it."
+    },
+    {
+      "finding_id": "HQ-04",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "acceptance-criteria.md:23 (AC6)",
+          "says": "each accepted host question also writes a keryx decisions entry, readable with keryx decisions report --json"
+        },
+        {
+          "ref": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md §6b",
+          "says": "a keryx decisions entry is written beside it; both are the operator's recorded decision, the second the weaker"
+        }
+      ],
+      "reasoning": "The premise that host-question opens 'leak' into the decisions surfaces assumes they are not decisions. AC6 and TM-04 §6b put them in the journal as the operator's recorded decision. The disagreement between the report, the export, the decisionCount comment and the TUI is real, but which model wins (count them as decisions, or keep them as a separate labelled kind) belongs to the operator. The readers must then be made consistent either way.",
+      "question": "Do host-question answers count as decisions in the journal count, export and TUI, or are they a separate labelled kind kept out of the live-decision numbers?",
+      "options": [
+        "dismiss — they are decisions (AC6); only align the readers and the decisionCount comment to include them",
+        "uphold — make them a separate labelled kind, filtered out of the decision counts and shown on their own row"
+      ]
+    },
+    {
+      "finding_id": "HQ-05",
+      "verdict": "upheld",
+      "reasoning": "Verified by site check. AC9 requires the skills to stop sending the operator to a terminal for these four acts, and the untouched sites still say they are terminal-only."
+    },
+    {
+      "finding_id": "HQ-06",
+      "verdict": "upheld",
+      "reasoning": "The schema description promises a coupling the schema does not enforce, and the source list is restated in many places with no parity test. No intent signal against it."
+    },
+    {
+      "finding_id": "HQ-07",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "acceptance-criteria.md:20 (AC3)",
+          "says": "frozen source set is claude-code, codex, keryx-shell, helyx-poll, other"
+        },
+        {
+          "ref": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md §6b",
+          "says": "the card stays the first choice wherever a card is available"
+        }
+      ],
+      "reasoning": "The core of the finding is that keryx-shell/ask_user should not be offered as a source where a card exists. The operator's frozen AC3 names keryx-shell as a valid source, and TM-04 already says the card comes first. Whether to keep it as a source, or narrow it, is the operator's call. The ref convention for reply-question hosts is a doc gap the fix can carry either way.",
+      "question": "Keep keryx-shell (ask_user) as a host-question source next to the card, or tell agents on keryx shell to use only the card?",
+      "options": [
+        "dismiss — keep keryx-shell as a source (AC3), card stays first; only add the ref convention",
+        "uphold — drop or qualify ask_user/keryx-shell as a source in the skill, docs, schema and help"
+      ]
+    },
+    {
+      "finding_id": "HQ-08",
+      "verdict": "upheld",
+      "reasoning": "The verb refuses a confirm-plan question that lacks the dispatch count and minute range (review-operator.ts:378-384), and the skill does not tell the agent to include them. Partial-number cases are untested."
+    },
+    {
+      "finding_id": "HQ-09",
+      "verdict": "upheld",
+      "reasoning": "MAX_OPERATOR_TEXT_LENGTH exists and is not applied to the new texts. A security finding: not downgradeable, and no signal against it."
+    },
+    {
+      "finding_id": "HQ-10",
+      "verdict": "upheld",
+      "reasoning": "The comment at review-operator.ts:420-421 that justifies warn-only journal failure is introduced by this branch, so it is not prior intent. Twin merging and retry double-recording are unaddressed."
+    },
+    {
+      "finding_id": "HQ-11",
+      "verdict": "upheld",
+      "reasoning": "AC10 requires docs, help and the CLI reference to match the code, and the cited sites disagree with it."
+    },
+    {
+      "finding_id": "HQ-12",
+      "verdict": "upheld",
+      "reasoning": "Duplicated shape checks and casts that are safe only because of distant earlier checks. No intent signal against it."
+    },
+    {
+      "finding_id": "HQ-13",
+      "verdict": "upheld",
+      "reasoning": "An assertion that cannot fail and untested branches are test defects. No signal shrinks them."
+    },
+    {
+      "finding_id": "HQ-14",
+      "verdict": "upheld",
+      "reasoning": "The unchanged closing sentence ('the agent never writes an operator quote') now contradicts the host-question path, and the overlong bullet buries the main instruction."
+    }
+  ]
+}

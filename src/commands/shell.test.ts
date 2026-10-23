@@ -38,7 +38,7 @@
 //     `history` externally.
 //   - `deps.makeProvider(provider, model, baseUrl)` is called to obtain the
 //     active `ProviderPort`: at least once (using `deps.initial`) before/at
-//     the first turn, and again whenever `/model` or `/provider` changes the
+//     the first turn, and again whenever `/model` or `/connect` changes the
 //     active selection. The provider instance used for a given turn's
 //     `stream()` call reflects whichever (provider, model) selection is
 //     active at the time that turn runs; exact call timing (immediately on
@@ -47,7 +47,7 @@
 //   - Slash commands (never trigger `provider.stream`, except where noted):
 //       `/help`            — write help text (mentions the other commands).
 //       `/model <m>`       — switch the active model for subsequent turns.
-//       `/provider <name>` — switch the active provider for subsequent turns.
+//       `/connect` — switch the active provider to a connected one for subsequent turns.
 //       `/clear`           — reset history to empty.
 //       `/exit`, `/quit`   — terminate the loop; `runShell` resolves cleanly.
 //   - End-of-input (the `io.lines` async iterable completes without `/exit`)
@@ -89,10 +89,10 @@
 //     — offers ONLY the current provider's models. On a valid result, `runShell`
 //     updates the active provider/model/baseUrl (recreating the provider via
 //     the existing `makeActive()` pattern) so the NEXT turn uses it.
-//   - `/provider` calls `deps.selectProviderModel?.(io)` (no `onlyProvider`) —
+//   - `/connect` calls `deps.selectProviderModel?.(io, { onlyConnected: true })` —
 //     a full re-detection/pick across all providers; same update-then-use
 //     behaviour.
-//   - When `deps.selectProviderModel` is undefined, `/models` and `/provider`
+//   - When `deps.selectProviderModel` is undefined, `/models` and `/connect`
 //     write a message containing "not available" and are no-ops — NEVER a
 //     crash, NEVER a model turn.
 //   - `/connect` needs NO new deps: it writes STATIC guidance mentioning
@@ -366,7 +366,7 @@ describe("AC2 — slash commands + provider_error resilience", () => {
     expect(secondReq.messages.map((m) => m.content)).toEqual(["Second"]);
   });
 
-  test("/model and /provider switch the active selection for subsequent turns", async () => {
+  test("/model and /connect switch the active selection for subsequent turns", async () => {
     const initialTurn = textTranscript("init", ["Hello!"]);
     const { provider: initialProvider, captured: initialCaptured } = capturingFakeProvider([initialTurn]);
     const switchedTurn = textTranscript("switched", ["Yo"]);
@@ -382,7 +382,7 @@ describe("AC2 — slash commands + provider_error resilience", () => {
     };
 
     const io: ShellIO = {
-      lines: linesFrom("Hi", "/model llama3.2", "/provider ollama", "Yo there", "/exit"),
+      lines: linesFrom("Hi", "/model llama3.2", "/connect", "Yo there", "/exit"),
       write: () => {},
     };
     const deps: ShellDeps = {
@@ -390,6 +390,7 @@ describe("AC2 — slash commands + provider_error resilience", () => {
       clock: fixedClock(),
       idSeq: fixedIdSeq(),
       initial: { provider: "fake", model: "fixture-model" },
+      selectProviderModel: async () => ({ provider: "ollama", model: "llama3.2" }),
     };
 
     await runShell(io, deps);
@@ -489,8 +490,8 @@ type SelectProviderModel = (
   opts?: { onlyProvider?: string; onlyConnected?: boolean },
 ) => Promise<{ provider: string; model: string; baseUrl?: string }>;
 
-describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", () => {
-  test("/help now also documents /models, /provider, and /connect", async () => {
+describe("AC3 — /models, /connect + credential safety (flow 022, flow 471)", () => {
+  test("/help documents /models and /connect, and no longer lists the removed provider command", async () => {
     const streamCalls = { count: 0 };
     const writes: string[] = [];
     const io: ShellIO = {
@@ -509,7 +510,7 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     expect(streamCalls.count).toBe(0);
     const output = writes.join("");
     expect(output).toMatch(/\/models/);
-    expect(output).toMatch(/\/provider/);
+    expect(output).not.toContain(`/${"provider"}`);
     expect(output).toMatch(/\/connect/);
   });
 
@@ -547,11 +548,11 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     expect(at(captured, 0).modelId).toBe("fixture-model-2");
   });
 
-  test("/provider re-runs full selection (no onlyProvider) and can switch to a different provider entirely", async () => {
+  test("/connect opens the connected-only selection and can switch to a different provider entirely", async () => {
     const turn = textTranscript("after-provider-switch", ["hi"]);
     const { provider: switchedProvider, captured } = capturingFakeProvider([turn]);
 
-    const selectCalls: Array<{ onlyProvider?: string } | undefined> = [];
+    const selectCalls: Array<{ onlyProvider?: string; onlyConnected?: boolean } | undefined> = [];
     const makeProviderCalls: Array<{ name: string; model: string; baseUrl?: string }> = [];
     const selectProviderModel: SelectProviderModel = async (_io, opts) => {
       selectCalls.push(opts);
@@ -563,7 +564,7 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     };
 
     const io: ShellIO = {
-      lines: linesFrom("/provider", "hi there", "/exit"),
+      lines: linesFrom("/connect", "hi there", "/exit"),
       write: () => {},
     };
     const deps: ShellDeps = {
@@ -576,9 +577,8 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
 
     await runShell(io, deps);
 
-    // `/provider` passes NO `onlyProvider` restriction (full re-detection).
-    expect(selectCalls.length).toBe(1);
-    expect(at(selectCalls, 0)?.onlyProvider).toBeUndefined();
+    // `/connect` asks for the connected-only selection, with no `onlyProvider` restriction.
+    expect(selectCalls).toEqual([{ onlyConnected: true }]);
 
     expect(
       makeProviderCalls.some(
@@ -590,11 +590,11 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     expect(at(captured, 0).modelId).toBe("llama3.2");
   });
 
-  test("/models and /provider fail-soft (write a message, never crash) when no selector is injected", async () => {
+  test("/models and /connect fail-soft (write a message, never crash) when no selector is injected", async () => {
     const streamCalls = { count: 0 };
     const writes: string[] = [];
     const io: ShellIO = {
-      lines: linesFrom("/models", "/provider", "/exit"),
+      lines: linesFrom("/models", "/connect", "/exit"),
       write: (s: string) => writes.push(s),
     };
     const deps: ShellDeps = {
@@ -608,6 +608,34 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     await expect(runShell(io, deps)).resolves.toBeUndefined();
     expect(streamCalls.count).toBe(0);
     expect(writes.join("")).toMatch(/not available/i);
+  });
+
+  test("the removed provider command answers Unknown command with a /connect hint and starts no selection or turn", async () => {
+    const streamCalls = { count: 0 };
+    const writes: string[] = [];
+    const selectCalls: unknown[] = [];
+    const io: ShellIO = {
+      lines: linesFrom(`/${"provider"} ollama`, "/exit"),
+      write: (s: string) => writes.push(s),
+    };
+    const deps: ShellDeps = {
+      makeProvider: () => countingProvider(streamCalls),
+      clock: fixedClock(),
+      idSeq: fixedIdSeq(),
+      initial: { provider: "fake", model: "fixture-model" },
+      selectProviderModel: async (_io, opts) => {
+        selectCalls.push(opts);
+        return { provider: "ollama", model: "llama3.2" };
+      },
+    };
+
+    await runShell(io, deps);
+
+    expect(selectCalls).toEqual([]);
+    expect(streamCalls.count).toBe(0);
+    const out = writes.join("");
+    expect(out).toContain("Unknown command");
+    expect(out).toContain("/connect");
   });
 
   test("/connect with a selector switches among connected providers only", async () => {
@@ -1673,3 +1701,51 @@ describe("--deny-tools", () => {
 // (See the comment block above: all five describes formerly here now live in
 // `shell-agent-repl.test.ts`, or — for held-turn wiring — in the pre-existing
 // `shell-pause.process.test.ts`.)
+
+// --- flow 468 AC10: /setup Run, Copy and tab detection wiring in the TUI shell ----
+//
+// SOURCE-TEXT AUDIT, on purpose and only here. `openSetup` lives inside
+// `runTuiShell`'s closure in `src/tui/tui-shell.ts`; the launcher needs a real
+// renderer, a session and a provider, so it cannot
+// run headless. The modal itself is covered behaviourally, through injected
+// seams, in `src/tui/setup-modal.test.ts` (AC6/AC8/AC9/AC10); this block pins
+// only that the shell hands the modal the real ones:
+//   projectRoot     the session cwd (tab detection and where the run starts)
+//   copyText        OSC 52 (`copyToClipboardOSC52`)
+//   showToast       `chrome.showToast`
+//   confirm         `confirmOperatorCard` (the operator confirm card)
+//   startRun        `runSetupSteps` over the session's job registry: keryx runs the steps itself
+//   isRunning       the one-run-at-a-time guard
+// There is no external agent and no main agent turn in this path.
+describe("flow 468 AC10 — the TUI shell wires /setup's Run, Copy and detection seams (source-text audit; the launcher cannot run headless)", () => {
+  const tuiShellSource = readFileSync(path.join(import.meta.dir, "..", "tui", "tui-shell.ts"), "utf8");
+  const openSetupStart = tuiShellSource.indexOf("const openSetup = ");
+  // The call's argument object, from `openSetupModal(` to a generous bound past it.
+  const callStart = tuiShellSource.indexOf("openSetupModal(otui, chrome, {", openSetupStart);
+  const openSetupCall = callStart < 0 ? "" : tuiShellSource.slice(callStart, callStart + 3500);
+
+  test("flow 468 AC10: openSetup hands the modal the project root, so the tab follows the project", () => {
+    expect(openSetupStart).toBeGreaterThan(-1);
+    expect(callStart).toBeGreaterThan(-1);
+    expect(openSetupCall).toMatch(/projectRoot\b/);
+  });
+
+  test("flow 468 AC10: Copy goes through OSC 52 and the toast", () => {
+    expect(openSetupCall).toMatch(/copyText\b/);
+    expect(openSetupCall).toContain("copyToClipboardOSC52");
+    expect(openSetupCall).toMatch(/showToast\b/);
+  });
+
+  test("flow 468 AC10: Run confirms through the operator card and runs the steps through the job registry", () => {
+    expect(openSetupCall).toContain("confirmOperatorCard");
+    expect(openSetupCall).toMatch(/startRun\b/);
+    expect(openSetupCall).toContain("runSetupSteps");
+    expect(openSetupCall).toContain("deps.jobRegistry");
+    expect(openSetupCall).toContain("ownKeryxPrefix()");
+  });
+
+  test("flow 468 AC10: one run at a time, and no external agent or main agent turn is involved", () => {
+    expect(openSetupCall).toMatch(/isRunning\b/);
+    expect(openSetupCall).not.toMatch(/external\.delegate|externalAgents|\bdelegate\b|runLine/);
+  });
+});

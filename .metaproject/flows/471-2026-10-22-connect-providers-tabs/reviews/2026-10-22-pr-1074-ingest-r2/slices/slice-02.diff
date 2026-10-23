@@ -1,0 +1,1522 @@
+--- src/commands/agent-commands.ts
+@@ 62,118 @@
+ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
+   { name: "/help", description: "Show available commands", modes: BOTH },
+   {
+     name: "/model",
+     description: "Switch the model",
+     modes: BOTH,
+     modeDescriptions: {
+       // Two genuinely different commands behind one token (R4).
+       agent: "Switch the model (interactive picker)",
+       chat: "Switch the active model for later turns — /model <name>",
+     },
+   },
+   {
+     name: "/models",
+     description: "Pick a model for the current provider (numbered menu)",
+     // The TUI's `/model` picker subsumes this, so it stays a chat-mode entry.
+     modes: CHAT_ONLY,
+   },
+   {
+     name: "/connect",
+-    description: "Switch provider / API key",
++    description: "Providers — switch, test or disconnect a connected one, or add a new one",
+     modes: BOTH,
+     modeDescriptions: {
+-      agent: "Connect to an already configured provider (interactive picker)",
+-      chat: "Switch to a connected provider (picker when available)",
++      agent: "Providers dialog: Connected (switch, Test, Disconnect) and Add provider (key or login)",
++      chat: "Providers picker: switch to a connected provider or add one (picker when available)",
+     },
+   },
+   {
+     name: "/search-provider",
+     description: "Configure and test a web search provider",
+     modes: AGENT_ONLY,
+   },
+   {
+     name: "/search-connect",
+     description: "Select a connected web search provider",
+     modes: AGENT_ONLY,
+   },
+-  {
+-    name: "/provider",
+-    description: "Switch provider — /provider <name>, or no arg to re-select",
+-    // Agent mode uses the configuration picker: provider → API-key → model.
+-    // Keep `/provider` available there too: it is the discoverable, conventional
+-    // command users expect when changing the active provider mid-session.
+-    modes: BOTH,
+-    modeDescriptions: {
+-      agent: "Add or configure a provider (interactive picker)",
+-    },
+-  },
+   {
+     name: "/think",
+     description: "Expand the last reasoning block — /think [auto|expand|hide|collapse]",
+     // flow 268 T17 (AC16): bare `/think` and `/think collapse` keep their
+     // pre-existing meaning (expand/collapse the LAST retained block); the
+     // three new args set the PERSISTED display mode for every future round
+     // (`ShellConfig.thinkDisplay`) — see `tui-shell.ts`'s `/think` handler.
+     modes: AGENT_ONLY,
+   },
+   { name: "/expand", description: "Expand the last tool output block", modes: AGENT_ONLY },
+   {
+     name: "/copy",
+     description: "Copy the newest transcript block to the clipboard",
+     modes: AGENT_ONLY,
+   },
+   { name: "/new", description: "Start a new session (old kept on disk)", modes: BOTH },
+   {
+     name: "/goal",
+     description: "Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]",
+     // SLATE-15 (flow 161): deterministic slate-open entry, a TUI/readline
+
+--- src/commands/agent-commands.ts
+@@ 736,788 @@
+   return command !== undefined && isCommandInMode(command, mode) ? command : undefined;
+ }
+ 
+ /**
+  * An explanatory message when `line`'s token is a REAL command that this mode
+  * does not offer (e.g. `/expand` typed in chat), else `undefined` — so a wrong-
+  * mode command fails with a reason instead of a bare "unknown command". Pure.
+  */
+ export function describeUnavailableCommand(line: string, mode: ShellMode): string | undefined {
+   const command = findAnyMode(line);
+   if (command === undefined || isCommandInMode(command, mode)) {
+     return undefined;
+   }
+   const where = command.modes.map((m) => `${m} mode`).join(" or ");
+   return (
+     `${command.name} is only available in ${where} — this is ${mode} mode. ` +
+     `Type /help for the commands available here.\n`
+   );
+ }
+ 
++/**
++ * A command that was folded into another, and what to run instead. `/provider`
++ * (flow 471) is now the "Add provider" tab of `/connect`.
++ */
++const REMOVED_COMMAND_HINTS: Readonly<Record<string, string>> = {
++  "/provider": "/provider was merged into /connect — run /connect (Connected and Add provider tabs).",
++};
++
++/** The hint for a removed command's line, or `undefined` for any other token. Pure. */
++export function removedCommandHint(line: string): string | undefined {
++  return REMOVED_COMMAND_HINTS[commandToken(line)];
++}
++
+ /**
+  * Render `mode`'s commands as an aligned `Commands:` block. `only` restricts the
+  * list to the given names (a surface that implements a subset of the mode —
+  * the readline agent REPL — must not advertise what it cannot run), keeping the
+  * registry's wording either way. Multi-line descriptions render with hanging
+  * indentation aligning with the description column (AC9); given `maxColumns`,
+  * each description line also word-wraps into that column. Pure.
+  */
+ export function renderCommandHelp(
+   mode: ShellMode,
+   only?: readonly string[],
+   maxColumns?: number,
+ ): string {
+   const allow = only === undefined ? undefined : new Set(only);
+   const options = commandsForMode(mode).filter((c) => allow === undefined || allow.has(c.name));
+   const width = options.reduce((w, c) => Math.max(w, c.name.length), 0);
+   const descColumn = width + 4;
+   // Too narrow a budget would stack one word per line; print the lines as-is then.
+   const wrapBudget =
+     maxColumns !== undefined && maxColumns - descColumn >= MIN_HELP_WRAP_COLUMNS ? maxColumns - descColumn : undefined;
+
+--- src/commands/agent.ts
+@@ 783,823 @@
+    * is the request-size estimate that tripped the guard. Optional; every
+    * existing call site (every test, every driver written before this flow)
+    * omits it and is unaffected — the guard still compacts `history` in place
+    * regardless, only the persistence/UX side-effect is skipped.
+    */
+   onContextCompaction?: (r: {
+     removed: number;
+     context: NormalizedMessage[];
+     estimate: number;
+     /**
+      * Flow 387 T18: `"prune"` when old tool exchanges were collapsed into text records
+      * (history got shorter, nothing was summarised). The host persists the new context
+      * and resets its archive cursor like a compaction, but must not count or announce it as one.
+      */
+     kind?: "compact" | "prune";
+   }) => void;
+   /**
+    * Flow 268: resolved per-provider `temperature`/`maxOutputTokens`/`timeoutMs`
+    * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
+    * in `commands/providers.ts`), resolved once at model-selection time by the
+-   * caller and re-resolved on every `/model`/`/provider`/`/connect` rebuild —
++   * caller and re-resolved on every `/model`/`/connect` rebuild —
+    * same lifecycle as `providerId`/`modelId` above. Only `temperature`
+    * (folded into `request.options.temperature` by {@link buildRequestOptions})
+    * and `timeoutMs` (an internal chat-call abort timer, threaded straight into
+    * `StreamOptions.timeoutMs`) are read from this field by `runAgentTurnCore`/
+    * `finishWithBudgetSummary`. `maxOutputTokens` on this object is NOT read
+    * here — the caller is expected to fold a provider's own override into
+    * {@link AgentDeps.maxOutputTokens} itself, via
+    * {@link resolveAgentMaxOutputTokens}'s `providerMaxOutputTokens` input, so
+    * there remains exactly one resolved output-token budget rather than two
+    * that could drift apart; the field stays on this type only so a caller can
+    * pass through the SAME `ResolvedProviderModelParams`/`ShellModelParams`
+    * object it already built for `temperature`/`timeoutMs` without stripping
+    * it. Every field absent (the default) reproduces exactly today's request
+    * shape: `budget.maxOutputTokens` falls back to
+    * {@link resolveAgentMaxOutputTokens}'s own default, `runReservation`
+    * mirrors it, and no `options.temperature` is set (AC3).
+    */
+   modelParams?: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
+   /**
+    * Flow 306 (W6 T9): `keryx shell`'s own lifecycle hook runtime
+
+--- src/commands/shell-types.ts
+@@ 63,95 @@
+    * so a caller outside the loop (the readline SIGINT/SIGTERM handler) can
+    * call `leave()` synchronously before `process.exit` (specification §5.4).
+    */
+   busBox?: { current: BusClient | undefined };
+ }
+ 
+ /** Resolved per-provider sampling/budget/timeout overrides (flow 268). */
+ export interface ShellModelParams {
+   temperature?: number;
+   maxOutputTokens?: number;
+   timeoutMs?: number;
+ }
+ 
+ /** Injected dependencies keeping `runShell` deterministic + offline. */
+ export interface ShellDeps {
+   makeProvider: (name: string, model: string, baseUrl?: string) => ProviderPort;
+   clock: () => string;
+   idSeq: () => string;
+   initial: { provider: string; model: string; baseUrl?: string; modelParams?: ShellModelParams };
+   /**
+-   * Bundled detect+pick selector for `/models`, `/provider`, and `/connect`.
+-   * `/models` passes `{ onlyProvider }`; `/provider` passes no opts (configure);
+-   * `/connect` passes `{ onlyConnected: true }` (switch among live providers).
+-   * When omitted, `/models`/`/provider` write "not available"; `/connect` falls
++   * Bundled detect+pick selector for `/models` and `/connect`.
++   * `/models` passes `{ onlyProvider }`; `/connect` passes `{ onlyConnected: true }`
++   * (the Providers dialog: switch among live providers, or add one).
++   * When omitted, `/models` writes "not available"; `/connect` falls
+    * back to static env guidance. They NEVER crash the loop.
+    */
+   selectProviderModel?: (
+     io: ShellIO,
+     opts?: { onlyProvider?: string; onlyConnected?: boolean },
+   ) => Promise<{ provider: string; model: string; baseUrl?: string; modelParams?: ShellModelParams }>;
+   /** When set, persist chat turns to a per-project session. */
+   session?: ShellSessionOpts;
+ }
+
+--- src/commands/shell.ts
+@@ 146,186 @@
+   isPermissionMode,
+   PERMISSION_MODES,
+   type PermissionMode,
+ } from "./permission-mode";
+ import {
+   collapseToolOutput,
+   colorEnabled,
+   indentBlock,
+   renderDiff,
+   renderMarkdown,
+   style,
+   summarizeToolArgs,
+ } from "../lib/ui";
+ import { blockLabel, looksLikeUnifiedDiff } from "../lib/md-blocks";
+ import {
+   checkVersion,
+   formatVersionUpdateAdvisory,
+   type VersionCheckResult,
+ } from "../lib/version-check";
+ import packageJson from "../../package.json" with { type: "json" };
+-import { commandsForMode, describeUnavailableCommand, parseDemoteCommand } from "./agent-commands";
++import { commandsForMode, describeUnavailableCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
+ // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
+ // ONLY through this core facade (see the zone note in
+ // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
+ // `renderGroupedNamedHelp` groups by the shared table but takes ITS
+ // descriptions from the caller, so chat/agent wording keeps coming from
+ // `AGENT_SLASH_COMMANDS` (mode-resolved by `commandsForMode`), never a second,
+ // independently-drifting copy in `help-groups.ts`.
+ import { renderGroupedNamedHelp } from "../standard/service";
+ // Flow 266 (AC8): the demote EFFECT lives with the registry, not with either
+ // shell, so both dispatch into the same rule instead of growing two.
+ import { demoteTask } from "../harness/tool/builtin/background-job-registry";
+ import { runTasksCommand } from "../tui/tasks-command";
+ import { formatUsageLine } from "../tui/usage-format";
+ import {
+   type AgentDeps,
+   type AgentIO,
+   buildAgentSystemInstruction,
+   generateControlNonce,
+   DEFAULT_MAX_OUTPUT_TOKENS,
+   describeReasoningEffortSource,
+
+--- src/commands/shell.ts
+@@ 227,267 @@
+ import { detachSlateSession } from "../session/slate-lifecycle";
+ import { runGoalCommand } from "./goal-command";
+ import { journaledAskUser } from "../tui/ask-user-bridge";
+ 
+ export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
+ 
+ /** A short, trusted system instruction assembled by the (trusted) shell itself. */
+ const SYSTEM_INSTRUCTION =
+   "You are the keryx interactive shell assistant. Be economical with output tokens: " +
+   "lead with the conclusion, give the shortest correct answer, prefer bullet points over " +
+   "prose, and omit preamble and restated context.";
+ 
+ /** Static guidance for `/connect` — never reads/echoes an actual credential. */
+ const CONNECT_GUIDANCE = [
+   "To use Anthropic (claude-*) models, set the ANTHROPIC_API_KEY environment",
+   "variable before launching keryx, e.g.:",
+   "",
+   "  export ANTHROPIC_API_KEY=<key>",
+   "",
+   "keryx reads ANTHROPIC_API_KEY from the environment only — it never stores,",
+-  "logs, or echoes the key. Then run /provider to pick the anthropic provider.",
++  "logs, or echoes the key. Then run /connect to pick the anthropic provider.",
+   "",
+ ].join("\n");
+ 
+ /**
+  * Help text for chat mode. Flow 303 (AC7): grouped the same way `keryx help`
+  * and the TUI's `/help` modal group everything — by the onboarding task table
+  * in `src/standard/help-groups.ts` — because a modal cannot render here. The
+  * NAMES still come from the shared registry (`agent-commands.ts`'s
+  * `commandsForMode`), so chat's menu and the TUI's can never drift on WHICH
+  * commands chat mode has; only the session footer is chat-specific.
+  */
+ const HELP_TEXT = [
+   renderGroupedNamedHelp(commandsForMode("chat")),
+   "Sessions are per-project. Resume: keryx shell -c | -r [id]",
+   "Context counter is an estimate (~4 chars/token); chat has no provider usage hook.",
+   "",
+ ].join("\n");
+ 
+ /**
+  * Commands the readline AGENT REPL actually implements. Agent mode as a whole
+
+--- src/commands/shell.ts
+@@ 958,1003 @@
+           history.pop();
+         }
+         activeTurn = undefined;
+       }
+       live = persistHistory(live, history, { archive, provider: providerName, model: modelName });
+     },
+     // Chat has no Slate; do not fabricate Seeds or accepted memory.
+     preserve: async () => {},
+     cleanup: async () => {},
+     release: () => { leaveBus(); releaseLease(); },
+     progress: (stage) => { if (stage === "failed") process.exitCode = 1; if (sessionsOn) system(`${preservationProgress(stage)}\n`); },
+   });
+   const finalize = async (): Promise<void> => { await finalizeChat(); };
+   if (deps.session?.finalizerBox !== undefined) deps.session.finalizerBox.current = finalize;
+ 
+   const makeActive = (): ProviderPort =>
+     baseUrl === undefined
+       ? deps.makeProvider(providerName, modelName)
+       : deps.makeProvider(providerName, modelName, baseUrl);
+ 
+-  // Create once at start; recreated on `/model` / `/provider` switches below.
++  // Create once at start; recreated on `/model` / `/connect` switches below.
+   let provider = makeActive();
+ 
+   /**
+    * Apply a `{provider, model, baseUrl?, modelParams?}` selection from the
+-   * interactive picker (shared by the `/models` and no-arg `/provider`
++   * interactive picker (shared by the `/models` and `/connect`
+    * commands): update the active selection and recreate the provider.
+    * Behavior-preserving extraction.
+    */
+   const applySelection = (picked: {
+     provider: string;
+     model: string;
+     baseUrl?: string;
+     modelParams?: ShellModelParams;
+   }): void => {
+     providerName = picked.provider;
+     modelName = picked.model;
+     baseUrl = picked.baseUrl;
+     modelParams = picked.modelParams ?? {};
+     provider = makeActive();
+   };
+   const selectAndApply = async (options: { onlyProvider?: string; onlyConnected?: boolean }): Promise<void> => {
+     if (deps.selectProviderModel === undefined) return;
+     try {
+       applySelection(await deps.selectProviderModel(io, options));
+     } catch (cause) {
+
+--- src/commands/shell.ts
+@@ 1152,1207 @@
+             `Compacted: removed ${packed.result.removed} msgs from context · archive ${live.summary.archiveMessageCount} · compact×${live.summary.compactCount}\n`,
+           );
+         }
+         continue;
+       }
+       if (command === "/model") {
+         if (argument.length > 0) {
+           modelName = argument;
+           provider = makeActive();
+         }
+         continue;
+       }
+       if (command === "/models") {
+         if (deps.selectProviderModel === undefined) {
+           system("Interactive model selection is not available in this session.\n");
+           continue;
+         }
+         await selectAndApply({ onlyProvider: providerName });
+         continue;
+       }
+-      if (command === "/provider") {
+-        if (argument.length > 0) {
+-          if (argument === "openai-codex") {
+-            if (deps.selectProviderModel === undefined) {
+-              system("Interactive subscription selection is not available. Run `keryx auth login openai-codex` and select an authorized model.\n");
+-            } else {
+-              await selectAndApply({ onlyProvider: "openai-codex" });
+-            }
+-            continue;
+-          }
+-          // Explicit by-name switch (keeps the model + baseUrl selection).
+-          providerName = argument;
+-          provider = makeActive();
+-          continue;
+-        }
+-        if (deps.selectProviderModel === undefined) {
+-          system("Interactive provider selection is not available in this session.\n");
+-          continue;
+-        }
+-        // Pass an empty opts object (no `onlyProvider`) → full re-selection.
+-        await selectAndApply({});
+-        continue;
+-      }
+       if (command === "/connect") {
+         if (deps.selectProviderModel === undefined) {
+           system(CONNECT_GUIDANCE);
+           continue;
+         }
+         await selectAndApply({ onlyConnected: true });
+         continue;
+       }
+       // A real command that belongs to the OTHER mode (`/expand`, `/think`,
+       // `/copy`, `/resume`) fails with a reason, not a bare "unknown command".
+       const wrongMode = describeUnavailableCommand(command, "chat");
+       if (wrongMode !== undefined) {
+         system(wrongMode);
+         continue;
+       }
+-      system(`Unknown command: ${command}. Type /help for commands.\n`);
++      system(`Unknown command: ${command}. ${removedCommandHint(command) ?? "Type /help for commands."}\n`);
+       continue;
+     }
+ 
+     // A blank line is a no-op (never an empty model turn).
+     if (line.trim().length === 0) {
+       continue;
+     }
+ 
+     // A normal line is one turn: push the user message, then stream a reply.
+     history.push({ role: "user", content: line, provenance: "project" });
+ 
+     // flow 268: absent `modelParams` (the default) leaves the request with no
+     // temperature and no provider override (AC3). The budget below is the ONE
+     // deliberate divergence from the old chat-mode default: the hardcoded 1024
+     // truncated long replies — the same reason agent mode's own 1024 was
+     // raised to DEFAULT_MAX_OUTPUT_TOKENS in commands/agent.ts.
+     const resolvedMaxOutputTokens = modelParams.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+     const request: NormalizedRequest = {
+       providerId: providerName,
+       modelId: modelName,
+
+--- src/commands/shell.ts
+@@ 2253,2293 @@
+     stopSpinner();
+     // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+     const line = selfAnsweredLine(question, answerLabel);
+     out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(line)}\n`);
+   };
+ 
+   let live: SessionHandle | undefined;
+   let history: NormalizedMessage[] = [];
+   let archive: NormalizedMessage[] = [];
+   let nextArchiveIndex = 0;
+   let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+   /**
+    * SLATE-5 open/close wiring: a fresh, never-opened ref per live session dir
+    * (reassigned on `/new`; see below). `undefined` whenever `live` is —
+    * sessions disabled, no dir to anchor a slate to, so `runAgentTurn` skips
+    * all slate lifecycle work (see `RunAgentTurnOptions.slateSession`).
+    */
+   let slateSession: SlateSessionRef | undefined;
+   // Flow 267: fetch the provider's real context window ONCE for this session.
+   // Unlike the chat REPL above, this readline AGENT REPL has no `/model`/
+-  // `/provider`/`/connect` command to react to (confirmed: those branches only
++  // `/connect` command to react to (confirmed: those branches only
+   // exist in the chat loop above) — `deps.providerId`/`deps.modelId` never
+   // change for the lifetime of one `runAgentRepl` call — so there is no
+   // rebuild point to re-fetch this at. Best-effort: an unreachable gateway or
+   // unrecognized provider just leaves the guard off, same as `/status`'s own
+   // "never invent a window" contract.
+   try {
+     const limits = await loadSessionLimits({ provider: deps.providerId, model: deps.modelId });
+     if (limits.contextWindow !== undefined) {
+       deps = { ...deps, contextWindow: limits.contextWindow };
+     }
+   } catch {
+     // best-effort — the guard simply stays off for this session.
+   }
+   deps = {
+     ...deps,
+     // Flow 267: mirrors the `/compact` command handler below — persist the
+     // SAME bookkeeping (`compactCount`, `archive.jsonl`, `context.jsonl`) via
+     // `persistCompacted` instead of letting the shrink exist only in memory.
+     // `live === undefined` (sessions off) just skips persistence; `history`
+     // was already spliced in place by the guard regardless.
+
+--- src/commands/shell.ts
+@@ 3246,3290 @@
+         if (wanted.length === 0) {
+           agentIo.onSystem?.(formatThemeList(getThemeId()));
+         } else {
+           const next = parseThemeId(wanted);
+           if (next === undefined) {
+             agentIo.onSystem?.(`Unknown theme '${wanted}'.\n${formatThemeList(getThemeId())}`);
+           } else {
+             applyThemeId(next);
+             persistThemeId(next);
+             agentIo.onSystem?.(`Theme: ${themeLabel(next)}\n`);
+           }
+         }
+       } else if (command === "/settings") {
+         // Flow 374: the same rows the TUI modal shows, as a table. The ones whose
+         // command this REPL does not have are marked "(TUI only)".
+         const rows = buildSettingsRows(
+           await loadSettingsSnapshot(sessionCwd, { permissionMode, plan: readOnly, reasoningOverride: reasoningSessionOverride }, configDir),
+         );
+         agentIo.onSystem?.(formatSettingsTable(rows, { available: new Set(READLINE_AGENT_COMMANDS) }));
+       } else {
+-        // `/models` / `/provider` are chat-mode commands: say so instead of
++        // `/models` is a chat-mode command: say so instead of
+         // calling them unknown. Anything else falls back to the old message.
+         agentIo.onSystem?.(
+           describeUnavailableCommand(command, "agent") ??
+-            `Unknown command: ${command}. Type /help.\n`,
++            `Unknown command: ${command}. ${removedCommandHint(command) ?? "Type /help."}\n`,
+         );
+       }
+       printPromptWithBusNotice();
+       continue;
+     }
+     if (line.trim().length === 0) {
+       printPromptWithBusNotice();
+       continue;
+     }
+     // Flow 275 T8 (AC5): a `turns` lease holds this line instead of starting
+     // a turn — `/bus` above is unaffected, it dispatched before this check.
+     if (isHeld()) {
+       heldQueue.push(line);
+       agentIo.onSystem?.(heldNotice());
+       printPromptWithBusNotice();
+       continue;
+     }
+     await runOperatorLine(line);
+     printPromptWithBusNotice();
+   }
+
+--- src/commands/shell.ts
+@@ 4549,4589 @@
+         io.write("\n");
+       }
+     } else {
+       provider = providerArg;
+       if (modelArg !== undefined) {
+         model = modelArg;
+       } else {
+         // Resolve the provider's first detected model (no hardcoded default).
+         const detected = await detectProviders({
+           fetch: globalThis.fetch,
+           env: process.env,
+           ...(baseUrl !== undefined ? { baseUrl } : {}),
+         });
+         const match = detected.find((d) => d.name === providerArg);
+         model = match?.models[0] ?? "fake-echo";
+       }
+     }
+ 
+     const baseFactory = realMakeProvider(emitSystem);
+     // flow 268: resolved once at readline startup, same as the TUI branches
+-    // above; re-resolved on every `/model`/`/provider`/`/connect` re-selection
++    // above; re-resolved on every `/model`/`/connect` re-selection
+     // by `realSelectProviderModel`'s own wrapping (see its definition).
+     const initialModelParams = resolveProviderModelParamsByName(
+       provider,
+       loadShellConfig(runtime.cacheDir),
+       runtime.cacheDir,
+     );
+     const deps: ShellDeps = {
+       makeProvider: baseFactory,
+       clock: () => new Date().toISOString(),
+       idSeq: () => randomUUID(),
+       initial: {
+         provider,
+         model,
+         ...(baseUrl === undefined ? {} : { baseUrl }),
+         ...(Object.keys(initialModelParams).length > 0 ? { modelParams: initialModelParams } : {}),
+       },
+       selectProviderModel: realSelectProviderModel(baseUrl, runtime.cacheDir),
+     };
+ 
+     // Resolve the mode: explicit flag wins; otherwise default to agent.
+
+--- src/remote/command-connect.test.ts
+@@ 93,356 @@
+     }
+     h.client().choices[1]?.answer(undefined);
+     await h.bridge.idle();
+     expect(h.client().replies).toEqual([]);
+   });
+ 
+   it("sends the operator to the shell when no provider is connected", async () => {
+     const h = commandHarness({
+       listProviders: async () => [],
+       listModels: async () => undefined,
+       switchModel: async () => ({ output: "", ok: true }),
+     });
+     await h.bridge.enable();
+     await h.say("/connect");
+     await h.bridge.idle();
+     expect(h.client().choices).toEqual([]);
+     expect(h.client().replies[0]).toContain("No provider is connected");
+     expect(h.client().replies[0]).toContain("never typed into a chat");
+   });
+ 
++  it("keeps that refusal when the shell cannot list addable providers", async () => {
++    const h = commandHarness({ listProviders: async () => [], listModels: async () => undefined, switchModel: async () => ({ output: "", ok: true }) });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await h.bridge.idle();
++    expect(h.client().choices).toEqual([]);
++    expect(h.client().replies[0]).toContain("No provider is connected");
++  });
++
+   it("is refused while the shell is busy", async () => {
+     const h = commandHarness({ busy: true, listProviders: async () => PROVIDERS, listModels: async () => undefined, switchModel: async () => ({ output: "", ok: true }) });
+     await h.bridge.enable();
+     await h.say("/connect");
+     await h.bridge.idle();
+     expect(h.client().choices).toEqual([]);
+   });
+ });
++
++// Flow 471, AC8: the Add provider list, [Test] and [Connect] (device login only).
++
++const ADDABLE = [
++  { id: "acme", label: "Acme", connected: true, deviceLogin: false },
++  { id: "copilot", label: "Copilot", connected: false, deviceLogin: true },
++  { id: "hosted", label: "Hosted", connected: false, deviceLogin: false },
++];
++const CODE = "WDJB-MJHT";
++const LINK = "https://example.com/login/device";
++
++function addRig(extra: { connected?: typeof PROVIDERS; tested?: string[]; connectedIds?: string[]; switched?: string[] } = {}) {
++  const tested = extra.tested ?? [];
++  const connectedIds = extra.connectedIds ?? [];
++  const switched = extra.switched ?? [];
++  return commandHarness({
++    listProviders: async () => extra.connected ?? PROVIDERS,
++    listModels: async () => undefined,
++    switchModel: async (id) => {
++      switched.push(id);
++      return { output: "", ok: true };
++    },
++    listAddableProviders: async () => ADDABLE,
++    testProvider: async (id) => {
++      tested.push(id);
++      return id === "hosted" ? { ok: false, message: "no credential, Connect first" } : { ok: true, message: "ok — 3 model(s)" };
++    },
++    connectWithDeviceLogin: async (id, notify) => {
++      connectedIds.push(id);
++      await notify(`Open ${LINK} and enter the code ${CODE}`);
++      return { ok: true, message: "connected. The session and model are unchanged." };
++    },
++  });
++}
++
++describe("/connect: Add provider (AC8)", () => {
++  it("adds an Add provider button after the connected providers", async () => {
++    const h = addRig();
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the provider picker");
++    expect(h.client().choices[0]?.rows).toEqual([["* Acme"], ["Other"], ["Add provider"]]);
++    h.client().choices[0]?.answer(undefined);
++    await h.bridge.idle();
++  });
++
++  it("goes straight to the Add provider list when nothing is connected", async () => {
++    const h = addRig({ connected: [] });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    expect(h.client().choices[0]?.rows).toEqual([["Acme (connected)"], ["Copilot"], ["Hosted"]]);
++    expect(h.client().replies).toEqual([]);
++    h.client().choices[0]?.answer(undefined);
++    await h.bridge.idle();
++  });
++
++  it("lists every addable provider after Add provider is pressed, and offers Test and Connect", async () => {
++    const h = addRig();
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the provider picker");
++    h.client().choices[0]?.answer(2);
++    await waitFor(() => h.client().choices.length === 2, "the add list");
++    expect(h.client().choices[1]?.rows).toEqual([["Acme (connected)"], ["Copilot"], ["Hosted"]]);
++    h.client().choices[1]?.answer(1);
++    await waitFor(() => h.client().choices.length === 3, "Test / Connect");
++    expect(h.client().choices[2]?.rows).toEqual([["Test", "Connect"]]);
++    h.client().choices[2]?.answer(undefined);
++    await h.bridge.idle();
++  });
++
++  it("[Test] relays the host message and does not switch the model", async () => {
++    const tested: string[] = [];
++    const switched: string[] = [];
++    const h = addRig({ connected: [], tested, switched });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(0);
++    await h.bridge.idle();
++    expect(tested).toEqual(["copilot"]);
++    expect(h.client().replies).toEqual(["Copilot: ok — 3 model(s)"]);
++    expect(switched).toEqual([]);
++  });
++
++  it("[Test] relays the no-credential answer", async () => {
++    const h = addRig({ connected: [] });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(2);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(0);
++    await h.bridge.idle();
++    expect(h.client().replies).toEqual(["Hosted: no credential, Connect first"]);
++  });
++
++  it("[Connect] on a device-login provider posts the code and link, then the result, and does not switch", async () => {
++    const connectedIds: string[] = [];
++    const switched: string[] = [];
++    const h = addRig({ connected: [], connectedIds, switched });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(1);
++    await h.bridge.idle();
++    expect(connectedIds).toEqual(["copilot"]);
++    expect(h.client().replies.length).toBe(2);
++    expect(h.client().replies[0]).toContain(CODE);
++    expect(h.client().replies[0]).toContain(LINK);
++    expect(h.client().replies[1]).toBe("Copilot: connected. The session and model are unchanged.");
++    expect(switched).toEqual([]);
++  });
++
++  it("[Connect] on a key provider calls no host hook and sends the key to the shell", async () => {
++    const tested: string[] = [];
++    const connectedIds: string[] = [];
++    const h = addRig({ connected: [], tested, connectedIds });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(2);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(1);
++    await h.bridge.idle();
++    expect(tested).toEqual([]);
++    expect(connectedIds).toEqual([]);
++    expect(h.client().replies.length).toBe(1);
++    expect(h.client().replies[0]).toContain("entered in the shell");
++    expect(h.client().replies[0]).toContain("never in this chat");
++    expect(h.client().replies[0]).not.toMatch(/paste|enter your|https?:|base url/i);
++  });
++
++  it("changes nothing when the Add list or Test / Connect is not answered", async () => {
++    const tested: string[] = [];
++    const connectedIds: string[] = [];
++    const h = addRig({ connected: [], tested, connectedIds });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(undefined);
++    await h.bridge.idle();
++    expect(tested).toEqual([]);
++    expect(connectedIds).toEqual([]);
++    expect(h.client().replies).toEqual([]);
++  });
++
++  it("has no Disconnect, key, URL or token button anywhere in the Add provider path", async () => {
++    const h = addRig();
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the provider picker");
++    h.client().choices[0]?.answer(2);
++    await waitFor(() => h.client().choices.length === 2, "the add list");
++    h.client().choices[1]?.answer(2);
++    await waitFor(() => h.client().choices.length === 3, "Test / Connect");
++    for (const choice of h.client().choices) {
++      expect(JSON.stringify(choice.rows)).not.toMatch(/disconnect|key|url|token|password/i);
++      expect(choice.text).not.toMatch(/paste|enter your|api key|password/i);
++    }
++    h.client().choices[2]?.answer(undefined);
++    await h.bridge.idle();
++  });
++
++  it("answers that Test is not available when the shell has no such hook", async () => {
++    const h = commandHarness({
++      listProviders: async () => [],
++      listModels: async () => undefined,
++      switchModel: async () => ({ output: "", ok: true }),
++      listAddableProviders: async () => ADDABLE,
++    });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(0);
++    await h.bridge.idle();
++    expect(h.client().replies[0]).toContain("not available from this shell");
++  });
++
++  it("[Connect] on a provider shown as connected starts no login and points to Test or the shell", async () => {
++    const connectedIds: string[] = [];
++    const h = commandHarness({
++      listProviders: async () => [],
++      listModels: async () => undefined,
++      switchModel: async () => ({ output: "", ok: true }),
++      listAddableProviders: async () => [{ id: "copilot", label: "Copilot", connected: true, deviceLogin: true }],
++      testProvider: async () => ({ ok: true, message: "ok — 3 model(s)" }),
++      connectWithDeviceLogin: async (id) => {
++        connectedIds.push(id);
++        return { ok: true, message: "connected. The session and model are unchanged." };
++      },
++    });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(0);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.client().choices[1]?.answer(1);
++    await h.bridge.idle();
++    expect(connectedIds).toEqual([]);
++    expect(h.client().replies).toEqual(["Copilot is already connected. Use Test, or reconnect in the shell (/connect)."]);
++  });
++
++  it("does not start a device login while the shell is busy", async () => {
++    const connectedIds: string[] = [];
++    const h = addRig({ connected: [], connectedIds });
++    await h.bridge.enable();
++    await h.say("/connect");
++    await waitFor(() => h.client().choices.length === 1, "the add list");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
++    h.state.busy = true;
++    h.client().choices[1]?.answer(1);
++    await h.bridge.idle();
++    expect(connectedIds).toEqual([]);
++    expect(h.client().replies[0]).toContain("was not run");
++  });
++});
+
+--- src/remote/command-gateway.test.ts
+@@ 1,34 @@
+ // Flow 387, AC1 and AC8: a "/" line from the topic goes to a gateway with an explicit allowlist.
+ // Anything else answers "not available remotely" with the reason, and nothing runs.
+ 
+ import { describe, expect, it } from "bun:test";
+ import { classifyRemoteCommand, isAddressedToOtherBot, menuNamesAreValid, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from "./command-gateway";
+ import { commandHarness, waitFor } from "./command.test-helpers";
+ 
+ const ALLOWED_TEXT = ["/help", "/status", "/doctor", "/new", "/compact", "/think expand", "/goal", "/queue", "/reasoning", "/theme dark", "/plan"];
+ 
+ /** AC8: each of these is refused remotely, and each has its own test below. */
+ const REFUSED_LINES: Array<[string, string]> = [
+   ["/exit", "exit"],
+   ["/quit", "quit"],
+   ["/channels", "channels"],
+-  ["/provider", "provider"],
+   ["/search-provider", "search-provider"],
+   ["/search-connect", "search-connect"],
+   ["/remote-control off", "remote-control"],
+   ["/integrate", "integrate"],
+   ["/copy", "copy"],
+   ["/game", "game"],
+   ["/setup", "setup"],
+   ["/mcp trust", "mcp"],
+   ["/guard", "guard"],
+   ["/editguard", "editguard"],
+   ["/schedule", "schedule"],
+   ["/rewind", "rewind"],
+   ["/conform", "conform"],
+   ["/ci", "ci"],
+   ["/theme", "theme"],
+   ["/think", "think"],
+   ["/think collapse", "think"],
+ ];
+ 
+ /** Refused commands whose reason is written in the gateway's own switch, not in REMOTE_REFUSED. */
+
+--- src/remote/command-gateway.ts
+@@ 22,94 @@
+   | "builtin"
+   /** Opens a button picker in the topic. */
+   | "picker"
+   /** Runs only after a Yes/No press in the topic when its arguments change something. */
+   | "confirm";
+ 
+ export interface RemoteCommandSpec {
+   /** The shell's own name, without the slash (`external-agents`). */
+   name: string;
+   kind: RemoteCommandKind;
+   /** One line for the menu and `/help`; at most 256 characters. */
+   description: string;
+ }
+ 
+ /** The allowlist, in menu order. Everything a topic may run is on this list. */
+ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
+   { name: "help", kind: "builtin", description: "List the commands you can use from this topic" },
+   { name: "status", kind: "text", description: "Show the session: model, mode, queue, usage" },
+   { name: "doctor", kind: "text", description: "Run the health checks" },
+   { name: "model", kind: "picker", description: "Pick another model with buttons" },
+-  { name: "connect", kind: "picker", description: "Switch to a connected provider with buttons" },
++  { name: "connect", kind: "picker", description: "Switch to a connected provider with buttons; also add a provider (device login only) and test it" },
+   { name: "resume", kind: "picker", description: "Return to an earlier session with buttons" },
+   { name: "sessions", kind: "builtin", description: "List recent sessions" },
+   { name: "history", kind: "builtin", description: "Post the last messages of this session here: /history [N], 1 to 20" },
+   { name: "stop", kind: "builtin", description: "Stop the run you started from Telegram" },
+   { name: "new", kind: "text", description: "Start a new session; this topic stays bound to it" },
+   { name: "clear", kind: "text", description: "Same as /new" },
+   { name: "compact", kind: "text", description: "Compact the conversation: /compact [focus]" },
+   { name: "think", kind: "text", description: "Set how reasoning shows: /think <auto|expand|hide>" },
+   { name: "goal", kind: "text", description: "Show or set the session goal" },
+   { name: "queue", kind: "text", description: "Manage the queue: /queue <remove|edit|force> [N]" },
+   { name: "mode", kind: "confirm", description: "Show or set the permission mode; trust and auto ask for a button press" },
+   { name: "plan", kind: "confirm", description: "Read-only mode: /plan [on|off]; bare shows it, off asks for a button press" },
+   { name: "reasoning", kind: "text", description: "Show or set reasoning effort" },
+   { name: "theme", kind: "text", description: "Set the theme: /theme <name>" },
+   { name: "jevrules", kind: "text", description: "Show the Jev rules" },
+   { name: "staledocs", kind: "text", description: "Show stale documents" },
+   { name: "opencomments", kind: "text", description: "Show open review comments" },
+   { name: "contract", kind: "text", description: "Show the contract check" },
+   { name: "triage", kind: "text", description: "Advisory triage of the latest review package" },
+   { name: "risk", kind: "text", description: "Risk map of the working diff" },
+   { name: "scenarios", kind: "text", description: "User scenarios the working diff likely changes" },
+   { name: "delegate", kind: "confirm", description: "Hand a paid task to an external agent: /delegate <agent> <task>; asks first" },
+   { name: "external", kind: "confirm", description: "Show or switch sending work to external providers; on and off ask first" },
+   { name: "external-agents", kind: "confirm", description: "Show or switch the external agent runtime; on and off ask first" },
+   { name: "route", kind: "confirm", description: "Show or switch model routing: /route [on|off]; on and off ask first" },
+ ];
+ 
+ /** Commands that are never run from the topic, each with the reason the topic is told. */
+ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
+   exit: "it would close the shell",
+   quit: "it would close the shell",
+   channels: "it manages the Telegram connection itself",
+-  provider: "it asks for provider keys and addresses, which are never typed into a chat",
+   "search-provider": "it asks for provider keys, which are never typed into a chat",
+   "search-connect": "it changes where searches are sent",
+   "remote-control": "turning remote control off would archive this topic, and its panel is local",
+   integrate: "it edits other tools' configuration on this machine",
+   copy: "it uses this machine's clipboard",
+   game: "it needs the shell's screen",
+   setup: "it asks for keys and changes the configuration",
+   mcp: "it can trust tools and change server connections; use the shell",
+   guard: "it changes a safety guard; use the shell",
+   editguard: "it changes a safety guard; use the shell",
+   settings: "it edits settings, some of them secret; use the shell",
+   bus: "it talks to other agents on this machine",
+   review: "it needs the shell's screen",
+   reviews: "it needs the shell's screen",
+   product: "it needs the shell's screen",
+   governance: "it needs the shell's screen",
+   decisions: "it opens a panel in the shell",
+   expand: "it needs the shell's screen",
+   interrupt: "use /stop here to end a run you started from Telegram, or stop it in the shell",
+   permissions: "it opens a panel in the shell; saved rules are changed there, never from a chat",
+
+--- src/remote/command-router.ts
+@@ 30,122 @@
+ }
+ 
+ export interface ModelChoice {
+   id: string;
+   label: string;
+   current?: boolean;
+ }
+ 
+ export interface ModelListing {
+   /** The provider these models belong to, as the topic is told it. */
+   provider: string;
+   models: ModelChoice[];
+ }
+ 
+ export interface ProviderChoice {
+   id: string;
+   label: string;
+   current?: boolean;
+ }
+ 
++/** A provider the Add provider list offers (flow 471). Never a key, an address or an env var name. */
++export interface AddableProvider {
++  id: string;
++  label: string;
++  /** Already connected here. */
++  connected: boolean;
++  /** Connecting it is a device login (a code and a link), which needs nothing typed. */
++  deviceLogin: boolean;
++}
++
++/** How testing or connecting a provider ended; `message` is shown to the topic as is (after redaction). */
++export interface ProviderOutcome {
++  ok: boolean;
++  message: string;
++}
++
+ export interface SessionChoice {
+   id: string;
+   label: string;
+   current?: boolean;
+ }
+ 
+ /** What the router needs from the shell. Every member but the first two is optional. */
+ export interface RemoteCommandHost {
+   isBusy(): boolean;
+   /** Stop the running turn. The router never calls it: a command from the topic must not stop a turn. The bridge uses it for a Telegram turn's own run limit. */
+   cancelTurn(): void;
+   /**
+    * `/stop` (flow 396): end the running turn if Telegram started it. "stopped" means it was asked to stop (the
+    * bridge says so when the turn ends); "idle" means no turn is running; "operator" means the running turn
+    * was started in the shell, which a topic may not stop.
+    */
+   stopTelegramTurn?(): "stopped" | "idle" | "operator";
+   /** Run a slash line as the operator would type it and collect what it printed. */
+   runCommand?(line: string): Promise<CommandOutcome>;
+   /**
+    * The reason the shell would not run this line right now (it is busy and the command is one
+    * it defers), or undefined. Asked only while busy.
+    */
+   busyRefusal?(line: string): string | undefined;
+   /** The models of a provider (the current one when none is named). Never includes a key or an address. */
+   listModels?(providerId?: string): Promise<ModelListing | undefined>;
+   /** The providers the operator already connected, usable as they are. Never a way to connect a new one. */
+   listProviders?(): Promise<ProviderChoice[]>;
++  /** Every provider the Add provider list can offer, connected or not (flow 471). Never a key or an address. */
++  listAddableProviders?(): Promise<AddableProvider[]>;
++  /** Probe a provider's model list with what is stored for it; "no credential, Connect first" when there is none. Never sends a key to the topic. */
++  testProvider?(providerId: string): Promise<ProviderOutcome>;
++  /**
++   * Connect a provider by device login. `notify` posts text to the topic: the router passes it so the user code and the
++   * verification link reach the chat (both public by design). Resolves when the login ends. Never switches the model.
++   */
++  connectWithDeviceLogin?(providerId: string, notify: (text: string) => Promise<void>): Promise<ProviderOutcome>;
+   /** Switch the model (and the provider, when one is named). */
+   switchModel?(modelId: string, providerId?: string): Promise<CommandOutcome>;
+   /** Recent sessions of this project, newest first. */
+   listSessions?(): Promise<SessionChoice[]>;
+   /** Make a session the live one, the way `/resume` does. */
+   resumeSession?(id: string): Promise<CommandOutcome>;
+ }
+ 
+ export interface RouterLimits {
+   /** After this long a command that is still running says so in the topic. */
+   runningNoticeMs: number;
+   /** After this long the topic stops waiting for a command and is told it is still running. Nothing is cancelled; the topic hears how it ended. */
+   commandLimitMs: number;
+   /** How long a picker or a Yes/No waits for a press. */
+   choiceTimeoutMs: number;
+   /** How often a command held for an idle main looks again (flow 419, AC4). */
+   idlePollMs?: number;
+   /** After this long a held command is dropped, and the topic is told. */
+   queuedCommandLimitMs?: number;
+ }
+
+--- src/remote/command-router.ts
+@@ 153,195 @@
+   record(text: string): void;
+   /** Redact, trim and cap text for the topic. */
+   compose(text: string): string;
+   /**
+    * Ask the topic with buttons. Resolves with the flat index of the pressed button, undefined
+    * when nobody pressed in time (or the topic is gone), or a refusal with the reason serve gave.
+    */
+   choose(text: string, rows: string[][], timeoutMs: number, forUserId: number | undefined): Promise<number | undefined | ChoiceRefusal>;
+   /** True while a command that swaps the session runs: the topic stays bound to it. */
+   holdTopic(on: boolean): void;
+   /** Whether the session was swapped since the last call; the separator line replaced the output. */
+   takeSwitched(): boolean;
+   limits: RouterLimits;
+ }
+ 
+ interface PickOption {
+   id: string;
+   label: string;
+ }
+ 
++/** The Add provider button's id on the connected-providers picker; no provider id can equal it. */
++const ADD_PROVIDER_ID = "::add-provider";
++
+ /** Commands that swap the live session; the topic follows them. */
+ const SESSION_COMMANDS: readonly string[] = ["new", "clear", "resume"];
+ 
+ /** How a question to the topic ended: a result, or "deferred" when a run took over the reaction. */
+ type AskResult = "done" | "failed" | "deferred";
+ 
+ /** How a command line ended, for the reaction on the message that carried it. */
+ export type CommandEnd = (result: "done" | "failed") => void;
+ 
+ function ended(end: CommandEnd | undefined, result: "done" | "failed"): void {
+   try {
+     end?.(result);
+   } catch {
+     // A reaction is a courtesy; it never changes what the command did.
+   }
+ }
+ 
+ export class RemoteCommandRouter {
+   private chain: Promise<void> = Promise.resolve();
+   private detached = 0;
+
+--- src/remote/command-router.ts
+@@ 592,749 @@
+       return busy !== undefined ? { busy } : await switchModel(chosen.id, providerId);
+     });
+     if ("busy" in switched) {
+       await this.ctx.reply(`/model was not run: ${switched.busy}.`).catch(() => false);
+       return "failed";
+     }
+     const outcome = switched;
+     this.ctx.record(`/model ${outcome.ok ? "switched" : "failed"}`);
+     const text = outcome.output.trim();
+     await this.ctx.reply(this.ctx.compose(text.length > 0 ? text : outcome.ok ? `Model: ${chosen.label.replace(/^\* /, "")}.` : "The model was not changed.")).catch(() => false);
+     return outcome.ok ? "done" : "failed";
+   }
+ 
+   private async pickProvider(fromId: number | undefined): Promise<AskResult> {
+     const host = this.ctx.host;
+     if (host.listProviders === undefined || host.listModels === undefined || host.switchModel === undefined) {
+       await this.ctx.reply("/connect is not available from this shell.").catch(() => false);
+       return "failed";
+     }
+     const providers = await host.listProviders();
++    const canAdd = host.listAddableProviders !== undefined;
+     if (providers.length === 0) {
++      if (canAdd) {
++        // Nothing to switch to: go straight to the providers that can be added.
++        return await this.pickAddableProvider(fromId);
++      }
+       await this.ctx.reply("No provider is connected yet. Connecting one needs a key, which is never typed into a chat; use the shell.").catch(() => false);
+       return "failed";
+     }
+     const options = providers.map((provider) => ({ id: provider.id, label: provider.current === true ? `* ${provider.label}` : provider.label }));
++    if (canAdd) {
++      options.push({ id: ADD_PROVIDER_ID, label: "Add provider" });
++    }
+     const chosen = await this.pick("connect", "Connected providers. Pick one to switch to:", options, fromId);
+     if (chosen === "refused") {
+       return "failed";
+     }
+     if (chosen === undefined) {
+       this.ctx.record("/connect not answered in time; nothing changed");
+       return "failed";
+     }
++    if (chosen.id === ADD_PROVIDER_ID) {
++      return await this.pickAddableProvider(fromId);
++    }
+     return await this.pickModel(chosen.id, fromId);
+   }
+ 
++  /** The Add provider list: every provider the shell reports, then [Test] / [Connect] for the one pressed. */
++  private async pickAddableProvider(fromId: number | undefined): Promise<AskResult> {
++    const host = this.ctx.host;
++    if (host.listAddableProviders === undefined) {
++      await this.ctx.reply("/connect is not available from this shell.").catch(() => false);
++      return "failed";
++    }
++    const addable = await host.listAddableProviders();
++    if (addable.length === 0) {
++      await this.ctx.reply("There are no providers to add from this shell.").catch(() => false);
++      return "failed";
++    }
++    const options = addable.map((provider) => ({ id: provider.id, label: provider.connected ? `${provider.label} (connected)` : provider.label }));
++    const chosen = await this.pick("connect", "Add provider. Pick one to test or connect:", options, fromId);
++    if (chosen === "refused") {
++      return "failed";
++    }
++    if (chosen === undefined) {
++      this.ctx.record("/connect not answered in time; nothing changed");
++      return "failed";
++    }
++    const provider = addable.find((entry) => entry.id === chosen.id);
++    if (provider === undefined) {
++      return "failed";
++    }
++    const action = await this.ask("connect", this.ctx.compose(`${provider.label}: test the stored credential, or connect it?`), [["Test", "Connect"]], fromId);
++    if (action === "refused") {
++      return "failed";
++    }
++    if (action === undefined) {
++      this.ctx.record("/connect not answered in time; nothing changed");
++      return "failed";
++    }
++    return action === 0 ? await this.testAddable(provider) : await this.connectAddable(provider);
++  }
++
++  private async testAddable(provider: AddableProvider): Promise<AskResult> {
++    const host = this.ctx.host;
++    if (host.testProvider === undefined) {
++      await this.ctx.reply("Testing a provider is not available from this shell.").catch(() => false);
++      return "failed";
++    }
++    const outcome = await host.testProvider(provider.id);
++    this.ctx.record(`/connect test ${provider.id}: ${outcome.ok ? "ok" : "failed"}`);
++    await this.ctx.reply(this.ctx.compose(`${provider.label}: ${outcome.message}`)).catch(() => false);
++    return outcome.ok ? "done" : "failed";
++  }
++
++  private async connectAddable(provider: AddableProvider): Promise<AskResult> {
++    const host = this.ctx.host;
++    if (provider.connected) {
++      // Signing in again would replace a working credential; that is a shell decision. No host call.
++      this.ctx.record(`/connect ${provider.id}: already connected`);
++      await this.ctx.reply(this.ctx.compose(`${provider.label} is already connected. Use Test, or reconnect in the shell (/connect).`)).catch(() => false);
++      return "failed";
++    }
++    if (!provider.deviceLogin) {
++      // A key is never typed into a chat: no host call, the operator is sent to the shell.
++      this.ctx.record(`/connect ${provider.id}: needs a key, entered in the shell`);
++      await this.ctx
++        .reply(this.ctx.compose(`${provider.label} needs a key. The key is entered in the shell with /connect (Add provider tab), never in this chat.`))
++        .catch(() => false);
++      return "failed";
++    }
++    if (host.connectWithDeviceLogin === undefined) {
++      await this.ctx.reply("Connecting a provider is not available from this shell.").catch(() => false);
++      return "failed";
++    }
++    // The login signs in a provider for the whole shell; not while a turn is using the current one.
++    const busy = this.busyReason("/connect", "connect");
++    if (busy !== undefined) {
++      this.ctx.record(`/connect not run: ${busy}`);
++      await this.ctx.reply(`/connect was not run: ${busy}.`).catch(() => false);
++      return "failed";
++    }
++    this.ctx.record(`/connect ${provider.id}: device login started`);
++    // The code and the link are public by design; they are the only thing the login posts.
++    const notify = async (text: string): Promise<void> => {
++      await this.ctx.reply(this.ctx.compose(text)).catch(() => false);
++    };
++    let outcome: ProviderOutcome;
++    try {
++      outcome = await host.connectWithDeviceLogin(provider.id, notify);
++    } catch {
++      outcome = { ok: false, message: "Device login failed. The details are in the shell." };
++    }
++    this.ctx.record(`/connect ${provider.id}: device login ${outcome.ok ? "done" : "failed"}`);
++    await this.ctx.reply(this.ctx.compose(`${provider.label}: ${outcome.message}`)).catch(() => false);
++    return outcome.ok ? "done" : "failed";
++  }
++
+   private async pickSession(fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
+     const host = this.ctx.host;
+     if (host.listSessions === undefined || host.resumeSession === undefined) {
+       await this.ctx.reply("/resume is not available from this shell.").catch(() => false);
+       return "failed";
+     }
+     const sessions = (await host.listSessions()).filter((session) => session.current !== true);
+     if (sessions.length === 0) {
+       await this.ctx.reply("There is no earlier session to return to.").catch(() => false);
+       return "done";
+     }
+     const chosen = await this.pick("resume", "Return to an earlier session:", sessions.map((s) => ({ id: s.id, label: s.label })), fromId);
+     if (chosen === "refused") {
+       return "failed";
+     }
+     if (chosen === undefined) {
+       this.ctx.record("/resume not answered in time; nothing changed");
+       return "failed";
+     }
+     const resume = host.resumeSession.bind(host);
+
+--- src/remote/command.test-helpers.ts
+@@ 17,59 @@
+   answer(index: number | undefined): void;
+ }
+ 
+ export interface CommandClient extends RemoteClientLike {
+   options: RemoteClientOptions;
+   replies: string[];
+   choices: ChoiceCall[];
+   /** Every state the shell reported, as [update id, state], in order. */
+   reported: Array<[number, MessageState]>;
+ }
+ 
+ export interface CommandHarnessOptions {
+   busy?: boolean;
+   runCommand?: (line: string) => Promise<CommandOutcome>;
+   busyRefusal?: (line: string) => string | undefined;
+   runningNoticeMs?: number;
+   commandLimitMs?: number;
+   listModels?: RemoteBridgeHost["listModels"];
+   switchModel?: RemoteBridgeHost["switchModel"];
+   listProviders?: RemoteBridgeHost["listProviders"];
++  listAddableProviders?: RemoteBridgeHost["listAddableProviders"];
++  testProvider?: RemoteBridgeHost["testProvider"];
++  connectWithDeviceLogin?: RemoteBridgeHost["connectWithDeviceLogin"];
+   listSessions?: RemoteBridgeHost["listSessions"];
+   resumeSession?: RemoteBridgeHost["resumeSession"];
+   choiceTimeoutMs?: number;
+   idlePollMs?: number;
+   queuedCommandLimitMs?: number;
+   /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
+   runTimeoutMs?: number;
+   /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */
+   refuseChoice?: string;
+   progressIntervalMs?: number;
+   progressToolThreshold?: number;
+   sessionState?: RemoteBridgeHost["sessionState"];
+   turnRunning?: RemoteBridgeHost["turnRunning"];
+   /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */
+   askApproval?: NonNullable<RemoteClientLike["askApproval"]>;
+ }
+ 
+ export function commandHarness(opts: CommandHarnessOptions = {}) {
+   const calls: string[] = [];
+   const ran: string[] = [];
+
+--- src/remote/command.test-helpers.ts
+@@ 67,109 @@
+     notice: (t) => calls.push(`notice:${t}`),
+     cancelTurn: () => calls.push("cancel"),
+     recordOn: (n) => calls.push(`on:${n}`),
+     recordOff: () => calls.push("off"),
+     runCommand:
+       opts.runCommand === undefined
+         ? async (line) => {
+             ran.push(line);
+             return { output: `ran ${line}`, ok: true };
+           }
+         : async (line) => {
+             ran.push(line);
+             return (opts.runCommand as (line: string) => Promise<CommandOutcome>)(line);
+           },
+     ...(opts.busyRefusal !== undefined ? { busyRefusal: opts.busyRefusal } : {}),
+     ...(opts.sessionState !== undefined ? { sessionState: opts.sessionState } : {}),
+     ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),
+     ...(opts.listModels !== undefined ? { listModels: opts.listModels } : {}),
+     ...(opts.switchModel !== undefined ? { switchModel: opts.switchModel } : {}),
+     ...(opts.listProviders !== undefined ? { listProviders: opts.listProviders } : {}),
++    ...(opts.listAddableProviders !== undefined ? { listAddableProviders: opts.listAddableProviders } : {}),
++    ...(opts.testProvider !== undefined ? { testProvider: opts.testProvider } : {}),
++    ...(opts.connectWithDeviceLogin !== undefined ? { connectWithDeviceLogin: opts.connectWithDeviceLogin } : {}),
+     ...(opts.listSessions !== undefined ? { listSessions: opts.listSessions } : {}),
+     ...(opts.resumeSession !== undefined ? { resumeSession: opts.resumeSession } : {}),
+   };
+   let client!: CommandClient;
+   const bridge = new RemoteBridge({
+     host,
+     now: () => state.now,
+     approvalTimeoutMs: 50,
+     ...(opts.runningNoticeMs !== undefined ? { commandRunningNoticeMs: opts.runningNoticeMs } : {}),
+     ...(opts.commandLimitMs !== undefined ? { commandLimitMs: opts.commandLimitMs } : {}),
+     ...(opts.choiceTimeoutMs !== undefined ? { choiceTimeoutMs: opts.choiceTimeoutMs } : {}),
+     idlePollMs: opts.idlePollMs ?? 5,
+     ...(opts.progressIntervalMs !== undefined ? { progressIntervalMs: opts.progressIntervalMs } : {}),
+     ...(opts.progressToolThreshold !== undefined ? { progressToolThreshold: opts.progressToolThreshold } : {}),
+     ...(opts.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: opts.queuedCommandLimitMs } : {}),
+     makeClient: (options: RemoteClientOptions) => {
+       const startResult: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0 };
+       const fake = {
+         options,
+         replies: [] as string[],
+
+--- src/remote/shell-bridge.ts
+@@ 351,395 @@
+     this.progress = new ProgressNotes({
+       ...(options.progressIntervalMs === undefined ? {} : { intervalMs: options.progressIntervalMs }),
+       ...(options.progressToolThreshold === undefined ? {} : { toolThreshold: options.progressToolThreshold }),
+       now: this.now,
+       send: (text) => {
+         const client = this.client;
+         if (client === undefined || !client.connected) return;
+         this.push("reply", "progress note");
+         void client.reply(composeReply(text)).catch(() => false);
+       },
+     });
+     this.router = new RemoteCommandRouter({
+       host: {
+         isBusy: () => this.host.isBusy(),
+         cancelTurn: () => this.host.cancelTurn(),
+         stopTelegramTurn: () => this.stopTelegramTurn(),
+         ...(this.host.runCommand !== undefined ? { runCommand: (line: string) => this.host.runCommand!(line) } : {}),
+         ...(this.host.busyRefusal !== undefined ? { busyRefusal: (line: string) => this.host.busyRefusal!(line) } : {}),
+         ...(this.host.listModels !== undefined ? { listModels: (id?: string) => this.host.listModels!(id) } : {}),
+         ...(this.host.listProviders !== undefined ? { listProviders: () => this.host.listProviders!() } : {}),
++        ...(this.host.listAddableProviders !== undefined ? { listAddableProviders: () => this.host.listAddableProviders!() } : {}),
++        ...(this.host.testProvider !== undefined ? { testProvider: (id: string) => this.host.testProvider!(id) } : {}),
++        ...(this.host.connectWithDeviceLogin !== undefined
++          ? { connectWithDeviceLogin: (id: string, notify: (text: string) => Promise<void>) => this.host.connectWithDeviceLogin!(id, notify) }
++          : {}),
+         ...(this.host.switchModel !== undefined ? { switchModel: (model: string, provider?: string) => this.host.switchModel!(model, provider) } : {}),
+         ...(this.host.listSessions !== undefined ? { listSessions: () => this.host.listSessions!() } : {}),
+         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
+       },
+       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
+       live: () => this.client !== undefined,
+       history: async (args) => await this.historyForCommand(args),
+       record: (text) => this.push("command", text),
+       compose: composeReply,
+       choose: async (text, rows, timeoutMs, forUserId) => {
+         const client = this.client;
+         if (client === undefined || !client.connected) {
+           return undefined;
+         }
+         try {
+           if (client.askChoice === undefined) {
+             return await client.requestChoice(text, rows, timeoutMs, forUserId);
+           }
+           const answer = await client.askChoice(text, rows, timeoutMs, forUserId === undefined ? {} : { forUserId });
+           if (answer.kind === "none" && answer.refusal !== undefined) return { refused: answer.refusal };
+
+--- src/standard/help-groups.test.ts
+@@ 194,238 @@
+ 
+   test("`keryx help look-and-feel` lists /theme — a group with no CLI verbs at all must still render its slash commands", () => {
+     const group = HELP_GROUP_ORDER.find((g) => g.slug === "look-and-feel");
+     expect(group).toBeDefined();
+     const text = renderCliGroupHelp(group!);
+     expect(text).toContain("Look and feel:");
+     expect(text).toContain("in keryx shell:");
+     expect(text).toContain("/theme");
+     expect(text).toContain("/settings");
+     expect(text).toContain("/model");
+   });
+ 
+   test("`keryx help connect` lists both the CLI verbs and the slash commands for that group", () => {
+     const group = HELP_GROUP_ORDER.find((g) => g.slug === "connect");
+     expect(group).toBeDefined();
+     const text = renderCliGroupHelp(group!);
+     expect(text).toContain("auth");
+     expect(text).toContain("providers");
+     expect(text).toContain("in keryx shell:");
+     expect(text).toContain("/connect");
+-    expect(text).toContain("/provider");
++    // The old add/reconfigure command was folded into `/connect` (flow 471).
++    // Built from parts so the docs/standard invariant that no file names it stays literal.
++    const removed = `/${"provider"}`;
++    expect(text).not.toContain(`${removed} `);
++    expect(findSlashEntry(removed)).toBeUndefined();
+   });
+ 
+   test("groupBySlug resolves a known slug and refuses an unknown one", () => {
+     expect(groupBySlug("automation")?.name).toBe("Automation");
+     expect(groupBySlug("nope")).toBeUndefined();
+   });
+ 
+   test("findCliEntry / findSlashEntry resolve exact names", () => {
+     expect(findCliEntry("shell")?.group).toBe("Start here");
+     expect(findSlashEntry("/theme")?.group).toBe("Look and feel");
+     expect(findCliEntry("/theme")).toBeUndefined();
+     expect(findSlashEntry("/settings")?.group).toBe("Look and feel");
+   });
+ 
+   test("renderEntryDetail names the entry and its summary", () => {
+     const entry = findCliEntry("init");
+     expect(entry).toBeDefined();
+     const detail = renderEntryDetail(entry!);
+     expect(detail).toContain("init");
+     expect(detail).toContain(entry!.summary);
+
+--- src/standard/help-groups.ts
+@@ 140,198 @@
+ 
+   // ---- Connect a model provider -------------------------------------------
+   {
+     kind: "cli",
+     name: "auth",
+     group: "Connect a model provider",
+     summary: "Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status.",
+   },
+   {
+     kind: "cli",
+     name: "providers",
+     group: "Connect a model provider",
+     summary: "Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility.",
+   },
+   {
+     kind: "cli",
+     name: "routing",
+     group: "Connect a model provider",
+     summary: "Category -> model routing table (list, set, unset, trust), the model-profile catalogue (profile list, profile set), and real measured task cost (stats).",
+   },
+-  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
++  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Providers dialog: switch, test or disconnect a connected provider, or add one (Connected / Add provider tabs)." },
+   {
+     kind: "slash",
+     name: "/routing",
+     group: "Connect a model provider",
+     summary: "Route task categories to models — a flat, searchable list across every connected provider.",
+   },
+   {
+     kind: "slash",
+     name: "/search-provider",
+     group: "Connect a model provider",
+     summary: "Configure and test a web search provider.",
+   },
+   {
+     kind: "slash",
+     name: "/search-connect",
+     group: "Connect a model provider",
+     summary: "Select a connected web search provider.",
+   },
+-  {
+-    kind: "slash",
+-    name: "/provider",
+-    group: "Connect a model provider",
+-    summary: "Switch provider — /provider <name>, or no arg to re-select.",
+-  },
+   {
+     kind: "cli",
+     name: "external",
+     group: "Connect a model provider",
+     summary: "Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on|off|status|list).",
+   },
+   {
+     kind: "slash",
+     name: "/external",
+     group: "Connect a model provider",
+     summary: "Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on|off].",
+   },
+ 
+   // ---- Look and feel -------------------------------------------------------
+   {
+     kind: "slash",
+     name: "/theme",
+     group: "Look and feel",
+     summary: "Open the theme picker — /theme [name] applies immediately.",
+   },

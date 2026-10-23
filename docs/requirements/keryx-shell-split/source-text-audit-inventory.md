@@ -456,6 +456,27 @@ change the scan result. When the shell is split, point it at the resulting
 source modules (or scan their directory) to retain the regression coverage;
 no shell injection seam is needed.
 
+### Added by flow 468 (`/setup` Run)
+
+`commands/shell.test.ts` adds one source reader of `tui/tui-shell.ts`, the "flow 468
+AC10" block. `openSetup` lives inside the `launchTuiAgentShell` closure, so whether the
+shell hands `openSetupModal` the real seams cannot be observed headless. The block pins
+that it does:
+- the session cwd as `projectRoot`, which drives tab detection and is where the run starts;
+- OSC 52 for Copy and `chrome.showToast` for its toast;
+- `confirmOperatorCard` for Run's confirmation;
+- `runSetupSteps` over the session's job registry with `ownKeryxPrefix()`, so keryx
+  runs the steps itself;
+- the one-run-at-a-time guard;
+- no external-agent or main-agent call.
+
+The modal and the runner are covered behaviourally in `tui/setup-modal.test.ts`.
+
+The block slices a fixed 3,500-character window after `openSetupModal(`, which is the
+fragile shape this document describes: a large insertion before the seams pushes them
+out of the window. When the closure becomes mountable, replace it with a test that
+opens `/setup` in a mounted shell and observes the confirm card and the job registry.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -488,7 +509,7 @@ commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-starting-line.test.ts | commands/shell.ts | 1
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 5
+commands/shell.test.ts | commands/shell.ts, tui/tui-shell.ts | 6
 decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3

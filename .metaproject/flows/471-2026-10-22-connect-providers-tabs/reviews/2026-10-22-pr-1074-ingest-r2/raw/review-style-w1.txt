@@ -1,0 +1,105 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-01 (docs, CHANGELOG, flow records, gdgraph artifacts, and the agent-commands/shell test edits) is consistent and readable. The /provider removal is carried through README and docs/docs without leaving dangling wording, and test names and comments were updated with it. Three low-severity observations: a stale pair of comments in the shell.test.ts header, a CHANGELOG entry that names a command that never existed and mis-describes Telegram, and two docs rewordings made only to satisfy the AC10 grep. No major findings. Slice-01 holds no TUI, remote or modal-host source, so the footerFor(tabId) and Telegram code paths were not judged here.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/shell.test.ts",
+      "line": null,
+      "quote": "//     a full re-detection/pick across all providers; same update-then-use",
+      "problem": "The pinned-contract header comment was edited from `/provider` to `/connect` on one line only. The edited bullet now reads `/connect` calls `selectProviderModel?.(io, { onlyConnected: true })` followed by 'a full re-detection/pick across all providers', which is the removed /provider behaviour and contradicts onlyConnected: true. The next-but-one bullet still says '`/connect` needs NO new deps: it writes STATIC guidance mentioning `ANTHROPIC_API_KEY`', which contradicts the bullet above it and the tests in this file that drive /connect through selectProviderModel.",
+      "impact": "A reader of the contract header gets three incompatible descriptions of /connect in one list: connected-only picker, full re-detection, and static env-var guidance. The comment is the stated pin for the tests below it, so it misleads the next editor of those tests.",
+      "suggested_fix": "Rewrite the two bullets to one statement: `/connect` calls `deps.selectProviderModel?.(io, { onlyConnected: true })`, offers only connected providers, and applies the result like /models does. Delete the 'STATIC guidance' bullet or mark it as the pre-flow-304 behaviour.",
+      "evidence": "src/commands/shell.test.ts head: the bullet quoted above (the line after `/connect calls ... { onlyConnected: true }`) and, at line 98, `//   - `/connect` needs NO new deps: it writes STATIC guidance mentioning`. The test at the end of the diff, '/connect with a selector switches among connected providers only', asserts the selector path.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:stale-contract-comment:shell.test.ts"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "- **Changed:** `/connect` and `/providers` are one command and one modal with two tabs.",
+      "problem": "The 0.3.130 entry says `/connect` and `/providers` were merged. No `/providers` slash command is registered; the command removed in this PR is `/provider` (the next bullet and the PR body say so). A search of CHANGELOG.md, README.md, docs/docs/cli-reference.md, src/commands/agent-commands.ts and src/standard/help-groups.ts finds `/providers` only on this line. The wording comes from the operator's message, not from the code. The Telegram bullet also says 'the same modal opens' in Telegram; Telegram gets buttons (AC8, README), not a modal.",
+      "impact": "Release notes name a command users never had and describe the Telegram surface as a modal. Someone searching the changelog for what happened to `/provider` or `/providers` gets two spellings.",
+      "suggested_fix": "Write 'The `/provider` wizard and `/connect` are one command and one modal with two tabs.' and 'in Telegram `/connect` gets an Add provider button and a [Test] on each row.'",
+      "evidence": "CHANGELOG.md:11 `/connect` and `/providers` are one command; CHANGELOG.md:13 `/provider` is gone; CHANGELOG.md:14 'in Telegram the same modal opens'. Sites: CHANGELOG.md:11, CHANGELOG.md:14.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:changelog-wrong-command-name"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "docs/docs/harness.md",
+      "line": null,
+      "quote": "shared contract test (`stream-contract.test.ts` in the harness provider directory) pins",
+      "problem": "Two docs sentences unrelated to /connect were reworded in this PR: harness.md replaced the repo path `src/harness/provider/stream-contract.test.ts` with a prose description, and hooks.md changed 'sink/provider' to 'sink or provider'. The only visible reason is the AC10 invariant `! rg -n \"/provider\\b\" README.md docs/docs ...`, whose pattern has no leading boundary and so matches `harness/provider/` and `sink/provider`. The reason is not recorded in the diff, so this is inferred.",
+      "impact": "A docs path that a reader could paste into an editor became prose, to get past a loose grep. The next docs author who writes a real path under harness/provider/ will trip the same invariant. What would settle it: whether AC10's pattern was meant to match only the slash command; if so, anchor it (for example `(^|[^a-z/])/provider\\b`) and restore the path.",
+      "suggested_fix": "Anchor the invariant pattern in the flow's acceptance criteria check and restore `src/harness/provider/stream-contract.test.ts` and 'sink/provider'. If the pattern is frozen, keep the rewording and note why in the journal.",
+      "evidence": "docs/docs/harness.md:38 `stream-contract.test.ts` in the harness provider directory; docs/docs/hooks.md:766 'a real sink or provider'; flow AC10 check: ! rg -n \"/provider\\b\" README.md docs/docs src/standard src/commands/init.ts. Sites: docs/docs/harness.md:38, docs/docs/hooks.md:766.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:docs-reworded-for-grep",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 1
+  }
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Naming, wording and test titles were updated consistently with the /provider removal across README, docs/docs, agent-commands tests and shell tests. The leftovers are one stale comment pair in the shell.test.ts contract header, a CHANGELOG entry with a wrong command name and an inexact Telegram description, and two unrelated docs rewordings made to pass the AC10 grep.
+
+## Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2`
+- Scope mode: diff, slice-01 read in full (2796 diff lines; the files named in its headers: gdgraph artifacts, flow 471 records, CHANGELOG, README, docs/docs, package.json, agent-commands.test.ts, providers.models-failure.test.ts, shell-grant-refresh.test.ts, shell-slash-registry.test.ts, shell-subscription-selection.test.ts, shell.test.ts)
+- Not covered: slices 02-04 (assigned to other dispatches); TUI, modal-host and remote source were not read for this result.
+
+## Stats
+- major: 0
+- minor: 2
+- info: 1
+
+## Minor & Info
+
+### [F-001] Stale /connect description in the shell.test.ts contract header
+- **Severity**: minor
+- **File**: src/commands/shell.test.ts (header comment, around lines 92-98)
+- **Problem**: The edited bullet says /connect calls the selector with `onlyConnected: true` but still describes 'a full re-detection/pick across all providers', and a later bullet still says /connect 'writes STATIC guidance'.
+- **Fix**: One consistent bullet for /connect (connected-only selector); drop the static-guidance bullet.
+
+### [F-002] CHANGELOG names `/providers` and calls the Telegram surface a modal
+- **Severity**: minor
+- **File**: CHANGELOG.md:11, CHANGELOG.md:14
+- **Problem**: No `/providers` command existed; the removed one is `/provider`. Telegram gets buttons, not a modal.
+- **Fix**: Name `/provider` and say 'Add provider button' for Telegram.
+
+### [F-003] Docs rewordings made only to satisfy the AC10 pattern
+- **Severity**: info
+- **File**: docs/docs/harness.md:38, docs/docs/hooks.md:766
+- **Problem**: A repo path and 'sink/provider' were reworded because `/provider\b` matches them. Reason inferred, not recorded in the diff.
+- **Fix**: Anchor the invariant pattern and restore the path, or record the reason in the journal.
+
+## Positive Notes
+- Test titles and the `/connect` rewrites in agent-commands, shell and subscription tests track the behaviour change instead of only swapping the string.
+- The removed command is tested with a `removedCommandHint` case plus a runShell case that asserts no selector call and no model turn.
+- README, cli-reference and onboarding describe the two tabs with the same labels (Connected, Add provider) and the same keys.

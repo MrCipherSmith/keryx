@@ -1,0 +1,1326 @@
+--- src/tui/connect-modal.test.ts
+@@ 1,773 @@
++// flow 471: `/connect` is ONE "Providers" dialog with two tabs, "Connected" and
++// "Add provider" (AC2, AC4, AC5, AC6, AC7, AC11). Every test mounts the real
++// `selectProviderModelInTui` inside the real shell chrome (so the dialog is a
++// ModalHost modal, not the bare-renderer overlay), with an injected fetch/env
++// and a temp config dir — never the real home and never the network.
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { commandsForMode } from "../commands/agent-commands";
++import type { DetectedProvider } from "../commands/select";
++import { loadShellConfig, saveApiKey, shellConfigPath } from "../lib/shell-config";
++import { createShellChrome, type ShellChrome } from "./shell-chrome";
++import { selectProviderModelInTui } from "./tui-shell";
++
++async function loadOpenTui(): Promise<{
++  core: typeof import("@opentui/core");
++  testing: typeof import("@opentui/core/testing");
++} | undefined> {
++  try {
++    // SEQUENTIAL, never `Promise.all` — see `shell-chrome.test.ts`'s own loader.
++    const core = await import("@opentui/core");
++    const testing = await import("@opentui/core/testing");
++    return { core, testing };
++  } catch {
++    return undefined;
++  }
++}
++
++type OtuiBundle = NonNullable<Awaited<ReturnType<typeof loadOpenTui>>>;
++type TestSetup = Awaited<ReturnType<OtuiBundle["testing"]["createTestRenderer"]>>;
++type Mounted = TestSetup & { chrome: ShellChrome; destroy: () => void };
++
++const OTUI = await loadOpenTui();
++const otuiTest = test.skipIf(OTUI === undefined);
++
++function requireOtui(): OtuiBundle {
++  if (OTUI === undefined) {
++    throw new Error("unreachable: otuiTest skips without @opentui/core");
++  }
++  return OTUI;
++}
++
++const ESC_PARSER_TIMEOUT_MS = 50;
++
++async function mountChrome(otui: OtuiBundle, size: { width: number; height: number } = { width: 120, height: 40 }): Promise<Mounted> {
++  const setup = await otui.testing.createTestRenderer(size);
++  const chrome = await createShellChrome(otui.core, setup.renderer, {
++    title: "keryx · chrome",
++    status: "s/m",
++    footerHint: "/ commands",
++    placeholder: "ask keryx",
++    commands: commandsForMode("agent"),
++  });
++  await setup.flush();
++  return {
++    ...setup,
++    chrome,
++    destroy: () => {
++      chrome.destroy();
++      setup.renderer.destroy();
++    },
++  };
++}
++
++async function pressEscape(h: TestSetup): Promise<void> {
++  h.mockInput.pressEscape();
++  await new Promise((resolve) => setTimeout(resolve, ESC_PARSER_TIMEOUT_MS * 3));
++  await h.flush();
++}
++
++/** Wait for a frame matching `predicate` against a wall-clock deadline (not a render-pass count). */
++async function waitFor(h: TestSetup, predicate: (frame: string) => boolean, deadlineMs = 5_000): Promise<string> {
++  const until = Date.now() + deadlineMs;
++  for (;;) {
++    await h.flush();
++    const frame = h.captureCharFrame();
++    if (predicate(frame) || Date.now() >= until) return frame;
++    await new Promise((resolve) => setTimeout(resolve, 15));
++  }
++}
++
++/** Zero-based `{ row, col }` of `needle` within the frame LINE containing `rowNeedle` (col + 1: inside the text). */
++function locate(frame: string, rowNeedle: string, needle: string): { row: number; col: number } {
++  const lines = frame.split("\n");
++  const row = lines.findIndex((line) => line.includes(rowNeedle));
++  if (row < 0) return { row: -1, col: -1 };
++  const col = lines[row]!.indexOf(needle);
++  return { row, col: col < 0 ? -1 : col + 1 };
++}
++
++const DEEPSEEK: DetectedProvider = { name: "deepseek", label: "DeepSeek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY" };
++const GROQ: DetectedProvider = { name: "groq", label: "Groq", models: ["llama-3.3-70b-versatile"], envKey: "GROQ_API_KEY" };
++const ENV_KEYS = ["DEEPSEEK_API_KEY", "GROQ_API_KEY"] as const;
++const SECRET = "sk-flow471-SECRET-0123456789";
++
++/** Counts calls and answers a live two-model list, whatever the credential. */
++function countingFetch(): { fetchFn: typeof fetch; calls: () => number } {
++  let n = 0;
++  const fetchFn = (async () => {
++    n += 1;
++    return { ok: true, json: async () => ({ data: [{ id: "m1" }, { id: "m2" }] }) } as Response;
++  }) as unknown as typeof fetch;
++  return { fetchFn, calls: () => n };
++}
++
++let configDir: string;
++const savedEnv: Record<string, string | undefined> = {};
++
++beforeEach(() => {
++  configDir = mkdtempSync(join(tmpdir(), "keryx-connect-modal-"));
++  for (const k of ENV_KEYS) {
++    savedEnv[k] = process.env[k];
++    delete process.env[k];
++  }
++});
++
++afterEach(() => {
++  for (const k of ENV_KEYS) {
++    if (savedEnv[k] === undefined) delete process.env[k];
++    else process.env[k] = savedEnv[k];
++  }
++  rmSync(configDir, { recursive: true, force: true });
++});
++
++/** Seed a saved key so a provider counts as connected without touching process.env. */
++function seedConnected(...providers: DetectedProvider[]): void {
++  for (const p of providers) saveApiKey(p.envKey!, "sk-seeded", configDir);
++}
++
++describe("AC2 — one Providers dialog with two tabs", () => {
++  otuiTest("opens on Connected when something is connected; digits, Tab and the mouse switch tabs", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      let frame = await waitFor(h, (f) => f.includes("[Disconnect]"));
++      expect(h.renderer.root.findDescendantById("modal-backdrop")?.visible).toBe(true);
++      expect(frame).toContain("Providers");
++      expect(frame).toContain("Connected");
++      expect(frame).toContain("Add provider");
++      expect(frame).toContain("[Test]");
++      expect(frame).not.toContain("Groq"); // not connected: only on the Add tab
++
++      await h.mockInput.pressKeys(["2"]);
++      frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      expect(frame).toContain("Groq");
++
++      await h.mockInput.pressKeys(["1"]);
++      frame = await waitFor(h, (f) => f.includes("[Disconnect]"));
++      expect(frame).not.toContain("Add custom provider");
++
++      h.mockInput.pressTab(); // cycles to the next tab
++      frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressTab(); // and wraps
++      frame = await waitFor(h, (f) => f.includes("[Disconnect]"));
++
++      // Clicking the tab strip switches too (the second occurrence is the tab, the first the button).
++      const lines = frame.split("\n");
++      const row = lines.findIndex((l) => l.includes("Providers")) + 1;
++      const tabRow = lines.findIndex((l, i) => i >= row - 1 && l.includes("Connected") && l.includes("Add provider"));
++      expect(tabRow).toBeGreaterThanOrEqual(0);
++      const col = lines[tabRow]!.lastIndexOf("Add provider");
++      await h.mockMouse.click(col + 1, tabRow);
++      frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      expect(frame).toContain("[Connect]");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("opens on Add provider when nothing is connected, with no toast and no network call", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      const frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      expect(frame).toContain("[Connect]");
++      expect(frame).toContain("DeepSeek");
++      expect(frame).not.toContain("No connected providers");
++      expect(frame).not.toContain("[Disconnect]");
++      expect(calls()).toBe(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++      expect(h.chrome.overlayActive()).toBe(false);
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("disconnecting the last connected provider moves to the Add tab", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("[Disconnect]"));
++      h.mockInput.pressArrow("right");
++      h.mockInput.pressArrow("right"); // Label -> Test -> Disconnect
++      await h.flush();
++      h.mockInput.pressEnter(); // arm
++      await waitFor(h, (f) => f.includes("disconnect 'DeepSeek'?"));
++      h.mockInput.pressEnter(); // confirm
++      const frame = await waitFor(h, (f) => f.includes("No providers connected"));
++      expect(frame).toContain("Add custom provider");
++      expect(loadShellConfig(configDir).apiKeys?.DEEPSEEK_API_KEY).toBeUndefined();
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++});
++
++describe("AC4 — the [Add provider] button, by mouse and by keyboard", () => {
++  otuiTest("clicking [Add provider] opens the Add tab", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      const frame = await waitFor(h, (f) => f.includes("[Add provider]"));
++      const button = locate(frame, "[Add provider]", "[Add provider]");
++      expect(button.col).toBeGreaterThan(0);
++      await h.mockMouse.click(button.col, button.row);
++      const added = await waitFor(h, (f) => f.includes("Add custom provider"));
++      expect(added).toContain("Groq");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("the a key opens the Add tab", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("[Disconnect]"));
++      await h.mockInput.pressKeys(["a"]);
++      const added = await waitFor(h, (f) => f.includes("Add custom provider"));
++      expect(added).toContain("Groq");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++});
++
++describe("AC5 — the Add tab lists every provider with [Connect] and [Test]", () => {
++  otuiTest("each provider and the custom entry get their buttons; Test with no credential makes no request", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      let frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      for (const label of ["DeepSeek", "Groq"]) {
++        expect(locate(frame, label, "[Connect]").col).toBeGreaterThan(0);
++        expect(locate(frame, label, "[Test]").col).toBeGreaterThan(0);
++      }
++      expect(locate(frame, "Add custom provider", "[Connect]").col).toBeGreaterThan(0);
++
++      const test = locate(frame, "DeepSeek", "[Test]");
++      await h.mockMouse.click(test.col, test.row);
++      frame = await waitFor(h, (f) => f.includes("no credential, Connect first"));
++      expect(frame).toContain("no credential, Connect first");
++      expect(calls()).toBe(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++      expect(calls()).toBe(0);
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("Right moves the row action from Connect to Test; Enter then runs the check without a request", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressArrow("right");
++      await h.flush();
++      h.mockInput.pressEnter();
++      const frame = await waitFor(h, (f) => f.includes("no credential, Connect first"));
++      expect(frame).toContain("no credential, Connect first");
++      expect(calls()).toBe(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++});
++
++describe("AC6, AC7 — [Connect] saves, checks /models, returns to Connected and never switches the session", () => {
++  otuiTest("a pasted key is saved 0600, /models is checked, the Connected tab lists it, and no frame ever shows the key", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const seen: string[] = [];
++    const fetchFn = (async (_input: RequestInfo | URL, init?: RequestInit) => {
++      const auth = new Headers(init?.headers).get("authorization") ?? "";
++      if (auth !== `Bearer ${SECRET}`) return { ok: false, status: 401, text: async () => "" } as Response;
++      return { ok: true, json: async () => ({ data: [{ id: "m1" }, { id: "m2" }] }) } as Response;
++    }) as unknown as typeof fetch;
++    const snap = async (predicate: (f: string) => boolean): Promise<string> => {
++      const frame = await waitFor(h, predicate);
++      seen.push(frame);
++      return frame;
++    };
++    let settled = false;
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      void pending.then(() => {
++        settled = true;
++      });
++      await snap((f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter(); // [Connect] is the default action
++      const keyStep = await snap((f) => f.includes("API key"));
++      expect(keyStep).toContain("DeepSeek");
++
++      // The key step shows what is being typed (the field is the one place it
++      // is visible); every frame AFTER Enter must be free of it.
++      await h.mockInput.typeText(SECRET);
++      await h.flush();
++      h.mockInput.pressEnter();
++
++      const frame = await snap((f) => f.includes("connected —") && f.includes("[Disconnect]"));
++      expect(frame).toContain("DeepSeek connected — 2 model(s)");
++      expect(frame).toContain("[Test]");
++      expect(frame).toContain("[Add provider]");
++      expect(settled).toBe(false); // the session was not switched; the dialog is still open
++
++      // Saved owner-only, in the temp dir, and in exactly one place.
++      expect(loadShellConfig(configDir).apiKeys?.DEEPSEEK_API_KEY).toBe(SECRET);
++      expect(statSync(shellConfigPath(configDir)).mode & 0o777).toBe(0o600);
++      const stored = readFileSync(shellConfigPath(configDir), "utf8");
++      expect(stored.split(SECRET).length - 1).toBe(1);
++
++      // Once the step is left, the key is on no frame the operator sees.
++      for (const f of seen) expect(f).not.toContain(SECRET);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++      expect(settled).toBe(true);
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("a rejected key shows the reason, asks again, and the second key connects", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const fetchFn = (async (_input: RequestInfo | URL, init?: RequestInit) => {
++      const auth = new Headers(init?.headers).get("authorization") ?? "";
++      if (auth !== `Bearer ${SECRET}`) return { ok: false, status: 401, text: async () => "" } as Response;
++      return { ok: true, json: async () => ({ data: [{ id: "m1" }] }) } as Response;
++    }) as unknown as typeof fetch;
++    const frames: string[] = [];
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("API key"));
++      await h.mockInput.typeText("sk-wrong-key");
++      h.mockInput.pressEnter();
++      const retry = await waitFor(h, (f) => f.includes("rejected the credential"));
++      frames.push(retry);
++      expect(retry).toContain("API key");
++
++      await h.mockInput.typeText(SECRET);
++      h.mockInput.pressEnter();
++      const done = await waitFor(h, (f) => f.includes("connected —") && f.includes("[Disconnect]"));
++      frames.push(done);
++      expect(done).toContain("DeepSeek connected — 1 model(s)");
++      for (const f of frames) {
++        expect(f).not.toContain(SECRET);
++        expect(f).not.toContain("sk-wrong-key");
++      }
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("Esc at the key step returns to the Add tab and saves nothing", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("API key"));
++      await h.mockInput.typeText("sk-typed-then-abandoned");
++
++      await pressEscape(h);
++      const frame = await waitFor(h, (f) => f.includes("Add custom provider") && !f.includes("API key"));
++      expect(frame).toContain("[Connect]");
++      expect(frame).not.toContain("sk-typed-then-abandoned");
++      expect(loadShellConfig(configDir).apiKeys?.DEEPSEEK_API_KEY).toBeUndefined();
++      expect(calls()).toBe(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("a connected provider's [Connect] on the Add tab skips the key step it does not need", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("[Disconnect]"));
++      await h.mockInput.pressKeys(["2"]);
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      const frame = await waitFor(h, (f) => f.includes("connected —") && f.includes("[Disconnect]"));
++      expect(frame).toContain("DeepSeek connected — 2 model(s)");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++});
++
++/** Everything outside the frame that a key could reach while the dialog runs: toasts, header, status, title. */
++function spyOnChrome(chrome: ShellChrome): string[] {
++  const seen: string[] = [];
++  for (const name of ["showToast", "setStatus", "setHeaderMeta", "setTitle"] as const) {
++    const original = chrome[name].bind(chrome);
++    (chrome as unknown as Record<string, (text: string) => void>)[name] = (text: string) => {
++      seen.push(text);
++      original(text);
++    };
++  }
++  return seen;
++}
++
++/** Every piece of text the transcript box holds, walked from its nodes. */
++function transcriptText(chrome: ShellChrome): string {
++  const parts: string[] = [];
++  const walk = (node: unknown): void => {
++    if (node === null || typeof node !== "object") return;
++    const candidate = node as { plainText?: unknown; content?: unknown; getChildren?: () => unknown[] };
++    if (typeof candidate.plainText === "string") parts.push(candidate.plainText);
++    if (typeof candidate.content === "string") parts.push(candidate.content);
++    for (const child of candidate.getChildren?.() ?? []) walk(child);
++  };
++  walk(chrome.transcript);
++  return parts.join("\n");
++}
++
++/** Wait for the dialog's first frame and make sure the Add tab is showing (it opens on Connected when something is connected). */
++async function showAddTab(h: TestSetup): Promise<string> {
++  const first = await waitFor(h, (f) => f.includes("Add custom provider") || f.includes("[Disconnect]") || f.includes("[Add provider]"));
++  if (first.includes("Add custom provider")) return first;
++  await h.mockInput.pressKeys(["a"]);
++  return waitFor(h, (f) => f.includes("Add custom provider"));
++}
++
++const DEEPSEEK_AT_URL: DetectedProvider = { ...DEEPSEEK, baseUrl: "https://api.deepseek.com" };
++const COPILOT: DetectedProvider = { name: "github-copilot", label: "GitHub Copilot", models: ["gpt-4o"] };
++
++describe("review round 2 — the Add tab's other paths", () => {
++  otuiTest("a skipped key step does not connect a provider that needs a key", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("API key"));
++      h.mockInput.pressEnter(); // empty Enter = skip
++      const frame = await waitFor(h, (f) => f.includes("no key entered"));
++      expect(frame).toContain("DeepSeek: no key entered");
++      expect(frame).toContain("Add custom provider");
++      expect(frame).not.toContain("connected —");
++      expect(loadShellConfig(configDir).apiKeys?.DEEPSEEK_API_KEY).toBeUndefined();
++      expect(calls()).toBe(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("[Test] on the Add tab with a stored credential says ok with the model count", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("[Disconnect]"));
++      await h.mockInput.pressKeys(["a"]);
++      const frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      const test = locate(frame, "DeepSeek", "[Test]");
++      await h.mockMouse.click(test.col, test.row);
++      const done = await waitFor(h, (f) => f.includes("ok — 2 model(s)"));
++      expect(done).toContain("ok — 2 model(s)");
++      expect(calls()).toBeGreaterThan(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("[Test] on the Add tab shows the failure line when the provider refuses the credential", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const fetchFn = (async () => ({ ok: false, status: 401, text: async () => "" }) as Response) as unknown as typeof fetch;
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      const frame = await showAddTab(h);
++      const test = locate(frame, "DeepSeek", "[Test]");
++      await h.mockMouse.click(test.col, test.row);
++      const done = await waitFor(h, (f) => f.includes("rejected the credential"));
++      expect(done).toContain("rejected the credential (HTTP 401)");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("Esc at the base-URL step returns to the Add tab and saves nothing", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn, calls } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK_AT_URL], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await showAddTab(h);
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("endpoint URL"));
++      await h.mockInput.typeText("-edited");
++
++      await pressEscape(h);
++      const frame = await waitFor(h, (f) => f.includes("Add custom provider") && !f.includes("endpoint URL"));
++      expect(frame).toContain("[Connect]");
++      expect(loadShellConfig(configDir).baseUrls?.deepseek).toBeUndefined();
++      expect(calls()).toBe(0);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("Esc at the device-login step returns to the Add tab and saves nothing", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const hanging = (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch;
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [COPILOT], { onlyConnected: true, fetch: hanging, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("Device login"));
++
++      await pressEscape(h);
++      const frame = await waitFor(h, (f) => f.includes("Add custom provider") && !f.includes("Device login"));
++      expect(frame).toContain("[Connect]");
++      expect(frame).not.toContain("connected —");
++      expect(readdirSync(configDir)).toEqual([]);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("Esc in the custom-provider wizard returns to the Add tab and saves nothing", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressArrow("down");
++      await h.flush();
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("Provider name"));
++      await h.mockInput.typeText("half-typed");
++
++      await pressEscape(h);
++      const frame = await waitFor(h, (f) => f.includes("Add custom provider") && !f.includes("Provider name"));
++      expect(frame).not.toContain("half-typed");
++      expect(readdirSync(configDir)).toEqual([]);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("an endpoint that cannot be reached re-opens the URL step with the reason, and a corrected URL connects", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const fetchFn = (async (input: RequestInfo | URL) => {
++      if (!String(input).includes("good")) throw new Error("connect ECONNREFUSED");
++      return { ok: true, json: async () => ({ data: [{ id: "m1" }] }) } as Response;
++    }) as unknown as typeof fetch;
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK_AT_URL], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await showAddTab(h);
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("endpoint URL"));
++      h.mockInput.pressEnter(); // keep the default; it cannot be reached
++      const retry = await waitFor(h, (f) => f.includes("could not be reached"));
++      expect(retry).toContain("endpoint URL");
++
++      await h.mockInput.typeText("/good");
++      h.mockInput.pressEnter();
++      const done = await waitFor(h, (f) => f.includes("connected —") || f.includes("could not"));
++      expect(done).toContain("DeepSeek connected — 1 model(s)");
++      expect(loadShellConfig(configDir).baseUrls?.deepseek).toContain("good");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("a Connect that ends in an error shows the reason on the Add tab and lists nothing as connected", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const fetchFn = (async () => ({ ok: false, status: 500, text: async () => "" }) as Response) as unknown as typeof fetch;
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("API key"));
++      await h.mockInput.typeText(SECRET);
++      h.mockInput.pressEnter();
++      const frame = await waitFor(h, (f) => f.includes("could not list models"));
++      expect(frame).toContain("DeepSeek could not list models (HTTP 500)");
++      expect(frame).toContain("Add custom provider");
++      expect(frame).not.toContain("connected —");
++      expect(frame).not.toContain(SECRET);
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("Enter on a Connected row picks the provider, then a model, and resolves that selection", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("[Disconnect]"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("m1") && f.includes("m2"));
++      h.mockInput.pressEnter();
++      const selection = await pending;
++      expect(selection?.provider).toBe("deepseek");
++      expect(["m1", "m2"]).toContain(selection?.model ?? "");
++    } finally {
++      h.destroy();
++    }
++  });
++
++  otuiTest("the typed key is on no channel the shell shows: frames, toasts, header, status or transcript", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui);
++    const channels = spyOnChrome(h.chrome);
++    const fetchFn = (async (_input: RequestInfo | URL, init?: RequestInit) => {
++      const auth = new Headers(init?.headers).get("authorization") ?? "";
++      if (auth !== `Bearer ${SECRET}`) return { ok: false, status: 401, text: async () => "" } as Response;
++      return { ok: true, json: async () => ({ data: [{ id: "m1" }] }) } as Response;
++    }) as unknown as typeof fetch;
++    const frames: string[] = [];
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      await waitFor(h, (f) => f.includes("Add custom provider"));
++      h.mockInput.pressEnter();
++      await waitFor(h, (f) => f.includes("API key"));
++      await h.mockInput.typeText(SECRET);
++      h.mockInput.pressEnter();
++      frames.push(await waitFor(h, (f) => f.includes("connected —") && f.includes("[Disconnect]")));
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++      frames.push(await waitFor(h, () => true));
++
++      for (const frame of frames) expect(frame).not.toContain(SECRET);
++      for (const text of channels) expect(text).not.toContain(SECRET);
++      expect(transcriptText(h.chrome)).not.toContain(SECRET);
++      expect(existsSync(configDir)).toBe(true);
++    } finally {
++      h.destroy();
++    }
++  });
++});
++
++describe("AC11 — the dialog and its footer fit 80x24", () => {
++  const FIT = { width: 80, height: 24 };
++
++  otuiTest("both tabs keep the whole panel on screen and the footer lists the active tab's keys", async () => {
++    const otui = requireOtui();
++    const h = await mountChrome(otui, FIT);
++    const { fetchFn } = countingFetch();
++    seedConnected(DEEPSEEK, GROQ);
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.chrome, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
++      let frame = await waitFor(h, (f) => f.includes("[Disconnect]"));
++      const panel = h.renderer.root.findDescendantById("modal-panel") as { x: number; y: number; width: number; height: number };
++      expect(panel.y).toBeGreaterThanOrEqual(0);
++      expect(panel.y + panel.height).toBeLessThanOrEqual(FIT.height);
++      expect(panel.x + panel.width).toBeLessThanOrEqual(FIT.width);
++      expect(frame).toContain("DeepSeek");
++      expect(frame).toContain("Groq");
++      expect(frame).toContain("Enter run"); // the Connected footer's own keys
++      expect(frame).toContain("a add");
++
++      await h.mockInput.pressKeys(["2"]);
++      frame = await waitFor(h, (f) => f.includes("Add custom provider"));
++      const after = h.renderer.root.findDescendantById("modal-panel") as { y: number; height: number };
++      expect(after.y + after.height).toBeLessThanOrEqual(FIT.height);
++      expect(frame).toContain("Enter run");
++      expect(frame).toContain("←/→ Connect/Test"); // the Add footer names its own keys
++      expect(frame).not.toContain("a add");
++      expect(frame).toContain("[Connect]");
++
++      await pressEscape(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.destroy();
++    }
++  });
++});
+
+--- src/tui/connect-provider-buttons.test.ts
+@@ 545,585 @@
+         h.renderer.destroy();
+       }
+     } finally {
+       applyThemeId(previous);
+     }
+   });
+ });
+ 
+ // AC7's session-side half (the `/connect` command handler comparing the
+ // disconnected name against the CURRENT session's provider and printing a
+ // system line) lives inside `launchTuiAgentShell`'s giant closure, which no
+ // test in this file mounts end-to-end — same reason `tui-shell.test.ts`'s own
+ // SLATE-3a/SLATE-3b/AC7 describe blocks (see `readFileSync`d source audits
+ // there) read the source rather than driving the full interactive shell. The
+ // STEP's own contract — `onDisconnected` fires with the right name, exactly
+ // once, only on a CONFIRMED disconnect — is proven above (AC4's second case).
+ // This audits only that the command handler actually wires that callback to
+ // the session comparison and the system line the operator was promised.
+ describe("AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit)", () => {
+   const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+-  const handlerStart = tuiSource.indexOf('if (command.name === "/connect" || command.name === "/provider")');
++  const handlerStart = tuiSource.indexOf('if (command.name === "/connect")');
+   const handlerBody = tuiSource.slice(handlerStart, handlerStart + 2500);
+ 
+   test("onDisconnected compares the disconnected name against the session's OWN provider", () => {
+     expect(handlerBody).toContain("onDisconnected: (name, sharedWith) => {");
+     expect(handlerBody).toContain("if (name === currentSel.provider) {");
+   });
+ 
+   test("the system line names 'already-loaded credential' and how to move on", () => {
+     expect(handlerBody).toContain("already-loaded credential");
+     expect(handlerBody).toContain("/connect another provider or restart");
+     expect(handlerBody).toContain("io.onSystem?.(");
+   });
+ 
+   // flow 304 review finding #2: the result must ALSO name every provider a
+   // shared env var affected (e.g. built-in zai/zai-coding sharing ZAI_API_KEY).
+   test("the result also reports sharedWith to the operator", () => {
+     expect(handlerBody).toContain("if (sharedWith.length > 0) {");
+     expect(handlerBody).toContain("this also disconnected");
+   });
+ 
+
+--- src/tui/modal-host.test.ts
+@@ 307,379 @@
+   });
+   await h.flush();
+   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
+   const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
+   expect(panel.width).toBe(sized.width);
+   expect(panel.height).toBe(sized.height);
+   const first = { width: panel.width, height: panel.height };
+   h.mockInput.pressArrow("right");
+   await h.flush();
+   const after = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
+   expect(after.width).toBe(first.width);
+   expect(after.height).toBe(first.height);
+   const frame = h.captureCharFrame();
+   expect(frame).toContain("/status");
+   expect(frame).toContain("[x] esc");
+   expect(frame).toContain(formatModalFooter([{ key: "c", label: "copy id" }, { key: "esc", label: "close" }]));
+   handle?.close();
+   h.destroy();
+ });
+ 
++otuiTest("footerFor shows each tab's own footer, and falls back to footer when it returns undefined", async () => {
++  const otui = requireOtui();
++  const h = await mountChrome(otui);
++  const connected = [{ key: "a", label: "add" }, { key: "esc", label: "close" }];
++  const add = [{ key: "1", label: "connected" }, { key: "esc", label: "close" }];
++  const fallback = [{ key: "q", label: "fallback" }];
++  const handle = openModal(otui.core, h.chrome, {
++    title: "Providers",
++    tabs: [
++      { id: "connected", label: "Connected" },
++      { id: "add", label: "Add provider" },
++      { id: "other", label: "Other" },
++    ],
++    renderTab: () => {},
++    footer: fallback,
++    footerFor: (tabId) => (tabId === "connected" ? connected : tabId === "add" ? add : undefined),
++  });
++  await h.flush();
++  expect(h.captureCharFrame()).toContain(formatModalFooter(connected));
++  expect(h.captureCharFrame()).not.toContain(formatModalFooter(add));
++
++  handle?.setTab("add");
++  await h.flush();
++  expect(h.captureCharFrame()).toContain(formatModalFooter(add));
++  expect(h.captureCharFrame()).not.toContain(formatModalFooter(connected));
++
++  handle?.setTab("other");
++  await h.flush();
++  expect(h.captureCharFrame()).toContain(formatModalFooter(fallback));
++  handle?.close();
++  h.destroy();
++});
++
+ otuiTest("x closes the modal the same as Esc", async () => {
+   const otui = requireOtui();
+   const h = await mountChrome(otui, { width: 90, height: 24 });
+   let closed = 0;
+   openModal(otui.core, h.chrome, {
+     title: "Inspector",
+     tabs: [{ id: "info", label: "Info" }],
+     renderTab: () => {},
+     onClose: () => {
+       closed += 1;
+     },
+   });
+   await h.flush();
+   await h.mockInput.pressKeys(["x"]);
+   await h.flush();
+   expect(closed).toBe(1);
+   expect(h.chrome.overlayActive()).toBe(false);
+   h.destroy();
+ });
+ 
+
+--- src/tui/model-picker-notice.test.ts
+@@ 1,21 @@
+-// "(no models found)" was the only thing `/provider` could say.
++// "(no models found)" was the only thing the old /provider (now /connect) could say.
+ //
+ // The operator picked a provider, was asked nothing, and got an empty list.
+ // What had actually happened was that `api.x.ai` answered 403 — the stored
+ // grok login had expired — and the picker had no vocabulary for that. Worse,
+ // the dead value in `env` was itself the reason the key step never ran: the
+ // wizard asked for a credential only when it held none, so the one credential
+ // that needed replacing was the one it would never ask about.
+ //
+ // This file pins both halves: the picker SAYS why it is empty, and a refused
+ // credential re-opens the key step carrying the provider's own words.
+ 
+ import { describe, expect, test } from "bun:test";
+ import { mkdtemp, rm } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+ import type { DetectedProvider } from "../commands/select";
+ import { modelPickerNotice, pickModelInTui, selectProviderModelInTui } from "./tui-shell";
+ 
+ // Same module-cycle-safe load + hard skip as `tui-shell.test.ts`: an absent
+ // optional native dependency must SKIP (which CI fails on) rather than pass.
+
+--- src/tui/provider-endpoint-retry.test.ts
+@@ 1,21 @@
+-// A typo'd endpoint was a dead end in `/provider`.
++// A typo'd endpoint was a dead end in the old /provider (now /connect).
+ //
+ // The operator edited the base URL, got it slightly wrong, and the picker
+ // answered with an empty model list and no way back to the URL step: the only
+ // exits were Esc (losing the provider choice) or picking nothing. The endpoint
+ // is the operator's own input and the one thing they can fix on the spot, so
+ // the picker now re-opens that step carrying the provider's own words.
+ //
+ // The discipline this file pins is NOT "retry on any empty list" — that was the
+ // original shape of this fix, and it would now fire on a refused credential
+ // (which the key step handles) and on a provider that honestly has no models
+ // (where the URL is already right). `endpointMayBeAtFault` draws that line and
+ // the tests below hold it from both sides.
+ 
+ import { describe, expect, test } from "bun:test";
+ import { mkdtemp, rm } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+ import type { DetectedProvider } from "../commands/select";
+ import { endpointMayBeAtFault, selectProviderModelInTui } from "./tui-shell";
+ 
+
+--- src/tui/provider-probe.test.ts
+@@ 1,38 @@
++// Flow 471: the [Test] probe shared by the Add provider tab and Telegram's /connect.
++
++import { describe, expect, it } from "bun:test";
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { probeProviderConnection } from "./tui-shell";
++
++describe("probeProviderConnection", () => {
++  it("answers no-credential without any network call when a key provider has no key", async () => {
++    const dir = mkdtempSync(join(tmpdir(), "keryx-probe-"));
++    try {
++      let calls = 0;
++      const outcome = await probeProviderConnection("openai", {
++        configDir: dir,
++        env: {},
++        requireCredential: true,
++        fetch: (async () => {
++          calls += 1;
++          throw new Error("must not be called");
++        }) as unknown as typeof fetch,
++      });
++      expect(outcome).toEqual({ kind: "no-credential" });
++      expect(calls).toBe(0);
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++
++  it("answers unknown for a name nobody registered", async () => {
++    const dir = mkdtempSync(join(tmpdir(), "keryx-probe-"));
++    try {
++      expect(await probeProviderConnection("no-such-provider", { configDir: dir, env: {}, requireCredential: true })).toEqual({ kind: "unknown" });
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++});
+
+--- src/tui/queue-nav.test.ts
+@@ 1,46 @@
+ import { expect, test } from "bun:test";
+-import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
++import { clampQueueNavIndex, stepAddNavAction, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+ 
+ test("stepQueueNavIndex moves up/down and wraps at both ends", () => {
+   expect(stepQueueNavIndex(1, 3, "up")).toBe(0);
+   expect(stepQueueNavIndex(0, 3, "up")).toBe(2); // wraps to the tail
+   expect(stepQueueNavIndex(1, 3, "down")).toBe(2);
+   expect(stepQueueNavIndex(2, 3, "down")).toBe(0); // wraps to the head
+ });
+ 
+ test("stepQueueNavIndex is always 0 for an empty queue", () => {
+   expect(stepQueueNavIndex(0, 0, "up")).toBe(0);
+   expect(stepQueueNavIndex(5, 0, "down")).toBe(0);
+ });
+ 
+ test("clampQueueNavIndex keeps the selection inside a shrunk range", () => {
+   expect(clampQueueNavIndex(2, 3)).toBe(2); // already in range: unchanged
+   expect(clampQueueNavIndex(5, 3)).toBe(2); // was pointing past the new end
+   expect(clampQueueNavIndex(-1, 3)).toBe(0);
+   expect(clampQueueNavIndex(0, 0)).toBe(0); // empty queue
+ });
+ 
+ test("stepQueueNavAction cycles force -> edit -> delete -> force and back", () => {
+   expect(stepQueueNavAction("force", "right")).toBe("edit");
+   expect(stepQueueNavAction("edit", "right")).toBe("delete");
+   expect(stepQueueNavAction("delete", "right")).toBe("force"); // wraps
+   expect(stepQueueNavAction("force", "left")).toBe("delete"); // wraps the other way
+   expect(stepQueueNavAction("edit", "left")).toBe("force");
+ });
+ 
+ // flow 304 AC3: /connect's row-nav mode cycles Label -> Test -> Disconnect.
+ test("stepConnectNavAction cycles label -> test -> disconnect -> label and back", () => {
+   expect(stepConnectNavAction("label", "right")).toBe("test");
+   expect(stepConnectNavAction("test", "right")).toBe("disconnect");
+   expect(stepConnectNavAction("disconnect", "right")).toBe("label"); // wraps
+   expect(stepConnectNavAction("label", "left")).toBe("disconnect"); // wraps the other way
+   expect(stepConnectNavAction("test", "left")).toBe("label");
+ });
++
++// flow 471: the Add provider tab alternates Connect <-> Test in either direction.
++test("stepAddNavAction toggles connect and test in both directions", () => {
++  expect(stepAddNavAction("connect", "right")).toBe("test");
++  expect(stepAddNavAction("test", "right")).toBe("connect");
++  expect(stepAddNavAction("connect", "left")).toBe("test");
++  expect(stepAddNavAction("test", "left")).toBe("connect");
++});
+
+--- src/tui/remote-provider-hooks.test.ts
+@@ 1,241 @@
++// Flow 471 (AC8, review F-001, F-002, F-003, F-007): the provider hooks Telegram's /connect calls.
++// Everything they return is sent to a chat, so these tests feed them the dangerous inputs (a provider's
++// error text holding masked key fragments, a login failure holding a token) and look at what comes out.
++
++import { describe, expect, it } from "bun:test";
++import type { ModelsFailure } from "../commands/providers";
++import type { DeviceLoginInput, DeviceLoginResult } from "../lib/oauth/login";
++import { createConnectedProvidersCache, createRemoteDeviceLogin, NO_CREDENTIAL_TEXT, remoteFailureText, testProviderForRemote } from "./remote-provider-hooks";
++
++const MASKED = ["sk-proj-****abcd", "sk-ab...wxyz", "key ending in 1a2b3c"];
++const TOKEN = "gho_SECRETTOKENVALUE123";
++const DEVICE_CODE = "DEVICE-CODE-SECRET-9f8e7d";
++const CHALLENGE = { userCode: "WDJB-MJHT", verificationUri: "https://example.com/login/device" };
++
++function leaks(text: string): string[] {
++  return [...MASKED, TOKEN, DEVICE_CODE].filter((sample) => text.includes(sample));
++}
++
++describe("testProviderForRemote", () => {
++  it("says how many models a live provider reports", async () => {
++    const out = await testProviderForRemote("acme", { probe: async () => ({ kind: "live", modelCount: 4 }) });
++    expect(out).toEqual({ ok: true, message: "ok — 4 model(s)" });
++  });
++
++  it("answers an unknown provider and a missing credential in fixed words", async () => {
++    expect((await testProviderForRemote("x", { probe: async () => ({ kind: "unknown" }) })).ok).toBe(false);
++    expect(await testProviderForRemote("x", { probe: async () => ({ kind: "no-credential" }) })).toEqual({ ok: false, message: NO_CREDENTIAL_TEXT });
++  });
++
++  it("never relays a provider's own error text, whatever masked fragments it holds", async () => {
++    const failures: ModelsFailure[] = [
++      { kind: "rejected", status: 401, detail: `Incorrect API key provided: ${MASKED[0]}. ${MASKED[1]} ${MASKED[2]}` },
++      { kind: "http", status: 500, detail: `upstream said ${MASKED.join(" ")}` },
++      { kind: "unreachable", detail: `connect ECONNREFUSED ${MASKED.join(" ")}` },
++      { kind: "empty", detail: MASKED.join(" ") },
++    ] as ModelsFailure[];
++    for (const failure of failures) {
++      const out = await testProviderForRemote("acme", { probe: async () => ({ kind: "failed", failure }) });
++      expect(out.ok).toBe(false);
++      expect(leaks(out.message)).toEqual([]);
++      expect(out.message).not.toContain("Incorrect API key");
++    }
++  });
++
++  it("keeps the failure kind and the status", () => {
++    expect(remoteFailureText({ kind: "rejected", status: 401, detail: "x" } as ModelsFailure)).toBe("rejected the credential (HTTP 401)");
++    expect(remoteFailureText({ kind: "http", status: 503, detail: "x" } as ModelsFailure)).toBe("could not list models (HTTP 503)");
++    expect(remoteFailureText({ kind: "unreachable", detail: "x" } as ModelsFailure)).toBe("could not be reached");
++    expect(remoteFailureText({ kind: "empty", detail: "x" } as ModelsFailure)).toBe("reports no models");
++  });
++});
++
++function loginRig(
++  login: (input: DeviceLoginInput) => Promise<DeviceLoginResult>,
++  extra: { allows?: boolean; busy?: () => boolean; timeoutMs?: number } = {},
++) {
++  const applied: Array<string | undefined> = [];
++  const connected: string[] = [];
++  const notes: string[] = [];
++  const calls: DeviceLoginInput[] = [];
++  const hook = createRemoteDeviceLogin({
++    login: async (input) => {
++      calls.push(input);
++      return login(input);
++    },
++    fetch: (async () => new Response("{}")) as unknown as typeof fetch,
++    applyEnv: (dir) => {
++      applied.push(dir);
++    },
++    allows: () => extra.allows ?? true,
++    ...(extra.busy !== undefined ? { isBusy: extra.busy } : {}),
++    ...(extra.timeoutMs !== undefined ? { timeoutMs: extra.timeoutMs } : {}),
++    configDir: "/tmp/cfg",
++    onConnected: (id) => connected.push(id),
++  });
++  const notify = async (text: string) => {
++    notes.push(text);
++  };
++  return { hook, applied, connected, notes, calls, notify };
++}
++
++const SUCCESS = { ok: true } as unknown as DeviceLoginResult;
++
++describe("createRemoteDeviceLogin", () => {
++  it("notifies once with exactly the user code and the link, then applies the token", async () => {
++    const rig = loginRig(async (input) => {
++      input.onChallenge?.(CHALLENGE as never);
++      return SUCCESS;
++    });
++    const out = await rig.hook.connect("copilot", rig.notify);
++    await Promise.resolve();
++    expect(rig.notes).toEqual([`Open ${CHALLENGE.verificationUri} and enter the code ${CHALLENGE.userCode}`]);
++    expect(out.ok).toBe(true);
++    expect(rig.applied).toEqual(["/tmp/cfg"]);
++    expect(rig.connected).toEqual(["copilot"]);
++    expect(rig.calls[0]?.dir).toBe("/tmp/cfg");
++    expect(rig.hook.running).toBe(false);
++  });
++
++  it("refuses a provider without a device login in the catalog and starts no login", async () => {
++    const rig = loginRig(async () => SUCCESS, { allows: false });
++    const out = await rig.hook.connect("hosted", rig.notify);
++    expect(out.ok).toBe(false);
++    expect(rig.calls).toEqual([]);
++    expect(rig.applied).toEqual([]);
++  });
++
++  it("times out, says so, and saves and applies nothing", async () => {
++    const rig = loginRig(
++      (input) =>
++        new Promise<DeviceLoginResult>((_resolve, reject) => {
++          input.signal?.addEventListener("abort", () => reject(new Error(`aborted ${TOKEN}`)));
++        }),
++      { timeoutMs: 15 },
++    );
++    const out = await rig.hook.connect("copilot", rig.notify);
++    expect(out).toEqual({ ok: false, message: "Device login timed out; nothing was saved." });
++    expect(rig.applied).toEqual([]);
++    expect(rig.connected).toEqual([]);
++    expect(rig.hook.running).toBe(false);
++  });
++
++  it("answers a failed login in fixed words, with no error text, token or device code", async () => {
++    const failed = loginRig(async () => ({ ok: false, error: `denied ${TOKEN} ${DEVICE_CODE} ${MASKED.join(" ")}` }) as unknown as DeviceLoginResult);
++    const a = await failed.hook.connect("copilot", failed.notify);
++    expect(a).toEqual({ ok: false, message: "Device login failed. Try /connect in the shell." });
++    const thrown = loginRig(async () => {
++      throw new Error(`boom ${TOKEN} ${DEVICE_CODE} ${MASKED.join(" ")}`);
++    });
++    const b = await thrown.hook.connect("copilot", thrown.notify);
++    expect(b).toEqual({ ok: false, message: "Device login failed. Try /connect in the shell." });
++    for (const text of [a.message, b.message]) expect(leaks(text)).toEqual([]);
++    expect(failed.applied).toEqual([]);
++    expect(thrown.applied).toEqual([]);
++  });
++
++  it("allows one login at a time: a second Connect is answered, not started", async () => {
++    let release: (() => void) | undefined;
++    const rig = loginRig(
++      () =>
++        new Promise<DeviceLoginResult>((resolve) => {
++          release = () => resolve(SUCCESS);
++        }),
++    );
++    const first = rig.hook.connect("copilot", rig.notify);
++    expect(rig.hook.running).toBe(true);
++    const second = await rig.hook.connect("copilot", rig.notify);
++    expect(second).toEqual({ ok: false, message: "a device login is already running" });
++    expect(rig.calls.length).toBe(1);
++    release?.();
++    expect((await first).ok).toBe(true);
++    // Once it ended, a new one may start.
++    const third = rig.hook.connect("copilot", rig.notify);
++    release?.();
++    expect(rig.calls.length).toBe(2);
++    release?.();
++    await third;
++  });
++
++  it("does not apply the token when the shell became busy during the login", async () => {
++    let busy = false;
++    const rig = loginRig(
++      async () => {
++        busy = true;
++        return SUCCESS;
++      },
++      { busy: () => busy },
++    );
++    const out = await rig.hook.connect("copilot", rig.notify);
++    expect(out.ok).toBe(false);
++    expect(out.message).toContain("busy");
++    expect(rig.applied).toEqual([]);
++    expect(rig.connected).toEqual([]);
++  });
++
++  it("says so when the login succeeded but was aborted before the token could be applied", async () => {
++    let finish: (() => void) | undefined;
++    const rig = loginRig(
++      () =>
++        new Promise<DeviceLoginResult>((resolve) => {
++          finish = () => resolve(SUCCESS);
++        }),
++    );
++    const pending = rig.hook.connect("copilot", rig.notify);
++    rig.hook.abort();
++    finish?.();
++    const out = await pending;
++    expect(out).toEqual({ ok: false, message: "Signed in, but not applied to this session; run /connect again or restart." });
++    expect(rig.applied).toEqual([]);
++    expect(rig.connected).toEqual([]);
++  });
++
++  it("abort() ends a waiting login, saves nothing and says it was stopped", async () => {
++    const rig = loginRig(
++      (input) =>
++        new Promise<DeviceLoginResult>((_resolve, reject) => {
++          input.signal?.addEventListener("abort", () => reject(new Error("aborted")));
++        }),
++    );
++    const pending = rig.hook.connect("copilot", rig.notify);
++    rig.hook.abort();
++    expect(await pending).toEqual({ ok: false, message: "Device login was stopped; nothing was saved." });
++    expect(rig.applied).toEqual([]);
++    expect(rig.hook.running).toBe(false);
++  });
++});
++
++describe("createConnectedProvidersCache", () => {
++  it("loads once for a burst of calls, again after the window, and again after invalidate", async () => {
++    let clock = 0;
++    let loads = 0;
++    const cache = createConnectedProvidersCache(
++      async () => {
++        loads += 1;
++        return { detected: [{ name: "a" }], connected: [{ name: "a" }] };
++      },
++      { ttlMs: 15_000, now: () => clock },
++    );
++    await Promise.all([cache.get(), cache.get()]);
++    await cache.get();
++    expect(loads).toBe(1);
++    clock = 20_000;
++    await cache.get();
++    expect(loads).toBe(2);
++    cache.invalidate();
++    await cache.get();
++    expect(loads).toBe(3);
++  });
++
++  it("does not keep a failed load", async () => {
++    let loads = 0;
++    const cache = createConnectedProvidersCache(async () => {
++      loads += 1;
++      if (loads === 1) throw new Error("probe failed");
++      return { detected: [], connected: [] };
++    });
++    await expect(cache.get()).rejects.toThrow();
++    await cache.get();
++    expect(loads).toBe(2);
++  });
++});
+
+--- src/tui/wizard-modal.test.ts
+@@ 79,119 @@
+   expect(root.findDescendantById(overlayId)).toBeUndefined();
+ }
+ 
+ const ENV_KEY = "KERYX_FLOW270_TEST_KEY";
+ const PROVIDER: DetectedProvider = {
+   name: "flow270-acme",
+   label: "Acme (flow 270)",
+   models: ["acme-small", "acme-large"],
+   envKey: ENV_KEY,
+ };
+ 
+ let configDir: string | undefined;
+ afterEach(() => {
+   delete process.env[ENV_KEY];
+   if (configDir !== undefined) {
+     rmSync(configDir, { recursive: true, force: true });
+     configDir = undefined;
+   }
+ });
+ 
+-describe("flow 270: /provider wizard steps render in ModalHost", () => {
++describe("flow 270: /connect wizard steps render in ModalHost", () => {
+   otuiTest("AC1: provider → API key → model, each step a dialog inside the shell", async () => {
+     const otui = requireOtui();
+     const h = await mountChrome(otui);
+     configDir = mkdtempSync(join(tmpdir(), "keryx-f270-"));
+ 
+     const result = selectProviderModelInTui(otui.core, h.chrome, [PROVIDER], { env: {}, configDir });
+     await h.flush();
+     let frame = h.captureCharFrame();
+     expect(frame).toContain("Select a provider");
+     expect(frame).toContain("Acme (flow 270)");
+     expectStepInModal(h, "picker");
+ 
+     h.mockInput.pressEnter(); // Acme is first
+     await h.flush();
+     frame = h.captureCharFrame();
+     expect(frame).toContain("Paste your Acme (flow 270) API key");
+     expect(frame).toContain("esc back");
+     expectStepInModal(h, "key-picker");
+ 
+     // AC4: ←/→ move the cursor inside the field instead of switching tabs.

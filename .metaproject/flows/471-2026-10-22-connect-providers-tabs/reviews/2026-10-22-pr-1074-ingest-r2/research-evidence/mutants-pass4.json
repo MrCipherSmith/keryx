@@ -1,0 +1,3 @@
+{ "mutants": [
+  { "id": "w2-M10", "file": "src/tui/modal-host.ts", "anchor": "if (key.name === \"right\" || (onStrip && key.name === \"tab\")) {", "replacement": "if (key.name === \"right\") {", "kind": "behavior" }
+] }

@@ -1,0 +1,580 @@
+{
+  "mutants": [
+    {
+      "id": "N01",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "const colon = raw.indexOf(\":\");",
+      "replacement": "const colon = raw.lastIndexOf(\":\");",
+      "note": "split --answered-by on the last colon: a ref with colons breaks",
+      "kind": "behavior"
+    },
+    {
+      "id": "N02",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "raw.slice(colon + 1).trim();",
+      "replacement": "raw.slice(colon + 1);",
+      "note": "ref not trimmed: a blank ref is accepted",
+      "kind": "behavior"
+    },
+    {
+      "id": "N03",
+      "file": "src/commands/review-operator.ts",
+      "anchor": ".includes(source) || ref === \"\") return refuse(\"\");",
+      "replacement": ".includes(source)) return refuse(\"\");",
+      "note": "empty ref accepted",
+      "kind": "behavior"
+    },
+    {
+      "id": "N04",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (ref.length > REF_MAX_LENGTH) return",
+      "replacement": "if (ref.length >= REF_MAX_LENGTH) return",
+      "note": "ref cap off by one",
+      "kind": "behavior"
+    },
+    {
+      "id": "N05",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "/\\p{Cc}/u.test(char)",
+      "replacement": "/[\\u0000-\\u001f\\u007f]/u.test(char)",
+      "note": "C1 control characters allowed in the ref",
+      "kind": "behavior"
+    },
+    {
+      "id": "N06",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "/\\p{Cc}/u.test(char)",
+      "replacement": "/[\\u0000-\\u001e\\u007f-\\u009f]/u.test(char)",
+      "note": "unit separator (0x1f) allowed in the ref",
+      "kind": "behavior"
+    },
+    {
+      "id": "N08",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "replacement": "if (LEAD_DECLINE.has(words[0] as string)) {",
+      "note": "punctuation-only text no longer reads as a decline (message changes)",
+      "kind": "behavior"
+    },
+    {
+      "id": "N09",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "LEAD_DECLINE.has(words[0] as string)) {",
+      "replacement": "LEAD_DECLINE.has(words[1] as string)) {",
+      "note": "lead-decline looks at the second word",
+      "kind": "behavior"
+    },
+    {
+      "id": "N10",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (words.some((word) => NEGATIONS.has(word))) throw",
+      "replacement": "if (words.slice(0, 1).some((word) => NEGATIONS.has(word))) throw",
+      "note": "negation only checked as the first word",
+      "kind": "behavior"
+    },
+    {
+      "id": "N11",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (words.includes(choices.decline)) throw",
+      "replacement": "if (false && words.includes(choices.decline)) throw",
+      "note": "the verb's own decline word no longer refuses",
+      "kind": "behavior"
+    },
+    {
+      "id": "N12",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "AFFIRMATIVE.has(word) || word === choices.confirm || choices.alsoAffirms",
+      "replacement": "AFFIRMATIVE.has(word) || choices.alsoAffirms",
+      "note": "the verb's confirming word no longer counts as a yes",
+      "kind": "behavior"
+    },
+    {
+      "id": "N13",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "|| choices.alsoAffirms?.includes(word) === true))",
+      "replacement": "|| false))",
+      "note": "'run' no longer affirms confirm-plan",
+      "kind": "behavior"
+    },
+    {
+      "id": "N14",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!words.some((word) => AFFIRMATIVE.has(word)",
+      "replacement": "if (words.some((word) => AFFIRMATIVE.has(word)",
+      "note": "non-affirmative gate inverted",
+      "kind": "behavior"
+    },
+    {
+      "id": "N15",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "\"agreed\", \"go\",",
+      "replacement": "\"agreed\",",
+      "note": "one affirmative word dropped",
+      "kind": "behavior"
+    },
+    {
+      "id": "N16",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "\"cannot\", \"cant\",",
+      "replacement": "\"cannot\",",
+      "note": "one negation word dropped",
+      "kind": "behavior"
+    },
+    {
+      "id": "N17",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "const named = words.some((word) => chosen.has(word));",
+      "replacement": "const named = true;",
+      "note": "decide-premise: choice need not be named",
+      "kind": "behavior"
+    },
+    {
+      "id": "N18",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!named || namesOther || negated) {",
+      "replacement": "if (!named || negated) {",
+      "note": "decide-premise: the other choice may be named",
+      "kind": "behavior"
+    },
+    {
+      "id": "N19",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!named || namesOther || negated) {",
+      "replacement": "if (!named || namesOther) {",
+      "note": "decide-premise: negation ignored",
+      "kind": "behavior"
+    },
+    {
+      "id": "N20",
+      "file": "src/commands/review-operator.ts",
+      "anchor": ".split(/[,.;:!?()\\n]+/u)",
+      "replacement": ".split(/[;:!?()\\n]+/u)",
+      "note": "decide-premise: clause split on comma and period dropped (No, dismiss it)",
+      "kind": "behavior"
+    },
+    {
+      "id": "N21",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "NEGATIONS.has(clause[index - 1] ?? \"\")",
+      "replacement": "NEGATIONS.has(clause[index + 1] ?? \"\")",
+      "note": "negation read after the choice word",
+      "kind": "behavior"
+    },
+    {
+      "id": "N22",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "\"dismisses\", \"drop\", \"dropped\",",
+      "replacement": "\"dismisses\", \"dropped\",",
+      "note": "one dismiss word dropped",
+      "kind": "behavior"
+    },
+    {
+      "id": "N24",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "held === undefined || held.source !== host.hostQuestion.source || held.ref !== host.hostQuestion.ref",
+      "replacement": "held === undefined || held.ref !== host.hostQuestion.ref",
+      "note": "repeat check ignores the source",
+      "kind": "behavior"
+    },
+    {
+      "id": "N25",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "held === undefined || held.source !== host.hostQuestion.source || held.ref !== host.hostQuestion.ref",
+      "replacement": "held === undefined || held.source !== host.hostQuestion.source",
+      "note": "repeat check ignores the ref",
+      "kind": "behavior"
+    },
+    {
+      "id": "N26",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "(?<![\\\\p{L}\\\\p{N}_-])",
+      "replacement": "(?<![\\\\p{L}\\\\p{N}_])",
+      "note": "token boundary before: hyphen no longer joins",
+      "kind": "behavior"
+    },
+    {
+      "id": "N27",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "(?![\\\\p{L}\\\\p{N}_-])",
+      "replacement": "(?![\\\\p{L}\\\\p{N}_])",
+      "note": "token boundary after: hyphen no longer joins",
+      "kind": "behavior"
+    },
+    {
+      "id": "N28",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "\"iu\").test(text)",
+      "replacement": "\"u\").test(text)",
+      "note": "token match case-sensitive",
+      "kind": "behavior"
+    },
+    {
+      "id": "N29",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (tokens.every((token) => namesToken(questionText, token))) return;",
+      "replacement": "if (tokens.some((token) => namesToken(questionText, token))) return;",
+      "note": "any one token suffices",
+      "kind": "behavior"
+    },
+    {
+      "id": "N30",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (countAlso && namesToken(questionText, String(tokens.length))) return;",
+      "replacement": "if (namesToken(questionText, String(tokens.length))) return;",
+      "note": "count accepted for decide-premise too",
+      "kind": "behavior"
+    },
+    {
+      "id": "N31",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (tokens.length === 0) return;\n  if (tokens.every",
+      "replacement": "if (tokens.every",
+      "note": "empty token list: every([]) is true anyway",
+      "kind": "behavior"
+    },
+    {
+      "id": "N32",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every(",
+      "replacement": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].some(",
+      "note": "stale plan: any one number suffices",
+      "kind": "behavior"
+    },
+    {
+      "id": "N33",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every(",
+      "replacement": "[estimate.dispatches, estimate.minutes.min].every(",
+      "note": "stale plan: max minutes not checked",
+      "kind": "behavior"
+    },
+    {
+      "id": "N34",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every(",
+      "replacement": "[estimate.dispatches, estimate.minutes.max].every(",
+      "note": "stale plan: min minutes not checked",
+      "kind": "behavior"
+    },
+    {
+      "id": "N35",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every(",
+      "replacement": "[estimate.minutes.min, estimate.minutes.max].every(",
+      "note": "stale plan: dispatch count not checked",
+      "kind": "behavior"
+    },
+    {
+      "id": "N36",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "refuseNonAffirmative(host.answerText, \"confirm-plan\");",
+      "replacement": "",
+      "note": "confirm-plan: answer text not checked",
+      "kind": "behavior"
+    },
+    {
+      "id": "N37",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "refuseNonAffirmative(host.answerText, input.command);",
+      "replacement": "",
+      "note": "gate verbs: answer text not checked",
+      "kind": "behavior"
+    },
+    {
+      "id": "N38",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "kind === \"mutation-waiver\" ? undefined : input.selected);",
+      "replacement": "undefined);",
+      "note": "override: --selected not bound into the subject",
+      "kind": "behavior"
+    },
+    {
+      "id": "N39",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "decision.kind === kind && decision.hostQuestion?.source",
+      "replacement": "decision.hostQuestion?.source",
+      "note": "gate repeat lookup ignores the kind",
+      "kind": "behavior"
+    },
+    {
+      "id": "N40",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "decision.finding === finding.key && decision.hostQuestion?.source",
+      "replacement": "decision.hostQuestion?.source",
+      "note": "premise repeat lookup ignores the finding",
+      "kind": "behavior"
+    },
+    {
+      "id": "N41",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "const shortId = finding.key.split(\"#\").pop() as string;",
+      "replacement": "const shortId = finding.key;",
+      "note": "question must name the full key",
+      "kind": "behavior"
+    },
+    {
+      "id": "N43",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "env[\"KERYX_TOOL_CALL\"] === \"1\"",
+      "replacement": "env[\"KERYX_TOOL_CALL\"] !== undefined",
+      "note": "any KERYX_TOOL_CALL value refuses",
+      "kind": "behavior"
+    },
+    {
+      "id": "N44",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "replacement": "if (isAutonomousEnv(env)) {",
+      "note": "run profile unattended not read",
+      "kind": "behavior"
+    },
+    {
+      "id": "N45",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "replacement": "if (readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "note": "autonomous env not read",
+      "kind": "behavior"
+    },
+    {
+      "id": "N46",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "return reason.trim();\n}",
+      "replacement": "return reason;\n}",
+      "note": "recorded reason not trimmed",
+      "kind": "behavior"
+    },
+    {
+      "id": "N47",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "channel: source,",
+      "replacement": "channel: \"tui\",",
+      "note": "journal entry channel is not the source",
+      "kind": "behavior"
+    },
+    {
+      "id": "N49",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "await answerDecision({ cwd, id: opened.id, choice });",
+      "replacement": "await answerDecision({ cwd, id: opened.id, choice: choices.options[0]!.id });",
+      "note": "journal answers the first option, not the chosen one",
+      "kind": "behavior"
+    },
+    {
+      "id": "N50",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "arg === \"--answered-by\" || arg.startsWith(\"--answered-by=\"))) {\n    return recordHostQuestion",
+      "replacement": "arg === \"--answered-by\")) {\n    return recordHostQuestion",
+      "note": "equals form of --answered-by not detected",
+      "kind": "behavior"
+    },
+    {
+      "id": "N51",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "log(`warning: the answer is recorded",
+      "replacement": "throw error; log(`warning: the answer is recorded",
+      "note": "journal failure is fatal after the record is written",
+      "kind": "behavior"
+    },
+    {
+      "id": "N52",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (value === undefined || value.trim() === \"\") throw new Error(",
+      "replacement": "if (value === undefined || value === \"\") throw new Error(",
+      "note": "whitespace-only text accepted",
+      "kind": "behavior"
+    },
+    {
+      "id": "U01",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "w === \"--answered-by\" || w.startsWith(\"--answered-by=\")",
+      "replacement": "w === \"--answered-by\"",
+      "note": "floor: equals form missed",
+      "kind": "behavior"
+    },
+    {
+      "id": "U02",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "if (verbAt < 0 || !HOST_QUESTION_VERB_SET.has(args[verbAt]!)) continue;",
+      "replacement": "if (verbAt < 0) continue;",
+      "note": "floor: any review verb with the flag",
+      "kind": "behavior"
+    },
+    {
+      "id": "U03",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "if (feedsShell && inner(words)) return true;",
+      "replacement": "if (inner(words)) return true;",
+      "note": "floor: echoed text counts without a shell on the pipe",
+      "kind": "behavior"
+    },
+    {
+      "id": "U04",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "depth < 3 &&",
+      "replacement": "depth < 1 &&",
+      "note": "floor: nested sh -c two levels deep missed",
+      "kind": "behavior"
+    },
+    {
+      "id": "U05",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "\"dash\", \"ksh\", \"eval\"]);",
+      "replacement": "\"dash\", \"ksh\"]);",
+      "note": "floor: eval wrapper missed",
+      "kind": "behavior"
+    },
+    {
+      "id": "U09",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "\"rg\", \"ag\", \"cat\"]);",
+      "replacement": "\"rg\", \"ag\"]);",
+      "note": "floor: cat no longer a printing command",
+      "kind": "behavior"
+    },
+    {
+      "id": "T01",
+      "file": "src/review/types.ts",
+      "anchor": "if (value === null || typeof value !== \"object\") return false;\n  const hq",
+      "replacement": "if (typeof value !== \"object\") return false;\n  const hq",
+      "note": "isHostQuestion(null) throws",
+      "kind": "behavior"
+    },
+    {
+      "id": "T02",
+      "file": "src/review/types.ts",
+      "anchor": "typeof field === \"string\" && field.trim() !== \"\"",
+      "replacement": "typeof field === \"string\"",
+      "note": "blank text counts as filled",
+      "kind": "behavior"
+    },
+    {
+      "id": "T03",
+      "file": "src/review/types.ts",
+      "anchor": " && filled(hq[\"questionText\"]) && filled(hq[\"answerText\"]) && filled(hq[\"time\"])",
+      "replacement": " && filled(hq[\"answerText\"]) && filled(hq[\"time\"])",
+      "note": "question text not required",
+      "kind": "behavior"
+    },
+    {
+      "id": "T04",
+      "file": "src/review/types.ts",
+      "anchor": " && filled(hq[\"answerText\"]) && filled(hq[\"time\"])",
+      "replacement": " && filled(hq[\"time\"])",
+      "note": "answer text not required",
+      "kind": "behavior"
+    },
+    {
+      "id": "T05",
+      "file": "src/review/types.ts",
+      "anchor": " && filled(hq[\"time\"])",
+      "replacement": "",
+      "note": "time not required",
+      "kind": "behavior"
+    },
+    {
+      "id": "T06",
+      "file": "src/review/types.ts",
+      "anchor": "(HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq[\"source\"]) && ",
+      "replacement": "",
+      "note": "any source accepted",
+      "kind": "behavior"
+    },
+    {
+      "id": "D01",
+      "file": "src/decisions/types.ts",
+      "anchor": " && record.hostQuestion !== null;",
+      "replacement": ";",
+      "note": "a null hostQuestion marks a host-question entry",
+      "kind": "behavior"
+    },
+    {
+      "id": "D02",
+      "file": "src/decisions/types.ts",
+      "anchor": "return record !== null && record !== undefined && record.hostQuestion",
+      "replacement": "return record.hostQuestion",
+      "note": "isHostQuestionEntry(undefined) throws",
+      "kind": "behavior"
+    },
+    {
+      "id": "E01",
+      "file": "src/review/estimate.ts",
+      "anchor": " && (v.confirmedVia !== \"host-question\" || isHostQuestion(v.hostQuestion))",
+      "replacement": "",
+      "note": "plan reader trusts a host-question record without a question",
+      "kind": "behavior"
+    },
+    {
+      "id": "E02",
+      "file": "src/review/estimate.ts",
+      "anchor": "\"terminal\", \"host-question\"];",
+      "replacement": "\"terminal\"];",
+      "note": "plan reader refuses host-question",
+      "kind": "behavior"
+    },
+    {
+      "id": "E03",
+      "file": "src/review/plan-confirmation.ts",
+      "anchor": "if (confirmation.confirmedVia === \"host-question\" && confirmation.hostQuestion === undefined) throw new Error(\"a host-question plan confirmation needs the question and the answer\");",
+      "replacement": "",
+      "note": "writer accepts a host-question confirmation with no question",
+      "kind": "behavior"
+    },
+    {
+      "id": "O01",
+      "file": "src/review/operator-decisions.ts",
+      "anchor": "return d.confirmedVia === \"host-question\" ? isHostQuestion(d.hostQuestion) : true;",
+      "replacement": "return true;",
+      "note": "decision reader trusts a host-question record without a question",
+      "kind": "behavior"
+    },
+    {
+      "id": "O03",
+      "file": "src/review/premise.ts",
+      "anchor": "decision.hostQuestion === undefined ? \"\" : `",
+      "replacement": "true ? \"\" : `",
+      "note": "dismissal evidence loses the source and ref",
+      "kind": "behavior"
+    },
+    {
+      "id": "J01",
+      "file": "src/decisions/journal.ts",
+      "anchor": "r.hostQuestion?.source !== host?.source || ",
+      "replacement": "",
+      "note": "open twin ignores the source",
+      "kind": "behavior"
+    },
+    {
+      "id": "J02",
+      "file": "src/decisions/journal.ts",
+      "anchor": "|| r.hostQuestion?.ref !== host?.ref ",
+      "replacement": "",
+      "note": "open twin ignores the ref",
+      "kind": "behavior"
+    },
+    {
+      "id": "J03",
+      "file": "src/decisions/journal.ts",
+      "anchor": " || r.hostQuestion?.verb !== host?.verb) continue;",
+      "replacement": ") continue;",
+      "note": "open twin ignores the verb",
+      "kind": "behavior"
+    },
+    {
+      "id": "J04",
+      "file": "src/decisions/journal.ts",
+      "anchor": "r.kind === \"open\" && r.hostQuestion === undefined).length + 1",
+      "replacement": "r.kind === \"open\").length + 1",
+      "note": "a host question moves the arm of the next question",
+      "kind": "behavior"
+    },
+    {
+      "id": "R01",
+      "file": "src/decisions/report.ts",
+      "anchor": "const drawn = opens.filter((open) => !isHostQuestionEntry(open));",
+      "replacement": "const drawn = opens;",
+      "note": "host questions counted as drawn decisions",
+      "kind": "behavior"
+    }
+  ]
+}

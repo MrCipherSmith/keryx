@@ -1,0 +1,77 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-style-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "Pure duplication of a three-part rule; no suppression, comment or sibling pattern shows it was chosen, and extracting a helper makes both sites consistent."
+    },
+    {
+      "finding_id": "review-style-w3:F-004",
+      "verdict": "upheld",
+      "reasoning": "Duplicated stepping and tab-cycling code; no signal of intent, and a shared helper is the idiomatic fix."
+    },
+    {
+      "finding_id": "review-style-w3:F-005",
+      "verdict": "upheld",
+      "reasoning": "Two positional booleans at call sites are a recognised clean-code smell (flag arguments); no comment or rule justifies them, the suggested options-object fix is sound."
+    },
+    {
+      "finding_id": "review-style-w3:F-007",
+      "verdict": "upheld",
+      "reasoning": "Magic layout numbers whose own comment ('~22 columns') disagrees with the code (24) are a real maintainability defect; no exemption seen, named constants are standard."
+    },
+    {
+      "finding_id": "review-style-w3:F-008",
+      "verdict": "upheld",
+      "reasoning": "Role-less names that change meaning per tab are a naming defect; no intent signal found and the rename is consistent with naming practice."
+    },
+    {
+      "finding_id": "review-style-w3:F-010",
+      "verdict": "upheld",
+      "reasoning": "Import list otherwise alphabetical; one out-of-order entry is a real, trivially fixable deviation with no justification."
+    },
+    {
+      "finding_id": "review-style-w3:F-012",
+      "verdict": "upheld",
+      "reasoning": "The PR itself extracts the Telegram hooks out of tui-shell.ts for size, so the same split is consistent; that is only the PR's own signal, which cannot ratify the choice, and no prior exemption or comment justifies the monolith."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "Test gap on two of three surfaces; no intent signal (skip comment, exemption) says they were deliberately left untested, and a per-surface test is a sound fix."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "Confirmed at src/tui/connect-modal.test.ts:73-81 that waitFor returns the last frame at the deadline and never throws, so discarding its result leaves the step-opened precondition unasserted; no comment says this is intended."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "Same non-throwing waitFor (connect-modal.test.ts:73-81): Tab behavior goes unasserted; the suggested explicit expectations are sound and consistent with the digit and mouse steps that do assert."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-003",
+      "verdict": "upheld",
+      "reasoning": "Negative-only assertions without a positive control can pass vacuously; no signal of intent, and a positive probe is standard test practice."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-004",
+      "verdict": "upheld",
+      "reasoning": "Duplicate-fixture test and unasserted branches are coverage gaps; no signal they were deliberate, fix is sound."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-005",
+      "verdict": "upheld",
+      "reasoning": "Fixtures cast to shapes the producer cannot emit pin a non-existent state; no comment justifies the casts and building real shapes is sound."
+    }
+  ]
+}
+```
+
+Summary: 13 findings judged, all minor: 13 upheld, 0 downgraded, 0 challenged, 0 owner-decision. No finding is held. No intent signals or practice sources found against any premise; signals visible in the PR (tui-shell extraction of Telegram hooks) are the PR's own and do not count. Git history of tests was read only to confirm the PR introduced them.

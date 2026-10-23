@@ -303,6 +303,8 @@ export interface ReviewsPanelHandle {
   parityLines(): string[];
   /** The Readiness block: verdict and failing items per review. */
   readinessLines(): string[];
+  /** Managed reviews whose readiness verdict is NOT READY (the Reviews card's attention signal). */
+  notReadyCount(): number;
   dispose(): void;
 }
 
@@ -383,6 +385,7 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     layerLines: () => projectReviewsLayerLines(depth, options.width),
     parityLines: () => projectReviewsParityLines(depth, options.width),
     readinessLines: () => projectReviewsReadinessLines(depth, options.width),
+    notReadyCount: () => depth?.filter((row) => row.readiness?.verdict === "NOT READY").length ?? 0,
     dispose() {
       disposed = true;
       generation += 1;

@@ -1,0 +1,104 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice-03 (balance-panel, chat-shell, game-modal, model-turn, modal-host, queue-nav, remote-provider-hooks, tui-shell) is a single-operator TUI plus a one-topic Telegram bridge, so the load profile is human-scale (not provided; severity assumes that). No blocker or major concurrency or resource finding. The new shared state is handled correctly: createRemoteDeviceLogin checks and sets `current` with no await between them (no check-then-act gap), isBusy is re-asked synchronously right before applyEnv, the timer is cleared in finally, abort is wired to remote-off and renderer destroy, and createConnectedProvidersCache shares one in-flight probe and does not keep a failed load or a load that was invalidated mid-flight. /connect is deferred while a turn is running (busy-dispatch), so the TUI connect sequence's process.env write is not made under a live turn. Three low-severity observations follow.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "async function runTest(tabId: ProvidersTabId, name: string): Promise<void> {",
+      "problem": "Provider [Test] has no in-flight guard, on either surface. In the Providers dialog, Enter or a click on [Test] calls runTest(...) every time; a second press before the first probe returns starts a second concurrent GET /models (and a second model-profile store refresh through onSummary) for the same provider, and whichever resolves last writes the row's status, so a slow first probe can overwrite a newer result. Telegram's [Test] (testProvider -> testProviderForRemote -> probeProviderConnection) likewise starts one probe per tap, with no per-provider dedup.",
+      "impact": "Failure mode at human scale: a double-press or a run of Telegram taps puts N parallel requests on one provider endpoint (the provider may rate-limit the key, 429, which then shows as a failed Test for a healthy provider), and the status line can show a stale outcome. Bounded by operator input rate, not by traffic, so not a stability risk. The Connected-tab runTest had the same shape before this PR; the PR adds the Add-tab row and the Telegram caller.",
+      "suggested_fix": "Keep a Map<providerId, Promise<ProviderProbeOutcome>> of probes in flight (one in the dialog step, one in the Telegram hook) and return the existing promise for a repeat press; delete the entry in finally. Or ignore the press while statuses holds the 'testing…' content for that row.",
+      "evidence": "tui-shell.ts runTest: no guard before probeProviderConnection(...), called from the Enter handler (`void runTest(\"connected\", row.name)`, `void runTest(\"add\", row.name)`) and from both [Test] button handlers. testProvider: (providerId) => testProviderForRemote(providerId, { probe: (id) => probeProviderConnection(id, { requireCredential: true }) }) has no dedup either.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "highload:provider-test-no-inflight-guard",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "(remoteDeviceLogin ??= createRemoteDeviceLogin({ isBusy: shellIsBusy, onConnected: () => connectedProviders.invalidate() })).connect(providerId, notify),",
+      "problem": "The one-login-at-a-time rule covers only logins started from Telegram. shellIsBusy does not include an open /connect dialog (detachSlashWork under chrome.withOverlay), so a Telegram [Connect] device login and the dialog's own runDeviceLoginInTui for the same provider can run at once, and both write the user-global token store.",
+      "impact": "Needs the operator to start a login in the TUI and tap [Connect] in Telegram for the same provider within the login window (up to REMOTE_DEVICE_LOGIN_LIMIT_MS = 10 min). Two grants are then issued and the last write to the store wins; both are valid, so the likely outcome is one wasted authorization and a possibly confusing 'connected' message, not corruption. Reported as info (shared law 1): I could not confirm from the slice whether the token store write is atomic, and I did not read it. Reading oauth/grants.ts would settle it.",
+      "suggested_fix": "If it matters, make shellIsBusy (or the remote connect) also refuse while the Providers overlay is open, or document that the dialog and Telegram do not coordinate.",
+      "evidence": "createRemoteDeviceLogin keeps `current` per instance and the instance is created only in this remote closure; the TUI path calls runDeviceLoginInTui directly with no shared guard. shellIsBusy = chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || turnLoop.queue.length > 0 || leaseView()?.held() === true.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "dedupe_key": "highload:device-login-cross-surface",
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": "return { ok: false, message: \"a device login is already running\" };",
+      "problem": "A Telegram device login holds the single `current` slot until the operator authorizes it, it times out (10 min), or remote control goes off. There is no cancel button or command for it, so an abandoned login (code never entered) refuses every other Telegram [Connect], for any provider, with 'a device login is already running' for up to 10 minutes.",
+      "impact": "Reachable by one tap on [Connect] followed by walking away. Cost is a 10-minute wait or switching remote control off and on; no data is lost and no resource grows. Probably an accepted trade-off of the one-at-a-time rule, so info only.",
+      "suggested_fix": "Optional: let a second [Connect] for the same provider replace the first (abort and restart), or offer a [Cancel] on the code message that calls abort().",
+      "evidence": "connect() returns early when `current !== undefined`; the only ends are login resolving, the timer at timeoutMs, or abort(), which the shell calls from recordOff and onDestroy only.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "highload:device-login-slot-held",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": ["slice-03"],
+  "inputs_unreadable": []
+}
+```
+
+## High-Load Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2`
+- Scope mode: explicit-hash-range, slice-03 only
+- Load profile: not provided (single-operator TUI and one Telegram topic; severity assumes human-scale input)
+- Files reviewed: 8 files with code changes (balance-panel, chat-shell, game-modal, model-turn, modal-host, queue-nav are comment, string or small-API changes with no concurrency surface)
+
+### Summary
+`/connect` becomes one tabbed dialog and Telegram gains Add provider, Test and device-login Connect. The shared state added for it is sound: one-login guard with no await between check and set, a busy re-check immediately before the env write, a cleared timer, abort on remote-off and destroy, and an in-flight-sharing cache that ignores failed or invalidated loads. Only low-severity gaps remain (no in-flight guard on Test; the one-login rule does not span the TUI dialog; an abandoned login holds the slot for up to 10 minutes).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 2
+
+### Findings
+#### Concurrency & Race Conditions
+F-001 (minor), F-002 (info)
+
+#### Resource Management
+None detected.
+
+#### Caching
+None detected. createConnectedProvidersCache: the in-flight promise is shared, a failed load is dropped, `entry === mine` stops a stale load from clearing a newer one, and invalidate is called on connect, disconnect and device login. TUI `/connect` does not use the cache and re-detects, so it cannot read stale data from it.
+
+#### Database Under Load
+Not applicable (no database access in this slice).
+
+#### Async / Queues
+None detected.
+
+#### Retry / Timeout / Circuit Breaker
+F-003 (info). The device login is bounded by a 10-minute timer plus abort, and login.ts passes the signal into its HTTP calls (searched `signal` in src/lib/oauth/login.ts).
+
+#### Idempotency & Distributed Invariants
+None detected. A repeated Telegram [Connect] while a login runs is answered, not started.
+
+### Clean Areas
+A1 shared mutable state, A2 check-then-act (remote login slot), A3 async primitives (no unbounded Promise.all), B1 to B3, C1 to C3, E1 to E3, F1 and F2 reviewed.
+
+Not read: the bodies of filterConnectedDetectedProviders, testProviderConnection and the token store (outside the slice diff), so any per-call timeout or write atomicity there is unverified.

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 23,
+  "droppedKey": "59acbade040232b3",
+  "fileBytes": {
+    "fixtures/routing-shell-pty.ts": 4860,
+    "scripts/generate-commands-by-task.ts": 785,
+    "src/acp/server.ts": 77812,
+    "src/cli.ts": 10584,
+    "src/commands/serve-digest.ts": 3042,
+    "src/remote/bootstrap.ts": 2621,
+    "src/remote/channels.ts": 10461,
+    "src/remote/http-surface.ts": 76089,
+    "src/remote/remote.test-helpers.ts": 7028,
+    "src/remote/service.ts": 13180,
+    "src/scheduler/digest-delivery.ts": 11413,
+    "src/tui/games/modal.test-helpers.ts": 5187,
+    "src/tui/project-context-inspector.ts": 12981,
+    "src/tui/remote-queue-wiring.ts": 7497,
+    "src/tui/rewind-inspector.ts": 8432,
+    "src/tui/routing-inspector.ts": 27234,
+    "src/tui/setup-modal.ts": 12710,
+    "src/tui/sidebar-cards.ts": 24201,
+    "src/tui/subagent-inspector.ts": 7525,
+    "src/tui/triggers-inspector.ts": 18605,
+    "src/tui/turn-guard-inspector.ts": 7762,
+    "src/tui/turn-loop.ts": 5395,
+    "src/tui/workspace-inspector.ts": 11971
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/tui/project-context-inspector.ts",
+        "src/tui/remote-queue-wiring.ts",
+        "src/tui/rewind-inspector.ts",
+        "src/tui/routing-inspector.ts",
+        "src/tui/setup-modal.ts",
+        "src/tui/sidebar-cards.ts",
+        "src/tui/subagent-inspector.ts",
+        "src/tui/triggers-inspector.ts",
+        "src/tui/turn-guard-inspector.ts",
+        "src/tui/workspace-inspector.ts",
+        "src/tui/games/modal.test-helpers.ts",
+        "fixtures/routing-shell-pty.ts",
+        "scripts/generate-commands-by-task.ts"
+      ],
+      "bytes": 149750
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/remote/remote.test-helpers.ts",
+        "src/cli.ts",
+        "src/scheduler/digest-delivery.ts",
+        "src/remote/http-surface.ts",
+        "src/commands/serve-digest.ts",
+        "src/remote/service.ts",
+        "src/remote/bootstrap.ts"
+      ],
+      "bytes": 123957
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/acp/server.ts",
+        "src/remote/channels.ts",
+        "src/tui/turn-loop.ts"
+      ],
+      "bytes": 93668
+    }
+  ]
+}

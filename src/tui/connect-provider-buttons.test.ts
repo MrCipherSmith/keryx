@@ -562,7 +562,7 @@ describe("AC10 — button/row colours come from the active theme", () => {
 // the session comparison and the system line the operator was promised.
 describe("AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit)", () => {
   const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-  const handlerStart = tuiSource.indexOf('if (command.name === "/connect" || command.name === "/provider")');
+  const handlerStart = tuiSource.indexOf('if (command.name === "/connect")');
   const handlerBody = tuiSource.slice(handlerStart, handlerStart + 2500);
 
   test("onDisconnected compares the disconnected name against the session's OWN provider", () => {

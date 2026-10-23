@@ -163,7 +163,7 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { commandsForMode, describeUnavailableCommand, parseDemoteCommand } from "./agent-commands";
+import { commandsForMode, describeUnavailableCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
 // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
 // ONLY through this core facade (see the zone note in
 // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
@@ -244,7 +244,7 @@ const CONNECT_GUIDANCE = [
   "  export ANTHROPIC_API_KEY=<key>",
   "",
   "keryx reads ANTHROPIC_API_KEY from the environment only — it never stores,",
-  "logs, or echoes the key. Then run /provider to pick the anthropic provider.",
+  "logs, or echoes the key. Then run /connect to pick the anthropic provider.",
   "",
 ].join("\n");
 
@@ -975,12 +975,12 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       ? deps.makeProvider(providerName, modelName)
       : deps.makeProvider(providerName, modelName, baseUrl);
 
-  // Create once at start; recreated on `/model` / `/provider` switches below.
+  // Create once at start; recreated on `/model` / `/connect` switches below.
   let provider = makeActive();
 
   /**
    * Apply a `{provider, model, baseUrl?, modelParams?}` selection from the
-   * interactive picker (shared by the `/models` and no-arg `/provider`
+   * interactive picker (shared by the `/models` and `/connect`
    * commands): update the active selection and recreate the provider.
    * Behavior-preserving extraction.
    */
@@ -1169,29 +1169,6 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         await selectAndApply({ onlyProvider: providerName });
         continue;
       }
-      if (command === "/provider") {
-        if (argument.length > 0) {
-          if (argument === "openai-codex") {
-            if (deps.selectProviderModel === undefined) {
-              system("Interactive subscription selection is not available. Run `keryx auth login openai-codex` and select an authorized model.\n");
-            } else {
-              await selectAndApply({ onlyProvider: "openai-codex" });
-            }
-            continue;
-          }
-          // Explicit by-name switch (keeps the model + baseUrl selection).
-          providerName = argument;
-          provider = makeActive();
-          continue;
-        }
-        if (deps.selectProviderModel === undefined) {
-          system("Interactive provider selection is not available in this session.\n");
-          continue;
-        }
-        // Pass an empty opts object (no `onlyProvider`) → full re-selection.
-        await selectAndApply({});
-        continue;
-      }
       if (command === "/connect") {
         if (deps.selectProviderModel === undefined) {
           system(CONNECT_GUIDANCE);
@@ -1207,7 +1184,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         system(wrongMode);
         continue;
       }
-      system(`Unknown command: ${command}. Type /help for commands.\n`);
+      system(`Unknown command: ${command}. ${removedCommandHint(command) ?? "Type /help for commands."}\n`);
       continue;
     }
 
@@ -2293,7 +2270,7 @@ export async function runAgentRepl(
   let slateSession: SlateSessionRef | undefined;
   // Flow 267: fetch the provider's real context window ONCE for this session.
   // Unlike the chat REPL above, this readline AGENT REPL has no `/model`/
-  // `/provider`/`/connect` command to react to (confirmed: those branches only
+  // `/connect` command to react to (confirmed: those branches only
   // exist in the chat loop above) — `deps.providerId`/`deps.modelId` never
   // change for the lifetime of one `runAgentRepl` call — so there is no
   // rebuild point to re-fetch this at. Best-effort: an unreachable gateway or
@@ -3286,11 +3263,11 @@ export async function runAgentRepl(
         );
         agentIo.onSystem?.(formatSettingsTable(rows, { available: new Set(READLINE_AGENT_COMMANDS) }));
       } else {
-        // `/models` / `/provider` are chat-mode commands: say so instead of
+        // `/models` is a chat-mode command: say so instead of
         // calling them unknown. Anything else falls back to the old message.
         agentIo.onSystem?.(
           describeUnavailableCommand(command, "agent") ??
-            `Unknown command: ${command}. Type /help.\n`,
+            `Unknown command: ${command}. ${removedCommandHint(command) ?? "Type /help."}\n`,
         );
       }
       printPromptWithBusNotice();
@@ -4589,7 +4566,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
 
     const baseFactory = realMakeProvider(emitSystem);
     // flow 268: resolved once at readline startup, same as the TUI branches
-    // above; re-resolved on every `/model`/`/provider`/`/connect` re-selection
+    // above; re-resolved on every `/model`/`/connect` re-selection
     // by `realSelectProviderModel`'s own wrapping (see its definition).
     const initialModelParams = resolveProviderModelParamsByName(
       provider,

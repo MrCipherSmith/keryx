@@ -79,11 +79,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/connect",
-    description: "Switch provider / API key",
+    description: "Providers — switch, test or disconnect a connected one, or add a new one",
     modes: BOTH,
     modeDescriptions: {
-      agent: "Connect to an already configured provider (interactive picker)",
-      chat: "Switch to a connected provider (picker when available)",
+      agent: "Providers dialog: Connected (switch, Test, Disconnect) and Add provider (key or login)",
+      chat: "Providers picker: switch to a connected provider or add one (picker when available)",
     },
   },
   {
@@ -95,17 +95,6 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     name: "/search-connect",
     description: "Select a connected web search provider",
     modes: AGENT_ONLY,
-  },
-  {
-    name: "/provider",
-    description: "Switch provider — /provider <name>, or no arg to re-select",
-    // Agent mode uses the configuration picker: provider → API-key → model.
-    // Keep `/provider` available there too: it is the discoverable, conventional
-    // command users expect when changing the active provider mid-session.
-    modes: BOTH,
-    modeDescriptions: {
-      agent: "Add or configure a provider (interactive picker)",
-    },
   },
   {
     name: "/think",
@@ -149,7 +138,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/setup",
-    description: "Metaproject preparation guide — /setup [init|refresh|repair] (prints steps, runs nothing)",
+    description: "Metaproject preparation guide — /setup [init|refresh|repair] (copy the agent prompt, or let keryx run the steps as background jobs after you confirm)",
     modes: BOTH,
   },
   {
@@ -762,6 +751,19 @@ export function describeUnavailableCommand(line: string, mode: ShellMode): strin
     `${command.name} is only available in ${where} — this is ${mode} mode. ` +
     `Type /help for the commands available here.\n`
   );
+}
+
+/**
+ * A command that was folded into another, and what to run instead. `/provider`
+ * (flow 471) is now the "Add provider" tab of `/connect`.
+ */
+const REMOVED_COMMAND_HINTS: Readonly<Record<string, string>> = {
+  "/provider": "/provider was merged into /connect — run /connect (Connected and Add provider tabs).",
+};
+
+/** The hint for a removed command's line, or `undefined` for any other token. Pure. */
+export function removedCommandHint(line: string): string | undefined {
+  return REMOVED_COMMAND_HINTS[commandToken(line)];
 }
 
 /**

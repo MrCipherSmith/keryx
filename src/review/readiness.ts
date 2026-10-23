@@ -18,7 +18,7 @@ import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
 import { readRunProfile } from "./run-profile";
 import type { PremiseQuestionDecision } from "./operator-decisions";
-import { awaitingOperator, premiseHoldState } from "./premise";
+import { awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
 import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
 import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
@@ -246,7 +246,15 @@ function premiseDecisionsCheck(ctx: Context): Verdict {
   const held = records.filter((finding) => premiseHoldState(finding, decisions) !== "none");
   if (held.length === 0) return ok("no finding is held by the premise judge");
   const awaiting = awaitingOperator(records, decisions);
-  if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
+  if (awaiting.length === 0) {
+    // Flow 467: an answer the agent recorded from the host's own question is not a card press; say so and from where.
+    const hostQuestions = held.flatMap((finding) => {
+      const decision = latestPremiseDecision(finding, decisions);
+      return decision?.confirmedVia === "host-question" && decision.hostQuestion !== undefined ? [`${decision.hostQuestion.source}:${decision.hostQuestion.ref}`] : [];
+    });
+    const viaHost = hostQuestions.length === 0 ? "" : `; ${hostQuestions.length} confirmed via host-question (${hostQuestions.join(", ")}), not by a card`;
+    return ok(`${held.length} held finding(s), every one with an operator decision${viaHost}`);
+  }
   const evidence = `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`;
   // Before an ingest the held records come from raw results and premises.json, and the answer commands read
   // findings.json only (review F-002): the first repair is the ingest.
@@ -255,7 +263,7 @@ function premiseDecisionsCheck(ctx: Context): Verdict {
   }
   return bad(
     evidence,
-    `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
+    `ask the operator: in keryx shell call the review_decide_premise tool (a card); elsewhere ask with the host's question tool, or in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>" (from a host question add --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>")`,
   );
 }
 

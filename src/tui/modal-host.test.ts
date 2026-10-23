@@ -324,6 +324,68 @@ otuiTest("panel size does not change when switching short and long tab bodies", 
   h.destroy();
 });
 
+otuiTest("footerFor shows each tab's own footer, and falls back to footer when it returns undefined", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const connected = [{ key: "a", label: "add" }, { key: "esc", label: "close" }];
+  const add = [{ key: "1", label: "connected" }, { key: "esc", label: "close" }];
+  const fallback = [{ key: "q", label: "fallback" }];
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Providers",
+    tabs: [
+      { id: "connected", label: "Connected" },
+      { id: "add", label: "Add provider" },
+      { id: "other", label: "Other" },
+    ],
+    renderTab: () => {},
+    footer: fallback,
+    footerFor: (tabId) => (tabId === "connected" ? connected : tabId === "add" ? add : undefined),
+  });
+  await h.flush();
+  expect(h.captureCharFrame()).toContain(formatModalFooter(connected));
+  expect(h.captureCharFrame()).not.toContain(formatModalFooter(add));
+
+  handle?.setTab("add");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain(formatModalFooter(add));
+  expect(h.captureCharFrame()).not.toContain(formatModalFooter(connected));
+
+  handle?.setTab("other");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain(formatModalFooter(fallback));
+  handle?.close();
+  h.destroy();
+});
+
+otuiTest("Tab on the tab strip moves to the next tab and Shift+Tab to the previous", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Providers",
+    tabs: [
+      { id: "connected", label: "Connected" },
+      { id: "add", label: "Add provider" },
+    ],
+    renderTab: () => {},
+  });
+  await h.flush();
+  const strip = h.renderer.root.findDescendantById("modal-tab-strip") as { focus: () => void };
+  expect(handle?.activeTab()).toBe("connected");
+
+  strip.focus();
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(handle?.activeTab()).toBe("add");
+
+  strip.focus();
+  h.mockInput.pressTab({ shift: true });
+  await h.flush();
+  expect(handle?.activeTab()).toBe("connected");
+
+  handle?.close();
+  h.destroy();
+});
+
 otuiTest("x closes the modal the same as Esc", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });
@@ -709,6 +771,68 @@ otuiTest("Flow 269 AC2: ModalHost bounds dialog width strictly within main pane 
   expect(frame).toContain("main pane clamped");
 
   handle?.close();
+  h.destroy();
+});
+
+// Flow 468 AC13 (phase C): a wide sidebar (68 columns) on a 100-column terminal leaves `main`
+// about 32 columns. The detail modal must be sized against the terminal (or its backdrop mounted
+// at the root), not squeezed to the transcript column: at least 72 columns, inside the terminal.
+// The sidebar is widened through the renderable itself, so this test does not depend on how the
+// geometry store drives it.
+const WIDE_SIDEBAR = 68;
+
+otuiTest("flow 468 AC13: with a wide sidebar on a 100-column terminal the modal is at least 72 columns wide", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 100, height: 40 });
+  (h.chrome.sidebar as unknown as { width: number }).width = WIDE_SIDEBAR;
+  await h.flush();
+  expect((h.chrome.main as unknown as { width: number }).width).toBe(100 - WIDE_SIDEBAR); // squeezed, as the plan says
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Wide Sidebar Modal",
+    tabs: [{ id: "tab", label: "Tab" }],
+    renderTab: (_tabId, body) => {
+      const parent = body as { add: (c: unknown) => void };
+      parent.add(new otui.core.TextRenderable(h.renderer, { id: "wide-body", content: "body readable beside a wide sidebar" }));
+    },
+  });
+  await h.flush();
+  const panel = h.renderer.root.findDescendantById("modal-panel") as unknown as { width: number; x: number };
+  expect(panel.width).toBeGreaterThanOrEqual(MODAL_PANEL_MIN_WIDTH);
+  expect(panel.width).toBeLessThanOrEqual(100);
+  expect(panel.x + panel.width).toBeLessThanOrEqual(100);
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Wide Sidebar Modal");
+  expect(frame).toContain("body readable beside a wide sidebar");
+  expect(frame).toContain("[x] esc"); // the close hint is not clipped off the right edge
+  handle?.close();
+  h.destroy();
+});
+
+otuiTest("flow 468 AC13: widening the sidebar after the modal host exists still gives the next modal its 72 columns", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 100, height: 40 });
+  // The host is created once per renderer and its mount point is fixed by the first open.
+  const first = openModal(otui.core, h.chrome, {
+    title: "First",
+    tabs: [{ id: "tab", label: "Tab" }],
+    renderTab: () => {},
+  });
+  await h.flush();
+  first?.close();
+  await h.flush();
+  (h.chrome.sidebar as unknown as { width: number }).width = WIDE_SIDEBAR;
+  await h.flush();
+  const second = openModal(otui.core, h.chrome, {
+    title: "Second",
+    tabs: [{ id: "tab", label: "Tab" }],
+    renderTab: () => {},
+  });
+  await h.flush();
+  const panel = h.renderer.root.findDescendantById("modal-panel") as unknown as { width: number; x: number };
+  expect(panel.width).toBeGreaterThanOrEqual(MODAL_PANEL_MIN_WIDTH);
+  expect(panel.x + panel.width).toBeLessThanOrEqual(100);
+  expect(h.captureCharFrame()).toContain("Second");
+  second?.close();
   h.destroy();
 });
 

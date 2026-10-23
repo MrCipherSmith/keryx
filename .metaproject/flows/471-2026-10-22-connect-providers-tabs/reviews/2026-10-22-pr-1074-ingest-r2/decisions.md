@@ -1,0 +1,29 @@
+# Decisions
+
+- CP-01: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-02: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-03: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-04: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-05: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-06: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-07: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-08: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-09: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-10: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-11: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-12: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-13: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-14: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-15: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-16: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-17: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-18: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-19: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-20: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-21: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-22: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-23: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-24: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-25: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-26: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- CP-27: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

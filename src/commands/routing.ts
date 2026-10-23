@@ -126,10 +126,10 @@ async function runList(args: string[], location: RoutingConfigLocation, deps: Ro
   for (const error of [project.error, user.error].filter((e): e is string => e !== undefined)) {
     console.error(`routing: ${error}`);
   }
-  const connected = connectedPredicateFrom(providers);
+  const session = loadSession();
+  const connected = connectedPredicateFrom(providers, session);
   const profiles = loadModelProfiles(location.userConfigDir);
   const available = availablePredicateFromProfiles(profiles);
-  const session = loadSession();
   let derived: RoutingTable = {};
   if (session !== undefined) {
     const sessionProvider = providers.find((p) => p.name === session.providerId);
