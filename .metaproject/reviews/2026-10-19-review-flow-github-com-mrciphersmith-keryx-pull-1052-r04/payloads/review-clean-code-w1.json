@@ -1,0 +1,600 @@
+{
+  "reviewer": "review-clean-code",
+  "scope_mode": "diff",
+  "round": 3,
+  "base_sha": "062aa9c36484e7b7f6b8a1dd6140671330646e66",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "review_context": {
+    "request": {
+      "raw": "Round r04 of PR https://github.com/MrCipherSmith/keryx/pull/1052 (flow 464), delta 6f47bf35f..b1c6da0e6 over the r03 package. slice-01 is the fix slice answering D-01, D-03, D-08, D-12 (card-first wording in waiver tool texts, docs wording, completion-gate text). slices 02-05 carry the rest of the PR diff vs the merge base (new to this package). Known minors D-02..D-14 from r03 may stay open as follow-ups; the autonomous-profile.ts wording is deliberate (unattended children are excluded from the card gate).",
+      "mode": "delta"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/context.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/flow.json",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/journal.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/plan.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/commands-by-task.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/docs/limitations.md",
+        "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+        "package.json",
+        "src/commands/agent-commands.ts",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-other.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/operator-confirm-tools.ts",
+        "src/commands/review.ts",
+        "src/commands/shell.test.ts",
+        "src/commands/shell.ts",
+        "src/flow/confirm-token.test.ts",
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/service.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/harness/external/write-land.ts",
+        "src/harness/tool/builtin/interactive-tools.ts",
+        "src/learning/decisions.ts",
+        "src/remote/client.ts",
+        "src/remote/mirror-undelivered.test.ts",
+        "src/remote/shell-bridge.ts",
+        "src/review/chunks-estimate.ts",
+        "src/review/complete-gated.ts",
+        "src/review/completion-gate.ts",
+        "src/review/coverage-complete.ts",
+        "src/review/estimate.ts",
+        "src/review/evidence-level.ts",
+        "src/review/operator-decisions.ts",
+        "src/review/plan-confirmation.ts",
+        "src/review/premise-question.ts",
+        "src/review/publish.ts",
+        "src/review/readiness.ts",
+        "src/review/types.ts",
+        "src/standard/help-groups.ts",
+        "src/trigger/unattended.ts",
+        "src/tui/approval-mirror.ts",
+        "src/tui/decisions-surface.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/remote-control-surface.ts",
+        "src/tui/tui-shell.ts"
+      ]
+    },
+    "git": {
+      "base": "062aa9c36484e7b7f6b8a1dd6140671330646e66",
+      "head": "b1c6da0e6992e4df473bae6b2fde78bc94d28776",
+      "repo": "MrCipherSmith/keryx",
+      "branch": "docs/flow-helyx-operator-confirm"
+    },
+    "pr": {
+      "number": 1052,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1052",
+      "title": "Operator review confirmations answered in Telegram (flow 464)",
+      "state": "open",
+      "base": "main",
+      "head": "b1c6da0e6992e4df473bae6b2fde78bc94d28776"
+    },
+    "memory": {
+      "query": "layers memory index of the package (keryx review layers refresh); no separate per-round query recorded",
+      "entries": [],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "machine-written gdgraph/wiki data not in diff"
+      ]
+    }
+  },
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {}
+  },
+  "budget": {
+    "max_findings": 30
+  },
+  "allowed_tools": "read-only",
+  "metaproject": {
+    "memory": [],
+    "wiki": [],
+    "graph": {
+      "note": "see layers block"
+    }
+  },
+  "slices": [
+    "slice-01"
+  ],
+  "is_fix_round": true,
+  "pr_context": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/pr-context.md",
+  "skill_path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+  "prior_findings": [
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-01",
+        "reviewer": "review-security-code",
+        "severity": "major",
+        "problem": "The result strings and tool descriptions of the waiver tools still tell the agent to close the review with `keryx review complete`, while the PR's rule (TM-04, SKILL.md, completion-gate.ts nextStep) is that an agent never runs it and calls the review_complete card instead. Sites: line 262 (review_waive_coverage description: 'run `keryx review complete` afterwards to close the review'), line 296 (review_waive_coverage result: 'Run `keryx review complete` to close the review.'), line 312 (review_waive_readiness description, same sentence), line 358 (review_waive_readiness result, same sentence). The header comment at line 24 ('Closing the review is still `keryx review complete`') is the same text for maintainers.",
+        "impact": "Attack vector: the agent finishes a waiver card, reads the tool result 'Run `keryx review complete` to close the review.', and runs `keryx review complete <package>` through shell_exec. Plain `complete` has no TTY check and no command-risk floor (only --waive and --waive-coverage do; TM-04 section 8 says so), so the round reaches `closed` with no review_complete card, no operator press, no `confirmedVia` and no `pressedBy`. The head, evidence, routing and readiness gates in completeReviewGated still apply, so this bypasses the operator's final yes and the press record, not the gates. The operator decision on C-05 was 'uphold' (the card is the operator act and the agent must not close the round by itself); the strings the agent reads last, immediately after the waiver, point the other way. This is the unfixed residual of C-21.",
+        "suggested_fix": "Change the four strings (262, 296, 312, 358) to say: 'call the `review_complete` card in keryx shell to close the review' (keep the CLI wording only for 'outside the shell'), and reword the line-24 comment the same way. Add a test in operator-confirm-review-tools.test.ts asserting that neither waiver result nor description contains 'Run `keryx review complete`' and that both name `review_complete`.",
+        "evidence": "keryx ctx rg 'keryx review complete' src/commands/operator-confirm-review.ts at head lists lines 8, 9, 18, 24, 261, 262, 296, 312, 358, 705; 8, 9, 18, 261 and 705 describe the CLI equivalent of a tool and are accurate; 24, 262, 296, 312 and 358 instruct the agent to run it. Line 296 and 358 read at head: `... not reviewed. Run \\`keryx review complete\\` to close the review.` and `... .join(\", \")}. Run \\`keryx review complete\\` to close the review.`. src/review/completion-gate.ts:753-820 nextStep says call the review_complete card and never run `keryx review complete` yourself, so the two agent-facing texts contradict each other. docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md section 8 (line 127) states plain `review complete` has no TTY check. src/review/complete-gated.ts runs only the gates, no operator-act check. Also reported by: review-clean-code-w1:F-003, review-style-w2:F-001.",
+        "confidence": "high",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 296,
+        "quote": "${waiver.files.length} file(s) not reviewed. Run ",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review.ts:262 (review_waive_coverage description)",
+            "src/commands/operator-confirm-review.ts:296 (review_waive_coverage result)",
+            "src/commands/operator-confirm-review.ts:312 (review_waive_readiness description)",
+            "src/commands/operator-confirm-review.ts:358 (review_waive_readiness result)",
+            "src/commands/operator-confirm-review.ts:24 (header comment, no runtime effect)"
+          ],
+          "enumeration_method": "keryx ctx rg -n 'keryx review complete' src/commands/operator-confirm-review.ts (10 matches, each read); the remaining 5 (8, 9, 18, 261, 705) are accurate CLI-equivalence statements and were excluded; SKILL.md / SKILL.detail.md and completion-gate.ts were checked and already say 'call the review_complete card'"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "fix slice slice-01 of this round"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-02",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "problem": "The delta rewrote the closing instruction of nextStep() as the same clause pasted into all three return strings (lines 756, 759, 761): ``then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).``",
+        "impact": "Three copies of one operator-facing rule that must change together (it is the sentence that tells the agent the CLI is off limits and which card closes a round). The next wording change, for example the card being renamed or the rule being relaxed for unattended runs, has to be made in three long literals, and a miss leaves the gate nudging the agent with two different instructions. This commit already shows the cost: the neighbouring strings in describeBlockers (see CC-W2-002) were not carried along.",
+        "suggested_fix": "Introduce one constant, e.g. `const CLOSE_VIA_CARD = \"then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).\";`, and build the three returns as `\"Next: ...\" + CLOSE_VIA_CARD` (the three differing heads stay as they are). decideReviewGate's `Stop only after the review_complete card has closed the package` can then reference the same noun once.",
+        "evidence": "src/review/completion-gate.ts lines 756, 759 and 761 at head 6f47bf35f all end with the identical clause; diff of slice-02 shows all three were edited in this delta (the old tail was `then \\`keryx review complete\\`.`).",
+        "confidence": "high",
+        "file": "src/review/completion-gate.ts",
+        "line": 761,
+        "quote": "return \"Next: write or ingest the missing artifacts (`keryx review ingest`), then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).\";",
+        "class_scope": {
+          "sites": [
+            "src/review/completion-gate.ts:761"
+          ],
+          "enumeration_method": "Every place that carries the 'call the review_complete card, never run keryx review complete' agent instruction as a copied literal: completion-gate.ts nextStep (3 sites) and the two describeBlockers strings that still say the opposite (CC-W2-002). Skill/doc copies are prose and out of scope."
+        }
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-03",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "problem": "describeBlockers still tells the agent to run `keryx review complete` (line 788) and that `keryx review complete` lists the blockers (line 791), while the same continue message, built by decideReviewGate, ends with nextStep's new rule 'you never run `keryx review complete` yourself' and 'Stop only after the review_complete card has closed the package'.",
+        "impact": "One nudge now contains two opposite instructions about the same command. An agent that follows the blocker list literally runs the CLI the delta just said it must not run; one that follows nextStep has no way to see why the list is empty. The delta updated nextStep, the stop report and the stop condition but not these two strings.",
+        "suggested_fix": "Reword line 788 to the card ('none listed; call the `review_complete` card') and line 791 to say the blockers are listed by `keryx review status <package>` or by the card's refusal, matching what the other strings now say. Use the constant from CC-W2-001 if the clause is reused.",
+        "evidence": "src/review/completion-gate.ts:788 and :791 at head 6f47bf35f next to :756-761 and :812-819 (decideReviewGate message). The refused-gate report at :804 was updated in this delta; these two were not.",
+        "confidence": "medium",
+        "file": "src/review/completion-gate.ts",
+        "line": 788,
+        "quote": "if (open.blockers.length === 0) return \"- none listed; run `keryx review complete` to close the package\";"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "fix slice slice-01 of this round"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-04",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "problem": "completeSpec().apply is about 57 lines (741-797) and does five jobs in one body: re-reads and compares the facts digest, runs the gate, decides whether the round closed after a throw (re-reading the manifest), writes completion-confirmation.json, and composes a multi-part output with a closed-but-bookkeeping-failed path. It also declares a local `reason` closure used in four places.",
+        "impact": "This is the one function that closes a review, and its subtle rule ('a throw from the engine is not proof that nothing closed') is buried in the middle of record writing and message assembly, so it is hard to test or change alone. The delta grew it from a short try/return into three partial-failure branches (gateError, recordError, closed) that share mutable `let`s (done, gateError, recordError) declared at different points.",
+        "suggested_fix": "Extract two named steps and leave apply as the sequence: `runCompletionGate(ctx, seams, prepared, confirmation): Promise<{ done?: ...; gateError?: unknown }>` plus `writeCompletionRecord(prepared, facts, confirmation): Promise<unknown | undefined>` (returns the error), and `completionOutput({ closedLine, problems, done })` for the text. Move `reason` to module scope (the same `error instanceof Error ? error.message : String(error)` expression is already inlined at lines 183 of operator-confirm-tools.ts, 235 there and 675 here).",
+        "evidence": "src/commands/operator-confirm-review.ts lines 741-797 at head 6f47bf35f; body length counted from the `async apply(` line to its closing brace. Also reported by: review-clean-code-w1:F-001.",
+        "confidence": "medium",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 742,
+        "quote": "if (prepared === undefined) return { output: \"review_complete: nothing prepared for this card\", isError: true };",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review.ts:742"
+          ],
+          "enumeration_method": "Functions over 40 lines in this delta: completeSpec().apply (this finding) and the arrow returned by mirrorApprovalToTopic in src/tui/tui-shell.ts (6097-6148, about 50 lines, two parallel card-log lifecycles; see CC-W2-004). completionFacts (658-692, about 35 lines, four data sources) is in the minor band and not filed."
+        }
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-05",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "problem": "The expression `error instanceof Error ? error.message : String(error)` is written out five times in the operator-confirm code: line 87 (`failed`), line 675 (inline in the research.json card line), line 743 (a local `reason` in apply), and src/commands/operator-confirm-tools.ts lines 183 and 235. Line 87 and line 743 are the same helper under two names in one file, and the slice added the third copy.",
+        "impact": "A change to how an error is shown on a card (for example `cause` chaining or redacting a path) has to be made in five places; one miss leaves a card or an operator message with a different rendering. Also, `failed` and `reason` in one file invite a reader to wonder whether they differ.",
+        "suggested_fix": "Hoist one module-level `const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));` in operator-confirm-review.ts, define `failed` as `(error) => ({ refusal: reasonOf(error) })`, and use `reasonOf` on lines 675, 748, 767, 786 and 787; operator-confirm-tools.ts can import the same helper.",
+        "evidence": "keryx ctx rg --all -n 'instanceof Error' src/commands/operator-confirm-review.ts src/commands/operator-confirm-tools.ts returned exactly the five sites above. A repo-wide search for an existing exported helper (errorMessage, messageOf, toErrorMessage) found none; src/retention/fs-deps.ts describeError has a different purpose. Five sites would be major under the definition's DRY rule; reported as minor under the project default that Clean Code findings are minor, because each site is one line and the failure mode is a cosmetic difference in message text.",
+        "confidence": "high",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 87,
+        "quote": "const failed = (error: unknown): { refusal: string } => ({ refusal: error instanceof Error ? error.message : String(error) });"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-06",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "problem": "The delta introduced OperatorConfirmationLog.settle(id, outcome, turnAborted) so the mapping from a race outcome to a card answer lives in one tested place, then used it only for the mirrored branch (line 6138). The not-mirrored branch right above still re-implements the dock half of that mapping by hand with a different shape: `aborted || verdict === undefined` instead of `turnAborted`, and `verdict !== undefined && verdict !== false` instead of `result !== false`.",
+        "impact": "Two copies of 'how a local answer maps to withdrawn/shell and yes/no' with subtly different conditions, one covered by settle's unit test (operator-confirmations.test.ts, 'a mirrored card is settled from how the race ended') and one not covered at all. A later change to the rule (for example treating a thrown inner() as withdrawn) lands in only one of them.",
+        "suggested_fix": "In the unmirrored branch call `operatorCards.settle(unmirroredId, verdict === undefined ? undefined : { from: \"dock\", result: verdict }, foregroundOperation.signal.aborted)` so both branches go through settle and the test covers both.",
+        "evidence": "src/tui/tui-shell.ts:6109 (unmirrored finally) against :6138 (`operatorCards.settle(cardId, outcome, foregroundOperation.signal.aborted)`) and src/tui/operator-confirmations.ts:65-69 (settle). The finally at 6108 runs even when inner() throws, where verdict stays undefined and settle(undefined) gives the same withdrawn/no result.",
+        "confidence": "high",
+        "file": "src/tui/tui-shell.ts",
+        "line": 6109,
+        "quote": "operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted || verdict === undefined ? \"withdrawn\" : \"shell\", yes: verdict !== undefined && verdict !== false });"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-07",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "problem": "review_complete is the one card whose operator record (quote, confirmedVia, pressedBy/pressedAt, head, evidence, waivers) is not handed to the domain library that closes the round. Every sibling card passes `confirmation.confirmedVia` and `cardPressFields(confirmation)` into the library call that mutates the artifact (recordCoverageWaiver, waiveReadiness, answerChunkEstimate, recordPlanConfirmation, answerPremiseQuestion, recordOperatorDecision). Here the command layer calls completeReviewGated first, and only afterwards writes a separate `completion-confirmation.json` into the package.",
+        "impact": "The close and its proof are two non-atomic writes owned by different layers: the delta itself had to add a branch for 'the round is closed but the confirmation record could not be written'. The sidecar is registered nowhere: `keryx ctx rg 'completion-confirmation|COMPLETION_FILE' src docs` (non-test) finds only these two lines, so no reader, no readiness/status item, no ledger entry, no manifest field and no TM-04 sentence refers to it. The 'who pressed' fact for the review close therefore lives only in the in-memory card log (lost on restart) and in an unindexed file, while TM-04 6a says 'the record keeps pressedBy'.",
+        "suggested_fix": "Pass the confirmation (quote, confirmedVia, press fields, at) into completeReviewGated / completeManagedReview via an option so the engine writes it into the manifest or a registered artifact in the same step that sets status closed, as the sibling libraries do. If the sidecar is kept, record it before the gate (remove it when the gate refuses), read it back in `review status`/readiness, and name the file in TM-04 section 6a.",
+        "evidence": "src/commands/operator-confirm-review.ts:753-796 (gate, close check, then writeFileAtomic of COMPLETION_FILE, then the 'closed but record could not be written' branch); contrast :157, :236, :294, :444, :566, :639 where the press fields travel into the library call. rg over src and docs for the file name returns only :650 and :780.",
+        "confidence": "medium",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 780,
+        "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE)",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review.ts:780"
+          ],
+          "enumeration_method": "Operator-card records written by the command layer outside the artifact owner (review_complete only); other cards already route through the domain library."
+        }
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-08",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "problem": "The slice adds a rule that an agent completes a review only through the review_complete card. An autonomous run cannot use it: review_complete is in OPERATOR_CONFIRM_TOOL_NAMES and excluded from the unattended roster (unattended.ts 55-88, 241-243). Yet src/review/autonomous-profile.ts:144 tells the autonomous child to 'finish it yourself: ... then keryx review complete' and line 153 says 'The run is finished only when keryx review complete has closed the package'; the same guide's exit table says exit 0 is 'closed by `keryx review complete`'. The same sentence also says the run 'never tells you to run the terminal command', but the profile prompt does exactly that.",
+        "impact": "Documentation and agent prompts contradict each other about the only path an unattended run has to close a review. A reader of the guide cannot tell whether an autonomous run may run the CLI; a future change that enforces the 'agent never runs the CLI' rule would break the autonomous exit-0 path with no doc saying so.",
+        "suggested_fix": "State the autonomous exception in the guide and in the SKILL Done-when ('an unattended run closes the package with `keryx review complete` because no card can be answered'), or reword autonomous-profile.ts 144/153 to match the new rule. Pick one and make the exit table agree.",
+        "evidence": "docs/docs/guides/autonomous-review.md:35 (new sentence); src/review/autonomous-profile.ts:144 and 153; src/trigger/unattended.ts:241-243 (unattendedRefusal for excluded card tools). Also reported by: review-pr-contract-w1:PC-001, review-style-w1:F-001.",
+        "confidence": "medium",
+        "file": "docs/docs/guides/autonomous-review.md",
+        "line": 35,
+        "quote": "An agent completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal."
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "fix slice slice-01 of this round"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-09",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "The post-close recovery path of review_complete (gate throws after the round closed, so the tool must still report closed and surface the bookkeeping error) has no test. The only close-then-fail case in operator-confirm-review-tools.test.ts (around lines 716-724) fails the confirmation record write, not the gate. Deleting the status-closed fallback (mutant M1) and deleting the gateError-after-close problem line (mutant M2) both leave all 50 tests in the file green.",
+        "impact": "A regression that reports a closed round as 'nothing was recorded' (or silently drops the bookkeeping error after close) would ship unnoticed. Lost-confirmation messaging is the whole point of this fix round.",
+        "suggested_fix": "Add a behavioural test that makes completeReviewGated throw after it has written the closed status (inject a failing post-close step, or stub the bookkeeping writer), then assert the tool result is isError, mentions 'the round is closed but its bookkeeping stopped', and does NOT contain 'nothing was recorded'.",
+        "evidence": "mutation: M1 and M2 survive (scratch copy, bun test src/commands/operator-confirm-review-tools.test.ts, 50 pass) Also reported by: review-testing-practices-w2:F-003.",
+        "confidence": "high",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 765,
+        "quote": "const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === \"closed\";"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-10",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "The onUndelivered wiring and the mirrored/unmirrored settling in mirrorApprovalToTopic are pinned only by a source-text grep (operator-confirmations.test.ts:180-186 asserts the string 'operatorCards.markUndelivered(cardId)' and two '} finally {'). No behavioural test drives the function. Disabling the wiring (mutant T1: isCard replaced by false) and forcing the unmirrored finally to always answer 'shell' (mutant T6) both survive the TUI and operator-confirm suites. The unit test for OperatorConfirmationLog.markUndelivered passes independently of whether the shell ever calls it.",
+        "impact": "A refactor that keeps the strings but breaks the call order, or removes the call, keeps the grep green while an undelivered card stays on the waiting list or is recorded as answered.",
+        "suggested_fix": "Extract mirrorApprovalToTopic's settle step to a testable seam, or drive it from a tui-shell test with a fake transport that returns undelivered, and assert on the public OperatorConfirmationLog state (waiting() excludes the card; the answered line shows withdrawn) rather than the source text.",
+        "evidence": "mutation: T1 and T6 survive (scratch copy, bun test operator-confirmations.test.ts tui-shell.test.ts operator-confirm-tools.test.ts)",
+        "confidence": "medium",
+        "file": "src/tui/tui-shell.ts",
+        "line": 6128,
+        "quote": "if (cardId !== undefined) operatorCards.markUndelivered(cardId);"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-11",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "The new unreadable-research.json branch is tested only in one direction. Inverting the guard so a missing research.json (ENOENT, the normal no-research case) is reported as a coverage waiver (mutant M3) leaves the suite green; the never-report mutant (M3b) is killed, so only the ENOENT-must-be-silent direction is unpinned.",
+        "impact": "Every review without a research file would show a spurious 'waiver: coverage' line on the confirmation card, training the operator to ignore waiver lines.",
+        "suggested_fix": "Add a card-content test for a package with no research.json and assert the card text contains no 'waiver: coverage' line.",
+        "evidence": "mutation: M3 survives, M3b killed",
+        "confidence": "high",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 674,
+        "quote": "if ((error as NodeJS.ErrnoException).code !== \"ENOENT\") {"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-12",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "A remote yes is asserted to record remote-card, pressedBy and pressedAt for five of the nine recording specs, but not for review_publish, review_waive_coverage, review_waive_readiness or the mutation-waiver and reviewer-override decisions. Deleting cardPressFields(confirmation) at lines 236, 294, 357 and 444 leaves every operator-confirm test, the confirm-token tests, the TUI tests and completion-gate tests green (175 pass, 0 fail each).",
+        "impact": "These are the recorders whose audit trail AC1 exists for. A refactor that drops the spread loses who pressed the card and when on a waiver or a publish, and nothing goes red. This is the unfinished half of C-33.",
+        "suggested_fix": "Add one table-driven test in operator-confirm-review-tools.test.ts over the four remaining specs: press a remote yes (yes(t, input, 'remote', pressedBy) with PRESSED_AT), read the record each spec writes (the publish record, research.json coverage waiver, manifest readiness_waivers entry, operator-decisions.json entry) and expect confirmedVia remote-card, pressedBy and pressedAt; press a tui yes and expect neither field.",
+        "evidence": "Mutation runs in a scratch copy of HEAD: site-236 (publish), site-294 (waive_coverage), site-357 (waive_readiness), site-444 (decisions) each survive; site-157, site-566, site-639 and site-772 are killed by the existing remote-yes assertions. The record-layer press sites (publish.ts:175, coverage-complete.ts:100/:228, readiness.ts:577, operator-decisions.ts:233/:278) have no pressedBy assertion in src/review/*.test.ts and were not mutated (not reached).",
+        "confidence": "high",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 294,
+        "quote": "const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review.ts:236 (review_publish)",
+            "src/commands/operator-confirm-review.ts:294 (review_waive_coverage)",
+            "src/commands/operator-confirm-review.ts:357 (review_waive_readiness)",
+            "src/commands/operator-confirm-review.ts:444 (mutation waiver and reviewer override decisions)"
+          ],
+          "enumeration_method": "keryx ctx rg -n cardPressFields src/commands/operator-confirm-review.ts lists nine matches (one import, eight spreads); each spread was deleted in turn in a scratch copy and the five operator-confirm and gate test files run"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "fix slice slice-01 of this round"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-13",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "The card text for the report evidence line and for a recorded waiver quote goes through cardSafe, but the tests pin that sanitising only for the recorded head ('a recorded head with a line break cannot add a line to the card'). Removing cardSafe from the evidence line (M27) and from the waiver operator_quote (M28, line 668) survives.",
+        "impact": "These two strings come from the report file and from manifest waivers, both writable by an agent. The card the operator reads is the authority for the yes; a line break in either could add a forged line to it, and the test that guards the same property for the head does not cover them.",
+        "suggested_fix": "Extend the head test into a table over the three card fields: a report whose Evidence level line carries a line break, and a readiness waiver whose operator_quote carries one; expect the card text to contain no extra line for either.",
+        "evidence": "Mutation M27 (`: evidenceLine`) and M28 (`${clip(waiver.operator_quote)}` without cardSafe) both leave 175 pass, 0 fail; M12 (head without cardSafe) is red.",
+        "confidence": "medium",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 688,
+        "quote": "cardSafe(evidenceLine)"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "D-14",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "The attended-completion nudge was rewritten to name the review_complete card instead of the CLI (lines 761, 804, 819), but src/review/completion-gate.test.ts asserts none of that wording. Reverting each of the three strings to the CLI form (M29, M30, M31) survives.",
+        "impact": "The point of the commit is that an attended agent is told to ask for the card and never to run keryx review complete itself. A revert reintroduces the instruction the operator-confirmation design forbids, with no red test.",
+        "suggested_fix": "In completion-gate.test.ts assert that the attended nudge and the stop text contain 'review_complete' and do not contain 'keryx review complete' as an instruction to run.",
+        "evidence": "Mutations M29, M30, M31 each leave 175 pass, 0 fail.",
+        "confidence": "medium",
+        "file": "src/review/completion-gate.ts",
+        "line": 804,
+        "quote": "The review_complete card would still be refused on:"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": "carried open as a follow-up by the operator"
+    }
+  ],
+  "layers": {
+    "version": 1,
+    "files": [
+      "docs/docs/guides/autonomous-review.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/review/completion-gate.ts"
+    ],
+    "prHead": "b1c6da0e6992e4df473bae6b2fde78bc94d28776",
+    "graphCommit": "b1c6da0e6992e4df473bae6b2fde78bc94d28776",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 1,
+      "files": [
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-tools.ts",
+        "src/review/completion-gate.test.ts",
+        "src/review/harness-robustness.test.ts"
+      ]
+    },
+    "symbols": [
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "ReviewConfirmSeams",
+        "kind": "interface",
+        "line": 55,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "trackerPrLookup",
+        "kind": "function",
+        "line": 65,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "packageRef",
+        "kind": "function",
+        "line": 72,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "resolvePackage",
+        "kind": "function",
+        "line": 78,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": [
+          "placeReviewPath (src/lib/review-path-flags.ts:50)",
+          "resolveReviewPackagePath (src/review/managed.ts:2934)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "label",
+        "kind": "function",
+        "line": 85,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "failed",
+        "kind": "function",
+        "line": 87,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "name": "hashedFileCount",
+        "kind": "function",
+        "line": 39,
+        "callers": [
+          "src/review/completion-gate.test.ts"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "name": "fileHash",
+        "kind": "function",
+        "line": 42,
+        "callers": [
+          "dirSignature (src/review/completion-gate.ts:58)",
+          "src/review/completion-gate.test.ts"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "name": "dirSignature",
+        "kind": "function",
+        "line": 58,
+        "callers": [
+          "dirSignature (src/review/completion-gate.ts:58)",
+          "findReviewGateState (src/review/completion-gate.ts:702)"
+        ],
+        "callees": [
+          "dirSignature (src/review/completion-gate.ts:58)",
+          "fileHash (src/review/completion-gate.ts:42)",
+          "isDirectory (src/agents/generate.test.ts:298)"
+        ]
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "name": "isPathDelimiter",
+        "kind": "function",
+        "line": 94,
+        "callers": [
+          "reviewPackagePaths (src/review/completion-gate.ts:102)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "name": "isSeparator",
+        "kind": "function",
+        "line": 95,
+        "callers": [
+          "reviewPackagePaths (src/review/completion-gate.ts:102)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "name": "reviewPackagePaths",
+        "kind": "function",
+        "line": 102,
+        "callers": [
+          "namePaths (src/review/completion-gate.ts:581)",
+          "src/review/completion-gate.test.ts"
+        ],
+        "callees": [
+          "isPathDelimiter (src/review/completion-gate.ts:94)",
+          "isSeparator (src/review/completion-gate.ts:95)"
+        ]
+      }
+    ],
+    "relatedTests": [
+      "src/commands/operator-confirm-review-tools.test.ts",
+      "src/review/completion-gate.test.ts",
+      "src/review/harness-robustness.test.ts"
+    ],
+    "wiki": [],
+    "memory": [],
+    "truncated": [],
+    "unavailable": []
+  }
+}

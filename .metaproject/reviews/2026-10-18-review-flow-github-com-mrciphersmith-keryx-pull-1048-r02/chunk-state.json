@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "retry": {
+    "schemaVersion": 1,
+    "scopeFingerprint": "465ff1bc80f66e87aed821a42bf4ee4081ec4bb1d20f74daf4f1e361a7a3fbff",
+    "reviewers": {
+      "review-regression": {
+        "attempt": 0,
+        "status": "DONE",
+        "notRun": false,
+        "stalls": 0,
+        "covered": [
+          "chunk-001",
+          "chunk-002",
+          "chunk-003",
+          "chunk-004",
+          "chunk-005"
+        ]
+      }
+    }
+  },
+  "derived": [],
+  "outcomes": {
+    "chunk-001": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 1,
+      "findings": []
+    },
+    "chunk-002": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 2,
+      "findings": []
+    },
+    "chunk-003": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 3,
+      "findings": []
+    },
+    "chunk-004": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 4,
+      "findings": []
+    },
+    "chunk-005": {
+      "status": "DONE",
+      "decision": "accepted",
+      "attempts": 1,
+      "seq": 5,
+      "findings": []
+    }
+  }
+}

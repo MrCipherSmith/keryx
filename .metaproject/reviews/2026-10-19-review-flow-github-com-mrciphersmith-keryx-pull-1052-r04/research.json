@@ -1,0 +1,1230 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:AR-W1-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding AR-W1-001 (SKILL.md line 782 and SKILL.detail.md line 386 (and the same lines in src/gdskills/bundled/skills/re) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w1:AR-W1-001 (minor, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md) is recorded as canonical finding E-01 in the r04 report (keryx:findings block); read from raw/review-architecture-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-01 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-01"
+    },
+    {
+      "id": "review-architecture-w2:AR-W2-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding AR-W2-001 (completionFacts (line 658) parses manifest.json, report.md and research.json with readFileSync and a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w2:AR-W2-001 (minor, src/commands/operator-confirm-review.ts:665) is recorded as canonical finding E-24 in the r04 report (keryx:findings block); read from raw/review-architecture-w2.txt.",
+      "reason": "Primary report for canonical E-24; the canonical record carries this text.",
+      "finding": "E-24"
+    },
+    {
+      "id": "review-architecture-w2:AR-W2-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding AR-W2-002 (The attribution record of the closing act (confirmedVia, pressedBy, pressedAt, head, evidence, waive) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w2:AR-W2-002 (minor, src/commands/operator-confirm-review.ts:780) is recorded as canonical finding E-25 in the r04 report (keryx:findings block); read from raw/review-architecture-w2.txt.",
+      "reason": "Primary report for canonical E-25; the canonical record carries this text.",
+      "finding": "E-25"
+    },
+    {
+      "id": "review-architecture-w3:F-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-001 (Additional agent-facing sites (SKILL.md:134, SKILL.md:124, Round plan step 9, SKILL.detail.md:866, p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-001 (minor, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:134) is recorded as canonical finding E-01 in the r04 report (keryx:findings block); read from raw/review-architecture-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-01 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-01"
+    },
+    {
+      "id": "review-architecture-w3:F-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-002 (The pressedBy / pressedAt shape and its remote-card-only conditional spread are re-declared in src/f) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-002 (info, src/review/types.ts:1) is recorded as canonical finding E-26 in the r04 report (keryx:findings block); read from raw/review-architecture-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-26 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-26"
+    },
+    {
+      "id": "review-architecture-w4:F-001",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-001 (operatorCards.ask/settle/markUndelivered are called only inside mirrorApprovalToTopic. requestApprov) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-001 (minor, src/tui/tui-shell.ts:6028) is recorded as canonical finding E-46 in the r04 report (keryx:findings block); read from raw/review-architecture-w4.txt.",
+      "reason": "Primary report for canonical E-46; the canonical record carries this text.",
+      "finding": "E-46"
+    },
+    {
+      "id": "review-architecture-w4:F-002",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-002 (The unmirrored branch re-implements the place/yes mapping that OperatorConfirmationLog.settle alread) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-002 (info, src/tui/tui-shell.ts:6112) is recorded as canonical finding E-52 in the r04 report (keryx:findings block); read from raw/review-architecture-w4.txt.",
+      "reason": "Primary report for canonical E-52; the canonical record carries this text.",
+      "finding": "E-52"
+    },
+    {
+      "id": "review-architecture-w4:F-003",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-003 (A pure TUI view-model module value-imports the command registry (which statically imports operator-c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-003 (info, src/tui/operator-confirmations.ts:6) is recorded as canonical finding E-53 in the r04 report (keryx:findings block); read from raw/review-architecture-w4.txt.",
+      "reason": "Primary report for canonical E-53; the canonical record carries this text.",
+      "finding": "E-53"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (describeBlockers line 788 was changed to name the review_complete card, but the overflow line at 791) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w1:F-001 (minor, src/review/completion-gate.ts) is recorded as canonical finding D-03 in the r04 report (keryx:findings block); read from raw/review-clean-code-w1.txt.",
+      "reason": "Primary report for canonical D-03; the canonical record carries this text.",
+      "finding": "D-03"
+    },
+    {
+      "id": "review-clean-code-w2:F-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-001 (SKILL.md:782 and SKILL.detail.md:386 still tell the agent to run `keryx review complete` after a wai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-001 (minor, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md) is recorded as canonical finding E-01 in the r04 report (keryx:findings block); read from raw/review-clean-code-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-01 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-01"
+    },
+    {
+      "id": "review-clean-code-w2:F-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-002 (The remote-answer rule (allowed Telegram user only, this card, once, within one hour; record keeps `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-002 (minor, docs/docs/guides/review-with-a-record.md) is recorded as canonical finding E-15 in the r04 report (keryx:findings block); read from raw/review-clean-code-w2.txt.",
+      "reason": "Primary report for canonical E-15; the canonical record carries this text.",
+      "finding": "E-15"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-003 (The count in the prose does not match the table that follows (17 rows) or the registry (19 names in ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-003 (info, docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md) is recorded as canonical finding E-13 in the r04 report (keryx:findings block); read from raw/review-clean-code-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-13 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-13"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-001",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-001 (apply of the new review_complete spec spans lines 741-797 (57 lines) and does five jobs: re-read fac) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-001 (major, src/commands/operator-confirm-review.ts:741) is recorded as canonical finding E-06 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Primary report for canonical E-06; the canonical record carries this text.",
+      "finding": "E-06"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-002",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-002 (completionFacts (about 35 lines) parses manifest.json, report.md and research.json, reads operator d) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-002 (minor, src/commands/operator-confirm-review.ts:658) is recorded as canonical finding E-24 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-24 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-24"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-003",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-003 (invoke is now about 43 lines. The remote-press policy (who pressed, allowed list, one-hour TTL) sits) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-003 (minor, src/commands/operator-confirm-tools.ts:198) is recorded as canonical finding E-28 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Primary report for canonical E-28; the canonical record carries this text.",
+      "finding": "E-28"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-004",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-004 (confirmationVia, confirmationPressedBy and confirmationPressedAt always travel together, but are thr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-004 (minor, src/commands/agent.ts:6191) is recorded as canonical finding E-26 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-26 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-26"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-005",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-005 (record() hand-writes the two 'x === undefined ? {} : {...}' spreads and, with the recordScheduleDeci) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-005 (minor, src/commands/operator-confirm-other.ts:109) is recorded as canonical finding E-26 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-26 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-26"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-006",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-006 (The abbreviated-head length 12 is a bare literal at lines 723, 734 and 784 inside completeSpec (card) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-006 (minor, src/commands/operator-confirm-review.ts:723) is recorded as canonical finding E-29 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Primary report for canonical E-29; the canonical record carries this text.",
+      "finding": "E-29"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-007",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-007 (The diff adds a local arrow (743) and an inline copy (675) of the error-to-message conversion, while) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-007 (minor, src/commands/operator-confirm-review.ts:743) is recorded as canonical finding E-30 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Primary report for canonical E-30; the canonical record carries this text.",
+      "finding": "E-30"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-008",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-008 (The same five-name list is pasted into the /remote-control description (187) and the /decisions desc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:CC3-008 (minor, src/commands/agent-commands.ts:187) is recorded as canonical finding E-17 in the r04 report (keryx:findings block); read from raw/review-clean-code-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-17 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-17"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-001",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-001 (The pressedBy/pressedAt pair is declared and conditionally spread by hand at src/flow/confirm-token.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:CC4-001 (minor, src/harness/external/write-land.ts:229) is recorded as canonical finding E-26 in the r04 report (keryx:findings block); read from raw/review-clean-code-w4.txt.",
+      "reason": "Primary report for canonical E-26; the canonical record carries this text.",
+      "finding": "E-26"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-002",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-002 (answerChunkEstimate now takes 6 parameters and recordCoverageWaiver (src/review/coverage-complete.ts) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:CC4-002 (minor, src/review/chunks-estimate.ts:160) is recorded as canonical finding E-32 in the r04 report (keryx:findings block); read from raw/review-clean-code-w4.txt.",
+      "reason": "Primary report for canonical E-32; the canonical record carries this text.",
+      "finding": "E-32"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-003",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-003 (The same clause is pasted into all three returns of nextStep (lines 756, 759, 761). It was just rewr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:CC4-003 (minor, src/review/completion-gate.ts:756) is recorded as canonical finding E-10 in the r04 report (keryx:findings block); read from raw/review-clean-code-w4.txt.",
+      "reason": "Primary report for canonical E-10; the canonical record carries this text.",
+      "finding": "E-10"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-004",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-004 (mapApprovalAnswer already casts 'got' to '{ decision?: unknown; approvalId?: unknown; fromId?: unkno) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:CC4-004 (minor, src/remote/shell-bridge.ts:208) is recorded as canonical finding E-33 in the r04 report (keryx:findings block); read from raw/review-clean-code-w4.txt.",
+      "reason": "Primary report for canonical E-33; the canonical record carries this text.",
+      "finding": "E-33"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-005",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-005 (This doc comment describes ReadinessWaiver but sits above ConfirmedVia (already detached on the base) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:CC4-005 (minor, src/review/types.ts:87) is recorded as canonical finding E-34 in the r04 report (keryx:findings block); read from raw/review-clean-code-w4.txt.",
+      "reason": "Primary report for canonical E-34; the canonical record carries this text.",
+      "finding": "E-34"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-001",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-001 (mirrorApprovalToTopic's closure is about 52 lines (6097-6148) mixing card classification, a no-topic) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-001 (minor, src/tui/tui-shell.ts:6097) is recorded as canonical finding E-35 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Primary report for canonical E-35; the canonical record carries this text.",
+      "finding": "E-35"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-002",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-002 (The 'is this an operator card' decision is spelled out at three sites with different rules: 5555 (us) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-002 (minor, src/tui/tui-shell.ts:6100) is recorded as canonical finding E-36 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Primary report for canonical E-36; the canonical record carries this text.",
+      "finding": "E-36"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-003",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-003 (Three positional parameters, the last two optional arrays of the same type. A caller can swap them w) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-003 (minor, src/tui/remote-control-surface.ts:120) is recorded as canonical finding E-37 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Primary report for canonical E-37; the canonical record carries this text.",
+      "finding": "E-37"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-004",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-004 (age() and clock() are new copies of helpers that already exist: clock is the same toISOString().slic) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-004 (minor, src/tui/operator-confirmations.ts:105) is recorded as canonical finding E-38 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Primary report for canonical E-38; the canonical record carries this text.",
+      "finding": "E-38"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-005",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-005 (Two names for one concept and a misleading status model: 'card' (operatorCards, getWaitingCards, wai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-005 (minor, src/tui/operator-confirmations.ts:11) is recorded as canonical finding E-39 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Primary report for canonical E-39; the canonical record carries this text.",
+      "finding": "E-39"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-006",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-006 (OpenDecisionsOptions (shared by openDecisions and openDecisionsArms) gained confirmationLines, docum) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-006 (minor, src/tui/decisions-surface.ts:467) is recorded as canonical finding E-40 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Primary report for canonical E-40; the canonical record carries this text.",
+      "finding": "E-40"
+    },
+    {
+      "id": "review-clean-code-w5:CC5-007",
+      "source": "raw/review-clean-code-w5.txt",
+      "question": "Is review-clean-code finding CC5-007 (entries() is documented as answered 'newest first' and the log as keeping 'the last few answered car) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w5:CC5-007 (info, src/tui/operator-confirmations.ts:87) is recorded as canonical finding E-23 in the r04 report (keryx:findings block); read from raw/review-clean-code-w5.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-23 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-23"
+    },
+    {
+      "id": "review-highload-w4:H4-01",
+      "source": "raw/review-highload-w4.txt",
+      "question": "Is review-highload finding H4-01 (waiting() applies the 1-hour token cutoff only when it is called, and it is called only from repaint) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w4:H4-01 (minor, src/tui/operator-confirmations.ts:81) is recorded as canonical finding E-21 in the r04 report (keryx:findings block); read from raw/review-highload-w4.txt.",
+      "reason": "Primary report for canonical E-21; the canonical record carries this text.",
+      "finding": "E-21"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (describeBlockers was fixed for the empty-list case (line 788 now says to call the `review_complete` ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w1:F-001 (minor, src/review/completion-gate.ts) is recorded as canonical finding D-03 in the r04 report (keryx:findings block); read from raw/review-logic-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical D-03 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "D-03"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (D-12 is claimed fixed by slice-01, but no change in slice-01 or in the r03 to r04 delta adds a remot) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w1:F-002 (minor, src/commands/operator-confirm-review-tools.test.ts) is recorded as canonical finding D-12 in the r04 report (keryx:findings block); read from raw/review-logic-w1.txt.",
+      "reason": "Primary report for canonical D-12; the canonical record carries this text.",
+      "finding": "D-12"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (The Done-when bullet states an absolute rule that an agent never runs `keryx review complete`. For a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w2:F-001 (minor, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:136) is recorded as canonical finding E-45 in the r04 report (keryx:findings block); read from raw/review-logic-w2.txt.",
+      "reason": "Primary report for canonical E-45; the canonical record carries this text.",
+      "finding": "E-45"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (The review_complete card has only a `package` input and apply passes no `dispositions` to completeRe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-001 (major, src/commands/operator-confirm-review.ts:756) is recorded as canonical finding E-02 in the r04 report (keryx:findings block); read from raw/review-logic-w3.txt.",
+      "reason": "Primary report for canonical E-02; the canonical record carries this text.",
+      "finding": "E-02"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (waiveReadiness writes confirmedVia and, with this slice, pressedBy and pressedAt into manifest.readi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-001 (major, src/review/readiness.ts:577) is recorded as canonical finding E-03 in the r04 report (keryx:findings block); read from raw/review-logic-w4.txt.",
+      "reason": "Primary report for canonical E-03; the canonical record carries this text.",
+      "finding": "E-03"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-002 (The stored confirmation token is parsed without checking the types of the new pressedBy and pressedA) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-002 (minor, src/flow/confirm-token.ts:157) is recorded as canonical finding E-22 in the r04 report (keryx:findings block); read from raw/review-logic-w4.txt.",
+      "reason": "Primary report for canonical E-22; the canonical record carries this text.",
+      "finding": "E-22"
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-003 (The plan and chunk-estimate confirmation validators, like the operator-decisions validators (operato) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-003 (minor, src/review/plan-confirmation.ts:1) is recorded as canonical finding E-22 in the r04 report (keryx:findings block); read from raw/review-logic-w4.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-22 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-22"
+    },
+    {
+      "id": "review-logic-w5:F-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-001 (raceApproval informs the card log only when the topic answer is flagged undelivered. Any other end o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w5:F-001 (major, src/tui/approval-mirror.ts:53) is recorded as canonical finding E-04 in the r04 report (keryx:findings block); read from raw/review-logic-w5.txt.",
+      "reason": "Primary report for canonical E-04; the canonical record carries this text.",
+      "finding": "E-04"
+    },
+    {
+      "id": "review-logic-w5:F-002",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-002 (Pruning and the 'newest first' listing both use ask order. A card asked earlier but answered last is) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w5:F-002 (minor, src/tui/operator-confirmations.ts:58) is recorded as canonical finding E-23 in the r04 report (keryx:findings block); read from raw/review-logic-w5.txt.",
+      "reason": "Primary report for canonical E-23; the canonical record carries this text.",
+      "finding": "E-23"
+    },
+    {
+      "id": "review-logic-w5:F-003",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-003 (A topic allow without fromId is logged as 'yes · pressed by a Telegram user', but the tool refuses a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w5:F-003 (info, src/tui/operator-confirmations.ts:68) is recorded as canonical finding E-49 in the r04 report (keryx:findings block); read from raw/review-logic-w5.txt.",
+      "reason": "Primary report for canonical E-49; the canonical record carries this text.",
+      "finding": "E-49"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (TM-04 Purpose states nineteen operator-only decisions, but the section 2 table lists seventeen tool ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-001 (minor, docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md) is recorded as canonical finding E-13 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w1.txt.",
+      "reason": "Primary report for canonical E-13; the canonical record carries this text.",
+      "finding": "E-13"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The PR adds the rule that an agent never runs `keryx review complete` and closes a review only throu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-002 (minor, docs/docs/guides/review-with-a-record.md:893) is recorded as canonical finding E-14 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w1.txt.",
+      "reason": "Primary report for canonical E-14; the canonical record carries this text.",
+      "finding": "E-14"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (description.md and plan.md of flow 464 both still open with 'Status: draft for operator approval', w) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-003 (minor, .metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md:3) is recorded as canonical finding E-16 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w1.txt.",
+      "reason": "Primary report for canonical E-16; the canonical record carries this text.",
+      "finding": "E-16"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-004",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-004 (The PR body does not mention the version bump to 0.3.124 or the dated CHANGELOG section [0.3.124] - ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-004 (info, package.json) is recorded as canonical finding E-48 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w1.txt.",
+      "reason": "Primary report for canonical E-48; the canonical record carries this text.",
+      "finding": "E-48"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-005",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-005 (The /remote-control description (and the /decisions one at line 304: 'also lists the Telegram review) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w2:PC-005 (minor, src/commands/agent-commands.ts:187) is recorded as canonical finding E-17 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w2.txt.",
+      "reason": "Primary report for canonical E-17; the canonical record carries this text.",
+      "finding": "E-17"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-006",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-006 (The PR adds `pressedBy` (the Telegram user id) and `pressedAt` to SignatureConfirmation (types.ts 18) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w3:PC-006 (minor, src/flow/types.ts:173) is recorded as canonical finding E-18 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w3.txt.",
+      "reason": "Primary report for canonical E-18; the canonical record carries this text.",
+      "finding": "E-18"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-007",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-007 (The PR body says \"TUI: pending and answered operator cards in the remote status tab, sidebar and `/d) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w4:PC-007 (minor, src/tui/remote-control-surface.ts:392) is recorded as canonical finding E-19 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w4.txt.",
+      "reason": "Primary report for canonical E-19; the canonical record carries this text.",
+      "finding": "E-19"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-008",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-008 (The PR body says \"The card says when the Telegram mirror was not delivered\" and TM-04 section 6a (li) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w4:PC-008 (minor, src/tui/tui-shell.ts:6129) is recorded as canonical finding E-20 in the r04 report (keryx:findings block); read from raw/review-pr-contract-w4.txt.",
+      "reason": "Primary report for canonical E-20; the canonical record carries this text.",
+      "finding": "E-20"
+    },
+    {
+      "id": "review-regression-w1:R-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding R-001 (The PR rule is that an agent never runs `keryx review complete` and closes through the review_comple) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w1:R-001 (major, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md) is recorded as canonical finding E-01 in the r04 report (keryx:findings block); read from raw/review-regression-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-01 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-01"
+    },
+    {
+      "id": "review-regression-w2:R-001",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding R-001 (The PR rule (SKILL.md:136 Done when, SKILL.detail.md:669, completion-gate.ts nextStep) is that an ag) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w2:R-001 (major, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782) is recorded as canonical finding E-01 in the r04 report (keryx:findings block); read from raw/review-regression-w2.txt.",
+      "reason": "Primary report for canonical E-01; the canonical record carries this text.",
+      "finding": "E-01"
+    },
+    {
+      "id": "review-regression-w2:R-002",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding R-002 (SKILL.md:284 tells the agent to record what became of each finding by running `review complete --fin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w2:R-002 (major, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284) is recorded as canonical finding E-02 in the r04 report (keryx:findings block); read from raw/review-regression-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-02 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-02"
+    },
+    {
+      "id": "review-regression-w4:RB-001",
+      "source": "raw/review-regression-w4.txt",
+      "question": "Is review-regression finding RB-001 (Changed symbols nextStep and decideReviewGate in src/review/completion-gate.ts now tell the model to) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w4:RB-001 (major, src/commands/shell.ts:4712) is recorded as canonical finding E-05 in the r04 report (keryx:findings block); read from raw/review-regression-w4.txt.",
+      "reason": "Primary report for canonical E-05; the canonical record carries this text.",
+      "finding": "E-05"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (describeBlockers was reworded only for the empty-blocker case (D-03 first string). When more than 20) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-001 (minor, src/review/completion-gate.ts) is recorded as canonical finding D-03 in the r04 report (keryx:findings block); read from raw/review-security-code-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical D-03 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "D-03"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-002 (D-12 is claimed fixed in slice-01 but no test was added. A remote yes is asserted to record remote-c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-002 (minor, src/commands/operator-confirm-review-tools.test.ts) is recorded as canonical finding D-12 in the r04 report (keryx:findings block); read from raw/review-security-code-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical D-12 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "D-12"
+    },
+    {
+      "id": "review-security-code-w1:F-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-003 (The D-01 regression assertions cover only the review_waive_readiness result. The review_waive_covera) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-003 (info, src/commands/operator-confirm-review-tools.test.ts) is recorded as canonical finding E-09 in the r04 report (keryx:findings block); read from raw/review-security-code-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-09 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-09"
+    },
+    {
+      "id": "review-security-code-w2:F-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-001 (The sentence says plain `keryx review complete` needs a terminal. review.ts runComplete (lines 4556-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w2:F-001 (info, docs/docs/cli-reference.md:4921) is recorded as canonical finding E-07 in the r04 report (keryx:findings block); read from raw/review-security-code-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-07 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-07"
+    },
+    {
+      "id": "review-security-code-w4:SEC-W4-001",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding SEC-W4-001 (readCoverageWaiver validates pressedBy as a safe integer and pressedAt as a non-empty string, but is) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w4:SEC-W4-001 (info, src/review/estimate.ts) is recorded as canonical finding E-22 in the r04 report (keryx:findings block); read from raw/review-security-code-w4.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-22 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-22"
+    },
+    {
+      "id": "review-security-code-w4:SEC-W4-002",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding SEC-W4-002 (The one deny path after a successful POST carries no undelivered flag, unlike the four paths before ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w4:SEC-W4-002 (info, src/remote/client.ts) is recorded as canonical finding E-54 in the r04 report (keryx:findings block); read from raw/review-security-code-w4.txt.",
+      "reason": "Primary report for canonical E-54; the canonical record carries this text.",
+      "finding": "E-54"
+    },
+    {
+      "id": "review-security-code-w5:SEC-W5-001",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is review-security-code finding SEC-W5-001 (clip() collapses whitespace but strips no ESC/C1/bidi characters; card titles it renders include uns) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w5:SEC-W5-001 (info, src/tui/operator-confirmations.ts:471) is recorded as canonical finding E-55 in the r04 report (keryx:findings block); read from raw/review-security-code-w5.txt.",
+      "reason": "Primary report for canonical E-55; the canonical record carries this text.",
+      "finding": "E-55"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (describeBlockers line 788 was changed to the card, but the overflow line 791 still reads \"- … and N ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-001 (minor, src/review/completion-gate.ts) is recorded as canonical finding D-03 in the r04 report (keryx:findings block); read from raw/review-style-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical D-03 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "D-03"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The same instruction is worded three ways: \"Call review_complete to close the review.\" (tool results) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-002 (info, src/commands/operator-confirm-review.ts) is recorded as canonical finding E-51 in the r04 report (keryx:findings block); read from raw/review-style-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-51 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-51"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The new bullet is one line of roughly 700 characters and covers five tools, the Telegram rules, the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-003 (info, docs/docs/guides/autonomous-review.md) is recorded as canonical finding E-15 in the r04 report (keryx:findings block); read from raw/review-style-w1.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-15 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-15"
+    },
+    {
+      "id": "review-style-w2:F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-001 (The sentence says plain `review complete` needs a terminal. The complete handler in src/commands/rev) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-001 (major, docs/docs/cli-reference.md:4921) is recorded as canonical finding E-07 in the r04 report (keryx:findings block); read from raw/review-style-w2.txt.",
+      "reason": "Primary report for canonical E-07; the canonical record carries this text.",
+      "finding": "E-07"
+    },
+    {
+      "id": "review-style-w2:F-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-002 (A 400-character parenthetical sits between the subject and the predicate of a sentence that ends 'ar) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-002 (minor, docs/docs/limitations.md:187) is recorded as canonical finding E-15 in the r04 report (keryx:findings block); read from raw/review-style-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-15 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-15"
+    },
+    {
+      "id": "review-style-w2:F-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-003 (The count does not match the table in section 2, which lists 17 tools at head (14 at the base, where) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-003 (info, docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:15) is recorded as canonical finding E-13 in the r04 report (keryx:findings block); read from raw/review-style-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-13 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-13"
+    },
+    {
+      "id": "review-style-w2:F-004",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-004 (The same roughly 500-character clause appears word for word at line 603 and line 734, as single long) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-004 (info, docs/docs/guides/review-with-a-record.md:734) is recorded as canonical finding E-15 in the r04 report (keryx:findings block); read from raw/review-style-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-15 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-15"
+    },
+    {
+      "id": "review-style-w3:S3-01",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-01 (The file grew from 655 lines at the merge base to 819 lines at head, past the 800-line threshold, al) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-01 (minor, src/commands/operator-confirm-review.ts:1) is recorded as canonical finding E-31 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Primary report for canonical E-31; the canonical record carries this text.",
+      "finding": "E-31"
+    },
+    {
+      "id": "review-style-w3:S3-02",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-02 (invoke narrows nothing for the compiler after the early return, so it reaches for assertions: `token) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-02 (minor, src/commands/operator-confirm-tools.ts:206) is recorded as canonical finding E-28 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-28 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-28"
+    },
+    {
+      "id": "review-style-w3:S3-03",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-03 (The refusal text hard-codes \"1 hour\" while the limit is REMOTE_CARD_TTL_MS (60 * 60 * 1000), exporte) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-03 (info, src/commands/operator-confirm-tools.ts:219) is recorded as canonical finding E-50 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Primary report for canonical E-50; the canonical record carries this text.",
+      "finding": "E-50"
+    },
+    {
+      "id": "review-style-w3:S3-04",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-04 (The /remote-control description grew from about 85 to about 270 characters, and the same five-name l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-04 (info, src/commands/agent-commands.ts:187) is recorded as canonical finding E-17 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-17 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-17"
+    },
+    {
+      "id": "review-style-w3:S3-05",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-05 (The new review_complete block extracts an error message in three different inline forms (completionF) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-05 (info, src/commands/operator-confirm-review.ts:743) is recorded as canonical finding E-30 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-30 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-30"
+    },
+    {
+      "id": "review-style-w3:S3-06",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-06 (The header still opens with \"Four decisions\" although the file registers ten specs and this PR adds ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-06 (info, src/commands/operator-confirm-review.ts:3) is recorded as canonical finding E-51 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Primary report for canonical E-51; the canonical record carries this text.",
+      "finding": "E-51"
+    },
+    {
+      "id": "review-style-w3:S3-07",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding S3-07 (The new overThresholdPackage helper repeats the nine-line draft manifest literal (reviewId pr7932-r1) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:S3-07 (info, src/commands/operator-confirm-review-tools.test.ts:478) is recorded as canonical finding E-47 in the r04 report (keryx:findings block); read from raw/review-style-w3.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-47 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-47"
+    },
+    {
+      "id": "review-style-w4:S4-01",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding S4-01 (The pressedBy/pressedAt shape and the spread-when-defined pattern are re-implemented by hand in src/) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:S4-01 (minor, src/flow/confirm-token.ts:140) is recorded as canonical finding E-26 in the r04 report (keryx:findings block); read from raw/review-style-w4.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-26 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-26"
+    },
+    {
+      "id": "review-style-w4:S4-02",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding S4-02 (A single line of about 300 characters holds a conditional spread with two more conditional spreads n) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:S4-02 (minor, src/harness/external/write-land.ts:229) is recorded as canonical finding E-27 in the r04 report (keryx:findings block); read from raw/review-style-w4.txt.",
+      "reason": "Primary report for canonical E-27; the canonical record carries this text.",
+      "finding": "E-27"
+    },
+    {
+      "id": "review-style-w4:S4-03",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding S4-03 (o is already cast to { decision?, approvalId?, fromId? } at line 198; the new line adds a second inl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:S4-03 (minor, src/remote/shell-bridge.ts:208) is recorded as canonical finding E-33 in the r04 report (keryx:findings block); read from raw/review-style-w4.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-33 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-33"
+    },
+    {
+      "id": "review-style-w4:S4-04",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding S4-04 (The same clause is pasted into all three returns of nextStep (lines 756, 759, 761).) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:S4-04 (info, src/review/completion-gate.ts:756) is recorded as canonical finding E-10 in the r04 report (keryx:findings block); read from raw/review-style-w4.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-10 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-10"
+    },
+    {
+      "id": "review-style-w4:S4-05",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding S4-05 (The same object literal is returned from four exits of askApproval (lines 441, 453, 457, 461).) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:S4-05 (info, src/remote/client.ts:441) is recorded as canonical finding E-56 in the r04 report (keryx:findings block); read from raw/review-style-w4.txt.",
+      "reason": "Primary report for canonical E-56; the canonical record carries this text.",
+      "finding": "E-56"
+    },
+    {
+      "id": "review-style-w4:S4-06",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding S4-06 (Inserted between ./package-location and ./premise, breaking the alphabetical order of the surroundin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:S4-06 (info, src/review/premise-question.ts:13) is recorded as canonical finding E-57 in the r04 report (keryx:findings block); read from raw/review-style-w4.txt.",
+      "reason": "Primary report for canonical E-57; the canonical record carries this text.",
+      "finding": "E-57"
+    },
+    {
+      "id": "review-style-w5:S5-01",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-01 (mirrorApprovalToTopic now holds the unmirrored-card early branch, the isCard four-clause condition, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-01 (minor, src/tui/tui-shell.ts:6100) is recorded as canonical finding E-35 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-35 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-35"
+    },
+    {
+      "id": "review-style-w5:S5-02",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-02 (clock() is byte-identical to remote-control-surface.ts:144 and channels-surface.ts:127 (a third copy) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-02 (minor, src/tui/operator-confirmations.ts:105) is recorded as canonical finding E-38 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-38 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-38"
+    },
+    {
+      "id": "review-style-w5:S5-03",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-03 (confirmationLines is a function (entries, now) -> string[] here and an option property () => readonl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-03 (minor, src/tui/operator-confirmations.ts:148) is recorded as canonical finding E-40 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-40 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-40"
+    },
+    {
+      "id": "review-style-w5:S5-04",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-04 (A pure approval-response builder sits at module level between SIDE_WORKER_DENIED_TOOL_NAMES and isTo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-04 (info, src/tui/tui-shell.ts:571) is recorded as canonical finding E-58 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Primary report for canonical E-58; the canonical record carries this text.",
+      "finding": "E-58"
+    },
+    {
+      "id": "review-style-w5:S5-05",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-05 (The docblock does not mention the new confirmations parameter; projectRemoteRow's docblock (line 385) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-05 (info, src/tui/remote-control-surface.ts:119) is recorded as canonical finding E-59 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Primary report for canonical E-59; the canonical record carries this text.",
+      "finding": "E-59"
+    },
+    {
+      "id": "review-style-w5:S5-06",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-06 (The arithmetic uses REMOTE_CARD_TTL_MS but the visible text hardcodes '1-hour' here and in four othe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-06 (info, src/tui/operator-confirmations.ts:126) is recorded as canonical finding E-50 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Duplicate or sub-aspect of canonical E-50 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "E-50"
+    },
+    {
+      "id": "review-style-w5:S5-07",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-07 (`at` is an array index in answer() and markUndelivered() (lines 50, 73) but a timestamp in answered.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-07 (info, src/tui/operator-confirmations.ts:50) is recorded as canonical finding E-60 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Primary report for canonical E-60; the canonical record carries this text.",
+      "finding": "E-60"
+    },
+    {
+      "id": "review-style-w5:S5-08",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding S5-08 (Tests for projectRemoteRow, formatRemoteStatusLines, withConfirmationLines/presentDecisions and the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w5:S5-08 (info, src/tui/operator-confirmations.test.ts:1) is recorded as canonical finding E-61 in the r04 report (keryx:findings block); read from raw/review-style-w5.txt.",
+      "reason": "Primary report for canonical E-61; the canonical record carries this text.",
+      "finding": "E-61"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The fix that points agents at the review_complete card pins only one of the strings it changed. oper) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-001 (minor, src/commands/operator-confirm-review.ts) is recorded as canonical finding E-09 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w1.txt.",
+      "reason": "Primary report for canonical E-09; the canonical record carries this text.",
+      "finding": "E-09"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (A remote press is driven and read back (pressedBy/pressedAt) for review_chunks_answer, review_decide) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-001 (minor, src/commands/operator-confirm-review-tools.test.ts:1) is recorded as canonical finding D-12 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w2.txt.",
+      "reason": "Duplicate or sub-aspect of canonical D-12 (same site or mechanism); named in that finding's evidence line.",
+      "finding": "D-12"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (The test only calls ask() with a bogus head input. buildCard ignores input.head and apply is never i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-002 (minor, src/commands/operator-confirm-review-tools.test.ts:694) is recorded as canonical finding E-12 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w2.txt.",
+      "reason": "Primary report for canonical E-12; the canonical record carries this text.",
+      "finding": "E-12"
+    },
+    {
+      "id": "review-testing-practices-w2:F-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-003 (The test for the remote completeness check passes neither confirmationPressedBy nor confirmationPres) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-003 (minor, src/commands/operator-confirm-tools.test.ts:408) is recorded as canonical finding E-11 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w2.txt.",
+      "reason": "Primary report for canonical E-11; the canonical record carries this text.",
+      "finding": "E-11"
+    },
+    {
+      "id": "review-testing-practices-w2:F-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-004 ('a no, local or remote, records nothing' (confirm_plan, line 508; decide_premise, line 537) repeats ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-004 (info, src/commands/operator-confirm-review-tools.test.ts:508) is recorded as canonical finding E-47 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w2.txt.",
+      "reason": "Primary report for canonical E-47; the canonical record carries this text.",
+      "finding": "E-47"
+    },
+    {
+      "id": "review-testing-practices-w3:F-001",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-001 (RemoteClient.askApproval sets undelivered: true at four returns (client.ts:441 not connected or abor) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-001 (minor, src/remote/mirror-undelivered.test.ts:46) is recorded as canonical finding E-41 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w3.txt.",
+      "reason": "Primary report for canonical E-41; the canonical record carries this text.",
+      "finding": "E-41"
+    },
+    {
+      "id": "review-testing-practices-w3:F-002",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-002 (Both raceApproval dock stubs wait on a fixed 10 ms timer (lines 106 and 125) to let the topic leg se) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-002 (minor, src/remote/mirror-undelivered.test.ts:106) is recorded as canonical finding E-42 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w3.txt.",
+      "reason": "Primary report for canonical E-42; the canonical record carries this text.",
+      "finding": "E-42"
+    },
+    {
+      "id": "review-testing-practices-w3:F-003",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-003 (The new RemoteBridge.connected getter (this.client?.connected === true) is asserted only for a bridg) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-003 (info, src/remote/mirror-undelivered.test.ts:84) is recorded as canonical finding E-62 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w3.txt.",
+      "reason": "Primary report for canonical E-62; the canonical record carries this text.",
+      "finding": "E-62"
+    },
+    {
+      "id": "review-testing-practices-w4:F-001",
+      "source": "raw/review-testing-practices-w4.txt",
+      "question": "Is review-testing-practices finding F-001 (remoteApproval (the only producer of via/pressedBy/pressedAt on the ApprovalResponse, tui-shell.ts:5) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w4:F-001 (major, src/tui/tui-shell.ts:6147) is recorded as canonical finding E-08 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w4.txt.",
+      "reason": "Primary report for canonical E-08; the canonical record carries this text.",
+      "finding": "E-08"
+    },
+    {
+      "id": "review-testing-practices-w4:F-002",
+      "source": "raw/review-testing-practices-w4.txt",
+      "question": "Is review-testing-practices finding F-002 (The sidebar, status-tab and /decisions tests call only the pure formatters (projectRemoteRow, format) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w4:F-002 (minor, src/tui/operator-confirmations.test.ts:129) is recorded as canonical finding E-43 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w4.txt.",
+      "reason": "Primary report for canonical E-43; the canonical record carries this text.",
+      "finding": "E-43"
+    },
+    {
+      "id": "review-testing-practices-w4:F-003",
+      "source": "raw/review-testing-practices-w4.txt",
+      "question": "Is review-testing-practices finding F-003 (onUndelivered is deliberately placed after the settled guard, but both new raceApproval tests (mirro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w4:F-003 (minor, src/tui/approval-mirror.ts:51) is recorded as canonical finding E-44 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w4.txt.",
+      "reason": "Primary report for canonical E-44; the canonical record carries this text.",
+      "finding": "E-44"
+    },
+    {
+      "id": "review-testing-practices-w4:F-004",
+      "source": "raw/review-testing-practices-w4.txt",
+      "question": "Is review-testing-practices finding F-004 (A remote-layer unit test imports the 476 KB shell module to test a three-line pure array helper, and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w4:F-004 (info, src/remote/mirror-undelivered.test.ts:10) is recorded as canonical finding E-63 in the r04 report (keryx:findings block); read from raw/review-testing-practices-w4.txt.",
+      "reason": "Primary report for canonical E-63; the canonical record carries this text.",
+      "finding": "E-63"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "D-01": "closed",
+      "D-02": "open",
+      "D-03": "partial",
+      "D-04": "open",
+      "D-05": "open",
+      "D-06": "open",
+      "D-07": "open",
+      "D-08": "closed",
+      "D-09": "open",
+      "D-10": "open",
+      "D-11": "open",
+      "D-12": "closed",
+      "D-13": "open",
+      "D-14": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:fa1931f15abb",
+        "rawEvidence": "raw/review-architecture-w4.txt#sha256:fa1931f15abb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:f5f87e7bc7d3",
+        "rawEvidence": "raw/review-clean-code-w5.txt#sha256:f5f87e7bc7d3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:11beb5d23f99",
+        "rawEvidence": "raw/review-highload-w4.txt#sha256:11beb5d23f99",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:d4cd2c8670db",
+        "rawEvidence": "raw/review-logic-w5.txt#sha256:d4cd2c8670db",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:7cd491046c8b",
+        "rawEvidence": "raw/review-performance-w4.txt#sha256:7cd491046c8b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:d373ddf2a69b",
+        "rawEvidence": "raw/review-pr-contract-w4.txt#sha256:d373ddf2a69b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:1d2642b97f74",
+        "rawEvidence": "raw/review-regression-w5.txt#sha256:1d2642b97f74",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:ac996f0812ea",
+        "rawEvidence": "raw/review-security-code-w5.txt#sha256:ac996f0812ea",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:6c3d9fec9f43",
+        "rawEvidence": "raw/review-style-w5.txt#sha256:6c3d9fec9f43",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:3506dea46484",
+        "rawEvidence": "raw/review-testing-practices-w4.txt#sha256:3506dea46484",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 45,
+    "known": 0,
+    "unknown": 45,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

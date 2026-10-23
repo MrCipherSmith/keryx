@@ -1,0 +1,142 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- PR 1058, base 33020cf1e, head 5974c9768. Slice read in full: slice-01 (1311 lines): the skill texts (review-orchestrator SKILL.md and SKILL.detail.md, job-orchestrator, review-premise), `review-finding.schema.json`, README, and flow/gdgraph bookkeeping files.
+- The slice holds no executable code. For context I read `git diff` of `src/commands/review-operator.ts`, `src/review/operator-decisions.ts`, `src/review/types.ts`, `src/trigger/unattended.ts`, and `git grep KERYX_TOOL_CALL`. The implementation itself belongs to other slices and is not reviewed here.
+- The decided trade (keryx does not verify the host answer; TM-04 section 5 reversed) is not reported.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 3
+- Info: 1
+
+### Findings
+
+### [SEC-001] Skill tells the agent both to supply `--reason` and never to write the operator's reason
+- Severity: minor
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (Wave D bullet and Hosts "Operator decisions" bullet)
+- Attack vector: no outside attacker. The weakness is attribution. A prompt-injected or careless agent follows the command template, which requires `--reason "<why>"`, and writes the reason itself. The record stores it in `operator.reason` next to `actor: "operator"`, so agent-authored text reads as the operator's reason.
+- Problem: the same SKILL.md says `plus --reason "<why>" on waive-mutation, override-reviewers and decide-premise` (the CLI refuses a missing `--reason`, per the help text in review-operator.ts), and in Wave D says "Record only an answer they gave and never write their words or their reason yourself." Both cannot hold: the verb needs a reason and the skill forbids the agent to write it. The previous wording ("never write their reason") assumed the operator ran the command. The schema description of `operator` still calls it "the operator's answer ... An audit trail".
+- Why it matters: the host-question path is already weaker evidence. A reason that the agent wrote and the record attributes to the operator weakens it further, and the instruction cannot be followed as written.
+- Fix: say where the reason comes from. Either the question asks the operator for the reason and `--reason` is their words, or the record marks it as agent-supplied (a separate `hostQuestion` field), and the skill says which one.
+
+### [SEC-002] Skill has the agent paste verbatim question and answer text, which can carry untrusted content, into double-quoted shell arguments
+- Severity: minor
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (Hosts "Operator decisions" bullet), same template in SKILL.detail.md (readiness item 11, Preflight 4 step 4) and the Wave D bullet
+- Attack vector: a PR author puts `$(cmd)` or a backtick expression in code or a PR comment. A reviewer quotes it in a finding. The held finding's `question` (premise judge output) or the agent's own question text carries it. The agent copies "the question as asked" into `--question-text "..."` in a Bash call, and the shell expands it with the agent's privileges. An operator answer containing `"` or a newline also breaks the command.
+- Problem: the template is `--answer-text "<their words, verbatim>" --question-text "<the question as asked>"`. Double quotes expand `$()` and backticks. Earlier templates (`--quote "<their words>"`) did the same, but they carried only the operator's own typing. `--question-text` now carries text derived from reviewed code. The skill does not say to escape it or pass it another way.
+- Why it matters: the agent already has a shell, so this is not new privilege. It is a trust-boundary crossing from third-party PR text into a command line. It is reachable only when the agent pastes verbatim without escaping.
+- Fix: tell the agent to pass the texts with single quotes (escaping embedded `'`), or add `--answer-text-file` / `--question-text-file` or stdin input and name it in the skill and help.
+- Confidence: medium. The path needs an agent that does not escape; nothing in the diff stops it.
+
+### [SEC-003] The skill points keryx shell at the host-question path, but that shell always refuses `--answered-by`
+- Severity: minor
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (Hosts "Operator decisions" bullet)
+- Attack vector: none. The risk is an agent that hits a refusal and works around it (for example, unsetting `KERYX_TOOL_CALL`), because the skill sent it down a path that cannot succeed.
+- Problem: the skill lists `ask_user` (a keryx shell tool) among the host question tools and `keryx-shell` among the `--answered-by` sources. But `src/harness/process/shell-spawn.ts:140` sets `env.KERYX_TOOL_CALL = "1"` for every `shell_exec` child, and `src/commands/review-operator.ts:332` refuses `--answered-by` when it is set. Inside keryx shell the verb therefore always refuses, and the only working path is the card. The sibling sentence says to call the card there, so the text is inconsistent. The `keryx-shell` source value can then never be recorded by the shell itself.
+- Why it matters: weak, and only a contract mismatch. A refused command with a skill saying to run it invites a bypass attempt. `command-risk.ts` already guards `env -u KERYX_TOOL_CALL`, which limits the harm.
+- Fix: state in the skill that in keryx shell the card is the only path and `--answered-by` is refused there. Drop `ask_user` from the host-question list for these four acts, or say what `keryx-shell` is for (for example a Claude Code session whose own environment was cleaned).
+
+### [SEC-004] Schema does not enforce the coupling between `confirmedVia: "host-question"` and `hostQuestion`
+- Severity: info
+- File: .metaproject/core/gdskills/contracts/review-finding.schema.json (the `operator` object)
+- Attack vector: none in the current code path. The runtime validator (`viaConsistent` in src/review/operator-decisions.ts) requires a complete `hostQuestion` exactly when the record says `host-question`, but the schema does not.
+- Problem: the description says `Set with confirmedVia host-question only`, yet the schema accepts `hostQuestion` with `confirmedVia: "terminal"` or `"tui-card"`, and `confirmedVia: "host-question"` with no `hostQuestion`. The `operator` object sets `additionalProperties: false`, so the author meant it to be strict. `time` and `ref` also have no format or length bound.
+- Why it matters: a consumer that trusts the schema (the PR comment renderer, `/decisions` report) could show a host-question record with no question, or a card record carrying a forged question block. Ingest strips `operator` from input findings, so no outside input reaches it today. This is why it is info.
+- Fix: add an `allOf` entry: `if confirmedVia const host-question then required hostQuestion`, and `if confirmedVia not host-question then hostQuestion absent` (`not: { required: [hostQuestion] }`).
+
+### Clean Areas
+- Injection (SQL, XSS, command execution): no executable code in the slice; SEC-002 covers the one command-line template path.
+- Auth/authz: skills keep `review complete`, its waivers, publish and chunk acts on the card or terminal path, and readiness item 11 (premise decisions) stays non-waivable. `unattended runs and nested keryx refuse the flag` is stated consistently across the skills (the runtime guards are in other slices).
+- Secrets, crypto, CSRF, path traversal, open redirect: nothing in the slice. No credentials, tokens or PII in the added flow, journal and context files (they hold Helyx message ids and the operator's quoted request only).
+- README and skill text state the weaker proof plainly ("keryx does not verify them, which is why it is weaker than a card"), so the decision is not hidden.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "The slice holds the skill texts, the review-finding schema and the README for flow 467. No exploitable vulnerability is introduced. Three minor findings: the skill both requires and forbids an agent-written --reason (attribution), verbatim untrusted text goes into double-quoted shell arguments, and the skill sends keryx shell to a path that shell always refuses. One info finding: the schema does not enforce the confirmedVia/hostQuestion coupling the runtime enforces.",
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "minor",
+      "repo": null,
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Record only an answer they gave and never write their words or their reason yourself.",
+      "problem": "The skill requires `--reason \"<why>\"` on decide-premise, waive-mutation and override-reviewers (the CLI refuses without it) and in the same text says the agent must never write the operator's reason. The reason lands in operator.reason next to actor operator.",
+      "impact": "An agent-written reason is stored as the operator's, which weakens the audit trail of a path that is already unverified; the instruction cannot be followed as written.",
+      "suggested_fix": "State who supplies the reason: have the question ask the operator for it so --reason is their words, or record it as agent-supplied in the hostQuestion object, and make the skill say which.",
+      "evidence": "SKILL.md Hosts bullet: 'plus `--reason \"<why>\"` on `waive-mutation`, `override-reviewers` and `decide-premise`' versus Wave D: 'never write their words or their reason yourself'; review-operator.ts help: 'a missing --reason' is refused.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "dedupe_key": "skill-reason-contradiction",
+      "blocking_merge": false
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "repo": null,
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Then record the answer with the verb: `keryx review <verb> --package <package> --answered-by",
+      "problem": "The command template puts verbatim question text (derived from reviewed code and premise-judge output) and answer text into double-quoted shell arguments, with no instruction to escape or to pass them by file or stdin. Double quotes expand $() and backticks.",
+      "impact": "A PR author's `$(cmd)` text that reaches a finding question could run with the agent's privileges if pasted verbatim; an answer with a double quote or newline breaks the command. Needs an agent that does not escape.",
+      "suggested_fix": "Tell the agent to single-quote the texts and escape embedded single quotes, or add --answer-text-file / --question-text-file (or stdin) and use it in the skill, help and README.",
+      "evidence": "Same template at SKILL.md Hosts bullet and Wave D bullet, and SKILL.detail.md readiness item 11 and Preflight 4 step 4: `--answer-text \"<their words, verbatim>\" --question-text \"<the question as asked>\"`.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "skill-shell-interpolation-question-text",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (Hosts bullet, Round plan step 6, Wave D bullet)",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (readiness item 11, Preflight 4 step 4, mutation pass)",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md (HELD paragraph)",
+          "README.md (Operator decisions section)"
+        ],
+        "enumeration_method": "read the full slice diff and listed every added line that carries --answer-text or --question-text; the bundled copies under src/gdskills/bundled are the same text and are in other slices"
+      }
+    },
+    {
+      "id": "SEC-003",
+      "severity": "minor",
+      "repo": null,
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Ask the operator with the host's own question tool (`AskUserQuestion`, Codex's question tool, a Telegram poll through Helyx, `ask_user`)",
+      "problem": "The skill lists keryx shell's `ask_user` as a host question tool and `keryx-shell` as a --answered-by source, but every keryx shell shell_exec child carries KERYX_TOOL_CALL=1 and the verb refuses --answered-by under it. In keryx shell the host-question path always fails; only the card works.",
+      "impact": "Contract mismatch: an agent told to run a command that cannot succeed may try a workaround such as unsetting KERYX_TOOL_CALL (command-risk.ts guards that form). The `keryx-shell` source value cannot be recorded by the shell itself.",
+      "suggested_fix": "Say in the skill that in keryx shell the card is the only path and --answered-by is refused there; drop `ask_user` from this list, or say what the keryx-shell source is for.",
+      "evidence": "src/harness/process/shell-spawn.ts:140 `env.KERYX_TOOL_CALL = \"1\";` and src/commands/review-operator.ts:332 `if (env[\"KERYX_TOOL_CALL\"] === \"1\") {` ... `--answered-by is refused: this keryx was started from an agent's shell`.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "dedupe_key": "skill-keryx-shell-host-question-refused",
+      "blocking_merge": false
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "repo": null,
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"description\": \"Set with confirmedVia host-question only: the question the host asked the operator and the answer that came back, as the agent reported them.\",",
+      "problem": "The description says hostQuestion is set with confirmedVia host-question only, but the schema allows hostQuestion with any confirmedVia and host-question with no hostQuestion. The runtime validator (viaConsistent in src/review/operator-decisions.ts) does enforce the coupling; the schema does not.",
+      "impact": "A consumer that trusts the schema could render a host-question record with no question, or a card record with a forged question block. Ingest strips `operator` from input findings, so no outside input reaches it today.",
+      "suggested_fix": "Add allOf entries to the operator object: confirmedVia const host-question requires hostQuestion, and any other confirmedVia forbids it (not: { required: [\"hostQuestion\"] }).",
+      "evidence": "operator.properties.confirmedVia enum adds \"host-question\" and hostQuestion is a free property with no if/then in the operator object; viaConsistent returns `d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true`.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "schema-hostquestion-coupling",
+      "blocking_merge": false,
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": [{ "id": "slice-01", "coverage": "read in full, 1311 lines", "status": "DONE" }]
+}
+```

@@ -1,0 +1,39 @@
+STATUS: DONE
+
+## High-Load Review (round r04, wave 3, slice-04)
+
+Scope: PR 1052, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, slice-04 (src/flow: confirm-token, schema, service, types; bundled review skills; write-land.ts; interactive-tools.ts; learning/decisions.ts; remote/client.ts, shell-bridge.ts, mirror-undelivered.test.ts; src/review: chunks-estimate, complete-gated, completion-gate, coverage-complete, estimate, evidence-level, operator-decisions, plan-confirmation, premise-question, publish, readiness, types). Load profile not provided; severity assumes moderate-to-high traffic, but this is an interactive single-operator shell, so the realistic concurrency is one operator, one Telegram topic and at most a second terminal or background job touching the same package.
+
+Summary: the slice is almost entirely plumbing. It adds the optional pressedBy / pressedAt pair (CardPress, cardPressFields) to the records a remote card writes, adds the `undelivered` flag to the approval answer path, adds `completeReviewGated` as the single close path shared by the CLI and the review_complete card, and rewords agent-facing text. I found no high-load defect that the diff introduces or worsens.
+
+Verified against source at head:
+- No new shared mutable state, pool, cache, queue, retry or timer. `cardPressFields` is a pure function; the new fields are plain optional properties.
+- remote/client.ts askApproval: the four new `undelivered: true` returns are on paths that return immediately (not connected, aborted, post refused, no approvalId, post threw). No new wait, listener or timer is added; the existing settle / early-decision / abort handling is untouched.
+- remote/shell-bridge.ts askApproval: `openPrompts` is incremented before the await and decremented in `finally`, unchanged; the new `undelivered` return on the not-connected path exits before the increment. `mirrorUndeliveredNote` and the `connected` getter are synchronous reads of two fields.
+- Write paths keep their existing protection: operator-decisions.json is written under `withOperatorDecisionsLock` (read and write under one lock, so two overlapping writers both land); chunk-estimate.json under `withChunkStateLock`; plan-confirmation.json, published.json, research.json, manifest.json, report.md and the confirm token through `writeFileAtomic`. The diff adds fields to these records without changing when or how they are written.
+- recordPremiseDecisionAfter still runs findings.json and operator-decisions.json under one lock with an undo on a failed append; the new `...cardPressFields(input)` only widens the record.
+- completeReviewGated (complete-gated.ts) is two synchronous refusal checks then completeManagedReview: no retry, loop or fan-out. It resolves the package path once itself and once inside completeManagedReview (two small path resolutions, not a hot path).
+- write-land.ts: only the decision-file body widens (pressedBy / pressedAt). The create-exclusive decision write that arbitrates two concurrent landers, and the cleanup of the branch and the worktree in the catch and finally, are unchanged.
+- confirm-token.ts: mint still writes the whole token (replacing the earlier one, latest mint only); consume still marks `usedAt`. pressedBy / pressedAt are copied through; there is no new check-then-act.
+
+Observations that are not findings (pre-existing, not made worse by this slice):
+- recordCoverageWaiver (research.json) and waiveReadiness (manifest.json) are read-modify-write without a lock, so a concurrent writer to the same file in the read-to-write window would lose an update. They were so before the diff; the diff adds two optional fields to the record they write, nothing to the window. Each is reached from one operator card at a time.
+- The wave-2 items (gh calls without a timeout, never-swept pending card map, completeManagedReview snapshot) are not touched by this slice.
+
+Stats: blocker 0 | major 0 | minor 0 | info 0
+
+Clean areas: concurrency and races (no new shared state; existing lock and atomic-write discipline preserved), resource management (no handle, stream, pool or timer added), caching (none), database (none), queues (none), retry / timeout (none added), idempotency (token and decision-file single-use semantics unchanged).
+
+Prior dispositions: D-02..D-14 left open as instructed; none is made worse by this slice from a load standpoint. D-01 / D-03 / D-08 / D-12 are wording matters (slice-01) and not claimed here.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "No high-load defect introduced by slice-04. The slice adds optional press metadata to card-written records, an undelivered flag on early-return approval paths, and a shared completeReviewGated close path; existing locks, atomic writes, single-use token and exclusive decision-file semantics are unchanged. Two pre-existing unlocked read-modify-write sites (coverage waiver, readiness waiver) are noted, not filed.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-04"],
+  "findings": []
+}
+```

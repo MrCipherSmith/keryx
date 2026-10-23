@@ -1,0 +1,2292 @@
+--- .metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json
+@@ 90,121 @@
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "reason"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1 },
+           "reason": { "type": "string", "minLength": 1, "description": "Why it was left alone — 'already correct', 'out of scope', 'blocked by <x>'" }
+         }
+       }
+     },
+     "project_context_applied": {
+       "type": "array",
+       "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "sha256", "how"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
++          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
++          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
++          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
+         }
+       }
+     },
+     "notes": {
+       "type": "string",
+       "description": "Warnings, blockers, or additional context. The three fields above were carved out of this one: free text is where they went before they were declared, and anything that fits one of them belongs there instead."
+     }
+   }
+ }
+
+--- .metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json
+@@ 78,120 @@
+           "type": "string",
+           "description": "Expected test runner output after generation (before implementation)",
+           "examples": ["all failing (RED phase)", "4 failed, 0 passed"]
+         },
+         "notes": {
+           "type": "string",
+           "description": "Test design decisions, assumptions, or concerns"
+         }
+       }
+     },
+     "project_context_applied": {
+       "type": "array",
+       "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "sha256", "how"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
++          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
++          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
++          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
+         }
+       }
+     },
+     "status_report": {
+       "type": "object",
+       "required": ["status", "tests_written", "all_criteria_covered"],
+       "properties": {
+         "status": {
+           "type": "string",
+           "enum": ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"],
+           "description": "Subagent status protocol value"
+         },
+         "tests_written": {
+           "type": "integer",
+           "minimum": 0,
+           "description": "Total number of test cases written"
+         },
+         "test_files_committed": {
+           "type": "array",
+           "items": { "type": "string" },
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/flow.json
+@@ 1,13 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "462",
++  "slug": "conditional-reads",
++  "title": "Conditional mandatory reads for documents cited by project rules",
++  "status": "in-progress",
++  "createdAt": "2026-10-18T08:31:22.923Z",
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/flow.json
+@@ 15,18 @@
++  "source": {
++    "type": "description",
++    "ref": null
++  },
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/flow.json
+@@ 20,466 @@
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "origin": {
++    "kind": "human-request",
++    "quote": "то есть я так понимаю что когда мы их импортируем в эти файлы которые идут в project rules должны не только ссылки хэши но и правильное грамотное описание чтобы агент мог понять и когда ему нужно читать основное правило и что он обязан его прочитать чтобы он сходил по ссылке именно вычитал",
++    "source": "helyx-channel message 212151, 2026-10-18T07:15:20Z (voice, transcribed); poll 211 answers"
++  },
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "context collected by the PRD/TRD author in docs/requirements/keryx-conditional-reads and context.md"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "superseded by tasks T5-T13 per plan.md steps"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "tests are written inside each implement task (TDD per task)"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [
++        "T5",
++        "T6",
++        "T7",
++        "T8",
++        "T9",
++        "T10",
++        "T11",
++        "T12",
++        "T13"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T5",
++      "title": "S1 references.json schema, loader, section extraction",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T08:47:53.700Z",
++            "outcome": "started",
++            "detail": "462-T5 dispatch"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "S2 resolver: task text, promotion, cap, undeclared",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T08:55:03.924Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "S3 output schemas anchor+summary and synced copies",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T08:47:54.136Z",
++            "outcome": "started",
++            "detail": "462-T7 dispatch"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "S4 validator: anchor, summary check, drift, enforcement",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T09:02:24.800Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "S5 CLI skills references check|suggest, import hint",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T08:55:04.419Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T10",
++      "title": "S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T09:19:19.633Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T11",
++      "title": "S7 orchestrator and worker skill instructions",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T09:13:13.175Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T12",
++      "title": "S8 docs: README, docs site, CLI reference",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T09:30:51.671Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T13",
++      "title": "S9 e2e fixture, live-run runbook",
++      "kind": "test",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-18T09:19:20.174Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-18T08:31:22.923Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-18T08:46:27.492Z",
++      "event": "frozen",
++      "detail": "22 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-18T08:47:09.797Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-18T08:47:10.264Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-18T08:47:10.722Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-18T08:47:11.184Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-10-18T08:47:11.650Z",
++      "event": "task-added",
++      "detail": "T5: S1 references.json schema, loader, section extraction"
++    },
++    {
++      "at": "2026-10-18T08:47:12.107Z",
++      "event": "task-added",
++      "detail": "T6: S2 resolver: task text, promotion, cap, undeclared"
++    },
++    {
++      "at": "2026-10-18T08:47:12.581Z",
++      "event": "task-added",
++      "detail": "T7: S3 output schemas anchor+summary and synced copies"
++    },
++    {
++      "at": "2026-10-18T08:47:13.018Z",
++      "event": "task-added",
++      "detail": "T8: S4 validator: anchor, summary check, drift, enforcement"
++    },
++    {
++      "at": "2026-10-18T08:47:13.474Z",
++      "event": "task-added",
++      "detail": "T9: S5 CLI skills references check|suggest, import hint"
++    },
++    {
++      "at": "2026-10-18T08:47:13.939Z",
++      "event": "task-added",
++      "detail": "T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states"
++    },
++    {
++      "at": "2026-10-18T08:47:14.446Z",
++      "event": "task-added",
++      "detail": "T11: S7 orchestrator and worker skill instructions"
++    },
++    {
++      "at": "2026-10-18T08:47:14.892Z",
++      "event": "task-added",
++      "detail": "T12: S8 docs: README, docs site, CLI reference"
++    },
++    {
++      "at": "2026-10-18T08:47:15.367Z",
++      "event": "task-added",
++      "detail": "T13: S9 e2e fixture, live-run runbook"
++    },
++    {
++      "at": "2026-10-18T08:47:24.446Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13 (was empty) — review follows every implement/test/docs task"
++    },
++    {
++      "at": "2026-10-18T08:47:53.700Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 462-T5 dispatch"
++    },
++    {
++      "at": "2026-10-18T08:47:54.136Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 462-T7 dispatch"
++    },
++    {
++      "at": "2026-10-18T08:54:53.493Z",
++      "event": "task-done",
++      "detail": "T5: S1 references.json schema, loader, section extraction"
++    },
++    {
++      "at": "2026-10-18T08:54:53.998Z",
++      "event": "task-done",
++      "detail": "T7: S3 output schemas anchor+summary and synced copies"
++    },
++    {
++      "at": "2026-10-18T08:55:03.924Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T08:55:04.419Z",
++      "event": "task-attempt",
++      "detail": "T9: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T09:02:18.603Z",
++      "event": "task-done",
++      "detail": "T6: S2 resolver: task text, promotion, cap, undeclared"
++    },
++    {
++      "at": "2026-10-18T09:02:24.800Z",
++      "event": "task-attempt",
++      "detail": "T8: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T09:12:45.640Z",
++      "event": "task-done",
++      "detail": "T8: S4 validator: anchor, summary check, drift, enforcement"
++    },
++    {
++      "at": "2026-10-18T09:13:13.175Z",
++      "event": "task-attempt",
++      "detail": "T11: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T09:18:56.256Z",
++      "event": "task-done",
++      "detail": "T11: S7 orchestrator and worker skill instructions"
++    },
++    {
++      "at": "2026-10-18T09:18:56.790Z",
++      "event": "task-done",
++      "detail": "T9: S5 CLI skills references check|suggest, import hint"
++    },
++    {
++      "at": "2026-10-18T09:19:19.633Z",
++      "event": "task-attempt",
++      "detail": "T10: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T09:19:20.174Z",
++      "event": "task-attempt",
++      "detail": "T13: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T09:26:59.128Z",
++      "event": "task-done",
++      "detail": "T13: S9 e2e fixture, live-run runbook"
++    },
++    {
++      "at": "2026-10-18T09:30:50.482Z",
++      "event": "task-done",
++      "detail": "T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states"
++    },
++    {
++      "at": "2026-10-18T09:30:51.671Z",
++      "event": "task-attempt",
++      "detail": "T12: started (attempt 1)"
++    },
++    {
++      "at": "2026-10-18T09:36:38.411Z",
++      "event": "task-done",
++      "detail": "T12: S8 docs: README, docs site, CLI reference"
++    },
++    {
++      "at": "2026-10-18T09:57:51.214Z",
++      "event": "ac-updated",
++      "detail": "AC10: \"For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least two distinct words of five or more letters that occur in the anchored section (one required when the section has only one such word); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t \"summary\"`]\" -> \"For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least three distinct words of five or more letters that occur in the anchored section (as many as the section holds when it has fewer than three); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t \"summary\"`]\" (Operator decision, poll 213 (2026-10-18): raise the summary vocabulary threshold from two to three distinct words after the e2e test showed a foreign section can share two words)"
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/flow.json
+@@ 472,562 @@
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/references-config.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/context-resolver.test.ts src/gdskills/resolved-context-check.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/context-resolver.test.ts -t \"task text\""
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/context-resolver.test.ts -t \"glob promotes\""
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/context-resolver.test.ts -t \"keyword promotes\""
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/references-section.test.ts"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/context-resolver.test.ts -t \"cap keeps promoted\""
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/context-resolver.test.ts -t \"undeclared\""
++    },
++    "AC9": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/output-schema.test.ts"
++    },
++    "AC10": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"summary\""
++    },
++    "AC11": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"hash and n/a\""
++    },
++    "AC12": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/resolved-context-check.test.ts src/flow/task-project-context.test.ts"
++    },
++    "AC13": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"drift\""
++    },
++    "AC14": {
++      "kind": "exec",
++      "check": "bun test src/commands/skills-references.test.ts -t \"check\""
++    },
++    "AC15": {
++      "kind": "exec",
++      "check": "bun test src/commands/skills-references.test.ts -t \"suggest\""
++    },
++    "AC16": {
++      "kind": "exec",
++      "check": "bun test src/tui/project-context-inspector.test.ts"
++    },
++    "AC17": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/skill-sync.test.ts"
++    },
++    "AC18": {
++      "kind": "exec",
++      "check": "bun test src/gdskills/conditional-reads.e2e.test.ts"
++    },
++    "AC19": {
++      "kind": "exec",
++      "check": "bun run docs:check"
++    },
++    "AC20": {
++      "kind": "judged"
++    },
++    "AC21": {
++      "kind": "exec",
++      "check": "bun run check"
++    },
++    "AC22": {
++      "kind": "judged"
++    }
++  }
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.implement.json
+@@ 1,70 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/tui/project-context-inspector.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7",
++      "bytes": 1121,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/storybook-guidelines.mdc",
++      "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423",
++      "bytes": 1056,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.result.json
+@@ 1,67 @@
++{
++  "task_id": "task-10",
++  "task_name": "TUI: ProjectCtx refs segment, /projectctx References tab, /projectctx refs (AC16)",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "Sidebar ProjectCtx gains refs <promoted>/<declared> (with !<k> for check problems, - before a resolve, ? for an invalid file); the /projectctx modal gets a References tab (condition, anchor, promotion status and reason per declaration, plus the problems of keryx skills references check); /projectctx refs opens it; a polling feed repaints the sidebar and the open tab on a new resolve; TUI-states.md is authoritative and every row has a render test.",
++  "files_created": ["src/tui/project-references-view.ts"],
++  "files_modified": [
++    "src/tui/project-context-inspector.ts",
++    "src/tui/project-context-inspector.test.ts",
++    "src/tui/tui-shell.ts",
++    "src/gdskills/project-context-status.ts",
++    "src/gdskills/project-context-status.test.ts",
++    "src/commands/agent-commands.ts",
++    "src/standard/help-groups.ts",
++    "docs/docs/commands-by-task.md",
++    "docs/docs/cli-reference.md",
++    "docs/requirements/keryx-conditional-reads/TUI-states.md"
++  ],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "pass",
++  "type_check_result": "pass",
++  "test_result": "pass for bun test src/tui/project-context-inspector.test.ts (25 passed), src/gdskills/project-context-status.test.ts (9 passed), src/standard and src/commands/agent-commands.test.ts; bun test src/tui: 2 failures in src/tui/ci-triage-source.test.ts (not opted in cases), a file this task did not touch",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "behavior_changes": [
++    {
++      "description": "The References tab is always present in /projectctx, including a project with no references file, where it shows one line naming `keryx skills references suggest` (TUI-states R0). Status and Last resolve tab text and the sidebar line are unchanged without a references file.",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": ["Hide the tab until a references file exists (then /projectctx refs would have nothing to open)"]
++    },
++    {
++      "description": "The usage line of an invalid /projectctx argument now reads [warn|block|refs]; the existing parse test was updated for it.",
++      "user_visible": true,
++      "needs_operator": false
++    },
++    {
++      "description": "The ProjectCtx line is now shown when the project has a references file even with no rules and no recorded resolve (warn · 0 rules · refs -/<n>).",
++      "user_visible": true,
++      "needs_operator": false
++    }
++  ],
++  "assumptions": [
++    "A declared reference is told apart from a cited contract by the resolver entry's condition field; only declared entries count towards <promoted>.",
++    "A references file with zero declarations is shown as refs -/0 (or 0/0), not hidden, so undeclared-citation problems can surface.",
++    "A resolve recorded by a worker outside the TUI is picked up by polling the status every 5 seconds (unref'd interval, same pattern as the decisions and approvals sidebars)."
++  ],
++  "not_touched": [
++    { "path": "src/gdskills/context-resolver.ts", "reason": "out of scope: resolver and validator are not changed by this task" },
++    { "path": "src/gdskills/conditional-reads.e2e.test.ts", "reason": "owned by T13" },
++    { "path": "src/tui/settings-model.ts", "reason": "the settings row keeps its [warn|block] usage; refs is not a setting" }
++  ],
++  "noticed_not_touched": [
++    { "what": "Two tests fail in this environment: loadCiTriageList and runCiTriageForItem 'not opted in' cases see gh being called", "where": "src/tui/ci-triage-source.test.ts" }
++  ],
++  "project_context_applied": [
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "read" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "read" },
++    { "path": ".metaproject/rules/core/code-style-patterns.mdc", "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e", "how": "read" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7", "how": "n/a" },
++    { "path": ".metaproject/rules/core/storybook-guidelines.mdc", "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423", "how": "n/a" }
++  ],
++  "notes": "Rules read in full. tdd-workflow: tests written first and seen failing, then code. error-handling: the status loader returns problems as values (invalid / findings), the feed reports a failing poll once and never swallows it; no new catch rethrows were needed. solid-principles: the References text lives in its own module (project-references-view.ts), the feed is separate from the modal. code-style-patterns: strict types, no any. frontend-assistant (React/MobX/Ant Design) and storybook-guidelines do not apply to this opentui terminal UI: read, n/a. tsc was run through `keryx ctx run -- node <repo>/node_modules/typescript/bin/tsc --noEmit` because a bare tsc process is killed (SIGTERM) in this session."
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.implement.json
+@@ 1,97 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7",
++      "bytes": 1121,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/storybook-guidelines.mdc",
++      "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423",
++      "bytes": 1056,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/mobx-store-template.mdc",
++      "sha256": "3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc",
++      "bytes": 19666,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "bytes": 1414,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "bytes": 6112,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.result.json
+@@ 1,69 @@
++{
++  "task_id": "task-11",
++  "task_name": "Skill instructions pass task text and name the proof items; managed copies in sync (AC17)",
++  "task_type": "mixed",
++  "status": "success",
++  "description": "Added --task-text and the promoted-entry proof (path, sha256, anchor, summary, how read|followed) to the flow-orchestrator, job-orchestrator (SKILL.md and orchestrator-prompt.md), task-implementer and tests-creator instructions and output examples; copied the five files to .metaproject/skills/gdskills; added src/gdskills/skill-sync.test.ts (written first, 11 of 23 red, now 23 green).",
++  "files_modified": [
++    "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
++    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
++    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
++    "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
++    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
++    ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
++    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
++    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
++    ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
++    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md"
++  ],
++  "files_created": [
++    "src/gdskills/skill-sync.test.ts"
++  ],
++  "project_context_applied": [
++    {
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/storybook-guidelines.mdc",
++      "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/mobx-store-template.mdc",
++      "sha256": "3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "how": "read"
++    }
++  ]
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.implement.json
+@@ 1,97 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "README.md"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7",
++      "bytes": 1121,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/storybook-guidelines.mdc",
++      "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423",
++      "bytes": 1056,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/mobx-store-template.mdc",
++      "sha256": "3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc",
++      "bytes": 19666,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "bytes": 1414,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "bytes": 6112,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.result.json
+@@ 1,60 @@
++{
++  "task_id": "task-12",
++  "task_name": "Docs: conditional reads, guide, CLI reference, README",
++  "task_type": "mixed",
++  "status": "success",
++  "files_created": [],
++  "files_modified": [
++    "README.md",
++    "docs/docs/cli-reference.md",
++    "docs/docs/guides/apply-project-rules.md"
++  ],
++  "project_context_applied": [
++    {
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/storybook-guidelines.mdc",
++      "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/mobx-store-template.mdc",
++      "sha256": "3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "how": "n/a"
++    }
++  ],
++  "notes": "docs:check script and mkdocs are absent here, so the strict site build was not run; check:doc-links, cli-reference-coverage, commands-by-task, help-groups tests and check:retired-spellings pass. commands-by-task.md is generated from HELP_GROUPS (src) and has no skills references entry; not hand-edited. Rules marked n/a (frontend, MobX, NestJS, Storybook, SOLID, api-contracts) do not apply to a docs-only task."
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.implement.json
+@@ 1,70 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/gdskills/conditional-reads.e2e.test.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "bytes": 1414,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "bytes": 6112,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.result.json
+@@ 1,43 @@
++{
++  "task_id": "task-13",
++  "task_name": "S9 e2e fixture, live-run runbook",
++  "task_type": "service_api",
++  "status": "success",
++  "files_created": [
++    "src/gdskills/conditional-reads.e2e.test.ts",
++    "docs/requirements/keryx-conditional-reads/live-run.md"
++  ],
++  "files_modified": [],
++  "project_context_applied": [
++    {
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "how": "n/a"
++    }
++  ]
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.implement.json
+@@ 1,44 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/gdskills/references-config.ts",
++    "src/gdskills/references-section.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.result.json
+@@ 1,6 @@
++{"task_id":"task-5","task_name":"S1 references.json schema, loader, section extraction","task_type":"service_api","status":"success",
++"files_created":["src/gdskills/references-config.ts","src/gdskills/references-config.test.ts","src/gdskills/references-section.ts","src/gdskills/references-section.test.ts","docs/requirements/keryx-conditional-reads/schemas/references.schema.json"],
++"project_context_applied":[
++{"path":".metaproject/rules/core/tdd-workflow.mdc","sha256":"3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3","how":"followed"},
++{"path":".metaproject/rules/core/error-handling.mdc","sha256":"78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c","how":"followed"},
++{"path":".metaproject/rules/core/solid-principles.mdc","sha256":"ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b","how":"followed"}]}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.implement.json
+@@ 1,70 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/gdskills/context-resolver.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "bytes": 1414,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "bytes": 6112,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.result.json
+@@ 1,28 @@
++{
++  "task_id": "task-6",
++  "task_name": "Resolver promotes declared conditional references",
++  "task_type": "service_api",
++  "status": "success",
++  "files_created": [
++    "src/gdskills/reference-entries.ts"
++  ],
++  "files_modified": [
++    "src/gdskills/context-resolver.ts",
++    "src/gdskills/context-resolver.test.ts",
++    "src/gdskills/resolve-context-command.ts",
++    "src/commands/skills.ts",
++    "src/harness/tool/metaproject-operations.ts",
++    "src/harness/tool/metaproject-operations.test.ts",
++    "src/harness/tool/metaproject-adapter.ts",
++    "src/harness/tool/metaproject-port.ts",
++    "src/mcp/metaproject-tools.ts"
++  ],
++  "project_context_applied": [
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "read" },
++    { "path": ".metaproject/rules/core/code-style-patterns.mdc", "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e", "how": "read" },
++    { "path": ".metaproject/rules/core/nestjs-dto.mdc", "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051", "how": "n/a" },
++    { "path": ".metaproject/rules/core/api-contracts.mdc", "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a", "how": "read" }
++  ]
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.implement.json
+@@ 1,43 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/gdskills/output-schema.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.result.json
+@@ 1,7 @@
++{"task_id":"task-7","task_name":"S3 output schemas anchor+summary and synced copies","task_type":"service_api","status":"success",
++"files_created":["src/gdskills/output-schema.test.ts"],
++"files_modified":["src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json","src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json"],
++"project_context_applied":[
++{"path":".metaproject/rules/core/tdd-workflow.mdc","sha256":"3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3","how":"followed"},
++{"path":".metaproject/rules/core/error-handling.mdc","sha256":"78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c","how":"read"},
++{"path":".metaproject/rules/core/solid-principles.mdc","sha256":"ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b","how":"read"}]}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.implement.json
+@@ 1,70 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/gdskills/resolved-context-check.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "bytes": 1414,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "bytes": 6112,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.result.json
+@@ 1,23 @@
++{
++  "task_id": "task-8",
++  "task_name": "Validator: proof of reading for promoted references",
++  "task_type": "service_api",
++  "status": "success",
++  "files_created": ["src/gdskills/reference-proof.ts"],
++  "files_modified": [
++    "src/gdskills/resolved-context-check.ts",
++    "src/gdskills/resolved-context-check.test.ts",
++    "src/flow/task-project-context.test.ts",
++    "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
++    "src/harness/tool/metaproject-operations.ts",
++    "src/harness/tool/metaproject-operations.test.ts"
++  ],
++  "project_context_applied": [
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "read" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "read" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "read" },
++    { "path": ".metaproject/rules/core/code-style-patterns.mdc", "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e", "how": "read" },
++    { "path": ".metaproject/rules/core/nestjs-dto.mdc", "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051", "how": "read" },
++    { "path": ".metaproject/rules/core/api-contracts.mdc", "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a", "how": "read" }
++  ]
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.implement.json
+@@ 1,70 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/commands/skills-references.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "bytes": 2747,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "bytes": 1414,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "bytes": 6112,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.result.json
+@@ 1,84 @@
++{
++  "task_id": "task-9",
++  "task_name": "keryx skills references check/suggest and import hint",
++  "task_type": "service_api",
++  "status": "success",
++  "description": "Added `keryx skills references check [--json]` (validates .metaproject/rules/project/references.json: documents exist inside the root, are regular files under the size cap, anchors resolve, descriptions and keywords are long enough, declarations are used, cited documents are declared) and `keryx skills references suggest` (prints a skeleton for undeclared citations, writes nothing). `keryx skills import --rules` now prints a one-line hint in text mode when imported rules cite undeclared documents.",
++  "files_created": [
++    "src/gdskills/references-check.ts",
++    "src/commands/skills-references.ts",
++    "src/commands/skills-references.test.ts"
++  ],
++  "files_modified": [
++    "src/commands/skills.ts",
++    "src/gdskills/import-rules.ts",
++    "src/lib/group-subcommands.ts"
++  ],
++  "commits": [],
++  "lint_result": "pass",
++  "type_check_result": "pass",
++  "test_result": "21 passed, 0 failed in src/commands/skills-references.test.ts; bun test src/commands src/gdskills: 12519 pass, 7 skip, 4 fail + 1 error, all in scratch/TMPDIR sandbox tests and a gdgraph build-provenance module resolution test, none touching the changed files",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "assumptions": [
++    "A `.md` file under .metaproject/rules/ is a rule, not a cited reference document, so the undeclared-citation scan skips it.",
++    "The resolver's own citation scan is private to context-resolver.ts (worker T6 owns it), so references-check.ts has its own backtick-quoted `*.md` scan."
++  ],
++  "behavior_changes": [
++    {
++      "description": "`keryx skills import --rules` prints an extra hint after its normal output in text mode when the imported rules cite documents no references.json entry declares. With --json the output is unchanged and stays one parseable document.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": [
++        "Print the hint in --json mode as a `hint` field",
++        "Do not print a hint at all"
++      ]
++    },
++    {
++      "description": "`keryx skills references check` reports an extra error, document-too-large, for a declared document above the resolver's 262144-byte cap, because the resolver would refuse to promote it.",
++      "user_visible": true,
++      "needs_operator": false
++    },
++    {
++      "description": "`keryx skills references check` exits 1 only when the report has errors; warnings (short description, short keyword, unused declaration, undeclared citation) leave the exit code at 0.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": [
++        "Exit 1 on any finding, warnings included"
++      ]
++    }
++  ],
++  "project_context_applied": [
++    {
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/code-style-patterns.mdc",
++      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/nestjs-dto.mdc",
++      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
++      "how": "n/a"
++    },
++    {
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
++      "how": "n/a"
++    }
++  ],
++  "notes": "Nothing committed, per the brief. nestjs-dto and api-contracts were opened but concern NestJS DTOs and HTTP contracts; this task is a CLI command with no DTO or HTTP surface, so they are n/a. The 4 wide-suite failures are in src/commands/schedule-security.test.ts (scratch directory must sit under /tmp; this session's TMPDIR is elsewhere) and a gdgraph build-provenance test; they were not compared against a clean baseline."
++}
+
+--- .metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json
+@@ 90,121 @@
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "reason"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1 },
+           "reason": { "type": "string", "minLength": 1, "description": "Why it was left alone — 'already correct', 'out of scope', 'blocked by <x>'" }
+         }
+       }
+     },
+     "project_context_applied": {
+       "type": "array",
+       "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "sha256", "how"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
++          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
++          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
++          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
+         }
+       }
+     },
+     "notes": {
+       "type": "string",
+       "description": "Warnings, blockers, or additional context. The three fields above were carved out of this one: free text is where they went before they were declared, and anything that fits one of them belongs there instead."
+     }
+   }
+ }
+
+--- .metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json
+@@ 78,120 @@
+           "type": "string",
+           "description": "Expected test runner output after generation (before implementation)",
+           "examples": ["all failing (RED phase)", "4 failed, 0 passed"]
+         },
+         "notes": {
+           "type": "string",
+           "description": "Test design decisions, assumptions, or concerns"
+         }
+       }
+     },
+     "project_context_applied": {
+       "type": "array",
+       "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "sha256", "how"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
++          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
++          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
++          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
+         }
+       }
+     },
+     "status_report": {
+       "type": "object",
+       "required": ["status", "tests_written", "all_criteria_covered"],
+       "properties": {
+         "status": {
+           "type": "string",
+           "enum": ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"],
+           "description": "Subagent status protocol value"
+         },
+         "tests_written": {
+           "type": "integer",
+           "minimum": 0,
+           "description": "Total number of test cases written"
+         },
+         "test_files_committed": {
+           "type": "array",
+           "items": { "type": "string" },
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md
+@@ 1,19 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++DRAFT: not frozen. Waits for the operator. Test file names are proposals.
++
++## Criteria
++
++- AC1: A project file `.metaproject/rules/project/references.json` with `schema: 1` and a list of references (`path`, `when.globs`, `when.keywords`, `anchor`, `description`) is loaded; a committed JSON schema validates it; a declaration with neither globs nor keywords, an empty description or an absolute or escaping path is rejected with a message naming the entry. [verify: exec `bun test src/gdskills/references-config.test.ts`]
++- AC2: Without a references file every resolve result, validator verdict and TUI line is byte-identical to flow 461 behaviour. [verify: exec `bun test src/gdskills/context-resolver.test.ts src/gdskills/resolved-context-check.test.ts`]
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md
+@@ 21,39 @@
++- AC4: A declared reference whose glob matches any task file is resolved as `must_read`, with `reason` naming the glob, plus `anchor`, `description`, `section_bytes` and the sha256 of the whole file. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t "glob promotes"`]
++- AC5: A declared reference whose keyword occurs in the task text, case-insensitively and on a word boundary, is `must_read` with `reason` naming the keyword; a task matching neither stays `on_demand` and keeps its description, anchor and condition in the entry. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t "keyword promotes"`]
++- AC6: With an anchor the obligation and the budget are the section from the heading to the next heading of equal or higher level; a missing anchor makes the entry an error in `check` and falls back to the whole file with a warning at resolve time, never to silence. [verify: exec `bun test src/gdskills/references-section.test.ts`]
++- AC7: A promoted reference is never dropped by the byte cap; when the cap is exceeded the resolver warns with the sizes and keeps the obligation. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t "cap keeps promoted"`]
++- AC8: Documents cited by a rule but not declared keep the flow 461 `on_demand` behaviour and are listed as undeclared in the resolve record. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t "undeclared"`]
++- AC9: The `project_context_applied` item schemas of task-implementer and tests-creator (and their synced copies) accept optional `anchor` and `summary` strings, keep the `how` enum unchanged, and still reject unknown properties; every result valid under flow 461 stays valid. [verify: exec `bun test src/gdskills/output-schema.test.ts`]
++- AC10: For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least three distinct words of five or more letters that occur in the anchored section (as many as the section holds when it has fewer than three); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "summary"`]
++- AC11: A cited path with a hash that differs from the resolver's pin is a miss, as in flow 461, and a promoted entry cited only with `how: n/a` is a miss. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "hash and n/a"`]
++- AC12: Under `enforcement: warn` misses are printed and exit 0; under `block` `flow task done` and the standalone check exit 1 with the same lines. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts src/flow/task-project-context.test.ts`]
++- AC13: Editing a promoted document between resolve and validate is reported as drift, whatever its tier. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "drift"`]
++- AC14: `keryx skills references check` reports, with exit 1 on errors: file missing or outside the root (error), anchor not found (error), description under 20 characters (warning), keyword under 4 characters (warning), citation without a declaration (warning), declaration no rule cites (warning). `--json` gives the same data. [verify: exec `bun test src/commands/skills-references.test.ts -t "check"`]
++- AC15: `keryx skills references suggest` prints a JSON skeleton for every undeclared citation (path, size, candidate anchors from headings, empty description) and writes no file; `keryx skills import --rules` ends with the undeclared count and the command to run. [verify: exec `bun test src/commands/skills-references.test.ts -t "suggest"`]
++- AC16: The TUI shows it: sidebar `ProjectCtx` gains `refs <promoted>/<declared>`; the `/projectctx` modal gets a References tab with condition, anchor, promotion status and reason per declaration, and the problems from check; `/projectctx refs` opens it; the tab updates on a new resolve; every state is in TUI-states.md and has a render test. [verify: exec `bun test src/tui/project-context-inspector.test.ts`]
++- AC17: The orchestrator and worker skill instructions pass the task text to the resolver and say that a promoted entry requires path, sha256, anchor and a summary; the managed skill copies are in sync. [verify: exec `bun test src/gdskills/skill-sync.test.ts`]
++- AC18: A fixture project with a STYLING- and a THEMING-like document of the real sizes runs three scenarios end to end: styling file touched (STYLING promoted, THEMING not), theme keyword only (THEMING promoted), unrelated task (neither); each validated with a correct result and with a fabricated-summary result. [verify: exec `bun test src/gdskills/conditional-reads.e2e.test.ts`]
++- AC19: README, the docs site and the CLI reference describe declarations, resolution, proof, the check commands and the limits (the check is a proxy, not proof of reading); the docs site builds and the doc-link and command-reference checks pass. [verify: exec `bun run docs:check`]
++- AC20: The operator runbook for a live run on vantage-frontend (declarations for STYLING.md and THEMING.md, three tasks, expected verdicts) is in the PRD folder, and the operator's live run is recorded with its outcome in the flow journal. [verify: judged]
++- AC21: The whole suite, typecheck and lint pass on the final head, CI is green, and the branch carries no version bump or release commit. [verify: exec `bun run check`]
++- AC22: The flow's `description.md` carries the three origin lines (verbatim request, effect, how to observe) and they are accurate at completion. [verify: judged]
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/context.md
+@@ 1,58 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-10-18T08:31:22.049Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [2.109] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++2. [1.887] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++3. [1.855] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++4. [1.766] A shell allowlist matched against the raw command string is not a security boundary (lesson/accepted) - lessons/allowlist-not-a-boundary.md
++   A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt.
++   claimType: lesson | confidence: high | version: 1.0.0
++   scope: module:src/lib, src/commands, src/tui, entity:shell-permissions, command-risk, approval gate
++   provenance: source=flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/` link=docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md author=unknown confirmedBy=unknown
++5. [1.665] gdctx-flag-allowlist-no-bundle-expansion (known-mistake/accepted) - known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md
++   A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:ctx, ripgrep, flag-parsing, entity:buildRgCommand, RG_SAFE_FLAGS, RG_SAFE_VALUE_FLAGS
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-3) author=unknown confirmedBy=Reproduced this session via `keryx ctx rg -il "todo" src`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/description.md
+@@ 1,27 @@
++# Conditional mandatory reads for documents cited by project rules
++
++Status: draft (PRD and criteria wait for the operator; not frozen)
++Source: user description (origin: human-request)
++PRD: docs/requirements/keryx-conditional-reads/README.md
++Depends on: flow 461 (PR #1047). Rebase onto main once it is merged.
++
++## Problem
++
++Flow 461 made project rules mandatory reading for code and test workers. A document that a rule only cites (Vantage: STYLING.md about 100 KB, THEMING.md about 68 KB) is resolved as an optional on-demand contract with no condition. The validator never requires it, and nothing tells the worker when it matters. A task on className or theme tokens can pass every gate without the governing document being read.
++
++## Expected Outcome
++
++A project declares, for each cited document, where it applies (file globs plus task keywords), the section that matters and a description. The resolver promotes matching documents from on_demand to must_read. The worker's result proves the read with the path, the sha256, the anchor and a summary. A deterministic validator checks that proof, warning first and blocking under the existing enforcement setting. The project can see gaps (undeclared citations, dead anchors, thin descriptions) from the CLI and the TUI.
++
++## Outcome criteria
++
++- Запрос (дословно): «то есть я так понимаю что когда мы их импортируем в эти файлы которые идут в project rules должны не только ссылки хэши но и правильное грамотное описание чтобы агент мог понять и когда ему нужно читать основное правило и что он обязан его прочитать чтобы он сходил по ссылке именно вычитал» (source: helyx-channel message 212151, 2026-10-18T07:15:20Z (voice, transcribed); poll 211 answers)
++- Эффект (формализация агента): when a task touches a document's declared area, the worker cannot finish with a passing gate unless its result cites that document's declared section by hash and anchor with a summary that matches the section; an imported rule's cited documents carry a description saying when to read them.
++- Как наблюдать (предложение агента): resolve a fixture task on a styling file and see the document as must_read in the last-resolve record and in the TUI References tab; submit a result without the citation and see the validator miss; submit it with a summary unrelated to the section and see the summary miss; run the same task on an unrelated file and see the document stay on_demand with its description.
++
++## Out of Scope
++
++- Proving a model really read the text (the check is a deterministic proxy, documented as such).
++- Model-inferred conditions; declarations are authored.
++- Changing rule selection, the cap default, or release/version bumps (releases are batched).
++- Rollout to other projects (operator).
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/journal.md
+@@ 1,37 @@
++# Flow Journal
++
++- 2026-10-18T08:31:22.923Z - flow created
++- 2026-10-18T08:46:27.492Z - frozen: 22 criteria; checksum recorded
++- 2026-10-18T08:47:09.797Z - started
++- 2026-10-18T08:47:10.264Z - task-done: T1: Collect remaining context
++- 2026-10-18T08:47:10.722Z - task-done: T2: Implement per plan
++- 2026-10-18T08:47:11.184Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-10-18T08:47:11.650Z - task-added: T5: S1 references.json schema, loader, section extraction
++- 2026-10-18T08:47:12.107Z - task-added: T6: S2 resolver: task text, promotion, cap, undeclared
++- 2026-10-18T08:47:12.581Z - task-added: T7: S3 output schemas anchor+summary and synced copies
++- 2026-10-18T08:47:13.018Z - task-added: T8: S4 validator: anchor, summary check, drift, enforcement
++- 2026-10-18T08:47:13.474Z - task-added: T9: S5 CLI skills references check|suggest, import hint
++- 2026-10-18T08:47:13.939Z - task-added: T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states
++- 2026-10-18T08:47:14.446Z - task-added: T11: S7 orchestrator and worker skill instructions
++- 2026-10-18T08:47:14.892Z - task-added: T12: S8 docs: README, docs site, CLI reference
++- 2026-10-18T08:47:15.367Z - task-added: T13: S9 e2e fixture, live-run runbook
++- 2026-10-18T08:47:24.446Z - task-depends-set: T4: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13 (was empty) — review follows every implement/test/docs task
++- 2026-10-18T08:47:53.700Z - task-attempt: T5: started (attempt 1) — 462-T5 dispatch
++- 2026-10-18T08:47:54.136Z - task-attempt: T7: started (attempt 1) — 462-T7 dispatch
++- 2026-10-18T08:54:53.493Z - task-done: T5: S1 references.json schema, loader, section extraction
++- 2026-10-18T08:54:53.998Z - task-done: T7: S3 output schemas anchor+summary and synced copies
++- 2026-10-18T08:55:03.924Z - task-attempt: T6: started (attempt 1)
++- 2026-10-18T08:55:04.419Z - task-attempt: T9: started (attempt 1)
++- 2026-10-18T09:02:18.603Z - task-done: T6: S2 resolver: task text, promotion, cap, undeclared
++- 2026-10-18T09:02:24.800Z - task-attempt: T8: started (attempt 1)
++- 2026-10-18T09:12:45.640Z - task-done: T8: S4 validator: anchor, summary check, drift, enforcement
++- 2026-10-18T09:13:13.175Z - task-attempt: T11: started (attempt 1)
++- 2026-10-18T09:18:56.256Z - task-done: T11: S7 orchestrator and worker skill instructions
++- 2026-10-18T09:18:56.790Z - task-done: T9: S5 CLI skills references check|suggest, import hint
++- 2026-10-18T09:19:19.633Z - task-attempt: T10: started (attempt 1)
++- 2026-10-18T09:19:20.174Z - task-attempt: T13: started (attempt 1)
++- 2026-10-18T09:26:59.128Z - task-done: T13: S9 e2e fixture, live-run runbook
++- 2026-10-18T09:30:50.482Z - task-done: T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states
++- 2026-10-18T09:30:51.671Z - task-attempt: T12: started (attempt 1)
++- 2026-10-18T09:36:38.411Z - task-done: T12: S8 docs: README, docs site, CLI reference
++- 2026-10-18T09:57:51.214Z - ac-updated: AC10: "For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least two distinct words of five or more letters that occur in the anchored section (one required when the section has only one such word); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "summary"`]" -> "For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least three distinct words of five or more letters that occur in the anchored section (as many as the section holds when it has fewer than three); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t "summary"`]" (Operator decision, poll 213 (2026-10-18): raise the summary vocabulary threshold from two to three distinct words after the e2e test showed a foreign section can share two words)
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/plan.md
+@@ 1,24 @@
++# Implementation Plan
++
++Status: draft (waits for the operator's confirmation of PRD and criteria)
++
++## Approach
++
++A sidecar `references.json` in the project rules folder carries the declarations, because imported rules are overwritten by `skills update` and the front-matter reader has no nested values. The resolver gets the task text, matches globs and keywords, and promotes matching contracts to must_read with anchor, description and section size. The result schema gains optional `anchor` and `summary` on `project_context_applied` items; `how` keeps its enum so old results stay valid (decision D1 for the operator). The validator adds a deterministic summary check on top of the 461 path and hash check. A `skills references check|suggest` pair helps authoring; the TUI gets a References tab, a sidebar counter and a command.
++
++## Steps
++
++1. Schema and loader for references.json; section extraction by heading anchor (src/gdskills).
++2. Resolver: task text input, promotion, never demoted by the cap, descriptions on unmatched entries.
++3. Output schemas of task-implementer and tests-creator, plus the sync copies: `anchor`, `summary`.
++4. Validator: anchor equality, summary length and vocabulary overlap, warn/block, `flow task done` refusal.
++5. CLI `skills references check` and `suggest`; end-of-import hint.
++6. TUI: sidebar counter, References tab, `/projectctx refs`, settings rows if any; TUI-states.md.
++7. Orchestrator and skill instructions: pass the task text, require the citation.
++8. Docs: README, docs site, CLI reference, the project-rules guide.
++9. Fixture with STYLING- and THEMING-like documents; tests per criterion; operator runbook for the live run on vantage-frontend.
++
++## Risks
++
++- Keyword breadth, summary false positives and fabricated summaries; see the PRD risk table.
++- The resolver and validator live in PR #1047; start code only after it is merged and this branch is rebased.
+
+--- .metaproject/flows/462-2026-10-18-conditional-reads/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 335,366 @@
+   "acceptance_criteria": ["<the frozen ACn lines this task must satisfy>"],
+   "context_refs": [
+     { "path": ".metaproject/flows/<dir>/context.md", "kind": "context", "exists": true },
+     { "path": ".metaproject/flows/<dir>/plan.md", "kind": "plan", "exists": true },
+     { "path": ".metaproject/flows/<dir>/acceptance-criteria.md", "kind": "custom", "exists": true },
+     { "path": ".metaproject/flows/<dir>/resolved/<Tn>.<for>.json", "kind": "custom", "exists": true }
+   ],
+   "files_to_read": ["<only files gdgraph/gdctx narrowed to>"],
+   "constraints": [
+     "Never edit flow.json.",
+     "Never edit frozen acceptance criteria.",
+-    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied.",
++    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+     "Return a subagent-result; first line must be STATUS:.",
+     "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
+     "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",
+     "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary."
+   ],
+   "allowed_actions": ["read", "write", "run-command", "git"],
+   "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/<dir>/journal.md" },
+   "budget": { "max_output_tokens": null },
+   "provenance": { "created_at": "<iso-utc>", "created_by": "flow-orchestrator" }
+ }
+ ```
+ 
+ **Task boundary commit, after every accepted worker result** (`DONE` or
+ `DONE_WITH_CONCERNS`), then mark task progress. It commits exactly those
+ `changed_files` from the worker's `subagent-result` that git still shows as
+ changed, never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc` rule 4 and
+ "Reporting Back"). It skips cleanly when none remain (expected for a worker that
+ reported no files or committed on its own, like tests-creator's stubs):
+ 
+ ```bash
+
+--- .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md
+@@ 756,782 @@
+   # if two tasks in this wave share a target_file, dispatch them sequentially.
+ 
+   keryx job step <job-name> implement --status in-progress           # wave 1 only
+   # Step B — task-implementer (after all test stubs are committed)
+   keryx skills resolve-context --for implement ... --out <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json
+   Dispatch one task-implementer per task in this wave, in a SINGLE turn (parallel),
+-  each carrying test_case_specs: TEST_SPECS[task_id] and resolved_context_file.
++  each carrying test_case_specs: TEST_SPECS[task_id] and resolved_context_file (an entry promoted by a declared condition, reason condition:glob:<g> or condition:keyword:<k>, needs its project_context_applied item to carry path, sha256 of the whole file, the declared anchor, a summary of 40+ characters in the worker's own words, and how read|followed, never n/a).
+   Wait for ALL of them; per result: keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that resolved file>
+ 
+   Read each result's STATUS line:
+     DONE / DONE_WITH_CONCERNS → accept it (record every concern)
+     BLOCKED                   → do not accept it; read its result file
+ 
+   # Task boundary commit, for EVERY accepted result, before anything else,
+   # whatever auto_commit was (see "Task boundary commit" below):
+   FOR each accepted result: commit its still-changed reported paths, or skip
+ 
+   any BLOCKED → STOP, resolve or ask the user
+   otherwise   → continue to next wave
+ ```
+ 
+ #### tests-creator dispatch (Step A)
+ 
+ ```
+ Task({
+   description: "Wave <N> tests: <task_id>",
+   subagent_type: "general-purpose",
+
+--- .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md
+@@ 136,160 @@
+      Load skill: skills/gdskills/quality/tests-creator/SKILL.md
+   2. Parallel safety check: tasks sharing a target_file run sequentially.
+   3. keryx skills resolve-context --for implement ... --out <...>/<task_id>.implement.resolved.json
++     A promoted entry (reason condition:glob:<g> or condition:keyword:<k>) needs path, sha256, the declared anchor, a summary
++     (40+ characters, own words) and how read|followed in the worker's project_context_applied; validate refuses it otherwise.
+      Dispatch one task-implementer per task, in a SINGLE turn (parallel), each carrying
+      resolved_context_file. Wait for all; per result run
+      keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that file>
+      Load skill: skills/gdskills/orchestration/task-implementer/SKILL.md
+   4. Read each STATUS line:
+        all DONE               → next wave
+        any DONE_WITH_CONCERNS → record concerns, continue
+        any BLOCKED            → STOP, read the result file, resolve or ask the user
+ 
+ There is no wave-executor agent. Instruct every dispatched agent to write full
+ detail to <JOBS_ROOT>/<job-name>/results/<task_id>.json and return only a compact
+ summary — context grows with what agents RETURN.
+ ```
+ 
+ Record with `keryx job document --type implementation-report`.
+ 
+ ### Step: VERIFY — Quality Gate
+ 
+ Dispatch `code-verifier` (`skills/gdskills/orchestration/code-verifier/SKILL.md`) with
+ `codebase_path`, `base_branch`, `scope: changed`. Record with
+
+--- .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md
+@@ 184,204 @@
+-- Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
++- An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition and carries an `anchor`, a `description` and `section_bytes`: read the anchored section in full. Its `project_context_applied` item needs the `path`, the `sha256` of the whole file as pinned, the `anchor` exactly as declared, a `summary` and `how` `read` or `followed`, never `n/a`. Write the `summary` in your own words, at least 40 characters, naming at least three distinct words of five or more letters taken from the anchored section; `contracts validate --resolved` rejects a copied hash without it. Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
+ 
+ **2.1 Read all target files:**
+ - Read each file from `target_files` in full
+ - If a file does not exist yet, note it as "new file to create"
+ - Read the `context` field for additional type/signature info
+ 
+ **2.2 Read existing tests and stories:**
+ - `existing_tests` and `existing_stories` default to `[]`; the string `"none"` is not a legal value and 1.4 refuses it
+ - Read each file listed in either array
+ - Understand existing test patterns (describe/it structure, mocks, fixtures) and, for every file in `existing_stories`, the story patterns it uses (`Meta`/`StoryObj` shape, how variants are declared, how callbacks are stubbed) — 4.4 builds on what you record here
+ 
+ **2.3 Read module neighbors:**
+ - List sibling files in the same directory as each target file
+ - Read 2-3 similar files to understand module patterns (naming, exports, structure)
+ - Pay attention to import aliases, named vs default exports, interfaces vs types, observer wrapping and props naming, and store patterns (makeObservable(this), explicit decorators, private fields before public, thin public @action.bound UI actions, non-mutating public helpers, private API methods, runInAction after await)
+ 
+ **2.4 Load relevant rules (from `module_patterns` or by detection):**
+ 
+ Rules `resolve-context` listed are already read (2.0c); load the rest by what you're implementing.
+ 
+
+--- .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md
+@@ 408,448 @@
+ mkdir -p <JOBS_ROOT>/<JOB_NAME>/results
+ ```
+ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
+ ```json
+ {
+   "task_id": "<task_id>",
+   "task_name": "<task_name>",
+   "task_type": "<task_type>",
+   "status": "<success|partial|failed>",
+   "description": "<what was implemented>",
+   "files_modified": ["src/path/file.ts"],
+   "files_created": ["src/path/newfile.ts"],
+   "files_deleted": [],
+   "commits": ["abc1234", "def5678"],
+   "lint_result": "<pass|N errors: details>",
+   "type_check_result": "<pass|N errors: details>",
+   "test_result": "<pass|N passed, M failed: details|skipped>",
+   "story_result": "<pass|build error: details|not applicable>",
+   "acceptance_criteria_met": "<all|partial: list of unmet criteria|none>",
+   "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
+-  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a" }],
++  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a", "anchor": "<declared heading; promoted entries only>", "summary": "<own words, 40+ chars; promoted entries only>" }],
+   "noticed_not_touched": [{ "what": "<problem>", "where": "<path|symbol>" }],
+   "assumptions": ["<what you assumed where the task did not say>"],
+   "behavior_changes": [{ "description": "<what now behaves differently>", "user_visible": true, "needs_operator": true, "alternatives": ["<option you did not take>"] }],
+   "not_touched": [{ "path": "src/path/file.ts", "reason": "<why left alone>" }],
+   "notes": "<any warnings, blockers, or additional context>"
+ }
+ ```
+ 
+ Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
+ 
+ Four of those fields have a bar, and a field that collects noise trains the reader to skim all of them. Omit one rather than pad it. The first three are adapted (MIT; see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
+ 
+ - `assumptions` — what you assumed where the task was silent AND acted on. If the assumption being wrong would not change a line you wrote, it is a hedge, not an assumption; leave it out.
+ - `noticed_not_touched` — a problem in code you actually read, stated so a follow-up task could be written from it alone, with `where` it lives. Not a dumping ground for every smell seen in passing, and not style opinion.
+ - `not_touched` — of the files this task was aimed at (`target_files`), the ones absent from `files_modified`/`files_created`/`files_deleted`, each with why. It answers that one question and no other: a reader subtracts those lists and this one from `target_files`, and flags the remainder as an unexplained omission.
+ - `behavior_changes` — behavior you chose where the task and the plan's state × event matrix did not decide it. **Every user-visible tradeoff goes here with `user_visible: true, needs_operator: true`** and the `alternatives` you rejected: message wording, where an error appears, which state resets or survives a switch, retry or reload. Never only in `assumptions`, `notes` or a journal line — the orchestrator asks the operator before it accepts a result carrying one, and a tradeoff it cannot see is accepted unasked.
+ 
+ Then check the shape and record the file — two commands, both of which refuse rather than warn:
+ 
+ ```bash
+
+--- .metaproject/skills/gdskills/quality/tests-creator/SKILL.md
+@@ 248,288 @@
+ ### Phase 4: REPORT
+ 
+ Emit the `test_case_specs` block for consumption by `task-implementer`.
+ 
+ **Output structure:**
+ 
+ ```
+ TEST_CASE_SPECS:
+   framework: <vitest|jest|pytest|...>
+   test_files:
+     - path: <test file path>
+       target_module: <source file to implement>
+       test_count: <N>
+       tests:
+         - id: test-1
+           description: <it description>
+           criterion: <which acceptance criterion>
+           type: happy_path | edge_case | error_path
+           status: written  # test file exists, test is RED
+ 
+-  project_context_applied: [{path: <rule path, project first>, sha256: <resolver's sha256>, how: read|followed|n/a}]
++  project_context_applied: [{path: <rule path, project first>, sha256: <resolver's sha256>, how: read|followed|n/a, anchor: <declared heading, promoted entries only>, summary: <own words, 40+ chars, promoted entries only>}]
+ 
+   run_command: "<command to run just these tests>"
+   expected_result: "all failing (RED phase)"
+   notes: "<any test design decisions or assumptions>"
+ ```
+ 
+ **STATUS reporting:**
+ 
+ ```
+ STATUS: DONE
+ tests_written: <N>
+ test_files: [<list of paths>]
+ all_criteria_covered: true | false (with explanation)
+ ```
+ 
+ ---
+ 
+ ## Integration with Task Implementer
+ 
+ When `task-implementer` receives a task that includes `test_case_specs`:
+
+--- README.md
+@@ 244,269 @@
+ ├── data/gdgraph/         # graph artifacts, module map, query results
+ ├── data/testing/         # test context, related tests, normalized reports
+ ├── data/health/          # normalized health artifacts and trends
+ ├── flows/                # task flows with frozen acceptance criteria
+ └── …                     # per-module config, hooks, templates, dashboard
+ ```
+ 
+ All Markdown and JSON. All diffable. All yours. And readable as a dashboard when
+ a human wants to look at it (`keryx dash`):
+ 
+ <p align="center">
+   <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/dashboard.png" alt="The keryx dashboard: health score, attention signals, and the enabled modules" width="880">
+ </p>
+ 
+ ### Your rules, applied first
+ 
+ `keryx skills import --rules <dir>` copies your rule files into
+ `.metaproject/rules/project/`. When an agent is about to write code or tests,
+ `keryx skills resolve-context` lists which rules and skills it must read —
+ yours before the bundled ones — and the task is checked against what the agent
+-says it read (`warn` by default, `block` on request). See
++says it read (`warn` by default, `block` on request).
++
++A long document your rules point at, such as `STYLING.md` or `THEMING.md`, can
++be required only when the task needs it. List it in
++`.metaproject/rules/project/references.json` with the globs and keywords that
++make it required and, optionally, the heading to read. `resolve-context
+
+--- README.md
+@@ 271,295 @@
++heading and writes a short summary of what it read, and `keryx skills
++references check` and `suggest` help you write the declarations. The summary
++check is a proxy: keryx cannot see what an agent opens, and a summary that
++reuses the section's words passes. How often a document is required depends on
++how broad its globs and keywords are. See
+ [Make agents follow my project's own rules](https://github.com/MrCipherSmith/keryx/blob/main/docs/docs/guides/apply-project-rules.md).
+ 
+ ## The agent harness
+ 
+ This is the half that makes the other half worth having.
+ 
+ > **The agent is ephemeral; the project brain is durable.**
+ 
+ keryx ships its own agent runtime — not a wrapper around someone else's. It owns
+ the execution loop, the tool registry, permissions, sessions, subagents and
+ completion gates, and it assembles its context from the same `.metaproject/`
+ graph, wiki, memory, rules, skills, testing, health and security that every other
+ agent reads. That combination is the point: an agent that starts a turn already
+ knowing the repository, and that cannot end one by asserting it is done.
+ 
+ ```bash
+ keryx shell                                   # TUI + agent (default UI)
+ keryx shell --no-tui                          # classic readline shell
+ keryx shell --chat                            # chat without tools
+ keryx shell --provider ollama --model gemma4:e4b     # fully local

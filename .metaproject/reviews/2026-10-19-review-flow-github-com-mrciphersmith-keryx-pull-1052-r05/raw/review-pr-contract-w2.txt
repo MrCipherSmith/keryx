@@ -1,0 +1,67 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Slices 03 and 04 (completion-gate card/command wording, card-lifecycle helpers, SKILL.md/cli-reference/review.ts edits) read against the PR body and the files the fix claims to answer. PC-001 is wave 1's and not repeated. The body claims hold for these slices: the Telegram-mirror-not-delivered wording is still there (tui operator-confirmations.ts), the E-01 skill sites (SKILL.md 124/134/782, SKILL.detail.md 386/866, both bundled mirrors, which are byte-identical) now name the card, the E-07 cli-reference sentence now says plain complete has no terminal check, and the E-02 `dispositions` input exists on the card. Three documentation gaps outside or beside the diff remain, all minor: the no-card fallback wording and the card's new `dispositions` input and `ended` state are not in CHANGELOG/cli-reference/TM-04, and the unchanged job-orchestrator skill (and its bundled copy) still tells an agent to run `keryx review complete --finding`. Known deferred items (E-13, E-14, D-03) are not re-raised.",
+  "findings": [
+    {
+      "id": "PC-101",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 758,
+      "quote": ": \"run `keryx review complete`\";",
+      "problem": "E-05 was fixed by making the gate say 'run `keryx review complete`' in a session with no review_complete tool (cardAvailable false, set in src/commands/agent.ts:3501). The rule stated everywhere else is unconditional: SKILL.md:136 'an agent never runs `keryx review complete`; that command is for a human in a terminal', cli-reference.md:4921 'the agent then closes the review through the `review_complete` card, never by running `keryx review complete`', TM-04 section 6a and 8. None of those documents mentions the exception, and the review-orchestrator skill is loaded in the same readline session in which the gate nudge contradicts it.",
+      "impact": "A reader or an agent in a readline `keryx shell` gets two opposite instructions (the loaded skill: never run it; the gate: run it) and the docs give no rule for which wins. The fallback is deliberate (E-05 suggested_fix), so the cost is only a documentation gap, not a code defect.",
+      "suggested_fix": "Add one sentence to SKILL.md:136, cli-reference.md:4921 and TM-04 section 8: where the session has no review_complete tool (the readline shell), the agent closes the package with `keryx review complete` and the continue message says so.",
+      "evidence": "Gate: src/review/completion-gate.ts:755-759 closeStep(card) and :806 `const card = input.cardAvailable !== false;`; caller src/commands/agent.ts:3501 `cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\")`. Docs: git grep 'readline' over cli-reference.md, TM-04 and review-with-a-record.md at 77d2eff20 finds no sentence on this case; SKILL.md:136 and cli-reference.md:4921 quoted above.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-102",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": 1325,
+      "quote": "keryx review complete <previous-review-id-or-path> \\",
+      "problem": "The PR's rule (SKILL.md:136 'an agent never runs `keryx review complete`') is the fix for E-01, and E-02's fix added `dispositions` to the review_complete card precisely so an agent need not use the CLI flags. The job-orchestrator skill is unchanged by the PR and still instructs the agent to run the CLI with `--finding/--disposition/--evidence` as step 7 of its fix loop (SKILL.md:1002 and 1325-1328; orchestrator-prompt.md:27 and 193, 'keryx review complete <review-id> --finding F-001 --disposition acted-on --evidence \"<commit>\"'). Neither file mentions the card or `dispositions`. The E-02 class_scope listed these exact sites; the fix commit left them.",
+      "impact": "An agent running a job-orchestrator fix loop in keryx shell follows its own skill and runs plain `keryx review complete` through shell_exec, which has no TTY check or command-risk floor (TM-04 section 8), instead of calling the card. Unverified whether the previous round is already closed at that point (in which case only dispositions are recorded and no new close happens); managed.ts was not traced for a re-complete of a closed package.",
+      "suggested_fix": "In job-orchestrator SKILL.md:1002, 1325-1328 and orchestrator-prompt.md:27, 193 (and the bundled copies under src/gdskills/bundled/skills/orchestration/job-orchestrator/), say: in keryx shell pass the dispositions to the `review_complete` card; the `--finding` form is for a human's terminal.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-103",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 4921,
+      "quote": "without a reachable topic the card says \"Telegram mirror not delivered\" and is answered in the shell",
+      "problem": "Commit 77d2eff20 adds two user-visible behaviours that no user-facing document in the diff or outside it describes: (1) a card whose Telegram leg ended after the card was posted now shows 'Telegram is no longer waiting for this card, answer in the shell' (src/tui/operator-confirmations.ts:132, new `topicEnded` state); the docs and CHANGELOG.md:9 describe only the 'Telegram mirror not delivered' wording; (2) the review_complete card accepts `dispositions` (src/commands/operator-confirm-review.ts:746-751), recorded and shown on the card; cli-reference.md:4881 still lists only `[--finding <id> --disposition <state> --evidence <ref>]...` and the 4921 paragraph, CHANGELOG.md:9 and TM-04 line 26 do not mention the input. Only the review-orchestrator skill (SKILL.md:247, 285) does.",
+      "impact": "An operator who sees 'no longer waiting' on /remote-control or /decisions has no document to look it up in; a person reading the CLI reference or CHANGELOG does not learn that the card can record finding dispositions, so the reference reads as if the fix-round close needs the terminal.",
+      "suggested_fix": "Add to cli-reference.md:4921 and TM-04 section 6a one clause for the 'no longer waiting' wording (stream dropped or one-hour wait ended, answer in the shell), and one for the card's `dispositions` input; extend the CHANGELOG.md:9 entry.",
+      "evidence": "git grep 'no longer waiting|mirror not delivered' at 77d2eff20 over docs, CHANGELOG.md, .metaproject/skills and src/gdskills finds the new wording only in code and tests; git grep 'dispositions' over cli-reference.md, TM-04 and the review guides finds no mention of the card input.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "PC-102: trace completeManagedReview on an already-complete package to settle whether job-orchestrator step 7 re-runs the gates or only records dispositions.",
+    "E-13, E-14 and D-03 remain open as deferred minors; not re-raised."
+  ],
+  "prior_dispositions": [
+    {"finding": "E-01", "disposition": "acted-on", "evidence": "SKILL.md:782 and SKILL.detail.md:386 now read 'then call `review_complete`'; 124, 134, 59 and 866 name the card with the CLI for a human; both bundled copies are byte-identical (git diff --quiet between the two trees at 77d2eff20)."},
+    {"finding": "E-02", "disposition": "acted-on", "evidence": "review_complete card has a validated `dispositions` input (operator-confirm-review.ts:653-686, 746-823); SKILL.md:247 and :284-285 say agents pass it. The job-orchestrator sites are PC-102."},
+    {"finding": "E-07", "disposition": "acted-on", "evidence": "cli-reference.md:4921 now lists only the --waive forms as terminal-only and adds 'plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8)'."},
+    {"finding": "E-05", "disposition": "acted-on", "evidence": "completion-gate.ts closeStep(card) with cardAvailable from the roster; the exception is undocumented, see PC-101."},
+    {"finding": "E-04", "disposition": "acted-on", "evidence": "onTopicEnded and markUndelivered(id, 'ended') in approval-mirror.ts and operator-confirmations.ts, tested in card-lifecycle.test.ts; user-facing wording undocumented, see PC-103."}
+  ],
+  "slices": [
+    {"id": "slice-03", "coverage": "read in full: completion-gate.ts closeStep/describeBlockers/decideReviewGate, approval-mirror.ts onTopicEnded, operator-confirmations.ts remoteApproval/askUnmirroredCard/raceMirroredCard/markUndelivered, tui-shell.ts import changes, card-lifecycle.test.ts, operator-confirmations.test.ts", "status": "DONE"},
+    {"id": "slice-04", "coverage": "read in full: SKILL.md and bundled SKILL.md hunks, cli-reference.md 4921, review.ts import hunk, tui-shell.ts raceApproval removal; changed lines compared with git diff -U0 b1c6da0e6..77d2eff20", "status": "DONE"}
+  ],
+  "stats": {"findings_total": 3, "blocker": 0, "major": 0, "minor": 3, "info": 0}
+}
+```

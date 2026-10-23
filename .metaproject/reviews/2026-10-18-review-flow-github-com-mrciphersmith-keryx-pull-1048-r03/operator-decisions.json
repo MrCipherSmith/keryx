@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-002",
+      "answer": "dismiss",
+      "reason": "Читаемость сообщения при падении; тот же приём в 29 других тестовых файлах, тест и так падает",
+      "quote": "yeo",
+      "at": "2026-10-18T18:00:20.612Z",
+      "actor": "operator",
+      "confirmedVia": "terminal",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "d09875c93ed46d145acda8fe43df1c2889654cb85dc91b484cddc4e410e97d1f"
+      }
+    }
+  ]
+}

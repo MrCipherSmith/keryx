@@ -1,0 +1,95 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Wave 3, slice-03 and slice-04, delta b1c6da0e6..77d2eff20, read at head 77d2eff20. The E-claims that fall to this role hold on these slices: E-08 is closed (remoteApproval with an injectable clock, askUnmirroredCard and raceMirroredCard extracted out of the tui-shell closure and driven by card-lifecycle.test.ts with the real log), E-04 is closed (onTopicEnded marks the card, own wording, no regression on the undelivered path), E-01 imperative sites are fixed in both skill copies (mirrors are byte-identical, no 'then run `keryx review complete`' left) and E-07 is fixed in cli-reference.md:4921. E-10 and E-05 stay partial for reasons wave 1 and wave 2 already filed (F-001, F-104, F-102, F-103) and are not re-raised. Three new minors remain on the lifecycle code: the shell closure still mixes levels and repeats the card-title derivation, the fingerprint-to-remoteApproval ternary is written twice, and raceMirroredCard switches modes on a nullable question and drops onUndelivered silently in one mode. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-201",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6125,
+      "quote": "return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;",
+      "principle": "Clean Code - DRY E1 (two occurrences, noted)",
+      "problem": "E-08 moved the construction of the remote approval into remoteApproval, but the decision around it is still written twice in tui-shell.ts: line 6083 (`return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, answer.fromId) : true;`) and line 6125, each under the same two-line `Flow 456: ... records confirmedVia: \"remote-card\"` comment. The rule 'a remote allow on a fingerprinted card returns the press record, anything else returns true' lives in two closures.",
+      "impact": "Two occurrences only, so minor. If the record gains a field or the no-fingerprint case changes, the Telegram-turn path (6083) and the typed-turn mirror path (6125) have to be edited together; the E-08 tests drive remoteApproval, not this choice.",
+      "suggested_fix": "Give remoteApproval the whole decision: `remoteAllow(meta, fromId)` returning `meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, fromId) : true`, and call it at both sites with the comment kept once on the helper.",
+      "evidence": "git grep -n 'remoteApproval(' at 77d2eff20 in src/tui/tui-shell.ts lists 6083 and 6125 only; both read in context (6081-6083, 6118-6125).",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-202",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6111,
+      "quote": "question: isCard && meta?.card !== undefined ? (meta.card[0] ?? tool) : undefined,",
+      "principle": "Clean Code - Functions B1/B3 (mixed abstraction in a 35-line closure) and DRY E1",
+      "problem": "After the E-08 extraction the mirrorApprovalToTopic closure (lines 6092-6126, about 35 lines) still interleaves five jobs at different levels: classify the approval as a card (6095-6096), the unmirrored path (6097-6100), the plain pass-through for an inactive bridge (6101-6103), the too-long path (6104-6107), the race and the transcript/focus/plan presentation of the result (6108-6125). The card's title is derived twice with the same expression, `meta.card[0] ?? tool` at 6099 and again at 6111, and the second is guarded by `meta?.card !== undefined` although `isCard` (6095) already requires `meta.card !== undefined`; only the TypeScript narrowing is missing, so the check is repeated to satisfy the compiler.",
+      "impact": "The next card rule (a new unmirrored case, a different title) has to be threaded through a closure that already carries the whole decision tree. The twice-written title can drift between the unmirrored and the raced path, so the same card would appear under two names in the confirmations view.",
+      "suggested_fix": "Compute `const cardTitle = isCard ? (meta?.card?.[0] ?? tool) : undefined` once next to isCard and pass it to both askUnmirroredCard and raceMirroredCard; move the post-race presentation (focus, setMainAgent, onSystem line, return) into a small `presentTopicAnswer(outcome.answer, brief, meta)` so the closure only routes.",
+      "evidence": "Read of src/tui/tui-shell.ts 6085-6127 at head 77d2eff20; the title expression appears at 6099 (`meta.card[0] ?? tool`) and 6111; isCard is defined at 6095.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-203",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 199,
+      "quote": "const id = options.question === undefined ? undefined : options.log.ask(options.question, true);",
+      "principle": "SOLID - SRP F1 / Clean Code - Function Arguments B2 (a nullable argument selecting a mode)",
+      "problem": "raceMirroredCard does two different things depending on whether `question` is undefined: with a question it logs the card, wires onUndelivered and onTopicEnded to the log and settles it; with undefined it is a bare raceApproval and the caller's `onUndelivered` is never called (the callbacks are only added inside the `id === undefined ? {} : {...}` spread at lines 204-212). The option's doc comment says 'The topic never took the card; the shell tells the operator to answer here', which is false in the undefined mode, and the doc for `question` ('nothing is logged') does not mention that the note is dropped too. The nullable argument is the mode switch and the conditional object spread hides it.",
+      "impact": "A caller that passes onUndelivered for a non-card approval gets no call and no error. tui-shell.ts:6113 does exactly that for every approval it routes here, relying on `question` being defined only for cards; a later change to isCard would silently turn the operator-facing note off for some cards. The function has two reasons to change (the card log and the race).",
+      "suggested_fix": "Either call options.onUndelivered from the race regardless of logging (wire raceApproval's onUndelivered to `() => { if (id !== undefined) log.markUndelivered(id); options.onUndelivered?.(); }`) so the note does not depend on the log, or split into raceApproval for plain approvals and raceMirroredCard with a required `question: string`, and state the contract in the doc comment.",
+      "evidence": "Read of src/tui/operator-confirmations.ts 188-220 at head 77d2eff20 and the call site at src/tui/tui-shell.ts 6109-6117; the base closure at b1c6da0e6 gated onUndelivered on isCard the same way, so there is no behaviour change, only an undocumented coupling now living in a reusable helper.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "src/commands/review.ts:4558 and :4562 hold the same ~400-character 'needs a terminal ... call the review_complete card' message twice with two words changed; unchanged by this delta (only the completeManagedReview import line is in slice-04), so not raised. A shared builder would close the duplication together with F-102.",
+    "src/tui/card-lifecycle.test.ts lets the topic leg settle with `setTimeout(resolve, 10)` inside the dock callbacks (lines 483, 521, 545); a timing wait rather than an awaited event is a testing-practices question, left to that reviewer."
+  ],
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "partial" },
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-05", "disposition": "partial" },
+    { "id": "E-07", "disposition": "closed" },
+    { "id": "E-08", "disposition": "closed" },
+    { "id": "E-10", "disposition": "partial" }
+  ],
+  "slices": [
+    {
+      "id": "slice-03",
+      "coverage": "Read in full: slice diff, and at head 77d2eff20 src/review/completion-gate.ts 750-831, src/tui/approval-mirror.ts, src/tui/operator-confirmations.ts, src/tui/tui-shell.ts 6055-6145 (plus base b1c6da0e6 6090-6150 to compare the closure), src/tui/card-lifecycle.test.ts and the operator-confirmations.test.ts hunk from the diff. Wave 1 and wave 2 findings F-001..F-007 and F-101..F-109 on these hunks were not repeated.",
+      "status": "DONE"
+    },
+    {
+      "id": "slice-04",
+      "coverage": "Read in full: slice diff plus the real b1c6da0e6..77d2eff20 diff of .metaproject SKILL.md (the slice shows only removed lines), docs/docs/cli-reference.md:4921 at head, src/commands/review.ts 4539-4600 and the import removal, tui-shell.ts import hunks; diff -q confirms both bundled skill copies are byte-identical to the .metaproject copies and no 'then run `keryx review complete`' remains.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+## Clean Code Review (round r05, slice-03 and slice-04, b1c6da0e6..77d2eff20)
+
+### Prior findings on these slices
+- Closed: E-04 (onTopicEnded, own wording, undelivered path unchanged), E-07 (cli-reference.md:4921 now says plain `complete` has no terminal check), E-08 (lifecycle extracted and tested with the real log).
+- Partial: E-01 (imperative sites fixed in both copies; SKILL.md:59/134 still name bare `complete`, F-101), E-05 (cardAvailable added; review.ts:4558/4562 and completion-gate.ts:800 still unconditional, F-102, F-103), E-10 (closeStep covers nextStep only, F-001/F-104).
+
+### New findings
+F-201 (duplicated fingerprint ternary), F-202 (mirror closure mixed levels, title derived twice), F-203 (raceMirroredCard nullable mode switch). All minor.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 0

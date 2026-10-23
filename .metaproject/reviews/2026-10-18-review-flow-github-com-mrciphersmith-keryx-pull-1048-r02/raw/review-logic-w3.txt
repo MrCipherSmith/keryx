@@ -1,0 +1,93 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-03 (resolver wiring, reference entries, proof, check, config, section extraction, CLI, status, two output schemas) is logically sound on the main paths: AC1 (loader and schema), AC3 (task text), AC4/AC5 promotion, AC7 (cap keeps promoted), AC8 (undeclared), AC9 (schema additions), AC10/AC11 (proof rules), AC13 (drift), AC14/AC15 (check/suggest/hint) are implemented, and AC2 holds (no references key, no undeclared key, promotedBytes 0 so budget is unchanged). Two majors: a dead anchor is accepted by the resolver as 'whole file is the obligation' but the validator can then never accept any summary (unsatisfiable obligation under block), and keyword matching applies word-character lookarounds to keywords that begin or end with a non-word character, so a keyword such as '.css' never matches 'styles.css'. Two minors (BOM hides the first heading; hard-coded word length).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "if (!section.found) return { ok: false, why: `the anchored section \"${entry.anchor}\" cannot be found in ${entry.path} now (${section.reason})` };",
+      "problem": "The resolver treats a dead anchor as 'the whole file is the obligation' (reference-entries.ts: `sectionBytes = bytes` with the warning 'the whole file (...) is the obligation'; AC6: 'falls back to the whole file with a warning'). The entry is still emitted with `anchor` set and tier must_read when promoted. The validator does not apply the same fallback: wordsFailure -> currentSection calls extractSection(text, entry.anchor) again, gets found:false, and returns a `summary-words` failure 'has a summary that cannot be checked: the anchored section ... cannot be found'. That failure is returned for every cited summary, however faithful.",
+      "impact": "Trigger: references.json declares anchor 'Class conventions' for STYLING.md, the heading is absent or renamed at resolve time, and a task file matches the glob. The worker follows the resolver's own instruction (reads the whole file), cites the right sha256, the declared anchor and a good 40+ character summary in the file's words; checkResolvedContext still pushes a miss on every run. Under enforcement 'block' `flow task done` and the standalone check exit 1 with no action the worker can take; only an operator edit of references.json clears it. No drift is reported either (the file hash is unchanged), so the miss reads as a worker failure. This contradicts the resolver's stated fallback and AC6/AC12 intent (a warning, never an unsatisfiable obligation). The existing test covers a section that vanishes after resolve, not a dead anchor at resolve time.",
+      "suggested_fix": "Make the validator mirror the resolver: when the anchor is not found, compare the summary against the whole file text (what: 'the file'), keeping the anchor-equality rule. Better, record the fallback in the entry at resolve time (omit `section_bytes` being equal to `bytes` is not a marker; add a flag or drop `anchor` from the promoted entry) so both sides read the same thing. Alternatively make the resolver refuse to promote an entry whose anchor is dead and warn, so the contradiction cannot arise.",
+      "evidence": "reference-entries.ts resolveReferences: `if (section.found) sectionBytes = section.bytes; else { sectionBytes = bytes; ... warnings.push(... the whole file (${bytes} bytes) is the obligation ...` then `...(declaration.anchor !== undefined ? { anchor: declaration.anchor } : {})` on the same entry. reference-proof.ts currentSection: `if (entry.anchor === undefined) return { ok: true, text, what: \"the file\" }; const section = extractSection(text, entry.anchor); if (!section.found) return { ok: false, ... }`. wordsFailure turns ok:false into `{ rule: \"summary-words\", detail: \"has a summary that cannot be checked: ...\" }`, which proofMisses maps to a ResolvedMiss, which sets `blocking` under block.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": ["src/gdskills/reference-proof.ts currentSection", "src/gdskills/reference-entries.ts resolveReferences dead-anchor fallback"],
+        "enumeration_method": "searched the slice for every extractSection caller: reference-entries.ts (falls back to whole file), references-check.ts declarationFindings (reports an error, intended), reference-proof.ts currentSection (no fallback). Only the last one disagrees with the resolver."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);",
+      "problem": "The not-a-word-character lookarounds are applied unconditionally. When the keyword itself begins (or ends) with a non-word character, the lookaround demands that the neighbouring text character is also a non-word character, which is the opposite of a word boundary at that edge. Verified at head: keywordOccurs('fix styles.css please', '.css') returns false, keywordOccurs('a@apply', '@apply') returns false, while keywordOccurs('use @apply here', '@apply') returns true.",
+      "impact": "Trigger: a declaration with a keyword such as '.css', '.scss', '@apply' or '::part' (the natural spelling for a styling document) and a task text like 'fix styles.css' or 'tidy a.scss'. The reference is not promoted and stays on_demand, so the obligation to read STYLING.md is silently skipped. `check` does not warn (a 4-character keyword passes MIN_KEYWORD_CHARACTERS). AC5 says 'on a word boundary', which a conventional \\b would satisfy for 'styles.css'.",
+      "suggested_fix": "Apply each lookaround only when the keyword's edge character is a word character: prefix `(?<![\\p{L}\\p{N}_])` only if the keyword starts with [\\p{L}\\p{N}_], suffix `(?![\\p{L}\\p{N}_])` only if it ends with one. Add a test for '.css' in 'styles.css'.",
+      "evidence": "Ran keywordOccurs from src/gdskills/reference-entries.ts under bun at head: ('fix styles.css please', '.css') -> false; ('use @apply here', '@apply') -> true; ('a@apply', '@apply') -> false. The regex source is the quoted line.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": ["src/gdskills/reference-entries.ts keywordOccurs"],
+        "enumeration_method": "keywordOccurs is the only keyword matcher in the slice (promotionReason is its only caller in this slice); the single-entry list is deliberate."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/references-section.ts",
+      "line": null,
+      "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+      "problem": "A UTF-8 BOM at the start of a markdown document sits before the first '#', so the first-line heading is not recognised. The BOM is stripped for references.json (loadReferences) but not for the documents read by extractSection / readDeclaredFile / inspectDocument. Verified: extractSection('\\uFEFF# Title\\ntext\\n## B\\nx\\n', 'Title') returns found:false with available ['B'].",
+      "impact": "Trigger: a declared document saved with a BOM whose anchor is its first-line H1. The resolver warns 'anchor not found' and falls back to the whole file; `check` reports anchor-not-found as an error while the heading is visible in any editor. Cost is a confusing diagnostic, and with F-001 an unsatisfiable proof.",
+      "suggested_fix": "In scanHeadings, strip a leading U+FEFF from the first line before matching (keeping offsets consistent with markdown.slice, i.e. treat the BOM as part of the section prefix).",
+      "evidence": "Ran extractSection at head with the BOM input: {\"found\":false,\"anchor\":\"Title\",\"reason\":\"no heading matches anchor \\\"Title\\\"\",\"available\":[\"B\"]}.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "problem": "The word length is hard-coded as `{5,}` while WORD_MIN_LETTERS = 5 is exported, used in the failure message and documented as the rule. Changing the constant changes the message but not the check.",
+      "impact": "Maintenance cost: the reported rule ('N or more letters') and the enforced rule can diverge silently after a tuning change.",
+      "suggested_fix": "Build the pattern from the constant: new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\").",
+      "evidence": "WORD_MIN_LETTERS is referenced only in the `detail` string of wordsFailure; distinctWords does not read it.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "const rel = normaliseCitedPath(match[1]!) ?? match[1]!;",
+      "problem": "Citations are now normalised before they key the `cited` map for every project, including projects without a references file. A rule citing './docs/x.md' or 'docs\\x.md' used to produce a contract entry whose path was the raw spelling and now produces 'docs/x.md'.",
+      "impact": "Only a differently spelled path in `contract` entries for unusual citations; ordinary spellings are unchanged, so AC2 ('byte-identical without a references file') holds for them. Worth knowing if AC2 is read literally. What would settle it: a fixture rule citing './x.md' compared before and after.",
+      "suggested_fix": "None required; mention in the docs if the strict reading of AC2 matters.",
+      "evidence": "Read from the diff: previously `const rel = match[1]!;`.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 2, "info": 1 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Spec compliance gate ran against ACs 1-15 as far as slice-03 carries them (loader/schema, task text, promotion, section budget, cap, undeclared, schemas, proof rules, drift, check/suggest/hint). No unimplemented criterion found in this slice; AC16 (TUI), AC17 (skills sync), AC18 (e2e) and AC19 to AC22 are outside the slice. The MCP and flow-orchestrator task-text pass-through for AC3 exists in other files (metaproject-operations.ts takes task_text) and was not reviewed here.
+
+Routing audit: graph_used no (not-relevant, diff-local review), wiki_used no (not-relevant), ctx_used yes (keryx ctx read/rg), raw_rg_used no.

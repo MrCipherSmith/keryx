@@ -1,0 +1,97 @@
+STATUS: DONE
+
+## Architecture Review (PR 1052, round r04, wave 2, slice-03)
+
+### Review Scope
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776, merge-base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice read in full: slice-03 (src/commands: agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts, and the five test files). Context opened at head: src/review/complete-gated.ts, src/review/types.ts (cardPressFields), src/review/managed.ts (recordedPackageHead, getManagedReviewStatus), src/review/package-location.ts (readManifestHead), src/review/evidence-level.ts, the single operatorConfirm binding site (shell.ts), TM-04 6a, AC4.
+- Stack: generic-ts (keryx CLI + TUI), no NestJS or MobX.
+
+### Summary
+The slice is structurally sound. `keryx review complete` and the `review_complete` card now close a round through one function (`completeReviewGated` in src/review/), so the run-profile and narrowed-routing gates cannot drift between the two paths. The remote-answer checks (allowed id, one hour TTL, spent token) sit in one choke point, `operatorConfirmTool().invoke`, with one binding site (`shell.ts`) that fails closed when no allowed list is bound. Press fields travel through one helper, `cardPressFields`, into the review records. Two minor structural points concern the new `review_complete` spec, which is the only card that assembles package state and writes its own audit file in the command layer instead of calling a review/ library.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Layer Violations
+None at major level. See AR-W2-001 (minor): the card's facts are read from the package inside the command layer.
+
+### Dependency Direction
+None detected. commands/ imports review/ and remote/config (inward); review/types.ts imports nothing from commands/ (`CardPress` is structural, `OperatorConfirmation` satisfies it).
+
+### Module Boundary Violations
+None detected. Single `operatorConfirm` binding site (src/commands/shell.ts:4221); the roster tests (19 tools, MCP/ACP/unattended exclusion) are updated with the new tool.
+
+### Design Pattern Misuse
+See AR-W2-002 (minor).
+
+### SOLID Violations
+None detected beyond the two minors. No stale "then run `keryx review complete`" wording in the slice's non-test source: the waiver tool descriptions and results (operator-confirm-review.ts:261 area, the waive_readiness result) and the two refusal texts in review.ts now say to call the review_complete card. Remaining `review complete` mentions in src/commands are in terminal-only wording (header comments, "Same effect as `keryx review complete --waive`"), which is correct. Outside the slice, the already-known SKILL.md:782 / SKILL.detail.md:386 (and bundled mirrors) are the only stale sites found by `keryx ctx rg` over src; src/review/readiness.ts:294 and :424 already pair the card with "in a terminal run keryx review complete", and src/review/autonomous-profile.ts:144 is the deliberate unattended wording.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A - not detected in stack.
+
+### Findings
+
+#### [AR-W2-001] review_complete assembles package facts in the command layer with its own manifest reader that disagrees with the gate's
+- Severity: minor
+- File: src/commands/operator-confirm-review.ts:658 (completionFacts), :665 (head)
+- Problem: `completionFacts` parses manifest.json with an inline ad-hoc type, reads report.md, and parses research.json `dispatch` with `readFileSync` inside the command file. Every sibling card in this file delegates reading to a review/ function. The package already has typed readers for the same data (`getManagedReviewStatus` returning `ManagedReviewManifest`, `readManifestHead`, `recordedPackageHead` in src/review/managed.ts:173-181). The head is the concrete divergence: `recordedPackageHead` only accepts a 7-40 hex string (trimmed, lowercased); `completionFacts` accepts any non-empty string and shows it as `reviewed head: ...` after `cardSafe`.
+- Why it matters: AC4 and TM-04 present the card as the package's own facts. A manifest whose `target.head` is not a valid SHA makes the card claim a reviewed head the gate ignores (the gate treats it as not recorded). The covering test ("a recorded head with a line break cannot add a line to the card") asserts that the card shows `HEAD\nwaivers: none` as the reviewed head, which pins the mismatch. A third reader of the same field will drift further as the gate evolves.
+- Fix: move the read into src/review/ as one function (for example `readCompletionFacts(dir)` next to `evidence-level.ts` / `coverage-complete.ts`), built on the existing typed manifest and on `recordedPackageHead`, so card and gate share the head rule. The command spec keeps only rendering (`cardSafe`, lines) and the digest.
+- Evidence: `keryx ctx rg -n "async function recordedPackageHead|readManifestHead" src/review` finds the existing readers; src/review/managed.ts:176-177 applies `/^[0-9a-f]{7,40}$/i` that operator-confirm-review.ts:665 does not.
+- Confidence: medium (the layering point is a judgement call, the head-rule mismatch is verified in the source)
+
+#### [AR-W2-002] The review_complete audit record is a write-only side file written after the close, outside the gate and undocumented
+- Severity: minor
+- File: src/commands/operator-confirm-review.ts:650 (COMPLETION_FILE), :780 (write)
+- Problem: Every other card records who confirmed (`confirmedVia`, `pressedBy`, `pressedAt`) through the review/ library function that applies the decision, in a record the gates and readers use (manifest waivers, operator-decisions.json, plan-confirmation.json). `review_complete` closes the round through `completeReviewGated`, then the command layer writes `completion-confirmation.json` in a second, non-atomic step. No src code reads that file (`keryx ctx rg completion-confirmation src` matches only operator-confirm-review.ts and its test), it is not in the manifest `artifacts` list, and it appears in no doc (TM-04 6a, cli-reference, flow 464 files and CHANGELOG: no match). A close through the CLI leaves no equivalent record.
+- Why it matters: TM-04 6a promises that "the record keeps pressedBy ... beside confirmedVia" for the card-gated acts, and the closing act is the one the PR exists to make attributable. A failed write leaves a closed round with no attribution (the code reports it, the test pins it), and nothing downstream (`review status`, the report, flow gates) can show who closed the round.
+- Fix: pass the confirmation into `completeManagedReview` (an optional `confirmation: { quote, confirmedVia, pressedBy?, pressedAt? }`) and record it on the closed manifest in the same write as the status, as `readiness_waivers` entries already do. If the side file is kept, name it in the manifest artifacts and in TM-04 so a reader knows where to look.
+- Evidence: src/commands/operator-confirm-review.ts:775-781 writes after `completeReviewGated` returns; test at operator-confirm-review-tools.test.ts:1947 builds a directory at that path to force the failed-write branch.
+- Confidence: medium (design preference on where the record lives; the absence of any reader and of documentation is verified)
+
+### Checks that came out clean
+- Single close path: src/commands/review.ts runComplete and operator-confirm-review.ts completeSpec both call `completeReviewGated` (src/review/complete-gated.ts); the run-profile and routing refusals moved out of the command with the same messages.
+- Remote acceptance in one place: operator-confirm-tools.ts `invoke` deletes the token before the allowed-id, who-pressed and TTL checks, so a refusal spends it; the local path has no TTL by design (TM-04 6a).
+- Driver plumbing: agent.ts forwards `confirmationPressedBy/At` only when `confirmationVia === "remote"`, and `invoke` re-checks; the two checks are redundant but not conflicting.
+- `record()` in operator-confirm-other.ts and the schedule decision-log line type carry the optional press fields; no other card site in that file writes `confirmedVia` outside `record()`.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "summary": "slice-03 keeps the layering intact: one shared close path (completeReviewGated), one remote-acceptance choke point, one binding site that fails closed. Two minor points on the new review_complete spec: it reads package facts in the command layer with a head rule that differs from the gate's, and its audit record is an undocumented write-only side file written after the close.",
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [ { "id": "slice-03", "coverage": "read in full" } ],
+  "findings": [
+    {
+      "id": "AR-W2-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 665,
+      "quote": "const recorded = typeof manifest.target?.head === \"string\" && manifest.target.head !== \"\" ? manifest.target.head : undefined;",
+      "problem": "completionFacts (line 658) parses manifest.json, report.md and research.json with readFileSync and an inline manifest type inside the command file, while sibling cards delegate reading to review/ functions and typed readers exist (getManagedReviewStatus, readManifestHead, recordedPackageHead). Its head rule differs from the gate's: recordedPackageHead accepts only a 7-40 hex string, completionFacts shows any non-empty string as the reviewed head.",
+      "impact": "The card can show a reviewed head that the completion gate treats as not recorded, and a third reader of manifest.target.head will drift as the gate changes. The test 'a recorded head with a line break cannot add a line to the card' pins a non-SHA value being shown as the reviewed head.",
+      "suggested_fix": "Move the read into one review/ function (for example readCompletionFacts(dir)) built on the typed manifest and recordedPackageHead, so card and gate share the head rule; keep rendering (cardSafe, lines, digest) in the command spec.",
+      "evidence": "src/review/managed.ts:173-181 recordedPackageHead applies /^[0-9a-f]{7,40}$/i after trim and lowercase; src/commands/operator-confirm-review.ts:665 does not. keryx ctx rg for readManifestHead / recordedPackageHead shows the existing readers.",
+      "confidence": "medium"
+    },
+    {
+      "id": "AR-W2-002",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 780,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "The attribution record of the closing act (confirmedVia, pressedBy, pressedAt, head, evidence, waivers) is a separate completion-confirmation.json written by the command layer after completeReviewGated has already closed the round. No src code reads it, it is not in the manifest artifacts, and no doc names it (TM-04, cli-reference, flow 464 files, CHANGELOG: no match). Other cards record attribution through the review/ function that applies the decision. A CLI close leaves no equivalent record.",
+      "impact": "TM-04 6a promises pressedBy beside confirmedVia for the card-gated acts, and the closing act is the one the PR exists to attribute; a failed write leaves a closed round with no attribution and nothing downstream (review status, report, flow gates) can show who closed it.",
+      "suggested_fix": "Pass an optional confirmation { quote, confirmedVia, pressedBy?, pressedAt? } into completeManagedReview and record it on the closed manifest in the same write as the status (as readiness_waivers already do); if the side file stays, list it in the manifest artifacts and document it in TM-04.",
+      "evidence": "keryx ctx rg completion-confirmation src matches only src/commands/operator-confirm-review.ts and operator-confirm-review-tools.test.ts; keryx ctx rg --hidden over docs, CHANGELOG.md and the flow 464 directory has no match; operator-confirm-review.ts:775-781 writes after completeReviewGated returns.",
+      "confidence": "medium"
+    }
+  ]
+}
+```

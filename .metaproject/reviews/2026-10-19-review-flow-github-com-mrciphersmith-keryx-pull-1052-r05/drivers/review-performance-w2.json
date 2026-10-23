@@ -1,0 +1,23 @@
+{
+  "reviewer": "review-performance",
+  "wave": 2,
+  "waves": 2,
+  "slices": [
+    "slice-03",
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-03",
+      "path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/slices/slice-03.diff",
+      "bytes": 33689
+    },
+    {
+      "id": "slice-04",
+      "path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/slices/slice-04.diff",
+      "bytes": 31136
+    }
+  ],
+  "result": "raw/review-performance-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+}

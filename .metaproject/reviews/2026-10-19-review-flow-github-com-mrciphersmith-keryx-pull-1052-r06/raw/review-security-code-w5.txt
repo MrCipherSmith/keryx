@@ -1,0 +1,79 @@
+STATUS: DONE
+
+## Security Review (round r06, second-look slice-07)
+
+### Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base: `062aa9c36484e7b7f6b8a1dd6140671330646e66`, head `0f980c4078eb937fcb0806fe5a25e7235bf34465`
+- Scope mode: diff, slice-07 only (second look, unchanged since r05)
+- Changed files reviewed: 13 (src/flow/confirm-token.ts, schema.ts, service.ts, types.ts; the three bundled skill files; src/harness/external/write-land.ts; src/harness/tool/builtin/interactive-tools.ts; src/learning/decisions.ts; src/remote/client.ts, shell-bridge.ts, mirror-undelivered.test.ts)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+S-401 and the other r05 findings were not re-reported. Nothing in slice-07 touches the review_complete dispositions path, so the S-401 completeness question belongs to slices 01 and 02, not to this slice.
+
+### Findings
+
+### [F6-701] Stored token's optional provenance fields are copied into the signature unvalidated
+- **Severity**: info
+- **File**: src/flow/confirm-token.ts:157-174 (parseStoredToken) and :235-236 (consumeConfirmationToken)
+- **Attack vector**: none in the current code path. Exploiting it takes write access to the flow's `confirm-token.json`, and an attacker with that access can already replace the stored hash with a hash of a token they know and mint a spendable token outright. So this adds no new capability. Writing the file is not reachable through the card path in this diff.
+- **Problem**: `parseStoredToken` checks the required fields but passes `pressedBy`, `pressedAt` and `confirmedVia` through as they are on disk. `consumeConfirmationToken` then copies `pressedBy` and `pressedAt` into the signature whatever their type. The flow schema (schema.ts:331) types `pressedBy` as integer, so a non-integer value would be written to flow.json and then fail `flow check`. A forged `confirmedVia: "remote-card"` would also record `mechanism: "remote-card-token"`. The `confirmedVia` pass-through already existed for `tui-card` before this PR.
+- **Why it matters**: defense in depth only. The remote press is checked at mint time (operator-confirm-tools.ts:213-217: the allow-list and a pressedBy/pressedAt that must be present), but that guarantee is not re-checked when the token is read back.
+- **Fix**: in `parseStoredToken`, accept `pressedBy` only when `Number.isSafeInteger`, `pressedAt` only when `isInstant`, `confirmedVia` only from a fixed set, and treat a token with an invalid optional field as `token_unreadable`. Track it as a follow-up; it does not block the PR.
+
+### Clean Areas (checked, no finding)
+- Remote press provenance: `pressedBy` is set only when `confirmationVia === "remote"` (agent.ts:6122-6125) and `invoke` refuses a remote answer without pressedBy and pressedAt, or from an id not on the allow-list, or on a card older than the TTL (operator-confirm-tools.ts:207-221). `readApprovalEvent` and `mapApprovalAnswer` keep `fromId` only when `Number.isSafeInteger`.
+- Fail-closed approval path: `undelivered` is attached only to a deny. `mapApprovalAnswer` adds it only when `!yes`, and the test pins `allow` plus `undelivered` to undefined. The `RemoteClient.askApproval` early returns (not connected, post refused, no approvalId, thrown) all stay `deny`. A card whose mirror was undelivered stays answerable only in the shell, so the flag adds no way to approve.
+- Token binding: `confirmMint` re-checks `acChecksum` and the completion target under the flow lock when `expect` is given (service.ts:1658-1665), so a criteria or target change after the card was drawn mints nothing. Only the hash is stored, the plaintext token is returned once, and `describeConfirmationFailure` never echoes it.
+- Landing a write run: the decision file records the card text and who pressed. The patch hash is verified against the stored patch before landing, and `decisionBody` is JSON-serialised (no injection through `quote`).
+- decisions.ts: the added `pressedBy` and `pressedAt` fields are optional and JSON-serialised into the decisions log. There is no parsing or interpolation risk.
+- Skill text (SKILL.md, SKILL.detail.md, review-premise SKILL.md, bundled mirrors): the edits route the agent to the `review_complete` and `review_decide_premise` cards and do not weaken any gate. review-premise still may not dismiss or downgrade a `review-security-code` finding. The residual that plain `keryx review complete` has no TTY check is already known (TM-04 section 8) and not raised again.
+- Injection, secrets, crypto, path traversal, open redirect, CSRF: no new surface in the changed lines.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "summary": "Slice-07 (flow token provenance, remote client and bridge undelivered flag, write-land decision body, decisions log, orchestrator and premise skill text) has no exploitable defect. The remote-press path is fail closed and the pressedBy/pressedAt chain is allow-listed at mint time. One info note: the stored token's optional provenance fields are not re-validated on read.",
+  "findings": [
+    {
+      "id": "F6-701",
+      "severity": "info",
+      "file": "src/flow/confirm-token.ts",
+      "line": 157,
+      "quote": "return record as unknown as StoredConfirmationToken;",
+      "problem": "parseStoredToken validates the required fields but passes pressedBy, pressedAt and confirmedVia through as stored; consumeConfirmationToken copies pressedBy and pressedAt into the signature without a type check, while the flow schema types pressedBy as integer.",
+      "impact": "No attack vector in the current code path: exploiting it needs write access to confirm-token.json, which already lets an attacker substitute the token hash and mint a spendable token. Defense in depth only: a hand-written token could record a remote-card signature or put a non-integer pressedBy into flow.json, which then fails flow check.",
+      "suggested_fix": "In parseStoredToken accept pressedBy only as a safe integer, pressedAt only as a parseable instant and confirmedVia only from {tui-card, remote-card}; treat an invalid optional field as token_unreadable.",
+      "evidence": "confirm-token.ts:157-174 (no check of the optional fields), :235-236 (spread into the signature), schema.ts:331 (pressedBy integer); the mint-time checks are operator-confirm-tools.ts:207-221. Static reading, no run.",
+      "confidence": "medium"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": [
+    {
+      "id": "slice-07",
+      "coverage": "read in full: confirm-token.ts, schema.ts, service.ts, types.ts hunks; the three bundled skill files; write-land.ts, interactive-tools.ts, decisions.ts, client.ts, shell-bridge.ts hunks; mirror-undelivered.test.ts. Call sites re-read at head: confirm-token.ts:140-238, operator-confirm-tools.ts:198-239, agent.ts:6085-6145",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "findings": 1,
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 1
+  }
+}
+```
+
+Routing audit: graph_used no (payload layers block read instead), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg for pressedBy sites), raw_rg_used no.

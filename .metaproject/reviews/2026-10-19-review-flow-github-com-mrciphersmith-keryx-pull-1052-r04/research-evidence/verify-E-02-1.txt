@@ -1,0 +1,11 @@
+# keryx review verify-run
+finding: E-02
+command: sh -c grep -c 'dispositions' src/commands/operator-confirm-review.ts; grep -q 'dispositions' src/commands/operator-confirm-review.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:22.154Z
+exit: 1
+
+--- stdout ---
+0
+--- stderr ---
+

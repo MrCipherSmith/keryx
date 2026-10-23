@@ -1,0 +1,75 @@
+# keryx review verify-run
+finding: C-04
+command: rg -n 'head' src/commands/operator-confirm-review.ts | head -40; sed -n '960,985p' src/review/managed.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:19.948Z
+exit: 0
+
+--- stdout ---
+18:// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's
+47:import type { PrLookup } from "../review/complete-head-gate";
+125:          return { refusal: `The chunk run needs ${estimate.chunks} pass(es), within the ceiling of ${estimate.maxPasses}: it goes ahead without a question.` };
+312:      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
+315:      properties: { package: packageSchema, item: { type: "string", description: `The readiness item: its number (1-${READINESS_ITEMS.length}) or id, e.g. head, pr-files or quotes-located. Item ${READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number ?? "premise-decisions"} (premise-decisions) is never waived: each held finding is answered with review_decide_premise.` } },
+408:              `head: ${cardSafe(subject.head ?? "not recorded")}`,
+410:              "yes: the review records `Not run: mutation pass` with your words for these mutants at this head; a new head or a new mutant asks again",
+424:            `head: ${cardSafe(subject.head ?? "not recorded")}`,
+428:            "yes: the gate accepts leaving out exactly these reviewers at this head; dropping another one or a new head asks again",
+442:        return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+463:  if (typeof sha !== "string" || !/^[0-9a-f]{7,40}$/i.test(sha)) return { refusal: "sha must be the pull request head commit" };
+477:      "Post the final review-comment replies on a pull request (`keryx review comments reply --final`). Pass the repo, the PR number, its head sha, the outcomes file and the review package or result. " +
+484:        sha: { type: "string", description: "The pull request head commit." },
+653:type CompletePrepared = { dir: string; head: string | undefined; digest: string };
+655:type CompletionFacts = { reviewId: string; prBound: boolean; head: string | undefined; evidence: string; waivers: string[]; status: string };
+658:function completionFacts(dir: string, headInput: string | undefined): CompletionFacts {
+662:    target?: { kind?: string; head?: unknown };
+665:  const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
+679:    head: headInput ?? recorded,
+696:      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries, and says yes before the round is closed. " +
+697:      "Pass the review package, and head only when the round ran against a commit other than the one recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
+703:        head: { type: "string", description: "The commit this round ran against (7-40 hex characters); defaults to the head the package recorded." },
+711:      const headInput = typeof input["head"] === "string" && input["head"].trim() !== "" ? input["head"].trim().toLowerCase() : undefined;
+712:      if (headInput !== undefined && !/^[0-9a-f]{7,40}$/.test(headInput)) return { refusal: `head "${headInput}" is not a commit SHA (7-40 hex characters)` };
+715:        const facts = completionFacts(dir, headInput);
+717:        if (headInput !== undefined && !facts.prBound) return { refusal: `head applies to a pull request package; ${facts.reviewId} does not target one` };
+719:        const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
+723:            facts.head === undefined
+724:              ? "reviewed head: not recorded (the package does not carry a commit)"
+725:              : `reviewed head: ${facts.head}${headInput === undefined ? "" : " (given by the agent, replaces the recorded head)"}`,
+728:            "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
+730:          subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
+731:          prepared: { dir, head: facts.head, digest: factsDigest(facts) },
+739:      const headInput = typeof input["head"] === "string" && input["head"].trim() !== "" ? input["head"].trim().toLowerCase() : undefined;
+742:        facts = completionFacts(prepared.dir, headInput);
+747:        return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+753:          ...(headInput === undefined ? {} : { head: headInput }),
+761:          head: prepared.head,
+768:            `review ${done.manifest.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`,
+    throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
+  }
+  // Flow 458: the round record decides what the round reviewed; one edited after `review start` is refused here too.
+  const tampered = roundRecordTampered(packageDir);
+  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);
+  const warnings: string[] = [];
+  let manifest = stored;
+  if (options.head !== undefined) {
+    if (!isPrBound(stored.target)) {
+      throw new Error(`--head applies to a pull request package; ${stored.reviewId} targets a ${stored.target.kind}.`);
+    }
+    const head = options.head.trim().toLowerCase();
+    if (!/^[0-9a-f]{7,40}$/.test(head)) {
+      throw new Error(`--head "${options.head}" is not a commit SHA. Give the commit this round ran against, 7-40 hex characters.`);
+    }
+    const recordedHead = stored.target.head;
+    if (typeof recordedHead === "string" && recordedHead !== "" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {
+      warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}); the manifest now records ${head.slice(0, 7)}`);
+    }
+    manifest = { ...stored, target: { ...stored.target, head } };
+  }
+  const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
+  if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: withoutPartialHeader(reportText), lookup: options.prLookup })).warnings);
+  const evidence = parseEvidenceLevel(reportText);
+  if (!evidence.ok) {
+    const problem = `the report's evidence level is missing or invalid: ${evidence.reason}`;
+--- stderr ---
+

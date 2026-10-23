@@ -1,0 +1,36 @@
+# keryx review verify-run
+finding: D-01
+command: keryx ctx rg -n keryx review complete src/commands/operator-confirm-review.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T03:14:43.728Z
+exit: 0
+
+--- stdout ---
+# gdctx rg summary
+
+Command: `rg --with-filename --line-number --column --no-heading -n -- keryx review complete src/commands/operator-confirm-review.ts`
+Exit code: `0`
+Matches: `10` (4 shown below; full output in raw)
+Files: `1`
+Raw lines: `10`
+Scope: `ripgrep defaults` — NOT searched: hidden paths not named on the command line (any dot-directory, `.metaproject/` included); `.gitignore`d files; binary files (anything holding a NUL byte, which ripgrep always skips silently). There, a nil result means "not looked at", not "not present". Widen with `--hidden` / `--no-ignore`.
+Completeness: `partial` — 4 of 10 matches across 1 of 1 files are listed below. This is NOT an enumeration: re-run with `--all` for every match, or `--json` for the full machine-readable set.
+
+## Top Files
+
+- src/commands/operator-confirm-review.ts: 10
+
+## Matches
+
+- src/commands/operator-confirm-review.ts
+  - 8:30 //   review_waive_coverage   keryx review complete --waive-coverage "<quote>"       -> recordCoverageWaiver
+  - 9:30 //   review_waive_readiness  keryx review complete --waive <item> "<quote>"         -> waiveReadiness
+  - 18:35 // Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's
+  - 24:74 // The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
+  … omitted 6 of 10 matches in this file — full output in raw
+
+compacted: 2,085 → 1,455 bytes (30% saved; full output in raw)
+raw: .metaproject/data/gdctx/raw/2026-10-19T03-14-43-705Z-fe852e_rg.log
+summary: .metaproject/data/gdctx/artifacts/2026-10-19T03-14-43-705Z-fe852e_rg.md
+--- stderr ---
+

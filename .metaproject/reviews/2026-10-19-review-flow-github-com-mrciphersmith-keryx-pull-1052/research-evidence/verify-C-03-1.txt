@@ -1,0 +1,24 @@
+# keryx review verify-run
+finding: C-03
+command: rg -n 'completeReviewGated|COMPLETION_FILE|nothing was recorded|writeFileAtomic' src/commands/operator-confirm-review.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:19.728Z
+exit: 0
+
+--- stdout ---
+40:import { completeReviewGated } from "../review/complete-gated";
+43:import { writeFileAtomic } from "../lib/fs";
+153:        return { output: "The chunk plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+292:        return { output: "The uncovered files changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+355:        return { output: "The readiness item changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+442:        return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+565:      if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+634:        return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+650:const COMPLETION_FILE = "completion-confirmation.json";
+744:        return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
+747:        return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+750:        const done = await completeReviewGated(ctx.projectRoot, prepared.dir, {
+765:        await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\n`);
+774:        return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
+--- stderr ---
+

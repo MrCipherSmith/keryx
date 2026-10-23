@@ -1,0 +1,40 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "slices": [{ "id": "slice-02", "coverage": "read in full (1570 lines); tui-shell.ts mirror wrapper, approval-mirror.ts, operator-confirmations.ts, operator-confirm-tools.ts and operator-confirm-review.ts (review_complete) re-read at head 6f47bf35f" }],
+  "prior_dispositions": [
+    {
+      "id": "C-38",
+      "disposition": "open",
+      "evidence": "src/remote/client.ts lines 450-462 at head 6f47bf35f are unchanged: one try/catch still wraps this.post(), the response.ok check and response.json(), and every path returns { decision: \"deny\", undelivered: true }. A response.json() failure after the bridge accepted the request is therefore still labelled undelivered. The delta adds OperatorConfirmationLog.markUndelivered and the onUndelivered hook in raceApproval, so the label now also flips the sidebar/status entry to 'Telegram mirror not delivered' and drops the card from waiting(). Still harmless to state: no waiter is registered on that path, so a late Telegram press is dropped and the shell dock stays the only place. A cosmetic mislabel in a narrow window (info), not fixed, not regressed in severity."
+    },
+    {
+      "id": "C-42",
+      "disposition": "open",
+      "evidence": "src/commands/operator-confirm-tools.ts line 192 (`pending.set(token, { ..., issuedAt: now().getTime() })`): entries are still removed only by invoke (any path) or confirmationDeclined; no sweep, timer or per-call eviction was added in the delta, and issuedAt is read only for the remote 1-hour check. One small object per abandoned card in a process-local Map, so growth is negligible for a single-operator shell; the suggested optional sweep was not done. Info."
+    }
+  ],
+  "findings": [],
+  "positive_notes": [
+    "The card-log settle path closes on every exit: the unmirrored branch and the mirrored branch both settle in a finally, and OperatorConfirmationLog.settle maps a thrown race (outcome undefined) to 'withdrawn', so no unanswered entry can leak in the in-memory log.",
+    "raceApproval keeps the settled guard in front of onUndelivered, so a late topic leg cannot flip an already answered card; markUndelivered is idempotent and ignores answered or unmirrored entries (pinned by operator-confirmations.test.ts).",
+    "waiting() now ignores a card older than the 1-hour token, so the sidebar count and the remote status cannot advertise a button the shell will refuse.",
+    "review_complete is idempotent under retry: the digest includes status, so a second card for a package the first one closed is refused as 'already complete', and an apply that closed the round but failed bookkeeping or the confirmation record reports isError without a re-run being harmful.",
+    "The token is single use and is deleted before any remote check, so a replayed, expired or foreign press burns the token and cannot be applied twice; the pressedBy/pressedAt plumbing into the signature adds no new shared mutable state."
+  ]
+}
+```
+
+# High-Load Review Report (round r03, wave 2, slice-02)
+
+## Verdict: APPROVE
+
+No high-load defects found in this delta. The new code is single-process, bounded by the number of cards an operator can hold open, and every in-memory structure it adds (card log entries, pending token map) is either settled in a finally or removed by the single-use token path. The only concurrency-relevant surface, the mirrored dock/topic race, keeps its settled guard and now also tells the log when the topic never took the card.
+
+Prior findings: C-38 (client.ts undelivered mislabel) and C-42 (unswept pending map) are both still open at info severity; neither affects state and neither grew worse.
+
+Clean areas: A (shared mutable state, TOCTOU: the facts digest is rechecked in apply and the gates re-run), B (no per-request connection, handle or unbounded collection added), C (no cache in the delta), D (no database access), E (no queue), F (no retry or external call added), G (single-use token, repeat close refused).

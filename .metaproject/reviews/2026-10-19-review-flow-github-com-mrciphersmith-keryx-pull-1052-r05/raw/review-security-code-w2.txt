@@ -1,0 +1,24 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable code-level vulnerability in slice-06 at head 77d2eff20. Checked: (1) remote-press identity (confirmationVia/PressedBy/PressedAt) is built from the bridge ApprovalResponse in agent.ts and passed to tool.invoke only when via === 'remote'; the model cannot supply it. (2) operator-confirm-tools.ts invoke fails closed: missing pressedBy/pressedAt, absent or empty allowedUserIds, id not on the list, and a card older than REMOTE_CARD_TTL_MS (1 hour) are each refused, and the one-time token is deleted before any of these checks, so a replay or a retry cannot apply. (3) The token is bound to the exact input (entry.input !== key(input)), which now covers review_complete 'dispositions'. (4) review_complete apply re-reads the facts, compares the digest to the one shown on the card, and uses prepared.dispositions, never the live input; the model cannot supply a head. (5) Gate parity: runComplete and the card both go through completeReviewGated, which keeps the run-profile refusal and the narrowed-routing refusal (refuseUnreadable) before the head, evidence, research and readiness gates, so moving them out of review.ts dropped no gate. (6) cardPressFields threads who/when into every waiver and decision record; tui-card records carry no press fields. (7) shell.ts is the only binding of operatorConfirm and supplies allowedUserIds from loadRemoteConfig, whose list must be non-empty positive safe integers; a missing config yields undefined, so remote answers are refused. (8) Cards too long for the topic after redaction get no remote buttons (operatorCardTooLongForTopic), so an operator cannot be shown a cut card with a Yes button. (9) KERYX_TOOL_CALL=1 nested-shell refusal is intact and tested. Tests in the slice exercise the allowlist, TTL boundary, replay, other-question token and missing-press-field paths. Info-level only, no finding raised: plain 'keryx review complete' has no TTY guard (already wave-1 info and documented in TM-04 section 8); the 'finding' string in dispositionLine is not clipped (affects card length only, which then falls back to local-only answering).",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-02", "disposition": "closed"}
+  ],
+  "slices": [
+    {
+      "id": "slice-06",
+      "coverage": "Read slice-06.diff in full (agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts and the five test files) and the head files operator-confirm-tools.ts invoke, operator-confirm-review.ts completeSpec/apply/completionFacts, review/complete-gated.ts, remote/shell-bridge.ts and remote/config.ts. Second-look slice, unchanged since r03; read once for security defects.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

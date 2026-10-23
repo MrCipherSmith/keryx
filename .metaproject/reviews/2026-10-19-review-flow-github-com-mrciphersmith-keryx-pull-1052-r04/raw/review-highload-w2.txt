@@ -1,0 +1,40 @@
+STATUS: DONE
+
+## High-Load Review (round r04, wave 2, slice-03)
+
+Scope: PR 1052, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, slice-03 (src/commands: agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts, plus four test files). Load profile not provided; severity assumes moderate-to-high traffic, but the code is an interactive single-operator shell, so the realistic concurrency is one operator, one Telegram topic and a background job or second terminal touching the same package.
+
+Summary: the slice adds the pressedBy / pressedAt carry path, a second allow-list check and a one-hour TTL on remote card answers, and the review_complete card. I found no high-load defect that the diff introduces or worsens. The pending-card map is single-use (the entry is deleted before any remote check or apply), the review_complete digest includes the manifest status so a second card for an already-closed package is refused, and the close is routed through the same completeReviewGated function the CLI uses, so there is one set of gates.
+
+Verified against source at head:
+- operator-confirm-tools.ts:198-221: the pending entry is deleted before the allow-list and TTL checks, so a racing or replayed answer for the same token cannot apply twice; a rejected remote answer burns the card (documented behaviour).
+- allowedUserIds fails closed: shell.ts reads loadRemoteConfig() per remote answer and returns undefined on any load failure, which refuses every remote answer. The read is one small synchronous config file, only on a remote press; not a hot path.
+- review_complete (operator-confirm-review.ts, completeSpec): facts (head, evidence line, waivers, status) are re-read in apply and compared as a sha256 digest; status is part of the digest, so a concurrent close by a CLI run or a second card makes the digest differ and nothing is recorded. If the gate throws after the engine already wrote the closed manifest, the code re-reads status and reports closed with a problems line instead of claiming a refusal (completeManagedReview writes the closed manifest at managed.ts:1030, then clearActiveReview / recordFinishedRound / writeReviewNotes after it). completion-confirmation.json is written with writeFileAtomic.
+- agent.ts:6120-6125 and 6187-6192: pressedBy / pressedAt are taken only from a response with via === "remote" and forwarded only with confirmationVia === "remote"; a local answer cannot carry a Telegram id into the record.
+- operator-confirm-other.ts: recordScheduleDecision appends one JSONL line per decision (pre-existing pattern; the diff only widens the line type).
+
+Observations that are not findings (pre-existing, not made worse by this slice, kept for the record):
+- trackerPrLookup / githubPrFiles call `gh` through Bun.spawn with no timeout (src/flow/tracker/github.ts:6); review_complete.apply reaches them through completeReviewGated without threading ctx.signal. The same seams already serve review_publish and review_waive_readiness (flow 456) and the CLI, so a hung gh blocks the turn the same way there.
+- The per-tool `pending` Map in operatorConfirmTool is swept only by invoke / confirmationDeclined. agent.ts:6172 (reserveInvocation refusing after the operator's yes) and an aborted approval leave an entry behind. Entries are small and bounded by aborted cards per session; the new issuedAt field would allow a sweep in confirmation() if anyone wants one.
+- completeManagedReview builds the closed manifest from the snapshot it read before its two GitHub calls (managed.ts:957 vs :1021-1030), so a manifest write by another process in that window is overwritten. Pre-existing in the CLI path; the digest check immediately before apply keeps the card path's exposure to the gate duration.
+
+Stats: blocker 0 | major 0 | minor 0 | info 0
+
+Clean areas: concurrency and races (single-use token, digest guard, status in digest), resource management (no per-request pool, handle or stream), caching (none added), database (none), queues (none), retry / timeout (no retry added; the gh timeout gap is pre-existing), idempotency (a repeat of review_complete is refused as already complete).
+
+Prior dispositions: D-01 (waiver tool texts naming `keryx review complete`) is answered in this slice at the review_waive_coverage and review_waive_readiness descriptions, the waive_readiness result string and the review.ts complete error texts; it is not a high-load matter and I claim nothing beyond that the sites changed. D-02..D-14 left open as instructed; none is made worse by this slice from a load standpoint.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "No high-load defect introduced by slice-03. Remote card answers are single-use, allow-listed (fail closed) and TTL-bound; review_complete guards with a status-bearing digest and shares the CLI's gates. Three pre-existing observations (gh without timeout, unswept pending map, stale-snapshot manifest write) are noted, not filed.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "addressed-in-slice", "note": "Waiver tool descriptions, readiness result string and review.ts error texts in slice-03 now point at review_complete. Not a high-load matter." }
+  ]
+}
+```

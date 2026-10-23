@@ -1,0 +1,94 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Lens: does each slice-04 test fail if the guarded behaviour breaks (AC8 TUI log, AC5 note on the card, who-pressed recording). The eleven tests in src/tui/operator-confirmations.test.ts are pure and deterministic (an injected clock, no sleeps, no network) and they do bite on the formatters and the log class: the waiting line with age and time left, the expired line, the 'answer it in the shell' line for an unmirrored card, 'pressed by Telegram user N' for a Telegram answer and no user for a shell or withdrawn answer, waiting-first ordering, the answered-cards cap with a subscriber notification on every change, and the sidebar count text. What no test reaches is the shell wiring that feeds the log: the file imports only the log class and the line helpers, and does not touch mirrorApprovalToTopic, the operatorCards ask/answer calls, the Telegram pressedBy from the answer, the withdrawn place, the unmirrored branch, or the confirmationLines seams of openDecisions and the /remote-control surface. Three minor findings and one info; no blockers or majors.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "if (cardId !== undefined) operatorCards.answer(cardId, { place: \"telegram\", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });",
+      "problem": "AC8: every place the shell feeds the confirmation log is untested. The log tests construct OperatorConfirmationLog and call ask and answer by hand with the arguments the author expects the shell to pass. The calls that actually decide what an operator sees are in tui-shell.ts: ask(card[0], true) for a mirrored card, ask(..., false) for the unmirrored branch, answer place 'shell' versus 'withdrawn' keyed on the foreground signal, and answer place 'telegram' with pressedBy taken from outcome.answer.fromId. A search for OperatorConfirmationLog, operatorCards, getWaitingCards, getConfirmationLines and confirmationLines finds them in no test other than operator-confirmations.test.ts, which exercises only the class.",
+      "impact": "Dropping the pressedBy spread, answering with the wrong place (a Telegram press logged as 'shell', an aborted card logged as an operator yes), forgetting the answer call so a card sits in 'waiting' forever and the sidebar keeps counting it, or logging a card that is not a card (isCard false) all leave the suite green. The dock shows who pressed the card, so a wrong attribution is a misleading audit surface for the operator, not just cosmetics.",
+      "suggested_fix": "Extract the log bookkeeping around the inner approver into an exported function (for example `withConfirmationLog(log, inner, bridgeNote)`) that takes the log, the card meta, the race outcome and the abort state, and test its three branches directly: the unmirrored branch logs ask(false) then an answer with place 'shell'; a Telegram outcome with fromId 7 logs place 'telegram' and pressedBy 7, and without fromId logs no pressedBy; an aborted foreground logs 'withdrawn' whatever the verdict. Alternatively drive mirrorApprovalToTopic with a scripted bridge and a stub inner approver and read log.entries().",
+      "evidence": "src/tui/tui-shell.ts:6105, 6116, 6126 and 6131 hold the four ask/answer sites; src/tui/operator-confirmations.test.ts imports only OperatorConfirmationLog and the line helpers (line 10) and its 11 tests (lines 21-136) call ask/answer directly. keryx ctx rg for the log and its accessors over src with a *.test.ts glob returns only that file.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac8-shell-log-wiring",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": null,
+      "quote": "const text = withConfirmationLines(\"By stage:\\n  ordinary\", confirmationLines(log.entries(), T0));",
+      "problem": "AC8: the /decisions modal and /remote-control status tests compose the helpers themselves and hand the result to the presenter, so they cannot fail on the surface wiring. In the /decisions test the card section is built in the test (`withConfirmationLines(...)` on a string the test wrote) and then passed to presentDecisions as `{ text, visibleRows }`; the production path is openDecisions appending `withConfirmationLines(report, confirmationLines?.() ?? [])` and openDecisionsArms discarding the cards, and mountDecisionsSidebar forwarding confirmationLines through openWith. The /remote-control test calls formatRemoteStatusLines with lines it computed, not presentRemoteControl with getConfirmationLines.",
+      "impact": "If openDecisions stops appending the section, openWith stops forwarding confirmationLines, or presentRemoteControl stops reading the log, the operator loses the cards in the modal and the status tab (the only places that list a waiting question and its remaining token time) and every test here stays green. The first test would also pass if withConfirmationLines were wired into the wrong tab.",
+      "suggested_fix": "Drive the production entry points with a seam: call openDecisions with a `confirmationLines: () => [...]` option and assert the painted content contains the section, with an empty-array case that leaves the report byte-identical; call presentRemoteControl (or its status builder) with getConfirmationLines and getWaitingCards stubs and assert the Remote row text and the status tab. The FakeText/open stubs already in the test can be reused.",
+      "evidence": "src/tui/operator-confirmations.test.ts:112-134 and 102-110; src/tui/decisions-surface.ts openDecisions and mountDecisionsSidebar appear in the slice-04 diff with the confirmationLines parameter; no test names openDecisions, openDecisionsArms, presentRemoteControl or getConfirmationLines.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac8-surface-wiring",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;",
+      "problem": "AC5 with AC8: the only test of the 'mirror not delivered' log state builds it by hand (`log.ask(..., false)`, operator-confirmations.test.ts line 37). The production code reaches mirrored=false only on the branch where the bridge is unconfigured or not connected before the card opens. When the channel looks connected but the topic does not take the card (the case raceApproval's onUndelivered reports), the entry was already logged with mirrored true, onUndelivered only prints a system line, and OperatorConfirmationLog has no way to mark an entry unmirrored afterwards. waiting() counts mirrored unanswered entries, so that card is shown as 'waiting' with a 1-hour countdown and counted in the sidebar although the operator can only answer it in the shell. No test drives that path, so the pure-unit test cannot show that the log and the system line disagree.",
+      "impact": "The sidebar says '1 card waiting' and the status tab shows '57m left of the 1-hour token' for a card Telegram never received, and the dock card carries no mirror note on that path. The test for the unmirrored line is green because it constructs the state production never produces for an undelivered ask on a connected bridge.",
+      "suggested_fix": "Add a test that runs the wrapper with a bridge that reports connected and a topic that returns an undelivered answer, then asserts the log entry is not counted by waiting() and renders the 'answer it in the shell' line. That test will fail today, which is the point; the fix is a `markUnmirrored(id)` on the log called from onUndelivered, plus the test.",
+      "evidence": "src/tui/tui-shell.ts:6116 logs mirrored true; the onUndelivered option in the same call only calls io.onSystem; src/tui/operator-confirmations.ts has ask, answer, waiting, entries and subscribe and no way to change the mirrored flag of an existing entry. Marked medium because the logic reviewer may judge the behaviour intended; the test gap stands either way.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac5-ac8-undelivered-connected",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": null,
+      "quote": "test(\"a card past the token says it expired\", () => {",
+      "problem": "The 1-hour display boundary is pinned on neither side. The waiting test uses 59 minutes left, the expired test goes past the token, and no case sits at exactly the TTL or at one millisecond either side. The token store accepts a press at exactly TTL and refuses TTL plus 1 (slice-02 tests), so the display and the store can disagree by a millisecond if the comparison here is `left > 0` against the store's `<=`.",
+      "impact": "Cosmetic: a card could show 'expired' for the last millisecond in which a press is still accepted, or the reverse.",
+      "suggested_fix": "Add a case at now = askedAt + TTL and at TTL + 1 and assert the line against the store's own boundary.",
+      "evidence": "src/tui/operator-confirmations.test.ts:21-35 (the waiting and expired tests); the slice-02 token tests cover exactly TTL accepted and TTL+1 refused.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac8-ttl-boundary",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": ["slice-04"]
+}
+```
+
+## Summary
+
+Verdict from the testing lens for slice-04: the pure helpers and the log class are well tested (injected clock, no sleeps, no network, observable output). The wiring that makes them true is not.
+
+- F-001 (minor): no test reaches the ask/answer calls in tui-shell.ts (place shell, withdrawn, telegram; pressedBy from the answer's fromId; the unmirrored branch).
+- F-002 (minor): the /decisions modal and /remote-control status tests build the card lines in the test and pass them to the presenter, so openDecisions, openWith and presentRemoteControl can ignore the cards with the suite green.
+- F-003 (minor, medium confidence): an undelivered ask on a connected bridge leaves the log entry mirrored, so it is counted and shown with a countdown; the 'not delivered' test builds the state by hand.
+- F-004 (info): the TTL boundary of the display is not pinned.
+
+Not read: src/tui/approval-mirror.test.ts beyond a search for undelivered, the tui-shell test files, and the hunks of slice-04.diff for tui-shell.ts outside the card-wrapper region (about lines 6068-6157). No commands were run.
+
+graph_context: unavailable (graphify-out/graph.json was not consulted; verification was by direct reads and keryx ctx rg).
+
+Routing audit: graph_used: no (not-relevant, test-only review by direct reads); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

@@ -1,0 +1,105 @@
+STATUS: DONE
+
+## High-Load Review
+
+### Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Parent ref: `main`
+- Merge-base: `d2cb377f59f7f9c8553d9f377f99360bff3f6328`
+- Scope mode: explicit-hash-range (d2cb377f5..6f47bf35f, slice-01)
+- Load profile: not provided (severity assumes moderate-to-high traffic; the surface is a per-operator-press path, a handful of calls per review round)
+- Changed files reviewed: 24 (sources re-read at head 6f47bf35f: operator-confirm-review.ts, tui-shell.ts mirror wrapper, operator-confirmations.ts, review/managed.ts, completion-gate.ts, command-risk.ts)
+
+### Summary
+The delta answers the round-1 findings: the card log is now settled in try/finally on both mirror exits, `markUndelivered` and the TTL filter keep the waiting view honest, `completionFacts` no longer swallows research.json read errors, and `apply` separates "gate refused" from "closed but bookkeeping stopped". No new concurrency, resource, retry or idempotency defect was introduced. Open items are the pre-existing ones the delta does not touch (C-41 TOCTOU window, C-45 transport-time log entry).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Prior dispositions (checked against head 6f47bf35f)
+Mapping of the requested vocabulary to the schema enum: fixed = closed, not-fixed = open, partially = partial.
+
+- C-01 closed. `src/commands/operator-confirm-rosters.test.ts` now asserts `toHaveLength(19)`, matching the 19 entries of `OPERATOR_CONFIRM_TOOL_NAMES`.
+- C-03 closed. `apply` runs `completeReviewGated` in its own try, derives `closed` from the result or a re-read of the manifest status, and reports "refused ... nothing was recorded" only when the round is not closed. A failing `completion-confirmation.json` write is a separate try and is reported as "the round is closed but the confirmation record could not be written" with `isError`.
+- C-05 partial. The text in both SKILL.detail.md copies (line 669) now names the card as the agent's path. The code still does not gate plain `keryx review complete`: `src/lib/command-risk.ts` 700-760 floors only the waiver flags and opaque args after `review complete`, and the delta changes nothing there. The operator decision "uphold" is applied to the text, not to the CLI behaviour.
+- C-06 closed. `mirrorApprovalToTopic` (tui-shell.ts ~6095-6152) passes `onUndelivered` that calls `operatorCards.markUndelivered(cardId)`; `waiting()` also filters by TTL.
+- C-13 closed. Both the mirrored and the unmirrored branch answer the card log in `finally`, so a rejecting inner call no longer leaves a pending entry. `answer` is idempotent and trims answered entries to `ANSWERED_CARDS_KEPT = 5`.
+- C-16 open. `docs/docs/guides/autonomous-review.md` line 35 still reads "it stops at the floor and never tells you to run the terminal command", unchanged. The prior finding asked for "refused by name, recorded as Not run". Minor, doc only.
+- C-17 closed. CHANGELOG line 10 now says a replayed, expired, foreign or text-only answer is refused and records nothing, and that a rejected remote answer burns the card so it has to be asked again. This matches the token-deleted-first behaviour.
+- C-18 closed. TM-04 restated what a Telegram press proves and does not prove (evidence of an allowed account, not of a reachable channel); wording present in the delta.
+- C-19 closed. TM-04 message-order bullet is present with the dropped / delayed / reordered cases and their outcomes.
+- C-20 closed. `## [Unreleased]` is empty at the top of CHANGELOG.md and `## [0.3.124] - 2026-10-19` follows it in the same shape as the `0.3.123` heading.
+- C-21 partial. The review_complete card is the stated path in the changed Done-when and detail lines, but `SKILL.md` still tells the agent to run `keryx review complete` (line ~782 / ~136 area) and the `review_waive_*` tool outputs still say to run the CLI.
+- C-22 partial. `completionFacts` no longer computes `prBound`, so the drift against `isPrBound` is gone. It still re-reads manifest.json, report.md and research.json with ad-hoc JSON types in the commands layer (operator-confirm-review.ts 658-692) instead of one shared preflight from `src/review`.
+- C-23 closed. `research.json` read errors other than ENOENT now push a "could not read research.json ... the research gate will refuse" waiver line (operator-confirm-review.ts 669-678).
+- C-24 closed. `remoteApproval` moved above the side-worker JSDoc (tui-shell.ts ~571-575), so the Flow 173 block is contiguous with `isToolAvailableToSideWorker`.
+- C-26 closed. The repeated head handling and refusal text in `completeSpec` are consolidated through `completionFacts` and the shared error-text helper in completion-gate.ts.
+- C-32 partial. The delta adds tests (operator-confirmations.test.ts, operator-confirm-review-tools.test.ts, confirm-token.test.ts, shell.test.ts), but the Telegram callback to `remoteApproval` to `pressedBy` seam through `mirrorApprovalToTopic` is covered by source-text audits and hand-composed log tests, not by a test that feeds a topic answer with a known fromId through the wrapper.
+- C-39 closed. `pressedAt` is documented in flow-state.schema.json and in TM-04 as the shell-side delivery time.
+- C-41 open (info). Unchanged: `completeManagedReview` (review/managed.ts 950-1066) reads the manifest, report and findings at gate start, awaits the PR head gate, then closes. The digest check in `apply` precedes that await. Needs a second writer on the package; no change in the delta.
+- C-45 open. The Telegram answer is still written to the card log at transport time (`place: "telegram", yes: decision === "allow", pressedBy`) in `mirrorApprovalToTopic`, before the gated tool call re-checks allowed id, token and TTL. A press the gate refuses can still show as an accepted yes in the sidebar and `/decisions`. Minor, display only; the authoritative record (`confirmedVia`, `pressedBy`, `pressedAt`) is written by the gate.
+
+### Findings
+
+#### Concurrency & Race Conditions
+None detected. `OperatorConfirmationLog` is single-threaded in-process state; `answer` and `markUndelivered` are idempotent and guarded by `answered !== undefined`.
+
+#### Resource Management
+None detected. The log is bounded (unanswered cards plus `ANSWERED_CARDS_KEPT`); every ask is settled in `finally`, so no pending-entry growth when the inner call rejects or the turn stops.
+
+#### Caching
+None detected.
+
+#### Database Under Load
+None detected.
+
+#### Async / Queues
+None detected.
+
+#### Retry / Timeout / Circuit Breaker
+None detected. The 1-hour card TTL is enforced in `waiting()` and in the token gate.
+
+#### Idempotency & Distributed Invariants
+None detected. A replayed press is refused by the single-use token; the manifest close precedes the bookkeeping writes, and a failure after the close is now reported as such (C-03).
+
+### Clean Areas
+Parts A (concurrency), B (resources), C (caching), D (database), E (queues), F (retry/timeout), G (idempotency) reviewed on the delta: no findings.
+
+```json keryx:findings
+[]
+```
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "No new high-load findings in the r03 delta. The card-log lifecycle is now settled in finally on both mirror exits, markUndelivered and the TTL filter are bounded, and review_complete apply separates a refused gate from a closed round with failed bookkeeping. 19 prior findings dispositioned: 12 closed, 4 partial, 3 open (C-16 doc wording, C-41 info TOCTOU window, C-45 transport-time log entry).",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "C-01", "disposition": "closed" },
+    { "id": "C-03", "disposition": "closed" },
+    { "id": "C-05", "disposition": "partial" },
+    { "id": "C-06", "disposition": "closed" },
+    { "id": "C-13", "disposition": "closed" },
+    { "id": "C-16", "disposition": "open" },
+    { "id": "C-17", "disposition": "closed" },
+    { "id": "C-18", "disposition": "closed" },
+    { "id": "C-19", "disposition": "closed" },
+    { "id": "C-20", "disposition": "closed" },
+    { "id": "C-21", "disposition": "partial" },
+    { "id": "C-22", "disposition": "partial" },
+    { "id": "C-23", "disposition": "closed" },
+    { "id": "C-24", "disposition": "closed" },
+    { "id": "C-26", "disposition": "closed" },
+    { "id": "C-32", "disposition": "partial" },
+    { "id": "C-39", "disposition": "closed" },
+    { "id": "C-41", "disposition": "open" },
+    { "id": "C-45", "disposition": "open" }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

@@ -1,0 +1,51 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice-01 (docs, SKILL files, flow files) is structurally sound in the three areas asked about. (1) The three SKILL files changed in both copies (review-orchestrator/SKILL.md, review-orchestrator/SKILL.detail.md, review-premise/SKILL.md) are byte-identical between src/gdskills/bundled/skills/review/... and .metaproject/skills/gdskills/review/... at head (cmp on the worktree, and the two diffs are the same hunks), so the bundled source and the projection did not drift. (2) No generated file is in this PR: the PR's 58 changed paths contain nothing under .metaproject/data/ or .metaproject/wiki/ (gdgraph provenance, module-map, summary, wiki components, freshness-queue show up only as uncommitted changes in the main checkout, not in the diff), so no generated artifact is committed in the feature PR. The .metaproject/flows/464-... files are the flow's own record, which this repository commits by design. (3) TM-04 keeps the TM-01..TM-03 shape (Purpose, mechanism, what it proves, what it does not prove, bypass list, references) and the new section 6a is consistent with the code it describes (operator-confirm-tools.ts: the token is deleted from `pending` before any check, so every refusal spends it; allowlist compared as a number with includes and an undefined allowlist refuses; 1 hour measured from entry.issuedAt on the shell clock; pressedBy/pressedAt only spread when remote). Two documentation findings remain: the TM-04 tool table and count were not extended for the card this PR adds, and the header metadata still describes flow 456 only. Neither affects behaviour.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": 26,
+      "quote": "| `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |",
+      "problem": "Section 2 'The tools' and the count in section 1 ('Thirteen keryx decisions are the operator's alone') are the decision record's inventory of card tools and the CLI command each one replaces. Section 6a, added by this PR, introduces `review_complete` (CLI `keryx review complete`, which records the close and which section 6a lists as a card) and names `review_confirm_plan` and `review_decide_premise`, but none of the three is in the table and the count was not touched. `review_waive_readiness` and `review_waive_coverage` are described in the table as 'records the waiver only', which stays true, but the table now never says which card performs the close itself. The row for `review_waive_coverage` / `review_waive_readiness` therefore reads as the whole of `review complete`'s operator side.",
+      "evidence": "TM-04 line 15 'Thirteen keryx decisions...' and the table lines 20-35 list the card tools and omit review_confirm_plan, review_decide_premise and review_complete; line 102 (section 6a, 'Flow 464 puts the four review acts that used to need a terminal ... behind cards: `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness` / `review_waive_coverage`, and `review_complete`') names them. The tools exist: src/commands/operator-confirm-review.ts (header comment lines 16-21 lists review_confirm_plan, review_decide_premise and 'Flow 464 adds review_complete'), and src/trigger/unattended.ts lines 59-71 refuses all of them by name. Section 8 (approval floor) is also unchanged: it lists `review complete --waive-coverage` and `--waive` but not plain `review complete`, `confirm-plan` or `decide-premise`. The omission of confirm-plan and decide-premise predates this PR (flows 457/459); the omission of review_complete is introduced by it.",
+      "impact": "TM-04 is the document that docs/docs/cli-reference.md (lines 2773, 3212, 4367) and docs/docs/limitations.md cite for what a card does and does not prove. A reader who audits the card inventory from section 2 will believe the review close is not a card, and the stated count of operator-only decisions does not match the tools the table lists or the ones operatorConfirmSpecs() registers. No runtime effect.",
+      "suggested_fix": "Add rows for `review_confirm_plan` (`keryx review confirm-plan`), `review_decide_premise` (`keryx review decide-premise`) and `review_complete` (`keryx review complete`, the same gates as the CLI) to the table in section 2, change 'Thirteen' to the real count or drop the number, and in section 8 either list the three terminal commands next to the ones already named or state that they are terminal-only by TTY check and not part of touchesHumanConfirmation (src/lib/command-risk.ts has no match for confirm-plan or decide-premise).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "tm04-tool-table-stale"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": 7,
+      "quote": "**Task**: flow 456",
+      "problem": "The header says Status Implemented, Frozen 2026-10-15, Task flow 456, but the record now also carries flow 457 (section 4c), flow 458 (section 4d) and, from this PR, flow 464 (section 6a). The neighbouring records TM-02 (flow 289, frozen 2026-09-22) and TM-03 (flow 299, frozen 2026-09-23) each name one flow and were not extended by later flows. Sections added after the freeze date change what the record claims (6a adds a Telegram allowlist, token-once and one-hour rule and three 'does not prove' items), so the freeze date no longer bounds the content.",
+      "evidence": "TM-04 lines 5-7 (Status, Frozen, Task); `git log` shows 60a1c9a4a 'docs(tm-04): state what a Telegram card answer proves...' touching the file in this PR. Sections 4c and 4d already set the precedent of extending the file without updating the header, so this is a convention gap, not a new regression.",
+      "impact": "A reader cannot tell from the header which flows the record covers or when the content was last frozen; the decision-registry and docs cross-references cite TM-04 as a single frozen decision.",
+      "suggested_fix": "Either list the later flows in the header (Task: flows 456, 457, 458, 464) and add a 'Last amended' date, or move section 6a (and 4c/4d) into a TM-05 record that depends on TM-04, as TM-03 did for TM-02.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Checked and found sound (no finding):
+- Bundled vs projection SKILL copies: `cmp` reports identical for review-orchestrator/SKILL.md, review-orchestrator/SKILL.detail.md and review-premise/SKILL.md; both copies carry the same 8 changed lines (2+1+1 each).
+- Generated artifacts: none of the PR's changed paths is under .metaproject/data/ or .metaproject/wiki/; the gdgraph/wiki changes in the main checkout are uncommitted local state outside this diff.
+- SKILL wording versus code: the SKILL text now sends the operator to the `review_complete` card in the shell or the Telegram topic, and that card exists in src/commands/operator-confirm-review.ts and is refused to unattended runs in src/trigger/unattended.ts.
+- TM-04 section 6a versus code: single-use token (deleted from the in-memory map before the checks), allowlist check on pressedBy as a number with an undefined list refusing, one-hour limit from the stored issuedAt on the shell clock, pressedBy/pressedAt written only on `confirmedVia: "remote-card"` (src/commands/operator-confirm-tools.ts lines 199-230).
+- Not examined (outside this slice): the code slices; the code-level layering of the review_complete card is covered by review-architecture-w2 and w3.

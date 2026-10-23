@@ -1,0 +1,4360 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+    ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/context.md",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/description.md",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/plan.md",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.implement.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.result.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/tasks.md",
+    ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+    ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/commands-by-task.md",
+    "docs/docs/guides/apply-project-rules.md",
+    "docs/requirements/keryx-conditional-reads/README.md",
+    "docs/requirements/keryx-conditional-reads/TUI-states.md",
+    "docs/requirements/keryx-conditional-reads/live-run.md",
+    "docs/requirements/keryx-conditional-reads/schemas/references.schema.json",
+    "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+    "package.json",
+    "src/commands/agent-commands.ts",
+    "src/commands/skills-references.test.ts",
+    "src/commands/skills-references.ts",
+    "src/commands/skills.ts",
+    "src/flow/task-project-context.test.ts",
+    "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+    "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+    "src/gdskills/conditional-reads.e2e.test.ts",
+    "src/gdskills/context-resolver.test.ts",
+    "src/gdskills/context-resolver.ts",
+    "src/gdskills/import-rules.ts",
+    "src/gdskills/output-schema.test.ts",
+    "src/gdskills/project-context-status.test.ts",
+    "src/gdskills/project-context-status.ts",
+    "src/gdskills/reference-entries.ts",
+    "src/gdskills/reference-proof.ts",
+    "src/gdskills/references-check.ts",
+    "src/gdskills/references-config.test.ts",
+    "src/gdskills/references-config.ts",
+    "src/gdskills/references-section.test.ts",
+    "src/gdskills/references-section.ts",
+    "src/gdskills/resolve-context-command.ts",
+    "src/gdskills/resolved-context-check.test.ts",
+    "src/gdskills/resolved-context-check.ts",
+    "src/gdskills/skill-sync.test.ts",
+    "src/harness/tool/metaproject-adapter.ts",
+    "src/harness/tool/metaproject-operations.test.ts",
+    "src/harness/tool/metaproject-operations.ts",
+    "src/harness/tool/metaproject-port.ts",
+    "src/lib/group-subcommands.ts",
+    "src/mcp/metaproject-tools.ts",
+    "src/standard/help-groups.ts",
+    "src/tui/project-context-inspector.test.ts",
+    "src/tui/project-context-inspector.ts",
+    "src/tui/project-references-view.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/tui/ops-sidebar.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 30,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/ops-sidebar.test-helpers.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "hop": 1,
+      "fanIn": 24,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "path": [
+        "src/harness/tool/builtin/spawn-subagent-tool.ts",
+        "src/harness/tool/metaproject-adapter.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/run/run.ts",
+      "hop": 1,
+      "fanIn": 19,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "path": [
+        "src/harness/run/run.ts",
+        "src/harness/tool/metaproject-port.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/metaproject-tools.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "path": [
+        "src/harness/tool/builtin/metaproject-tools.ts",
+        "src/harness/tool/metaproject-operations.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp/tools.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/mcp/metaproject-tools.ts",
+      "path": [
+        "src/mcp/tools.ts",
+        "src/mcp/metaproject-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/install-plan.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "package.json",
+      "path": [
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "package.json",
+      "path": [
+        "src/cli-registry.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "path": [
+        "src/commands/interactive-agent-tools.ts",
+        "src/harness/tool/metaproject-port.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/ops-sidebar.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/ops-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "package.json",
+      "path": [
+        "src/commands/doctor.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agent-approval-context.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "path": [
+        "src/commands/agent-approval-context.ts",
+        "src/harness/tool/metaproject-port.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/commands.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "src/acp/commands.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/roster.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "path": [
+        "src/acp/roster.ts",
+        "src/harness/tool/metaproject-adapter.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/rule-references.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "src/gdskills/rule-references.ts",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/decisions-surface.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/schedules-sidebar.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/schedules-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/project-context-status.ts",
+      "path": [
+        "src/tui/settings-state.ts",
+        "src/gdskills/project-context-status.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/acp.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/bundle.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/bundle.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "src/commands/help.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/hooks.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/hooks.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/project-tools.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "path": [
+        "src/commands/project-tools.ts",
+        "src/harness/tool/metaproject-port.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/version.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/version.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/policy/metaproject-escalation.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "path": [
+        "src/harness/policy/metaproject-escalation.ts",
+        "src/harness/tool/metaproject-port.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/approvals-sidebar.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/approvals-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/autoreview-surface.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/autoreview-surface.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/external-diff-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/help-modal.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "src/tui/help-modal.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "path": [
+        "src/wiki/deep-enrich.ts",
+        "src/harness/tool/metaproject-operations.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/task-project-context.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/gdskills/resolved-context-check.ts",
+      "path": [
+        "src/flow/task-project-context.ts",
+        "src/gdskills/resolved-context-check.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "docs/requirements/keryx-project-implementation-rules/live-run-result.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "docs/requirements/keryx-project-implementation-rules/live-run-result.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "fixtures/routing-shell-pty.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/generate-commands-by-task.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "scripts/generate-commands-by-task.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/__fixtures__/vantage-rules/expected.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "src/gdskills/__fixtures__/vantage-rules/expected.json",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/service.ts",
+      "hop": 2,
+      "fanIn": 99,
+      "via": "src/gdskills/resolved-context-check.ts",
+      "path": [
+        "src/flow/service.ts",
+        "src/flow/task-project-context.ts",
+        "src/gdskills/resolved-context-check.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/bus/client.ts",
+      "hop": 2,
+      "fanIn": 26,
+      "via": "package.json",
+      "path": [
+        "src/bus/client.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/acp/commands.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {AGENT_SLASH_COMMANDS} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/roster.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {AGENT_SLASH_COMMANDS} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {AGENT_SLASH_COMMANDS, commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, renderCommandHelp} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/group-subcommands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {GROUP_SUBCOMMANDS} of src/lib/group-subcommands.ts (hop 1, from src/lib/group-subcommands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/forgetting.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/help.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/service.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/group-subcommands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {GROUP_SUBCOMMANDS} of src/lib/group-subcommands.ts (hop 1, from src/lib/group-subcommands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {launchTuiAgentShell} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/backfill.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/group-subcommands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {GROUP_SUBCOMMANDS} of src/lib/group-subcommands.ts (hop 1, from src/lib/group-subcommands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/decisions/interviewer-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/docs/own-answer-docs.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {findCliEntry, findSlashEntry} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/context-resolver.vantage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/context-resolver.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ProjectContextResolution, resolveProjectContext} of src/gdskills/context-resolver.ts (hop 1, from src/gdskills/context-resolver.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-rules.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "source": "text-link",
+      "reason": "test-consumer",
+      "detail": "exercises src/commands/skills-references.test.ts (hop 1, from src/commands/skills-references.test.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-update.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/project-skills-registry-kind.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/context-resolver.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ProjectContextResolution, readLastResolve} of src/gdskills/context-resolver.ts (hop 1, from src/gdskills/context-resolver.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/task-implementer-contract.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/policy/metaproject-escalation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/run/run.metaproject.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/metaproject-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {MetaprojectPort} of src/harness/tool/metaproject-port.ts (hop 1, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/graph-find-projection.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/memory-recall-p3.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-p0.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-boundary-parity.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-display-truth.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/search-code-confinement.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/search-code-output.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/wiki-evidence-projection.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/wiki-freshness-op.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/group-subcommands-flow.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/group-subcommands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {GROUP_SUBCOMMANDS} of src/lib/group-subcommands.ts (hop 1, from src/lib/group-subcommands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/evidence-find-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/memory-p0.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_OPERATIONS} of src/harness/tool/metaproject-operations.ts (hop 1, from src/harness/tool/metaproject-operations.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/metaproject-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/resolve-context-command.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runResolveContextCommand} of src/gdskills/resolve-context-command.ts (hop 1, from src/gdskills/resolve-context-command.ts): run it, it is not read"
+    },
+    {
+      "file": "src/product/bulk-budget.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/group-subcommands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {GROUP_SUBCOMMANDS} of src/lib/group-subcommands.ts (hop 1, from src/lib/group-subcommands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/standard/commands-by-task.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {renderCommandsByTaskMarkdown} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/standard/help-groups.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS, findCliEntry, findSlashEntry, renderCliGroupHelp, renderGroupedCliHelp, renderGroupedSlashHelp} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ask-user-transcript.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/channels-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {findAgentCommand} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/modal-host.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/shell-chrome.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/theme-picker.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {default} of package.json (hop 1, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createMetaprojectAdapter} of src/harness/tool/metaproject-adapter.ts (hop 1, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/bundle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {bundleCommand} of src/commands/bundle.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/doctor-entrypoints.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildDoctorReport} of src/commands/doctor.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/doctor.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildDoctorReport, doctorCommand} of src/commands/doctor.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/harness.replay.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {acpCommandHelpText} of src/acp/commands.ts (hop 2, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {hooksCommand} of src/commands/hooks.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/install-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildInstallPlan, currentWriterVersion} of src/lib/install-plan.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildAcpSessionTools} of src/acp/roster.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell, shellCommand} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell, shellCommand} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell, shellCommand} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {versionCommand} of src/commands/version.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/commands/workspace.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/confirm-floors.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/hooks/failure-matrix.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/hooks/guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/replay/replay.hardening.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/replay/replay.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/resume/resume.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/rpc.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/run/run.completion-requirements.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/run/run.hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/run/run.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-lifecycle-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/install-plan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildInstallPlan} of src/lib/install-plan.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-approvals-binding.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-turn.ask-parity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RunDeps, runOffline} of src/harness/run/run.ts (hop 2, from src/harness/tool/metaproject-port.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/read-only.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/sac-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/slate-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/tools-input-parity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildToolRegistry} of src/mcp/tools.ts (hop 2, from src/harness/tool/metaproject-adapter.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/approvals-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/approvals-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeApprovalsCommand} of src/tui/approvals-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/autoreview-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeAutoReviewCommand} of src/tui/autoreview-surface.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChatShell} of src/tui/chat-shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/conform-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/digest-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeSchedulesCommand} of src/tui/schedules-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/external-diff-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeExternalDiffCommand} of src/tui/external-diff-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/governance-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/governance-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/help-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/intake-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ops-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeOpsCommand} of src/tui/ops-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/permissions-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/reviews-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/rewind-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/routing-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/schedules-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeSchedulesCommand} of src/tui/schedules-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-context-status.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {loadSettingsSnapshot} of src/tui/settings-state.ts (hop 2, from src/gdskills/project-context-status.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/setup-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/triggers-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/triggers-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runLeasedChatShell} of src/commands/shell.ts (hop 2, from package.json): run it, it is not read"
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed package.json: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-governance.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/core-package.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed package.json: run it, it is not read"
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 57 at hop 2, fan-in 12, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 57 at hop 2, fan-in 11, reached via src/harness/tool/metaproject-port.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/integrations/install-state.ts",
+      "hop": 2,
+      "fanIn": 10,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 57 at hop 2, fan-in 10, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/dispatch.ts",
+      "hop": 2,
+      "fanIn": 10,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 57 at hop 2, fan-in 10, reached via src/harness/tool/metaproject-adapter.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 57 at hop 2, fan-in 9, reached via src/harness/tool/metaproject-operations.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 57 at hop 2, fan-in 8, reached via src/harness/tool/metaproject-port.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 57 at hop 2, fan-in 6, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/routing-entrypoint.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 57 at hop 2, fan-in 4, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 57 at hop 2, fan-in 2, reached via src/harness/tool/metaproject-operations.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/server.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 57 at hop 2, fan-in 2, reached via src/standard/help-groups.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/rpc.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 57 at hop 2, fan-in 2, reached via src/harness/tool/metaproject-port.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 57 at hop 2, fan-in 1, reached via src/harness/tool/metaproject-operations.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 57 at hop 2, fan-in 1, reached via src/harness/tool/metaproject-operations.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/resume/resume.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 57 at hop 2, fan-in 1, reached via src/harness/tool/metaproject-port.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run/cli.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 57 at hop 2, fan-in 1, reached via src/harness/tool/metaproject-port.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-long.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 57 at hop 2, fan-in 0, reached via src/harness/tool/metaproject-operations.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 57 at hop 2, fan-in 0, reached via src/harness/tool/metaproject-operations.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/shell-chrome.ts",
+      "hop": 1,
+      "fanIn": 36,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SlashCommandOption} from src/commands/agent-commands.ts; changed: {AGENT_SLASH_COMMANDS, commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, renderCommandHelp}"
+    },
+    {
+      "file": "src/commands/standard.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runCapabilities, runDoctor, runValidate} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/gdskills/update-rules.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/import-rules.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {projectRuleEntry} from src/gdskills/import-rules.ts; changed: {runSkillsImportRulesCommand}"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {operatorCardDialog} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {filterConnectedDetectedProviders} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/route-synonyms.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {expandQueryTokens, normalizeRouteText} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scoreBundledSkillRoute} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {normalizeRouteText, scoreBundledSkillRoute} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/commands/trigger-reachability.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {normalizeRouteText, scoreBundledSkillRoute} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/gdskills/catalog-single-source.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {normalizeRouteText} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runCapabilities, runValidate} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {onKeypress} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseDelegateCommand} from src/commands/agent-commands.ts; changed: {AGENT_SLASH_COMMANDS, commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, renderCommandHelp}"
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {modelPickerNotice, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {endpointMayBeAtFault, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/review.ts",
+      "hop": 2,
+      "fanIn": 51,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {keryxSelfCommand} from src/harness/tool/builtin/metaproject-tools.ts; changed: {builtinMetaprojectTools}"
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 2,
+      "fanIn": 20,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {InstallPlanBlockedError, formatInstallPlan, isPreviewRequested, parseDivergenceResolution} from src/lib/install-plan.ts; changed: {buildInstallPlan, currentWriterVersion}"
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DivergenceResolution, InstallPlanBlockedError, formatInstallPlan, isPreviewRequested, parseDivergenceResolution} from src/lib/install-plan.ts; changed: {buildInstallPlan, currentWriterVersion}"
+    },
+    {
+      "file": "src/harness/run-external-factory.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SpawnSubagentToolDeps, StructuredSubagentResult, SubagentMode} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/commands/rules.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DivergenceResolution, formatInstallPlan, isPreviewRequested, parseDivergenceResolution} from src/lib/install-plan.ts; changed: {buildInstallPlan, currentWriterVersion}"
+    },
+    {
+      "file": "src/tui/external-bridge.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ResolveAcpProviderDeps, parseAcpArgs, resolveAcpProvider, shellGrantRefresh, shellModelSource} from src/commands/acp.ts; changed: {acpCommand}"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {busLeasesFromClient} from src/commands/shell.ts; changed: {runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellIO} from src/commands/shell.ts; changed: {runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SignalShutdownParts, makeSignalShutdown} from src/commands/shell.ts; changed: {runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {chooseShellSurface, parseShellCliFlags} from src/commands/shell.ts; changed: {runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/decisions/round3.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runDecisionsFollowup} from src/tui/decisions-surface.ts; changed: {routeDecisionsCommand}"
+    },
+    {
+      "file": "src/harness/tool/builtin/keryx-self-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-operations.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {keryxSelfCommand, makeKeryxRunner} from src/harness/tool/builtin/metaproject-tools.ts; changed: {builtinMetaprojectTools}"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-backstop.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SUBAGENT_CHILD_RESERVATION_MS, SUBAGENT_HARD_CAP_GRACE_MS, invokeWithBackstop, resolveSubagentHardCapMs} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/lib/routing-entrypoint.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {InstallCrashSignal, InstallPlanBlockedError, readInstallJournal} from src/lib/install-plan.ts; changed: {buildInstallPlan, currentWriterVersion}"
+    },
+    {
+      "file": "src/lib/serve-turn.outcome.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-port.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HarnessRunOutput} from src/harness/run/run.ts; changed: {RunDeps, runOffline}"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {recordSaveNote, saveDispatchRecord} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseShellCliFlags} from src/commands/shell.ts; changed: {runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/metaproject-adapter.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/trigger-ledger.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {appendRuns, makeProject, manualInterval, writeReport, writeTriggers} from src/tui/ops-sidebar.test-helpers.ts; changed: {mountChrome}"
+    },
+    {
+      "file": "src/tui/trigger-run-now.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CLI, appendRuns, makeProject, writeTriggers} from src/tui/ops-sidebar.test-helpers.ts; changed: {mountChrome}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/TUI-states.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/schemas/references.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 85,
+    "changedFilesResolved": 35,
+    "changedFilesUnresolved": 50,
+    "candidates": 210,
+    "retained": 40,
+    "droppedByCap": 17,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 42,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 153,
+    "textLinksAdded": 6,
+    "relatedTestsAdded": 6,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 38,
+      "2": 2
+    }
+  },
+  "graph": {
+    "nodes": 3255,
+    "edges": 11650
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "package.json",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "not a JS/TS module: every importer is reached by the file edge"
+      },
+      {
+        "file": "src/commands/agent-commands.ts",
+        "names": [
+          "AGENT_SLASH_COMMANDS",
+          "commandsForMode",
+          "describeUnavailableCommand",
+          "filterCommands",
+          "findAgentCommand",
+          "renderCommandHelp"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: AGENT_SLASH_COMMANDS, commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, renderCommandHelp"
+      },
+      {
+        "file": "src/commands/skills-references.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/skills-references.ts",
+        "names": [
+          "printReferencesHelp",
+          "referencesCommand",
+          "renderReferencesReport"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: printReferencesHelp, referencesCommand, renderReferencesReport"
+      },
+      {
+        "file": "src/commands/skills.ts",
+        "names": [
+          "printSkillsHelpFor",
+          "skillVerifySkillCommand",
+          "skillsCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: printSkillsHelpFor, skillVerifySkillCommand, skillsCommand"
+      },
+      {
+        "file": "src/flow/task-project-context.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/conditional-reads.e2e.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/context-resolver.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/context-resolver.ts",
+        "names": [
+          "ContextEntry",
+          "ProjectContextResolution",
+          "RecordedResolve",
+          "ResolveContextInput",
+          "TASK_TEXT_MAX_CHARS",
+          "readLastResolve",
+          "recordLastResolve",
+          "resolveProjectContext",
+          "truncateTaskText"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ContextEntry, ProjectContextResolution, RecordedResolve, ResolveContextInput, TASK_TEXT_MAX_CHARS, readLastResolve, recordLastResolve, resolveProjectContext, truncateTaskText"
+      },
+      {
+        "file": "src/gdskills/import-rules.ts",
+        "names": [
+          "runSkillsImportRulesCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: runSkillsImportRulesCommand"
+      },
+      {
+        "file": "src/gdskills/output-schema.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/project-context-status.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/project-context-status.ts",
+        "names": [
+          "ProjectContextStatus",
+          "ProjectReferencesStatus",
+          "loadProjectContextStatus"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ProjectContextStatus, ProjectReferencesStatus, loadProjectContextStatus"
+      },
+      {
+        "file": "src/gdskills/reference-entries.ts",
+        "names": [
+          "ResolveReferencesInput",
+          "ResolvedReferences",
+          "keywordOccurs",
+          "promotionReason",
+          "resolveReferences"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ResolveReferencesInput, ResolvedReferences, keywordOccurs, promotionReason, resolveReferences"
+      },
+      {
+        "file": "src/gdskills/reference-proof.ts",
+        "names": [
+          "CitedItem",
+          "ProofFailure",
+          "ProofRule",
+          "SUMMARY_MIN_CHARS",
+          "SUMMARY_MIN_SHARED_WORDS",
+          "WORD_MIN_LETTERS",
+          "distinctWords",
+          "isPromoted",
+          "pickProofItem",
+          "proofFailures"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: CitedItem, ProofFailure, ProofRule, SUMMARY_MIN_CHARS, SUMMARY_MIN_SHARED_WORDS, WORD_MIN_LETTERS, distinctWords, isPromoted, pickProofItem, proofFailures"
+      },
+      {
+        "file": "src/gdskills/references-check.ts",
+        "names": [
+          "MIN_DESCRIPTION_CHARACTERS",
+          "MIN_KEYWORD_CHARACTERS",
+          "REFERENCES_SUGGEST_COMMAND",
+          "ReferenceSkeleton",
+          "ReferencesCheckReport",
+          "ReferencesFinding",
+          "ReferencesFindingCode",
+          "ReferencesSuggestion",
+          "SuggestResult",
+          "checkReferences",
+          "suggestReferences",
+          "undeclaredCitationHint"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS, REFERENCES_SUGGEST_COMMAND, ReferenceSkeleton, ReferencesCheckReport, ReferencesFinding, ReferencesFindingCode, ReferencesSuggestion, SuggestResult, checkReferences, suggestReferences, undeclaredCitationHint"
+      },
+      {
+        "file": "src/gdskills/references-config.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/references-config.ts",
+        "names": [
+          "LoadReferencesResult",
+          "ParseReferencesResult",
+          "REFERENCES_PATH",
+          "REFERENCES_SCHEMA",
+          "REFERENCES_SCHEMA_VERSION",
+          "ReferenceCondition",
+          "ReferenceDeclaration",
+          "isDocumentCitation",
+          "loadReferences",
+          "normaliseCitedPath",
+          "parseReferences"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: LoadReferencesResult, ParseReferencesResult, REFERENCES_PATH, REFERENCES_SCHEMA, REFERENCES_SCHEMA_VERSION, ReferenceCondition, ReferenceDeclaration, isDocumentCitation, loadReferences, normaliseCitedPath, parseReferences"
+      },
+      {
+        "file": "src/gdskills/references-section.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/references-section.ts",
+        "names": [
+          "MarkdownHeading",
+          "SectionFound",
+          "SectionMissing",
+          "SectionResult",
+          "extractSection",
+          "markdownHeadings",
+          "slugifyHeading"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: MarkdownHeading, SectionFound, SectionMissing, SectionResult, extractSection, markdownHeadings, slugifyHeading"
+      },
+      {
+        "file": "src/gdskills/resolve-context-command.ts",
+        "names": [
+          "renderResolutionMarkdown",
+          "runResolveContextCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: renderResolutionMarkdown, runResolveContextCommand"
+      },
+      {
+        "file": "src/gdskills/resolved-context-check.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/resolved-context-check.ts",
+        "names": [
+          "ResolvedContextReport",
+          "ResolvedMiss",
+          "checkResolvedContext",
+          "formatResolvedHeadline",
+          "formatResolvedReport"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ResolvedContextReport, ResolvedMiss, checkResolvedContext, formatResolvedHeadline, formatResolvedReport"
+      },
+      {
+        "file": "src/gdskills/skill-sync.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/harness/tool/metaproject-adapter.ts",
+        "names": [
+          "createMetaprojectAdapter"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: createMetaprojectAdapter"
+      },
+      {
+        "file": "src/harness/tool/metaproject-operations.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/harness/tool/metaproject-operations.ts",
+        "names": [
+          "METAPROJECT_OPERATIONS"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: METAPROJECT_OPERATIONS"
+      },
+      {
+        "file": "src/harness/tool/metaproject-port.ts",
+        "names": [
+          "MetaprojectPort"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: MetaprojectPort"
+      },
+      {
+        "file": "src/lib/group-subcommands.ts",
+        "names": [
+          "GROUP_SUBCOMMANDS"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: GROUP_SUBCOMMANDS"
+      },
+      {
+        "file": "src/mcp/metaproject-tools.ts",
+        "names": [
+          "toMcpTools"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: toMcpTools"
+      },
+      {
+        "file": "src/standard/help-groups.ts",
+        "names": [
+          "HELP_GROUPS",
+          "entriesInGroup",
+          "findCliEntry",
+          "findEntry",
+          "findSlashEntry",
+          "renderCliGroupHelp",
+          "renderCommandsByTaskMarkdown",
+          "renderGroupedCliHelp",
+          "renderGroupedNamedHelp",
+          "renderGroupedSlashHelp"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp"
+      },
+      {
+        "file": "src/tui/project-context-inspector.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/project-context-inspector.ts",
+        "names": [
+          "NO_REFERENCES_TEXT",
+          "PROJECT_CONTEXT_POLL_MS",
+          "ProjectContextCommand",
+          "ProjectContextFeed",
+          "ProjectContextFeedOptions",
+          "ProjectContextModalOptions",
+          "ProjectContextTab",
+          "createProjectContextFeed",
+          "formatProjectReferencesLines",
+          "openProjectContext",
+          "parseProjectContextCommand",
+          "presentProjectContext",
+          "renderProjectContextSidebarValue"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: NO_REFERENCES_TEXT, PROJECT_CONTEXT_POLL_MS, ProjectContextCommand, ProjectContextFeed, ProjectContextFeedOptions, ProjectContextModalOptions, ProjectContextTab, createProjectContextFeed, formatProjectReferencesLines, openProjectContext, parseProjectContextCommand, presentProjectContext, renderProjectContextSidebarValue"
+      },
+      {
+        "file": "src/tui/project-references-view.ts",
+        "names": [
+          "NO_REFERENCES_TEXT",
+          "formatProjectReferencesLines",
+          "referencesSidebarSegment"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: NO_REFERENCES_TEXT, formatProjectReferencesLines, referencesSidebarSegment"
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "names": [
+          "launchTuiAgentShell"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: launchTuiAgentShell"
+      }
+    ],
+    "barrels": [
+      "src/core.ts",
+      "src/standard/service.ts"
+    ],
+    "textKeys": 4,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "src/acp/commands.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "AGENT_SLASH_COMMANDS"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/acp/roster.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "AGENT_SLASH_COMMANDS"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "AGENT_SLASH_COMMANDS",
+        "commandsForMode",
+        "describeUnavailableCommand",
+        "filterCommands",
+        "findAgentCommand",
+        "renderCommandHelp"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "GROUP_SUBCOMMANDS"
+      ],
+      "via": "src/lib/group-subcommands.ts"
+    },
+    {
+      "file": "src/commands/bundle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "bundleCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/doctor-entrypoints.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildDoctorReport"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/doctor.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildDoctorReport",
+        "doctorCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/forgetting.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/commands/harness.replay.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "acpCommandHelpText"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/commands/help.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/commands/hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "hooksCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/install-lifecycle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildInstallPlan",
+        "currentWriterVersion"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildAcpSessionTools"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "GROUP_SUBCOMMANDS"
+      ],
+      "via": "src/lib/group-subcommands.ts"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell",
+        "shellCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell",
+        "shellCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "launchTuiAgentShell"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell",
+        "shellCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/skills-governance.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "versionCommand"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/commands/workspace.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/core-package.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "package.json"
+    },
+    {
+      "file": "src/decisions/backfill.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "GROUP_SUBCOMMANDS"
+      ],
+      "via": "src/lib/group-subcommands.ts"
+    },
+    {
+      "file": "src/decisions/interviewer-path.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/docs/own-answer-docs.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "findCliEntry",
+        "findSlashEntry"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/flow/confirm-floors.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/gdskills/context-resolver.vantage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ProjectContextResolution",
+        "resolveProjectContext"
+      ],
+      "via": "src/gdskills/context-resolver.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-rules.test.ts",
+      "reason": "text-link",
+      "symbols": [],
+      "via": "src/commands/skills-references.test.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-update.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/gdskills/project-skills-registry-kind.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ProjectContextResolution",
+        "readLastResolve"
+      ],
+      "via": "src/gdskills/context-resolver.ts"
+    },
+    {
+      "file": "src/gdskills/task-implementer-contract.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/harness/hooks/failure-matrix.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/hooks/guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/policy/metaproject-escalation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/replay/replay.hardening.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/replay/replay.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/resume/resume.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/rpc.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/run/run.completion-requirements.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/run/run.hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/run/run.metaproject.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/run/run.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/metaproject-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "MetaprojectPort"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-lifecycle-tool.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/graph-find-projection.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/harness/tool/memory-recall-p3.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-p0.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/metaproject-boundary-parity.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/harness/tool/metaproject-display-truth.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/harness/tool/search-code-confinement.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/search-code-output.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/harness/tool/wiki-evidence-projection.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/harness/tool/wiki-freshness-op.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/lib/group-subcommands-flow.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "GROUP_SUBCOMMANDS"
+      ],
+      "via": "src/lib/group-subcommands.ts"
+    },
+    {
+      "file": "src/lib/install-plan.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildInstallPlan"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/lib/serve-approvals-binding.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/lib/serve-turn.ask-parity.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RunDeps",
+        "runOffline"
+      ],
+      "via": "src/harness/tool/metaproject-port.ts"
+    },
+    {
+      "file": "src/mcp/evidence-find-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/mcp/mcp.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/mcp/memory-p0.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_OPERATIONS"
+      ],
+      "via": "src/harness/tool/metaproject-operations.ts"
+    },
+    {
+      "file": "src/mcp/metaproject-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runResolveContextCommand"
+      ],
+      "via": "src/gdskills/resolve-context-command.ts"
+    },
+    {
+      "file": "src/mcp/read-only.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/mcp/sac-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/mcp/slate-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/mcp/tools-input-parity.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildToolRegistry"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    },
+    {
+      "file": "src/product/bulk-budget.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "GROUP_SUBCOMMANDS"
+      ],
+      "via": "src/lib/group-subcommands.ts"
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/standard/commands-by-task.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "renderCommandsByTaskMarkdown"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/standard/help-groups.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS",
+        "findCliEntry",
+        "findSlashEntry",
+        "renderCliGroupHelp",
+        "renderGroupedCliHelp",
+        "renderGroupedSlashHelp"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/approvals-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/approvals-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeApprovalsCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/ask-user-transcript.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/autoreview-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeAutoReviewCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/channels-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChatShell"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/conform-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "findAgentCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/digest-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeSchedulesCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/external-diff-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeExternalDiffCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/governance-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/governance-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/help-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/intake-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/modal-host.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/ops-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeOpsCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/permissions-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/reviews-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/rewind-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/routing-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/schedules-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeSchedulesCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/settings-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "loadSettingsSnapshot"
+      ],
+      "via": "src/gdskills/project-context-status.ts"
+    },
+    {
+      "file": "src/tui/setup-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/shell-chrome.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/theme-picker.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/triggers-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/triggers-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runLeasedChatShell"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "default"
+      ],
+      "via": "package.json"
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createMetaprojectAdapter"
+      ],
+      "via": "src/harness/tool/metaproject-adapter.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

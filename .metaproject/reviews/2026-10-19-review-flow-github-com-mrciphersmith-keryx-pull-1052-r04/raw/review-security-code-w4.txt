@@ -1,0 +1,55 @@
+STATUS: DONE
+
+## Security Review - slice-04 (press fields, undelivered flag, completeReviewGated)
+
+Scope: slice-04 of PR 1052, head b1c6da0e6992, base 062aa9c36484. Code level only.
+
+Guarantees I tried to break, and what I found:
+
+- Forged or missing pressedBy: not accepted. operatorConfirmTool.invoke (src/commands/operator-confirm-tools.ts) refuses a remote answer when pressedBy or pressedAt is undefined, when the id is not in allowedUserIds (read fresh from loadRemoteConfig in src/commands/shell.ts), and when the card is older than 1 hour. The press fields reach invoke only through per-call locals of the driver in src/commands/agent.ts, set from the approval response, so they cannot leak across calls. The press source is the serve hub frame, which the hub checks against allowedUserIds (src/remote/hub.ts) and the client and bridge validate as a safe integer. A topic allow with no fromId aborts the dock and is then refused at invoke, which is a usability matter, not a bypass.
+- Undelivered mirror treated as an answer: no. mapApprovalAnswer keeps undelivered only on a deny; an undelivered deny has no fromId, so isTopicPress is false and the dock stays the only place to answer. OperatorConfirmationLog.markUndelivered only changes the display.
+- Close-path bypass: none. The only callers of completeManagedReview are completeReviewGated itself; keryx review complete (src/commands/review.ts) and the review_complete card (src/commands/operator-confirm-review.ts) both call completeReviewGated, which runs the run-profile and narrowed-routing refusals first. The card also recomputes a facts digest at apply time and refuses if the head, evidence level or waivers changed after the card was shown.
+- Tampering with signature records: the token store and signature record are plain files, and consumeConfirmationToken copies pressedBy and pressedAt from the stored file. This is the same trust model as before (the hash, target and acChecksum are equally file-held), so it is not a new vector. See SEC-W4-001.
+- Nested agent shells: nestedAgentCardRefusal still blocks cards when KERYX_TOOL_CALL=1.
+
+Findings: two INFO notes; no blocker, major or minor.
+
+Clean areas checked: injection, authn/authz of the remote answer, IDOR, secrets, crypto (sha256 token hash, randomUUID card token), CSRF, path traversal, open redirect. React and NestJS patterns are not touched by this slice.
+
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "summary": "No exploitable vulnerability in slice-04. Forged or missing pressedBy fails closed in operatorConfirmTool.invoke; an undelivered mirror is never counted as a press; every completeManagedReview caller goes through completeReviewGated; review_complete re-checks a facts digest at apply. Two info notes on defense in depth.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "SEC-W4-001",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/review/estimate.ts",
+      "line": null,
+      "quote": "PlanConfirmation adds pressedBy?: number and pressedAt?: string; isPlanConfirmation does not validate them",
+      "problem": "readCoverageWaiver validates pressedBy as a safe integer and pressedAt as a non-empty string, but isPlanConfirmation (and other readers of the new press fields) accept any value, and no reader ties the press fields to confirmedVia remote-card.",
+      "impact": "No new attack: plan-confirmation.json, like the token store and the waiver files, is a plain package file whose confirmedVia and quote an agent with shell access can already write, so the press fields add no trust beyond what is forgeable today. The only risk is a malformed value reaching a later display or audit.",
+      "suggested_fix": "Validate pressedBy as a safe integer and pressedAt as a string in isPlanConfirmation, and reject press fields when confirmedVia is not remote-card.",
+      "evidence": "slices/slice-04.diff plan-confirmation and estimate hunks; src/review/coverage-complete.ts readCoverageWaiver validates both fields.",
+      "confidence": "medium"
+    },
+    {
+      "id": "SEC-W4-002",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/remote/client.ts",
+      "line": null,
+      "quote": "if (!this.connected) return { decision: \"deny\" } (after a successful post)",
+      "problem": "The one deny path after a successful POST carries no undelivered flag, unlike the four paths before it.",
+      "impact": "Not exploitable: a deny with no fromId is not a topic press (isTopicPress), so the dock stays open and nothing is recorded as an answer. It only makes the card say less about why the topic leg ended.",
+      "suggested_fix": "Leave as is, or note in a comment that this deny means the card may have reached the topic, which is why it is not flagged undelivered.",
+      "evidence": "src/tui/approval-mirror.ts isTopicPress: allow, or fromId defined.",
+      "confidence": "medium"
+    }
+  ]
+}
+```

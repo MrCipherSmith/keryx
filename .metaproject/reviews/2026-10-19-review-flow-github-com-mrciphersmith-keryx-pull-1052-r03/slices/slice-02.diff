@@ -1,0 +1,1569 @@
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 116,156 @@
+ ## Slices, waves and results — every host; keryx shell specifics marked
+ 
+ A reviewer starts in the project root and reads project files; a path outside the project root is unreadable to it. On keryx shell its `context_files` content reaches it wrapped as DATA, and slices and measurements travel only there (never pasted or retyped); elsewhere the prompt names the slice paths. `skill_path` and `pr_context` stay payload fields. The text reaches the reviewer in slices small enough to finish.
+ 
+ 0. **Publish the plan before anything else (keryx shell).** Your first tool call is `plan_set` with `step-0`…`step-14` and `step-10b` all `pending`. A shell turn that has open plan items is continued by the host; a turn that ends on a text reply is over, and a message saying the review "cannot be honestly completed" ends the run with nothing reviewed. Never end the turn while a step is `pending` or `in_progress`: mark it `blocked` only with a cause you cannot fix with a command, and otherwise keep working. Step 6a then updates this plan rather than creating it.
+ 1. **Slice first.** `keryx review slice --ref <base> --package <package> --host <host>` after `keryx review start`. It writes `<package>/slices/slice-NN.diff` files of at most 150000 bytes each and a `manifest.json` carrying a wave budget (`--wave-bytes`, never below the slice ceiling; default by `--host`: 60000 on keryx-shell, 150000 elsewhere): what ONE reviewer dispatch may total, so a role owning many slices is dispatched in slice waves that each fit the child deadline. On keryx shell with a large diff pass a small `--max-bytes` (for example 18000) and `--wave-bytes` (for example 54000) so no wave outruns a reviewer's five minutes; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
+ 2. **Slices travel by path; on keryx shell, only by `context_files`.** The slices sit under the project (`<package>/slices`). On keryx shell pass each reviewer its slice paths in `spawn_subagent`'s `context_files`: the host copies the text into that reviewer's task, so you never paste or retype a slice. Elsewhere name the slice paths in the prompt. Put the `slices` ids in its reviewer-input. A dispatch that names a git range but no slice leaves the reviewer with nothing to read — that is `BLOCKED`, not a review.
+ 3. **Check before dispatch, every payload.** `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` for the wave; exit 1 means a payload names no slice, is over the wave ceiling (dispatch fewer slices, then the next wave), names a `skill_path` or `context_doc` that does not exist (`REVIEWER_INPUT_PATH_MISSING`), belongs to an unconfirmed over-threshold plan (`REVIEWER_INPUT_PLAN_UNCONFIRMED`), or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
+ 4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time. On keryx shell every round reviewer's `spawn_subagent` carries `review_wave: {"package": "<package>", "pass": "round"}` (a wave outside it counts against the turn's 32 children) and a `timeout_ms` that fits its wave: the default 300000 is sized for a wave of 60000 bytes, so a larger `--wave-bytes` needs a larger `timeout_ms`. Give each reviewer `max_rounds` of at least 40 (the default); a reviewer that spends its rounds reading the skill and the schema returns nothing. **Incomplete means the next wave while it makes progress, Not run when it stalls.** Every reviewer result lists the `slices` it covered, in its `REVIEW_RESULT` object, as ids (`"slices": ["slice-01", "slice-02"]`); an object with an `id` and an optional `coverage` note (`{"id": "slice-01", "coverage": "read in full"}`) is read the same way. An object with a `status` counts only when it is DONE, COMPLETE, COVERED or OK (any case); a slice marked NOT_READ, INCOMPLETE, SKIPPED or PARTIAL is not covered, so give a slice you did not read no `status` of that kind and leave it out. An entry with no id counts for nothing. **One driver file per dispatch.** Write `<package>/drivers/<reviewer>.json` with `{"reviewer": "<name>", "slices": [<ids dispatched>], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`: `ledger build` takes the reviewer's rule file from `definition` (a `skill_path` there, or inside a `payload` object, is read too) and the slices it was handed from `slices`. Only reviewer replies belong in `raw/`; a verification payload or a note filed there is reported as set aside and left in place, but it still costs a step. On `INCOMPLETE`, `BLOCKED` or `NEEDS_CONTEXT` (never accepted as a finished scope), and on a `DONE` that left slices open, `keryx review retry-plan --manifest <package>/slices/manifest.json --result <package>/raw/<reviewer>.txt --package <package>` decides and hands out the next wave of only the slices still uncovered (`--next-wave` plans one without a result). A result that covered a new slice spends no attempt; two results in a row with nothing new, or six failed rounds, print the `- **Not run:** …` line to paste into the report, and a result with nothing new first has its open slices cut in half. `keryx review slice --package <package>` already wrote one driver per reviewer x wave (`drivers/<reviewer>-w<n>.json`: slice ids, absolute slice paths, `result` path; the dispatcher adds `model`). Dispatch each wave in one batch, save each reply to its driver's `result`, and after each batch run `keryx review next --package <package>` (never `retry-plan` once per reviewer): it returns every reviewer's next wave at once, with reason `missing`, `retry`, `stalled` or `escalated`, or `done`. After a crash or timeout run it first: it collects late results from `<package>/raw/` and never re-hands a finished slice. Only the operator can accept a smaller set than that (`review_override_reviewers`, or `keryx review override-reviewers` in their terminal). An unfinished reviewer is never counted as a clean pass. **Persist every result, on every host.** On keryx shell pass each reviewer `save_result_to: <package>/raw/<reviewer>.txt`: the host writes its full final text there. Elsewhere the prompt tells the reviewer to write its whole reply to `<package>/raw/<reviewer>.txt` before it answers. Either way `review complete` has raw evidence after the transcript is cut, and you parse that file, never the tool output. Build `research.json` with `keryx review ledger build --package <package>` — never by hand: it reads the saved results, `scope-files.json` and the retry state, marks a reviewer complete only when its result is finished and its payloads cover the scope, and prints each gap with the exact next command and the waves left (a `retry-plan --next-wave` call, or a `--dispositions` entry for a raw finding). Run `keryx review ingest --research <package>/research.json` once it prints READY (exit 0). A refused `review complete` names what is missing: fix that with a command and run it again; it is never `blocked`. `--head` wants a SHA (`git rev-parse HEAD`), not `HEAD`.
+ 5. **Never print a scope or a slice.** The tool output of one call is cut at about 20 KB and `keryx review scope` of a large PR prints hundreds of KB. Run it as `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json` and read the counts from the file (`keryx ctx read`, or `jq`); take `<base>` from `git symbolic-ref refs/remotes/origin/HEAD`, not a guessed `origin/main`. Create `.metaproject/data/review/` first (`mkdir -p`) — a missing directory is a command to run, not a blocker. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
+ 6. **Write mutants whole.** A testing reviewer's `mutant_candidates` cover every changed branch, code downstream of the diff included. Write them to `research-evidence/mutants.json` unchanged; you may not narrow them, and a candidate no pass has run still blocks the coverage gate (`SKILL.detail.md`, mutation pass).
+ 7. **Measure before `review-layout`.** Run the browser measurements (Playwright/Storybook) yourself and pass them in its first dispatch (`context_files` on keryx shell, by path elsewhere); they count as evidence when the command and viewport are named. A second `NEEDS_CONTEXT` from one role is Not run (`layout: no engine`), not another refill (`SKILL.detail.md`).
+ 
+ ## Control
+ 
+ - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+ - **Waves.** Split by diff domain (`core` = logic, security, architecture; `domain` = frontend, backend, conventions; `support` = style, tests), in that order; A/B/C/D below keep their dependency order, except Wave C, which starts early and overlaps A and B (see Wave C); Wave D runs after the last verifier pass. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
+ - **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`, at most 300 seconds (`MAX_RETRY_AFTER_SECONDS`). After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+ - **Early verdict.** When every reviewer and the verifier are done, save every verifier pass to `research-evidence/verifications.json`, then run `keryx review verdict <package>` (it reads `<package>/raw`; the shared `.metaproject/data/review/raw` only when passed as `--raw`, which mixes in other rounds) and give the operator the verdict then; refuted findings are excluded only once `verifications.json` exists, held ones only once Wave D's claims are saved to `research-evidence/premises.json`. A verdict given before Wave D ran is provisional, and you say so: it counts as open the findings the judge may still hold or lower. The mutation pass, ledger and `keryx review complete` continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § "Early verdict").
+ - **Recovery.** After a timeout or crash: collect, validate, ingest, then dispatch only what is missing with `keryx review next --package <package>` (all reviewers at once). Never re-dispatch a wave whose results are on disk; after a second timeout of the same reviewer change the task (fewer slices, narrower focus), not only the diff size (`SKILL.detail.md` § "Recovery").
+-- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and `keryx review complete` has run. `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then run `keryx review complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
++- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and the `review_complete` card has been answered (an agent never runs `keryx review complete`; that command is for a human in a terminal). `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then call `review_complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
+ 
+ ---
+ 
+ ## Step 12 — the `keryx:findings` block
+ 
+ The prose report is for a human. **`keryx review ingest` reads the fenced block,
+ not the prose**, and a round that emits only prose cannot be used to build the
+ next round's input — the reviewer's `confidence`, `evidence`, `impact` and
+ `suggested_fix` do not survive rendering, and no regex recovers what was never
+ written down.
+ 
+ So every report ends with one fenced block whose info string carries
+ `keryx:findings`:
+ 
+ ````text
+ ```json keryx:findings
+ [ { …one object per finding, conforming to review-finding.schema.json… } ]
+ ```
+ ````
+ 
+
+--- CHANGELOG.md
+@@ 8,12 @@
+ 
+ - **Added:** a `review_complete` card in keryx shell shows the reviewed head SHA, the evidence level and every waiver with its operator quote, and completes the review in process under the same gates as `keryx review complete`. `review_confirm_plan` and `review_decide_premise` answer through the same card.
+-- **Added:** a card answered in the Telegram topic records `pressedBy` (the pressing user id) and `pressedAt` next to `confirmedVia: "remote-card"`. A remote answer is accepted only from an allowed user id, once, for that one question, within 1 hour; a replayed, expired, foreign or text-only answer changes nothing. A card whose Telegram mirror was not delivered says so, and the terminal commands keep working as before.
++- **Added:** a card answered in the Telegram topic records `pressedBy` (the pressing user id) and `pressedAt` next to `confirmedVia: "remote-card"`. A remote answer is accepted only from an allowed user id, once, for that one question, within 1 hour. A replayed, expired, foreign or text-only answer is refused and records nothing; a rejected remote answer burns the card, so nothing is applied and the card has to be asked again. A card whose Telegram mirror was not delivered says so, and the terminal commands keep working as before.
+ - **Added:** pending and answered operator cards appear in the remote status tab, the Remote sidebar row and `/decisions`.
+ - **Docs:** TM-04 states what a Telegram answer proves and what it does not; the review guides, `cli-reference.md`, both review-orchestrator skill copies and the review-premise skill tell the agent to call the card and never send the operator to a terminal. `keryx flow ac confirm` is unchanged.
+
+--- docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md
+@@ 1,46 @@
+ # TM-04: Operator Confirmation Cards
+ 
+ ## Decisions Only the Operator May Take, Asked as a Card in `keryx shell`, and What a Card Does Not Prove
+ 
+ **Status**: Implemented
+ **Frozen**: 2026-10-15
+ **Task**: flow 456
+ **Depends on**: TM-03 (terminal confirmation token). This record changes where the operator answers, not what the answer is worth. Flow 295 (`schedule_create`) is the pattern it generalises.
+ **Reviewer Track**: architecture
+ 
+ ---
+ 
+ ## 1. Purpose
+ 
+-Thirteen keryx decisions are the operator's alone: lifting a review pass ceiling, posting a review to GitHub, waiving unreviewed files or a readiness item, minting a flow completion token, landing an external agent's patch, accepting, promoting or graduating a learned pattern, and changing or running a schedule. Each CLI path refuses unless stdin and stdout are terminals. Inside `keryx shell` the agent runs commands through `shell_exec`, which has no terminal, so it stopped and told the operator to open another terminal and type a long command.
++Nineteen keryx decisions are the operator's alone: lifting a review pass ceiling, confirming a review plan, deciding a held finding's premise, closing a review round, posting a review to GitHub, waiving unreviewed files or a readiness item, minting a flow completion token, landing an external agent's patch, accepting, promoting or graduating a learned pattern, and changing or running a schedule. Each CLI path refuses unless stdin and stdout are terminals. Inside `keryx shell` the agent runs commands through `shell_exec`, which has no terminal, so it stopped and told the operator to open another terminal and type a long command.
+ 
+ This record replaces that hand-off. In `keryx shell` each decision is a native tool. The tool shows the operator a card (what is decided, the exact effect, the subject) and takes a yes or no. The terminal paths stay exactly as they were.
+ 
+ ## 2. The tools
+ 
+ | Tool | Same effect as |
+ |---|---|
+ | `review_chunks_answer` | `keryx review chunks estimate --answer yes\|no` |
++| `review_confirm_plan` | `keryx review confirm-plan` |
++| `review_decide_premise` | `keryx review decide-premise` |
++| `review_complete` | `keryx review complete` (closes the round after every gate passes; the head is the recorded manifest head, not one the model supplies. The agent completes a review only through this card; the CLI stays for a human in a terminal) |
+ | `review_publish` | `keryx review publish` |
+ | `review_waive_coverage` | `keryx review complete --waive-coverage` (records the waiver only) |
+ | `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |
+ | `flow_confirm` | `keryx flow confirm <id> [--merged]` |
+ | `external_apply` | `keryx agents external apply <run-id>` |
+ | `learn_accept`, `learn_promote`, `learn_graduate` | `keryx learn accept`, `promote`, `graduate apply` |
+ | `schedule_create`, `schedule_resume`, `schedule_run`, `schedule_pause`, `schedule_remove` | `keryx schedule add`, `resume`, `run`, `pause`, `remove` |
+ 
+ The framework is `src/commands/operator-confirm-tools.ts`. The specs are in `operator-confirm-review.ts` and `operator-confirm-other.ts`.
+ 
+ **How a call runs.**
+ 1. `buildCard` reads the real state on disk and builds the card. A card is never built from the model's input alone. A refusal (nothing to confirm) ends the call without asking.
+ 2. The tool declares a confirmation, so the approval gate treats it as a hard floor: every permission mode asks (`auto` included), review-auto never grants it, no saved pattern or MCP trust grant applies, and an unattended run is denied.
+ 3. The card's single-use token lives in the shell process's memory. It reaches `invoke` only after the operator's yes. A declined or denied card drops it; a replay finds nothing.
+ 4. On yes, `apply` calls the same library function the CLI calls, in process, and re-checks that the state did not move between the card and the yes.
+ 5. The decision is stored with `confirmedVia`: `tui-card` when the operator answered in this shell, `remote-card` when they answered in the session's remote topic. The quote is the card title plus `: yes`.
+ 
+ ## 3. What a card proves
+ 
+ A person pressed yes, in this keryx shell session or in its remote topic, on a card whose text was built from the state that the decision then changed. For the remote topic, "a person" means an account on the remote allowlist (`src/remote/config.ts`) answering in the session's own topic, the same rule that governs every other remote approval. A card is never weaker than an existing `alwaysAsk` approval.
+
+--- docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md
+@@ 87,110 @@
+ - a package in the working tree with completion evidence (published.json, a ledger with `scopeReviewed`, or a closed status) that no commit of merge-base..head added or changed — typically an untracked one, the user's own; or
+ - a package read from git history whose commit is merged into the base branch (an ancestor of it): a local branch may be anybody's checked-out pull request, so an unmerged one counts for nothing on its own; or
+ - a package the branch did commit (keryx commits flow review packages on the PR branch by design), or an unmerged one from history, whose manifest identity (target, head, flow, mode, start's stamps — not lifecycle fields such as status), findings.json and round.json hash to an entry of the machine-local round registry. `review ingest` (of a round past its draft), `review complete` and `review publish` append that entry under the user's keryx directory (`keryxConfigDir()/review-rounds/<repo>.jsonl`), outside the repository; the file is compacted to the newest entry per package past 512 KB. `sourcesTried` says "trusted: local registry".
+ 
+ Anything else is a full round (`fallback-first`) with the candidate's findings attached as context only, and `sourcesTried` says why it was not trusted. On another machine the registry has no entry, so a committed package is trusted only through our own round block.
+ 
+ The registry moves the boundary to the user, as everywhere else in this document: it stops a pull request author, who cannot write the reviewer's home directory, from committing a fake previous round. It does not stop a hostile agent running as the same user, which can append an entry exactly as it can write any other user-owned file, or the operator-decision records of §4c. The round record itself (`round.json`, `prior_findings.json`) is hashed into the manifest at start and refused by slice, ledger build and complete when edited, which catches a cooperating agent's careless edit, not a determined one.
+ 
+ ## 5. Why child-process proofs were rejected
+ 
+ The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.
+ 
+ The in-process tool has no such surface. The decision never leaves the shell process: no argument, environment variable, file or socket carries it. `ask_user` was rejected for a different reason: it can be answered by review-auto, the arbiter or an answers file, and its answer returns through the model.
+ 
+ ## 6. Remote answering
+ 
+ A card raised while the remote topic is active is mirrored to the topic like any other approval. The first answer wins: a press in the topic closes the dock, an answer in the dock removes the buttons in the topic. When the topic answers, the gate records `confirmedVia: "remote-card"`, so a record always says where the yes came from. Silence in the topic never ends the dock.
+ 
+ ### 6a. What a Telegram answer proves, and what it does not
+ 
+-Flow 464 puts the four review acts that used to need a terminal (`review confirm-plan`, `review decide-premise`, `review complete --waive` and `--waive-coverage`, `review complete`) behind cards: `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness` / `review_waive_coverage`, and `review_complete`. A card the topic answers is accepted only when all of these hold: the press comes from a Telegram user id in the binding's `allowedUserIds` (a binding with none refuses every remote answer), it carries this question's token, the token is unused, and it is under one hour old. Each refusal leaves the token spent. The record keeps `pressedBy` (the Telegram user id) and `pressedAt` (the shell's clock, not Telegram's) beside `confirmedVia: "remote-card"`. A card answered in the shell has neither field. If the topic cannot be reached, the card says "Telegram mirror not delivered" and is answered in the shell.
++Flow 464 puts the review acts an agent used to hand to a terminal (`review confirm-plan`, `review decide-premise`, `review complete --waive` and `--waive-coverage`, and the closing `review complete`) behind cards: `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness` / `review_waive_coverage`, and `review_complete`. A card the topic answers is accepted only when all of these hold: the press comes from a Telegram user id in the binding's `allowedUserIds` (a binding with none refuses every remote answer), it carries this question's token, the token is unused, and it is under one hour old. Each refusal leaves the token spent. The record keeps `pressedBy` (the Telegram user id) and `pressedAt` (the shell's clock, not Telegram's) beside `confirmedVia: "remote-card"`. A card answered in the shell has neither field. If the topic cannot be reached, the card says "Telegram mirror not delivered" and is answered in the shell.
+ 
+ What the press proves: someone logged in to an allowed Telegram account pressed yes on this card, within the hour, once.
+ 
+
+--- docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md
+@@ 122,138 @@
+ 
+ An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before.
+ 
+ ## 8. The CLI paths and the approval floor
+ 
+-In a real terminal every command behaves as it did. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
++In a real terminal every command behaves as it did. `review confirm-plan` and `review decide-premise` check for a terminal, and so do `review complete --waive` and `--waive-coverage`; without one they point to their card tool. A plain `review complete` has no TTY check: the CLI runs the same gates without a terminal, so the card is a rule for the agent, which the skills and the gate messages state, not a lock on the command. The gate's refusals are unchanged. An agent never closes a review with the CLI: it calls the `review_complete` card, and `keryx review complete` is for a human in a terminal. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
+ 
+ `touchesHumanConfirmation` (`src/lib/command-risk.ts`) already forced `ask` for `flow confirm`, `schedule add|remove|pause|resume|run`, `review chunks estimate --answer`, `review complete --waive-coverage` and `--waive`, and `review publish`. It now also covers `keryx learn accept|promote|graduate` and `keryx agents external apply` (`touchesOperatorDecision`), so a `shell_exec` attempt of any of them asks in every mode. Like the rest of that floor it is a text match and has the limits TM-03 §5 states.
+ 
+ ## 9. References
+ 
+ - `src/commands/operator-confirm-tools.ts`, `operator-confirm-review.ts`, `operator-confirm-other.ts`, `schedule-tools.ts`.
+ - `src/commands/agent.ts`, `src/tui/tui-shell.ts`: the approval driver, the dock and the topic mirror.
+ - `src/lib/command-risk.ts`: `touchesHumanConfirmation`, `touchesOperatorDecision`.
+ - `src/trigger/unattended.ts`: interactive-only tool names.
+ - `src/flow/confirm-token.ts`: the token and its caveat.
+ - TM-03 (`TM-03-terminal-confirmation-token.md`): the token this record's `flow_confirm` mints, and the bypasses that still apply.
+
+--- docs/docs/cli-reference.md
+@@ 4901,4941 @@
+ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
+ keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                           [--package <review-dir>] [--json|--brief] [--out <file>]
+ keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
+ keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
+ keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
+                         [--state <file>] [--dry-run] [--json]
+ keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+ keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+ keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+ keryx review layers status  --package <review-dir> [--json]
+ keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+ keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+ keryx review coverage --package <review-dir> [--json]
+ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...   (card review_complete)
+ keryx review readiness <review-id-or-path> [--json]
+ keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
+ ```
+ 
+-The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal. Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; `keryx review complete` then closes the review without the flags (TM-04).
++The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal. Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04).
+ 
+ **An unrecognised option is refused, not ignored**, and the command exits 1. A
+ flag that is silently dropped writes nothing and still reports success.
+ 
+ `--head <sha>` is the commit the round ran against, written to
+ `manifest.target.head` and read by the `review` completion gate — which refuses
+ to complete a flow whose last round cannot say which tree it read. Omitted, it
+ is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+ `pr` target's own head so that a round run against something other than what
+ will merge *fails* the gate instead of passing it. With no checkout to ask and a
+ `pr` target, the pull request's head is used instead; with neither, the head is
+ left off and the gate reports it as unobserved.
+ 
+ `review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+ at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+ records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+ head that is not the pull request's head still needs the first line of `report.md` to name it and
+ say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+ 
+ A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+
+--- docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json
+@@ 528,575 @@
+               "additionalProperties": true,
+               "required": [
+                 "kind",
+                 "acChecksum"
+               ],
+               "properties": {
+                 "kind": {
+                   "type": "string",
+                   "enum": [
+                     "complete"
+                   ]
+                 },
+                 "acChecksum": {
+                   "type": "string"
+                 },
+                 "target": {
+                   "type": "string",
+                   "description": "The completion target the token was minted for: `pr:<url>` or `merged`."
+                 }
+               }
++            },
++            "pressedBy": {
++              "type": "integer",
++              "description": "Flow 464: on a remote-card token, the Telegram user id that pressed the card."
++            },
++            "pressedAt": {
++              "type": "string",
++              "description": "Flow 464: on a remote-card token, the shell's clock when the press arrived."
+             }
+           }
+         }
+       }
+     },
+     "completionAttempt": {
+       "type": "object",
+       "description": "flow 291: one `flow complete` attempt, on the record — every gate it evaluated, whether the attempt passed overall, and the AC checksum in force. Never mutated once written.",
+       "additionalProperties": true,
+       "required": [
+         "at",
+         "gates",
+         "passed",
+         "acChecksum"
+       ],
+       "properties": {
+         "at": {
+           "type": "string"
+         },
+         "gates": {
+
+--- src/commands/agent.ts
+@@ 282,322 @@
+  * A bare `boolean` is the historical form and still works. The object form
+  * BINDS the answer to an action: when `fingerprint` is present it must equal the
+  * fingerprint the approver was given, otherwise the driver treats the answer as
+  * a denial. That closes the gap where "the user said yes" and "this is what
+  * runs" are two independent facts that merely happen to line up.
+  * `trustMcpTool` is accepted only for `use_tool`, in trust mode, after that
+  * fingerprint check, and never for a call under the untrusted-content floor;
+  * hosts must offer it only for catalog-resolved MCP tools.
+  */
+ export type ApprovalResponse =
+   | boolean
+   | {
+       approved: boolean;
+       fingerprint?: string;
+       trustMcpTool?: boolean;
+       /**
+        * Flow 456: the answer came from the remote topic, not this shell. A label for the record an
+        * operator-confirmed tool writes (`confirmedVia`); it never changes whether the call runs.
+        */
+       via?: "remote";
+-      /** Flow 464: the Telegram user id that pressed the button and the ISO time of the press (remote answers only). */
++      /** Flow 464: the Telegram user id that pressed the button and the ISO time on this shell's clock when the press arrived, not Telegram's time (remote answers only). */
+       pressedBy?: number;
+       pressedAt?: string;
+     };
+ 
+ /**
+  * Optional marks on an approver. Without them a `false` is a person's refusal. `attended: false` is an approver
+  * with nobody behind it (an unattended run); `current()` is false once the turn that asked has been displaced, so
+  * its `false` is a stale turn's, not an answer. Neither kind of `false` counts as the operator refusing.
+  */
+ export interface ApproverProvenance {
+   attended?: boolean;
+   current?: () => boolean;
+ }
+ 
+ /** Rendering sink for agent mode. Assistant text streams through `write`. */
+ export interface AgentIO {
+   write: (s: string) => void;
+   /**
+    * A durable-history checkpoint is needed. Emitted after every history
+    * mutation, including streamed assistant deltas, so interrupted turns are
+
+--- src/commands/operator-confirm-review.ts
+@@ 30,70 @@
+ import { createHash } from "node:crypto";
+ import { existsSync, readFileSync, statSync } from "node:fs";
+ import path from "node:path";
+ import { cardSafe } from "../lib/card-safe";
+ import { cardPressFields } from "../review/types";
+ import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
+ import { placeReviewPath } from "../lib/review-path-flags";
+ import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
+ import { readChunkPlan } from "../review/chunks";
+ import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate } from "../review/chunks-estimate";
+ import { completeReviewGated } from "../review/complete-gated";
+ import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
+ import { evidenceLevelLine } from "../review/evidence-level";
+ import { writeFileAtomic } from "../lib/fs";
+ import { resolveReviewPackagePath } from "../review/managed";
+ import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+ import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+ import type { PrLookup } from "../review/complete-head-gate";
+ import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
+ import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
+-import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
++import { readOperatorDecisions, recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+ import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
+ import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
+ 
+ /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
+ export interface ReviewConfirmSeams {
+   prLookup?: PrLookup;
+   prFiles?: (ref: string) => Promise<string[] | null>;
+   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+ }
+ 
+ const LISTED_FILES = 15;
+ const BODY_PREVIEW_LINES = 8;
+ const BODY_PREVIEW_CHARS = 140;
+ 
+ async function trackerPrLookup(ref: string): Promise<Awaited<ReturnType<PrLookup>>> {
+   if (!(await githubAdapter.detect())) return null;
+   return githubAdapter.prStatus(ref);
+ }
+ 
+ const packageSchema = { type: "string", description: "The review package: its directory or its review id." } as const;
+
+--- src/commands/operator-confirm-review.ts
+@@ 635,665 @@
+       }
+       const warnings: string[] = [];
+       await answerPremiseQuestion(
+         prepared.dir,
+         { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) },
+         { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
+       );
+       return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 10. review_complete (flow 464)
+ 
+ const COMPLETION_FILE = "completion-confirmation.json";
+ const WAIVER_QUOTE_CHARS = 300;
+ 
+ type CompletePrepared = { dir: string; head: string | undefined; digest: string };
+ 
+-type CompletionFacts = { reviewId: string; prBound: boolean; head: string | undefined; evidence: string; waivers: string[]; status: string };
++type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
+ 
+ /** What the card shows, read from the package. The same read is repeated in `apply` to see that nothing moved. */
+-function completionFacts(dir: string, headInput: string | undefined): CompletionFacts {
++async function completionFacts(dir: string): Promise<CompletionFacts> {
+   const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as {
+     reviewId?: string;
+     status?: string;
+     target?: { kind?: string; head?: unknown };
+     readiness_waivers?: Array<{ item: string; operator_quote: string }>;
+   };
+   const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
+
+--- src/commands/operator-confirm-review.ts
+@@ 686,735 @@
+     reviewId: manifest.reviewId ?? path.basename(dir),
+-    prBound: manifest.target?.kind === "pr",
+-    head: headInput ?? recorded,
++    head: recorded === undefined ? undefined : cardSafe(recorded),
+     evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
+     waivers,
+     status: manifest.status ?? "",
+   };
+ }
+ 
+ function clip(text: string): string {
+   return text.length > WAIVER_QUOTE_CHARS ? `${text.slice(0, WAIVER_QUOTE_CHARS)}…` : text;
+ }
+ 
+ const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+ 
+ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePrepared> {
+   return {
+     name: "review_complete",
+     description:
+-      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries, and says yes before the round is closed. " +
+-      "Pass the review package, and head only when the round ran against a commit other than the one recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
++      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries (readiness, coverage, mutation, reviewer override), and says yes before the round is closed. " +
++      "Pass the review package; the round closes against the head the package recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
+       "record the waivers first with review_waive_readiness or review_waive_coverage. A refused gate closes nothing.",
+     inputSchema: {
+       type: "object",
+       properties: {
+         package: packageSchema,
+-        head: { type: "string", description: "The commit this round ran against (7-40 hex characters); defaults to the head the package recorded." },
+       },
+       required: ["package"],
+       additionalProperties: false,
+     },
+     async buildCard(input, ctx): Promise<OperatorCardResult<CompletePrepared>> {
+       const ref = packageRef(input);
+       if (ref === undefined) return { refusal: "package is required" };
+-      const headInput = typeof input["head"] === "string" && input["head"].trim() !== "" ? input["head"].trim().toLowerCase() : undefined;
+-      if (headInput !== undefined && !/^[0-9a-f]{7,40}$/.test(headInput)) return { refusal: `head "${headInput}" is not a commit SHA (7-40 hex characters)` };
+       try {
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+-        const facts = completionFacts(dir, headInput);
++        const facts = await completionFacts(dir);
+         if (facts.status === "closed") return { refusal: `${facts.reviewId} is already complete` };
+-        if (headInput !== undefined && !facts.prBound) return { refusal: `head applies to a pull request package; ${facts.reviewId} does not target one` };
+         const name = label(dir, ctx.projectRoot);
+         const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
+         return {
+           title: `Complete review ${cardSafe(facts.reviewId)}${at}?`,
+           lines: [
+             facts.head === undefined
+               ? "reviewed head: not recorded (the package does not carry a commit)"
+-              : `reviewed head: ${facts.head}${headInput === undefined ? "" : " (given by the agent, replaces the recorded head)"}`,
++              : `reviewed head: ${facts.head}`,
+             facts.evidence,
+             ...(facts.waivers.length === 0 ? ["waivers: none"] : facts.waivers),
+             "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
+           ],
+           subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
+           prepared: { dir, head: facts.head, digest: factsDigest(facts) },
+
+--- src/commands/operator-confirm-review.ts
+@@ 745,750 @@
+       try {
+-        facts = completionFacts(prepared.dir, headInput);
++        facts = await completionFacts(prepared.dir);
+       } catch (error) {
+-        return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
++        return { output: `review_complete refused: ${reason(error)} — nothing was recorded`, isError: true };
+       }
+       if (factsDigest(facts) !== prepared.digest) {
+
+--- src/commands/operator-confirm-review.ts
+@@ 756,759 @@
+-        const done = await completeReviewGated(ctx.projectRoot, prepared.dir, {
++        done = await completeReviewGated(ctx.projectRoot, prepared.dir, {
+           prLookup: seams.prLookup ?? trackerPrLookup,
+           prFiles: seams.prFiles ?? githubPrFiles,
+-          ...(headInput === undefined ? {} : { head: headInput }),
+           now: new Date(confirmation.at),
+
+--- src/commands/operator-confirm-review.ts
+@@ 784,816 @@
++      const closedLine = `review ${facts.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`;
++      const problems: string[] = [];
++      if (recordError !== undefined) problems.push(`the round is closed but the confirmation record could not be written: ${reason(recordError)}`);
++      if (gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${reason(gateError)}`);
++      return {
++        output: [
++          closedLine,
++          ...problems,
++          ...(done?.readiness === undefined ? [] : [readinessLine(done.readiness)]),
++          ...(done?.warnings ?? []).map((warning) => `warning: ${warning}`),
++        ].join("\n"),
++        ...(problems.length === 0 ? {} : { isError: true }),
++      };
+     },
+   };
+ }
+ 
+ /** The specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
+ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonly OperatorConfirmSpec[] {
+   return [
+     chunksAnswerSpec(),
+     publishSpec(seams),
+     waiveCoverageSpec(),
+     waiveReadinessSpec(seams),
+     decisionSpec("mutation-waiver"),
+     decisionSpec("reviewer-override"),
+     replySpec(),
+     confirmPlanSpec(),
+     decidePremiseSpec(),
+     completeSpec(seams),
+   ] as readonly OperatorConfirmSpec[];
+ }
+ 
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 16,57 @@
+ import { computeReadiness } from "../review/readiness";
+ import { computeVerdict } from "../review/verdict";
+ import type { PostResult, ReviewEvent } from "../review/publish";
+ import { buildReviewConfirmSpecs, reviewConfirmSpecs } from "./operator-confirm-review";
+ import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NOW = new Date("2026-10-15T19:00:00.000Z");
+ const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
+ const ALLOWED_ID = 446593035;
+ const PRESSED_AT = "2026-10-15T19:00:05.000Z";
+ 
+ let root: string;
+ let pkg: string;
+ const posts: Array<{ ref: string; event: ReviewEvent; body: string }> = [];
+ 
+ const post = async (ref: string, event: ReviewEvent, body: string): Promise<PostResult> => {
+   posts.push({ ref, event, body });
+   return { ok: true, detail: "ok" };
+ };
+ 
+-function tool(name: string): InteractiveTool {
+-  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post }).find((entry) => entry.name === name);
++function tool(name: string, seams: Partial<Parameters<typeof buildReviewConfirmSpecs>[0]> = {}): InteractiveTool {
++  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post, ...seams }).find((entry) => entry.name === name);
+   if (spec === undefined) throw new Error(`no spec ${name}`);
+   return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {}, allowedUserIds: () => [ALLOWED_ID] });
+ }
+ 
+ type Asked = { card: readonly string[]; title: string; token: string };
+ 
+ /** Ask for the card. A refusal comes back as `{ error }`. */
+ async function ask(t: InteractiveTool, input: Record<string, unknown>): Promise<Asked | { error: string }> {
+   const result = await t.confirmation!(input);
+   return result as Asked | { error: string };
+ }
+ 
+ const asked = (value: Asked | { error: string }): Asked => {
+   if ("error" in value) throw new Error(`expected a card, got a refusal: ${value.error}`);
+   return value;
+ };
+ 
+ async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote", pressedBy: number = ALLOWED_ID): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
+   const card = asked(await ask(t, input));
+   const press = via === undefined ? {} : { confirmationVia: via, confirmationPressedBy: pressedBy, confirmationPressedAt: PRESSED_AT };
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 601,768 @@
+   });
+ 
+   test("the card lists every readiness waiver (item and quote) and the coverage waiver", async () => {
+     await makeRound();
+     const manifest = readJson("manifest.json");
+     manifest["readiness_waivers"] = [
+       { item: "verifier", operator_quote: "Accept failing readiness item 4 (verifier) as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
+       { item: "ledger", operator_quote: "Accept failing readiness item 7 (ledger) as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
+     ];
+     put("manifest.json", manifest);
+     const research = readJson("research.json");
+     research["dispatch"] = { ...(research["dispatch"] ?? {}), coverageWaiver: { operatorQuote: "Waive coverage of 2 files?: yes", time: NOW.toISOString(), files: ["src/a.ts", "src/b.ts"] } };
+     put("research.json", research);
+     const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+     expect(card).toContain('waiver: readiness item verifier: "Accept failing readiness item 4 (verifier) as it is?: yes"');
+     expect(card).toContain('waiver: readiness item ledger: "Accept failing readiness item 7 (ledger) as it is?: yes"');
+     expect(card).toContain('waiver: coverage, 2 file(s) not reviewed: "Waive coverage of 2 files?: yes"');
+     expect(card).not.toContain("waivers: none");
+   });
+ 
++  test("the card lists the mutation waiver and the reviewer override from operator-decisions.json, with item and quote", async () => {
++    await makeRound();
++    put("operator-decisions.json", {
++      schemaVersion: 1,
++      decisions: [
++        { kind: "mutation-waiver", quote: "Waive the mutation pass?: yes", reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1", "m2"] } },
++        { kind: "reviewer-override", quote: "Run a smaller reviewer set?: yes", reason: "small diff", confirmedVia: "remote-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] } },
++      ],
++    });
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain('waiver: mutation pass not run m1, m2: "Waive the mutation pass?: yes" (tui-card)');
++    expect(card).toContain('waiver: reviewer override, left out review-security-code: "Run a smaller reviewer set?: yes" (remote-card)');
++    expect(card).not.toContain("waivers: none");
++  });
++
++  test("an operator decision added between the card and the yes records nothing", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    const card = asked(await ask(t, { package: pkg }));
++    put("operator-decisions.json", {
++      schemaVersion: 1,
++      decisions: [{ kind: "mutation-waiver", quote: "sneaked in", reason: "x", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } }],
++    });
++    const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
++    expect(result.isError).toBe(true);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a research.json that cannot be read is shown as such, not as 'waivers: none'", async () => {
++    await makeRound();
++    writeFileSync(path.join(pkg, "research.json"), "{ not json");
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain("waiver: coverage, could not read research.json");
++    expect(card).not.toContain("waivers: none");
++  });
++
+   test("a no closes nothing", async () => {
+     await makeRound();
+     const before = read("manifest.json");
+     const t = tool("review_complete");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
+     expect(read("manifest.json")).toBe(before);
+     expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+   });
+ 
+   test("a gate that refuses shows the refusal and records nothing (a stamped report with no evidence level)", async () => {
+     await makeRound({ report: "# Round\n\nNo findings.\n" });
+     const manifest = readJson("manifest.json");
+     manifest["report_fields"] = ["evidence-level"];
+     put("manifest.json", manifest);
+     const before = read("manifest.json");
+     const result = await yes(tool("review_complete"), { package: pkg });
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("nothing was recorded");
+     expect(read("manifest.json")).toBe(before);
+     expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+   });
+ 
+   test("a waiver added between the card and the yes records nothing", async () => {
+     await makeRound();
+     const t = tool("review_complete");
+     const card = asked(await ask(t, { package: pkg }));
+     const manifest = readJson("manifest.json");
+     manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "sneaked in", time: NOW.toISOString(), confirmedVia: "tui-card" }];
+     put("manifest.json", manifest);
+     const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("changed after the card was shown");
+     expect(status()).not.toBe("closed");
+   });
+ 
+-  test("an already closed round and a head on a non-PR package are refused before a card is drawn", async () => {
++  test("the model cannot supply a head: the schema has none, and the gate runs against the recorded head", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    expect(JSON.stringify(t.definition.inputSchema)).not.toContain('"head"');
++    const card = asked(await ask(t, { package: pkg, head: "deadbeefdead" }));
++    expect(card.card.join("\n")).toContain(`reviewed head: ${HEAD}`);
++  });
++
++  test("a recorded head with a line break cannot add a line to the card", async () => {
++    await makeRound();
++    const manifest = readJson("manifest.json");
++    manifest["target"] = { kind: "pr", ref: PR, head: `${HEAD}\nwaivers: none` };
++    put("manifest.json", manifest);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
++    expect(card.every((line) => !line.includes("\n"))).toBe(true);
++    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(1);
++  });
++
++  test("an already closed round is refused before a card is drawn", async () => {
+     await makeRound();
+     await yes(tool("review_complete"), { package: pkg });
+     expect(await ask(tool("review_complete"), { package: pkg })).toEqual({ error: expect.stringContaining("already complete") });
+-    await makeRound({ id: "2026-10-15-report", target: { kind: "report", ref: "review.md" } });
+-    expect(await ask(tool("review_complete"), { package: pkg, head: HEAD.slice(0, 10) })).toEqual({ error: expect.stringContaining("pull request package") });
++  });
++
++  test("a round closed by the gate whose confirmation record cannot be written is reported as closed, not as 'nothing recorded'", async () => {
++    await makeRound();
++    mkdirSync(path.join(pkg, "completion-confirmation.json"));
++    const result = await yes(tool("review_complete"), { package: pkg });
++    expect(status()).toBe("closed");
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("the round is closed but the confirmation record could not be written");
++    expect(result.output).not.toContain("nothing was recorded");
++  });
++
++  // Flow 464 (PR 1052 C-08): the gates `keryx review complete` meets are the same ones the card meets, and a refusal records nothing.
++  describe("the card meets the same gates as the terminal command", () => {
++    const refuses = async (t: InteractiveTool, text: string): Promise<void> => {
++      const before = read("manifest.json");
++      const result = await yes(t, { package: pkg });
++      expect(result.isError).toBe(true);
++      expect(result.output).toContain(text);
++      expect(result.output).toContain("nothing was recorded");
++      expect(read("manifest.json")).toBe(before);
++      expect(status()).not.toBe("closed");
++      expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++    };
++
++    test("a merged pull request is refused", async () => {
++      await makeRound();
++      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "MERGED", headSha: HEAD }) }), "merged");
++    });
++
++    test("a head that moved is refused", async () => {
++      await makeRound();
++      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "OPEN", headSha: "f".repeat(40) }) }), "fffffff");
++    });
++
++    test("a held finding the operator has not answered is refused (the premise rule, never waived through this card)", async () => {
++      await makeRound();
++      put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
++      await refuses(tool("review_complete"), "premise-decisions");
++    });
++
++    test("a package stamped with the operator gate and no run-profile.json is refused", async () => {
++      await makeRound();
++      put("manifest.json", { ...readJson("manifest.json"), operatorGate: 1 });
++      await refuses(tool("review_complete"), "run-profile.json");
++    });
++
++    test("a slice the manifest routes narrower than its content needs is refused", async () => {
++      await makeRound();
++      put("slices/manifest.json", { slices: [{ id: "s1", path: "s1.diff", roles: [], depth: "light" }] });
++      put("slices/s1.diff", "diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n+import { spawn } from \"node:child_process\";\n+spawn(process.argv[2]);\n");
++      await refuses(tool("review_complete"), "slices/manifest.json");
++    });
+   });
+ });
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 325,382 @@
+     const confirmation = await gate.tool.confirmation!({ to });
+     if ("error" in confirmation) throw new Error(confirmation.error);
+     return confirmation.token!;
+   };
+ 
+   test("an allowed id, this question's token, unused, inside the hour is accepted", async () => {
+     const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+     const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
+     expect(result.isError).toBe(false);
+     expect(gate.applied).toHaveLength(1);
+   });
+ 
+   test("an id that is not allowed is refused, says why, and changes nothing", async () => {
+     const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+     const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate), { pressedBy: 777 }));
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("Telegram user 777 is not on the allowed list — nothing was changed");
+     expect(gate.applied).toEqual([]);
+   });
+ 
++  test("with no allowed-id list to check (the provider returns undefined) a remote answer is refused and the token is spent", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => undefined });
++    const token = await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).output).toContain("no operator-confirmed card");
++  });
++
++  test("with no allowed-id provider bound at all a remote answer is refused", async () => {
++    const gate = testGate({ ceiling: 25 });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++
+   test("another question's token is refused, changes nothing, and is spent", async () => {
+     const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+     const token = await issue(gate, 31);
+     const result = await gate.tool.invoke({ to: 99 }, remote(token));
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
+     expect(gate.applied).toEqual([]);
+     expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
+   });
+ 
+   test("a replay of a used token is refused", async () => {
+     const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+     const token = await issue(gate);
+     expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
+     const replay = await gate.tool.invoke({ to: 31 }, remote(token));
+     expect(replay.isError).toBe(true);
+     expect(replay.output).toContain("nothing was changed");
+     expect(gate.applied).toHaveLength(1);
+   });
+ 
+
+--- src/commands/shell.test.ts
+@@ 860,900 @@
+     "graph_path",
+     "graph_query",
+     "graph_symbol",
+     "health_status",
+     // Flow 393: working-memory recall (read-only) and the Notes writer.
+     "history_search",
+     "learn_accept",
+     "learn_graduate",
+     "learn_promote",
+     "list_dir",
+     "memory_search",
+     "plan_get",
+     "plan_set",
+     "plan_update",
+     "read_file",
+     "read_wiki",
+     "recall_step",
+     "repomap",
+     "review_chunks_answer",
+     "review_comments_reply",
++    "review_complete",
+     "review_confirm_plan",
+     "review_decide_premise",
+     "review_override_reviewers",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_mutation",
+     "review_waive_readiness",
+     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
+     // the card; schedule_list is read-only. TUI roster only.
+     "schedule_create",
+     "schedule_list",
+     "schedule_pause",
+     "schedule_remove",
+     "schedule_resume",
+     "schedule_run",
+     "search_code",
+     // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
+     // servers the operator has connected — if a qualified name like
+     // `linear__create_issue` ever appears in this list, the package's whole
+     // premise has been reversed.
+
+--- src/flow/confirm-token.test.ts
+@@ 468,510 @@
+   await expect(
+     service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: "pr:https://github.com/acme/app/pull/999" } }),
+   ).rejects.toThrow(/completion target changed after the confirmation card/);
+   await expect(readFile(confirmTokenPath(ROOT, dir), "utf8")).rejects.toThrow();
+   const ok = await service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: `pr:${PR}` } });
+   expect(ok.token.length).toBeGreaterThan(0);
+ });
+ 
+ test("456: a card-minted token is spent with a card mechanism in the signature", async () => {
+   const service = await fresh();
+   const { id, dir } = await readyFlow(service);
+   const minted = await service.confirmMint({ cwd: ROOT, id, confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes" } });
+   clock = new Date(clock.getTime() + 60_000);
+   const result = await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+   expect(result.passed).toBe(true);
+   const flow = await onDisk(dir);
+   expect(flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation?.mechanism).toBe("remote-card-token");
+   expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
+ });
+ 
++test("464: a remote-card token carries who pressed the card and when into the signature", async () => {
++  const service = await fresh();
++  const { id, dir } = await readyFlow(service);
++  const minted = await service.confirmMint({
++    cwd: ROOT,
++    id,
++    confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" },
++  });
++  clock = new Date(clock.getTime() + 60_000);
++  await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
++  const flow = await onDisk(dir);
++  const confirmation = flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation;
++  expect(confirmation).toMatchObject({ mechanism: "remote-card-token", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" });
++  expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
++});
++
+ test("456: the refusal text names the flow_confirm tool in keryx shell and the terminal outside it", () => {
+   for (const reason of ["token_required", "token_not_minted", "token_expired", "token_target_mismatch"] as const) {
+     const text = describeConfirmationFailure(reason, "42");
+     expect(text).toContain("`flow_confirm` tool inside keryx shell");
+     expect(text).toContain("from a terminal outside it: `keryx flow confirm 42`");
+   }
+ });
+
+--- src/flow/confirm-token.ts
+@@ 55,95 @@
+   flowId: string;
+   kind: "complete";
+   acChecksum: string;
+   /**
+    * The completion target the operator was shown when minting (security
+    * review of PR #661): `pr:<url>` for a pull-request completion, `merged` for
+    * a direct-merge one. `flow complete` refuses a token spent on any other
+    * target, so a token minted while looking at pull/1 cannot close pull/999.
+    */
+   target: string;
+   mintedAt: string;
+   expiresAt: string;
+   usedAt?: string | undefined;
+   /**
+    * Flow 456: how the operator's yes arrived when it was not the terminal challenge — `tui-card`
+    * for the shell's yes/no card — and the card text that answer was given to. Absent on a token
+    * minted by `keryx flow confirm` in a terminal, and on every token minted before flow 456.
+    */
+   confirmedVia?: string | undefined;
+   confirmationQuote?: string | undefined;
+-  /** Flow 464: the Telegram user id that pressed the remote card and the time of the press. */
++  /** Flow 464: the Telegram user id that pressed the remote card and the shell's clock when the press arrived. */
+   pressedBy?: number | undefined;
+   pressedAt?: string | undefined;
+ };
+ 
+ export type ConfirmationTokenFailure =
+   | "token_required"
+   | "token_not_minted"
+   | "token_unreadable"
+   | "token_mismatch"
+   | "token_expired"
+   | "token_used"
+   | "token_other_flow"
+   | "token_stale_criteria"
+   | "token_target_mismatch";
+ 
+ export type ConfirmationTokenCheck =
+   | { ok: true; stored: StoredConfirmationToken }
+   | { ok: false; reason: ConfirmationTokenFailure };
+ 
+ export function confirmTokenPath(cwd: string, dir: string): string {
+
+--- src/flow/confirm-token.ts
+@@ 215,256 @@
+ export async function consumeConfirmationToken(
+   cwd: string,
+   dir: string,
+   stored: StoredConfirmationToken,
+   now: Date,
+ ): Promise<SignatureConfirmation> {
+   const consumedAt = now.toISOString();
+   await writeFileAtomic(
+     confirmTokenPath(cwd, dir),
+     `${JSON.stringify({ ...stored, usedAt: consumedAt }, null, 2)}\n`,
+   );
+   // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token".
+   const mechanism: SignatureConfirmation["mechanism"] =
+     stored.confirmedVia === "tui-card" ? "tui-card-token" : stored.confirmedVia === "remote-card" ? "remote-card-token" : "terminal-token";
+   return {
+     mechanism,
+     tokenRef: stored.tokenRef,
+     mintedAt: stored.mintedAt,
+     consumedAt,
+     boundTo: { kind: stored.kind, acChecksum: stored.acChecksum, target: stored.target },
++    ...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),
++    ...(stored.pressedAt !== undefined ? { pressedAt: stored.pressedAt } : {}),
+   };
+ }
+ 
+ /** One operator-facing sentence per refusal. Never echoes the token. */
+ export function describeConfirmationFailure(reason: ConfirmationTokenFailure, flowId: string): string {
+   const mint =
+     "mint one with the `flow_confirm` tool inside keryx shell (the operator presses yes on a card), " +
+     `or from a terminal outside it: \`keryx flow confirm ${flowId}\``;
+   switch (reason) {
+     case "token_required":
+       return `this flow requires a confirmation token, passed as --confirm-token; ${mint}`;
+     case "token_not_minted":
+       return `no confirmation token was minted for this flow; ${mint}`;
+     case "token_unreadable":
+       return `the confirmation token store could not be read; ${mint}`;
+     case "token_mismatch":
+       return `the confirmation token does not match the one minted for this flow (only the latest mint is valid); ${mint}`;
+     case "token_expired":
+       return `the confirmation token expired; ${mint}`;
+     case "token_used":
+
+--- src/flow/schema.ts
+@@ 311,352 @@
+             additionalProperties: true,
+             required: ["mechanism", "tokenRef", "mintedAt", "consumedAt", "boundTo"],
+             properties: {
+               mechanism: { type: "string", enum: ["terminal-token", "tui-card-token", "remote-card-token"] },
+               tokenRef: { type: "string", description: "A prefix of the stored token hash. Never the token." },
+               mintedAt: { type: "string" },
+               consumedAt: { type: "string" },
+               boundTo: {
+                 type: "object",
+                 additionalProperties: true,
+                 required: ["kind", "acChecksum"],
+                 properties: {
+                   kind: { type: "string", enum: ["complete"] },
+                   acChecksum: { type: "string" },
+                   target: {
+                     type: "string",
+                     description: "The completion target the token was minted for: `pr:<url>` or `merged`.",
+                   },
+                 },
+               },
++              pressedBy: { type: "integer", description: "Flow 464: on a remote-card token, the Telegram user id that pressed the card." },
++              pressedAt: { type: "string", description: "Flow 464: on a remote-card token, the shell's clock when the press arrived." },
+             },
+           },
+         },
+       },
+       completionAttempt: {
+         type: "object",
+         description:
+           "flow 291: one `flow complete` attempt, on the record — every gate it evaluated, whether the attempt passed overall, and the AC checksum in force. Never mutated once written.",
+         additionalProperties: true,
+         required: ["at", "gates", "passed", "acChecksum"],
+         properties: {
+           at: { type: "string" },
+           gates: {
+             type: "array",
+             items: { $ref: "#/definitions/gateOutcome" },
+           },
+           passed: { type: "boolean" },
+           acChecksum: {
+             type: ["string", "null"],
+             description: "The acceptance-criteria checksum in force when this attempt ran.",
+
+--- src/flow/types.ts
+@@ 167,209 @@
+ };
+ 
+ /**
+  * What a confirmation token recorded when it was spent on a completion
+  * (flow 299, AC3). This is a record of a mechanism, not an identity: it says
+  * an interactive confirmation step ran within the token's TTL for exactly
+  * this AC checksum. It does not say who ran that step (see TM-03).
+  */
+ export type SignatureConfirmation = {
+   mechanism: "terminal-token" | "tui-card-token" | "remote-card-token";
+   /** A prefix of the stored hash, for correlation. Never the token. */
+   tokenRef: string;
+   mintedAt: string;
+   consumedAt: string;
+   /**
+    * `target` (security review of PR #661): `pr:<url>` or `merged`, the
+    * completion the operator was shown. Optional in the type so a signature
+    * written before it existed still reads.
+    */
+   boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
++  /** Flow 464: for a remote-card token, the Telegram user id that pressed the card and the shell's clock when the press arrived. */
++  pressedBy?: number | undefined;
++  pressedAt?: string | undefined;
+ };
+ 
+ /**
+  * One append-only signature (flow 289, AC4): who signed, when, and exactly
+  * what they signed. Pushed onto `FlowState.signatures`, never mutated once
+  * written — a repeated `ac confirm`/`complete` records a NEW entry rather
+  * than replacing the last one, so the full signing history survives even
+  * when (e.g.) an AC is reconfirmed.
+  */
+ export type FlowSignature = {
+   at: string;
+   kind: "ac-confirm" | "complete";
+   identity: Identity;
+   /** The AC id this signs. Present only for `kind: "ac-confirm"`. */
+   criterion?: string | undefined;
+   /**
+    * The acceptance-criteria checksum in force at signing time. Null when the
+    * criteria were not frozen yet (mirrors `FlowState.acChecksum`).
+    */
+   acChecksum: string | null;
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 649,689 @@
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+ `keryx review readiness <review-id-or-path> [--json]` reads the package and prints every readiness item, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+ 4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+ 7. `head` — the report's head is the PR head.
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+-`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic) or run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
++`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic). An agent completes a review only through that card; `keryx review complete` is for a human in a terminal. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+ A fix round that reports only new findings is unreadable: the author cannot tell
+ which of their fixes landed. Close the loop explicitly — one line per prior
+ finding, in the report, before the new findings:
+ 
+ | Disposition | Meaning |
+ |---|---|
+ | `closed` | Checked against the code, not against the commit message, and the defect is gone |
+ | `open` | The fix does not reach the defect; say what is still true |
+ | `partial` | One site of the class was fixed and the enumeration named others |
+ | `regressed` | The fix removed this defect and introduced another — file the new one separately |
+ | `withdrawn` | The finding was wrong. See below |
+ 
+ **Check the code, not the commit message.** A commit titled *"report an abandoned
+ sync as abandoned"* is a claim; the disposition is whether the branch it renamed
+ is reachable and pinned. On a recorded round, two such commits asserted behaviour
+
+--- src/review/completion-gate.ts
+@@ 736,781 @@
+ /**
+  * True when the transcript shows the review skill was loaded or a `keryx review` command was executed in this session:
+  * the same definition the session tracker keeps (`SessionReviewNames.runSeen`), any subcommand — `status` and `attach`
+  * continue a review as much as `start` does.
+  */
+ export function reviewRunSeenInHistory(history: ReadonlyArray<HistoryMessage>): boolean {
+   return new SessionReviewTracker(process.cwd()).update(history).runSeen === true;
+ }
+ 
+ /** The earliest message timestamp in the transcript: packages closed before it are not this run's. */
+ export function sessionStartedAt(history: ReadonlyArray<{ ts?: string | undefined }>): number {
+   for (const message of history) {
+     const at = message.ts === undefined ? Number.NaN : Date.parse(message.ts);
+     if (!Number.isNaN(at)) return at;
+   }
+   return Date.now();
+ }
+ 
+ function nextStep(open: OpenManagedReview): string {
+   if (open.packageDir === "") {
+-    return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
++    return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
+   }
+   if (open.blockers.some((b) => /research|dispatch/.test(b))) {
+-    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
++    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
+   }
+-  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then `keryx review complete`.";
++  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
+ }
+ 
+ export type ReviewGateInput = {
+   open: OpenManagedReview | null;
+   runSeen: boolean;
+   continues: number;
+   stalls: number;
+   lastSignature: string | undefined;
+ };
+ 
+ export type ReviewGateDecision =
+   | { action: "accept" }
+   | { action: "continue"; message: string; stalls: number; signature: string }
+   | { action: "stop"; report: string };
+ 
+ const MAX_NUDGE_BLOCKERS = 20;
+ const MAX_NUDGE_BLOCKER_CHARS = 300;
+ 
+ /** One blocker as one bounded line: line breaks and control characters carried in from package text are flattened. */
+ function nudgeLine(blocker: string): string {
+
+--- src/review/completion-gate.ts
+@@ 784,821 @@
+   return flat.length > MAX_NUDGE_BLOCKER_CHARS ? `${flat.slice(0, MAX_NUDGE_BLOCKER_CHARS)}…` : flat;
+ }
+ 
+ export function describeBlockers(open: OpenManagedReview): string {
+   if (open.blockers.length === 0) return "- none listed; run `keryx review complete` to close the package";
+   const shown = open.blockers.slice(0, MAX_NUDGE_BLOCKERS).map((b) => `- ${nudgeLine(b)}`);
+   const more = open.blockers.length - shown.length;
+   return [...shown, ...(more > 0 ? [`- … and ${more} more (\`keryx review complete\` lists them all)`] : [])].join("\n");
+ }
+ 
+ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
+   const { open } = input;
+   if (open === null || !input.runSeen) return { action: "accept" };
+   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
+   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
+     return {
+       action: "stop",
+       report:
+         `Review ${open.reviewId} is not complete after ${input.continues} continue(s)` +
+         `${stalls >= MAX_REVIEW_GATE_STALLS ? " and no new artifact in the last " + stalls : ""}. ` +
+-        `\`keryx review complete\` still refuses on:\n${describeBlockers(open)}`,
++        `The review_complete card would still be refused on:\n${describeBlockers(open)}`,
+     };
+   }
+   return {
+     action: "continue",
+     stalls,
+     signature: open.signature,
+     message:
+-      `The managed review ${open.reviewId} is not finished: it is finished when \`keryx review complete\` accepts the package, not when you stop writing. ` +
++      `The managed review ${open.reviewId} is not finished: it is finished when the package is closed (the operator answers the \`review_complete\` card and its gates pass), not when you stop writing. ` +
+       `It still refuses on:\n${describeBlockers(open)}\n` +
+       `${nextStep(open)}\n` +
+       "Do the next missing step now. Step 1 (Build Review Context Pack) has no CLI command; it is a prose step, so mark it done and move on. " +
+       "A command that is refused is not a blocker: run `keryx review --help` for the accepted usage and retry with the right flags. " +
+       "A plan item you marked blocked for such a reason is not blocked: mark it in_progress. " +
+       "A tool loop guard or an empty child result is not a reason to ask the operator to resend the request or to continue: change the arguments, retry the failed pass on a smaller slice, and keep going. " +
+-      "Stop only after `review complete` succeeds, or report the one real blocker with its evidence.",
++      "Stop only after the `review_complete` card has closed the package, or report the one real blocker with its evidence.",
+   };
+ }
+
+--- src/review/types.ts
+@@ 71,111 @@
+   head?: string | undefined;
+ };
+ 
+ export type ManagedReviewFlowRef = {
+   id: string;
+   path: string;
+   issueUrl?: string | undefined;
+   prUrl?: string | undefined;
+ };
+ 
+ export type ReviewCoverageEntry = {
+   reviewer: string;
+   status: ReviewCoverageStatus;
+   reason: string;
+ };
+ 
+ /** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
+ /** How an operator decision was taken: the shell's yes/no card, or the remote topic's mirror of it. Absent on a terminal answer and on older records. */
+ export type ConfirmedVia = "tui-card" | "remote-card";
+ 
+-/** Flow 464: the Telegram user id that pressed a remote card and the ISO time of the press. Set only with `confirmedVia: "remote-card"`. */
++/** Flow 464: the Telegram user id that pressed a remote card and the ISO time on the shell's clock when the press arrived (not Telegram's time). Set only with `confirmedVia: "remote-card"`. */
+ export type CardPress = { pressedBy?: number | undefined; pressedAt?: string | undefined };
+ 
+ /** The press fields of `source` that are set, ready to spread into a record. */
+ export function cardPressFields(source: CardPress | undefined): CardPress {
+   return {
+     ...(source?.pressedBy === undefined ? {} : { pressedBy: source.pressedBy }),
+     ...(source?.pressedAt === undefined ? {} : { pressedAt: source.pressedAt }),
+   };
+ }
+ 
+ export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+ 
+ export type ManagedReviewManifest = {
+   schemaVersion: 1;
+   reviewId: string;
+   mode: ManagedReviewMode;
+   status: ReviewPackageStatus;
+   target: ManagedReviewTarget;
+   flow?: ManagedReviewFlowRef | undefined;
+   artifacts: {
+
+--- src/tui/operator-confirmations.test.ts
+@@ 1,86 @@
+ // Flow 464 (AC6): the Telegram review cards show where the operator already looks — the Remote sidebar row, the
+ // /remote-control status tab and the /decisions modal — with the age and the time left of the 1-hour token while a
+ // card waits, and who pressed once it is answered. The help modal and the slash command list name the card tools.
+ 
++import { readFileSync } from "node:fs";
++import path from "node:path";
+ import { expect, test } from "bun:test";
+ import { commandsForMode } from "../commands/agent-commands";
+ import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
+ import { HELP_GROUPS } from "../standard/help-groups";
+ import { presentDecisions, withConfirmationLines } from "./decisions-surface";
+ import { OperatorConfirmationLog, answeredConfirmationLine, confirmationLines, pendingConfirmationLine, waitingCardsText } from "./operator-confirmations";
+ import { formatRemoteStatusLines, projectRemoteRow } from "./remote-control-surface";
+ import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
+ 
+ const T0 = Date.UTC(2026, 9, 18, 12, 0, 0);
+ const CARD_TOOLS = ["review_confirm_plan", "review_decide_premise", "review_waive_readiness", "review_waive_coverage", "review_complete"];
+ 
+ function logAt(clock: { now: number }): OperatorConfirmationLog {
+   return new OperatorConfirmationLog(() => clock.now);
+ }
+ 
+ test("a waiting card shows its question, its age and the time left of the 1-hour token", () => {
+   const clock = { now: T0 };
+   const log = logAt(clock);
+   log.ask("Complete review 2026-10-18-x?", true);
+   clock.now = T0 + 3 * 60_000;
+   const [entry] = log.entries();
+   expect(pendingConfirmationLine(entry!, clock.now)).toBe("Complete review 2026-10-18-x? · asked 3m ago · 57m left of the 1-hour token");
+ });
+ 
+ test("a card past the token says it expired", () => {
+   const log = logAt({ now: T0 });
+   log.ask("Confirm the plan?", true);
+   const [entry] = log.entries();
+-  expect(pendingConfirmationLine(entry!, T0 + REMOTE_CARD_TTL_MS + 1000)).toContain("token expired, ask again");
++  expect(pendingConfirmationLine(entry!, T0 + REMOTE_CARD_TTL_MS + 1000)).toContain("Telegram token expired, answer in the shell");
++});
++
++test("a card past the token no longer counts as waiting in the topic", () => {
++  const clock = { now: T0 };
++  const log = logAt(clock);
++  log.ask("Confirm the plan?", true);
++  clock.now = T0 + REMOTE_CARD_TTL_MS;
++  expect(log.waiting()).toHaveLength(1);
++  clock.now = T0 + REMOTE_CARD_TTL_MS + 1;
++  expect(log.waiting()).toHaveLength(0);
++  expect(log.entries()).toHaveLength(1);
++});
++
++test("a card logged as mirrored that the topic never took is marked undelivered and stops waiting there", () => {
++  const log = logAt({ now: T0 });
++  let changes = 0;
++  const id = log.ask("Confirm the plan?", true);
++  log.subscribe(() => {
++    changes += 1;
++  });
++  expect(log.waiting()).toHaveLength(1);
++  log.markUndelivered(id);
++  expect(log.waiting()).toHaveLength(0);
++  expect(pendingConfirmationLine(log.entries()[0]!, T0)).toContain("Telegram mirror not delivered, answer in the shell");
++  expect(changes).toBe(1);
++  log.markUndelivered(id);
++  expect(changes).toBe(1);
++  log.answer(id, { place: "shell", yes: true });
++  log.markUndelivered(id);
++  expect(log.entries()[0]!.answered?.place).toBe("shell");
+ });
+ 
+ test("a card whose mirror was not delivered says it must be answered in the shell", () => {
+   const log = logAt({ now: T0 });
+   log.ask("Confirm the plan?", false);
+   const [entry] = log.entries();
+   expect(pendingConfirmationLine(entry!, T0)).toContain("Telegram mirror not delivered, answer in the shell");
+   expect(log.waiting()).toHaveLength(0);
+ });
+ 
+ test("an answered card shows who pressed it", () => {
+   const clock = { now: T0 };
+   const log = logAt(clock);
+   const id = log.ask("Complete review X?", true);
+   clock.now = T0 + 11_000;
+   log.answer(id, { place: "telegram", yes: true, pressedBy: 9 });
+   const [entry] = log.entries();
+   expect(answeredConfirmationLine(entry!)).toBe("Complete review X? · yes · pressed by Telegram user 9 at 12:00:11");
+   expect(log.waiting()).toHaveLength(0);
+ });
+
+--- src/tui/operator-confirmations.test.ts
+@@ 158,186 @@
+   const open = ((_otui: unknown, _chrome: unknown, input: { renderTab?: (id: string, body: unknown, ctx?: unknown) => void }) => {
+     input.renderTab?.("report", { add: () => undefined }, undefined);
+     return { close: () => undefined };
+   }) as never;
+   expect(presentDecisions(open, { TextRenderable: FakeText }, {}, { text, visibleRows: 40 })).toBeDefined();
+   expect(painted).toContain("By stage:");
+   expect(painted).toContain("Operator confirmations (Telegram cards)");
+   expect(painted).toContain("pressed by Telegram user 7");
+ });
+ 
+ test("the help modal and the command list name the card tools", () => {
+   const help = HELP_GROUPS.filter((entry) => entry.name === "/remote-control" || entry.name === "/decisions");
+   expect(help).toHaveLength(2);
+   const commands = commandsForMode("agent").filter((command) => command.name === "/remote-control" || command.name === "/decisions");
+   expect(commands).toHaveLength(2);
+   for (const tool of CARD_TOOLS) {
+     for (const entry of help) expect(entry.summary).toContain(tool);
+     for (const command of commands) expect(command.description).toContain(tool);
+   }
+ });
++
++// The mirror wrapper lives inside the shell's closure, so its wiring is pinned by source (as remote-queue-wiring.test.ts does).
++test("the shell settles a card's log entry on every exit and tells the log when the topic never took it", () => {
++  const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
++  const mirror = source.slice(source.indexOf("const mirrorApprovalToTopic ="), source.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic"));
++  expect(mirror).toContain("operatorCards.markUndelivered(cardId)");
++  expect(mirror.match(/\} finally \{/g)).toHaveLength(2);
++  expect(mirror).toContain('outcome === undefined) operatorCards.answer(cardId, { place: "withdrawn"');
++});
+
+--- src/tui/operator-confirmations.ts
+@@ 40,92 @@
+     this.changed();
+     return id;
+   }
+ 
+   /** The card was answered (or withdrawn, when the turn stopped). */
+   answer(id: number, result: { place: CardAnswerPlace; yes: boolean; pressedBy?: number }): void {
+     const at = this.items.findIndex((item) => item.id === id);
+     const entry = this.items[at];
+     if (entry === undefined || entry.answered !== undefined) return;
+     this.items[at] = {
+       ...entry,
+       answered: { place: result.place, yes: result.yes, at: this.now(), ...(result.pressedBy === undefined ? {} : { pressedBy: result.pressedBy }) },
+     };
+     const answered = this.items.filter((item) => item.answered !== undefined);
+     for (const old of answered.slice(0, Math.max(0, answered.length - ANSWERED_CARDS_KEPT))) {
+       this.items.splice(this.items.indexOf(old), 1);
+     }
+     this.changed();
+   }
+ 
+-  /** Cards waiting for a press in the topic: mirrored and not yet answered. */
++  /** The topic leg did not deliver a card that was logged as mirrored: it no longer waits for a press there. */
++  markUndelivered(id: number): void {
++    const at = this.items.findIndex((item) => item.id === id);
++    const entry = this.items[at];
++    if (entry === undefined || entry.answered !== undefined || !entry.mirrored) return;
++    this.items[at] = { ...entry, mirrored: false };
++    this.changed();
++  }
++
++  /** Cards waiting for a press in the topic: mirrored, not yet answered and inside the 1-hour token. */
+   waiting(): readonly ConfirmationEntry[] {
+-    return this.items.filter((item) => item.answered === undefined && item.mirrored);
++    const now = this.now();
++    return this.items.filter((item) => item.answered === undefined && item.mirrored && now - item.askedAt <= REMOTE_CARD_TTL_MS);
+   }
+ 
+   /** Every card the view holds, waiting first (oldest first), then the answered ones (newest first). */
+   entries(): readonly ConfirmationEntry[] {
+     const open = this.items.filter((item) => item.answered === undefined);
+     const done = this.items.filter((item) => item.answered !== undefined).reverse();
+     return [...open, ...done];
+   }
+ 
+   subscribe(listener: () => void): () => void {
+     this.listeners.add(listener);
+     return () => {
+       this.listeners.delete(listener);
+     };
+   }
+ 
+   private changed(): void {
+     for (const listener of [...this.listeners]) listener();
+   }
+ }
+
+--- src/tui/operator-confirmations.ts
+@@ 95,135 @@
+   const seconds = Math.max(0, Math.round(ms / 1000));
+   if (seconds < 60) return `${seconds}s`;
+   const minutes = Math.floor(seconds / 60);
+   if (minutes < 60) return `${minutes}m`;
+   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
+ }
+ 
+ function clock(at: number): string {
+   return new Date(at).toISOString().slice(11, 19);
+ }
+ 
+ function clip(text: string, max: number): string {
+   const flat = text.replace(/\s+/g, " ").trim();
+   return flat.length <= max ? flat : `${flat.slice(0, Math.max(0, max - 1))}…`;
+ }
+ 
+ /** `Complete review X? · asked 3m ago · 57m left of the 1-hour token`. */
+ export function pendingConfirmationLine(entry: ConfirmationEntry, now: number): string {
+   const elapsed = now - entry.askedAt;
+   const left = REMOTE_CARD_TTL_MS - elapsed;
+-  const token = left > 0 ? `${age(left)} left of the 1-hour token` : "token expired, ask again";
++  const token = left > 0 ? `${age(left)} left of the 1-hour token` : "Telegram token expired, answer in the shell";
+   const where = entry.mirrored ? "" : " · Telegram mirror not delivered, answer in the shell";
+   return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;
+ }
+ 
+ /** `Complete review X? · yes · pressed by Telegram user 9 at 12:03:11`. */
+ export function answeredConfirmationLine(entry: ConfirmationEntry): string {
+   const done = entry.answered;
+   if (done === undefined) return clip(entry.question, 80);
+   const verdict = done.yes ? "yes" : "no";
+   if (done.place === "telegram") {
+     const who = done.pressedBy === undefined ? "a Telegram user" : `Telegram user ${done.pressedBy}`;
+     return `${clip(entry.question, 80)} · ${verdict} · pressed by ${who} at ${clock(done.at)}`;
+   }
+   if (done.place === "withdrawn") return `${clip(entry.question, 80)} · withdrawn (the turn stopped) at ${clock(done.at)}`;
+   return `${clip(entry.question, 80)} · ${verdict} · answered in the shell at ${clock(done.at)}`;
+ }
+ 
+ /**
+  * The lines the surfaces print. No cards, no lines: a surface with nothing to say stays quiet. `heading` is the
+  * section title; each card is one line.
+
+--- src/tui/tui-shell.ts
+@@ 72,112 @@
+ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+ import { estimateRequestTokens } from "../harness/provider/context-guard";
+ import packageJson from "../../package.json" with { type: "json" };
+ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+ import { isProductCommand, openProduct } from "./product-open-surface";
+ import { loadReviewDepth } from "./review-panel";
+ import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, mountReviewsPanel, openReviews, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewsPanelHandle } from "./reviews-inspector";
+ import { permissionsSlashText } from "../commands/permissions-command";
+ import {
+   loadPosture,
+   postureLines,
+   postureSidebarText,
+   REMOTE_POLICY_COMMAND,
+   remotePolicyText,
+   type RemotePolicyDeps,
+ } from "../commands/remote-policy-command";
+ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+ import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
+ import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+ import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
+-import { type DockRace, raceApproval } from "./approval-mirror";
++import { type ApprovalRaceOutcome, type DockRace, raceApproval } from "./approval-mirror";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+ import type { CommandOutcome } from "../remote/command-router";
+ import { ChannelsClient } from "../remote/channels-client";
+ import {
+   type ChannelsPanelHandle,
+   isChannelsCommand,
+   loadChannelsSnapshot,
+   mountChannelsPanel,
+   openChannels,
+   parseChannelsArgs,
+ } from "./channels-surface";
+ import {
+   HISTORY_COMMAND,
+   isHistoryCommand,
+   isRemoteControlCommand,
+   commandEchoText,
+   labelTelegramLine,
+   mountRemotePanel,
+   openRemoteControl,
+
+--- src/tui/tui-shell.ts
+@@ 582,606 @@
+  * block). Takes a narrow structural type — mirroring `InteractiveTool`'s
+  * `definition.risk`/`definition.name` (`../commands/agent.ts`,
+  * `../harness/tool/builtin/interactive-tools.ts`) — so this module stays free
+  * of importing those types just for this one check.
+  */
+-/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the press time. */
+-function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
+-  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
+-}
+-
+ export function isToolAvailableToSideWorker(tool: { definition: { risk?: string; name: string } }): boolean {
+   return tool.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(tool.definition.name);
+ }
+ 
+ /** Parse a GitHub remote URL into `owner/repo` (if possible). */
+ function parseGitHubRemote(remote: string): string | undefined {
+   const trimmed = remote.trim();
+   if (trimmed.length === 0) {
+     return undefined;
+   }
+   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+     try {
+       const url = new URL(trimmed);
+       if (url.hostname !== "github.com") {
+         return undefined;
+       }
+       const [owner, repo] = url.pathname.split("/").filter(Boolean);
+       if (!owner || !repo) {
+         return undefined;
+       }
+
+--- src/tui/tui-shell.ts
+@@ 6139,6166 @@
+-            operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
++            if (outcome === undefined) operatorCards.answer(cardId, { place: "withdrawn", yes: false });
++            else if (outcome.from === "dock") operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
++            else operatorCards.answer(cardId, { place: "telegram", yes: outcome.answer.decision === "allow", ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
+           }
+-          return outcome.result;
+         }
++        if (outcome.from === "dock") return outcome.result;
+         const allowed = outcome.answer.decision === "allow";
+-        if (cardId !== undefined) operatorCards.answer(cardId, { place: "telegram", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
+         input.focus();
+         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
+         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
+         if (!allowed) return false;
+         // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
+         return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;
+       };
+     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
+ 
+     /** Host for ask_user — Claude-style options docked above the composer. */
+     const askUserInteractive = async (req: {
+       question: string;
+       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
+     }): Promise<AskUserAnswer> => {
+       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+       setMainAgent("blocked", "ask");
+       setBusyPhase("waiting for your answer (menu above input)");
+       // Keep a short transcript breadcrumb; the interactive picker is at the input.
+       const qShort = req.question.length > 100 ? `${req.question.slice(0, 97)}…` : req.question;
+       transcript.add(
+

@@ -1,0 +1,11 @@
+# keryx review verify-run
+finding: E-05
+command: sh -c grep -n 'operatorConfirm' src/commands/shell.ts; sed -n '4712,4730p' src/commands/shell.ts | grep -q operatorConfirm
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:22.640Z
+exit: 1
+
+--- stdout ---
+4221:            operatorConfirm: {
+--- stderr ---
+

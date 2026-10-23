@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "src/commands/operator-confirm-review-tools.test.ts",
+    "src/commands/operator-confirm-review.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/commands/operator-confirm-review.ts",
+      "path": [
+        "src/commands/operator-confirm-tools.ts",
+        "src/commands/operator-confirm-review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/operator-confirm-review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildReviewConfirmSpecs} of src/commands/operator-confirm-review.ts (hop 1, from src/commands/operator-confirm-review.ts): run it, it is not read"
+    }
+  ],
+  "unresolved": [],
+  "counts": {
+    "changedFilesSeen": 2,
+    "changedFilesResolved": 2,
+    "changedFilesUnresolved": 0,
+    "candidates": 2,
+    "retained": 1,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 0,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 1,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 1
+    }
+  },
+  "graph": {
+    "nodes": 3267,
+    "edges": 11703
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "names": [
+          "buildReviewConfirmSpecs",
+          "reviewConfirmSpecs"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: buildReviewConfirmSpecs, reviewConfirmSpecs"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildReviewConfirmSpecs"
+      ],
+      "via": "src/commands/operator-confirm-review.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

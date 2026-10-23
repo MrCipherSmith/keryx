@@ -1,0 +1,108 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review (round r04, fix slice slice-01)
+
+Scope: PR 1052, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, delta 6f47bf35f..b1c6da0e6. Slice read: slice-01 (docs/docs/guides/autonomous-review.md, src/commands/operator-confirm-review.ts, src/review/completion-gate.ts). The head blobs of operator-confirm-review.ts, operator-confirm-review-tools.test.ts, completion-gate.ts, unattended.ts and autonomous-profile.ts were read with git show to verify what the slice diff does not show in full.
+
+Verification of the claimed fixes:
+- D-01 closed. At head the four agent-facing sites now name the card: line 262 (waive_coverage description) "call review_complete afterwards to close the review", line 296 (result) "Call review_complete to close the review.", line 312 (waive_readiness description) same, line 358 (result) "Call review_complete to close the review.". The line 24 header comment reads "Closing the review is the review_complete card". The remaining `keryx review complete` mentions (8, 9, 18, 261, 705) are CLI-equivalence statements. review.ts runComplete's two terminal-refusal errors (not in this slice, same commit) also say "call the review_complete card". The agent is no longer pointed at the CLI immediately after a waiver, so the bypass of the operator's final yes by this route is closed.
+- D-03 partial. Line 788 (describeBlockers, empty blocker list) now says "call the `review_complete` card to close the package". Line 791 (more than 20 blockers) still reads "(`keryx review complete` lists them all)", the second string D-03 named, and it points an attended agent at the CLI. See F-001.
+- D-08 closed. autonomous-review.md and cli-reference.md now state the exception: an autonomous (unattended) run is excluded from the card gate, is not given the card tools, closes through `keryx review complete`, and a waiver stops it at the floor. This matches the code: OPERATOR_CONFIRM_TOOL_NAMES are refused for unattended runs (src/trigger/unattended.ts:87, :240) and autonomous-profile.ts:144/153 tell the child to run `keryx review complete`. The exit table (exit 0, "closed by `keryx review complete`") now agrees. The wording is deliberate, as the task brief says; I record no finding against it. Note for the record that the unattended path closes a round with no card press, which the new text states openly.
+- D-12 open. Slice-01 and commit b1c6da0e6 contain no test that a remote yes records remote-card, pressedBy and pressedAt for review_publish, review_waive_coverage, review_waive_readiness, or the mutation-waiver and reviewer-override decisions. In operator-confirm-review-tools.test.ts at head the only `"remote"` presses are at lines 127 (chunks answer), 426 and 532 and 548 (decide_premise), 503 and 519 (confirm_plan) and 583 (review_complete). The only test change in the delta is two assertions on the readiness-waiver result string (lines 346-347). The other commit in the delta (cfd839061) touches only src/tui/operator-confirmations.ts, its test and tui-shell.ts. So the four `cardPressFields(confirmation)` spreads that D-12 named (publish, waive_coverage, waive_readiness, decisions) are still unguarded by any test. See F-002.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 2
+- Info: 1
+
+### Findings
+
+### [F-001] describeBlockers still tells the agent to use `keryx review complete` when more than 20 blockers are open
+- Severity: minor
+- File: src/review/completion-gate.ts (line of the `… and N more` string in describeBlockers)
+- Attack vector: an attended agent reads the nudge "- … and 3 more (`keryx review complete` lists them all)" and runs `keryx review complete <package>` through shell_exec. Plain complete has no TTY check and no operator-act check. If the blockers have been cleared in the meantime it closes the round without a review_complete card and without `pressedBy`. The practical window is narrow (the string appears only when more than 20 blockers are open, so complete refuses and only lists them), so there is no reproducible bypass in the current code path.
+- Problem: D-03 named two strings; only the first (empty list) was reworded. The second still names the CLI as the lister, against the rule in nextStep ("you never run `keryx review complete` yourself").
+- Fix: reword to "(`keryx review status <package>` lists them all)", or "the review_complete card's refusal lists them all".
+- Confidence: high
+- Quote: "…and ${more} more (\`keryx review complete\` lists them all)"
+
+### [F-002] D-12 not addressed: remote-press audit fields on publish, both waivers and the decision recorders are unpinned
+- Severity: minor
+- File: src/commands/operator-confirm-review-tools.test.ts
+- Attack vector: none exploitable today; this is a regression guard for the who-pressed audit trail. A later refactor that drops `cardPressFields(confirmation)` from review_publish, review_waive_coverage, review_waive_readiness or the mutation-waiver and reviewer-override decisions would record a remote waiver or publish with no `pressedBy` or `pressedAt` and nothing would go red.
+- Problem: the claimed disposition for D-12 is "fixed in slice-01", but slice-01 and the delta carry no such test; head has remote-press assertions for five of the nine recorders only.
+- Fix: the table-driven test D-12 proposed (one remote yes and one tui yes per remaining spec, reading the record each writes).
+- Confidence: high
+- Quote: null (finding is about an absent test)
+
+### [F-003] The D-01 regression test covers one of the four fixed strings
+- Severity: info
+- File: src/commands/operator-confirm-review-tools.test.ts
+- Attack vector: none; test coverage note. Lines 346-347 assert the review_waive_readiness result ("Call review_complete to close the review." and no "keryx review complete"). The review_waive_coverage result (line 296) and both tool descriptions (262, 312) are not asserted, so the original wording can return there unnoticed.
+- Fix: add the same two assertions for the coverage-waiver result, and assert on the descriptions of both waiver tools.
+- Confidence: high
+
+### Clean Areas
+Checked in slice-01 with no new security issue: command injection (no new exec paths), path handling (no new fs use), secrets and logging (strings only), authorization wording on the card gate (card text and gates unchanged apart from the strings), docs claims about the Telegram check (allowed user id, once, one hour) which match TM-04 as summarised in pr-context. The unattended CLI-complete exception is documented and deliberate, not a finding.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix slice slice-01 verified against head b1c6da0e6. D-01 and D-08 are closed. D-03 is partial (one describeBlockers string still names the CLI). D-12 is open (no new tests for the remote-press audit fields). No blocker or major.",
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "- … and ${more} more (\\`keryx review complete\\` lists them all)",
+      "problem": "describeBlockers was reworded only for the empty-blocker case (D-03 first string). When more than 20 blockers are open the nudge still reads '… and N more (`keryx review complete` lists them all)', pointing an attended agent at the CLI that nextStep says it never runs.",
+      "impact": "An attended agent following the string runs plain `keryx review complete`, which has no TTY or operator-act check; once blockers are cleared it could close the round with no review_complete card and no pressedBy. Window is narrow (the string only appears while more than 20 blockers are open, so complete refuses), so no reproducible bypass in the current path.",
+      "suggested_fix": "Reword to '(`keryx review status <package>` lists them all)' or 'the review_complete card's refusal lists them all'.",
+      "evidence": "git show b1c6da0e6:src/review/completion-gate.ts lines 785-791: line 788 now says 'call the `review_complete` card', line 791 still says '`keryx review complete` lists them all'. Slice-01 diff changes only line 788.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": null,
+      "problem": "D-12 is claimed fixed in slice-01 but no test was added. A remote yes is asserted to record remote-card, pressedBy and pressedAt only for chunks_answer, confirm_plan, decide_premise and review_complete; review_publish, review_waive_coverage, review_waive_readiness and the mutation-waiver and reviewer-override decisions have none.",
+      "impact": "Dropping cardPressFields(confirmation) at the four named sites would lose who pressed a waiver or publish card and when, with every test still green. Audit-trail regression guard only, not an exploitable path.",
+      "suggested_fix": "Add the table-driven test from D-12: for each of the four specs press a remote yes (yes(t, input, 'remote', pressedBy)) and expect confirmedVia remote-card, pressedBy and pressedAt in the record each writes; press a tui yes and expect neither field.",
+      "evidence": "git show b1c6da0e6:src/commands/operator-confirm-review-tools.test.ts: grep for the literal \"remote\" argument lists lines 127, 426, 503, 519, 532, 548, 583 only. The delta (git show b1c6da0e6 and cfd839061 --stat) changes this test file by two assertions on the readiness-waiver result string (lines 346-347); cfd839061 touches only src/tui files.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "expect(result.output).not.toContain(\"keryx review complete\");",
+      "problem": "The D-01 regression assertions cover only the review_waive_readiness result. The review_waive_coverage result and both waiver tool descriptions, three of the four fixed strings, are not asserted.",
+      "impact": "The old 'Run `keryx review complete`' wording could return in those three places without a red test.",
+      "suggested_fix": "Add the same two assertions for the coverage-waiver result, and assert the descriptions of both waiver tools name review_complete and do not instruct running the CLI.",
+      "evidence": "git show b1c6da0e6 for the test file: the only added lines are 346-347 inside describe('review_waive_readiness').",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-12", "disposition": "open" }
+  ]
+}
+```

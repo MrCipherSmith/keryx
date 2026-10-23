@@ -1,0 +1,82 @@
+--- docs/docs/guides/autonomous-review.md
+@@ 15,55 @@
+ ```
+ keryx review run --autonomous --target pr --ref https://github.com/owner/repo/pull/123 \
+     [--budget-minutes 60] [--budget-tokens 2000000] [--stall-minutes 10] \
+     [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+ ```
+ 
+ `--ref` must be a pull request URL. No terminal is needed on any stream, so this is the form
+ to put in a script, a cron line or a CI job. `--target pr` is the only target.
+ 
+ | Exit code | Status | Meaning |
+ |---|---|---|
+ | 0 | `complete` | The package was closed by `keryx review complete`. |
+ | 2 | `incomplete` | The run ended, or was stopped, before the package was closed. |
+ | 3 | `floor` | The run was stopped at a floor: an action that always needs a human was refused. |
+ | 4 | `budget` | `--budget-minutes` or `--budget-tokens` was spent. |
+ | 5 | `stalled` | No new event for `--stall-minutes` (default 10). |
+ | 1 | refused | Bad arguments, or another run of the same pull request holds the lock. |
+ 
+ ## What it does where a person would answer
+ 
++- **The review acts (`review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage`, `review_complete`).** These are cards a person answers, in the shell or in the Telegram topic (one allowed user, once, within an hour; the record keeps `pressedBy` and `pressedAt`). An autonomous (unattended) run has nobody to answer them, so it is excluded from the card gate: it is not given these tools and closes the package through the CLI path as before (`keryx review complete`), while any waiver, which needs a terminal, stops it at the floor. An interactive agent in the shell completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal.
+ - **A menu (`ask_user`).** A question marked irreversible is refused (the run sees it as
+   cancelled). Any other question takes the recommended option, or the first one when none is
+   recommended. A question with nothing to choose from is refused. Every automatic answer is
+   written to `answers.ndjson` with its basis (`recommended`, `first`, `refused-irreversible`,
+   `refused-no-option`), so you can read later what was decided for you. A question the review
+   skill tagged as policy (scope, budget, partial coverage, a smaller slice) goes to the
+   [review arbiter](review-arbiter.md) instead: it answers from numbered rules, and a `deny` or
+   an `escalate` is a refusal, with its basis in `answers.ndjson`.
+ - **A floor.** The calls that always need a human (destructive, credentials, publishing)
+   are refused, not granted. A refused call stays refused: the same call in any spelling is
+   declined without a new question, and the run is told to choose another path. A run that can
+   only go on through a floor stops with exit code 3. When the last thing that happened was the
+   loop guard turning away a call the run had already made three times, the reason in the summary
+   says so first and then counts the floor refusals; the status and the exit code stay `floor`.
+ - **Time and tokens.** `--budget-minutes` and `--budget-tokens` are checked while the run
+   goes. When one is spent, the run is stopped at a safe point, the package is kept as it is,
+   and the exit code is 4.
+ - **A hang.** The child process is watched through its events file. If nothing new appears for
+   `--stall-minutes`, the run is stopped and the exit code is 5.
+ - **Silence on the terminal.** While the run goes, stderr gets one line
+
+--- src/commands/operator-confirm-review.ts
+@@ 296,304 @@
+-      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Run \`keryx review complete\` to close the review.` };
++      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Call review_complete to close the review.` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 4. review_waive_readiness
+ 
+ type ReadinessPrepared = { dir: string; item: string; evidence: string };
+
+--- src/review/completion-gate.ts
+@@ 775,796 @@
+   | { action: "stop"; report: string };
+ 
+ const MAX_NUDGE_BLOCKERS = 20;
+ const MAX_NUDGE_BLOCKER_CHARS = 300;
+ 
+ /** One blocker as one bounded line: line breaks and control characters carried in from package text are flattened. */
+ function nudgeLine(blocker: string): string {
+   // eslint-disable-next-line no-control-regex
+   const flat = blocker.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").trim();
+   return flat.length > MAX_NUDGE_BLOCKER_CHARS ? `${flat.slice(0, MAX_NUDGE_BLOCKER_CHARS)}…` : flat;
+ }
+ 
+ export function describeBlockers(open: OpenManagedReview): string {
+-  if (open.blockers.length === 0) return "- none listed; run `keryx review complete` to close the package";
++  if (open.blockers.length === 0) return "- none listed; call the `review_complete` card to close the package";
+   const shown = open.blockers.slice(0, MAX_NUDGE_BLOCKERS).map((b) => `- ${nudgeLine(b)}`);
+   const more = open.blockers.length - shown.length;
+   return [...shown, ...(more > 0 ? [`- … and ${more} more (\`keryx review complete\` lists them all)`] : [])].join("\n");
+ }
+ 
+ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
+   const { open } = input;
+   if (open === null || !input.runSeen) return { action: "accept" };

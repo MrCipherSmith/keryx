@@ -1,0 +1,1816 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+    ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+    ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+    ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/apply-project-rules.md",
+    "src/commands/skills-references.test.ts",
+    "src/commands/skills.ts",
+    "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+    "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+    "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+    "src/gdskills/conditional-reads.e2e.test.ts",
+    "src/gdskills/context-resolver.test.ts",
+    "src/gdskills/context-resolver.ts",
+    "src/gdskills/reference-entries.test.ts",
+    "src/gdskills/reference-entries.ts",
+    "src/gdskills/reference-proof.ts",
+    "src/gdskills/references-check.ts",
+    "src/gdskills/references-section.test.ts",
+    "src/gdskills/references-section.ts",
+    "src/gdskills/resolved-context-check.test.ts",
+    "src/harness/tool/metaproject-adapter-task-text.test.ts",
+    "src/mcp/metaproject-tools.test.ts",
+    "src/tui/project-context-inspector.test.ts",
+    "src/tui/project-context-inspector.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/import-rules.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/gdskills/references-check.ts",
+      "path": [
+        "src/gdskills/import-rules.ts",
+        "src/gdskills/references-check.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/gdskills/references-check.ts",
+      "path": [
+        "src/gdskills/project-context-status.ts",
+        "src/gdskills/references-check.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/gdskills/context-resolver.ts",
+      "path": [
+        "src/gdskills/resolve-context-command.ts",
+        "src/gdskills/context-resolver.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/reference-proof.ts",
+      "path": [
+        "src/gdskills/resolved-context-check.ts",
+        "src/gdskills/reference-proof.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/rule-references.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "src/gdskills/rule-references.ts",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/skills-references.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/gdskills/references-check.ts",
+      "path": [
+        "src/commands/skills-references.ts",
+        "src/gdskills/references-check.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "docs/requirements/keryx-conditional-reads/README.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "docs/requirements/keryx-project-implementation-rules/live-run-result.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "docs/requirements/keryx-project-implementation-rules/live-run-result.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "fixtures/routing-shell-pty.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/__fixtures__/vantage-rules/expected.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "src/gdskills/__fixtures__/vantage-rules/expected.json",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "path": [
+        "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+        "src/commands/skills-references.test.ts"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "hop": 2,
+      "fanIn": 26,
+      "via": "src/gdskills/reference-entries.ts",
+      "path": [
+        "src/harness/tool/metaproject-adapter.ts",
+        "src/gdskills/context-resolver.ts",
+        "src/gdskills/reference-entries.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/cli.ts",
+        "src/cli-registry.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/gdskills/references-check.ts",
+      "path": [
+        "src/tui/settings-state.ts",
+        "src/gdskills/project-context-status.ts",
+        "src/gdskills/references-check.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/help.ts",
+        "src/cli-registry.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/task-project-context.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/gdskills/reference-proof.ts",
+      "path": [
+        "src/flow/task-project-context.ts",
+        "src/gdskills/resolved-context-check.ts",
+        "src/gdskills/reference-proof.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/project-references-view.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/gdskills/context-resolver.ts",
+      "path": [
+        "src/tui/project-references-view.ts",
+        "src/gdskills/project-context-status.ts",
+        "src/gdskills/context-resolver.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {launchTuiAgentShell} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-rules.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "source": "text-link",
+      "reason": "test-consumer",
+      "detail": "exercises src/commands/skills-references.test.ts (hop 1, from src/commands/skills-references.test.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-update.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/output-schema.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "source": "text-link",
+      "reason": "test-consumer",
+      "detail": "exercises src/commands/skills-references.test.ts (hop 1, from src/commands/skills-references.test.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/project-skills-registry-kind.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/context-resolver.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {readLastResolve} of src/gdskills/context-resolver.ts (hop 1, from src/gdskills/context-resolver.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/task-implementer-contract.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills-references.test.ts",
+      "source": "text-link",
+      "reason": "test-consumer",
+      "detail": "exercises src/commands/skills-references.test.ts (hop 1, from src/commands/skills-references.test.ts): run it, it is not read"
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 1, from src/commands/skills.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ShellCommandRuntime, shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/context-resolver.vantage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {resolveProjectContext} of src/gdskills/context-resolver.ts (hop 2, from src/gdskills/reference-entries.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/project-context-status.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/references-check.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {loadProjectContextStatus} of src/gdskills/project-context-status.ts (hop 2, from src/gdskills/references-check.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-governance.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/skills.ts: run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/tui/tui-shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/metaproject-port.ts",
+      "hop": 1,
+      "fanIn": 26,
+      "via": "src/gdskills/context-resolver.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ProjectContextResolution} from src/gdskills/context-resolver.ts; changed: {RecordedResolve, readLastResolve, recordLastResolve}"
+    },
+    {
+      "file": "src/lib/serve-config.ts",
+      "hop": 1,
+      "fanIn": 21,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/harness/mutation/guard.ts",
+      "hop": 1,
+      "fanIn": 17,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/gdgraph/build.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/mcp-servers/catalog.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/bundle/export.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/floor.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {TuiSelection, estimateContextTokens, fmtTokens, modelPickerNotice, modelsForPicker, onKeypress, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": ".metaproject/flows/002-2026-07-10-gdgraph-java-python-import-resolution/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/002-2026-07-10-gdgraph-java-python-import-resolution/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/002-2026-07-10-gdgraph-java-python-import-resolution/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T42-exfil-attack.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T53-corpus.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T66-enum.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-perf.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-cost.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T84-cost.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T84-prechange.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/301-2026-09-23-unattended-sandbox-an-allowlist-network-/reviews/2026-09-23-flow-301-security-close-out-r2/findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/301-2026-09-23-unattended-sandbox-an-allowlist-network-/reviews/2026-09-23-flow-301-security-close-out-r2/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/301-2026-09-23-unattended-sandbox-an-allowlist-network-/reviews/2026-09-23-flow-301-security-close-out/findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/301-2026-09-23-unattended-sandbox-an-allowlist-network-/reviews/2026-09-23-flow-301-security-close-out/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/core-final.log.gz",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/research-evidence/verify/shell-base.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/research-evidence/verify/shell-r2.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/reviews/2026-10-14-pr-1009-round1-f720fdb2/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "bench/jev-review/dataset.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "docs/docs/modules.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "docs/requirements/gdgraph-java-import-resolution/prd.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "docs/requirements/gdgraph-java-import-resolution/specification.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "docs/requirements/keryx-mcp-servers/decisions.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "docs/requirements/keryx-os-sandbox/specification.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {operatorCardDialog} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {filterConnectedDetectedProviders} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/route-synonyms.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {expandQueryTokens, normalizeRouteText} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scoreBundledSkillRoute} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {normalizeRouteText, scoreBundledSkillRoute} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/commands/trigger-reachability.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {normalizeRouteText, scoreBundledSkillRoute} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/gdskills/catalog-single-source.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {normalizeRouteText} from src/commands/skills.ts; changed: {printSkillsHelpFor, skillVerifySkillCommand, skillsCommand}"
+    },
+    {
+      "file": "src/harness/branch/branch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/harness/mutation/guard.ip-host.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/harness/process/sandbox/proxy.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/lib/version-check.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/mcp-servers/fqn-sanitise.table.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/remote/format-html.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/remote/format-link.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/remote/format-property.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/remote/sse-protocol.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/floor.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/layers-refresh-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/reviewers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/text-links.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/reference-entries.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "i18n-key \"a.b\" (changed in src/gdskills/reference-entries.test.ts) is mentioned by 57 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {onKeypress} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {modelPickerNotice, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {pickModelInTui, pickSessionInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {endpointMayBeAtFault, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createTuiAgentIo} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {freshSlateSessionRef, sessionPickerOptions, startupSessionChoices} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {searchProviderWizardInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/gdskills/context-resolver.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {renderResolutionMarkdown} from src/gdskills/resolve-context-command.ts; changed: {runResolveContextCommand}"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup, withSavedBaseUrls} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/gdskills/update-rules.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/references-check.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {projectRuleEntry} from src/gdskills/import-rules.ts; changed: {runSkillsImportRulesCommand}"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {busLeasesFromClient} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, readlineAgentHelpText, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellIO} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {busLeasesFromClient, readlineAgentHelpText, runAgentRepl} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SignalShutdownParts, makeSignalShutdown} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, readlineAgentHelpText, runAgentRepl, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {chooseShellSurface, parseShellCliFlags} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseShellCliFlags} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 33,
+    "changedFilesResolved": 17,
+    "changedFilesUnresolved": 16,
+    "candidates": 49,
+    "retained": 20,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 39,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 49,
+    "droppedTestConsumer": 29,
+    "textLinksAdded": 9,
+    "relatedTestsAdded": 5,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 14,
+      "2": 6
+    }
+  },
+  "graph": {
+    "nodes": 3257,
+    "edges": 11656
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/skills-references.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/skills.ts",
+        "names": [
+          "printSkillsHelpFor",
+          "skillVerifySkillCommand",
+          "skillsCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: printSkillsHelpFor, skillVerifySkillCommand, skillsCommand"
+      },
+      {
+        "file": "src/gdskills/conditional-reads.e2e.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/context-resolver.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/context-resolver.ts",
+        "names": [
+          "RecordedResolve",
+          "readLastResolve",
+          "recordLastResolve"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: RecordedResolve, readLastResolve, recordLastResolve"
+      },
+      {
+        "file": "src/gdskills/reference-entries.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/reference-entries.ts",
+        "names": [
+          "keywordOccurs",
+          "promotionReason",
+          "resolveReferences"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: keywordOccurs, promotionReason, resolveReferences"
+      },
+      {
+        "file": "src/gdskills/reference-proof.ts",
+        "names": [
+          "proofFailures"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: proofFailures"
+      },
+      {
+        "file": "src/gdskills/references-check.ts",
+        "names": [
+          "checkReferences",
+          "suggestReferences",
+          "undeclaredCitationHint"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: checkReferences, suggestReferences, undeclaredCitationHint"
+      },
+      {
+        "file": "src/gdskills/references-section.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/references-section.ts",
+        "names": [
+          "extractSection",
+          "markdownHeadings"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: extractSection, markdownHeadings"
+      },
+      {
+        "file": "src/gdskills/resolved-context-check.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/harness/tool/metaproject-adapter-task-text.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/mcp/metaproject-tools.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/project-context-inspector.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/project-context-inspector.ts",
+        "names": [
+          "createProjectContextFeed",
+          "openProjectContext",
+          "presentProjectContext",
+          "renderProjectContextSidebarValue"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: createProjectContextFeed, openProjectContext, presentProjectContext, renderProjectContextSidebarValue"
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "names": [
+          "launchTuiAgentShell"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: launchTuiAgentShell"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 3,
+    "textHubs": [
+      {
+        "key": "a.b",
+        "kind": "i18n-key",
+        "via": "src/gdskills/reference-entries.test.ts",
+        "hits": 57
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ShellCommandRuntime",
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "launchTuiAgentShell"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/skills-governance.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/gdskills/context-resolver.vantage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "resolveProjectContext"
+      ],
+      "via": "src/gdskills/reference-entries.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-rules.test.ts",
+      "reason": "text-link",
+      "symbols": [],
+      "via": "src/commands/skills-references.test.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-update.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/gdskills/output-schema.test.ts",
+      "reason": "text-link",
+      "symbols": [],
+      "via": "src/commands/skills-references.test.ts"
+    },
+    {
+      "file": "src/gdskills/project-context-status.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "loadProjectContextStatus"
+      ],
+      "via": "src/gdskills/references-check.ts"
+    },
+    {
+      "file": "src/gdskills/project-skills-registry-kind.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "readLastResolve"
+      ],
+      "via": "src/gdskills/context-resolver.ts"
+    },
+    {
+      "file": "src/gdskills/task-implementer-contract.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.test.ts",
+      "reason": "text-link",
+      "symbols": [],
+      "via": "src/commands/skills-references.test.ts"
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/commands/skills.ts"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/tui/tui-shell.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

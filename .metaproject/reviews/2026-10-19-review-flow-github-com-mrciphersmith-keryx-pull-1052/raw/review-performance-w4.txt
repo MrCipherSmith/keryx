@@ -1,0 +1,45 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-04 (src/tui/*) read in full. No synchronous disk read or scan was added to any TUI render path, nothing runs per keystroke beyond what already ran, and the only new collection is bounded for answered cards. One info finding: an unanswered card entry can stay in the in-memory log for the life of the shell if the dock promise rejects.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });",
+      "problem": "operatorCards.ask(...) is followed by an await with no try/finally, so operatorCards.answer(...) runs only when inner() resolves. The same shape is in the mirrored branch: cardId is asked, then raceApproval(...) is awaited, and the answer calls sit after it. If inner() or the dock leg rejects, the entry keeps answered === undefined.",
+      "impact": "OperatorConfirmationLog evicts only inside answer() (ANSWERED_CARDS_KEPT = 5), so such an entry is never evicted. It shows as a 'waiting' line in /remote-control and /decisions (with 'token expired, ask again' after an hour) until the shell exits, and a mirrored one also keeps the sidebar 'N cards waiting' counter up. Cost is a few hundred bytes per rejected approval and an O(n) filter over a tiny n, so there is no measurable performance impact. It is reported as a stale-display and unbounded-in-principle collection, not as a bottleneck. Whether inner() can reject was not established from the diff.",
+      "suggested_fix": "Wrap the await in try/finally (or catch) and answer the entry as { place: 'withdrawn', yes: false } on the throw path, in both the unmirrored and the mirrored branch.",
+      "evidence": "src/tui/operator-confirmations.ts answer(): the splice of old answered entries is inside answer() only. src/tui/tui-shell.ts mirrorApprovalToTopic: ask() at the unmirrored branch and at 'const cardId = ...', answer() only after a successful await.",
+      "confidence": "low",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Performance Review (slice-04, src/tui/*)
+
+### Checked, no finding
+- Disk reads or scans of flows/reviews in the render path. src/tui/operator-confirmations.ts imports only REMOTE_CARD_TTL_MS and does no fs, no store read and no flow/review scan. Every function (pendingConfirmationLine, answeredConfirmationLine, confirmationLines, waitingCardsText) is a pure function over the in-memory log. OperatorConfirmationLog.waiting() and entries() are 1 to 3 array filters over (unanswered + at most 5 answered) entries.
+- decisions-surface.ts. openDecisions awaits reportText(cwd) as before (one journal read per modal open, unchanged by the PR) and then calls confirmationLines?.() once, so the cards are an in-memory snapshot at open time. withConfirmationLines is a string join. The keypress handler (scroll and repaint over the precomputed rows) is untouched, and openDecisionsArms drops the new option. The sidebar poller (refresh, count, backfilled) is untouched; options.confirmationLines is only forwarded into openWith.
+- Per-keystroke work. None added. The new operatorCards.subscribe listener fires only on ask() and answer(), meaning a card put to the operator or answered, once per event. It calls liveRemotePanel.refresh() (a handful of text-node assignments) plus the open /remote-control modal listeners.
+- Sidebar draw. getWaitingCards runs waiting(), an O(n) filter over under 10 entries, per draw. Draws are already driven by the bridge change notices.
+- Unbounded lists. Answered entries are capped at ANSWERED_CARDS_KEPT = 5. Waiting entries grow only with human-scale operator cards (see F-001 for the leak edge).
+- Import cost. operator-confirmations.ts imports operator-confirm-tools only for the REMOTE_CARD_TTL_MS constant. That module is already imported by src/tui/tui-shell.ts, src/commands/agent.ts and interactive-agent-tools.ts, so no new module is loaded into the TUI.
+- approval-mirror.ts. onUndelivered is an optional callback invoked at most once per topic answer, and no extra timers or listeners are added. Pre-existing and unchanged: AbortSignal.any per race.
+- mirrorUndeliveredNote (src/remote/shell-bridge.ts:296, outside the slice but read) reads two booleans. isCard and the note are computed once per approval, not in a loop.
+- remoteApproval() allocates one Date per approval. Negligible.
+- Synchronous blocking, bundle imports and redundant API calls: no new fs sync calls, no new heavy imports and no new network calls in the slice.
+
+### Not findings (noted)
+- The age and "time left of the 1-hour token" text is computed with Date.now() at repaint only, so an open modal shows stale ages until the next change or keypress. This is a display-freshness point, not a performance one, and it is left to the logic reviewer.

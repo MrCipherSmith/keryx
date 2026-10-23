@@ -1,0 +1,67 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Round r07, head 5444f96e4, slices slice-02 and slice-03. No blocker and no major. Layering and dependency direction are intact: the specs stay in the command layer, call the review libraries and re-read state in apply; the completeManagedReview import in review.ts and the raceApproval import in tui-shell.ts have no remaining use, and tui-shell keeps a type-only DockRace import. S-401 is fixed: completionDispositions caps entries, finding length and evidence length, refuses text the card would rewrite, and dispositionLine no longer clips. S-402 is fixed for reason and waiver quotes but the 'card shows what is stored' class is not closed for the posted bodies (F-001) and for lists (F-002). One tool description is stale (F-003).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 62,
+      "quote": "function shownBody(text: string): { lines: string[] } | { refusal: string } {",
+      "problem": "Two different 'hidden in card' predicates enforce one rule. shownBody (:62-66) accepts a line when cardSafe(line) === line. hiddenInCard (:672) accepts text only when cardSafe(text) === text and the text holds no \\p{Cf}, \\p{Zl} or \\p{Zp} character. cardSafe (src/lib/card-safe.ts:15) strips only C0/C1 controls, U+200E/200F, U+202A-202E and U+2066-2069. hiddenInCard is also declared inside the '10. review_complete' section (:669-672) although :377, :712 and :764 use it.",
+      "impact": "A publish or reply body holding U+200B, U+2060, U+FEFF or U+061C (the Arabic letter mark, a bidi control that is Cf but not in cardSafe's list) passes shownBody, is shown as plain text and is posted to GitHub as written. The same character in a reason or a disposition is refused. The posted-to-GitHub path, the more consequential one, has the weaker guard. Effect is an invisible character in a posted review, not a forged line.",
+      "suggested_fix": "Move hiddenInCard next to cardSafe in src/lib/card-safe.ts (export it, with the \\p{Cf}\\p{Zl}\\p{Zp} clause) and have shownBody call it per line after the tab-to-space step instead of its own cardSafe(line) !== line test. Add one test per call site with U+200B in the body.",
+      "evidence": "shownBody :62-66 tests only cardSafe(line) !== line; hiddenInCard :672 is `cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text)`; src/lib/card-safe.ts:15 strips the listed ranges only. Static reading at head 5444f96e4, no run.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 282,
+      "quote": "...listFiles(files.map(cardSafe)),",
+      "problem": "The r07 commit establishes 'the card shows what is stored' with three policies: refuse (reason :377, dispositions :712-714, bodies :65), mark (waiver quotes, quoteWhole :763-765) and, for lists, silently rewrite. Coverage files are shown through listFiles(files.map(cardSafe)) at :282 while prepared.files (:286) and recordCoverageWaiver (:298) keep the raw paths. Mutant ids are shown through cardSafe(subject.items.join(...)) at :415 while the raw ids go into prepared.subject (:421). Reviewers left out are shown at :434 and stored in the subject at :439. The waiver item is shown through cardSafe at :736. The commit removed the truncation (LISTED_FILES and others) but not the rewrite.",
+      "impact": "File names in a PR are chosen by the PR author and git allows control and bidi characters in them. A name the card rewrites (ESC stripped, U+202E removed, newline turned into the visible marker) is recorded raw after the operator pressed yes, so the 'lists' member of the class named in the round request is only half closed. Needs a hostile file name to matter. Not a regression of this delta.",
+      "suggested_fix": "Add a shown-list helper built on the shared hiddenInCard (see F-001) that returns the items as stored or, like quoteWhole, appends '[N entries hold characters this card hides or rewrites]'. Use it at :282, :415, :434 and :736.",
+      "evidence": "operator-confirm-review.ts :282 (files.map(cardSafe)), :286 (prepared.files raw), :298 (recordCoverageWaiver), :415 and :421 (mutant ids), :434 and :439 (reviewers), :736 (waiver.item) at head 5444f96e4. Static reading, no run.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 178,
+      "quote": "\"Same effect as `keryx review publish`; the operator sees the target, the verdict and the start of the body first.\",",
+      "problem": "The review_publish tool description still promises a preview ('the start of the body') but the card now builds 'body: N characters, M lines, shown whole:' and spreads every body line (:219-220); the BODY_PREVIEW_* caps are gone in slice-03. The review_comments_reply description (:483-484) already says 'sees every reply'.",
+      "impact": "The description is model-facing, so it misstates the contract the agent plans around. It also does not tell the agent that a body too long for a Telegram topic goes to the dock only (operatorCardTooLongForTopic, tui-shell.ts:6029-6032). Documentation drift only.",
+      "suggested_fix": "Reword to 'the operator sees the target, the verdict and the whole body first; a body too long for a Telegram topic is answered at the terminal'. Check the bundled skill text and docs that quote the preview wording.",
+      "evidence": "operator-confirm-review.ts:178 versus :219-220; tui-shell.ts:6029-6032 routes the over-long card to requestApprovalLocally. Static reading, no run.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 93,
+      "quote": "function listFiles(files: readonly string[]): string[] {",
+      "problem": "After the cap removal listFiles only indents (files.map((file) => `  ${file}`)) and has one call site (:282), which also pre-maps cardSafe. Separately, hiddenInCard's \\p{Cf} also matches U+200D (ZWJ), so a reason or disposition evidence with a compound emoji is refused with the 'bidi or zero-width' message and no code point is named.",
+      "impact": "Opinion-level, no named violation: a helper that adds only a name, and a refusal message that does not say which character offended.",
+      "suggested_fix": "Fold listFiles into the F-002 helper or inline it. Optionally name the first offending code point in the refusal.",
+      "evidence": "operator-confirm-review.ts:93-95 and :282; hiddenInCard at :672. Static reading, no run.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "questions": [
+    "If system-generated lists (F-002) are meant to be silently rewritten, say so in the TM-04 card contract; F-002 then becomes info."
+  ]
+}
+```

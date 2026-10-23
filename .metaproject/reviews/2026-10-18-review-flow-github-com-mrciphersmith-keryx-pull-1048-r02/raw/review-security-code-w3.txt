@@ -1,0 +1,57 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "slice-03 reviewed at head d6267d4a. Path handling is sound: declared and cited paths are normalised, rejected when absolute or climbing out, and realpath-checked against the root before reading; keyword matching escapes the keyword, so there is no regex injection. One availability defect: the markdown heading scan is quadratic on a heading line with a long whitespace run, and a 120 KB document blocks the process for 13 s. Two info notes.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/references-section.ts",
+      "line": null,
+      "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+      "problem": "scanHeadings matches every line with a lazy `(.*?)` followed by `[ \\t]*$`, and stripClosingHashes then runs `/[ \\t]+#+$/` over the captured text. Both backtrack quadratically on a heading line that holds a long run of spaces or tabs followed by a non-space character. scanHeadings runs on the whole declared document whenever an anchor is resolved, checked or proven, and the size cap is 262144 bytes (CONTRACT_MAX_BYTES), so the line can be that long.",
+      "impact": "Trigger: a contributor changes a markdown document that references.json declares with an anchor (STYLING.md style), adding one heading line such as `## x` + 120000 spaces + `x`. The next `keryx skills resolve-context`, `keryx skills references check`, `keryx skills contracts validate --resolved`, or a TUI status refresh (loadProjectContextStatus -> checkReferences) runs extractSection synchronously. Measured on this head with bun: 20000 spaces = 0.37 s, 60000 = 3.3 s, 120000 = 13.2 s, and the cost grows with the square, so a 250 KB line is about a minute of 100% CPU with the event loop blocked. A reviewer who checks out a hostile PR hangs the CLI and freezes the TUI. A file with no anchor in its declaration is not scanned.",
+      "suggested_fix": "Make heading detection linear. Match `^ {0,3}(#{1,6})(?:[ \\t]+(.*))?$` (no trailing-whitespace group), then `trimEnd()` in code. Replace the closing-hash strip with a linear step: after trimEnd, take the trailing `#` run and drop it only if the character before it is a space or tab, and treat a text made only of hashes as empty. Optionally skip lines longer than a few thousand characters as non-headings.",
+      "evidence": "node/bun timing of extractSection(\"# Title\\n\\n## Class conventions\\nbody\\n\\n## Hostile \" + \" \".repeat(n) + \"x\\n\", \"Class conventions\"): n=20000 -> 372 ms, n=60000 -> 3323 ms, n=120000 -> 13247 ms. Isolated regex timing: HEADING on \"# a\"+spaces(40000)+\"b\" = 1027 ms; strip regex on \"a\"+spaces(80000)+\"b\" = 3606 ms.",
+      "confidence": 0.9,
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "const headings = section.available.length > 0 ? ` Headings in the file: ${section.available.join(\"; \")}.` : \"\";",
+      "problem": "Heading text from the declared document goes into a resolver warning unchanged, and runSkillsResolveContext prints warnings with console.error. A heading can hold control characters such as ESC (the HEADING regex accepts any non-newline character). The same text reaches the `check` report (anchor-not-found message).",
+      "impact": "Trigger: a contributor renames the anchored heading so the anchor is dead and adds a heading containing terminal escape sequences; whoever runs resolve-context or references check on that checkout has the sequences written to their terminal (title spoofing, cursor moves that hide a line). The effect is limited to terminal rendering, so this is info only.",
+      "suggested_fix": "Strip C0/C1 control characters (keep none except space) from heading text before it is put into a warning or finding message.",
+      "evidence": "Warning built in reference-entries.ts resolveReferences; printed by `for (const warning of result.warnings) console.error(`warning: ${warning}`);` in resolve-context-command.ts; heading text comes from scanHeadings with no filtering.",
+      "confidence": 0.6,
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "const file = path.isAbsolute(entry.path) ? entry.path : path.join(projectRoot, entry.path);",
+      "problem": "currentSection reads the file named by `entry.path` taken from the `--resolved` JSON with no containment check. A `..` or absolute path in a hand-edited resolved file is read, and its words are compared with the worker's summary. The same unguarded read already exists in currentSha for the drift check, and an absolute path is legitimate for linked rules.",
+      "impact": "No attack vector from the changed code alone: the resolved file is produced by the resolver and supplied by the operator, not by the worker. Noted so that the trust assumption (the resolved file is not worker-writable) stays explicit.",
+      "suggested_fix": "None required. If the resolved file ever becomes worker-influenced, restrict relative paths to the project root and absolute paths to registered linked-rule origins.",
+      "evidence": "readResolvedFile in resolved-context-check.ts only checks `schema === 1` and `entries` is an array; currentSection and currentSha both join entry.path onto projectRoot.",
+      "confidence": 0.5,
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 2 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Clean areas checked: path traversal (declared paths, cited paths, realpath containment in readDeclaredFile and inspectDocument), regex injection in keywordOccurs (keyword is escaped), code execution and injection (none), secrets (the document body is never emitted, only sha256, bytes and the description), JSON handling (BOM, shape validation, unknown keys, duplicate paths rejected).

@@ -1,0 +1,933 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "062aa9c36484e7b7f6b8a1dd6140671330646e66",
+    "head": "d2cb377f59f7f9c8553d9f377f99360bff3f6328"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md",
+      "startLine": 1,
+      "endLine": 35
+    },
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/flow.json",
+      "startLine": 1,
+      "endLine": 153
+    },
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/journal.md",
+      "startLine": 1,
+      "endLine": 5
+    },
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/plan.md",
+      "startLine": 1,
+      "endLine": 21
+    },
+    {
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 669,
+      "endLine": 669
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "CHANGELOG.md",
+      "startLine": 13,
+      "endLine": 21
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 102,
+      "endLine": 115
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4893,
+      "endLine": 4893
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4897,
+      "endLine": 4897
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4916,
+      "endLine": 4916
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4921,
+      "endLine": 4921
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4994,
+      "endLine": 4995
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 150,
+      "endLine": 150
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 153,
+      "endLine": 153
+    },
+    {
+      "file": "docs/docs/guides/autonomous-review.md",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 603,
+      "endLine": 603
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 612,
+      "endLine": 613
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 734,
+      "endLine": 734
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 778,
+      "endLine": 778
+    },
+    {
+      "file": "docs/docs/limitations.md",
+      "startLine": 187,
+      "endLine": 187
+    },
+    {
+      "file": "package.json",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 187,
+      "endLine": 187
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 304,
+      "endLine": 304
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 302,
+      "endLine": 304
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 5816,
+      "endLine": 5817
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 6120,
+      "endLine": 6125
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 6191,
+      "endLine": 6192
+    },
+    {
+      "file": "src/commands/operator-confirm-other.ts",
+      "startLine": 109,
+      "endLine": 115
+    },
+    {
+      "file": "src/commands/operator-confirm-other.ts",
+      "startLine": 625,
+      "endLine": 625
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 10,
+      "endLine": 11
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 24,
+      "endLine": 25
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 55,
+      "endLine": 55
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 57,
+      "endLine": 58
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 93,
+      "endLine": 93
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 132,
+      "endLine": 133
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 426,
+      "endLine": 426
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 472,
+      "endLine": 663
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 18,
+      "endLine": 20
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 30,
+      "endLine": 31
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 34,
+      "endLine": 34
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 40,
+      "endLine": 43
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 46,
+      "endLine": 46
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 157,
+      "endLine": 157
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 236,
+      "endLine": 236
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 294,
+      "endLine": 294
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 357,
+      "endLine": 357
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 444,
+      "endLine": 444
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 566,
+      "endLine": 566
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 639,
+      "endLine": 639
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 647,
+      "endLine": 779
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 792,
+      "endLine": 792
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 61,
+      "endLine": 62
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 65,
+      "endLine": 68
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 94,
+      "endLine": 94
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 106,
+      "endLine": 106
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 108,
+      "endLine": 108
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 146,
+      "endLine": 152
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 190,
+      "endLine": 191
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 193,
+      "endLine": 216
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "startLine": 317,
+      "endLine": 403
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 56,
+      "endLine": 59
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 108,
+      "endLine": 113
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 116,
+      "endLine": 118
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 159,
+      "endLine": 165
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 192,
+      "endLine": 192
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 201,
+      "endLine": 201
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 203,
+      "endLine": 220
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "startLine": 226,
+      "endLine": 227
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 67,
+      "endLine": 68
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4564,
+      "endLine": 4564
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4572,
+      "endLine": 4572
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 129,
+      "endLine": 129
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 4221,
+      "endLine": 4228
+    },
+    {
+      "file": "src/flow/confirm-token.ts",
+      "startLine": 75,
+      "endLine": 77
+    },
+    {
+      "file": "src/flow/confirm-token.ts",
+      "startLine": 120,
+      "endLine": 120
+    },
+    {
+      "file": "src/flow/confirm-token.ts",
+      "startLine": 140,
+      "endLine": 141
+    },
+    {
+      "file": "src/flow/service.ts",
+      "startLine": 1678,
+      "endLine": 1683
+    },
+    {
+      "file": "src/flow/types.ts",
+      "startLine": 782,
+      "endLine": 782
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 669,
+      "endLine": 669
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "src/harness/external/write-land.ts",
+      "startLine": 156,
+      "endLine": 156
+    },
+    {
+      "file": "src/harness/external/write-land.ts",
+      "startLine": 173,
+      "endLine": 173
+    },
+    {
+      "file": "src/harness/external/write-land.ts",
+      "startLine": 229,
+      "endLine": 229
+    },
+    {
+      "file": "src/harness/tool/builtin/interactive-tools.ts",
+      "startLine": 66,
+      "endLine": 68
+    },
+    {
+      "file": "src/learning/decisions.ts",
+      "startLine": 32,
+      "endLine": 34
+    },
+    {
+      "file": "src/remote/client.ts",
+      "startLine": 135,
+      "endLine": 136
+    },
+    {
+      "file": "src/remote/client.ts",
+      "startLine": 441,
+      "endLine": 441
+    },
+    {
+      "file": "src/remote/client.ts",
+      "startLine": 453,
+      "endLine": 453
+    },
+    {
+      "file": "src/remote/client.ts",
+      "startLine": 457,
+      "endLine": 457
+    },
+    {
+      "file": "src/remote/client.ts",
+      "startLine": 461,
+      "endLine": 461
+    },
+    {
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "startLine": 1,
+      "endLine": 132
+    },
+    {
+      "file": "src/remote/shell-bridge.ts",
+      "startLine": 96,
+      "endLine": 97
+    },
+    {
+      "file": "src/remote/shell-bridge.ts",
+      "startLine": 208,
+      "endLine": 208
+    },
+    {
+      "file": "src/remote/shell-bridge.ts",
+      "startLine": 289,
+      "endLine": 301
+    },
+    {
+      "file": "src/remote/shell-bridge.ts",
+      "startLine": 424,
+      "endLine": 428
+    },
+    {
+      "file": "src/remote/shell-bridge.ts",
+      "startLine": 965,
+      "endLine": 965
+    },
+    {
+      "file": "src/review/chunks-estimate.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/chunks-estimate.ts",
+      "startLine": 114,
+      "endLine": 114
+    },
+    {
+      "file": "src/review/chunks-estimate.ts",
+      "startLine": 160,
+      "endLine": 160
+    },
+    {
+      "file": "src/review/chunks-estimate.ts",
+      "startLine": 165,
+      "endLine": 165
+    },
+    {
+      "file": "src/review/complete-gated.ts",
+      "startLine": 1,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "startLine": 32,
+      "endLine": 32
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "startLine": 98,
+      "endLine": 100
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "startLine": 215,
+      "endLine": 215
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "startLine": 228,
+      "endLine": 228
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "startLine": 198,
+      "endLine": 200
+    },
+    {
+      "file": "src/review/evidence-level.ts",
+      "startLine": 56,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 60,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 87,
+      "endLine": 87
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 233,
+      "endLine": 233
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 278,
+      "endLine": 278
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 33,
+      "endLine": 33
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 67,
+      "endLine": 67
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 76,
+      "endLine": 76
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 160,
+      "endLine": 160
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 33,
+      "endLine": 33
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 175,
+      "endLine": 175
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 27,
+      "endLine": 27
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 557,
+      "endLine": 557
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 577,
+      "endLine": 577
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 91,
+      "endLine": 102
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 582,
+      "endLine": 582
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 600,
+      "endLine": 600
+    },
+    {
+      "file": "src/trigger/unattended.ts",
+      "startLine": 59,
+      "endLine": 61
+    },
+    {
+      "file": "src/trigger/unattended.ts",
+      "startLine": 73,
+      "endLine": 73
+    },
+    {
+      "file": "src/tui/approval-mirror.ts",
+      "startLine": 35,
+      "endLine": 36
+    },
+    {
+      "file": "src/tui/approval-mirror.ts",
+      "startLine": 51,
+      "endLine": 53
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "startLine": 436,
+      "endLine": 440
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "startLine": 448,
+      "endLine": 450
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "startLine": 456,
+      "endLine": 460
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "startLine": 467,
+      "endLine": 467
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "startLine": 509,
+      "endLine": 510
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "startLine": 621,
+      "endLine": 621
+    },
+    {
+      "file": "src/tui/operator-confirmations.test.ts",
+      "startLine": 1,
+      "endLine": 145
+    },
+    {
+      "file": "src/tui/operator-confirmations.ts",
+      "startLine": 1,
+      "endLine": 141
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 120,
+      "endLine": 120
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 135,
+      "endLine": 136
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 200,
+      "endLine": 201
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 262,
+      "endLine": 262
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 385,
+      "endLine": 385
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 391,
+      "endLine": 393
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 414,
+      "endLine": 415
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 453,
+      "endLine": 453
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 46,
+      "endLine": 46
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 90,
+      "endLine": 90
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 126,
+      "endLine": 126
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 582,
+      "endLine": 586
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 1615,
+      "endLine": 1619
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3939,
+      "endLine": 3941
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4584,
+      "endLine": 4584
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4632,
+      "endLine": 4632
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6088,
+      "endLine": 6088
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6099,
+      "endLine": 6107
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6116,
+      "endLine": 6116
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6119,
+      "endLine": 6119
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6124,
+      "endLine": 6129
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6131,
+      "endLine": 6131
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6137,
+      "endLine": 6137
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 7338,
+      "endLine": 7341
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 7345,
+      "endLine": 7345
+    }
+  ],
+  "carried": [],
+  "mergeBase": "062aa9c36484e7b7f6b8a1dd6140671330646e66"
+}

@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-performance",
+  "wave": 1,
+  "waves": 4,
+  "slices": [
+    "slice-01"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/slices/slice-01.diff",
+      "bytes": 110208
+    }
+  ],
+  "result": "raw/review-performance-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+}

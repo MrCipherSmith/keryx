@@ -1,0 +1,100 @@
+STATUS: DONE
+
+# review-security-code, wave 3, slice-03 (PR 1052, flow 464)
+
+Summary: one major (model-supplied `head` on the review_complete card), two minors, one info. The press-field provenance, the shared completion gates, the unattended exclusion, the remote-client fail-closed path and the SKILL text all hold up. No command was run; everything below was read from the worktree.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "slices": ["slice-03"],
+  "summary": "Press fields reach the recorders only from the remote-card path (operator-confirm-tools.ts invoke); no CLI path or model input supplies them. complete-gated.ts is the one gate shared by the CLI and the card, the review_complete tool is on the unattended exclusion list, askApproval fails closed with an undelivered flag that can only ride a deny, and the SKILL changes keep the never-run --yes/--mode automatic and never-write-an-operator-quote rules. One real weakness: the review_complete card lets the agent pass a `head` that replaces the recorded head, which defeats the moved-head gate and is not shown against the recorded value. Two defense-in-depth minors and one pre-existing info.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "problem": "The review_complete card accepts a model-supplied `head` (7-40 hex). apply() passes it to completeReviewGated as `options.head`; completeManagedReview then replaces manifest.target.head with it before completeHeadGate runs, so the moved-head/merged-PR gate compares the PR's current head against the agent's value instead of the head the round recorded. The card prints `reviewed head: <agent value> (given by the agent, replaces the recorded head)` but never shows the recorded head it replaces, so the operator cannot see that the swap changes the meaning of the gate.",
+      "impact": "Attack vector: an agent (or an injected instruction in the reviewed PR) calls review_complete with head set to the PR's current head SHA after the PR moved past the commit the round actually reviewed. The head gate passes, the manifest records the agent's SHA, and the operator is asked to approve a card whose SHA looks like the current head. The round closes as if it reviewed the latest commit. The brief requires card content (SHA) to come from the package, not from model input; the CLI `--head` is typed by the operator, the card path is typed by the model. Mitigations that keep this from being a blocker: the card does label the value as agent-given, the operator must still press yes, and the gate still demands READY and an evidence level.",
+      "suggested_fix": "Preferred: drop `head` from the review_complete input schema and from buildCard/apply, so the card always completes against the head the package recorded; an operator who really needs a different head uses `keryx review complete --head` in a terminal. Alternative: keep the field but show the recorded head next to it on the card (`recorded head: <sha>; the agent asks to replace it with <sha>`), refuse a value that does not prefix-match the recorded head, and fold the recorded head into factsDigest.",
+      "evidence": "src/commands/operator-confirm-review.ts:703 declares `head` in the tool input; :679 `head: headInput ?? recorded`; :725 renders the agent value without the recorded one; :753 `...(headInput === undefined ? {} : { head: headInput })` is passed to completeReviewGated. src/review/managed.ts:967-979 replaces `manifest.target.head` with the supplied value and only pushes a warning when it differs from the recorded head; :982 runs completeHeadGate on the replaced manifest. The CLI reaches the same code with an operator-typed --head (src/commands/review.ts runComplete -> completeReviewGated).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "file": "src/commands/operator-confirm-review.ts",
+      "quote": ": `reviewed head: ${facts.head}${headInput === undefined ? \"\" : \" (given by the agent, replaces the recorded head)\"}`,",
+      "location_class": "in-diff",
+      "dedupe_key": "review-complete-card-agent-supplied-head",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:703 (input schema `head`)",
+          "src/commands/operator-confirm-review.ts:679 (completion facts use headInput ?? recorded)",
+          "src/commands/operator-confirm-review.ts:725 (buildCard shows only the agent value)",
+          "src/commands/operator-confirm-review.ts:753 (apply passes head to completeReviewGated)",
+          "src/review/managed.ts:967-979 (options.head replaces manifest.target.head before the head gate)"
+        ],
+        "enumeration_method": "keryx ctx rg for headInput|given by the agent|head: in operator-confirm-review.ts, plus keryx ctx rg for options.head|completeHeadGate in src/review/managed.ts; no other review_* card takes a model-supplied head."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "problem": "cardPressFields copies pressedBy/pressedAt from any CardPress-shaped value into the written record without checking that confirmedVia is \"remote-card\". Eight recorders accept the fields (answerChunkEstimate, recordCoverageWaiver, recordOperatorDecision, recordPremiseDecisionAfter, recordPlanConfirmation, answerPremiseQuestion, publish, waiveReadiness) and none of them enforce the pairing. The invariant (press fields only for remote-card, never tui-card) rests entirely on the single caller in operator-confirm-tools.ts invoke.",
+      "impact": "Attack vector: none in the current code. Every caller passes the confirmation object that invoke built, and invoke sets the fields only when ctx.confirmationVia === \"remote\" after the allowed-user and TTL checks. The risk is a future caller that forwards unvalidated press fields with confirmedVia tui-card or absent, which would forge an audit trail of who pressed. Hardening only.",
+      "suggested_fix": "Put the guard in the shared helper: make cardPressFields take the confirmedVia as well and return {} unless it is \"remote-card\" and pressedBy is a safe integer; have isPlanConfirmation in src/review/estimate.ts validate the two fields when present.",
+      "evidence": "src/review/types.ts:95-100 builds the spread from `source` alone, with no look at confirmedVia; callers pass the confirmation straight through (operator-confirm-review.ts:157, :236, :294 and the others from the same grep). src/commands/operator-confirm-tools.ts invoke (about lines 198-237) is the only place the fields are set, and only when remote.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "file": "src/review/types.ts",
+      "quote": "export function cardPressFields(source: CardPress | undefined): CardPress {",
+      "location_class": "in-diff",
+      "dedupe_key": "press-fields-not-coupled-to-confirmedvia"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "problem": "Confirmation of the known slice-02 item (not a new defect): the review_complete card's waiver list shows readiness_waivers (manifest.json) and the coverage waiver (research.json dispatch.coverageWaiver) but not operator-decisions.json. From the gate side this is consistent: completeReviewGated -> completeManagedReview honours only those two waiver sources, so every waiver that can change the outcome of the close is on the card.",
+      "impact": "No gate bypass. mutation-waiver and reviewer-override decisions in operator-decisions.json are consumed at dispatch-check and ledger time (src/review/coverage.ts:690, :708, :759, :808, :829), earlier than completion. The only effect is that an operator reading the card does not see those earlier decisions listed; that is information, not a hole.",
+      "suggested_fix": "Optional: list the operator-decisions.json entries on the card as `earlier decisions` so the operator sees the whole record, or state on the card that only close-time waivers are listed.",
+      "evidence": "src/review/coverage.ts:690, :708, :759, :808, :829 read confirmedDecision for mutation-waiver/reviewer-override; src/review/managed.ts completion path reads only manifest readiness_waivers and the research.json coverage waiver.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "file": "src/review/coverage.ts",
+      "quote": "confirmedDecision",
+      "location_class": "in-diff",
+      "dedupe_key": "review-complete-card-waiver-list-scope"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "problem": "Pre-existing and shared with the CLI: completeHeadGate treats a failed tracker lookup (throw, null, exists=false) as a warning, not a refusal, and the warning only surfaces after the round is closed. The card inherits this because it calls the same completeReviewGated.",
+      "impact": "Attack vector would need the tracker to be unreachable while the PR has moved or merged; the gate then does not refuse. This is not introduced by the diff and the card does not widen it. Tracked for awareness only.",
+      "suggested_fix": "Out of scope for this PR. If wanted later: have the review_complete card refuse (or show a banner on the card) when the head lookup could not run.",
+      "evidence": "src/review/complete-head-gate.ts: lookup failure paths return warnings only; src/review/managed.ts:982 collects the warnings after the call.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "file": "src/review/managed.ts",
+      "quote": "if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: withoutPartialHeader(reportText), lookup: options.prLookup })).warnings);",
+      "location_class": "pre-existing",
+      "dedupe_key": "head-gate-lookup-fail-open"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Not verified (no command allowed): that src/commands/operator-confirm-rosters.test.ts keeps OPERATOR_CONFIRM_TOOL_NAMES in step with the tool registry; and where fromId originates in src/tui/tui-shell.ts (outside slice-03, slice-04 covers it)."
+  ]
+}
+```
+
+## Clean areas (checked, no finding)
+
+- Press-field provenance: pressedBy/pressedAt are written only when ctx.confirmationVia === "remote" after the allowed-user check and the 1-hour TTL (operator-confirm-tools.ts invoke); no CLI path passes them; model input cannot reach them. tui-card records carry no press fields.
+- complete-gated.ts: one function shared by `keryx review complete` (src/commands/review.ts runComplete) and the card; it adds run-profile and routing refusals on top of completeManagedReview, so the card gets the head gate, evidence level, READY readiness, research errors and waiver rules exactly as the CLI. The card never records a waiver itself; the CLI requires a TTY for --waive/--waive-coverage. Merged or moved PR handling is the shared gate-based behaviour (refused unless the report names the reviewed SHA and says the PR moved), not new.
+- Unattended: "review_complete" is in OPERATOR_CONFIRM_TOOL_NAMES and isUnattendedExcludedTool checks both lists (src/trigger/unattended.ts), so an unattended run cannot call it.
+- Remote client: askApproval returns deny with undelivered:true on every non-posted path (no stream, aborted, HTTP error, missing approvalId, throw); mapApprovalAnswer carries undelivered only when !yes; RemoteBridge.askApproval denies when there is no client or it is not connected; fromId is accepted only as a safe integer. No path turns a missing answer into allow.
+- SKILL text (bundled review-orchestrator SKILL.md/SKILL.detail.md, review-premise SKILL.md): the lines "never run --mode automatic or --yes" and "never write an operator quote yourself; unattended, the item is Not run" are kept, the premise Iron Laws are unchanged, and the added review_complete and review_decide_premise card wording does not tell the agent to run or fabricate anything. Gap only: the text says nothing about what to do when a card is refused or undelivered (not filed; no attack vector).
+- Other recorder changes (write-land.ts confirmation type, evidence-level.ts evidenceLevelLine with a non-global regex, help-groups.ts summary text): no injection, path or secret issue.
+
+Routing audit: graph_used no (not-relevant: targeted read of named files); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg/read); raw_rg_used no (keryx:raw escape used only to get verbatim quote lines).

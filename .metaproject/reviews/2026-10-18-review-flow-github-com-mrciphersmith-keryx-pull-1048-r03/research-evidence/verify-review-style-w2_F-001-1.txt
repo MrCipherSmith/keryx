@@ -1,0 +1,14 @@
+# keryx review verify-run
+finding: review-style-w2:F-001
+command: python3 /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/v_docs.py
+cwd: /home/altsay/keryx/.worktrees/conditional-reads
+time: 2026-10-18T15:33:37.584Z
+exit: 0
+
+--- stdout ---
+DOC 261 only: a rule imported with `--link` is not scanned, and neither are bundled
+CLI 3491 | `references check` | `--json` | Check `.metaproject/rules/project/references.json` and the project rules that cite documents. Errors (exit `1`): `invalid-file` (also two entries for one document), `
+CODE 99 const links = new Map((await readProjectRuleRegistry(projectRoot)).filter((entry) => entry.mode === "link" && !copies.includes(entry.ref)).map((entry) => [entry.ref, entry.origin]));
+CODE 105 text = await readFile(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot), "utf8");
+--- stderr ---
+

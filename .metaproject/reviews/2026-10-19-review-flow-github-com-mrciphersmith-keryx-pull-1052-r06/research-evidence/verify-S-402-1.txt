@@ -1,0 +1,12 @@
+# keryx review verify-run
+finding: S-402
+command: bun /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/s402-repro.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T06:54:22.765Z
+exit: 1
+
+--- stdout ---
+{"storedLength":46,"underCap":true,"shown":"fixed in abc123","storedKind":"human","shownKind":"none"}
+DEFECT REPRODUCED: shown text differs from stored text and the stored text attests a human
+--- stderr ---
+

@@ -1,0 +1,64 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice 02 (review-operator.ts host-question path, docs, PRD, test file) is structurally sound: the new path sits behind one door (decisions/service), refuses before the first write, writes the review record before the journal, and leaves `review complete` untouched. One major: the answer-text gate on confirm-plan, waive-mutation and override-reviewers is a deny-list, so the code's own decline option (`keep`) and any non-affirmative free text are recorded as the operator's consent, against the documented rule that only 'a yes' is a decision. One minor: the journal entry shows option labels keryx supplied, not the options the host asked.",
+  "findings": [
+    {
+      "id": "A2-001",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": 304,
+      "quote": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "On confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is refuseDecline: a deny-list of 14 first words. There is no affirmative check (decide-premise alone adds refuseOtherChoice). The verbs' own decline option is declared in HOST_OPTIONS as `decline: \"keep\"` (lines 257 and 265) and the `--answer keep` flag is refused as a decline (line 364), but `keep` is not in LEAD_DECLINE, so the same word given as --answer-text is recorded as consent. The token `keep` also means 'uphold' in CHOICE_WORDS for decide-premise, so one word has opposite meanings across the four verbs with no shared source of truth. TM-04 6b, cli-reference, limitations and PRD Q2 all promise that for these verbs only 'a yes' is a decision and 'free text is never a decision'; the code enforces that only for decide-premise.",
+      "impact": "Reproducible with no TTY: `keryx review waive-mutation --package P --reason r --answered-by claude-code:q1 --answer-text \"Keep: run the mutation pass\" --question-text \"Waive the mutation pass?\"` exits 0, writes a mutation-waiver with confirmedVia host-question, and the journal answers choice `waive`. Same for `--answer-text \"keep\"` on override-reviewers, and for `--answer-text \"let me think about it\"` or `\"what are the unrun mutants?\"` on confirm-plan (the stale-plan check reads only digits in --question-text, never the answer). The mutation gate and the reviewer-set gate then pass on a record whose own words are a refusal or a question. That record is the only evidence a later reviewer has, and the documented promise is that it is checkable, so a recorded 'keep' reads as the operator waiving.",
+      "suggested_fix": "Make the gate positive for the three verbs, as it already is for decide-premise: keep a per-verb set of affirmative words (en and ru: yes, y, ok, okay, confirm, confirmed, waive, override, go, да, ок, подтверждаю, ...) and require one of them, with no negation before it as refuseOtherChoice does; refuse everything else as 'not one of the options'. Derive the decline set from HOST_OPTIONS[verb].decline plus the generic lead words so the option ids and the check cannot drift. Add tests that `keep`, `Keep: run the mutation pass`, `maybe later` and `what are the mutants?` are refused on waive-mutation, override-reviewers and confirm-plan with the package byte-identical (the existing AC3 tests try only `--answer keep` and the text forms n, no, nope, нет).",
+      "evidence": "src/commands/review-operator.ts lines 257 and 265 (decline: \"keep\"), 274 (LEAD_DECLINE has no keep), 304 (first-word-only test), 364 (--answer keep refused as a decline), 385, 395 and 411 (the three call sites; only the decide-premise branch adds refuseOtherChoice). Test file lines 205 and 256-259 cover the flag form and the listed lead words only. Wave 1 reported `don't waive it` (a listed word after the first); this is a different input class: no negation and no listed word.",
+      "confidence": 0.9,
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:385 (confirm-plan)",
+          "src/commands/review-operator.ts:411 (waive-mutation and override-reviewers)",
+          "src/commands/review-operator.ts:274 (LEAD_DECLINE)",
+          "src/commands/review-operator.ts:257 and 265 (HOST_OPTIONS decline ids)"
+        ],
+        "enumeration_method": "keryx ctx rg for refuseDecline|LEAD_DECLINE|decline: in review-operator.ts: three refuseDecline call sites, one of which (decide-premise, 395) is followed by refuseOtherChoice and two (confirm-plan 385, waive/override 411) are not; decline ids are declared at 241, 249, 257 and 265 and only the no/n family is in LEAD_DECLINE"
+      },
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "A2-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 426,
+      "quote": "options: choices.options,",
+      "problem": "The keryx decisions entry is opened with option ids and labels from the static HOST_OPTIONS table (for example `waive: Waive: the mutation pass is not run`, `keep: Keep: run the mutation pass`), not from what the host actually offered the operator, and the choice is set from the verb (`premiseAnswer ?? choices.confirm`), not parsed from the answer. The PRD and TM-04 6b say the journal shows 'the question, the options and the choice'; a reader of `keryx decisions report` takes the options as what the operator saw.",
+      "impact": "The host asks 'Waive the mutation pass? [Yes / No, rerun it]' and the operator answers 'Yes'. The report row shows options Waive/Keep and choice waive: options the operator was never shown, attributed to the poll. Only the question and answerText are the agent's report; the options and the choice are keryx's synthesis, so the journal reads as more verified than the record beside it.",
+      "suggested_fix": "Mark the synthesized options in the journal row (a flag rendered by decisions report and /decisions) or take the host's options as an optional flag and store what it said. Minimum: state in TM-04 6b and the report row that the options are keryx's standard set for the verb.",
+      "evidence": "src/commands/review-operator.ts lines 238-268 (HOST_OPTIONS) and 424-433 (openDecision then answerDecision with choices.options and choices.confirm); PRD line 465 'decisions report shows the question, the options and the choice'.",
+      "confidence": 0.75,
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+  "slices": ["slice-02"]
+}
+```
+
+## Architecture Review (slice-02, wave 2)
+
+### Summary
+The host-question path is one function (`recordHostQuestion`) behind the `--answered-by` branch in `runOperatorCommand`. Imports go through `decisions/service` (the stated single door), refusals run before the first write, and the review record is written before the journal so a failed journal only warns. `review complete` is not touched. The weak point is the answer gate for three of the four verbs (A2-001).
+
+### Checked and not reported
+- Journal-after-record ordering and warn-only journal failure: a deliberate choice with a stated reason (a retry must not record twice); the reason holds, since a retried decide-premise refuses on a finding no longer held and confirm-plan overwrites.
+- `openDecision` twin lookup (src/decisions/journal.ts:65): a host question whose text and option ids match an unanswered open would reuse that record; the immediate answer after open closes the window, so no failing input.
+- Zero-unrun-mutant waiver: the card path refuses ("No proposed mutant is unrun"), the CLI path, old and new, does not. Pre-existing terminal-path behaviour, not a regression of this diff.
+- Command-layer placement of the English/Russian answer lexicon: works, no second caller, so not reported as a layer violation.
+- Wave 1 items (stale terminal wording, plan numbers in the confirm-plan question, first-word decline `don't waive it`, schema coupling, keryx-shell source under KERYX_TOOL_CALL=1, AC12, AC7) not repeated.
+
+### Routing audit
+graph_used: no (slice diff plus targeted reads were enough); wiki_used: no (not relevant); ctx_used: yes (keryx ctx rg / read); raw_rg_used: no.

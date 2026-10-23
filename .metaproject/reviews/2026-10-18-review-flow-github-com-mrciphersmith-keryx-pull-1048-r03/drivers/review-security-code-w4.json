@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-security-code",
+  "wave": 4,
+  "waves": 8,
+  "slices": [
+    "slice-06"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-06",
+      "path": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/slices/slice-06.diff",
+      "bytes": 81546
+    }
+  ],
+  "result": "raw/review-security-code-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+}

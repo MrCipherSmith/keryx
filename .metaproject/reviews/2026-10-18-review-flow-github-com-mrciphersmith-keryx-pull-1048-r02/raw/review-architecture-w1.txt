@@ -1,0 +1,121 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-01 holds only docs, schemas, skill text, the AC file and package.json (no src/ code). No layer, dependency-direction or boundary violation can be introduced by it, and the doc claims I checked against the code at head agree on the proof rule (40 chars, 3 shared words, 5 letters, rule codes how/anchor/summary-length/summary-words) and on the check finding codes. Four documentation-drift findings remain: the live-run runbook states a two-word threshold the code does not implement, it and the PRD cite wrong identifiers, the PRD describes a reason format the resolver does not emit, and the numeric thresholds are restated by hand in about ten files with no test that holds them together.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "line": null,
+      "quote": "это сигнал, что порог в два слова слишком строг",
+      "problem": "The operator runbook tells the person running the live run that the summary must share at least two distinct words of five or more letters with the section, and treats a failure as a sign that the two-word threshold is too strict. The implemented and documented threshold is three (SUMMARY_MIN_SHARED_WORDS = 3 in src/gdskills/reference-proof.ts; cli-reference.md, the apply-project-rules guide, the AC file and the PRD section 5.3 all say three). The same runbook's expected output says '3 required', so it contradicts itself.",
+      "impact": "The live run (AC20) is the one step where a human, not a test, decides whether the check is calibrated. An operator who reads 'two' will misjudge a normal near-miss (2 shared words, 3 required) as a calibration bug, or will hand-write summaries for a threshold that is not the real one, and the finding that feeds the threshold decision is then built on a wrong number.",
+      "suggested_fix": "Change both runbook sentences to three, and name the constant (SUMMARY_MIN_SHARED_WORDS) so a later change to the code has one obvious thing to grep for. Better, see F-004: have the runbook read the number from the CLI output ('N required') instead of restating it.",
+      "evidence": "live-run.md in slice-01 says 'минимум два различных слова из пяти и более букв' and 'порог в два слова'. src/gdskills/reference-proof.ts at head: SUMMARY_MIN_SHARED_WORDS = 3, and wordsFailure prints `${required} required`. The runbook's own expected output block says '3 required'.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "live-run-threshold-two-vs-three"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "line": null,
+      "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+      "problem": "Identifiers in the flow documents do not match what they point at. (a) PRD section 7 calls the live run AC18; in the flow's acceptance-criteria.md AC18 is the end-to-end test and the live run is AC20. (b) live-run.md refers to 'риск 6', but the PRD risk table has five rows. (c) live-run.md names the check errors 'missing', 'anchor not found' and 'oversized', while references-check.ts emits the codes document-missing, anchor-not-found and document-too-large. (d) live-run.md cites the summary-words rule code, but the output prints a sentence ('shares N distinct word(s) ... required'), not the code.",
+      "impact": "The runbook is followed by a person on a real project, matching what they see against what the document says. A wrong AC number or a code name that never appears sends them searching for output that does not exist, and a reviewer cross-checking AC20 lands on the e2e test instead of the live run.",
+      "suggested_fix": "PRD section 7: say AC20. live-run.md: drop 'риск 6' or point at an existing row; use the real codes document-missing, anchor-not-found, document-too-large (they are printed in `keryx skills references check` output); describe the summary-words failure by its printed sentence.",
+      "evidence": "acceptance-criteria.md (AC18 e2e, AC20 live run); PRD risk table at head has five rows; src/gdskills/references-check.ts ReferencesFindingCode union lists the codes above; src/gdskills/reference-proof.ts wordsFailure builds the printed sentence.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "flow462-doc-identifiers"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "line": null,
+      "quote": "`reason: condition:glob|keyword (<rule or declaration>)`",
+      "problem": "PRD section 5.2 describes the reason of a promoted entry as 'condition:glob|keyword (<rule or declaration>)'. The resolver emits 'condition:glob:<glob>' or 'condition:keyword:<keyword>' (and 'declared' for an unpromoted entry); isPromoted() in reference-proof.ts relies on the 'condition:' prefix only.",
+      "impact": "The PRD is the design record; a reader implementing a consumer of the reason (TUI, a report) from it would parse a shape that never occurs. The CLI reference and the schema descriptions are right, so the cost is limited to this one document.",
+      "suggested_fix": "Rewrite the clause as 'reason: condition:glob:<glob> or condition:keyword:<keyword>'. Or mark section 5 as the pre-implementation design and point at cli-reference.md for the shipped shape.",
+      "evidence": "src/gdskills/reference-proof.ts: `entry.reason.startsWith(\"condition:\")`; src/gdskills/reference-entries.ts sets `reason ?? \"declared\"`; the contract schema and cli-reference.md in slice-01 describe condition:glob:<g> / condition:keyword:<k>.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "publication": "finding",
+      "dedupe_key": "prd-reason-format"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "export const SUMMARY_MIN_SHARED_WORDS = 3;",
+      "problem": "The proof thresholds (40 characters, 3 shared words, 5 letters) have one source in code, but slice-01 restates them by hand in prose in the flow-orchestrator, job-orchestrator, task-implementer and tests-creator SKILL.md files, orchestrator-prompt.md, cli-reference.md, the apply-project-rules guide, the PRD, the AC file, live-run.md and the schema descriptions. skill-sync.test.ts guards the keywords (--task-text, the paragraph naming condition:, path, sha256, anchor, summary) and the byte equality of the bundled / managed / contract copies, but not the numbers.",
+      "impact": "Changing a threshold (the PRD itself expects tuning after the live run) needs a ten-file hand edit with nothing that fails when one is missed. F-001 is the first case of exactly this: the runbook already says two where the code says three, and every test is green.",
+      "suggested_fix": "Keep the numbers in the instruction text, since a worker reads them there, but add a test next to skill-sync.test.ts that imports SUMMARY_MIN_CHARS, SUMMARY_MIN_SHARED_WORDS and WORD_MIN_LETTERS from reference-proof.ts and asserts that each instruction file, cli-reference.md and the guide contain the current values (and no other number in the sentence that carries them). Failing that, have the prose point at the CLI output for the threshold.",
+      "evidence": "src/gdskills/skill-sync.test.ts at head checks regexes for '--task-text' and the 'condition:' paragraph and the copy equality, and no numeric threshold. reference-proof.ts exports the three constants; live-run.md already disagrees with them (F-001).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "proof-thresholds-duplicated-in-prose"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": [
+    { "id": "slice-01", "coverage": "all 1827 lines of the diff read; doc claims checked against src/gdskills/reference-proof.ts, reference-entries.ts, references-check.ts, references-config.ts, context-resolver.ts and skill-sync.test.ts at head", "status": "DONE" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/conditional-reads`
+- Merge-base: `1658f77d374b2d20189a55eaf44b95d64768d6b6`; head `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: diff (slice-01 only)
+- Stack detected: generic-ts (the slice itself has no code)
+
+### Summary
+slice-01 is documentation, JSON schemas, skill instruction text, the AC file and one `package.json` script. It introduces no layer, dependency-direction or module-boundary change. Verdict: sound. The remaining findings are documentation drift and one maintenance cost, none worth blocking.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 1
+
+### Layer Violations
+None detected (no code in the slice).
+
+### Dependency Direction
+None detected in the slice. Outside the slice, I noticed a type-only import cycle between `src/gdskills/context-resolver.ts` and `src/gdskills/reference-entries.ts` (`ContextEntry` is imported back as a type). It is erased at compile time and is harmless at runtime; I did not raise it, because it is in a code slice that belongs to another reviewer and I did not verify it end to end.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected. `REFERENCES_SCHEMA` in code mirrors the committed schema and a test keeps them equal; the generated `commands-by-task.md` is covered by `docs:check`.
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A, not in this slice.
+
+### Documentation drift (maintenance)
+- F-001 (minor): live-run.md says two shared words, code and every other document say three.
+- F-002 (minor): wrong AC number, risk number, check error names and rule code in the PRD and runbook.
+- F-003 (info): PRD section 5.2 reason format differs from what the resolver emits.
+- F-004 (minor): the proof thresholds are restated by hand in about ten files and no test holds the numbers.
+
+### Not covered / unverified
+- The code slices (src/**) were not reviewed by me; they belong to other reviewers.
+- Not verified: whether `.metaproject/data/.../last.json` carries a task-text field that the `skills-resolve-context-result` schema (`additionalProperties: false`) would reject. In `context-resolver.ts` `RecordedResolve` adds `taskText` and `taskTextTruncated` beside `result`; the schema describes `result`, so this is most likely fine, but I did not check where the schema is applied.
+
+### Suggested Patches
+None.

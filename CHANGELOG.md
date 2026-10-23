@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Restored 13 review packages left in local worktrees during October 2026 reviews, preserving the more complete processed #1058 report already on `main` (PR #1060). This restores review evidence, not changes to the review completion or operator decision gates.
+
+### Security
+- Raised the `ip-address` override to `^10.7.4` and updated the lockfile to resolve GHSA-rxp7-6hxx-x8q5 in the transitive dependency tree.
+
 ## [0.3.130] - 2026-10-22
 
 0.3.129 was tagged but never published to npm: its release had no changelog section. Its changes ship here.

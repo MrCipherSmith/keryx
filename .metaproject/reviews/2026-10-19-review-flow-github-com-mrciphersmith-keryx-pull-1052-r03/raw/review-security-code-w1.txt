@@ -1,0 +1,105 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "round": 2,
+  "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+  "base": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 296,
+      "quote": "${waiver.files.length} file(s) not reviewed. Run ",
+      "problem": "The result strings and tool descriptions of the waiver tools still tell the agent to close the review with `keryx review complete`, while the PR's rule (TM-04, SKILL.md, completion-gate.ts nextStep) is that an agent never runs it and calls the review_complete card instead. Sites: line 262 (review_waive_coverage description: 'run `keryx review complete` afterwards to close the review'), line 296 (review_waive_coverage result: 'Run `keryx review complete` to close the review.'), line 312 (review_waive_readiness description, same sentence), line 358 (review_waive_readiness result, same sentence). The header comment at line 24 ('Closing the review is still `keryx review complete`') is the same text for maintainers.",
+      "impact": "Attack vector: the agent finishes a waiver card, reads the tool result 'Run `keryx review complete` to close the review.', and runs `keryx review complete <package>` through shell_exec. Plain `complete` has no TTY check and no command-risk floor (only --waive and --waive-coverage do; TM-04 section 8 says so), so the round reaches `closed` with no review_complete card, no operator press, no `confirmedVia` and no `pressedBy`. The head, evidence, routing and readiness gates in completeReviewGated still apply, so this bypasses the operator's final yes and the press record, not the gates. The operator decision on C-05 was 'uphold' (the card is the operator act and the agent must not close the round by itself); the strings the agent reads last, immediately after the waiver, point the other way. This is the unfixed residual of C-21.",
+      "suggested_fix": "Change the four strings (262, 296, 312, 358) to say: 'call the `review_complete` card in keryx shell to close the review' (keep the CLI wording only for 'outside the shell'), and reword the line-24 comment the same way. Add a test in operator-confirm-review-tools.test.ts asserting that neither waiver result nor description contains 'Run `keryx review complete`' and that both name `review_complete`.",
+      "evidence": "keryx ctx rg 'keryx review complete' src/commands/operator-confirm-review.ts at head lists lines 8, 9, 18, 24, 261, 262, 296, 312, 358, 705; 8, 9, 18, 261 and 705 describe the CLI equivalent of a tool and are accurate; 24, 262, 296, 312 and 358 instruct the agent to run it. Line 296 and 358 read at head: `... not reviewed. Run \\`keryx review complete\\` to close the review.` and `... .join(\", \")}. Run \\`keryx review complete\\` to close the review.`. src/review/completion-gate.ts:753-820 nextStep says call the review_complete card and never run `keryx review complete` yourself, so the two agent-facing texts contradict each other. docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md section 8 (line 127) states plain `review complete` has no TTY check. src/review/complete-gated.ts runs only the gates, no operator-act check.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:262 (review_waive_coverage description)",
+          "src/commands/operator-confirm-review.ts:296 (review_waive_coverage result)",
+          "src/commands/operator-confirm-review.ts:312 (review_waive_readiness description)",
+          "src/commands/operator-confirm-review.ts:358 (review_waive_readiness result)",
+          "src/commands/operator-confirm-review.ts:24 (header comment, no runtime effect)"
+        ],
+        "enumeration_method": "keryx ctx rg -n 'keryx review complete' src/commands/operator-confirm-review.ts (10 matches, each read); the remaining 5 (8, 9, 18, 261, 705) are accurate CLI-equivalence statements and were excluded; SKILL.md / SKILL.detail.md and completion-gate.ts were checked and already say 'call the review_complete card'"
+      }
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "C-01", "disposition": "closed", "evidence": "src/commands/operator-confirm-rosters.test.ts no longer pins 18; the roster assertion matches the 19 names of OPERATOR_CONFIRM_TOOL_NAMES (src/trigger/unattended.ts:55-88, includes review_complete)." },
+    { "id": "C-03", "disposition": "closed", "evidence": "operator-confirm-review.ts completeSpec.apply (741-797) runs the gate in its own try (gateError), then checks the manifest status 'closed', then writes completion-confirmation.json in a second step; a failed record write after the close reports 'the round is closed but ...' with isError. 'nothing was recorded' is kept for refusals before the close." },
+    { "id": "C-05", "disposition": "partial", "evidence": "Operator decision was uphold. Text now aligned: SKILL.md / SKILL.detail.md (both copies byte-identical, cmp) say call the review_complete card; completion-gate.ts nextStep says never run the CLI yourself; TM-04 section 8 (line 127) states honestly that plain `review complete` has no TTY check, so the card is a rule for the agent, not a lock. Remaining: docs/docs/cli-reference.md:4921 still lists plain `complete` among steps that 'need a terminal' (false: only --waive/--waive-coverage check isTerminal), and there is no runtime enforcement (no command-risk entry). The agent-facing waiver strings are tracked as F-001." },
+    { "id": "C-06", "disposition": "closed", "evidence": "OperatorConfirmationLog.markUndelivered (operator-confirmations.ts:61-67) sets the entry unmirrored and notifies; tui-shell.ts mirrorApprovalToTopic passes onUndelivered -> operatorCards.markUndelivered(cardId); waiting() drops it and pendingConfirmationLine appends 'Telegram mirror not delivered, answer in the shell'. Unit tests operator-confirmations.test.ts:50-67 cover it." },
+    { "id": "C-13", "disposition": "closed", "evidence": "tui-shell.ts mirrorApprovalToTopic has a try/finally in both branches that answers the card as 'withdrawn' when no outcome was recorded; pinned (source text) by operator-confirmations.test.ts:180-186." },
+    { "id": "C-16", "disposition": "open", "evidence": "docs/docs/guides/autonomous-review.md:35 still opens with 'An autonomous run has nobody to answer them: it stops at the floor ...'. At head the five card tools are in OPERATOR_CONFIRM_TOOL_NAMES and are excluded from the unattended roster by name (unattended.ts:55-88, isUnattendedExcludedTool), not refused by isFloorRefusal (autonomous-profile.ts:171-179), so the run does not 'stop at the floor' on them. The author left the wording on purpose per the brief; the sentence is still inaccurate wording only (no security impact), severity stays minor." },
+    { "id": "C-17", "disposition": "closed", "evidence": "CHANGELOG.md 0.3.124 now says a rejected remote answer is refused, records nothing and spends the card; matches TM-04 'Each refusal leaves the token spent'." },
+    { "id": "C-18", "disposition": "closed", "evidence": "TM-04 section 6a (lines 107-119) 'does not prove' bullets now say a bot-token holder can edit the mirrored card text, so a press proves a press on a card with the real approval id, not that the operator read the shell's text." },
+    { "id": "C-19", "disposition": "closed", "evidence": "TM-04 section 6a message-order bullet now states the token and the TUI card view are shell process memory, a restart drops pending cards and a later press is refused with no record." },
+    { "id": "C-20", "disposition": "closed", "evidence": "CHANGELOG.md: the Unreleased section is empty and the two entries sit under the dated 0.3.124 section." },
+    { "id": "C-21", "disposition": "open", "evidence": "SKILL.md line 136 and nextStep were corrected, but the waiver tools in src/commands/operator-confirm-review.ts still tell the agent to run `keryx review complete`: lines 262, 296, 312, 358 (agent-facing), comment at line 24. Raised as F-001." },
+    { "id": "C-22", "disposition": "closed", "evidence": "completionFacts (operator-confirm-review.ts:658-692) uses the library's isPrBound and parseEvidenceLevel instead of the ad-hoc predicates, so card and gate agree on prBound and on evidence validity." },
+    { "id": "C-23", "disposition": "closed", "evidence": "completionFacts (658-692) treats only ENOENT on research.json as 'none'; any other read or parse failure adds a 'could not read research.json (<reason>)' waiver line to the card." },
+    { "id": "C-24", "disposition": "closed", "evidence": "tui-shell.ts: remoteApproval now has its own JSDoc and the Flow 173 F-003 block is back directly above isToolAvailableToSideWorker; the card-log lifecycle is one try/finally per branch." },
+    { "id": "C-26", "disposition": "closed", "evidence": "completeSpec normalises the head in one helper used by both buildCard and apply, the refusal text is shared, and the TTL text is built from REMOTE_CARD_TTL_MS; no second copy remains in the file." },
+    { "id": "C-32", "disposition": "open", "evidence": "No behavioural test drives remoteApproval / mirrorApprovalToTopic with a known fromId or the allowedUserIds binding. The only wiring coverage is a source-text pin (operator-confirmations.test.ts:180-186: markUndelivered call, two 'finally' blocks, the withdrawn answer). A change that stops forwarding fromId (every remote press then refused, fail-closed) or stamps a wrong id would not fail a test. Minor, testing gap." },
+    { "id": "C-39", "disposition": "closed", "evidence": "info finding resolved by documentation: src/review/types.ts and flow-state.schema.json now describe pressedAt as the shell clock when the press was delivered; confirm-token.ts carries pressedBy/pressedAt into the signed record." },
+    { "id": "C-41", "disposition": "withdrawn", "evidence": "info with low confidence. completeManagedReview (managed.ts:925-1066) reads manifest, report, head and waivers once at the start, before the PR lookup; the only window is the digest check to that read, and it needs a second writer on the package. No code change was expected; the digest drift check at apply time remains." },
+    { "id": "C-45", "disposition": "partial", "evidence": "operator-confirmations.ts waiting() now honours the token TTL and pendingConfirmationLine says the Telegram token expired. Remaining: the finally in mirrorApprovalToTopic (tui-shell.ts ~6094-6150) still logs place 'telegram', yes: decision === 'allow' and pressedBy at transport time, before operatorConfirmTool.invoke re-checks the allowed list, token and TTL, so a press the gate refuses can still read 'yes, pressed by Telegram user N' in the sidebar and /decisions. Display only, no stored state is affected; severity stays minor." }
+  ]
+}
+```
+
+## Security Review
+
+### Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base for this fix round: `d2cb377f59f7f9c8553d9f377f99360bff3f6328` (delta to head `6f47bf35f31c2e8c882e573b61dd4c39fcc81264`)
+- Scope mode: explicit-hash-range (fix round, slice-01)
+- Changed files reviewed: 24 in the payload; security-relevant ones read in full (operator-confirm-review.ts, tui-shell.ts mirror block, operator-confirmations.ts and test, confirm-token.ts, completion-gate.ts, schema/types, TM-04, autonomous-review.md, cli-reference.md, CHANGELOG.md, review-orchestrator SKILL copies).
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 0 new (C-16, C-32, C-45 remain open as minor from round 1)
+- Info: 0
+
+Prior dispositions (19): 13 closed (C-01, C-03, C-06, C-13, C-17, C-18, C-19, C-20, C-22, C-23, C-24, C-26, C-39), 2 partial (C-05, C-45), 3 open (C-16, C-21, C-32), 1 withdrawn (C-41), 0 regressed.
+
+### Findings
+
+### [F-001] Waiver tools still tell the agent to run `keryx review complete`
+- **Severity**: major
+- **File**: src/commands/operator-confirm-review.ts:296 (also 262, 312, 358; comment at 24)
+- **Attack vector**: the agent completes a waiver card, reads the tool result 'Run `keryx review complete` to close the review.', and runs the CLI through shell_exec. Plain `complete` has no TTY check and no command-risk floor, so the round reaches `closed` with no review_complete card, no press, no `confirmedVia` and no `pressedBy`. The gates still apply; the operator's final yes and its audit record are skipped.
+- **Problem**: four agent-facing strings contradict the PR's own rule (an agent never runs `keryx review complete`; it calls the review_complete card), which SKILL.md, SKILL.detail.md and completion-gate.ts nextStep now state.
+- **Why it matters**: the operator decision on C-05 was uphold. The strings the agent reads last, right after the waiver, point it at the unguarded path, so the card is bypassed by following the tool's own output. This is the unfixed part of C-21.
+- **Fix**: say 'call the `review_complete` card in keryx shell to close the review' in the four strings and the line-24 comment; add a test that the waiver result and description do not contain 'Run `keryx review complete`'.
+- **Patch** (line 296 and 358 shape):
+```diff
+- ... not reviewed. Run \`keryx review complete\` to close the review.
++ ... not reviewed. Call the \`review_complete\` card in keryx shell to close the review.
+```
+
+### Clean Areas
+- Injection (SQL, command, SSTI, eval): no changed code builds shell strings, queries or templates from user input; the delta is cards, token fields and docs.
+- Authentication and authorization of the remote press: allowed-user list, single-use token and TTL checks in operator-confirm-tools.ts are unchanged in this delta; confirm-token.ts now signs pressedBy/pressedAt together with the record (no regression).
+- IDOR: the card resolves the package through resolvePackage and the digest; no id taken from a request without scoping.
+- Secrets and logging: no tokens or ids beyond the Telegram user id (pressedBy) are logged or shown; the card head is sanitised.
+- Crypto: no new crypto; randomUUID token use unchanged.
+- CSRF, path traversal, open redirect: not touched by the delta.
+- Unattended exclusion: the 19 card tools (including review_complete) remain excluded by name from the unattended roster (unattended.ts:55-88).
+
+### Routing audit
+- graph_used: no (not-relevant; delta files are few and named in the payload)
+- wiki_used: no (not-relevant; TM-04 and the guides were read directly)
+- ctx_used: yes (`keryx ctx rg` and `keryx ctx run --raw` for git)
+- raw_rg_used: no

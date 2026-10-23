@@ -1,0 +1,44 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slice-02 (src/commands, src/flow). One regression found: the new review_complete card tool is added to the TUI tool roster by completeSpec(seams) in operator-confirm-review.ts, and src/commands/shell.test.ts pins that roster with an exact sorted toEqual that does not list it, so that test fails. shell.test.ts is not in the PR's changed list; the blast radius reports it only as a dropped test-consumer (hop 1 via src/commands/shell.ts) and in testsToRun, so the finding is anchored at the changed file that causes it. Not re-filed, as instructed: src/commands/operator-confirm-rosters.test.ts pins 18 tools while the registry has 19. Checked and found no break: the CLI `keryx review complete` path after the review.ts refactor to completeReviewGated (same gates, same order, same refusal text prefix); the new remote-card second check (fail-closed on missing pressedBy, missing allowedUserIds, stale card; shell.ts is the only binder of operatorConfirm and supplies allowedUserIds); the optional confirmMint/pressedBy/pressedAt fields on callers that do not pass them (local tui-card answers are unchanged); the OPERATOR_CONFIRM_TOOL_NAMES unattended exclusion list (adding review_complete only widens the exclusion). Limits of this review: the blast radius is a capped code graph (hop-1 files capped at 40) and its dropped entries are test-consumers that were listed but not read by the computation; I read shell.test.ts and grepped the review card names across src test files, but I did not read every other dropped test (tui-shell.test.ts, decisions-surface.test.ts, agent-commands.test.ts, acp/commands.test.ts, help-groups.test.ts, commands-by-task.test.ts, command-registry.coverage.test.ts) line by line; a grep for review_complete / review_decide_premise across src/**/*.test.ts found roster pins only in shell.test.ts (broken), operator-confirm-review-tools.test.ts:93 and tui/operator-confirmations.test.ts:15 (both already list review_complete), and the known operator-confirm-rosters.test.ts. Runtime edges (string-keyed tool registry, hooks, spawned processes) are not in the code graph; the tool roster reaches shell.test.ts by exactly such a registry path, so it was found by grep, not by the radius.",
+  "findings": [
+    {
+      "id": "RG2-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "    completeSpec(seams),",
+      "problem": "The change adds the review_complete card tool to buildReviewConfirmSpecs (src/commands/operator-confirm-review.ts, the `completeSpec(seams),` entry), which reaches the TUI agent tool set through the operatorConfirm binding in src/commands/shell.ts. The unchanged test `shellCommand wires web_search into the agent TUI tool set` in src/commands/shell.test.ts asserts `expect(toolNames.sort()).toEqual([...])` over the exact roster. Its list names review_chunks_answer, review_comments_reply, review_confirm_plan, review_decide_premise, review_override_reviewers, review_publish, review_waive_coverage, review_waive_mutation and review_waive_readiness (lines 878-886) but not review_complete, so the actual list now has one more entry than the expected list.",
+      "impact": "Trigger: running `bun test src/commands/shell.test.ts` (it is in the radius's testsToRun and in the full suite / CI job typecheck-and-tests). Outcome: that test fails with an extra review_complete in the received array, so CI is red for a reason unrelated to the PR's own tests. The PR's test plan only runs operator-confirm-tools, operator-confirm-review-tools, remote and tui tests, which is why the PR author's targeted run would not see it. Same class as the known operator-confirm-rosters.test.ts 18-vs-19 pin, but a different file and a different assertion, so fixing the known one does not fix this.",
+      "suggested_fix": "Add \"review_complete\" to the expected array in src/commands/shell.test.ts, between \"review_comments_reply\" and \"review_confirm_plan\" (sorted order: review_comments_reply, review_complete, review_confirm_plan). Prefer deriving the review card names from reviewConfirmSpecs() so the next card does not repeat this.",
+      "evidence": "src/commands/operator-confirm-review.ts:792 `completeSpec(seams),` and :694 `name: \"review_complete\",`. src/commands/shell.test.ts:849 `expect(toolNames.sort()).toEqual([` with the review_* entries at lines 878-886 and no review_complete. blast-radius.json lists src/commands/shell.test.ts under dropped (hop 1 via src/commands/shell.ts, reason test-consumer) and in testsToRun. Search: `keryx ctx rg -n 'review_complete|review_decide_premise' src --glob '*.test.ts'` returned shell.test.ts:881 as the only roster pin that has review_decide_premise but lacks review_complete (operator-confirm-review-tools.test.ts:93 and tui/operator-confirmations.test.ts:15 already list review_complete; operator-confirm-rosters.test.ts is the known one). I did not run the test (read-only review); the claim rests on the exact-equality assertion and the roster contents above.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/shell.test.ts:849"
+        ],
+        "enumeration_method": "keryx ctx rg -n 'review_complete|review_decide_premise' src --glob '*.test.ts' (6 files, 32 matches): every test that lists the review card names was read; only shell.test.ts:881 pins the full roster without review_complete. The known src/commands/operator-confirm-rosters.test.ts is excluded as already reported. Other dropped test-consumers in the radius were not read line by line (see summary)."
+      }
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": ["slice-02"],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Run `bun test src/commands/shell.test.ts src/tui/tui-shell.test.ts src/tui/decisions-surface.test.ts src/commands/agent-commands.test.ts src/acp/commands.test.ts src/standard/help-groups.test.ts src/standard/commands-by-task.test.ts src/standard/command-registry.coverage.test.ts` on the head: these are dropped test-consumers of the blast radius that this reviewer did not read line by line, and shell.test.ts is expected to fail per RG2-001."
+  ]
+}
+```

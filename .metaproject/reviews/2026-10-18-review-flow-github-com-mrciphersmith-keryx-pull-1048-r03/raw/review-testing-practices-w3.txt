@@ -1,0 +1,77 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-03 (delta d6267d4a5..5382b56ab) read in full at head 5382b56ab: the five skill-prompt copies and their managed twins, the cli-reference row, the task-text redaction test in context-resolver.test.ts, and the feed/cardSafe changes in project-context-inspector.ts with their tests. No blocker or major. The new tests are deterministic (promise-gated loads, no timers, no network, per-test tmp roots). The two r02-driven gates that carry the most risk are pinned by assertions that can fail: the overlap guard (the 'loads' counter stays 1 across three ticks) and the stale-load guard (an older load finishing last leaves 'block' in place and 'seen' at two entries); the redaction is pinned by a file-level not.toContain on the secret and on a run of x characters. The managed-vs-bundled byte identity of the prompt copies is pinned by skill-sync.test.ts. Two info observations: the sidebar half of the control-character test cannot fail (the sidebar string holds only an enum and counts, so the cardSafe call on it is unreachable and unpinned), and the new code-point length of the recorded task text is only exercised with ASCII. Mutation pass NOT run: the payload's allowed_tools is read-only, so no command executed; 9 candidates are listed below, 0 run, 9 not reached. r02 findings F-004 and F-006 (slice-04 in r02) still apply unchanged and are not re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": 630,
+      "quote": "expect(control.test(renderProjectContextSidebarValue(status) ?? \"\")).toBe(false);",
+      "problem": "The sidebar half of 'control characters from a reference never reach the terminal' cannot fail. renderProjectContextSidebarValue builds its string from status.enforcement (the warn|block enum), plural(ruleCount, \"rule\"), referencesSidebarSegment (which returns 'refs ' plus a count, '-' or '?', and ' !<n>') and the fixed phrases 'cap exceeded' and 'config unreadable'. None of them carries reference text, so the assertion holds with or without the new cardSafe call wrapped around the join (src/tui/project-context-inspector.ts:105). The tab-body half (line 628) is a real pin: the hostile path, anchor and description reach formatProjectReferencesLines, and the body call to lines.map(cardSafe) is the only cleaner (no cardSafe in project-references-view.ts).",
+      "impact": "The test name and the commit message read as if the sidebar is covered against hostile reference text. It is not: the call is defence in depth for a value that today is built from enum and numbers, and the test would stay green if someone later interpolated a declaration field into the sidebar and removed the cardSafe call. Low: no current path puts file text there.",
+      "suggested_fix": "Either drop the sidebar assertion from this test and say in a comment that the sidebar holds no file text, or make it meaningful by exporting the segment builder behind a test that feeds a hostile enforcement value (cast) and asserts the output is clean.",
+      "evidence": "Read project-references-view.ts:28-35 (referencesSidebarSegment) and project-context-inspector.ts:98-106 (renderProjectContextSidebarValue) at head. Not a measured mutation: allowed_tools was read-only, so mutant M-05 below was not run; the claim rests on the inputs of the string, which are readable.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "publication": "finding"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": 535,
+      "quote": "taskTextLength: Array.from(options.taskText!).length",
+      "problem": "The recorded length counts code points with Array.from, the same way truncateTaskText cuts. Every test that reads taskTextLength (context-resolver.test.ts:428, 434, 448 and conditional-reads.e2e.test.ts:520) uses ASCII text, and the e2e expectation is itself written with Array.from, so replacing the production expression with options.taskText!.length gives the same numbers in all of them. Same class as r02 F-012 (the truncation test is ASCII only), at a new site.",
+      "impact": "A text with an astral character (an emoji in a task description) would record a UTF-16 length that disagrees with the 4000 code-point limit in the same record, and taskTextTruncated could be true for a recorded length near 4000. The value is a diagnostic only; nothing branches on it.",
+      "suggested_fix": "Add one case to the 'task text: the last resolve records its length' test: a text of 3 ASCII characters plus one emoji, asserting taskTextLength toBe 4 (and, for the cut, a 4001-code-point text built with an astral character at the boundary).",
+      "evidence": "Read context-resolver.ts:529-541 and the three test call sites above. Mutant M-07 below names the change; not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "publication": "finding"
+    }
+  ],
+  "slices": [
+    { "id": "slice-03", "coverage": "Read in full at head: skill-prompt copies (bundled and managed), cli-reference row, context-resolver.test.ts redaction tests with the production recordLastResolve, project-context-inspector.ts feed and presenter changes with their tests (R7 feed tests, the control-character test, the sidebar tests), card-safe.ts, skill-sync.test.ts. The slice diff file shows only removed lines for the code files; the added lines were read with git diff d6267d4a5..5382b56ab." }
+  ],
+  "mutation_table": {
+    "ran": false,
+    "reason": "payload allowed_tools is read-only: no command that runs tests may be executed; the definition forbids reporting a predicted result as a measured one",
+    "rows": []
+  },
+  "mutant_candidates": [
+    { "id": "M-01", "file": "src/tui/project-context-inspector.ts", "anchor": "if (polling) return;", "replacement": "", "kind": "behavior" },
+    { "id": "M-02", "file": "src/tui/project-context-inspector.ts", "anchor": "      polling = false;", "replacement": "", "kind": "behavior" },
+    { "id": "M-03", "file": "src/tui/project-context-inspector.ts", "anchor": "if (mine > applied && !sameStatus(current, next)) {", "replacement": "if (!sameStatus(current, next)) {", "kind": "behavior" },
+    { "id": "M-04", "file": "src/tui/project-context-inspector.ts", "anchor": "applied = Math.max(applied, mine);", "replacement": "applied = mine;", "kind": "behavior" },
+    { "id": "M-05", "file": "src/tui/project-context-inspector.ts", "anchor": "return cardSafe(parts.join(\" · \"));", "replacement": "return parts.join(\" · \");", "kind": "behavior" },
+    { "id": "M-06", "file": "src/tui/project-context-inspector.ts", "anchor": "stylePlanText(otui, lines.map(cardSafe).join(\"\\n\"), \"plain\")", "replacement": "stylePlanText(otui, lines.join(\"\\n\"), \"plain\")", "kind": "behavior" },
+    { "id": "M-07", "file": "src/gdskills/context-resolver.ts", "anchor": "taskTextLength: Array.from(options.taskText!).length", "replacement": "taskTextLength: options.taskText!.length", "kind": "behavior" },
+    { "id": "M-08", "file": "src/gdskills/context-resolver.ts", "anchor": "{ taskTextLength: Array.from(options.taskText!).length,", "replacement": "{ taskText: task.text, taskTextLength: Array.from(options.taskText!).length,", "kind": "behavior" },
+    { "id": "M-09", "file": "src/gdskills/context-resolver.ts", "anchor": "options.taskText !== undefined && options.taskText.trim() !== \"\" ? truncateTaskText(options.taskText) : undefined", "replacement": "options.taskText !== undefined ? truncateTaskText(options.taskText) : undefined", "kind": "behavior" }
+  ],
+  "mutant_coverage_note": "Expected by reading, NOT run and not claimed as results: M-01, M-02, M-03, M-06 and M-08 are pinned by assertions that name the exact state they remove (loads counter, polling reset visible through the 'again' error report in the first R7 feed test, the older-load-finishes-last case, the body control-character check, the not.toContain on the secret); M-05 survives by construction (F-001); M-04 looks equivalent (any load that could still be pending when a lower-numbered one finishes has a higher number); M-07 survives on ASCII fixtures (F-002); M-09 is a gate that predates this delta and has no whitespace-only task text case in the resolver tests. Mutants run: 0. Not reached: 9 of 9.",
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+Summary
+
+No blocker or major in slice-03. The delta is mostly prompt text and two small code changes, and the tests that came with it are sound.
+
+- Redaction of the task text (context-resolver.test.ts 425-455): the test reads the recorded file itself and asserts the secret and a run of 'x' are absent, asserts the length and truncation flag, and asserts the exact key set when no text is given. A change that writes the text back into last.json is caught. The command-level test checks the same through runResolveContextCommand.
+- Feed guards (project-context-inspector.test.ts 515-565): promise-gated loads, no timers. The overlap guard is pinned by the loads counter, the finally reset by the second load starting after the first, the stale-load guard by an older reload finishing last and leaving the newer status and the listener count unchanged. The reset on a thrown load is pinned indirectly by the first R7 feed test (the second error 'again' is reported only if a failed poll released the guard).
+- cardSafe on the tab body is pinned by the hostile-declaration test; on the sidebar it is not and cannot be (F-001, info).
+- The five prompt copies and their managed twins are pinned byte-identical by skill-sync.test.ts; that test pins only that '--task-text' is mentioned, not the quoting form of the example. The change from double to single quotes around the task description in the examples is not testable at this tier; whether a description containing an apostrophe survives single quoting is a question for review-logic/review-security-code, not a testing finding.
+
+Still applying from r02 and not re-filed: F-004 (the R4 fixture sets exceeded with usedBytes 109 under limitBytes 131072 and asserts 'over the cap: 109 of 131072 bytes'; project-context-inspector.test.ts:47 and :391, unchanged) and F-006 (the R7 after-close assertion checks Status text that is identical before and after; lines 451-454, unchanged). r02 F-012 (ASCII-only truncation) is extended by F-002 at a new site.
+
+Mutation pass: not run (read-only payload). Mutants run: 0; not reached: 9 of 9, listed above for the main session. Bookkeeping under .metaproject/flows/462-*/ was not read.
+
+Routing audit: graph_used: no (not-relevant, bounded delta slice, every changed symbol read at head); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, keryx ctx diff/run); raw_rg_used: no. Two raw git diff calls carried a keryx:raw marker because the slice file hides added lines.

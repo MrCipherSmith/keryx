@@ -1,0 +1,87 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Round r05 delta b1c6da0e6..77d2eff20, slice-02 (the only slice dispatched to this wave). E-04 (raceApproval onTopicEnded), E-05 (cardAvailable), E-03 (readiness_waivers schema) and the E-01 skill-text edits are complete for the concurrency, idempotency and queue concerns this role owns. E-02 (dispositions on the review_complete card) introduces one new partial-application path: dispositions are written to findings.json before the manifest is validated and closed, with no rollback, so a late failure leaves the round open with dispositions durably recorded while the card reports 'nothing was recorded'. One minor finding.",
+  "findings": [
+    {
+      "id": "H-01",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "await recordDispositions(packageDir, dispositions);",
+      "problem": "completeManagedReview writes the operator-confirmed dispositions to findings.json (under withOperatorDecisionsLock) and only afterwards builds the closed manifest, validates it (validateManagedReviewManifest) and writes it with writeFileAtomic. The catch block restores research.json and the waiver backups of manifest.json and report.md, but not findings.json. The dispositions write is therefore the one durable side effect of the close that is not rolled back when the manifest validation throws or the manifest write fails.",
+      "impact": "Failure mode: if validation or the manifest write fails after recordDispositions succeeded (invalid manifest, disk full, EIO on the rename), the round stays open but findings.json already carries the dispositions. operator-confirm-review.ts then answers 'review_complete refused: ... — nothing was recorded' (line 797), which is false for dispositions. The operator's corrected retry that names a different state or different evidence for the same finding is refused by recordDispositionsLocked ('record the correction as a new round'), so a card cannot be retried to a different outcome; only a byte-identical retry (a no-op on re-record) goes through. The window is narrow because the head, evidence, research and readiness gates all run before the write, so the exposure is limited to the manifest validation and write steps; it is an idempotency / partial-apply gap, not a data-loss one.",
+      "suggested_fix": "Move the dispositions write after the closed manifest has been validated and as the last step before writeFileAtomic(manifestPath, ...), or snapshot findings.json before recordDispositions and restore it in the catch beside researchBefore and waiverBackup. Whichever is chosen, keep the 'nothing was recorded' wording true, or reword it to say that dispositions may already be recorded.",
+      "evidence": "src/review/managed.ts:1017-1030 at 77d2eff20: `await recordDispositions(packageDir, dispositions);` (1019) precedes `validateManagedReviewManifest` (1026) and `writeFileAtomic(manifestPath, ...)` (1030); the catch at 1031-1039 restores only researchBefore (research.json) and waiverBackup (manifest.json, report.md). src/commands/operator-confirm-review.ts:797 `return { output: `review_complete refused: ${errorText(run.gateError)} — nothing was recorded`, isError: true };`. recordDispositionsLocked refuses a different state or different evidence for an already recorded finding.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "dedupe_key": "highload:complete-dispositions-written-before-close-no-rollback",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read in full: the E-01 skill-text mirrors, the E-02 dispositions card path (CompletePrepared, completionDispositions, buildCard, apply), the E-03 schema, the E-05 cardAvailable wiring, the E-04 test, and the added tests. Read at head 77d2eff20: approval-mirror.ts, complete-gated.ts, managed.ts 880-1140 and 1895-2005, shell-bridge.ts 940-1020, completion-gate.ts cardAvailable branches (grep).",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```
+
+## High-Load Review (r05 delta)
+
+### Review Scope
+- Delta: b1c6da0e6..77d2eff20, PR 1052 (flow 464)
+- Slice covered: slice-02
+- Load profile: not provided; severity assumes moderate traffic. The surface is a single operator answering a card, so contention is low and the concerns are idempotency and partial application.
+
+### Claimed fixes E-01..E-08, judged for the high-load role
+
+- E-04 (onTopicEnded, src/tui/approval-mirror.ts:55): complete. The callback fires once, only when the topic leg ended without a press and the leg itself was not aborted by the shell (`!topicAbort.signal.aborted`), and the `settled` flag stops a late callback after the dock answered. Undelivered and ended cases are mutually exclusive (`if ... else if`). The finally block still aborts the topic leg with `shell` or `cancelled`, so no leg is left waiting. The new mirror-undelivered tests cover both.
+- E-05 (cardAvailable, src/commands/agent.ts:3501): complete. The flag is derived from the registered tool set, so a shell without the card tool gets the CLI wording; completion-gate.ts:806 defaults to true only when the flag is absent. Tests cover true and false.
+- E-03 (readiness_waivers schema): complete. confirmedVia, pressedBy and pressedAt are declared, so a card-recorded waiver no longer fails manifest validation (which would have been a partial-apply path on the waiver card).
+- E-01 (skill text now says to call review_complete): complete for the mirrors in this slice; no load concern.
+- E-02 (dispositions on the card): the card freezes dispositions in `prepared` and the gates run before any write, which is correct. One residual issue: H-01 above (dispositions are written before the manifest is validated and closed, with no rollback).
+- E-06..E-08: no high-load concern in the slice.
+
+### Findings
+
+#### Concurrency & Race Conditions
+None detected. recordDispositions runs under withOperatorDecisionsLock; the raceApproval flags (`settled`, `started`) guard the callback races.
+
+#### Resource Management
+None detected. The `dispositions` array has no maxItems, but the input is operator-session scale (this round has 65 findings); an over-long card falls back to the shell through noticeCardTooLong, so nothing grows without bound.
+
+#### Caching
+None detected.
+
+#### Database Under Load
+None detected.
+
+#### Async / Queues
+None detected.
+
+#### Retry / Timeout / Circuit Breaker
+None detected.
+
+#### Idempotency & Distributed Invariants
+- [H-01] minor, src/review/managed.ts:1019: dispositions recorded before the close is validated; no rollback; the card says 'nothing was recorded'.
+
+### Clean Areas
+Concurrency (A), resource management (B), caching (C), database access (D), queues (E), retry and timeout (F) in slice-02. Slice-02 is the only slice dispatched to this wave; no other slice was read.

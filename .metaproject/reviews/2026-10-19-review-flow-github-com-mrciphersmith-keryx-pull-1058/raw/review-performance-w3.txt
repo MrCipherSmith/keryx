@@ -1,0 +1,38 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-03 (read in full, 1990 lines): the decisions journal and report changes, the review-record types and validators, two readiness lines and skill text. Every added cost is one-shot CLI work, O(host questions) or O(held findings) per call, against journals and finding sets of tens to low thousands of lines. No N+1, no render path, no unbounded in-process collection, no synchronous blocking added. No finding.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": ["slice-03"]
+}
+```
+
+## Performance Review (slice-03, wave 3 of 4)
+
+### Scope
+- PR 1058, slice-03 diff read in full (1990 lines): src/decisions/{journal,report,service,sources,types}.ts, three bundled skill texts (job-orchestrator, review-orchestrator SKILL.md and SKILL.detail.md, review-premise), review-finding.schema.json, src/review/{estimate,operator-decisions,plan-confirmation,premise-question,premise,readiness,types}.ts.
+- Surrounding code read: the TUI decisions sidebar (src/tui/decisions-surface.ts:555-575) for the callers of `decisionCount`. Waves 1-2 reports read; nothing repeated.
+
+### Looked at and not a finding
+- `buildReport` (report.ts): the diff adds two `opens.filter` passes (`hostOpens`, `drawn`) and one `hostOpens.map` with `hostQuestionRow`, which sorts a copy of one decision's answers (a handful). All linear in the journal, in the same function that already runs a dozen passes and a per-id sort. No new I/O, no new journal read.
+- `decisionCount` (service.ts) now reads `report.hostQuestions?.length` from the report it already loaded. The TUI sidebar calls `decisionCount`, `backfilledCount`, `annotatedCount` and `loadReport` separately, so each refresh parses the journal several times; that shape predates this diff and the diff adds no further load. Not reported (performance law 2: nothing outside the diff).
+- Journal `seq` (journal.ts:25): `records.filter(open && hostQuestion === undefined)` replaces `records.filter(open)`, same O(n) on a read the function already holds.
+- Validators (`validHostQuestion`, `viaConsistent`, `isHostQuestion`): a constant number of string checks per record, run on a file of tens of decisions. `isPlanConfirmation` runs on one small file.
+- readiness.ts `premiseDecisionsCheck`: one extra `latestPremiseDecision` per held finding, and only when nothing awaits the operator. Held findings are a few per review; no loop over data of any size.
+- Growth: each host-question act adds one open and one answer record to the journal and one entry to operator-decisions.json. That is per operator act, by hand, not per request; the journal's own cap on the answer text (`storedOperatorText`) applies. The uncapped texts in the review package are already reported in wave 2 (HL-W2-002).
+- Skill text and schema: prompt-load growth only; `hostQuestion` is a bounded object (five string fields, `additionalProperties: false`).
+
+### Clean areas
+N+1 queries, re-renders (no UI code changed), hot-path computation, missing indexes (no DB), memory leaks and unbounded in-process collections, bundle imports (`./types` and `./decisions` are already in the graph), synchronous blocking (the readFileSync in `readPlanConfirmation` is unchanged), pagination, redundant API calls, MobX.
+
+routing audit: graph_used: no (the questions were local to the changed functions and their callers); wiki_used: no (not relevant to a code-level cost review); ctx_used: yes (`keryx ctx rg` for the caller search); raw_rg_used: no

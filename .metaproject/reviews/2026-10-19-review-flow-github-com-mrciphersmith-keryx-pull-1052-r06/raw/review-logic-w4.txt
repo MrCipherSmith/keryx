@@ -1,0 +1,71 @@
+STATUS: DONE
+
+REVIEW_RESULT:
+```json
+{
+  "reviewer": "review-logic",
+  "worker": "w4",
+  "round": "r06",
+  "slices": ["slice-06"],
+  "status": "DONE",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "findings": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `docs/flow-helyx-operator-confirm` (PR 1052, flow 464)
+- Delta: 77d2eff20..0f980c407 (r06; r05 package plus the S-401 fix commit)
+- Slice reviewed: `slice-06` (second look, unchanged since r05). I also read `slice-01` and `slice-02` and the current `src/commands/operator-confirm-review.ts` to answer the S-401 question in the request.
+- Spec compliance gate: skipped, no issue or task was provided. The round context was used for the acceptance questions.
+
+### Summary
+slice-06 (the operator-confirm tool, the review_complete card, the agent plumbing of press fields, and the shared gate path) has no blocker or major logic defect. The S-401 fix is complete for every path I traced. It introduces no regression. The r05 ledger (S-401, F5-01 to F5-34) was not re-reported.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. In `operatorConfirmTool.invoke` the order is: press check, then the 1 hour remote TTL, then the allow-list (read fresh from `loadRemoteConfig()`). The one-time token is spent on every refusal, so a refused press cannot be replayed. A local `tui-card` answer carries no press fields and has no TTL, which matches the design.
+
+### Error Handling
+None detected. `apply` recomputes `completionFacts` and compares `factsDigest` (which includes status) before `completeReviewGated`. The "closed but bookkeeping stopped" path is reported, not swallowed. `completion-confirmation.json` goes through `writeFileAtomic`.
+
+### Null / Undefined Safety
+None detected. `agent.ts` forwards press fields only when the answer is remote and a token exists.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected in the slice.
+
+### S-401 follow-up: is the fix complete, and is there a regression
+
+Evidence is from static reading of `src/commands/operator-confirm-review.ts:650-702` and `src/review/complete-gated.ts`. Nothing was executed.
+
+1. The cap is enforced before the card is drawn. `completionDispositions` refuses more than `MAX_DISPOSITIONS` (20) entries, a finding longer than `MAX_DISPOSITION_FINDING_CHARS` (200), and an evidence longer than `MAX_DISPOSITION_EVIDENCE_CHARS` (300, measured after `trim()`). The refusal happens in the card's input step, so a refused input produces no card and no token.
+2. The card shows the evidence whole. `dispositionLine` no longer calls `clip()`. It prints `cardSafe(record.finding)` and `cardSafe(record.evidence)`. The `clip()` and `WAIVER_QUOTE_CHARS` pair still applies to waiver quotes only, and those were not part of S-401.
+3. Shown equals stored. The stored evidence is `evidence.trim()`, and the card shows `cardSafe` of that same string. The only differences are the visible newline marker and the removed control and bidi characters, and both are visible or non-printing, so neither can hide text. The hidden-tail attack, where text past character 300 forged an "Attested by: operator" line, is closed.
+4. No uncapped path found from the agent's input to the card or to the stored record. Records are rebuilt as `{finding, state, evidence?}`, which drops any extra keys. `findings.json` and `completion-confirmation.json` receive only these rebuilt records. Finding ids must resolve in the package (the engine refuses the rest).
+5. Oversized cards degrade safely. A card whose text goes past `MAX_APPROVAL_PROMPT_CHARS` (3000, `src/remote/protocol.ts:160`) is refused by `operatorCardTooLongForTopic` (`src/remote/shell-bridge.ts:280`). The Telegram buttons are not offered and the card is answered in the shell. With 20 entries at the maximum size the card passes 3000 characters, so that fallback is the expected result.
+6. Regression check. `completeReviewGated` runs `resolveReviewPackagePath`, `runProfileRefusal`, `packageRoutingRefusal(..., { refuseUnreadable: true })`, then `completeManagedReview`. That is the order `runComplete` in `src/commands/review.ts` used inline before, and both the CLI and the card now call the same function. I found no change in refusal order or in the arguments.
+
+### Notes, not findings
+- Length is counted in UTF-16 code units, and `cardSafe` does not strip zero-width characters other than `‎` and `‏`. This changes nothing about what the operator sees being the stored text up to invisible characters, and the caps still bound the size. Not reported as a defect.
+- I did not verify how the local TUI renders the largest card (about 11k characters). That code is in `tui-shell.ts` (slice-08, another reviewer's slice).
+- Open r05 items that this delta does not touch stay as they were: F5-04, F5-05, F5-06, F5-07 and the skill-wording items.
+
+### Suggested Patches
+None.
+
+### Routing audit
+graph_used: not-relevant (bounded slice review). wiki_used: not-relevant. ctx_used: yes. raw_rg_used: no.

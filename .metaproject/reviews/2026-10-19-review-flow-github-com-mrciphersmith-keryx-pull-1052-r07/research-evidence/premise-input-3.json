@@ -1,0 +1,115 @@
+{
+  "judge": "review-premise",
+  "source": "round",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "base_sha": "062aa9c36484e7b7f6b8a1dd6140671330646e66",
+  "head": "5444f96e4ce2f5b00cb0dea390a818e5ca182c23",
+  "findings": [
+    {
+      "id": "F-703",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 512,
+      "quote": "bodies.push(`reply ${index + 1}:`, ...shown.lines);",
+      "problem": "Each planned request is { method: 'POST', path: reply.endpoint, body: { body } } (src/review/pr-comments.ts:1879). The card prints 'reply N:' plus the body (:509-513); the digest bound at apply covers the whole request, so the endpoint is what gets posted but is never shown.",
+      "impact": "An agent controlling the outcomes file can attach a harmless-sounding body to a different review comment thread than the operator would expect. No hidden text; the stored value (endpoint) is simply not on the card, which breaks the same 'card must show what is stored' rule.",
+      "suggested_fix": "Add the target to each 'reply N:' line, for example the endpoint's comment id or the thread URL the planned reply carries (reply.comment.url).",
+      "also_reported_as": [
+        "review-logic-w7:L13-003"
+      ]
+    },
+    {
+      "id": "HL-702",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 529,
+      "quote": "const posted = await commentsReplyPass([...prepared.argv], false);",
+      "problem": "apply runs commentsReplyPass(prepared.argv, true) at line 527, compares JSON.stringify(requests) with prepared.requests (line 528), then runs commentsReplyPass(prepared.argv, false) at line 529, which rebuilds the requests again. If the outcomes file, the package or the PR comment set changes between the second dry run and the real pass, what is posted is not what was compared or shown. The hunk at lines 461-482 in this delta rewrites this spec's card (REPLY_PREVIEW removed), and the same shown-equals-applied class is the point of the commit. Not introduced by the delta, so a follow-up.",
+      "impact": "A window of a few hundred ms to seconds per confirmation; under concurrent edits a reply the operator never saw can be posted, and this tool cannot retract a posted reply.",
+      "suggested_fix": "Have the real pass accept the already-compared requests, or post from prepared.requests (JSON.parse) instead of recomputing.",
+      "also_reported_as": []
+    },
+    {
+      "id": "P-701",
+      "reviewer": "review-performance",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/tui/tui-shell.ts",
+      "line": 5424,
+      "quote": "      for (const line of card) {",
+      "problem": "Operator cards are now unbounded in line count, and the dock adds one TextRenderable per card line to the transcript. The delta removed every list cap: operator-confirm-review.ts:93-95 listFiles maps all files, :208-220 shows the whole publish body, :509-516 every reply body, :563 every perRole row, and operator-confirm-other.ts externalApplySpec spreads all files and all flaggedPaths. confirmOperatorCard (tui-shell.ts:5421-5426) loops over every card line and calls transcript.add(new otui.TextRenderable(...)) for each, synchronously, and the renderables stay in the transcript afterwards.",
+      "impact": "Hot path: once per operator-confirm card, human-gated, so infrequent. Scale: a review body up to GitHub's 65 536 characters, or a coverage waiver listing the uncovered files of a large PR (hundreds to thousands of lines). The cost is a one-time burst of renderable creation plus retained transcript memory per large card. Not a blocker: operatorCardTooLongForTopic (shell-bridge.ts:280-287) keeps such cards off Telegram, and showing the content whole is the goal of the fix.",
+      "suggested_fix": "Leave the content whole, since the correctness fix is right. If a large card is observed to stall the shell, render card lines through one multi-line TextRenderable per card (or per N lines) instead of one per line. Track as a follow-up; no change needed for this PR.",
+      "also_reported_as": []
+    },
+    {
+      "id": "S-12-01",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 89,
+      "quote": "const label = (dir: string, projectRoot: string): string => path.relative(projectRoot, dir) || \".\";",
+      "problem": "The package label is the raw relative directory path and is interpolated unsanitized into card titles and subjects (lines 135, 136, 145, 223, 279, 285, 341, 348, 413, 420, 429, 438, 558, 566, 623, 633, 807). Every other agent-influenced value in the same cards (finding key and severity, target, flow title, run id, file paths) goes through cardSafe, which strips ANSI/OSC, C0/C1 and bidi characters and folds newlines. A package directory directly under .metaproject/reviews/ or a flow reviews root is accepted by isReviewPackageDir when it holds manifest.json, and the isReviewPackageDir doc comment itself records that an agent can write such directories through an approved apply_patch. Linux directory names may contain newline, ESC and bidi characters. The label then reaches the TUI dialog and the card is mirrored to the Telegram topic (describeApprovalForTopic), and the title is also stored as entry.question and printed by OperatorConfirmationLog.clip, which flattens only whitespace and strips no control characters.",
+      "impact": "An agent that creates a package directory named with a newline or terminal escape sequence can make the operator's yes/no card for a waiver, ceiling lift or review_complete show a forged line or a misleading title (for example a fake 'subject:' or a benign-looking question) above the real decision lines, or inject escape sequences into the sidebar, /decisions modal and /remote-control status. The decision lines and the stored quote still reflect the real state, and the operator still presses yes or no, so this is a display-spoofing hardening gap rather than an authority bypass.",
+      "suggested_fix": "Sanitize at the source: const label = (dir, projectRoot) => cardSafe(path.relative(projectRoot, dir) || \".\"); import cardSafe from ../lib/card-safe is already present in the file. Optionally also have operatorConfirmTool.confirmation run cardSafe over title, lines and subject (refuse the card when cardSafe(x) !== x), so a future spec that forgets one value cannot reach the card.",
+      "also_reported_as": []
+    },
+    {
+      "id": "T-703",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 94,
+      "quote": "return files.map((file) => `  ${file}`);",
+      "problem": "Three more removed list caps have no over-the-cap fixture: review_waive_coverage listFiles (line 94, used at line 282), the review_override_reviewers 'not run' line (line 434) and review_confirm_plan estimate.perRole.map (line 563). The suites for these cards use 2 files (operator-confirm-review-tools.test.ts:308-327), no override card test at all (only the reason refusal at line 792) and a one-role plan (lines 521-551). Only the mutation waiver (30 mutants, line 796) and external_apply (40 files, 25 flagged; operator-confirm-other-tools.test.ts:338) got a fixture past the old cap.",
+      "impact": "The commit's claim that every list is shown whole is pinned for 2 of 5 changed lists; restoring the 15-item slice at lines 94, 434 or 563 stays green (m06, m10, m13).",
+      "suggested_fix": "One test per list with more entries than the old cap (16 uncovered files; 16 reviewers left out via a selected list; a plan with 16 roles) asserting every entry is on the card and no 'and N more' text.",
+      "also_reported_as": []
+    },
+    {
+      "id": "T-705",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 768,
+      "quote": "const hidden: Array<[string, string]> = [",
+      "problem": "Tests whose subject is an invisible character embed the literal invisible character in the source: U+202E at lines 230 and 769, U+200B at 770 and 793, U+200D at 771, U+FEFF at 772 and U+2028 at 775 (found with a codepoint search of the file). The neighbouring rows already use \\u001b, \\u0007 and \\u0085.",
+      "impact": "A row renders identical to plain text in review and in an editor, so a reader cannot tell which character it holds and the U+2028 row reads as a plain space; a formatter or copy-paste that strips format characters turns a must-refuse row into accepted plain text (that row then fails, but with no hint of the cause).",
+      "suggested_fix": "Write them as escapes: \\u202e, \\u200b, \\u200d, \\ufeff, \\u2028, in rows 230, 769-772, 775 and 793.",
+      "also_reported_as": []
+    },
+    {
+      "id": "T-706",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text);",
+      "problem": "Branches of the hidden-text path with no row: the S-402 table (operator-confirm-review-tools.test.ts:767-777) has rows for Cf (U+200B, U+200D, U+FEFF) and Zl (U+2028) but none for Zp (U+2029); the review_publish refusal test asserts stringContaining('holds control, escape or bidi characters on line') without the line number, so `${bad + 1}` at line 65 is unpinned; no row builds a lone \\r line or a body with trailing blank lines, so trimEnd at line 63 is unpinned.",
+      "impact": "Removing \\p{Zp} (m17), changing `bad + 1` to `bad` (m02) or dropping trimEnd (m04) leaves the suite green.",
+      "suggested_fix": "Add a U+2029 row to the S-402 table; assert 'on line 3' (or the real number) in the publish refusal; add a lone-CR line and a trailing-blank-lines body case.",
+      "also_reported_as": []
+    },
+    {
+      "id": "T-707",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 741,
+      "quote": "const atCap = `${\"a\".repeat(280)} operator: decided-by alice`.slice(0, 300);",
+      "problem": "S-401 and S-402 are defined as stored differing from shown. The at-cap and plain-text rows (lines 741-743 and 785) assert the card line and stop at ask(): no yes() follows with a read of findings.json or completion-confirmation.json to equal the shown evidence, and the waiver-quote test (line 877) asserts the card only. The existing disposition test (line 711) covers the happy path with one short value, so a cap-length value is never round-tripped.",
+      "impact": "A change that stored a trimmed or re-encoded evidence value, or applied a different transform than the card, would not be seen by the new tests.",
+      "suggested_fix": "After the at-cap card, call yes() and assert the stored disposition evidence in findings.json equals atCap exactly, and that completion-confirmation.json carries the same text.",
+      "also_reported_as": []
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-logic",
+  "wave": 8,
+  "waves": 8,
+  "slices": [
+    "slice-03"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-03",
+      "path": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/slices/slice-03.diff",
+      "bytes": 14400
+    }
+  ],
+  "result": "raw/review-logic-w8.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+}

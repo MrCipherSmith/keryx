@@ -1,0 +1,59 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice 03 is the resolver, reference-entries, reference-proof, references-config/section/check and the status snapshot. This is a CLI/TUI library with no shared mutable state, queues, pools or retries, so most high-load checks do not apply. No blocker or major found. Three minor load-related costs: a quadratic heading regex that runs synchronously on the TUI event loop, a status poll that now re-reads every rule and declared document every 5 seconds, and an unbounded headings list in a resolver warning.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/references-section.ts",
+      "line": null,
+      "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+      "problem": "The lazy `(.*?)` followed by `[ \\t]*$` is quadratic on a heading line that holds a long run of spaces or tabs and then a non-space character. The same shape exists in `stripClosingHashes` (`/[ \\t]+#+$/`). Both run synchronously inside `scanHeadings`, which `extractSection` and `markdownHeadings` call. I timed the exact patterns in node: a heading line with 20000 interior spaces takes about 250 ms, 40000 about 1.0 s, 80000 about 4.0 s. The time quadruples when the length doubles.",
+      "impact": "Trigger: an anchored declaration whose document has a `#` line with a very long internal whitespace run. A declared document may be up to 262144 bytes, so the worst case is tens of seconds. It blocks the event loop of whatever process called it: `keryx skills resolve-context`, the validator, and the TUI. In the TUI the status poll (every 5 s, PROJECT_CONTEXT_POLL_MS) reaches it through `checkReferences`, so the TUI freezes on every tick for as long as the file stays that way. Needs a pathological document, so it is minor.",
+      "suggested_fix": "Match the heading prefix with a linear regex, such as `/^ {0,3}(#{1,6})[ \\t]+(.*)$/`, and trim the trailing whitespace of the capture with a string trim. Replace the `/[ \\t]+#+$/` closing-hash strip with a manual scan from the end of the string. Alternatively skip heading lines longer than a fixed limit such as 1000 characters.",
+      "evidence": "Timing of the exact regexes on `'# a' + ' '.repeat(n) + 'b'`: n=20000 252 ms, n=40000 1002 ms, n=80000 4019 ms. For `stripClosingHashes`: 223 ms, 817 ms, 3435 ms.",
+      "confidence": 0.9,
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/project-context-status.ts",
+      "line": null,
+      "quote": "const report = await checkReferences(projectRoot);",
+      "problem": "`loadProjectContextStatus` now runs the full `checkReferences` analysis whenever a `references.json` exists. That analysis reads every project rule (`scanCitations` over `listRuleRefs`, one `readFile` each), then inspects every declared document and every undeclared cited document (up to 262144 bytes each, read whole), then runs `extractSection` on each anchored one. `readReferences` calls `loadReferences`, and `checkReferences` calls it again. `listRuleRefs` also runs a second time next to the one already in the `Promise.all`. The TUI calls this function from `createProjectContextFeed`, whose default interval fires `poll` every 5000 ms with `setInterval`. The tick has no in-flight guard.",
+      "impact": "Trigger: a project that declares references, with the TUI open. It repeats N rule reads plus M document reads, M documents of up to 256 KB each, every 5 s for as long as the TUI lives, although the answer only changes when a file changes. If a poll takes longer than 5 s, for example on a slow or network disk, ticks overlap and reads pile up. The cost is small for typical projects. Projects without `references.json` pay only one ENOENT read.",
+      "suggested_fix": "Keep the cheap parts in the poll (declarations and counts). Run the full `checkReferences` only when the modal's references tab is open or after an explicit reload, or cache the report keyed on the mtimes of `references.json`, the rules folder and the declared files. Also add a `polling` boolean to `poll` so a slow tick skips the next one.",
+      "evidence": "project-context-status.ts `readReferences` calls `loadReferences` then `checkReferences`; references-check.ts `checkReferences` calls `loadReferences`, `scanCitations` and `inspectDocument` again. src/tui/project-context-inspector.ts: `PROJECT_CONTEXT_POLL_MS = 5000` and `setInterval(() => { void tick(); }, ms)`.",
+      "confidence": 0.8,
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "const headings = section.available.length > 0 ? ` Headings in the file: ${section.available.join(\"; \")}.` : \"\";",
+      "problem": "When an anchor is not found, the warning lists every heading of the file with no cap. `references-check.ts` caps the same list at 12 (`headings.slice(0, 12)` and `\", ...\"`), so the two paths disagree. The warning is pushed into `ProjectContextResolution.warnings`, which is written to the JSON result, to `last.json`, and to stderr on every resolve.",
+      "impact": "Trigger: a declared anchor that does not match a heading in a large document, up to 262144 bytes with thousands of headings. Every resolve then emits a warning of tens to hundreds of kilobytes. The result is handed to workers as context, so one dead anchor repeats that text in each dispatch's prompt and in the recorded last-resolve file.",
+      "suggested_fix": "Cap the list the same way as references-check.ts, with the first 12 headings and a trailing \"...\". Share one helper for the truncated heading list.",
+      "evidence": "reference-entries.ts builds the string from the whole `section.available` array. references-check.ts uses `headings.slice(0, 12).join(\", \")` and appends `\", ...\"` when there are more.",
+      "confidence": 0.85,
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Clean areas: shared mutable state and races (no module-level state; `resolveReferences`, `proofFailures` and `checkResolvedContext` hold only local variables), connection pools, queues, retries and idempotency (not present in this slice), file-handle hygiene (`readDeclaredFile` checks containment, regular file and size before `readFile`), keyword matching (`keywordOccurs` escapes the keyword and uses a bounded lookaround, no backtracking blow-up; task text is capped at 4000 characters). Reviewed from the diff and the TUI poll code at head.
+
+Note, not a finding: `currentSection` in reference-proof.ts reads `entry.path` from a `--resolved` file with no containment or size check. `currentSha` in the same file already did that before this PR, and the new code returns only a word count, never file content, so I did not raise it.

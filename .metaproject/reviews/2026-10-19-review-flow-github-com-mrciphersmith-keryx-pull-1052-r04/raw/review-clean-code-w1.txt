@@ -1,0 +1,88 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Clean Code Review (r04, wave 1, slice-01)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776
+- Scope mode: delta (fix slice), slice-01 only
+- Files in slice: docs/docs/guides/autonomous-review.md, src/commands/operator-confirm-review.ts, src/review/completion-gate.ts
+
+### Summary
+The fix slice closes D-01 and D-08 and fixes half of D-03: the agent-facing waiver texts and the empty-blocker line now point at the review_complete card, and the autonomous exception is stated in the guide and matches unattended.ts. One sibling string in describeBlockers (line 791) still names the CLI as a way to list blockers. D-12 is not answered by this slice (no test added for the four press-field sites). No new Clean Code defect was introduced by the diff.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+#### Naming
+No naming issues found.
+
+#### Functions
+No function design issues found.
+
+#### Comments
+No comment issues found. The header comment at operator-confirm-review.ts:24-25 now reads "Closing the review is the review_complete card ... at a terminal the CLI flags record the waiver and close in one run", which is accurate.
+
+#### Error Handling
+No error handling issues found.
+
+#### DRY
+Not re-raised (D-02, D-05 stay open as follow-ups by the operator).
+
+#### SOLID
+No SOLID violations found.
+
+#### Residual of D-03
+
+[F-001] describeBlockers still sends the agent to the CLI to list blockers
+- Severity: minor
+- File: src/review/completion-gate.ts:791
+- Principle: Clean Code - consistent instruction (same family as D-03)
+- Problem: line 788 was fixed ("call the `review_complete` card to close the package"), but the overflow line two lines below still says "(`keryx review complete` lists them all)". `keryx review complete` is not a listing command: run by an agent it tries to close the package. The same continue message (decideReviewGate, lines 812-819) tells the agent it never runs that command.
+- Fix: say where the blockers are actually listed, e.g. "- ... and N more (`keryx review status <package>` lists them all)", using the status command that nextStep already names (line 756).
+
+### prior_dispositions check against source at head b1c6da0e6992
+
+- D-01 closed. All five sites verified at head: header comment line 24, review_waive_coverage description line 262 ("call review_complete afterwards to close the review"), its result line 296 ("Call review_complete to close the review."), review_waive_readiness description line 312 (same), its result line 358 ("Call review_complete to close the review."). Lines 8, 9, 18, 261, 279 describe the CLI equivalent and are accurate. review.ts:4558/4562 error texts were also moved to the card. A test asserts the readiness result (operator-confirm-review-tools.test.ts:346-347); the coverage result has no matching assertion (not a blocker for closure).
+- D-03 partial. Line 788 fixed; line 791 (the second half of the finding, suggested_fix named both) is unchanged. See F-001.
+- D-08 closed. docs/docs/guides/autonomous-review.md now states that an unattended run is excluded from the card gate, is not given the tools, closes through `keryx review complete`, and that waivers stop it at the floor. Verified: src/trigger/unattended.ts:63-73 lists review_complete and the waiver tools in OPERATOR_CONFIRM_TOOL_NAMES and :87 excludes them from the unattended roster. The exit table row (exit 0, "closed by `keryx review complete`") now agrees. cli-reference.md carries the same exception.
+- D-12 open. The slice contains no test for the press fields of review_publish, review_waive_coverage, review_waive_readiness and the decisions recorders. Remote-yes assertions at operator-confirm-review-tools.test.ts exist only at lines 132, 505, 534, 593 (chunks, confirm_plan, decide_premise, review_complete). The waiver and publish tests (271, 335, 192) use no remote press.
+
+### Clean Areas
+Names, function size and arguments, comments, error handling, DRY (no new repetition beyond the already-tracked D-02), SOLID: reviewed on slice-01, nothing new.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix slice closes D-01 and D-08, half-fixes D-03 (describeBlockers line 791 still names the CLI as a blocker lister), and does not answer D-12. No new defect from the diff.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": [ { "id": "slice-01", "status": "DONE", "coverage": "all three files of the slice read at head and checked against unattended.ts and the test file" } ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "more (\\`keryx review complete\\` lists them all)",
+      "problem": "describeBlockers line 788 was changed to name the review_complete card, but the overflow line at 791 still says '`keryx review complete` lists them all'. That command closes the package, it does not list blockers, and the same continue message tells the agent it never runs it.",
+      "impact": "An agent with more than 20 blockers is pointed at the CLI the rest of the nudge forbids; it either runs the close command or cannot find where the remaining blockers are listed.",
+      "suggested_fix": "Reword to name a real listing command, e.g. '- ... and N more (`keryx review status <package>` lists them all)', matching nextStep's wording at line 756.",
+      "evidence": "src/review/completion-gate.ts at head b1c6da0e: line 788 'call the `review_complete` card to close the package' next to line 791 '(\\`keryx review complete\\` lists them all)'; decideReviewGate lines 812-819 say the operator answers the review_complete card and nextStep lines 756-761 say 'you never run `keryx review complete` yourself'. Slice-01 diff touches only the 788 line.",
+      "confidence": "high",
+      "dedupe_key": "describeBlockers-791-cli-instruction",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-12", "disposition": "open" }
+  ]
+}
+```

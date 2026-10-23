@@ -1,0 +1,291 @@
+{
+ "mutants": [
+  {
+   "id": "M-E02-1",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "...dispositions.map(dispositionLine),",
+   "replacement": "...[],",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-2",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions }",
+   "replacement": "prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions: [] }",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-3",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "        waivers: facts.waivers,\n        dispositions: prepared.dispositions,\n",
+   "replacement": "        waivers: facts.waivers,\n",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-3b",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "      dispositions: prepared.dispositions,\n      prLookup:",
+   "replacement": "      prLookup:",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-4",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "!(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)",
+   "replacement": "false",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-5a",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "if (finding === \"\") return { refusal: `dispositions[",
+   "replacement": "if (false) return { refusal: `dispositions[",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-5b",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "if (evidence !== undefined && typeof evidence !== \"string\") return {",
+   "replacement": "if (false) return {",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-5c",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "if (!Array.isArray(raw)) return {",
+   "replacement": "if (false) return {",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-6",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "cardSafe(record.finding)",
+   "replacement": "record.finding",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E02-6b",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "cardSafe(clip(record.evidence))",
+   "replacement": "record.evidence",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E02-7",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "{ evidence: evidence.trim() }",
+   "replacement": "{ evidence }",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E02-8",
+   "file": "src/commands/operator-confirm-review.ts",
+   "anchor": "const run = await runCompletionGates(ctx.projectRoot, prepared, confirmation.at, seams);",
+   "replacement": "const run = await runCompletionGates(ctx.projectRoot, { ...prepared, dispositions: (() => { const d = completionDispositions(_input); return Array.isArray(d) ? d : prepared.dispositions; })() }, confirmation.at, seams);",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E03-1",
+   "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+   "anchor": "\"confirmedVia\": { \"type\": \"string\", \"enum\": [\"tui-card\", \"remote-card\"] },",
+   "replacement": " ",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E03-2",
+   "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+   "anchor": "\"confirmedVia\": { \"type\": \"string\", \"enum\": [\"tui-card\", \"remote-card\"] },",
+   "replacement": "\"confirmedVia\": { \"type\": \"string\" },",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E03-3a",
+   "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+   "anchor": "\"pressedBy\": { \"type\": \"integer\" },",
+   "replacement": " ",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E03-3b",
+   "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+   "anchor": "\"pressedBy\": { \"type\": \"integer\" },",
+   "replacement": "\"pressedBy\": { \"type\": \"string\" },",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E03-3c",
+   "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+   "anchor": "\"pressedAt\": { \"type\": \"string\", \"minLength\": 1 }",
+   "replacement": "\"pressedAtX\": { \"type\": \"string\", \"minLength\": 1 }",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E03-4",
+   "file": "src/review/readiness.ts",
+   "anchor": "ids.map((item) => ({ item, operator_quote: quote, time,",
+   "replacement": "ids.map((item) => ({ item, foo: 1, operator_quote: quote, time,",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E05-1a",
+   "file": "src/commands/agent.ts",
+   "anchor": "cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\"),",
+   "replacement": "cardAvailable: true,",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E05-1b",
+   "file": "src/commands/agent.ts",
+   "anchor": "cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\"),",
+   "replacement": "cardAvailable: false,",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E05-2a",
+   "file": "src/review/completion-gate.ts",
+   "anchor": "function nextStep(open: OpenManagedReview, card: boolean): string {",
+   "replacement": "function nextStep(open: OpenManagedReview, cardIn: boolean): string {\n  const card = true;\n  void cardIn;",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E05-2b",
+   "file": "src/review/completion-gate.ts",
+   "anchor": "export function describeBlockers(open: OpenManagedReview, card = true): string {",
+   "replacement": "export function describeBlockers(open: OpenManagedReview, card = false): string {",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E05-3",
+   "file": "src/review/completion-gate.ts",
+   "anchor": "function closeStep(card: boolean): string {",
+   "replacement": "function closeStep(card: boolean): string {\n  card = true;",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E04-1a",
+   "file": "src/tui/approval-mirror.ts",
+   "anchor": "else if (!isTopicPress(answer) && !topicAbort.signal.aborted) options.onTopicEnded?.();",
+   "replacement": "else if (!isTopicPress(answer)) options.onTopicEnded?.();",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E04-1b",
+   "file": "src/tui/approval-mirror.ts",
+   "anchor": "else if (!isTopicPress(answer) && !topicAbort.signal.aborted)",
+   "replacement": "if (!isTopicPress(answer) && !topicAbort.signal.aborted)",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E04-a",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "onTopicEnded: () => options.log.markUndelivered(id, \"ended\"),",
+   "replacement": "onTopicEnded: undefined,",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E04-b",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "...(reason === \"ended\" ? { topicEnded: true as const } : {})",
+   "replacement": "...({})",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E04-c",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "onTopicEnded: () => options.log.markUndelivered(id, \"ended\"),",
+   "replacement": "onTopicEnded: () => options.onUndelivered?.(),",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E04-d",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "entry.topicEnded === true ?",
+   "replacement": "entry.topicEnded !== true ?",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-E08-a1",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "...(fromId !== undefined ? { pressedBy: fromId } : {}),",
+   "replacement": "",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E08-a2",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "pressedAt: now().toISOString()",
+   "replacement": "pressedAt: new Date().toISOString()",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E08-b",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "if (id !== undefined) options.log.settle(id, outcome, options.turnSignal.aborted);",
+   "replacement": "void 0;",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E08-c",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "place: turnAborted ? \"withdrawn\" : \"shell\"",
+   "replacement": "place: \"shell\"",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E08-d1",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "place: turnSignal.aborted || !answered ? \"withdrawn\" : \"shell\"",
+   "replacement": "place: !answered ? \"withdrawn\" : \"shell\"",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E08-d2",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "place: turnSignal.aborted || !answered ? \"withdrawn\" : \"shell\"",
+   "replacement": "place: turnSignal.aborted ? \"withdrawn\" : \"shell\"",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E08-e",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "const id = options.question === undefined ? undefined : options.log.ask(options.question, true);",
+   "replacement": "const id = options.log.ask(options.question as string, true);",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-201",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId })",
+   "replacement": "pressedBy: outcome.answer.fromId ?? 0",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-202",
+   "file": "src/tui/operator-confirmations.ts",
+   "anchor": "yes: answered && verdict !== false",
+   "replacement": "yes: !turnSignal.aborted && answered && verdict !== false",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-E05-g",
+   "file": "src/review/completion-gate.ts",
+   "anchor": "${card ? \"call the `review_complete` card\" : \"run `keryx review complete`\"} to close the package",
+   "replacement": "call the `review_complete` card to close the package",
+   "kind": "presentation"
+  },
+  {
+   "id": "M-001a",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "remoteApproval(meta.fingerprint, outcome.answer.fromId)",
+   "replacement": "remoteApproval(meta.fingerprint, undefined)",
+   "kind": "behavior"
+  },
+  {
+   "id": "M-001b",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "remoteApproval(meta.fingerprint, answer.fromId)",
+   "replacement": "remoteApproval(meta.fingerprint, undefined)",
+   "kind": "behavior"
+  }
+ ]
+}

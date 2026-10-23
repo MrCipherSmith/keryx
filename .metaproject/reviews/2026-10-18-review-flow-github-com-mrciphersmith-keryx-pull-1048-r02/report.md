@@ -1,0 +1,2282 @@
+# Review: PR #1048 (flow 462, conditional mandatory reads) at d6267d4a5099f39b74e86a71e5c8f61ca47aa63d
+
+Orchestrator: vantage-review (generic engine: review-orchestrator, Keryx v1.11.0). No Vantage overlays: Bun CLI repository.
+Reviewed SHA: d6267d4a5099f39b74e86a71e5c8f61ca47aa63d (merge-base 1658f77d374b2d20189a55eaf44b95d64768d6b6), 62 filtered files, 43 dispatches over 10 roles, all finished.
+
+Evidence level: static plus selected execution — ran: the mutation pass (35 mutants, 15 killed, 20 survived, 0 timeout) and the Wave C verifier (9 of 9 claims confirmed by running them); did not run: the full test suite and the live run on this head. Reviewers read the diff and sources and reproduced selected claims under bun.
+
+Stage counts: 147 raw findings from the reviewers, 100 after de-duplication by cluster (blocker 0, major 7, minor 59, info 34).
+
+- **Not run:** a chunk pass for the 50 changed files absent from the code graph (they stay uncovered; they need the operator's `chunks estimate` answer). Chunk passes for the 17 files dropped by the blast-radius cap ran (5 chunks, 5 done, 0 findings).
+- **Not verified:** 50 changed files absent from the code graph (skills, schemas, docs) have an unresolved radius; only the --task-text runtime edge was checked by hand. (review-regression-w2:fu2, narrowed, remains: Runtime and prose consumers of the 50 off-graph files (skills, schemas, docs) have no regression pass; the radius is unresolved, not clean.)
+
+Not verified: 5
+
+Five blocker/major findings carry no verifier verdict: the five testing findings that severity-audit raised from minor to major on `mutant:<id>` evidence (review-testing-practices-w2:F-001, F-002, F-005, F-008, F-009). The Wave C verifier ran on 9 claims (9 of 9 confirmed).
+
+- **Known and accepted, not reported:** the summary check is a vocabulary proxy; `src/tui/ci-triage-source.test.ts` env failures also fail on main; `suggest` output is not pasteable as is; `references-check.ts` has its own citation scan; mkdocs was not run locally.
+
+## Findings by severity
+
+- **major** `src/gdskills/reference-proof.ts` — The resolver and the validator disagree about a declaration whose anchor no longer matches a heading. reference-entries.ts falls back to the whole file and states the obligation: "the whole file (${bytes} bytes) is the obligation" (AC6: fall back with a warnin (merged: review-architecture-w3:F-001, review-logic-w3:F-001)
+- **major** `src/gdskills/references-check.ts` — scanCitations iterates listRuleRefs(), which lists only files copied under .metaproject/rules/project/. The resolver's collectProjectRules also reads rules registered with mode link from their origin and scans their citations. The authoring checker therefore s (merged: review-architecture-w3:F-002, review-logic-w2:F-001)
+- **major** `src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md` — Five bundled skill files, with byte-identical managed copies under .metaproject/skills/gdskills, tell the executing agent to substitute the task title and description into a double-quoted shell argument of `keryx skills resolve-context`. Inside double quotes a (merged: review-security-code-w4:F-002, review-clean-code-w2:F-003)
+- **major** `src/gdskills/references-section.ts` — scanHeadings matches every line with a lazy `(.*?)` followed by `[ \t]*$`, and stripClosingHashes then runs `/[ \t]+#+$/` over the captured text. Both backtrack quadratically on a heading line that holds a long run of spaces or tabs followed by a non-space cha (merged: review-security-code-w3:F-001, review-highload-w3:F-001, review-security-code-w1:F-001)
+- **major** `src/gdskills/reference-entries.ts` — The not-a-word-character lookarounds are applied unconditionally. When the keyword itself begins (or ends) with a non-word character, the lookaround demands that the neighbouring text character is also a non-word character, which is the opposite of a word boun (review-logic-w3:F-002)
+- **major** `src/gdskills/context-resolver.ts` — recordLastResolve now writes up to 4000 characters of the raw --task-text into .metaproject/data/skills/project-context/last.json. Before this PR that file held only rule paths, hashes and warnings. The path is not in .gitignore (only .metaproject/data/skills/ (merged: review-security-code-w4:F-001, review-security-code-w1:F-002)
+- **major** `src/tui/project-context-inspector.ts` — paint() joins the lines built by formatProjectReferencesLines and passes them to a TextRenderable as is; stylePlanText with tone "plain" returns the string untouched. The new References tab puts attacker-writable strings into those lines with no escaping: decl (review-security-code-w5:F-001)
+- **minor** `docs/requirements/keryx-conditional-reads/live-run.md` — The operator runbook tells the person running the live run that the summary must share at least two distinct words of five or more letters with the section, and treats a failure as a sign that the two-word threshold is too strict. The implemented and documente (merged: review-architecture-w1:F-001, review-clean-code-w1:F-001, review-core-boundaries-w1:F-001, review-highload-w1:F-001, review-logic-w1:F-001, review-style-w1:F-001)
+- **minor** `docs/requirements/keryx-conditional-reads/README.md` — Identifiers in the flow documents do not match what they point at. (a) PRD section 7 calls the live run AC18; in the flow's acceptance-criteria.md AC18 is the end-to-end test and the live run is AC20. (b) live-run.md refers to 'риск 6', but the PRD risk table  (merged: review-architecture-w1:F-002, review-clean-code-w1:F-002, review-core-boundaries-w1:F-003, review-highload-w1:F-002, review-logic-w1:F-003, review-style-w1:F-003)
+- **minor** `src/gdskills/reference-proof.ts` — The proof thresholds (40 characters, 3 shared words, 5 letters) have one source in code, but slice-01 restates them by hand in prose in the flow-orchestrator, job-orchestrator, task-implementer and tests-creator SKILL.md files, orchestrator-prompt.md, cli-refe (review-architecture-w1:F-004)
+- **minor** `src/commands/skills.ts` — The diff edits printResolveContextHelp to add `--task-text`, and docs/docs/cli-reference.md (line 3452) shows `[--task-type <type>] [--task-text <text>] [--max-bytes <n>] [--out <path>] [--json]`, but the usage block of printSkillsHelp (`keryx skills --help`), (merged: review-architecture-w2:F-001, review-clean-code-w2:F-001)
+- **minor** `src/commands/skills-references.ts` — printReferencesHelp states the check thresholds (20 characters, 4 characters) and the command name `keryx skills references suggest` as literals, while references-check.ts exports MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAN (merged: review-architecture-w2:F-002, review-style-w2:F-001)
+- **minor** `src/gdskills/import-rules.ts` — The hint is computed after importProjectRules for every text-mode run, including --dry-run (and a run where rules were refused). A dry run copies nothing, so the count describes the rules already installed, not the rules the command would import, under the com (merged: review-architecture-w3:F-003, review-logic-w2:F-002)
+- **minor** `src/gdskills/resolved-context-check.ts` — The question 'which citation of this path counts' is answered by two unrelated rules in two modules: the hash check takes the last citation (`cited.get(where)?.at(-1)`), while the proof takes pickProofItem, which prefers a citation with the pinned sha256 and a (merged: review-architecture-w3:F-004, review-logic-w2:F-003)
+- **minor** `src/gdskills/reference-proof.ts` — Whether an entry is a promoted reference is decided by a string prefix of the free-text reason field. The producer is reference-entries.ts (`condition:glob:${glob}`, `condition:keyword:${keyword}`) in another module, with no shared constant or type; the entry  (merged: review-architecture-w3:F-005, review-clean-code-w3:F-006, review-clean-code-w5:F-002, review-style-w3:F-003)
+- **minor** `src/gdskills/reference-entries.ts` — The sequence lstat, realpath, containment check, regular-file check, size cap, read is written three times in this slice with small differences: readDeclaredFile here (re-lstats the real path), inspectDocument in references-check.ts (stats the real path, diffe (merged: review-architecture-w3:F-006, review-clean-code-w3:F-004, review-style-w3:F-001)
+- **minor** `src/gdskills/project-context-status.ts` — readReferences calls loadReferences, and then checkReferences, which loads the same file again, scans every copied rule, and reads every declared document. The status loader, documented as a 'read-only snapshot' for the TUI sidebar and modal, now runs the full (merged: review-architecture-w3:F-007, review-clean-code-w3:F-008)
+- **minor** `src/gdskills/reference-proof.ts` — WORD_MIN_LETTERS is exported and used in the failure message ('words of ${WORD_MIN_LETTERS} or more letters'), but distinctWords hard-codes `{5,}` in its regular expression. The threshold exists in two places and only one of them is enforced. (merged: review-architecture-w3:F-009, review-clean-code-w3:F-005, review-logic-w3:F-004, review-style-w3:F-002)
+- **minor** `src/gdskills/conditional-reads.e2e.test.ts` — The e2e test re-declares the predicate that decides which entries are 'promoted by a condition'. The production module already exports an identical `isPromoted` from src/gdskills/reference-proof.ts, and the same test file already imports `distinctWords` from t (review-architecture-w4:F-001)
+- **minor** `src/gdskills/output-schema.test.ts` — Two new test files assert the same invariant, 'the managed copies of the two output-contract schemas are byte-identical to the bundled source', each from its own hand-written path table. output-schema.test.ts keeps `SCHEMA_SOURCES` (source plus two copies per  (merged: review-architecture-w4:F-002, review-clean-code-w4:F-002)
+- **minor** `src/tui/tui-shell.ts` — createProjectContextFeed starts a 5 s setInterval at construction and returns stop(), but the shell never calls projectContextFeed.stop(). Every other live panel/poller in this shell is released in the renderer's onDestroy (disposeExecutionPlanPanel, liveSched (merged: review-architecture-w5:F-001, review-logic-w5:F-002, review-clean-code-w5:F-004, review-style-w5:F-004)
+- **minor** `.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md` — The 2.0c bullet that used to say only 'cite what you used in project_context_applied with the resolver's sha256; n/a needs a reason in notes; never edit a resolved file' now opens with the promoted-entry rule, and the general sentences follow it in the same bu (review-clean-code-w1:F-003)
+- **minor** `.metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md` — The proof rule (path, whole-file sha256, declared anchor, summary of 40 characters, three shared words of five letters, how read|followed) is restated in prose in eight places in this slice. The numbers live in code in one place (reference-proof.ts: SUMMARY_MI (review-clean-code-w1:F-004)
+- **minor** `src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md` — Step A of the wave pattern now spells out `--task-text "<task title and description>"`, but Step B (implement) is written with an ellipsis (`--for implement ... --out`), which a literal reader takes as the flags of an older command. The same asymmetry is in or (review-clean-code-w2:F-002)
+- **minor** `src/commands/skills-references.test.ts` — The size-limit test hard-codes 262145, one more than CONTRACT_MAX_BYTES (262144, exported from src/gdskills/context-resolver.ts). The test does not say where the number comes from. (review-clean-code-w2:F-004)
+- **minor** `src/commands/skills-references.test.ts` — The `declaration()` fixture builder nests a ternary inside a ternary inside an object spread to express 'a key present in overrides with value undefined removes the field'. It is the hardest line to read in a 329-line file, and every test in the file goes thro (merged: review-style-w2:F-002, review-clean-code-w2:F-005)
+- **minor** `src/gdskills/context-resolver.ts` — Clean Code B1/B3. The function body is about 110 lines after this diff and mixes rule/skill selection, citation scanning, task-text truncation with its warning, reference resolution, budget arithmetic and result assembly. The diff added roughly 40 lines (task  (review-clean-code-w3:F-001)
+- **minor** `src/gdskills/context-resolver.ts` — Clean Code B2. `collectContracts` now takes five positional parameters (projectRoot, cited, taken, declared, warnings), the diff adding the fifth; `readDeclaredFile(projectRoot, rootReal, rel, maxFileBytes)` and `undeclaredCitations(projectRoot, rootReal, cite (review-clean-code-w3:F-002)
+- **minor** `src/gdskills/reference-entries.ts` — Clean Code B1. The function is about 46 lines (exceeds the 40-line guide) and mixes levels: duplicate-listing guard, file read, anchor-to-section byte accounting with its dead-anchor fallback and warning text, promotion decision, and entry construction in one  (review-clean-code-w3:F-003)
+- **minor** `src/gdskills/references-check.ts` — Clean Code E2. The cap of 12 listed headings appears twice in one expression (`slice(0, 12)` and `headings.length > 12 ? ", ..."`) with no name. (merged: review-clean-code-w3:F-007, review-style-w3:F-007)
+- **minor** `src/gdskills/resolve-context-command.ts` — Clean Code A1/B3. The `flags` array literal in `renderResolutionMarkdown` is now one line of several hundred characters, and the new element puts a template literal with a nested conditional template inside an array element that already holds three ternaries.  (review-clean-code-w3:F-009)
+- **minor** `src/gdskills/references-check.ts` — Clean Code E1. Counting code points of trimmed text is written three ways in this diff: `lengthOf` here (spread), `charCount` in reference-proof.ts (`Array.from(text.trim()).length`) and `truncateTaskText` in context-resolver.ts (`Array.from(text)`). The two h (merged: review-clean-code-w3:F-010, review-style-w3:F-006)
+- **minor** `src/gdskills/conditional-reads.e2e.test.ts` — The ratio 20 (the anchored section must be under one twentieth of the document) is an unnamed literal repeated in three assertions (`styling.bytes / 20`, `Buffer.byteLength(text) / 20`, `theming.bytes / 20`), and the size tolerance `+ 2_000` is repeated four t (review-clean-code-w4:F-001)
+- **minor** `src/gdskills/resolved-context-check.test.ts` — docFixture fills the ContextEntry `bytes` field (and budget `usedBytes`) with `text.length`, a character count. The same slice's context-resolver tests use Buffer.byteLength for the same field, and the Russian-section test in this file passes Cyrillic text thr (merged: review-style-w4:F-001, review-clean-code-w4:F-003)
+- **minor** `src/tui/project-context-inspector.ts` — Adding the References tab extended a tab-id-to-formatter mapping that is spelled out separately in four places: the nested three-way ternary in paint(), the Math.max(...) list that sizes contentRows, the tabs array, and the ProjectContextTab union. Meanwhile ` (merged: review-clean-code-w5:F-001, review-style-w5:F-002)
+- **minor** `src/tui/project-context-inspector.ts` — reload() runs subscriber callbacks inside the same async function as the load, and poll() catches everything and reports it as a failed poll. A throwing subscriber (the sidebar repaint touches renderer objects) therefore (a) skips the remaining listeners, incl (review-clean-code-w5:F-003)
+- **minor** `docs/docs/cli-reference.md` — The Declare bullet in the CLI reference lists `description` after 'optionally', so it reads as optional. The loader (src/gdskills/references-config.ts, lines 62 and 211-212) and the committed JSON schema require it and reject an entry without a non-empty descr (merged: review-core-boundaries-w1:F-002, review-logic-w1:F-002)
+- **minor** `src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md` — Flow 462 makes every resolve-context dispatch in flow-orchestrator, job-orchestrator, task-implementer and tests-creator pass the task title and description as one double-quoted shell argument. That text comes from issue bodies and plans. In double quotes the  (review-highload-w2:F-001)
+- **minor** `src/gdskills/project-context-status.ts` — `loadProjectContextStatus` now runs the full `checkReferences` analysis whenever a `references.json` exists. That analysis reads every project rule (`scanCitations` over `listRuleRefs`, one `readFile` each), then inspects every declared document and every unde (merged: review-highload-w3:F-002, review-highload-w5:F-001, review-performance-w3:F-001, review-performance-w5:F-001)
+- **minor** `src/gdskills/reference-entries.ts` — When an anchor is not found, the warning lists every heading of the file with no cap. `references-check.ts` caps the same list at 12 (`headings.slice(0, 12)` and `", ..."`), so the two paths disagree. The warning is pushed into `ProjectContextResolution.warnin (review-highload-w3:F-003)
+- **minor** `src/tui/project-context-inspector.ts` — The project-context feed polls with setInterval and an async tick (poll -> reload -> options.load) with no in-flight guard. A tick starts every 5000 ms whether or not the previous load has finished. reload() also assigns `current` and notifies listeners in com (merged: review-highload-w4:F-001, review-highload-w5:F-002, review-logic-w5:F-001, review-performance-w5:F-002)
+- **minor** `src/gdskills/references-section.ts` — A UTF-8 BOM at the start of a markdown document sits before the first '#', so the first-line heading is not recognised. The BOM is stripped for references.json (loadReferences) but not for the documents read by extractSection / readDeclaredFile / inspectDocume (review-logic-w3:F-003)
+- **minor** `src/mcp/metaproject-tools.ts` — The MCP structured branch for skills_resolve_context forwards task_text to the port on its own code path (it returns port.skillsResolveContext directly and never calls op.invoke). No test exercises task_text on that path: src/mcp/metaproject-tools.test.ts call (merged: review-logic-w4:F-001, review-testing-practices-w2:F-001)
+- **minor** `src/gdskills/conditional-reads.e2e.test.ts` — The printed report an on_demand declared reference gets carries path, reason, bytes, sha and anchor, but not the declaration's description or condition, and the report has no undeclared list. renderResolutionMarkdown (unchanged apart from the anchor flag) is a (review-logic-w4:F-002)
+- **minor** `src/lib/args.ts` — `--task-text <text>` goes through optionValue, which treats any following token that starts with `--` as the next flag and returns undefined. A task title or description that begins with `--` (a CLI flag as the topic, or a markdown `-- ` aside) is therefore dr (review-security-code-w4:F-003)
+- **minor** `docs/requirements/keryx-conditional-reads/live-run.md` — The runbook names the check errors `missing`, `anchor not found`, `oversized`. The finding codes the command emits (ReferencesFindingCode in src/gdskills/references-check.ts, and the table in the guide and CLI reference) are `document-missing`, `anchor-not-fou (review-style-w1:F-002)
+- **minor** `docs/requirements/keryx-conditional-reads/README.md` — The status lines describe the flow as a draft with unfrozen criteria, and the next line says the branch must be rebased once #1047 is merged and that nothing compiles without the 461 resolver. At head the flow is frozen (flow.json history: 'frozen: 22 criteria (review-style-w1:F-004)
+- **minor** `src/gdskills/resolve-context-command.ts` — A ternary nested inside a template literal that is itself the branch of a ternary, packed on one line into an array of four other ternaries (the `flags` array is now one line of several hundred characters). (review-style-w3:F-004)
+- **minor** `src/gdskills/context-resolver.ts` — resolveProjectContext gains task truncation, reference resolution, a promoted-bytes budget check and the `undeclared` output on top of rule, skill, bundled and contract collection; it is now roughly 110 lines with well over ten decision points. `declarations ? (review-style-w3:F-005)
+- **minor** `src/tui/project-context-inspector.test.ts` — The two new type imports from ../gdskills/ are inserted after the `./modal-host` import, inside the sibling-import group, and `references-config` precedes `references-check`. The file's existing order is ../gdskills/* first, then ./* siblings. (review-style-w4:F-002)
+- **minor** `src/gdskills/resolved-context-check.test.ts` — The new block repeats `await checkResolvedContext({ projectRoot: root, resolved, result: ... })` more than twenty times, many of them wrapped over five lines, only to read `.misses` or `.drifted`. docFixture already returns `{ root, resolved, sha }`, so a loca (review-style-w4:F-003)
+- **minor** `src/tui/project-context-inspector.ts` — This flow adds `export type ProjectContextTab = "status" | "last" | "references"` and uses it for `initialTab`, but the working variable `tab` is widened to `string`, and the literal `"references"` is repeated as the separate single-member type `tab?: "referen (review-style-w5:F-001)
+- **minor** `src/tui/project-context-inspector.ts` — `formatProjectReferencesLines` is imported a few lines above for use in this file and then re-exported from the same module. Production code imports neither symbol from the inspector (tui-shell.ts does not); only project-context-inspector.test.ts reads them th (review-style-w5:F-003)
+- **minor** `src/commands/skills-references.test.ts` — The fixture cannot separate the ordering, de-duplication and attribution code in references-check.ts from its absence. In the test the citations enter the Map in rule-text order (STYLING.md, then THEMING.md), which already equals the sorted order, so deleting  (review-testing-practices-w1:F-001)
+- **minor** `src/commands/skills-references.test.ts` — The three numeric thresholds are pinned only far from the boundary. The description fixture is 14 characters against a limit of 20 (references-check.ts:188, `< MIN_DESCRIPTION_CHARACTERS`), the keywords are 3 and 2 characters against 4 (line 192), and the over (review-testing-practices-w1:F-002)
+- **minor** `src/commands/skills-references.test.ts` — The test is named 'lists only citations that name a file inside the project' but no cited path in it is outside the project AND exists. `../outside.md` is never created beside the temp root, so it is excluded by inspectDocument returning 'missing', exactly as  (review-testing-practices-w1:F-003)
+- **minor** `src/gdskills/skill-sync.test.ts` — This test (the AC17 pin for the instruction edits in this slice) asks only that each of the five instruction files contains `--task-text` once. job-orchestrator/SKILL.md carries the flag at two resolve sites in the diff (Step A and the fix loop) and orchestrat (review-testing-practices-w1:F-004)
+- **minor** `src/harness/tool/metaproject-adapter.ts` — The adapter that turns the port call into the resolver call forwards taskText, but src/harness/tool/metaproject-adapter.test.ts has no skillsResolveContext test and the slice adds none. Removing the spread keeps every test green. (review-testing-practices-w2:F-002)
+- **minor** `src/gdskills/context-resolver.test.ts` — The test is the AC7 pin (promoted references are never demoted by the cap) but only one promoted reference competes with the cap. THEMING.md (size 6000) has the glob docs/** and the task files match src/**, so it is not promoted; it is on_demand because its co (review-testing-practices-w2:F-003)
+- **minor** `src/tui/project-context-inspector.test.ts` — The R4 fixture sets exceeded: true with usedBytes: 109 against limitBytes: 131072, a state the resolver can never produce (exceeded means usedBytes is over limitBytes). The test then asserts the sentence 'over the cap: 109 of 131072 bytes', which is false for  (review-testing-practices-w2:F-004)
+- **minor** `src/tui/project-references-view.ts` — The 'R2 only declared entries count' test cites OTHER.md, which is not a declared path, so the entry.path === declaration.path half of the predicate excludes it and the entry.condition !== undefined half is never decisive. Removing the condition clause keeps t (review-testing-practices-w2:F-005)
+- **minor** `src/tui/project-context-inspector.test.ts` — The R7 test pushes a feed update after close and then asserts the Status text. The Status text is the same for the 'before' and 'after' snapshots, so the assertion passes whether or not the closed inspector kept repainting. (review-testing-practices-w2:F-006)
+- **minor** `src/gdskills/reference-entries.ts` — keywordOccurs builds a Unicode-aware whole-word regex with lookarounds over letters, digits and underscore, and escapes the keyword. The tests only use 'tailwinds are mentioned' and 'the pretailwind thing'. Digit adjacency (tailwind2), underscore adjacency (_t (review-testing-practices-w2:F-008)
+- **minor** `src/gdskills/reference-entries.ts` — Several resolveReferences branches have no assertion in the diff: the taken collision (a declared path already listed as a rule or skill is skipped with a warning), the maxFileBytes limit (info.size > maxFileBytes), glob-before-keyword precedence in the reason (review-testing-practices-w2:F-009)
+- **minor** `src/gdskills/reference-proof.ts` — The summary proof is well covered for length 28 versus 40, the 2/3 shared words boundary, case, and Cyrillic. Not pinned: code-point counting (an astral character counts as one, not two), NFC normalisation in distinctWords, the three-tier fallback of pickProof (review-testing-practices-w2:F-010)
+- **minor** `src/gdskills/references-section.ts` — references-section.test.ts pins backtick fences only with a plain opener and closer. The fence-closing conditions (tilde fences, a closing run shorter than the opening one, a different marker, a closing line with trailing text) and a heading made only of closi (review-testing-practices-w2:F-011)
+- **info** `docs/requirements/keryx-conditional-reads/README.md` — PRD section 5.2 describes the reason of a promoted entry as 'condition:glob|keyword (<rule or declaration>)'. The resolver emits 'condition:glob:<glob>' or 'condition:keyword:<keyword>' (and 'declared' for an unpromoted entry); isPromoted() in reference-proof. (review-architecture-w1:F-003)
+- **info** `src/gdskills/context-resolver.ts` — AC2 requires every resolve result to be byte-identical to flow 461 when there is no references file. This line runs for every project. For a rule that cites a non-canonical spelling (`./STYLING.md`, `docs\X.md`, `a/../b.md`), the contract entry's `path` is now (review-architecture-w3:F-008)
+- **info** `src/gdskills/reference-entries.ts` — The module graph has a type-level cycle: context-resolver.ts imports resolveReferences from reference-entries.ts, and reference-entries.ts and reference-proof.ts import ContextEntry from context-resolver.ts. ContextEntry also now carries reference-only fields  (review-architecture-w3:F-010)
+- **info** `src/mcp/metaproject-tools.ts` — The rule 'a blank task_text is dropped, a non-blank one is passed unchanged' is written out twice: in the operation descriptor's `invoke` (src/harness/tool/metaproject-operations.ts) and in the MCP structured case of `skills_resolve_context`. The change extend (merged: review-architecture-w4:F-003, review-clean-code-w4:F-004)
+- **info** `src/tui/project-context-inspector.ts` — The polling, change-detection and subscription logic (a data-source concern with timers and listener sets) now lives in the modal/view module project-context-inspector.ts, next to formatting and presentProjectContext. The feed adds a second responsibility (sta (review-architecture-w5:F-002)
+- **info** `src/gdskills/references-config.ts` — Clean Code E1. `normaliseRelativePath` and `normaliseCitedPath` share the absolute-path test, `path.posix.normalize` and the `..` escape test, differing only in trimming and in returning a reason versus `undefined`. The JSON-schema `pattern` repeats the absolu (review-clean-code-w3:F-011)
+- **info** `src/gdskills/resolved-context-check.ts` — SOLID/type design. `ResolvedMiss` makes `rule` and `detail` independently optional, but the comment on `detail` says it is "Present with rule". `formatResolvedReport` branches on `detail` only, so the pairing is a convention the type does not enforce. (review-clean-code-w3:F-012)
+- **info** `src/gdskills/references-check.ts` — Clean Code A3. In this module `declared` means a count here (`report`, `ReferencesCheckReport.declared`) and a `Set<string>` of declared paths elsewhere (`undeclaredCitations(..., declared: ReadonlySet<string>)`, `const declared = new Set(...)` in `checkRefere (review-clean-code-w3:F-013)
+- **info** `package.json` — AC19 is verified by `bun run docs:check` and also says 'the docs site builds', but the new script does not run `docs:build` (mkdocs build --strict). The script is the new shared entry point for the criterion and does not cover half of it. (review-core-boundaries-w1:F-004)
+- **info** `src/gdskills/reference-entries.ts` — context-resolver.ts imports resolveReferences from reference-entries.ts, and reference-entries.ts and reference-proof.ts import the ContextEntry type back from context-resolver.ts. The cycle is type-only, so it is erased at runtime and harmless today. (review-core-boundaries-w1:F-005)
+- **info** `src/gdskills/context-resolver.ts` — Checked, wave-1 question: parallel resolve-context runs (job-orchestrator waves) all write one last.json. writeContained writes a temp file in the same directory (name carries 6 random bytes, opened with 'wx'), then renames over the target, so each write lands (review-highload-w2:F-002)
+- **info** `src/gdskills/reference-proof.ts` — Words are runs of 5 or more letters of any script. Scripts written without spaces (Chinese, Japanese) yield one long 'word' per phrase, so an honest summary rarely shares three exact tokens with the section; the anchor heading's own words also count toward the (review-logic-w1:F-004)
+- **info** `src/gdskills/context-resolver.ts` — Citations are now normalised before they key the `cited` map for every project, including projects without a references file. A rule citing './docs/x.md' or 'docs\x.md' used to produce a contract entry whose path was the raw spelling and now produces 'docs/x.m (review-logic-w3:F-005)
+- **info** `src/tui/project-context-inspector.ts` — The modal height is computed once, from the status at open. The new subscribe listener repaints the open tab in place when a resolve is recorded, and the References tab then has a different number of lines (for example the `over the cap` line, or findings appe (review-logic-w5:F-003)
+- **info** `src/gdskills/reference-proof.ts` — The summary-words check re-reads the declared document from `entry.path` as stored in the `--resolved` JSON, with no containment (no realpath inside the project root, no regular-file check, no size cap), unlike the resolver's readDeclaredFile. The anchor and t (review-security-code-w1:F-003)
+- **info** `src/gdskills/reference-entries.ts` — Heading text from the declared document goes into a resolver warning unchanged, and runSkillsResolveContext prints warnings with console.error. A heading can hold control characters such as ESC (the HEADING regex accepts any non-newline character). The same te (review-security-code-w3:F-002)
+- **info** `src/gdskills/reference-proof.ts` — currentSection reads the file named by `entry.path` taken from the `--resolved` JSON with no containment check. A `..` or absolute path in a hand-edited resolved file is read, and its words are compared with the worker's summary. The same unguarded read alread (review-security-code-w3:F-003)
+- **info** `.metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md` — The statement of what a promoted entry owes (path, whole-file sha256, declared anchor, summary of 40+ characters in own words, three shared words of 5+ letters, how read|followed never n/a) is restated, in different wording and at different levels of detail, i (review-style-w1:F-005)
+- **info** `docs/requirements/keryx-conditional-reads/live-run.md` — The committed runbook hard-codes one person's home directory (/home/altsay/keryx/.worktrees/..., /home/altsay/work/vantage-frontend) and is written in Russian, while the other files of the same PRD folder (README.md, TUI-states.md, schemas) are English. (review-style-w1:F-006)
+- **info** `src/commands/skills-references.ts` — Pluralisation is written inline twice in the summary line, while references-check.ts has a `plural(count, noun)` helper for the same job (used by undeclaredCitationHint). It is module-private there, so the command re-implements it. (review-style-w2:F-003)
+- **info** `src/commands/skills-references.test.ts` — Three tests of the `skills import --rules` hint (this one, the 'prints no hint when every citation is declared or none exists' one, and the '--json stays pure JSON' one) carry the prefix `references suggest:`, but they exercise `skillsCommand(["import", "--rul (review-style-w2:F-004)
+- **info** `src/commands/skills-references.test.ts` — The rule front matter is written out three times as a string literal: the `RULE` constant, an inline variant in the 'no rule cites' test, and this one in the import-hint test. They differ only in the body line. (review-style-w2:F-005)
+- **info** `src/commands/agent-commands.ts` — The comment above `/projectctx` still lists three things (last resolve, cap, warn/block), while the description edited in this diff now also advertises `refs` and 'conditional references'. The comment was not updated with the line below it. (review-style-w2:F-006)
+- **info** `src/gdskills/context-resolver.ts` — The two new import lines are inserted between ./project-context-config and ./project-rules, breaking the alphabetical order the rest of the block follows (project-context-config, project-rules, project-skills, rule-frontmatter, skill-frontmatter). Also, the fi (review-style-w3:F-008)
+- **info** `src/gdskills/references-config.ts` — The schema description (a runtime constant a user may print) points to 'README.md section 5.1', but the repository root README.md has no such section; section 5.1 'Declarations' is in docs/requirements/keryx-conditional-reads/README.md. (review-style-w3:F-009)
+- **info** `src/gdskills/resolved-context-check.ts` — In a codebase where 'rule' already means a project rule (.mdc), ResolvedMiss.rule names a proof rule. Similarly `report(...)` in references-check.ts is a noun used as a function name that builds a ReferencesCheckReport. (review-style-w3:F-010)
+- **info** `src/gdskills/output-schema.test.ts` — The loop runs over `[source, ...copies]`, so for the first iteration `file` is `source` and the assertion compares the file with itself. It cannot fail. (review-style-w4:F-004)
+- **info** `src/gdskills/references-config.test.ts` — The local alias is named `Node`, the name of the DOM global type. It shadows it in this module. (review-style-w4:F-005)
+- **info** `src/gdskills/skill-sync.test.ts` — Module-level path constants are mixed: `root` is lowerCamel while its siblings `BUNDLED`, `MANAGED` and `CONTRACTS` are UPPER_SNAKE. `CONTRACTS` also names a directory here, while `CONTRACTS` in ./contracts (imported by output-schema.test.ts in the same slice) (review-style-w4:F-006)
+- **info** `src/gdskills/context-resolver.test.ts` — Several new test titles run past 150 characters and join two behaviours with a semicolon, and each test then asserts both. The titles of 'cap keeps promoted references...' and 'a rule that cites a declared document as ./STYLING.md...' are of the same kind. (review-style-w4:F-007)
+- **info** `src/gdskills/references-check.ts` — Four finding codes and one inspection branch have no test in skills-references.test.ts: `document-not-file` (a declared directory), `document-unreadable`, the dangling-symlink branch of inspectDocument ('a link that points nowhere'), and `rule-unreadable`. AC1 (review-testing-practices-w1:F-005)
+- **info** `src/tui/project-references-view.ts` — The declared-but-empty state (references.json present with an empty list) has no test: neither the sidebar segment for zero declarations nor the tab text NO_REFERENCES_TEXT is asserted. (review-testing-practices-w2:F-007)
+- **info** `src/gdskills/output-schema.test.ts` — Smaller gaps: the task-text truncation test uses ASCII only, so the code-point versus UTF-16 slice is unpinned; project-context-status.test.ts pins only two of the finding codes; output-schema.test.ts mixes a shape assertion with behavioural validation (valida (review-testing-practices-w2:F-012)
+- **info** `-` — The glue that turns the parsed '/projectctx refs' command into the inspector's initialTab lives outside slice-04 and was not located. The slice pins the parse result and the presenter's initialTab, but not the dispatcher between them, so AC for the command is  (review-testing-practices-w2:F-013)
+
+## Questions
+
+None raised by reviewers as `publication: question`.
+
+## Pre-existing
+
+None classified as pre-existing by reviewers.
+
+## Verified clean
+
+Regression (waves 1-5): no break at major or above in the radius; consumer tests passed (8374/8474 pass, 0 fail in waves 3 and 4, about 400 more in wave 5).
+
+```json keryx:findings
+[
+  {
+    "id": "review-architecture-w1:F-001",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "это сигнал, что порог в два слова слишком строг",
+    "problem": "The operator runbook tells the person running the live run that the summary must share at least two distinct words of five or more letters with the section, and treats a failure as a sign that the two-word threshold is too strict. The implemented and documented threshold is three (SUMMARY_MIN_SHARED_WORDS = 3 in src/gdskills/reference-proof.ts; cli-reference.md, the apply-project-rules guide, the AC file and the PRD section 5.3 all say three). The same runbook's expected output says '3 required', so it contradicts itself.",
+    "impact": "The live run (AC20) is the one step where a human, not a test, decides whether the check is calibrated. An operator who reads 'two' will misjudge a normal near-miss (2 shared words, 3 required) as a calibration bug, or will hand-write summaries for a threshold that is not the real one, and the finding that feeds the threshold decision is then built on a wrong number.",
+    "suggested_fix": "Change both runbook sentences to three, and name the constant (SUMMARY_MIN_SHARED_WORDS) so a later change to the code has one obvious thing to grep for. Better, see F-004: have the runbook read the number from the CLI output ('N required') instead of restating it.",
+    "evidence": "live-run.md in slice-01 says 'минимум два различных слова из пяти и более букв' and 'порог в два слова'. src/gdskills/reference-proof.ts at head: SUMMARY_MIN_SHARED_WORDS = 3, and wordsFailure prints `${required} required`. The runbook's own expected output block says '3 required'.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "runbook-two-words-threshold"
+  },
+  {
+    "id": "review-architecture-w1:F-002",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+    "problem": "Identifiers in the flow documents do not match what they point at. (a) PRD section 7 calls the live run AC18; in the flow's acceptance-criteria.md AC18 is the end-to-end test and the live run is AC20. (b) live-run.md refers to 'риск 6', but the PRD risk table has five rows. (c) live-run.md names the check errors 'missing', 'anchor not found' and 'oversized', while references-check.ts emits the codes document-missing, anchor-not-found and document-too-large. (d) live-run.md cites the summary-words rule code, but the output prints a sentence ('shares N distinct word(s) ... required'), not the code.",
+    "impact": "The runbook is followed by a person on a real project, matching what they see against what the document says. A wrong AC number or a code name that never appears sends them searching for output that does not exist, and a reviewer cross-checking AC20 lands on the e2e test instead of the live run.",
+    "suggested_fix": "PRD section 7: say AC20. live-run.md: drop 'риск 6' or point at an existing row; use the real codes document-missing, anchor-not-found, document-too-large (they are printed in `keryx skills references check` output); describe the summary-words failure by its printed sentence.",
+    "evidence": "acceptance-criteria.md (AC18 e2e, AC20 live run); PRD risk table at head has five rows; src/gdskills/references-check.ts ReferencesFindingCode union lists the codes above; src/gdskills/reference-proof.ts wordsFailure builds the printed sentence.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "prd-ac18-identifier"
+  },
+  {
+    "id": "review-architecture-w1:F-003",
+    "severity": "info",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "`reason: condition:glob|keyword (<rule or declaration>)`",
+    "problem": "PRD section 5.2 describes the reason of a promoted entry as 'condition:glob|keyword (<rule or declaration>)'. The resolver emits 'condition:glob:<glob>' or 'condition:keyword:<keyword>' (and 'declared' for an unpromoted entry); isPromoted() in reference-proof.ts relies on the 'condition:' prefix only.",
+    "impact": "The PRD is the design record; a reader implementing a consumer of the reason (TUI, a report) from it would parse a shape that never occurs. The CLI reference and the schema descriptions are right, so the cost is limited to this one document.",
+    "suggested_fix": "Rewrite the clause as 'reason: condition:glob:<glob> or condition:keyword:<keyword>'. Or mark section 5 as the pre-implementation design and point at cli-reference.md for the shipped shape.",
+    "evidence": "src/gdskills/reference-proof.ts: `entry.reason.startsWith(\"condition:\")`; src/gdskills/reference-entries.ts sets `reason ?? \"declared\"`; the contract schema and cli-reference.md in slice-01 describe condition:glob:<g> / condition:keyword:<k>.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "single:review-architecture-w1:F-003",
+    "publication": "finding"
+  },
+  {
+    "id": "review-architecture-w1:F-004",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "export const SUMMARY_MIN_SHARED_WORDS = 3;",
+    "problem": "The proof thresholds (40 characters, 3 shared words, 5 letters) have one source in code, but slice-01 restates them by hand in prose in the flow-orchestrator, job-orchestrator, task-implementer and tests-creator SKILL.md files, orchestrator-prompt.md, cli-reference.md, the apply-project-rules guide, the PRD, the AC file, live-run.md and the schema descriptions. skill-sync.test.ts guards the keywords (--task-text, the paragraph naming condition:, path, sha256, anchor, summary) and the byte equality of the bundled / managed / contract copies, but not the numbers.",
+    "impact": "Changing a threshold (the PRD itself expects tuning after the live run) needs a ten-file hand edit with nothing that fails when one is missed. F-001 is the first case of exactly this: the runbook already says two where the code says three, and every test is green.",
+    "suggested_fix": "Keep the numbers in the instruction text, since a worker reads them there, but add a test next to skill-sync.test.ts that imports SUMMARY_MIN_CHARS, SUMMARY_MIN_SHARED_WORDS and WORD_MIN_LETTERS from reference-proof.ts and asserts that each instruction file, cli-reference.md and the guide contain the current values (and no other number in the sentence that carries them). Failing that, have the prose point at the CLI output for the threshold.",
+    "evidence": "src/gdskills/skill-sync.test.ts at head checks regexes for '--task-text' and the 'condition:' paragraph and the copy equality, and no numeric threshold. reference-proof.ts exports the three constants; live-run.md already disagrees with them (F-001).",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "single:review-architecture-w1:F-004"
+  },
+  {
+    "id": "review-architecture-w2:F-001",
+    "severity": "minor",
+    "file": "src/commands/skills.ts",
+    "line": null,
+    "quote": "[--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]",
+    "problem": "The diff edits printResolveContextHelp to add `--task-text`, and docs/docs/cli-reference.md (line 3452) shows `[--task-type <type>] [--task-text <text>] [--max-bytes <n>] [--out <path>] [--json]`, but the usage block of printSkillsHelp (`keryx skills --help`), two lines above the new `keryx skills references` lines the diff adds, still omits `--task-text`. The flag's usage is therefore spelled in three places (the USAGE constant in resolve-context-command.ts, printResolveContextHelp, printSkillsHelp) and the group help is the one left behind.",
+    "impact": "An operator reading `keryx skills --help` does not see the one flag that lets a declared keyword promote a document; without it only globs promote. The group help also disagrees with the CLI reference that mirrors it. No behaviour breaks.",
+    "suggested_fix": "Add `[--task-text <text>]` to the resolve-context usage lines in printSkillsHelp. Optionally build the three usage strings from one exported constant (the USAGE in resolve-context-command.ts) so the next flag cannot be missed in one of them.",
+    "evidence": "src/commands/skills.ts printSkillsHelp resolve-context usage (single match of `--max-bytes <n>]`, unchanged context in the slice hunk 1828-1936) versus src/gdskills/resolve-context-command.ts USAGE and docs/docs/cli-reference.md 3451-3452, which carry --task-text.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "task-text-help-missing"
+  },
+  {
+    "id": "review-architecture-w2:F-002",
+    "severity": "minor",
+    "file": "src/commands/skills-references.ts",
+    "line": null,
+    "quote": "Warnings: a description under 20 characters, a keyword under 4, a cited document with",
+    "problem": "printReferencesHelp states the check thresholds (20 characters, 4 characters) and the command name `keryx skills references suggest` as literals, while references-check.ts exports MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAND for exactly these values. The sibling help in skills.ts already interpolates TASK_TEXT_MAX_CHARS from its owner, so the same slice mixes both styles. No test pins the help text to the constants.",
+    "impact": "If either threshold is changed in references-check.ts the findings use the new number and `keryx skills references --help` keeps teaching the old one. Cost is a silent doc drift to whoever next tunes the checks.",
+    "suggested_fix": "Import MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAND into skills-references.ts and interpolate them in the help template and the USAGE string.",
+    "evidence": "src/commands/skills-references.ts help template (`under 20 characters`, `under 4`) versus src/gdskills/references-check.ts lines 26-28 (exported constants) and the TASK_TEXT_MAX_CHARS interpolation in src/commands/skills.ts printResolveContextHelp.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "help-thresholds-hardcoded"
+  },
+  {
+    "id": "review-architecture-w3:F-001",
+    "severity": "major",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "the anchored section \"${entry.anchor}\" cannot be found in ${entry.path} now",
+    "problem": "The resolver and the validator disagree about a declaration whose anchor no longer matches a heading. reference-entries.ts falls back to the whole file and states the obligation: \"the whole file (${bytes} bytes) is the obligation\" (AC6: fall back with a warning, never silence). The proof module's currentSection returns { ok: false } for the same declaration, wordsFailure turns that into a summary-words failure, and nothing in the worker's control (citing the right anchor, reading the whole file, writing a good summary) can clear it.",
+    "impact": "Trigger: references.json declares an anchor that is renamed or removed in the document, and a task matches the declaration's condition. Outcome: the resolver tells the worker to read the whole file; the worker does, cites path, sha256, the declared anchor and a real summary; checkResolvedContext still emits a 'summary that cannot be checked' miss on every run. Under enforcement block this makes `flow task done` and the standalone check exit 1 until someone edits references.json, a fix the worker was never told about by the validator line. The fallback the resolver advertises is not honoured by the checker that enforces it.",
+    "suggested_fix": "Give the proof the same fallback the resolver uses: in currentSection, when extractSection returns found: false, return { ok: true, text, what: \"the file\" } (the whole file, matching the resolver's stated obligation) and keep the anchor-not-found problem in `references check` and the resolve warning. If fail-closed is intended instead, make the resolver demote or refuse the entry with the same wording rather than promising a whole-file obligation, and say so in the validator line.",
+    "evidence": "Diff, reference-entries.ts resolveReferences: when !section.found it sets sectionBytes = bytes and pushes a warning ending 'the whole file (...) is the obligation', and the entry stays must_read. Diff, reference-proof.ts currentSection: `if (!section.found) return { ok: false, why: ... }`; wordsFailure: `if (!section.ok) return { rule: \"summary-words\", detail: ... cannot be checked ... }`; proofFailures always calls wordsFailure when a summary exists. The only inputs are entry.anchor (from the resolver output) and the file text, so no worker-supplied value can make currentSection succeed.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "dead-anchor",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/reference-proof.ts currentSection",
+        "src/gdskills/reference-entries.ts resolveReferences dead-anchor fallback"
+      ],
+      "enumeration_method": "every extractSection caller in the slice was read: reference-entries.ts falls back to the whole file, references-check.ts declarationFindings reports the dead anchor as an error, reference-proof.ts currentSection fails it; the single disagreement is between the first and the third."
+    }
+  },
+  {
+    "id": "review-architecture-w3:F-002",
+    "severity": "major",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "A linked rule (registered in place, not copied) is not scanned.",
+    "problem": "scanCitations iterates listRuleRefs(), which lists only files copied under .metaproject/rules/project/. The resolver's collectProjectRules also reads rules registered with mode link from their origin and scans their citations. The authoring checker therefore sees a different rule set from the engine it is authoring for. The header comment records the limit but gives no reason for it, and the limit hits the primary import mode: `keryx skills import --rules <dir> --link` registers rules in place and copies nothing.",
+    "impact": "Trigger: a project whose rules are linked (import --rules --link) and which cite STYLING.md or similar. Outcomes: (1) undeclaredCitationHint finds nothing, so the AC15 closing lines (undeclared count and the command to run) never print after a --link import; (2) `references suggest` omits the documents cited only by linked rules; (3) `references check` reports 'unused-declaration: no project rule cites this document' for a declaration that a linked rule does cite and the resolver treats as cited. Check output and resolver output disagree about the same project.",
+    "suggested_fix": "Build the citation set from the same rule source the resolver uses: factor collectProjectRules (or a smaller 'rule texts of this project, copied and linked' function) out of context-resolver.ts and have scanCitations read it, reporting an unreadable or changed link as rule-unreadable. If linked rules are deliberately excluded, state the reason in the header and make the unused-declaration and hint wording say 'copied rules'.",
+    "evidence": "Diff, references-check.ts scanCitations: `for (const ref of (await listRuleRefs(projectRoot)).sort(compare))`. Head src/gdskills/context-resolver.ts: listRuleRefs is `return listRuleFiles(projectRoot)` (copied files only), while collectProjectRules adds `registry.keys()` and reads `resolveOriginPath(entry.origin, projectRoot)` for entries with mode link. Diff, import-rules.ts: the hint is computed by undeclaredCitationHint(process.cwd()) with no regard to --link.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "linked-rules-not-scanned",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/references-check.ts:96 scanCitations (used by checkReferences and suggestReferences)",
+        "src/gdskills/references-check.ts:262 undeclaredCitationHint (called from src/gdskills/import-rules.ts:275)"
+      ],
+      "enumeration_method": "searched src for listRuleRefs, scanCitations and undeclaredCitationHint callers; the resolver's collectProjectRules reads linked rules, scanCitations does not."
+    }
+  },
+  {
+    "id": "review-architecture-w3:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/import-rules.ts",
+    "line": null,
+    "quote": "const hint = await undeclaredCitationHint(process.cwd());",
+    "problem": "The hint is computed after importProjectRules for every text-mode run, including --dry-run (and a run where rules were refused). A dry run copies nothing, so the count describes the rules already installed, not the rules the command would import, under the comment 'Documents the imported rules cite but nothing declares'.",
+    "impact": "Trigger: `keryx skills import --rules <dir> --dry-run`. Outcome: the closing lines either say nothing about the rules about to be imported or report documents cited by unrelated, already-installed rules, so the operator reads a count that is not about the preview.",
+    "suggested_fix": "Skip the hint when args.includes(\"--dry-run\"), or when result.rules holds no row with status imported or overwritten.",
+    "evidence": "Diff, runSkillsImportRulesCommand: `const json = args.includes(\"--json\");` ... `if (!json) { const hint = await undeclaredCitationHint(process.cwd()); ... }`; no check of dryRun or of the result rows before it. undeclaredCitationHint reads only files on disk via scanCitations.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "import-rules-dry-run-hint"
+  },
+  {
+    "id": "review-architecture-w3:F-004",
+    "severity": "minor",
+    "file": "src/gdskills/resolved-context-check.ts",
+    "line": null,
+    "quote": "Flow 461 semantics: the last citation of each path is the one that counts for the hash.",
+    "problem": "The question 'which citation of this path counts' is answered by two unrelated rules in two modules: the hash check takes the last citation (`cited.get(where)?.at(-1)`), while the proof takes pickProofItem, which prefers a citation with the pinned sha256 and a real reading and otherwise falls back to the first non-n/a item. appliedOf now keeps every citation of a path, which makes the two rules able to pick different items.",
+    "impact": "Trigger: project_context_applied lists a promoted path twice. If the last item carries the pinned sha256 with how n/a and an earlier item carries a different sha256 with how read, a good anchor and a good summary, the hash check passes on the last item and the proof passes on the earlier one, so no miss is emitted for an entry that was last cited with n/a and with a hash that did not match on the item that proved it. AC11 (promoted entry cited with n/a is a miss) is met only for the single-citation case.",
+    "suggested_fix": "Select one citation per path once, in appliedOf or in checkResolvedContext, and feed the same item to the hash check and to proofFailures; or require that the proof item also carries the pinned sha256.",
+    "evidence": "Diff: `const last = cited.get(where)?.at(-1);` feeds `shas`; `pickProofItem(items, entry.sha256)` in proofMisses is `items.find((item) => item.sha256 === pinned && item.how !== \"n/a\") ?? items.find((item) => item.how !== \"n/a\") ?? items[0]`. With items [A{sha: other, how: read}, B{sha: pinned, how: n/a}] the first find returns undefined, the second returns A, and B satisfies `shas.includes(entry.sha256)`.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "hash-vs-proof-citation"
+  },
+  {
+    "id": "review-architecture-w3:F-005",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+    "problem": "Whether an entry is a promoted reference is decided by a string prefix of the free-text reason field. The producer is reference-entries.ts (`condition:glob:${glob}`, `condition:keyword:${keyword}`) in another module, with no shared constant or type; the entry already carries the structured field that says it is a declared reference (`condition`).",
+    "impact": "A change to the reason wording in reference-entries.ts, or another entry kind whose reason starts with 'condition:', silently turns the proof obligation off or on in the validator, which reads a --resolved file produced by a different command run.",
+    "suggested_fix": "Export the reason prefix from reference-entries.ts and build and test it there, or discriminate on `entry.condition !== undefined && entry.reason !== \"declared\"`; better, add a typed `promoted: true` field to ContextEntry for declared entries.",
+    "evidence": "Diff, reference-entries.ts: `reason: reason ?? \"declared\"` with promotionReason returning `condition:glob:${glob}` / `condition:keyword:${keyword}`; reference-proof.ts isPromoted matches on `entry.reason.startsWith(\"condition:\")`. The two files share no constant.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "promoted-reason-string-prefix"
+  },
+  {
+    "id": "review-architecture-w3:F-006",
+    "severity": "minor",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "async function readDeclaredFile(projectRoot: string, rootReal: string, rel: string, maxFileBytes: number): Promise<ReadOutcome> {",
+    "problem": "The sequence lstat, realpath, containment check, regular-file check, size cap, read is written three times in this slice with small differences: readDeclaredFile here (re-lstats the real path), inspectDocument in references-check.ts (stats the real path, different status vocabulary), and the inline loop in collectContracts. Each caller owns a different result vocabulary, and the same declared document is judged by both readDeclaredFile at resolve time and inspectDocument at check time.",
+    "impact": "A change to what counts as a readable document (for example a symlink or size rule) must be made in several places, and `references check` can accept a document that the resolver then rejects or the reverse, which makes the authoring tool an unreliable predictor of resolve behaviour. This is a maintenance cost; no divergence was demonstrated in the current code.",
+    "suggested_fix": "Extract one `inspectProjectDocument(projectRoot, rootReal, rel, maxBytes)` returning a tagged status plus text (the shape of Inspection in references-check.ts), place it next to the other filesystem helpers, and have reference-entries.ts map the status to a reject reason and references-check.ts map it to a finding.",
+    "evidence": "Diff: readDeclaredFile (reference-entries.ts) and inspectDocument (references-check.ts) both call lstat and realpath, test isPathInside(rootReal, real), check isFile and a byte cap from CONTRACT_MAX_BYTES, then readFile; collectContracts repeats the realpath and containment steps.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "read-declared-file-duplicated"
+  },
+  {
+    "id": "review-architecture-w3:F-007",
+    "severity": "minor",
+    "file": "src/gdskills/project-context-status.ts",
+    "line": null,
+    "quote": "const report = await checkReferences(projectRoot);",
+    "problem": "readReferences calls loadReferences, and then checkReferences, which loads the same file again, scans every copied rule, and reads every declared document. The status loader, documented as a 'read-only snapshot' for the TUI sidebar and modal, now runs the full authoring checker on every load, and the declarations it returns and the findings it returns come from two separate reads.",
+    "impact": "Every refresh of the ProjectCtx status performs a second parse of references.json plus a read of all rule files and all declared documents (each up to the 262144-byte cap). The two reads can disagree if the file changes between them (declarations from one version, findings from another).",
+    "suggested_fix": "Let checkReferences accept the already loaded declarations (checkLoadedReferences(projectRoot, loaded)) and call it from readReferences, keeping checkReferences(projectRoot) as the thin wrapper that loads first.",
+    "evidence": "Diff, project-context-status.ts: `const loaded = await loadReferences(projectRoot); ... const report = await checkReferences(projectRoot);`; references-check.ts checkReferences begins with `const loaded = await loadReferences(projectRoot);`.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "double-load-read-references"
+  },
+  {
+    "id": "review-architecture-w3:F-008",
+    "severity": "info",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "const rel = normaliseCitedPath(match[1]!) ?? match[1]!;",
+    "problem": "AC2 requires every resolve result to be byte-identical to flow 461 when there is no references file. This line runs for every project. For a rule that cites a non-canonical spelling (`./STYLING.md`, `docs\\X.md`, `a/../b.md`), the contract entry's `path` is now the normalised spelling where flow 461 emitted the spelling as written.",
+    "impact": "Trigger: a project without references.json whose rule cites a document as `./X.md`. Outcome: the contract entry path (and its position in the sort) differs from flow 461 output. The change is deliberate (shared normalisation, so that a citation matches a declaration) and is a repair for those spellings; it only deviates from the literal wording of AC2. Settle by confirming that AC2's test fixtures cite canonical paths only, or by normalising only when a references file is present.",
+    "suggested_fix": "Either record the exception in AC2, or call normaliseCitedPath only when `declarations !== undefined` and keep the raw spelling otherwise.",
+    "evidence": "Diff: the replaced line was `const rel = match[1]!;`. In flow 461, cite './X.md' misses the two rules-folder options in collectContracts and resolves through the third option `cite`, so entry.path was './X.md'; now it is 'X.md'.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "single:review-architecture-w3:F-008"
+  },
+  {
+    "id": "review-architecture-w3:F-009",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+    "problem": "WORD_MIN_LETTERS is exported and used in the failure message ('words of ${WORD_MIN_LETTERS} or more letters'), but distinctWords hard-codes `{5,}` in its regular expression. The threshold exists in two places and only one of them is enforced.",
+    "impact": "Changing WORD_MIN_LETTERS (it is exported, so a test or another module may change expectations around it) changes the message but not the rule, so the validator reports a threshold it does not apply.",
+    "suggested_fix": "Build the pattern from the constant: new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\"), constructed once at module level.",
+    "evidence": "Diff: `export const WORD_MIN_LETTERS = 5;` and the literal `/\\p{L}{5,}/gu` in distinctWords; WORD_MIN_LETTERS is read only in wordsFailure's message.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "word-min-letters-hardcoded"
+  },
+  {
+    "id": "review-architecture-w3:F-010",
+    "severity": "info",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "import type { ContextEntry } from \"./context-resolver\";",
+    "problem": "The module graph has a type-level cycle: context-resolver.ts imports resolveReferences from reference-entries.ts, and reference-entries.ts and reference-proof.ts import ContextEntry from context-resolver.ts. ContextEntry also now carries reference-only fields (anchor, section_bytes, condition).",
+    "impact": "No runtime effect: both back-edges are `import type`, erased at compile time, and no runtime cycle exists (references-check imports values from context-resolver but context-resolver does not import it back). It only matters if a later edit turns one back-edge into a value import, which would create a real cycle.",
+    "suggested_fix": "Optional: move ContextEntry and ContextKind into a small context-types.ts that both sides import, so the dependency runs one way.",
+    "evidence": "Diff: `import { resolveReferences } from \"./reference-entries\";` in context-resolver.ts; `import type { ContextEntry } from \"./context-resolver\";` in reference-entries.ts and reference-proof.ts.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "single:review-architecture-w3:F-010"
+  },
+  {
+    "id": "review-architecture-w4:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/conditional-reads.e2e.test.ts",
+    "line": null,
+    "quote": "const isPromoted = (entry: ContextEntry): boolean => entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+    "problem": "The e2e test re-declares the predicate that decides which entries are 'promoted by a condition'. The production module already exports an identical `isPromoted` from src/gdskills/reference-proof.ts, and the same test file already imports `distinctWords` from that module. The definition of 'promoted' (tier plus the `condition:` reason prefix) is therefore stated in two places.",
+    "impact": "If the resolver's reason format or the promotion rule changes, the production predicate and this local copy can diverge. The e2e fixture builder (`buildResult`) would then cite proofs for a different set of entries than the validator obliges, and scenario failures would point at the fixture rather than at the changed rule. Only a maintenance cost today: the two definitions agree at this head.",
+    "suggested_fix": "Import `isPromoted` from \"./reference-proof\" next to `distinctWords`. If the intent is an independent oracle, keep the local copy but say so in a comment above it.",
+    "evidence": "reference-proof.ts at head: `export function isPromoted(entry: ContextEntry): boolean { return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\"); }`. The e2e test imports `import { distinctWords } from \"./reference-proof\";` and defines its own `isPromoted` at the harness section.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "single:review-architecture-w4:F-001"
+  },
+  {
+    "id": "review-architecture-w4:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/output-schema.test.ts",
+    "line": null,
+    "quote": "test(\"the synced copies carry the same schema as the bundled source\", () => {",
+    "problem": "Two new test files assert the same invariant, 'the managed copies of the two output-contract schemas are byte-identical to the bundled source', each from its own hand-written path table. output-schema.test.ts keeps `SCHEMA_SOURCES` (source plus two copies per producer). skill-sync.test.ts keeps `schemaFiles` and `contractCopies`, which name the same four paths for the task-implementer and tests-creator output schemas.",
+    "impact": "Adding a third producer, or moving a contract copy, needs edits in both tables. A table that is missed still passes while the other one covers the file, so the drift is silent. The sync rule for these schemas has no single owner.",
+    "suggested_fix": "Keep the byte-identity assertions in one file (skill-sync.test.ts already owns the bundled-to-managed mapping for instructions and schemas) and keep output-schema.test.ts to the schema-content checks. Alternatively export the path table from one file and import it in the other.",
+    "evidence": "output-schema.test.ts: `copies: [\".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json\", \".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json\"]`. skill-sync.test.ts: `\"orchestration/task-implementer/output-contract.schema.json\"` in `schemaFiles`, and `[\"orchestration/task-implementer/output-contract.schema.json\", \"task-implementer-output-contract.schema.json\"]` in `contractCopies`. Both resolve to the same managed files and assert `toBe(read(source))`.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "output-schema-table-duplicated"
+  },
+  {
+    "id": "review-architecture-w4:F-003",
+    "severity": "info",
+    "file": "src/mcp/metaproject-tools.ts",
+    "line": null,
+    "quote": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+    "problem": "The rule 'a blank task_text is dropped, a non-blank one is passed unchanged' is written out twice: in the operation descriptor's `invoke` (src/harness/tool/metaproject-operations.ts) and in the MCP structured case of `skills_resolve_context`. The change extends an existing pattern, since `task_type` and `max_bytes` are already normalised in both places.",
+    "impact": "Both surfaces agree today (the unit test covers the operations side only). A later change to the rule, such as trimming the text or a length cap, has to be made twice, and the MCP side has no test of its own for the blank case.",
+    "suggested_fix": "No change required for this PR. If the normalisation grows, move the input parsing for `skills_resolve_context` into one exported helper that both the descriptor and the MCP case call.",
+    "evidence": "operations.ts: `const taskText = typeof input.task_text === \"string\" && input.task_text.trim() !== \"\" ? input.task_text : undefined;`. metaproject-tools.ts: `const taskText = stringParam(params, \"task_text\");` followed by the `trim() !== \"\"` check. The test 'skills_resolve_context passes task_text to the port as taskText and drops a blank one' exercises only `op(...).invoke`.",
+    "confidence": "low",
+    "reviewer": "review-architecture",
+    "dedupe_key": "blank-task-text-rule-duplicated"
+  },
+  {
+    "id": "review-architecture-w5:F-001",
+    "severity": "minor",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "const projectContextFeed = createProjectContextFeed({\n      load: () => loadProjectContextStatus(projectContextDir()),\n      onError: (message) => io.onSystem?.(`projectctx: ${message}\\n`),\n    });",
+    "problem": "createProjectContextFeed starts a 5 s setInterval at construction and returns stop(), but the shell never calls projectContextFeed.stop(). Every other live panel/poller in this shell is released in the renderer's onDestroy (disposeExecutionPlanPanel, liveSchedules.dispose(), liveIntake.dispose(), liveDecisions.dispose() and others). After the renderer is destroyed the poll keeps running and, when the status changes, calls the subscribed refreshProjectContextSidebar, which does clearTranscriptChildren/sbProjectCtx.add on destroyed renderables.",
+    "impact": "Lifecycle ownership is inconsistent with the siblings. The timer is unref'd, so it does not hold the process open, and a throwing listener is caught by poll() and reported through onError, so the observable harm is a leaked timer plus a possible stray 'projectctx: ...' system line after teardown, mainly where a shell is torn down inside a longer-lived process (tests, embedding). Verified: `keryx ctx rg projectContextFeed src/tui/tui-shell.ts` returns 5 matches, none is .stop().",
+    "suggested_fix": "Call projectContextFeed.stop() in the createShellRenderer onDestroy block next to the other dispose() calls (the feed is declared later in the same scope, so hoist a `let stopProjectContextFeed: (() => void) | undefined` as disposeExecutionPlanPanel is, or register it where liveSchedules is). Optionally make the listener a no-op once destroyed.",
+    "evidence": "src/tui/tui-shell.ts onDestroy block (disposeExecutionPlanPanel?.(); liveSchedules?.dispose(); ...) has no feed stop; slice-05 hunk @@ 5249 creates the feed with the default interval; defaultInterval returns () => clearInterval(timer) as stop.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "dedupe_key": "feed-stop-never-called"
+  },
+  {
+    "id": "review-architecture-w5:F-002",
+    "severity": "info",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "export function createProjectContextFeed(options: ProjectContextFeedOptions): ProjectContextFeed {",
+    "problem": "The polling, change-detection and subscription logic (a data-source concern with timers and listener sets) now lives in the modal/view module project-context-inspector.ts, next to formatting and presentProjectContext. The feed adds a second responsibility (state source) to a presentation file, and tui-shell imports it from there.",
+    "impact": "No violation of dependency direction and no defect: a mild SRP/placement smell. If another surface wants the same feed it must import a TUI view module. Whether a separate *-source/feed file is the local convention was not verified across all siblings, so this stays info.",
+    "suggested_fix": "Optional: move ProjectContextFeed, createProjectContextFeed and PROJECT_CONTEXT_POLL_MS to a sibling such as src/tui/project-context-feed.ts and import it from tui-shell and the tests; the inspector keeps only the subscribe option.",
+    "evidence": "Slice-05 hunk @@ 76,283 of project-context-inspector.ts adds the feed between the sidebar renderer and presentProjectContext. src/tui/project-references-view.ts, by contrast, is correctly a separate pure module.",
+    "confidence": "medium",
+    "reviewer": "review-architecture",
+    "dedupe_key": "single:review-architecture-w5:F-002"
+  },
+  {
+    "id": "review-clean-code-w1:F-001",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+    "problem": "The operator runbook says a summary must share at least two distinct words of five or more letters with the section. The code has SUMMARY_MIN_SHARED_WORDS = 3 (src/gdskills/reference-proof.ts:15), and AC10, the PRD (5.3), the guide and the CLI reference all say three; the runbook's own expected output in step 4 prints '3 required'. The same file repeats the wrong number where it tells the operator how to read a failed honest result ('это сигнал, что порог в два слова слишком строг'). It also names the check errors 'missing', 'anchor not found', 'oversized', while the checker's codes are document-missing, anchor-not-found and document-too-large.",
+    "impact": "AC20 is the one criterion that is a live run with an operator decision on the thresholds. An operator who follows the failure guidance reasons about a two-word threshold that does not exist, and cannot match the runbook's error names to the 'references check' output. The cost lands on whoever reads the runbook, not on runtime behaviour.",
+    "suggested_fix": "Change both 'два' sites to 'три' (the paragraph 'Проверка пересказа остаётся заменителем чтения' and the 'порог в два слова' bullet in section 5), and use the real codes document-missing, anchor-not-found, document-too-large in section 1.",
+    "evidence": "reference-proof.ts:15 SUMMARY_MIN_SHARED_WORDS = 3 and line 74 Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size); live-run.md step 4 expected output reads '3 required'; cli-reference.md in this slice lists document-missing, document-too-large and anchor-not-found.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "runbook-two-words-threshold"
+  },
+  {
+    "id": "review-clean-code-w1:F-002",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+    "problem": "Two PRD documents disagree with the frozen criteria. The PRD README points the live run at AC18, but AC18 is the end-to-end fixture test and the live run is AC20. The PRD README header ('Status: DRAFT for the operator; criteria are not frozen') and description.md ('Status: draft (PRD and criteria wait for the operator; not frozen)') say the criteria are not frozen, while flow.json records the event 'frozen' with '22 criteria; checksum recorded'. acceptance-criteria.md carries the same 'DRAFT: not frozen' line; it is checksum-protected and can only change through 'keryx flow ac update'.",
+    "impact": "A reader of the PRD folder is sent to the wrong criterion for the operator run and is told the criteria are still open when they are fixed. A maintenance cost for whoever reads the PRD.",
+    "suggested_fix": "In README.md section 7 write AC20, and set the README header and description.md Status line to the real state. Handle the acceptance-criteria.md line through 'keryx flow ac update', or leave it and say so, since a plain edit fails every gate.",
+    "evidence": "acceptance-criteria.md lists AC18 as the fixture e2e and AC20 as the live-run runbook; flow.json lines 301-302 record 'frozen' / '22 criteria; checksum recorded'.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "prd-ac18-identifier"
+  },
+  {
+    "id": "review-clean-code-w1:F-003",
+    "severity": "minor",
+    "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+    "line": null,
+    "quote": "An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition and carries an `anchor`, a `description` and `section_bytes`: read the anchored section in full.",
+    "problem": "The 2.0c bullet that used to say only 'cite what you used in project_context_applied with the resolver's sha256; n/a needs a reason in notes; never edit a resolved file' now opens with the promoted-entry rule, and the general sentences follow it in the same bullet. The general rule for every entry ('n/a needs a reason in notes') now reads as the continuation of a paragraph that has just said promoted entries may never use n/a, and the bullet is one run of about 140 words covering two audiences.",
+    "impact": "A worker reading the bullet linearly can take 'n/a needs a reason in notes' as applying to promoted entries, or miss that the drift sentence applies to every entry. The shape is a general statement displaced by an inserted special case. A readability cost to the next editor of the skill, not a behaviour defect.",
+    "suggested_fix": "Split into two bullets: first the general citation rule (cite each entry, resolver's sha256, n/a needs a reason in notes, never edit a resolved file), then 'A promoted entry (condition:glob / condition:keyword) additionally ...' with the anchor, summary and how rules.",
+    "evidence": "Diff hunk of task-implementer/SKILL.md at @@ 162,204 @@: the old general bullet is replaced by one that prepends the promoted-entry paragraph to the unchanged general sentences.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w1:F-003"
+  },
+  {
+    "id": "review-clean-code-w1:F-004",
+    "severity": "minor",
+    "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+    "line": null,
+    "quote": "a summary of 40+ characters in the worker's own words, and how read|followed, never n/a",
+    "problem": "The proof rule (path, whole-file sha256, declared anchor, summary of 40 characters, three shared words of five letters, how read|followed) is restated in prose in eight places in this slice. The numbers live in code in one place (reference-proof.ts: SUMMARY_MIN_CHARS, SUMMARY_MIN_SHARED_WORDS, WORD_MIN_LETTERS) and nothing ties the prose to them. F-001 is a drift that has already happened at one of these sites, and the orchestrator files already differ: job-orchestrator names '40+ characters' and no word count, task-implementer and tests-creator name three words, flow-orchestrator names both.",
+    "impact": "Changing one threshold means editing about eight prose sites by hand; the managed-copy sync test checks that copies match each other, not that the numbers match the code.",
+    "suggested_fix": "State the full rule once in task-implementer and tests-creator (the workers), and let the orchestrator files, the CLI reference and the PRD refer to it without repeating the numbers; or add a test that checks the prose against the constants' values.",
+    "evidence": "Sites listed in class_scope; constants at src/gdskills/reference-proof.ts:14-16.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w1:F-004"
+  },
+  {
+    "id": "review-clean-code-w2:F-001",
+    "severity": "minor",
+    "file": "src/commands/skills.ts",
+    "line": null,
+    "quote": "      [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]",
+    "problem": "The flag --task-text was added to the resolve-context subcommand help (printResolveContextHelp) and is in the USAGE string of resolve-context-command.ts, and the group help gained the two `skills references` lines, but the resolve-context usage block in printSkillsHelp (the group help) was not updated. One command is now described with two different flag sets inside one file.",
+    "impact": "An operator reading `keryx skills --help` does not learn that --task-text exists, which is the flag that makes keyword promotion work; it is discoverable only through `keryx skills resolve-context --help`. Maintenance cost: three hand-kept copies of one usage line (group help, subcommand help, USAGE const) drifted on the first change.",
+    "suggested_fix": "Add `[--task-text <text>]` to the resolve-context usage lines in printSkillsHelp. Optionally build both help blocks from one shared usage string so they cannot drift again.",
+    "evidence": "Diff hunk skills.ts @@1828,1936: the group-help context line `[--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]` is unchanged, while hunk @@1998,2046 changes printResolveContextHelp to `[--task-text <text>] [--max-bytes ...`. resolve-context-command.ts line 6 USAGE already lists --task-text.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "task-text-help-missing"
+  },
+  {
+    "id": "review-clean-code-w2:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": null,
+    "quote": "keryx skills resolve-context --for implement ... --out <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json",
+    "problem": "Step A of the wave pattern now spells out `--task-text \"<task title and description>\"`, but Step B (implement) is written with an ellipsis (`--for implement ... --out`), which a literal reader takes as the flags of an older command. The same asymmetry is in orchestrator-prompt.md item 3 (`keryx skills resolve-context --for implement ... --out <...>/<task_id>.implement.resolved.json`). The implement dispatch is the one where a declared keyword matters most.",
+    "impact": "An orchestrator model that copies the implement line literally resolves without --task-text, so only glob conditions promote a reference; a document declared by keyword never becomes must_read for the implementer and no proof is required, with no warning (the resolver warns only on truncation).",
+    "suggested_fix": "Replace the ellipsis in the implement lines of both files with the full flag list used in Step A (--files, --task-type, --task-text), or add one sentence saying the ellipsis stands for the same flags as Step A including --task-text.",
+    "evidence": "Diff hunk job-orchestrator/SKILL.md @@729,782: the -/+ pair adds --task-text to Step A only; the `--for implement ...` line is unchanged context. orchestrator-prompt.md @@112,160: item 1 gains --task-text, item 3 keeps `--for implement ... --out` and the added note describes the proof, not the flag.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w2:F-002"
+  },
+  {
+    "id": "review-clean-code-w2:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "line": null,
+    "quote": "--task-text \"<the task's title and description>\"",
+    "problem": "The instruction tells the dispatching model to put free text (a task title and description, which routinely contain double quotes, backticks and `$`) inside double quotes on a shell command line. No quoting guidance is given and the CLI has no file or stdin alternative.",
+    "impact": "Trigger: a task description containing a double quote, backtick or `$(`. Outcome: the command is split or a substitution runs in the operator's shell, or the text is cut at the first quote so a keyword after it cannot promote its reference. The same shape is repeated in the other bundled skill copies.",
+    "suggested_fix": "Add one line at the first occurrence: pass the text single-quoted (embedded single quotes escaped) or as a short plain summary; longer term accept a `--task-text-file` or stdin in resolve-context-command.ts.",
+    "evidence": "Added in flow-orchestrator/SKILL.md (@@303,366), job-orchestrator/SKILL.md (two places), orchestrator-prompt.md (two places), task-implementer/SKILL.md 2.0c and tests-creator/SKILL.md 1.2b.",
+    "confidence": "low",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "shell-quoted-task-text"
+  },
+  {
+    "id": "review-clean-code-w2:F-004",
+    "severity": "minor",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "files: { \"STYLING.md\": `# Styling\\n\\n${\"x\".repeat(262145)}\\n` },",
+    "problem": "The size-limit test hard-codes 262145, one more than CONTRACT_MAX_BYTES (262144, exported from src/gdskills/context-resolver.ts). The test does not say where the number comes from.",
+    "impact": "If the limit is raised the test stops reaching the limit and fails with a confusing missing-error assertion; if it is lowered the test passes without testing the boundary. The reader has to know the constant to understand the literal.",
+    "suggested_fix": "Import CONTRACT_MAX_BYTES and write `\"x\".repeat(CONTRACT_MAX_BYTES + 1)`.",
+    "evidence": "`git grep CONTRACT_MAX_BYTES` finds context-resolver.ts:82 `export const CONTRACT_MAX_BYTES = 262144;`. context-resolver.test.ts:303 uses the same literal, so the habit pre-exists.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w2:F-004"
+  },
+  {
+    "id": "review-clean-code-w2:F-005",
+    "severity": "info",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "...\"anchor\" in overrides ? (overrides.anchor === undefined ? {} : { anchor: overrides.anchor }) : { anchor: entry.anchor },",
+    "problem": "The `declaration()` test helper spreads a nested ternary to express three states for one field (key absent -> default anchor, key present and undefined -> no anchor, key present -> that anchor), next to a three-line `Overrides` type whose only job is to allow `undefined`.",
+    "impact": "Readers must decode the nested ternary to see that `declaration({ anchor: undefined })` means 'no anchor'; the intent is correct and covered by tests, so this is readability only.",
+    "suggested_fix": "Name the intent: give the helper a `withoutAnchor()` variant or a small `anchorFor(overrides)` function, so call sites read `declaration({ path: 'docs/GONE.md' })` and `declarationWholeFile(...)`.",
+    "evidence": "Used at the call sites `declaration({ anchor: undefined })` in four tests of the same file.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "declaration-helper-ternary"
+  },
+  {
+    "id": "review-clean-code-w3:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "export async function resolveProjectContext(input: ResolveContextInput): Promise<ProjectContextResolution> {",
+    "problem": "Clean Code B1/B3. The function body is about 110 lines after this diff and mixes rule/skill selection, citation scanning, task-text truncation with its warning, reference resolution, budget arithmetic and result assembly. The diff added roughly 40 lines (task truncation warning, resolveReferences call, promoted-budget block). Inside it `declarations ?? []` is written three times (`(declarations ?? []).some(`, `declarations: declarations ?? [],`, `(declarations ?? []).map(`) next to a separate `declarations !== undefined` test for `undeclared`.",
+    "impact": "Each new feature layered on this function raises the cost of reading and testing it; the budget/promotion block cannot be unit-tested without a full resolve. Maintenance cost only.",
+    "suggested_fix": "Bind `const declared = declarations ?? [];` once. Extract the new blocks as small functions: `taskTextWarning(task, declared)` and `promotedBudgetWarning(references, used, cap)`. Pre-existing size is not charged to the diff; only the growth is.",
+    "evidence": "Diff slice-03, hunks '@@ 326,377 @@', '@@ 396,436 @@' and '@@ 438,552 @@' of src/gdskills/context-resolver.ts.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-001"
+  },
+  {
+    "id": "review-clean-code-w3:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "declared: ReadonlySet<string>,",
+    "problem": "Clean Code B2. `collectContracts` now takes five positional parameters (projectRoot, cited, taken, declared, warnings), the diff adding the fifth; `readDeclaredFile(projectRoot, rootReal, rel, maxFileBytes)` and `undeclaredCitations(projectRoot, rootReal, cited, declared)` take four. Two sets of the same type (`taken`, `declared`) sit side by side, so a swapped call compiles. `projectRoot` and `rootReal` always travel together and rootReal is derived from projectRoot. `warnings: string[]` is an output argument.",
+    "impact": "A transposed `taken`/`declared` argument type-checks and silently changes which citations are listed. Maintenance cost.",
+    "suggested_fix": "Pass one options object (`{ projectRoot, cited, taken, declared }`) and return warnings alongside entries, as `resolveReferences` already does with `ResolvedReferences`.",
+    "evidence": "collectContracts signature in the diff; readDeclaredFile in reference-entries.ts; undeclaredCitations in references-check.ts. The caller passes `new Set([...taken, ...declaredPaths])` and `new Set((declarations ?? []).map(...))` in the same two positions.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-002"
+  },
+  {
+    "id": "review-clean-code-w3:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "export async function resolveReferences(input: ResolveReferencesInput): Promise<ResolvedReferences> {",
+    "problem": "Clean Code B1. The function is about 46 lines (exceeds the 40-line guide) and mixes levels: duplicate-listing guard, file read, anchor-to-section byte accounting with its dead-anchor fallback and warning text, promotion decision, and entry construction in one loop body.",
+    "impact": "The dead-anchor fallback (whole file becomes the obligation) is a policy decision buried in a loop; changing it means editing the loop that also builds entries.",
+    "suggested_fix": "Extract `obligationBytes(declaration, text, warnings): number` for the anchor block and `toEntry(declaration, read, reason, sectionBytes)` for the entry literal; keep the loop as guard, read, measure, promote, push.",
+    "evidence": "Diff slice-03, new file src/gdskills/reference-entries.ts, resolveReferences body.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-003"
+  },
+  {
+    "id": "review-clean-code-w3:F-004",
+    "severity": "minor",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "async function inspectDocument(projectRoot: string, rootReal: string, relative: string): Promise<Inspection> {",
+    "problem": "Clean Code E1. `inspectDocument` repeats the sequence of `readDeclaredFile` in reference-entries.ts (lstat, realpath, isPathInside against the real root, isFile, size cap, readFile) with a different result type. The copies already disagree on error classification: `inspectDocument` wraps the first lstat in a bare `catch` and returns `{ status: \"missing\" }` for any error, while `readDeclaredFile` returns \"does not exist\" only for ENOENT and `cannot be read (<message>)` otherwise.",
+    "impact": "For a declared document under a directory the process cannot traverse (EACCES, ENOTDIR), `keryx skills references check` reports `document-missing` (\"does not exist\"), while `keryx skills resolve-context` warns \"cannot be read (EACCES ...)\" for the same file. The two commands give contradictory diagnoses, and the check hides the real cause.",
+    "suggested_fix": "Put one `inspectProjectFile(projectRoot, rootReal, relative, maxBytes)` helper (returning a discriminated outcome with the error code) in a shared module; have `readDeclaredFile` and `inspectDocument` map its outcome to their own messages. Treat only ENOENT as missing.",
+    "evidence": "inspectDocument: `try { await lstat(absolute); } catch { return { status: \"missing\" }; }`. readDeclaredFile: `if (typeof error === \"object\" && error !== null && (error as { code?: unknown }).code === \"ENOENT\") return { ok: false, why: \"does not exist\" };` followed by a `cannot be read` branch.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "read-declared-file-duplicated"
+  },
+  {
+    "id": "review-clean-code-w3:F-005",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+    "problem": "Clean Code E2. The word length is exported as `WORD_MIN_LETTERS = 5` and the doc comment says \"words of {@link WORD_MIN_LETTERS} letters or more\", but the regex hardcodes `{5,}`. The user-facing message in `wordsFailure` interpolates the constant.",
+    "impact": "Changing `WORD_MIN_LETTERS` to 4 leaves the matcher at 5 while the failure message tells the worker \"words of 4 or more letters\"; the message then misstates the rule the worker is held to.",
+    "suggested_fix": "Build the pattern from the constant: `new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\")`, created once at module level.",
+    "evidence": "Constants block of reference-proof.ts: `export const WORD_MIN_LETTERS = 5;`; wordsFailure detail: `of ${WORD_MIN_LETTERS} or more letters`.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "word-min-letters-hardcoded"
+  },
+  {
+    "id": "review-clean-code-w3:F-006",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+    "problem": "Clean Code E2. Whether an entry is a promoted reference is decided by parsing the `reason` string. The producer writes `condition:glob:${glob}` and `condition:keyword:${keyword}` in reference-entries.ts, the consumer matches the bare prefix `condition:` in reference-proof.ts, and nothing shares the prefix. Promotion state is encoded in free text on an entry type that already has `tier`, `anchor` and `condition` fields.",
+    "impact": "Renaming or re-wording the reason prefix in `promotionReason` makes `isPromoted` return false for every entry; the proof (anchor and summary) is then skipped and `--resolved` validation passes on a hash alone, with no error and no failing test unless one covers the prefix.",
+    "suggested_fix": "Export a `PROMOTED_REASON_PREFIX = \"condition:\"` constant used by both sides, or add an explicit `promoted: true` marker to the entry.",
+    "evidence": "reference-entries.ts: `return `condition:glob:${glob}`` and `` `condition:keyword:${keyword}` ``; reference-proof.ts isPromoted.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "promoted-reason-string-prefix"
+  },
+  {
+    "id": "review-clean-code-w3:F-007",
+    "severity": "minor",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "const shown = headings.slice(0, 12).join(\", \");",
+    "problem": "Clean Code E2. The cap of 12 listed headings appears twice in one expression (`slice(0, 12)` and `headings.length > 12 ? \", ...\"`) with no name.",
+    "impact": "Changing one literal without the other drops or adds the trailing ellipsis incorrectly.",
+    "suggested_fix": "`const MAX_LISTED_HEADINGS = 12;` and use it in both places.",
+    "evidence": "declarationFindings, anchor-not-found message: `${headings.length > 12 ? \", ...\" : \"\"}`.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "heading-cap-12-literal"
+  },
+  {
+    "id": "review-clean-code-w3:F-008",
+    "severity": "minor",
+    "file": "src/gdskills/project-context-status.ts",
+    "line": null,
+    "quote": "const report = await checkReferences(projectRoot);",
+    "problem": "Clean Code B3/E1. `readReferences` calls `loadReferences(projectRoot)` and then `checkReferences(projectRoot)`, which calls `loadReferences` again. The file is read and parsed twice, and the two reads are not tied together.",
+    "impact": "If `references.json` is edited between the two reads (the TUI refreshes this snapshot while the user edits), `declarations` and `findings` come from different file versions, so the sidebar can show declarations that the findings do not describe. Also redundant I/O.",
+    "suggested_fix": "Let `checkReferences` accept the already-loaded declarations (or return them in its report) and call `loadReferences` once.",
+    "evidence": "readReferences: `const loaded = await loadReferences(projectRoot);` ... `const report = await checkReferences(projectRoot);` and checkReferences begins with `const loaded = await loadReferences(projectRoot);`.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "double-load-read-references"
+  },
+  {
+    "id": "review-clean-code-w3:F-009",
+    "severity": "minor",
+    "file": "src/gdskills/resolve-context-command.ts",
+    "line": null,
+    "quote": "${entry.section_bytes !== undefined ? `, section ${entry.section_bytes} bytes` : \"\"}",
+    "problem": "Clean Code A1/B3. The `flags` array literal in `renderResolutionMarkdown` is now one line of several hundred characters, and the new element puts a template literal with a nested conditional template inside an array element that already holds three ternaries. The reader has to parse four conditional levels to see what is rendered.",
+    "impact": "Hard to review or extend; the next flag has to be appended into the same line.",
+    "suggested_fix": "Extract `entryFlags(entry): string[]` with one statement per flag, and `anchorFlag(entry)` for the anchor and section size.",
+    "evidence": "Diff hunk '@@ 1,62 @@' of resolve-context-command.ts, the `const flags = [...]` line.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-009"
+  },
+  {
+    "id": "review-clean-code-w3:F-010",
+    "severity": "minor",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "const lengthOf = (text: string): number => [...text.trim()].length;",
+    "problem": "Clean Code E1. Counting code points of trimmed text is written three ways in this diff: `lengthOf` here (spread), `charCount` in reference-proof.ts (`Array.from(text.trim()).length`) and `truncateTaskText` in context-resolver.ts (`Array.from(text)`). The two helpers have identical behaviour and different names.",
+    "impact": "Two names for one concept; a future fix to the counting rule (for example graphemes instead of code points) has to be applied in each place.",
+    "suggested_fix": "One exported `codePointLength(text)` in a small shared module, used by both helpers.",
+    "evidence": "reference-proof.ts: `return Array.from(text.trim()).length;` inside `charCount`.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "char-count-helper-duplicated"
+  },
+  {
+    "id": "review-clean-code-w3:F-011",
+    "severity": "info",
+    "file": "src/gdskills/references-config.ts",
+    "line": null,
+    "quote": "if (posix.startsWith(\"/\") || /^[A-Za-z]:/.test(posix)) return undefined;",
+    "problem": "Clean Code E1. `normaliseRelativePath` and `normaliseCitedPath` share the absolute-path test, `path.posix.normalize` and the `..` escape test, differing only in trimming and in returning a reason versus `undefined`. The JSON-schema `pattern` repeats the absolute-path rule a third time (the file notes the loader must also check this).",
+    "impact": "Two copies of the escape rule; one can be tightened without the other (for example a drive-letter or UNC rule).",
+    "suggested_fix": "Have `normaliseRelativePath` call one shared `classifyRelative(posix)` returning `{ path } | { problem }`, with `normaliseCitedPath` mapping the problem to `undefined`.",
+    "evidence": "Both functions in references-config.ts contain `path.posix.normalize(posix)` and `normal === \"..\" || normal.startsWith(\"../\")`.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-011"
+  },
+  {
+    "id": "review-clean-code-w3:F-012",
+    "severity": "info",
+    "file": "src/gdskills/resolved-context-check.ts",
+    "line": null,
+    "quote": "rule?: ProofRule;",
+    "problem": "SOLID/type design. `ResolvedMiss` makes `rule` and `detail` independently optional, but the comment on `detail` says it is \"Present with rule\". `formatResolvedReport` branches on `detail` only, so the pairing is a convention the type does not enforce.",
+    "impact": "A miss built with `rule` and no `detail` falls through to the hash-miss message and prints a wrong sentence. No current code path builds one.",
+    "suggested_fix": "Model it as a union: `ResolvedMiss = HashMiss | (HashMiss & { rule: ProofRule; detail: string })`, or group the pair as `proof?: { rule; detail }`.",
+    "evidence": "ResolvedMiss type in the diff; proofMisses is the only producer and sets both fields.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-012"
+  },
+  {
+    "id": "review-clean-code-w3:F-013",
+    "severity": "info",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "function report(present: boolean, declared: number, findings: ReferencesFinding[]): ReferencesCheckReport {",
+    "problem": "Clean Code A3. In this module `declared` means a count here (`report`, `ReferencesCheckReport.declared`) and a `Set<string>` of declared paths elsewhere (`undeclaredCitations(..., declared: ReadonlySet<string>)`, `const declared = new Set(...)` in `checkReferences` and `suggestReferences`). The function `report` also shares its name with the local `const report` that `project-context-status.ts` binds to the same result.",
+    "impact": "Reader has to check the type each time; no functional effect.",
+    "suggested_fix": "Name the count `declaredCount` and the sets `declaredPaths`; rename `report` to `buildReport`.",
+    "evidence": "Both usages are in the diff of references-check.ts.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w3:F-013"
+  },
+  {
+    "id": "review-clean-code-w4:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/conditional-reads.e2e.test.ts",
+    "line": null,
+    "quote": "expect(styling.section_bytes).toBeLessThan(styling.bytes / 20);",
+    "problem": "The ratio 20 (the anchored section must be under one twentieth of the document) is an unnamed literal repeated in three assertions (`styling.bytes / 20`, `Buffer.byteLength(text) / 20`, `theming.bytes / 20`), and the size tolerance `+ 2_000` is repeated four times in the fixture test. The file names its other sizes (STYLING_TARGET_BYTES, THEMING_TARGET_BYTES) but not these two.",
+    "impact": "If the fixture is retuned (for example the anchored sections grow), four to seven literals must be found and changed together, and a reader cannot tell that the three `/ 20` checks assert one rule: the budget counts the section, not the file.",
+    "suggested_fix": "Add `const MAX_SECTION_SHARE = 1 / 20;` and `const SIZE_TOLERANCE_BYTES = 2_000;` beside the other fixture constants and use them in all assertions.",
+    "evidence": "Diff of src/gdskills/conditional-reads.e2e.test.ts: `/ 20` appears in the fixture test, scenario 1 and scenario 2; `+ 2_000` appears in the four upper-bound expectations of the fixture test.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w4:F-001"
+  },
+  {
+    "id": "review-clean-code-w4:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/output-schema.test.ts",
+    "line": null,
+    "quote": "\".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json\",",
+    "problem": "The table of which synced copies exist for each output schema is written twice: in output-schema.test.ts (SCHEMA_SOURCES, test \"the synced copies carry the same schema as the bundled source\") and in skill-sync.test.ts (schemaFiles and contractCopies, the byte-identity loops). Both assert `read(copy)` equals `read(source)` for the same four output-contract files under .metaproject/skills/gdskills and .metaproject/core/gdskills/contracts.",
+    "impact": "When a contract copy is added, renamed or moved, two test files must be edited in step; if only one is, the other keeps passing on a stale list and the sync guarantee quietly covers fewer files than the author believes. The byte-identity assertion also runs twice for every output schema.",
+    "suggested_fix": "Keep the byte-identity check in skill-sync.test.ts, which already owns the managed-copy sync, and reduce output-schema.test.ts to the property-key assertion on the bundled source (or export the path table from one module both tests import).",
+    "evidence": "Diff: output-schema.test.ts lines for SCHEMA_SOURCES and the last test; skill-sync.test.ts `schemaFiles`, `contractCopies` and the `is byte-identical to the bundled` tests name the same files.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "output-schema-table-duplicated"
+  },
+  {
+    "id": "review-clean-code-w4:F-003",
+    "severity": "info",
+    "file": "src/gdskills/resolved-context-check.test.ts",
+    "line": null,
+    "quote": "bytes: text.length,",
+    "problem": "docFixture fills the resolver entry's `bytes` and the budget's `usedBytes` with `text.length` (UTF-16 code units), while every other test in the diff and the resolver itself use `Buffer.byteLength` for these fields. The Russian-section test passes a Cyrillic `text` through the same fixture, so there the recorded `bytes` is smaller than the real byte size.",
+    "impact": "No assertion in the diff reads these two fields, so nothing fails today. The fixture does not model what the resolver emits, and a later check that compares `bytes` with the file (for example a size drift rule) would pass on ASCII text and fail only on the Cyrillic case.",
+    "suggested_fix": "Use `Buffer.byteLength(text)` for `bytes` and `usedBytes` in docFixture.",
+    "evidence": "Diff: docFixture builds `bytes: text.length` and `budget: { limitBytes: 1000, usedBytes: text.length, ... }`; the e2e and context-resolver tests assert `Buffer.byteLength(...)`.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "doc-fixture-bytes-length"
+  },
+  {
+    "id": "review-clean-code-w4:F-004",
+    "severity": "info",
+    "file": "src/mcp/metaproject-tools.ts",
+    "line": null,
+    "quote": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+    "problem": "The rule \"a blank task_text is dropped\" is implemented separately in the operation descriptor (`typeof input.task_text === \"string\" && input.task_text.trim() !== \"\" ? input.task_text : undefined`) and in the MCP projection above, next to the already duplicated parsing of task_type and max_bytes. The new line extends that pattern rather than introducing it.",
+    "impact": "Only two copies, so this is not yet a DRY violation by this reviewer's threshold. A third surface, or a change such as trimming the stored text, would have to be made in both places, and the two tests (operations and MCP) cover it separately.",
+    "suggested_fix": "No action needed for this change; if a third surface appears, extract a shared `normaliseTaskText(value: unknown): string | undefined` next to `requireString` and use it in both.",
+    "evidence": "Diff of src/harness/tool/metaproject-operations.ts (`const taskText = typeof input.task_text === \"string\" && input.task_text.trim() !== \"\" ? input.task_text : undefined;`) and src/mcp/metaproject-tools.ts.",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "blank-task-text-rule-duplicated"
+  },
+  {
+    "id": "review-clean-code-w5:F-001",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "        : tab === \"references\"\n          ? formatProjectReferencesLines(status)\n          : formatProjectContextStatusLines(status);",
+    "problem": "Adding the References tab extended a tab-id-to-formatter mapping that is spelled out separately in four places: the nested three-way ternary in paint(), the Math.max(...) list that sizes contentRows, the tabs array, and the ProjectContextTab union. Meanwhile `let tab: string` (was the untyped `let tab = \"status\"`) ignores the newly added ProjectContextTab type, and ProjectContextCommand declares its own inline `tab?: \"references\"` literal. A fourth tab means editing all of these in step, and a miss (a tab missing from the contentRows max) silently mis-sizes the modal rather than failing a type check.",
+    "impact": "Maintenance cost on the next tab addition (OCP smell); no wrong behaviour today.",
+    "suggested_fix": "Hold one table keyed by ProjectContextTab, e.g. `const TAB_LINES: Record<ProjectContextTab, (s: ProjectContextStatus) => string[]>`, and derive paint(), the contentRows maximum and the tabs list from it; type `tab` as ProjectContextTab and have ProjectContextCommand reuse `Extract<ProjectContextTab, \"references\">`.",
+    "evidence": "Diff hunk @@ 76,283 of project-context-inspector.ts: paint() ternary, contentRows `Math.max(formatProjectContextStatusLines(status).length, formatProjectContextLastLines(status).length, formatProjectReferencesLines(status).length) + 2`, `let tab: string = options.initialTab ?? \"status\"`; ProjectContextTab is declared at line ~21 and used only for `initialTab?: ProjectContextTab`.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "tab-formatter-mapping"
+  },
+  {
+    "id": "review-clean-code-w5:F-002",
+    "severity": "minor",
+    "file": "src/tui/project-references-view.ts",
+    "line": null,
+    "quote": "const match = /^condition:(glob|keyword):(.*)$/s.exec(reason);",
+    "problem": "reasonText() re-parses a string whose format is built in src/gdskills/reference-entries.ts (`return `condition:glob:${glob}`` and `` `condition:keyword:${keyword}` `` in promotionReason). The format lives in two modules with no shared constant, builder or parser, so the producer and the view agree only by convention. The fallback `: reason` hides a divergence (it would print the raw token) instead of failing a test.",
+    "impact": "If promotionReason's wording changes (a new kind, a different separator), the modal silently degrades to showing the raw reason; maintenance cost only.",
+    "suggested_fix": "Export a small `parseConditionReason(reason)` (or the prefix constant plus a builder) next to promotionReason in reference-entries.ts and use it from the view, so one module owns the format.",
+    "evidence": "Verified with keryx ctx rg: reference-entries.ts lines 50 and 52 produce `condition:glob:` / `condition:keyword:`; project-references-view.ts reasonText is the only parser (comment: '`condition:glob:src/**` reads as \"matched glob src/**\"').",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "promoted-reason-string-prefix"
+  },
+  {
+    "id": "review-clean-code-w5:F-003",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "    const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;\n      for (const listener of [...listeners]) listener(next);\n    }",
+    "problem": "reload() runs subscriber callbacks inside the same async function as the load, and poll() catches everything and reports it as a failed poll. A throwing subscriber (the sidebar repaint touches renderer objects) therefore (a) skips the remaining listeners, including an open modal's repaint, because `current` is already advanced and the next poll sees no change, and (b) is surfaced to the operator as a load failure ('projectctx: <message>') with `failing` set. Load errors and listener errors are one catch.",
+    "impact": "Only reachable if a subscriber throws (for example a repaint against a destroyed renderable); the symptom would be an open References tab that stops updating until the status changes again, with a misleading error. Not shown to occur in the diff, so kept at minor.",
+    "suggested_fix": "Isolate listeners: wrap each `listener(next)` in its own try/catch that reports through options.onError (or let guardedThemeRepaint-style guards own it), so one failing subscriber neither starves the others nor masquerades as a failed poll.",
+    "evidence": "Diff: createProjectContextFeed reload()/poll(); refreshProjectContextSidebar (tui-shell.ts) is subscribed via `projectContextFeed.subscribe(refreshProjectContextSidebar)` and clears/re-adds renderables; the modal listener calls paint().",
+    "confidence": "medium",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "single:review-clean-code-w5:F-003"
+  },
+  {
+    "id": "review-clean-code-w5:F-004",
+    "severity": "info",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "    const projectContextFeed = createProjectContextFeed({\n      load: () => loadProjectContextStatus(projectContextDir()),",
+    "problem": "The feed starts a 5 s poll when the shell builds the sidebar, and ProjectContextFeed.stop() is part of the interface, but no production code calls it (keryx ctx rg over tui-shell.ts finds projectContextFeed used only for current/subscribe/reload). The interval is unref'd, so it cannot hold the process open, which is why this is not worse.",
+    "impact": "None observable today; the unused stop() is an untested-in-production lifecycle seam, and any future shell teardown or multi-shell test will leak the timer until it is wired.",
+    "suggested_fix": "Call projectContextFeed.stop() from the shell's existing teardown, or drop stop() from the interface if process-lifetime polling is intended and say so in a comment.",
+    "evidence": "keryx ctx rg for projectContextFeed in tui-shell.ts: lines 5271, 5277, 5291, 5292, 5301; no stop call. defaultInterval unrefs the timer.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "feed-stop-never-called"
+  },
+  {
+    "id": "review-core-boundaries-w1:F-001",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+    "problem": "The operator runbook states the summary threshold as two shared words (line 39, and again at line 261: 'порог в два слова слишком строг'). The implementation uses SUMMARY_MIN_SHARED_WORDS = 3 (src/gdskills/reference-proof.ts), AC10 and the PRD say three, and the same runbook's expected output in step 4 says '3 required'.",
+    "impact": "The runbook is the AC20 evidence procedure. An operator who sees an honest result rejected with 2 shared words, or a fabricated one accepted with 2, will read it against a threshold the code does not use and may record a wrong conclusion about whether the threshold is too strict or too weak.",
+    "suggested_fix": "Change both places in live-run.md to 'три' / 'порог в три слова', matching SUMMARY_MIN_SHARED_WORDS and step 4's '3 required'.",
+    "evidence": "reference-proof.ts line 15: SUMMARY_MIN_SHARED_WORDS = 3; live-run.md lines 39, 261 say two; live-run.md step 4 expected output says '3 required'; commit a4a24a35d raised the threshold to three and did not update the runbook.",
+    "confidence": "high",
+    "reviewer": "review-core-boundaries",
+    "dedupe_key": "runbook-two-words-threshold"
+  },
+  {
+    "id": "review-core-boundaries-w1:F-002",
+    "severity": "minor",
+    "file": "docs/docs/cli-reference.md",
+    "line": null,
+    "quote": "and/or `when.keywords` (at least one), and optionally `anchor` (a heading;",
+    "problem": "The Declare bullet in the CLI reference lists `description` after 'optionally', so it reads as optional. The loader (src/gdskills/references-config.ts, lines 62 and 211-212) and the committed JSON schema require it and reject an entry without a non-empty description; AC1 says the same.",
+    "impact": "A project author who follows the CLI reference and omits `description` gets the file rejected, which turns promotion off for the whole run (warning only), so the feature silently stops working until the warning is read.",
+    "suggested_fix": "Reword to 'with `path`, `when.globs` and/or `when.keywords` (at least one) and `description`, and optionally `anchor` (a heading; only that section is required)'.",
+    "evidence": "references-config.ts: required: [\"path\", \"when\", \"description\"]; error 'description must be a non-empty string saying what the document governs'; docs/docs/guides/apply-project-rules.md lists `description` without saying it is required either.",
+    "confidence": "high",
+    "reviewer": "review-core-boundaries",
+    "dedupe_key": "description-reads-optional"
+  },
+  {
+    "id": "review-core-boundaries-w1:F-003",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+    "problem": "The PRD cites AC18 for the live run. In the criteria file AC18 is the end-to-end fixture test and the live run is AC20 (live-run.md is titled AC20).",
+    "impact": "A reader tracing the live-run obligation lands on the wrong criterion; the AC20 confirmation could be missed when closing the flow.",
+    "suggested_fix": "Change '(AC18)' to '(AC20)' in README.md section 7. live-run.md line 17 (AC18 for the e2e test) is correct.",
+    "evidence": "acceptance-criteria.md: AC18 = conditional-reads.e2e.test.ts, AC20 = operator runbook and recorded live run.",
+    "confidence": "high",
+    "reviewer": "review-core-boundaries",
+    "dedupe_key": "prd-ac18-identifier"
+  },
+  {
+    "id": "review-core-boundaries-w1:F-004",
+    "severity": "info",
+    "file": "package.json",
+    "line": null,
+    "quote": "\"docs:check\": \"bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts\"",
+    "problem": "AC19 is verified by `bun run docs:check` and also says 'the docs site builds', but the new script does not run `docs:build` (mkdocs build --strict). The script is the new shared entry point for the criterion and does not cover half of it.",
+    "impact": "A green `docs:check` does not show the site builds; that stays with CI or a manual `docs:build`. The PR body already says mkdocs was not run locally, so this is only about what the command name promises.",
+    "suggested_fix": "Either document next to the script (README/PRD) that `docs:check` excludes the mkdocs build, or chain `bun run docs:build` where mkdocs is available. No action needed if CI already runs docs:build.",
+    "evidence": "package.json scripts: docs:build and docs:check are separate; docs:check has no mkdocs step.",
+    "confidence": "medium",
+    "reviewer": "review-core-boundaries",
+    "dedupe_key": "single:review-core-boundaries-w1:F-004"
+  },
+  {
+    "id": "review-core-boundaries-w1:F-005",
+    "severity": "info",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "import type { ContextEntry } from \"./context-resolver\";",
+    "problem": "context-resolver.ts imports resolveReferences from reference-entries.ts, and reference-entries.ts and reference-proof.ts import the ContextEntry type back from context-resolver.ts. The cycle is type-only, so it is erased at runtime and harmless today.",
+    "impact": "If a later change turns one of these into a value import (for example reusing a constant from context-resolver), a real runtime cycle appears inside the shared gdskills layer.",
+    "suggested_fix": "Optional: move ContextEntry (and the other pure entry types) to a leaf types module that both sides import. No change required for this PR.",
+    "evidence": "context-resolver.ts imports `resolveReferences` from ./reference-entries; reference-entries.ts and reference-proof.ts have `import type { ContextEntry } from \"./context-resolver\"`.",
+    "confidence": "medium",
+    "reviewer": "review-core-boundaries",
+    "dedupe_key": "single:review-core-boundaries-w1:F-005"
+  },
+  {
+    "id": "review-highload-w1:F-001",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+    "problem": "The operator runbook states the summary threshold as two shared words in two places (the preamble and the failure criteria: 'порог в два слова слишком строг'). The validator at head requires three: SUMMARY_MIN_SHARED_WORDS = 3 in src/gdskills/reference-proof.ts, AC10, docs/docs/guides/apply-project-rules.md, and the same runbook's own step 4 expected output ('3 required').",
+    "impact": "The operator runs the AC20 live run against this document. A worker summary sharing exactly two words is rejected with '3 required', which the runbook's criterion 5 and failure notes would read as a finding about the threshold being too strict at two. The recorded journal entry for AC20 would then reason about a threshold that does not exist, and the runbook contradicts itself between step 4 and the preamble.",
+    "suggested_fix": "Replace 'два различных слова' with 'три различных слова' in the preamble and 'порог в два слова' with 'порог в три слова' in section 5. Better, state the number once and refer to it, so the runbook cannot drift from SUMMARY_MIN_SHARED_WORDS again.",
+    "evidence": "slice-01.diff lines 1396-1400 and 1618-1620 (two words); line 1582 (same file, step 4: '3 required'); src/gdskills/reference-proof.ts:15 `export const SUMMARY_MIN_SHARED_WORDS = 3;`; acceptance-criteria.md AC10 'at least three distinct words'.",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "runbook-two-words-threshold"
+  },
+  {
+    "id": "review-highload-w1:F-002",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+    "problem": "The PRD names the live-run criterion AC18. In the frozen-to-be criteria file the live run is AC20; AC18 is the end-to-end fixture test (conditional-reads.e2e.test.ts). live-run.md itself titles the run 'AC20'.",
+    "impact": "A reader following the PRD to confirm the live run would look at AC18 (an exec criterion confirmed by a test) and either confirm the wrong criterion or find the runbook unreferenced. Maintenance cost only; the criteria file is the single source and is correct.",
+    "suggested_fix": "Change '(AC18)' to '(AC20)' in section 7 of README.md. Also correct the sibling cross-references in the same PRD, such as '(AC13)' in the risks table, after checking each against acceptance-criteria.md.",
+    "evidence": "slice-01.diff line 1320 (README section 7) against line 205 (AC20 is the live run) and line 203 (AC18 is the e2e test); live-run.md line 1359 heading 'AC20'.",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "prd-ac18-identifier"
+  },
+  {
+    "id": "review-highload-w2:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "line": null,
+    "quote": "--task-text \"<the task's title and description>\"",
+    "problem": "Flow 462 makes every resolve-context dispatch in flow-orchestrator, job-orchestrator, task-implementer and tests-creator pass the task title and description as one double-quoted shell argument. That text comes from issue bodies and plans. In double quotes the shell still expands `$(...)`, backticks and `$VAR`, a literal `\"` ends the argument early, and a description over the kernel's single-argument limit (about 128 KiB on Linux) cannot be passed at all. The resolver cuts the text to 4000 characters only after it has arrived as argv.",
+    "impact": "Trigger: an issue or plan description that contains a backtick span or `$(...)` (common in issue text that quotes code or commands), or a stray double quote. A dispatching agent that pastes it verbatim has the shell run the embedded command, or gets a syntax error or a truncated --task-text. The truncated case is silent: the keyword match then runs on a cut text and a keyword-promoted reference is not promoted, with no warning. Frequency is low because the dispatcher is a model that may quote by hand; the cost when it does not is a command run from untrusted text.",
+    "suggested_fix": "Do not tell the dispatcher to inline free text. Either add a `--task-text-file <path>` (or `--task-text -` for stdin) and have the skills write the task description to a file first, or state in the prose that the text is passed single-quoted with embedded single quotes escaped, and name the first ~500 characters as enough (the resolver keeps 4000). The same sentence appears in job-orchestrator/SKILL.md, job-orchestrator/orchestrator-prompt.md, task-implementer/SKILL.md and tests-creator/SKILL.md.",
+    "evidence": "Slice hunks at flow-orchestrator/SKILL.md (resolve-context line before 'Dispatch payload'), job-orchestrator/SKILL.md Step A and fix loop item 3, orchestrator-prompt.md steps 1 and FIX item 2, task-implementer/SKILL.md 2.0c, tests-creator/SKILL.md 1.2b. runResolveContextCommand reads the flag with optionValue(args, \"--task-text\") and truncates later in truncateTaskText (context-resolver.ts), so no input path avoids argv.",
+    "confidence": "medium",
+    "reviewer": "review-highload",
+    "dedupe_key": "single:review-highload-w2:F-001"
+  },
+  {
+    "id": "review-highload-w2:F-002",
+    "severity": "info",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\\n`);",
+    "problem": "Checked, wave-1 question: parallel resolve-context runs (job-orchestrator waves) all write one last.json. writeContained writes a temp file in the same directory (name carries 6 random bytes, opened with 'wx'), then renames over the target, so each write lands whole or not at all and two runs never share a temp file. mkdir is recursive and idempotent. The record holds result and taskText together, so a reader never sees one run's result with another run's task text. Last writer wins.",
+    "impact": "No corruption and no lost enforcement data: the proof check (`contracts validate --resolved`, `task done --resolved`) reads the per-task --out file, which the skills name per task id (results/<task_id>.<for>.resolved.json, resolved/<Tn>.<for>.json), never last.json. The only readers of last.json are project-context-status.ts (TUI /projectctx tab) and tests. In a parallel wave the Last resolve tab shows whichever run finished last. A process killed between open and rename leaves a `.last.json.tmp-<hex>` file beside it; the failure is swallowed by the best-effort catch. No change needed. Not a finding to fix.",
+    "suggested_fix": "None required. If an operator needs per-task history in the TUI, key the record by task or run instead of one file; that is a feature, not a defect.",
+    "evidence": "context-resolver.ts recordLastResolve (try/catch around writeContained); contained-write.ts writeContained non-exclusive branch (tmp 'wx', chmod, rename; rm tmp on error); readers found with search_code on LAST_RESOLVE|last\\.json|RecordedResolve across src: project-context-status.ts, tui/project-context-inspector.ts and tests only.",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "single:review-highload-w2:F-002",
+    "publication": "omit"
+  },
+  {
+    "id": "review-highload-w3:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/references-section.ts",
+    "line": null,
+    "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+    "problem": "The lazy `(.*?)` followed by `[ \\t]*$` is quadratic on a heading line that holds a long run of spaces or tabs and then a non-space character. The same shape exists in `stripClosingHashes` (`/[ \\t]+#+$/`). Both run synchronously inside `scanHeadings`, which `extractSection` and `markdownHeadings` call. I timed the exact patterns in node: a heading line with 20000 interior spaces takes about 250 ms, 40000 about 1.0 s, 80000 about 4.0 s. The time quadruples when the length doubles.",
+    "impact": "Trigger: an anchored declaration whose document has a `#` line with a very long internal whitespace run. A declared document may be up to 262144 bytes, so the worst case is tens of seconds. It blocks the event loop of whatever process called it: `keryx skills resolve-context`, the validator, and the TUI. In the TUI the status poll (every 5 s, PROJECT_CONTEXT_POLL_MS) reaches it through `checkReferences`, so the TUI freezes on every tick for as long as the file stays that way. Needs a pathological document, so it is minor.",
+    "suggested_fix": "Match the heading prefix with a linear regex, such as `/^ {0,3}(#{1,6})[ \\t]+(.*)$/`, and trim the trailing whitespace of the capture with a string trim. Replace the `/[ \\t]+#+$/` closing-hash strip with a manual scan from the end of the string. Alternatively skip heading lines longer than a fixed limit such as 1000 characters.",
+    "evidence": "Timing of the exact regexes on `'# a' + ' '.repeat(n) + 'b'`: n=20000 252 ms, n=40000 1002 ms, n=80000 4019 ms. For `stripClosingHashes`: 223 ms, 817 ms, 3435 ms.",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "heading-regex-quadratic"
+  },
+  {
+    "id": "review-highload-w3:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/project-context-status.ts",
+    "line": null,
+    "quote": "const report = await checkReferences(projectRoot);",
+    "problem": "`loadProjectContextStatus` now runs the full `checkReferences` analysis whenever a `references.json` exists. That analysis reads every project rule (`scanCitations` over `listRuleRefs`, one `readFile` each), then inspects every declared document and every undeclared cited document (up to 262144 bytes each, read whole), then runs `extractSection` on each anchored one. `readReferences` calls `loadReferences`, and `checkReferences` calls it again. `listRuleRefs` also runs a second time next to the one already in the `Promise.all`. The TUI calls this function from `createProjectContextFeed`, whose default interval fires `poll` every 5000 ms with `setInterval`. The tick has no in-flight guard.",
+    "impact": "Trigger: a project that declares references, with the TUI open. It repeats N rule reads plus M document reads, M documents of up to 256 KB each, every 5 s for as long as the TUI lives, although the answer only changes when a file changes. If a poll takes longer than 5 s, for example on a slow or network disk, ticks overlap and reads pile up. The cost is small for typical projects. Projects without `references.json` pay only one ENOENT read.",
+    "suggested_fix": "Keep the cheap parts in the poll (declarations and counts). Run the full `checkReferences` only when the modal's references tab is open or after an explicit reload, or cache the report keyed on the mtimes of `references.json`, the rules folder and the declared files. Also add a `polling` boolean to `poll` so a slow tick skips the next one.",
+    "evidence": "project-context-status.ts `readReferences` calls `loadReferences` then `checkReferences`; references-check.ts `checkReferences` calls `loadReferences`, `scanCitations` and `inspectDocument` again. src/tui/project-context-inspector.ts: `PROJECT_CONTEXT_POLL_MS = 5000` and `setInterval(() => { void tick(); }, ms)`.",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "poll-reruns-full-check"
+  },
+  {
+    "id": "review-highload-w3:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "const headings = section.available.length > 0 ? ` Headings in the file: ${section.available.join(\"; \")}.` : \"\";",
+    "problem": "When an anchor is not found, the warning lists every heading of the file with no cap. `references-check.ts` caps the same list at 12 (`headings.slice(0, 12)` and `\", ...\"`), so the two paths disagree. The warning is pushed into `ProjectContextResolution.warnings`, which is written to the JSON result, to `last.json`, and to stderr on every resolve.",
+    "impact": "Trigger: a declared anchor that does not match a heading in a large document, up to 262144 bytes with thousands of headings. Every resolve then emits a warning of tens to hundreds of kilobytes. The result is handed to workers as context, so one dead anchor repeats that text in each dispatch's prompt and in the recorded last-resolve file.",
+    "suggested_fix": "Cap the list the same way as references-check.ts, with the first 12 headings and a trailing \"...\". Share one helper for the truncated heading list.",
+    "evidence": "reference-entries.ts builds the string from the whole `section.available` array. references-check.ts uses `headings.slice(0, 12).join(\", \")` and appends `\", ...\"` when there are more.",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "single:review-highload-w3:F-003"
+  },
+  {
+    "id": "review-highload-w4:F-001",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "const timer = setInterval(() => {\n    void tick();\n  }, ms);",
+    "problem": "The project-context feed polls with setInterval and an async tick (poll -> reload -> options.load) with no in-flight guard. A tick starts every 5000 ms whether or not the previous load has finished. reload() also assigns `current` and notifies listeners in completion order, not start order. Implementation sits outside the slice diff; the slice's `R7 the feed reloads on an interval...` test covers it and never exercises overlapping or out-of-order loads.",
+    "impact": "Trigger: load takes longer than 5 s (slow or network disk, large rules tree, the references check reading many files). Overlapping loads then pile up, one extra file scan per tick. A slower, older load can finish last and overwrite a newer status, so the sidebar and open modal show a stale resolve until the next change. Bounded by one TUI session, hence minor.",
+    "suggested_fix": "Add a single in-flight flag or reuse the pending promise in poll()/reload() (skip the tick while one is running), and drop a result whose start sequence number is older than the last applied. Add a test with a load that resolves after the next tick.",
+    "evidence": "src/tui/project-context-inspector.ts lines 149-155 (defaultInterval) and 167-186 (reload/poll/stop wiring); the test at `R7 the feed reloads on an interval and tells listeners only when the status changed` drives tick() sequentially with immediately-resolving loads only.",
+    "confidence": "low",
+    "reviewer": "review-highload",
+    "dedupe_key": "reload-no-ordering"
+  },
+  {
+    "id": "review-highload-w5:F-001",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "const stop = (options.interval ?? defaultInterval)(poll, options.pollMs ?? PROJECT_CONTEXT_POLL_MS);",
+    "problem": "Every 5 seconds the poll calls load -> loadProjectContextStatus -> readReferences -> checkReferences, which reads every project rule (scanCitations), every declared document and every cited-but-undeclared document in full (inspectDocument -> readFile, up to CONTRACT_MAX_BYTES = 262144 each), then JSON.stringify-compares the whole status. There is no cheap change test (mtime/size) in front of the full load, and the shell never calls feed.stop().",
+    "impact": "Trigger: the TUI is open in a project that has references.json. Outcome: N rule reads plus M document reads (up to ~256 KiB each, sequential awaits) every 5 s for the whole session, idle or not, so a project with a few dozen declared documents re-reads megabytes per minute for a sidebar counter that almost never changes. Async reads do not block the event loop, so this is wasted I/O and wake-ups, not an outage.",
+    "suggested_fix": "Gate the full load behind a cheap signature: stat references.json, tasks.config.json, last.json, the rules directory and the declared documents (mtimeMs+size) each tick, and call load only when the signature changed. Alternatively poll only last.json (the one file a worker writes) and recompute the findings on reload/open. Also call projectContextFeed.stop() on shell teardown (next to sessionSwitches.stop()).",
+    "evidence": "references-check.ts scanCitations: `text = await readFile(path.join(projectRoot, rulePath), \"utf8\")` per rule; inspectDocument: `text: await readFile(real, \"utf8\")` per declaration; project-context-status.ts readReferences calls `await checkReferences(projectRoot)` on every load; a search for `.stop()` in tui-shell.ts finds no call on projectContextFeed (only sessionSwitches.stop()).",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "dedupe_key": "poll-reruns-full-check"
+  },
+  {
+    "id": "review-highload-w5:F-002",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;",
+    "problem": "reload() has no in-flight guard and no ordering. The interval fires poll() regardless of whether the previous load finished, and the modal's `e` toggle and showProjectContext also call reload() concurrently. Whichever load resolves last wins, so a poll that began before the toggle write but resolves after the post-write reload replaces `current` with the older status and notifies the sidebar and the open modal with it.",
+    "impact": "Trigger: a poll load (which now includes checkReferences over all documents) overlapping the `e` toggle's write-then-reload, or any load slower than 5 s (network or slow disk) so polls stack. Outcome: the sidebar and modal show the old enforcement mode until the next successful poll (up to 5 s), and an `e` press in that window computes its target from the stale value (`status.enforcement === \"warn\" ? \"block\" : \"warn\"`), writing the mode already on disk, so the toggle appears to do nothing. On a slow filesystem the polls also pile up without bound, each holding its own reads. Self-heals; no persisted data is wrong.",
+    "suggested_fix": "Serialise loads in the feed: keep one in-flight promise and return it from reload() and skip the tick in poll() while it is pending; or stamp each load with an increasing generation and ignore a result older than the last applied one.",
+    "evidence": "createProjectContextFeed: `setInterval(() => { void tick(); }, ms)` with `poll` -> `await reload()`; reload assigns `current = next` unconditionally when it differs; presentProjectContext keypress handler: `.setEnforcement(status.enforcement === \"warn\" ? \"block\" : \"warn\")` then `.then(() => options.loadStatus())` -> `status = next`.",
+    "confidence": "medium",
+    "reviewer": "review-highload",
+    "dedupe_key": "reload-no-ordering"
+  },
+  {
+    "id": "review-logic-w1:F-001",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+    "problem": "The runbook states the summary threshold as two shared words, and a later paragraph tells the operator that a threshold of two words is too strict. The code (SUMMARY_MIN_SHARED_WORDS = 3 in reference-proof.ts, required = Math.min(3, sectionWords.size)), the README, the cli-reference and the runbook's own expected output (line 224: '3 required') all say three. The two-word text is stale after the threshold change.",
+    "impact": "An operator running AC20 reads 'two words' in the preconditions, then sees '3 required' in the real output, and the later advice ('the two-word threshold is too strict for your project') names a number that does not exist. The operator's judgement of whether the threshold needs tuning rests on the wrong figure, in the one document written to guide that judgement.",
+    "suggested_fix": "Replace 'минимум два различных слова' with 'минимум три различных слова (или все, если в разделе их меньше трёх)' at the first site, and 'порог в два слова' with 'порог в три слова' at the second site (around line 261).",
+    "evidence": "src/gdskills/reference-proof.ts: SUMMARY_MIN_SHARED_WORDS = 3 and 'const required = Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size)'. live-run.md line 39 says two, line 224 shows '3 required', line 261 says 'порог в два слова слишком строг для вашего'.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "runbook-two-words-threshold"
+  },
+  {
+    "id": "review-logic-w1:F-002",
+    "severity": "minor",
+    "file": "docs/docs/cli-reference.md",
+    "line": null,
+    "quote": "and/or `when.keywords` (at least one), and optionally `anchor` (a heading;",
+    "problem": "The Declare bullet reads 'optionally `anchor` (a heading; only that section is required) and `description`', which makes description look optional. The loader requires it: parseEntry in references-config.ts pushes 'description must be a non-empty string saying what the document governs' and the JSON schema lists description under required.",
+    "impact": "A user following this bullet who leaves description out gets the whole references.json rejected as invalid; promotion is then off for that run (a warning, exit 0), so every conditional read silently stops applying until they read the warning. Trigger: any declaration written from this reference page without a description.",
+    "suggested_fix": "Reword to: 'with `path`, `when` (`globs` and/or `keywords`, at least one) and `description` (all required), and optionally `anchor` ...'.",
+    "evidence": "src/gdskills/references-config.ts: schema 'required: [\"path\", \"when\", \"description\"]' and the description check in parseEntry; a parse error makes loadReferences return ok: false, which the resolver turns into a warning and no promotion.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "description-reads-optional"
+  },
+  {
+    "id": "review-logic-w1:F-003",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+    "problem": "The live run is AC20 in acceptance-criteria.md of flow 462; AC18 is the e2e test (live-run.md itself says the e2e test is AC18). The README also still carries 'Status: DRAFT for the operator; criteria are not frozen.' although the criteria file lists AC1-AC22 and the work is in review.",
+    "impact": "A reader tracing the live-run obligation from the PRD lands on the e2e criterion and may conclude the live run is already covered by a test; the DRAFT line suggests the criteria may still move. Documentation only, no behavioural effect.",
+    "suggested_fix": "Change 'AC18' to 'AC20' and update the Status line to the freeze state recorded in the flow.",
+    "evidence": "acceptance-criteria.md of flow 462: AC20 is the live run, AC18 the e2e test; live-run.md line 17 attributes src/gdskills/conditional-reads.e2e.test.ts to AC18.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "prd-ac18-identifier"
+  },
+  {
+    "id": "review-logic-w1:F-004",
+    "severity": "info",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+    "problem": "Words are runs of 5 or more letters of any script. Scripts written without spaces (Chinese, Japanese) yield one long 'word' per phrase, so an honest summary rarely shares three exact tokens with the section; the anchor heading's own words also count toward the shared set. The PRD names non-English text only in general terms.",
+    "impact": "Under enforcement block, a project documented in an unspaced script could see correct readings rejected, with no way to tune the threshold. Not reachable for the English and Russian projects the flow targets; the proxy nature of the check is already declared as a known limit.",
+    "suggested_fix": "No code change needed now. Add one sentence to the PRD risk table or guide section 5 that the word check assumes space-separated scripts, so a CJK project starts with warn.",
+    "evidence": "Pattern /\\p{L}{5,}/gu has no segmentation; an unspaced run counts as a single token. Reasoned from the code, not run.",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "dedupe_key": "single:review-logic-w1:F-004"
+  },
+  {
+    "id": "review-logic-w2:F-001",
+    "severity": "major",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "for (const ref of (await listRuleRefs(projectRoot)).sort(compare)) {",
+    "problem": "scanCitations reads only rule files that exist on disk under .metaproject/rules/project/ (listRuleRefs is a readdir). A rule imported with `keryx skills import --rules <dir> --link` is registered in place and has no copy there (import-rules.ts writes only the registry entry), so its citations are never seen. The resolver does read linked rules (collectProjectRules reads the registry's link entries and feeds their text to the citation pass), so the two disagree about which documents are cited.",
+    "impact": "Trigger: a project whose rules came in by `--link` and cite STYLING.md. (1) `skills import --rules <dir> --link` prints no 'N cited documents have no declaration' hint, although AC15 says import --rules ends with the undeclared count and the command to run. (2) `references suggest` prints an empty list while `resolve-context` lists the same document under `undeclared`. (3) `references check` reports a declaration for STYLING.md as `unused-declaration` ('no project rule cites this document') although a linked rule does cite it, and reports no `undeclared-citation` for an undeclared one. The comment in references-check.ts says a linked rule is not scanned, but gives no reason, and the user-facing help text does not mention the limit.",
+    "suggested_fix": "Build the rule list the way the resolver does: take the on-disk refs plus the registry's `link` entries whose origin is readable and whose sha256 still matches (reuse collectProjectRules or export a shared 'project rule texts' helper from context-resolver.ts), and scan those texts. If linked rules are to stay out of scope, say so in `keryx skills references --help` and in the import hint, and make `unused-declaration` not fire while any linked rule exists.",
+    "evidence": "references-check.ts:93-114 (scanCitations over listRuleRefs); context-resolver.ts:156-175 (listRuleFiles = readdir only) versus context-resolver.ts:205-230 (collectProjectRules also reads registry link entries) and 455-462 (citations taken from those candidates); import-rules.ts:196-203 (link mode writes no copy), :274-277 (hint calls undeclaredCitationHint, which uses the same scan).",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "linked-rules-not-scanned",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/references-check.ts:96 (scanCitations, used by checkReferences and suggestReferences)",
+        "src/gdskills/references-check.ts:262 (undeclaredCitationHint, called from src/gdskills/import-rules.ts:275)"
+      ],
+      "enumeration_method": "searched src for listRuleRefs/scanCitations/undeclaredCitationHint: scanCitations has two callers (checkReferences, suggestReferences), the hint goes through suggestReferences; the only other listRuleRefs user is project-context-status.ts (status display, not a citation scan)."
+    }
+  },
+  {
+    "id": "review-logic-w2:F-002",
+    "severity": "info",
+    "file": "src/gdskills/import-rules.ts",
+    "line": null,
+    "quote": "const hint = await undeclaredCitationHint(process.cwd());",
+    "problem": "The hint is computed from the rules on disk after the command returns, including on `--dry-run`, where nothing was imported. It then reads 'N cited documents have no declaration' about whatever was already installed, immediately after a dry-run listing of would-import rows.",
+    "impact": "No wrong state; the count describes the project, not the import, so on a dry run it can differ from what the import would produce. Settle by deciding whether the hint should be suppressed on --dry-run (or worded 'currently').",
+    "suggested_fix": "Skip the hint when `args.includes(\"--dry-run\")`, or label it as the current state of the project.",
+    "evidence": "import-rules.ts:270-277; the dry-run path writes nothing (line 221).",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "dedupe_key": "import-rules-dry-run-hint"
+  },
+  {
+    "id": "review-logic-w2:F-003",
+    "severity": "info",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return items.find((item) => item.sha256 === pinned && item.how !== \"n/a\") ?? items.find((item) => item.how !== \"n/a\") ?? items[0];",
+    "problem": "The hash check takes the LAST citation of a path (flow 461 rule) while the proof takes the first item with the pinned hash and a real `how`, falling back to the first item with any real `how` whatever its hash. A result that cites a path twice, first with a stale sha256 and a good summary and `how: read`, then with the pinned sha256 and `how: n/a`, passes the hash check on the last item and the proof on the first, so the `n/a` miss (AC11) is not reported.",
+    "impact": "Needs a worker that cites the same promoted path twice with different hashes; no input a normal worker produces. Listed so the two selection rules are known to differ.",
+    "suggested_fix": "In the fallback, require the item to carry the pinned sha256 (or report the pinned-hash item's `n/a` when one exists).",
+    "evidence": "resolved-context-check.ts:106-113 (last citation for the hash) versus reference-proof.ts:45-47 (pickProofItem).",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "dedupe_key": "hash-vs-proof-citation"
+  },
+  {
+    "id": "review-logic-w3:F-001",
+    "severity": "major",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "if (!section.found) return { ok: false, why: `the anchored section \"${entry.anchor}\" cannot be found in ${entry.path} now (${section.reason})` };",
+    "problem": "The resolver treats a dead anchor as 'the whole file is the obligation' (reference-entries.ts: `sectionBytes = bytes` with the warning 'the whole file (...) is the obligation'; AC6: 'falls back to the whole file with a warning'). The entry is still emitted with `anchor` set and tier must_read when promoted. The validator does not apply the same fallback: wordsFailure -> currentSection calls extractSection(text, entry.anchor) again, gets found:false, and returns a `summary-words` failure 'has a summary that cannot be checked: the anchored section ... cannot be found'. That failure is returned for every cited summary, however faithful.",
+    "impact": "Trigger: references.json declares anchor 'Class conventions' for STYLING.md, the heading is absent or renamed at resolve time, and a task file matches the glob. The worker follows the resolver's own instruction (reads the whole file), cites the right sha256, the declared anchor and a good 40+ character summary in the file's words; checkResolvedContext still pushes a miss on every run. Under enforcement 'block' `flow task done` and the standalone check exit 1 with no action the worker can take; only an operator edit of references.json clears it. No drift is reported either (the file hash is unchanged), so the miss reads as a worker failure. This contradicts the resolver's stated fallback and AC6/AC12 intent (a warning, never an unsatisfiable obligation). The existing test covers a section that vanishes after resolve, not a dead anchor at resolve time.",
+    "suggested_fix": "Make the validator mirror the resolver: when the anchor is not found, compare the summary against the whole file text (what: 'the file'), keeping the anchor-equality rule. Better, record the fallback in the entry at resolve time (omit `section_bytes` being equal to `bytes` is not a marker; add a flag or drop `anchor` from the promoted entry) so both sides read the same thing. Alternatively make the resolver refuse to promote an entry whose anchor is dead and warn, so the contradiction cannot arise.",
+    "evidence": "reference-entries.ts resolveReferences: `if (section.found) sectionBytes = section.bytes; else { sectionBytes = bytes; ... warnings.push(... the whole file (${bytes} bytes) is the obligation ...` then `...(declaration.anchor !== undefined ? { anchor: declaration.anchor } : {})` on the same entry. reference-proof.ts currentSection: `if (entry.anchor === undefined) return { ok: true, text, what: \"the file\" }; const section = extractSection(text, entry.anchor); if (!section.found) return { ok: false, ... }`. wordsFailure turns ok:false into `{ rule: \"summary-words\", detail: \"has a summary that cannot be checked: ...\" }`, which proofMisses maps to a ResolvedMiss, which sets `blocking` under block.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "dead-anchor",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/reference-proof.ts currentSection",
+        "src/gdskills/reference-entries.ts resolveReferences dead-anchor fallback"
+      ],
+      "enumeration_method": "searched the slice for every extractSection caller: reference-entries.ts (falls back to whole file), references-check.ts declarationFindings (reports an error, intended), reference-proof.ts currentSection (no fallback). Only the last one disagrees with the resolver."
+    }
+  },
+  {
+    "id": "review-logic-w3:F-002",
+    "severity": "major",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);",
+    "problem": "The not-a-word-character lookarounds are applied unconditionally. When the keyword itself begins (or ends) with a non-word character, the lookaround demands that the neighbouring text character is also a non-word character, which is the opposite of a word boundary at that edge. Verified at head: keywordOccurs('fix styles.css please', '.css') returns false, keywordOccurs('a@apply', '@apply') returns false, while keywordOccurs('use @apply here', '@apply') returns true.",
+    "impact": "Trigger: a declaration with a keyword such as '.css', '.scss', '@apply' or '::part' (the natural spelling for a styling document) and a task text like 'fix styles.css' or 'tidy a.scss'. The reference is not promoted and stays on_demand, so the obligation to read STYLING.md is silently skipped. `check` does not warn (a 4-character keyword passes MIN_KEYWORD_CHARACTERS). AC5 says 'on a word boundary', which a conventional \\b would satisfy for 'styles.css'.",
+    "suggested_fix": "Apply each lookaround only when the keyword's edge character is a word character: prefix `(?<![\\p{L}\\p{N}_])` only if the keyword starts with [\\p{L}\\p{N}_], suffix `(?![\\p{L}\\p{N}_])` only if it ends with one. Add a test for '.css' in 'styles.css'.",
+    "evidence": "Ran keywordOccurs from src/gdskills/reference-entries.ts under bun at head: ('fix styles.css please', '.css') -> false; ('use @apply here', '@apply') -> true; ('a@apply', '@apply') -> false. The regex source is the quoted line.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "single:review-logic-w3:F-002",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/reference-entries.ts keywordOccurs"
+      ],
+      "enumeration_method": "keywordOccurs is the only keyword matcher in the slice (promotionReason is its only caller in this slice); the single-entry list is deliberate."
+    }
+  },
+  {
+    "id": "review-logic-w3:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/references-section.ts",
+    "line": null,
+    "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+    "problem": "A UTF-8 BOM at the start of a markdown document sits before the first '#', so the first-line heading is not recognised. The BOM is stripped for references.json (loadReferences) but not for the documents read by extractSection / readDeclaredFile / inspectDocument. Verified: extractSection('\\uFEFF# Title\\ntext\\n## B\\nx\\n', 'Title') returns found:false with available ['B'].",
+    "impact": "Trigger: a declared document saved with a BOM whose anchor is its first-line H1. The resolver warns 'anchor not found' and falls back to the whole file; `check` reports anchor-not-found as an error while the heading is visible in any editor. Cost is a confusing diagnostic, and with F-001 an unsatisfiable proof.",
+    "suggested_fix": "In scanHeadings, strip a leading U+FEFF from the first line before matching (keeping offsets consistent with markdown.slice, i.e. treat the BOM as part of the section prefix).",
+    "evidence": "Ran extractSection at head with the BOM input: {\"found\":false,\"anchor\":\"Title\",\"reason\":\"no heading matches anchor \\\"Title\\\"\",\"available\":[\"B\"]}.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "single:review-logic-w3:F-003"
+  },
+  {
+    "id": "review-logic-w3:F-004",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+    "problem": "The word length is hard-coded as `{5,}` while WORD_MIN_LETTERS = 5 is exported, used in the failure message and documented as the rule. Changing the constant changes the message but not the check.",
+    "impact": "Maintenance cost: the reported rule ('N or more letters') and the enforced rule can diverge silently after a tuning change.",
+    "suggested_fix": "Build the pattern from the constant: new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\").",
+    "evidence": "WORD_MIN_LETTERS is referenced only in the `detail` string of wordsFailure; distinctWords does not read it.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "word-min-letters-hardcoded"
+  },
+  {
+    "id": "review-logic-w3:F-005",
+    "severity": "info",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "const rel = normaliseCitedPath(match[1]!) ?? match[1]!;",
+    "problem": "Citations are now normalised before they key the `cited` map for every project, including projects without a references file. A rule citing './docs/x.md' or 'docs\\x.md' used to produce a contract entry whose path was the raw spelling and now produces 'docs/x.md'.",
+    "impact": "Only a differently spelled path in `contract` entries for unusual citations; ordinary spellings are unchanged, so AC2 ('byte-identical without a references file') holds for them. Worth knowing if AC2 is read literally. What would settle it: a fixture rule citing './x.md' compared before and after.",
+    "suggested_fix": "None required; mention in the docs if the strict reading of AC2 matters.",
+    "evidence": "Read from the diff: previously `const rel = match[1]!;`.",
+    "confidence": "low",
+    "reviewer": "review-logic",
+    "dedupe_key": "single:review-logic-w3:F-005"
+  },
+  {
+    "id": "review-logic-w4:F-001",
+    "severity": "minor",
+    "file": "src/mcp/metaproject-tools.ts",
+    "line": null,
+    "quote": "const taskText = stringParam(params, \"task_text\");",
+    "problem": "The MCP structured branch for skills_resolve_context forwards task_text to the port on its own code path (it returns port.skillsResolveContext directly and never calls op.invoke). No test exercises task_text on that path: src/mcp/metaproject-tools.test.ts calls the tool only with { files, for }, and src/harness/tool/metaproject-operations.test.ts (new test 'passes task_text to the port as taskText') covers op.invoke, which this branch bypasses. The adapter line that forwards input.taskText to resolveProjectContext in metaproject-adapter.ts is also untested (no skillsResolveContext match in metaproject-adapter.test.ts).",
+    "impact": "AC3 names the MCP call as a carrier of the task text. Dropping the taskText spread in either place would silently disable keyword promotion for every MCP caller (all keyword-only declarations stay on_demand) and no test would fail.",
+    "suggested_fix": "Add one case to src/mcp/metaproject-tools.test.ts: write a references.json with a keyword declaration, invoke skills_resolve_context with task_text containing the keyword, and assert the entry is must_read with reason condition:keyword:<kw>; the same call without task_text stays on_demand.",
+    "evidence": "keryx ctx rg for skills_resolve_context in src/mcp tests shows only the files/for call at metaproject-tools.test.ts:56 and :111-:140; ripgrep for skillsResolveContext in metaproject-adapter.test.ts returns no match; the slice diff for metaproject-tools.ts adds the taskText lines only inside the bespoke case that returns port.skillsResolveContext(...) directly.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "mcp-task-text-untested"
+  },
+  {
+    "id": "review-logic-w4:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/conditional-reads.e2e.test.ts",
+    "line": null,
+    "quote": "expect(lines).toContain(`- ${THEMING_PATH} — project contract, declared, ${theming.bytes} bytes, sha256 ${theming.sha256.slice(0, 12)} (anchor \"${THEMING_ANCHOR}\", section ${theming.section_bytes} bytes)`);",
+    "problem": "The printed report an on_demand declared reference gets carries path, reason, bytes, sha and anchor, but not the declaration's description or condition, and the report has no undeclared list. renderResolutionMarkdown (unchanged apart from the anchor flag) is also what formatSkillsResolveContext returns to the interactive agent and what the CLI prints without --json. The description is the only text that tells a worker when to open an on_demand document (task-implementer SKILL.md: 'read on_demand ones only when the work touches them'), and the e2e test pins the line without it.",
+    "impact": "A worker that reads the Markdown form (the agent tool, or the CLI default) sees 'THEMING.md ... declared ... anchor \"Theme tokens\"' with nothing on what the document governs or when it applies, so the on-demand half of the feature (AC5: a task matching neither keeps description, anchor and condition) is only usable from the JSON form. AC5 itself is met in the entry record.",
+    "suggested_fix": "Append the description (and the condition, compactly) to the entry line for declared entries in renderResolutionMarkdown, add an 'undeclared' line when the list is non-empty, and update the e2e expectation; or state in the worker instructions that the JSON (--out) form is the one to read.",
+    "evidence": "e2e test at 'the printed report lists the promoted section and the on-demand document' asserts the exact line without description; resolve-context-command.ts renderResolutionMarkdown builds flags from index, linked, shadows, also_at and anchor only; formatSkillsResolveContext in metaproject-operations.ts returns renderResolutionMarkdown output plus warnings.",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "dedupe_key": "single:review-logic-w4:F-002"
+  },
+  {
+    "id": "review-logic-w5:F-001",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;",
+    "problem": "poll() and the explicit reload() (modal `e` toggle, showProjectContext, setProjectContextEnforcement) share one `reload` with no ordering guard. A poll that started its file reads before the enforcement write but resolves after the explicit reload assigns `current` and notifies listeners with the older snapshot.",
+    "impact": "Trigger: the user presses `e` in the modal while a 5s poll is in flight. The modal's `.then(next => status = next)` sets the fresh status, then the subscribed listener (or the poll resolving later) repaints the modal and the sidebar with the pre-toggle enforcement. The next poll, up to 5s later, corrects it. Meanwhile a second `e` press would toggle from the stale `status.enforcement`. Self-healing, so minor.",
+    "suggested_fix": "Give reload() a monotonically increasing sequence number taken before `options.load()` and discard a result whose sequence is lower than the last one applied, or serialise load calls through one in-flight promise.",
+    "evidence": "reload() and poll() in createProjectContextFeed; the modal key handler calls options.loadStatus(), which tui-shell binds to projectContextFeed.reload, while the interval calls the same reload. loadProjectContextStatus is async over several file reads, so two loads can finish out of start order.",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "dedupe_key": "reload-no-ordering"
+  },
+  {
+    "id": "review-logic-w5:F-002",
+    "severity": "minor",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "const projectContextFeed = createProjectContextFeed({",
+    "problem": "The feed starts a 5s interval at construction and returns `stop`, but tui-shell never calls projectContextFeed.stop() (the only references are current, subscribe and reload). The interval is unref'd, so it cannot hold the process open, but it keeps running after the shell is torn down.",
+    "impact": "Where the shell is disposed while the process lives (test harnesses, an in-process restart), each poll still runs loadProjectContextStatus, which now includes checkReferences. When the status then changes, the sidebar listener touches destroyed renderables; that throw happens inside reload(), is caught by poll and reported once through io.onSystem. The throw also aborts the remaining listeners after `current` was already updated, so they are never re-notified of that change.",
+    "suggested_fix": "Call projectContextFeed.stop() in the shell's teardown path next to disposeExecutionPlanPanel and liveSchedules.dispose(). Optionally wrap each listener call in try/catch so one failing subscriber does not starve the others.",
+    "evidence": "keryx ctx rg --all projectContextFeed src/tui/tui-shell.ts lists 5 matches, none a stop call; a teardown block exists around disposeExecutionPlanPanel?.() / liveSchedules?.dispose().",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "dedupe_key": "feed-stop-never-called"
+  },
+  {
+    "id": "review-logic-w5:F-003",
+    "severity": "info",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "contentRows:\n      Math.max(\n        formatProjectContextStatusLines(status).length,",
+    "problem": "The modal height is computed once, from the status at open. The new subscribe listener repaints the open tab in place when a resolve is recorded, and the References tab then has a different number of lines (for example the `over the cap` line, or findings appearing), but contentRows and the footer are not recomputed.",
+    "impact": "A tab that grows after open may be clipped or need scrolling. I did not trace modal-host's scroll behaviour, so this is an observation; confirm by opening /projectctx refs and recording a resolve over the cap while it is open.",
+    "suggested_fix": "Either size contentRows from the larger of the current and a worst-case line count, or accept the fixed height and document it.",
+    "evidence": "resolveModalPanelSize takes contentRows once; presentProjectContext passes it only in the openModalFn input.",
+    "confidence": "low",
+    "reviewer": "review-logic",
+    "dedupe_key": "single:review-logic-w5:F-003"
+  },
+  {
+    "id": "review-performance-w3:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/project-context-status.ts",
+    "line": null,
+    "quote": "const report = await checkReferences(projectRoot);",
+    "problem": "readReferences() is called from loadProjectContextStatus(), which the TUI's createProjectContextFeed calls through load: () => loadProjectContextStatus(projectContextDir()) on an unref'd setInterval every PROJECT_CONTEXT_POLL_MS (5000 ms) for the whole session. Before this diff a poll read three small files (config, last.json, registry) plus a rule listing. When references.json exists, each poll now also: loads references.json a second time (readReferences calls loadReferences, then checkReferences calls loadReferences again), re-lists and reads every project rule (scanCitations -> listRuleRefs + readFile per rule; listRuleRefs is already called once for the rule count in the same poll), and reads every declared document and every cited-but-undeclared .md document (inspectDocument reads up to CONTRACT_MAX_BYTES = 262144 bytes each, then extractSection runs on it). The result is only used when the References tab is open or the sidebar counters change.",
+    "impact": "Disk work in a long-lived interactive session grows with (rules + declared docs + cited docs), every 5 seconds, even when the user never opens the References tab and nothing changed. For a project with tens of rules and a few documents of tens of KB this is a few dozen file reads per tick: not a stall, but steady background IO and repeated parsing that was not there before, and it scales with the project's rule count. The ticks are not overlap-guarded (setInterval with void tick()), so a slow disk makes ticks pile up.",
+    "suggested_fix": "Keep the poll cheap: have loadProjectContextStatus return only the declarations (already loaded) on the poll path and compute checkReferences findings on demand, when the References tab opens or on an explicit reload. Alternatively cache the report keyed on the mtimes/sizes of references.json, the rule files and the declared documents. At minimum pass the already loaded declarations into checkReferences so references.json is not parsed twice, and guard the poll against overlapping ticks.",
+    "evidence": "project-context-status.ts readReferences(): loadReferences(projectRoot) then checkReferences(projectRoot); references-check.ts checkReferences(): loadReferences again, scanCitations (listRuleRefs + readFile per rule), inspectDocument per declaration, undeclaredCitations -> inspectDocument per cited .md. src/tui/project-context-inspector.ts: PROJECT_CONTEXT_POLL_MS = 5000, defaultInterval uses setInterval; src/tui/tui-shell.ts: load: () => loadProjectContextStatus(projectContextDir()). Data scale is not stated in the diff, hence minor.",
+    "confidence": "medium",
+    "reviewer": "review-performance",
+    "dedupe_key": "poll-reruns-full-check"
+  },
+  {
+    "id": "review-performance-w5:F-001",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "const timer = setInterval(() => {\n    void tick();\n  }, ms);",
+    "problem": "createProjectContextFeed polls every 5000 ms (PROJECT_CONTEXT_POLL_MS) for the whole TUI session and each poll calls loadProjectContextStatus, which for a project with references.json runs checkReferences. That reads every project rule (scanCitations), reads and parses every declared document (up to CONTRACT_MAX_BYTES = 262144 each) and every undeclared cited document, and calls loadReferences twice (readReferences, then checkReferences). The reads are sequential awaits. The result is then compared by JSON.stringify of the whole status including last.result entries. There is no cheap change test (mtime of last.json, references.json, rules dir) before the full recompute, and the tick has no in-flight guard, so a slow filesystem lets ticks overlap. The returned stop() is never called in tui-shell.ts (only 5 occurrences of projectContextFeed, none call stop), so the poll runs until process exit.",
+    "impact": "Steady background disk I/O and UTF-8 decode plus JSON stringify every 5 s on an idle TUI, scaling with the number of rules and declared documents (worst case roughly declarations x 256 KiB per tick). On a project with tens of small rules and documents this is milliseconds and invisible; the cost shows only with many or large documents, or a slow or network filesystem, where overlapping ticks can pile up. Off any measured hot path, so no user-visible regression is claimed. Only projects that have references.json pay the full cost; without it readReferences returns after one loadReferences.",
+    "suggested_fix": "Gate the expensive part on a cheap stamp: in the poll, stat last.json, references.json, tasks.config.json and the rules dir (or a rule-count plus max mtime) and call load() only when the stamp changed; reload() from the modal keeps loading unconditionally. Add an in-flight flag in poll() so a tick is skipped while the previous load is pending. Call projectContextFeed.stop() on TUI teardown. Optionally have readReferences reuse the already loaded declarations instead of calling loadReferences a second time via checkReferences.",
+    "evidence": "src/tui/project-context-inspector.ts defaultInterval and createProjectContextFeed.poll (no pending guard); src/gdskills/project-context-status.ts readReferences -> loadReferences + checkReferences; src/gdskills/references-check.ts scanCitations (readFile per rule), inspectDocument per declaration and per undeclared citation; src/gdskills/context-resolver.ts CONTRACT_MAX_BYTES = 262144; src/tui/tui-shell.ts has createProjectContextFeed at the const projectContextFeed site and no call to projectContextFeed.stop.",
+    "confidence": "medium",
+    "reviewer": "review-performance",
+    "dedupe_key": "poll-reruns-full-check"
+  },
+  {
+    "id": "review-performance-w5:F-002",
+    "severity": "info",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;",
+    "problem": "reload() is shared by the poll, the sidebar and the modal toggle (loadStatus: reloadProjectContext) with no ordering. A poll started before the user toggles enforcement can resolve after the toggle's reload and write the older status into current and to subscribers (the open modal then repaints it and its next 'e' press reads the stale status.enforcement). This is a correctness race rather than a cost; noted for review-logic, not graded here.",
+    "impact": "Needs a poll in flight at the moment of a toggle and the older read finishing last; the next poll 5 s later corrects the display. No performance cost.",
+    "suggested_fix": "Give reload() a sequence number and drop a result whose sequence is older than the last applied one, or serialize loads through one in-flight promise (which also fixes F-001's overlap).",
+    "evidence": "src/tui/project-context-inspector.ts reload: assigns current after await with no staleness check; showProjectContext passes loadStatus: reloadProjectContext and subscribe: projectContextFeed.subscribe in src/tui/tui-shell.ts.",
+    "confidence": "low",
+    "reviewer": "review-performance",
+    "dedupe_key": "reload-no-ordering"
+  },
+  {
+    "id": "review-security-code-w1:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/references-section.ts",
+    "line": null,
+    "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+    "problem": "HEADING is run on every ATX heading line of a declared document. The lazy `(.*?)` followed by `[ \\t]*$` is quadratic when the heading line holds a long run of spaces or tabs in the middle followed by a non-space character: at each lazy expansion position inside the run, `[ \\t]*` consumes the rest of the run, `$` fails, and it backtracks one step at a time. `stripClosingHashes` (`/[ \\t]+#+$/`) has the same shape on the matched text. Nothing caps the line length: the resolver accepts a file up to CONTRACT_MAX_BYTES (262144), `inspectDocument` in references-check.ts the same, and the validator's `currentSection` in reference-proof.ts reads the file with no size limit.",
+    "impact": "A declared document carrying one crafted heading line such as `# a` + about 200,000 spaces + `b` makes extractSection spin for minutes of synchronous CPU (order n squared). The same scan runs in `skills resolve-context`, in `contracts validate --resolved`, in `skills references check`, and in `loadProjectContextStatus`, which the TUI polls every 5 seconds (PROJECT_CONTEXT_POLL_MS) when the declaration has an anchor, so the TUI event loop freezes. Entry point: a contributor edits a document that references.json declares (or adds a declaration for a file they control). Needs a repo write, so a denial of service on developer tooling, not data exposure.",
+    "suggested_fix": "Make the heading match linear: capture with `^ {0,3}(#{1,6})[ \\t]+(\\S.*)$` (or `(.*)`) and trim the result in code instead of letting the regex backtrack on trailing whitespace; do the closing-hash strip with a manual scan from the end of the string. Optionally skip heading detection for lines over a few thousand characters.",
+    "evidence": "src/gdskills/references-section.ts:37 (HEADING), :49-51 (stripClosingHashes), :54-79 (scanHeadings runs HEADING on every line outside a fence). Callers: reference-entries.ts resolveReferences, references-check.ts declarationFindings, reference-proof.ts currentSection, project-context-status.ts readReferences via checkReferences (polled by createProjectContextFeed). Derived by reading the regex, not executed (read-only run).",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "dedupe_key": "heading-regex-quadratic"
+  },
+  {
+    "id": "review-security-code-w1:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\\n`);",
+    "problem": "recordLastResolve now stores the task text (up to TASK_TEXT_MAX_CHARS = 4000 characters) in the last-resolve record. That file is `.metaproject/data/skills/project-context/last.json`, which `git check-ignore` reports as not ignored (neither the root .gitignore nor its managed keryx block lists it). Before this change the record held paths, hashes and warnings only. The flow-orchestrator and job-orchestrator skills are now told to pass the task title and description on every dispatch, and the CLI `--task-text` accepts free text.",
+    "impact": "An operator or agent that runs `git add .metaproject` / `git add -A` after a resolve (the repo's own .gitignore comments describe this exact hazard for other runtime files) commits up to 4000 characters of task prose, which can hold a pasted token, customer data or a private issue body, into history that may be public. Flow task text is already versioned in plan.md, so the new exposure is chiefly ad hoc `--task-text` values and MCP `task_text` from conversations. The TUI does not read taskText (no reader found under src/tui), so the persisted copy is needed only for AC3.",
+    "suggested_fix": "Add `.metaproject/data/skills/project-context/` (or `last.json`) to the .gitignore outside the managed block and to renderMetaprojectGitignoreBlock() in src/lib/metaproject-gitignore.ts, or write the record with mode 0o600 as the other per-machine runtime files do. If the text is only needed to show what a resolve was for, store a hash plus the first 200 characters.",
+    "evidence": "src/gdskills/context-resolver.ts: RecordedResolve gains taskText/taskTextTruncated; recordLastResolve writes it; LAST_RESOLVE_PATH = \".metaproject/data/skills/project-context/last.json\". `git check-ignore -v` on that path exits 1 (not ignored); `git ls-files .metaproject/data/skills` lists nothing, so the file is untracked-but-not-ignored.",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "dedupe_key": "last-json-task-text"
+  },
+  {
+    "id": "review-security-code-w1:F-003",
+    "severity": "info",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "const file = path.isAbsolute(entry.path) ? entry.path : path.join(projectRoot, entry.path);",
+    "problem": "The summary-words check re-reads the declared document from `entry.path` as stored in the `--resolved` JSON, with no containment (no realpath inside the project root, no regular-file check, no size cap), unlike the resolver's readDeclaredFile. The anchor and tier it checks are likewise taken from the resolved file, not re-derived from references.json. This matches the existing currentSha behaviour from flow 461 (same absolute-path read), so it is the existing trust model extended, not a new boundary.",
+    "impact": "Only if the resolved file is hand-edited or a declared document is replaced by a symlink between resolve and validate: the validator reads that file, and the reported count of shared words (or the read error text) becomes a weak oracle for its contents. Nothing is written or returned verbatim. No attack path was found where an untrusted party controls the resolved file; stated so the trust assumption is explicit.",
+    "suggested_fix": "Reuse the resolver's containment (realpath inside project root, regular file, size <= CONTRACT_MAX_BYTES) in currentSection, and, if worker-writable resolved files are in the threat model, re-load references.json at validate time and compare anchor and tier to the declaration.",
+    "evidence": "src/gdskills/reference-proof.ts currentSection; src/gdskills/resolved-context-check.ts currentSha uses the same unguarded join (flow 461). Resolver side for comparison: src/gdskills/reference-entries.ts readDeclaredFile (lstat, realpath, isPathInside, isFile, size cap).",
+    "confidence": "low",
+    "reviewer": "review-security-code",
+    "dedupe_key": "single:review-security-code-w1:F-003"
+  },
+  {
+    "id": "review-security-code-w3:F-001",
+    "severity": "major",
+    "file": "src/gdskills/references-section.ts",
+    "line": null,
+    "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+    "problem": "scanHeadings matches every line with a lazy `(.*?)` followed by `[ \\t]*$`, and stripClosingHashes then runs `/[ \\t]+#+$/` over the captured text. Both backtrack quadratically on a heading line that holds a long run of spaces or tabs followed by a non-space character. scanHeadings runs on the whole declared document whenever an anchor is resolved, checked or proven, and the size cap is 262144 bytes (CONTRACT_MAX_BYTES), so the line can be that long.",
+    "impact": "Trigger: a contributor changes a markdown document that references.json declares with an anchor (STYLING.md style), adding one heading line such as `## x` + 120000 spaces + `x`. The next `keryx skills resolve-context`, `keryx skills references check`, `keryx skills contracts validate --resolved`, or a TUI status refresh (loadProjectContextStatus -> checkReferences) runs extractSection synchronously. Measured on this head with bun: 20000 spaces = 0.37 s, 60000 = 3.3 s, 120000 = 13.2 s, and the cost grows with the square, so a 250 KB line is about a minute of 100% CPU with the event loop blocked. A reviewer who checks out a hostile PR hangs the CLI and freezes the TUI. A file with no anchor in its declaration is not scanned.",
+    "suggested_fix": "Make heading detection linear. Match `^ {0,3}(#{1,6})(?:[ \\t]+(.*))?$` (no trailing-whitespace group), then `trimEnd()` in code. Replace the closing-hash strip with a linear step: after trimEnd, take the trailing `#` run and drop it only if the character before it is a space or tab, and treat a text made only of hashes as empty. Optionally skip lines longer than a few thousand characters as non-headings.",
+    "evidence": "node/bun timing of extractSection(\"# Title\\n\\n## Class conventions\\nbody\\n\\n## Hostile \" + \" \".repeat(n) + \"x\\n\", \"Class conventions\"): n=20000 -> 372 ms, n=60000 -> 3323 ms, n=120000 -> 13247 ms. Isolated regex timing: HEADING on \"# a\"+spaces(40000)+\"b\" = 1027 ms; strip regex on \"a\"+spaces(80000)+\"b\" = 3606 ms.",
+    "confidence": "high",
+    "reviewer": "review-security-code",
+    "dedupe_key": "heading-regex-quadratic",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/references-section.ts:37 HEADING",
+        "src/gdskills/references-section.ts:49 stripClosingHashes"
+      ],
+      "enumeration_method": "keryx ctx rg for (.*?), stripClosingHashes and HEADING in src/gdskills excluding tests: both are in references-section.ts; bundled-eval.ts heading patterns are unrelated and run on bundled skill text, not on declared documents."
+    }
+  },
+  {
+    "id": "review-security-code-w3:F-002",
+    "severity": "info",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "const headings = section.available.length > 0 ? ` Headings in the file: ${section.available.join(\"; \")}.` : \"\";",
+    "problem": "Heading text from the declared document goes into a resolver warning unchanged, and runSkillsResolveContext prints warnings with console.error. A heading can hold control characters such as ESC (the HEADING regex accepts any non-newline character). The same text reaches the `check` report (anchor-not-found message).",
+    "impact": "Trigger: a contributor renames the anchored heading so the anchor is dead and adds a heading containing terminal escape sequences; whoever runs resolve-context or references check on that checkout has the sequences written to their terminal (title spoofing, cursor moves that hide a line). The effect is limited to terminal rendering, so this is info only.",
+    "suggested_fix": "Strip C0/C1 control characters (keep none except space) from heading text before it is put into a warning or finding message.",
+    "evidence": "Warning built in reference-entries.ts resolveReferences; printed by `for (const warning of result.warnings) console.error(`warning: ${warning}`);` in resolve-context-command.ts; heading text comes from scanHeadings with no filtering.",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "dedupe_key": "single:review-security-code-w3:F-002"
+  },
+  {
+    "id": "review-security-code-w3:F-003",
+    "severity": "info",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "const file = path.isAbsolute(entry.path) ? entry.path : path.join(projectRoot, entry.path);",
+    "problem": "currentSection reads the file named by `entry.path` taken from the `--resolved` JSON with no containment check. A `..` or absolute path in a hand-edited resolved file is read, and its words are compared with the worker's summary. The same unguarded read already exists in currentSha for the drift check, and an absolute path is legitimate for linked rules.",
+    "impact": "No attack vector from the changed code alone: the resolved file is produced by the resolver and supplied by the operator, not by the worker. Noted so that the trust assumption (the resolved file is not worker-writable) stays explicit.",
+    "suggested_fix": "None required. If the resolved file ever becomes worker-influenced, restrict relative paths to the project root and absolute paths to registered linked-rule origins.",
+    "evidence": "readResolvedFile in resolved-context-check.ts only checks `schema === 1` and `entries` is an array; currentSection and currentSha both join entry.path onto projectRoot.",
+    "confidence": "low",
+    "reviewer": "review-security-code",
+    "dedupe_key": "single:review-security-code-w3:F-003"
+  },
+  {
+    "id": "review-security-code-w4:F-001",
+    "severity": "major",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {})",
+    "problem": "recordLastResolve now writes up to 4000 characters of the raw --task-text into .metaproject/data/skills/project-context/last.json. Before this PR that file held only rule paths, hashes and warnings. The path is not in .gitignore (only .metaproject/data/skills/stocktake/ is) and not in renderMetaprojectGitignoreBlock(), and writeContained is called without a mode, so the file is created 0664 (the worktree's own copy is 664). `git check-ignore -v` exits 1 for it, `git status` lists .metaproject/data/skills/ as untracked, and the file here already holds a taskText entry. Nothing in src/ reads taskText back: project-context-status.readLast passes it through, and no TUI view, validator or command uses it. The only reason given is a docs sentence that last.json 'records' the cut text, with no consumer named.",
+    "impact": "Trigger: an orchestrator or operator runs `keryx skills resolve-context --task-text \"<issue title and body>\"`, as the five orchestration skills now instruct for every dispatch. Issue and task bodies routinely hold pasted tokens, connection strings, customer data and logs. Outcome: the text lands in an untracked, non-ignored, group-readable file. A later `git add -A`, `git add .metaproject` or `git add .` commits it and a push publishes it; the repo already tracks hundreds of files under .metaproject/data/review*, so broad adds there are routine. The file also sits where any other local process or agent can read it.",
+    "suggested_fix": "Do not persist the text, since nothing consumes it. Record only what the TUI can use: `taskTextTruncated`, the length, and the keywords that matched (already in each entry's reason). If the text must stay, then (a) add `.metaproject/data/skills/project-context/` to renderMetaprojectGitignoreBlock() and to .gitignore, (b) pass `{ mode: 0o600 }` to writeContained (it applies only to a new file, so an existing 0664 last.json needs a chmod or a delete-and-recreate), and (c) cut it to a short prefix. Add a test that last.json is ignored and not world-readable.",
+    "evidence": "context-resolver.ts recordLastResolve (lines 529-541) builds `record` with taskText and calls writeContained(projectRoot, LAST_RESOLVE_PATH, ...) with no mode. LAST_RESOLVE_PATH = .metaproject/data/skills/project-context/last.json (line 84). The baseline recordLastResolve at merge-base 1658f77d3 wrote only { recordedAt, result }. `git check-ignore -v .metaproject/data/skills/project-context/last.json` exits 1; `git status --short` shows `?? .metaproject/data/skills/`; `ls -la` shows `-rw-rw-r-- last.json`; the file holds `\"taskText\": \"documentation for conditional reads\"`. src/lib/metaproject-gitignore.ts:386 lists only data/skills/stocktake/, and the sibling `.metaproject/data/decisions/` entry (lines 413-415) documents the 0o600 and ignored precedent for personal runtime state. A search for taskText in non-test src/tui and src/gdskills finds no reader.",
+    "confidence": "high",
+    "reviewer": "review-security-code",
+    "dedupe_key": "last-json-task-text",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/context-resolver.ts:529 recordLastResolve (the only writer of last.json)",
+        "src/gdskills/resolve-context-command.ts:50 (its only non-test caller)"
+      ],
+      "enumeration_method": "keryx ctx rg for recordLastResolve|LAST_RESOLVE_PATH|taskText over src excluding tests: one writer, one caller; the --out file and the MCP/adapter path never contain the text (resolveProjectContext does not return it), so last.json is the only place the text reaches disk"
+    }
+  },
+  {
+    "id": "review-security-code-w4:F-002",
+    "severity": "major",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "line": null,
+    "quote": "--task-text \"<the task's title and description>\"",
+    "problem": "Five bundled skill files, with byte-identical managed copies under .metaproject/skills/gdskills, tell the executing agent to substitute the task title and description into a double-quoted shell argument of `keryx skills resolve-context`. Inside double quotes a POSIX shell still expands $(...), backticks and $VAR. Markdown task descriptions use backticks all the time. The CLI has no way to read the text from a file or stdin, so the argv string is the only route, and the instruction never says to escape it. The docs example also uses double quotes.",
+    "impact": "Trigger: a task or issue description contains `cmd` or $(cmd), either by accident (inline code is ubiquitous) or planted by whoever authors the issue. An orchestrator or implementer that follows the template literally runs that command with its own shell permissions before keryx starts. Outcome: arbitrary command execution on the developer's machine or CI, or at minimum a mangled task text that silently stops keyword promotion. The MCP and agent-tool route (`task_text` field) does not go through a shell and is not affected.",
+    "suggested_fix": "Give the command a shell-safe input path and name it in the skills: a `--task-text-file <path>` (or `--task-text -` for stdin) option, with the instruction to write the description to a file with a quoted heredoc first. Failing that, change the templates to say the text must be single-quoted with embedded single quotes escaped, or passed as `--task-text=$'...'`, and state in the skill that the description is untrusted. Update the bundled and managed copies together (skill-sync.test.ts already checks they are byte-identical).",
+    "evidence": "flow-orchestrator/SKILL.md line 323 reads: `run keryx skills resolve-context --for test|implement --files ... --task-text \"<the task's title and description>\" --out ...`. job-orchestrator/orchestrator-prompt.md:132 and :188 and job-orchestrator/SKILL.md:749 and :1307 use `--task-text \"<task title and description>\"` and `--task-text \"<fix task description>\"`. task-implementer/SKILL.md:182 and tests-creator/SKILL.md:93 give the same form, and docs/docs/guides/apply-project-rules.md:170 shows it. resolve-context-command.ts reads the text only through optionValue(args, \"--task-text\"), with no file or stdin option.",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "dedupe_key": "shell-quoted-task-text",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+        "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+        "the same lines in the managed copies under .metaproject/skills/gdskills/",
+        "docs/docs/guides/apply-project-rules.md:170"
+      ],
+      "enumeration_method": "keryx ctx rg for task-text over src/gdskills/bundled and .metaproject/skills/gdskills (*.md): 14 matches in 10 files, 7 distinct bundled sites, each with a double-quoted placeholder; docs found by a separate rg over docs/"
+    }
+  },
+  {
+    "id": "review-security-code-w4:F-003",
+    "severity": "minor",
+    "file": "src/lib/args.ts",
+    "line": null,
+    "quote": "return next !== undefined && !next.startsWith(\"--\") ? next : undefined;",
+    "problem": "`--task-text <text>` goes through optionValue, which treats any following token that starts with `--` as the next flag and returns undefined. A task title or description that begins with `--` (a CLI flag as the topic, or a markdown `-- ` aside) is therefore dropped without a word: resolve-context-command treats it as no task text, records none, and warns about nothing.",
+    "impact": "Trigger: `keryx skills resolve-context ... --task-text \"--no-cache build flag\"`. Outcome: keyword-declared references are not promoted, the worker is not obliged to read them, and nothing says why. The only visible sign is the missing promotion, so the gate fails open. Narrow: it needs a text starting with `--`, and the `--task-text=<text>` spelling is unaffected.",
+    "suggested_fix": "In runResolveContextCommand, read `--task-text` with a parser that accepts a leading `--` (for example take args[index + 1] verbatim for this option), or fail loudly with 'use --task-text=<text>' when the flag is present with no usable value. Add a test for a text starting with `--`.",
+    "evidence": "src/lib/args.ts lines 18-28 (the guard on line 24); resolve-context-command.ts line 40 `const taskText = optionValue(args, \"--task-text\");` followed by the `taskText !== undefined && taskText.trim() !== \"\"` guards; no warning is emitted for the dropped text.",
+    "confidence": "high",
+    "reviewer": "review-security-code",
+    "dedupe_key": "single:review-security-code-w4:F-003"
+  },
+  {
+    "id": "review-security-code-w5:F-001",
+    "severity": "major",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.join(\"\\n\"), \"plain\") }));",
+    "problem": "paint() joins the lines built by formatProjectReferencesLines and passes them to a TextRenderable as is; stylePlanText with tone \"plain\" returns the string untouched. The new References tab puts attacker-writable strings into those lines with no escaping: declaration.path, declaration.anchor, every glob and keyword (conditionText), declaration.description (shown in the \"on demand\" row), the invalid-file messages (label() interpolates the raw path and the JSON.parse reason), and the finding messages (anchor-not-found lists up to 12 heading texts read from the declared document, unused-declaration and the others quote the path). All of them come from .metaproject/rules/project/references.json or from the documents it names, which are committed project files. JSON allows \\u001b and \\r in any of these strings, and parseReferences only trims them. The repository's own rule for exactly this input (src/lib/terminal-safe.ts: hooks.json is 'a committed file an attacker fully controls'; research-sync-panel.ts: 'The page is a file in the working tree: ... escaped before it reaches the terminal'; external-diff-modal.ts) is to pass such strings through terminalSafe/terminalSafeBlock. This modal and the new tab skip it.",
+    "impact": "Trigger: a user clones or checks out a repository whose references.json (or a declared .md heading) carries an escape sequence, for example description \"x\\u001b[1A\\u001b[2K...\" or a heading with the same, and runs /projectctx refs (or opens the References tab). Observed in a probe: createTestRenderer with a TextRenderable holding \"AB\\u001b[2JCD\\u001b[1A...\" keeps the ESC bytes in the cell buffer (captureCharFrame returns them verbatim) and a bare \\r starts a new row, so the sequences reach the cell contents that the renderer writes out; I did not capture the final byte stream sent to a real terminal. Outcome if they are emitted: cursor movement or line erase can repaint rows of the modal, for instance to hide a problems (n) line or to forge 'promoted' / 'matched glob' rows, in a view the operator reads to decide whether the rules are being applied. Bidi and zero-width characters also pass, so a path can read differently from what it is. The ordinary sidebar line is not affected (see clean areas).",
+    "suggested_fix": "Escape in the one sink, paint(): content: stylePlanText(otui, terminalSafeBlock(lines.join(\"\\n\")).text, \"plain\") with import { terminalSafeBlock } from \"../lib/terminal-safe\". terminalSafeBlock keeps \\n and \\t and replaces ESC, \\r, U+2028/2029, bidi and zero-width code points with visible \\xHH / \\uHHHH, so line counts (and the contentRows computation) are unchanged and all three tabs are covered, including the pre-existing Last resolve tab. Add a test in project-context-inspector.test.ts: a references.json whose description, anchor, glob and keyword contain \\u001b[2K and \\r must not put an ESC or CR in the renderable's content.",
+    "evidence": "src/tui/project-context-inspector.ts paint() (diff hunk @@ 76,283 @@); src/tui/project-references-view.ts rowLines, conditionText, findingLine, formatProjectReferencesLines; src/gdskills/references-config.ts parseEntry (values only trimmed; label() interpolates raw path); src/gdskills/references-check.ts declarationFindings (anchor-not-found message includes headings of the declared document); src/lib/terminal-safe.ts header comment; probe script in the review scratchpad.",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "dedupe_key": "single:review-security-code-w5:F-001",
+    "class_scope": {
+      "sites": [
+        "src/tui/project-references-view.ts:rowLines (path, anchor, description via entry.description ?? declaration.description)",
+        "src/tui/project-references-view.ts:conditionText (globs, keywords)",
+        "src/tui/project-references-view.ts:formatProjectReferencesLines (invalid-file errors)",
+        "src/tui/project-references-view.ts:findingLine (finding.path, finding.message with document headings)",
+        "src/tui/project-references-view.ts:reasonText (entry.reason from last.json, shown as recorded)",
+        "src/tui/project-context-inspector.ts:paint (the single sink for the three tabs)"
+      ],
+      "enumeration_method": "Read every string interpolated in project-references-view.ts and traced it to references.json, a declared document or last.json; searched src for terminalSafe users (keryx ctx rg terminal-safe) and found no use in project-context-inspector.ts or project-references-view.ts; one sink (paint) covers all of them."
+    }
+  },
+  {
+    "id": "review-style-w1:F-001",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+    "problem": "The runbook states the summary threshold as two shared words (and later calls 'порог в два слова' too strict in the failure list). The threshold is three: SUMMARY_MIN_SHARED_WORDS = 3 in src/gdskills/reference-proof.ts, AC10 as updated, and flow.json history (ac-updated 09:57:51, 'Operator decision, poll 213: raise the summary vocabulary threshold from two to three'). The same file's own expected output two sections later says '3 required', so it contradicts itself.",
+    "impact": "The operator runs the live run (AC20) from this file and is told to judge 'is the proxy enough' against a threshold that no longer exists; a note recorded in the flow journal would name the wrong number. Maintenance cost: the number is restated in prose in several places and this one was missed when it changed.",
+    "suggested_fix": "Change both mentions in live-run.md to three distinct words (and 'as many as the section holds when fewer than three'), matching README 5.3, the guide and the CLI reference.",
+    "evidence": "live-run.md lines 'пересказ должен делить минимум два различных слова из пяти и более букв с разделом' and '… сигнал, что порог в два слова слишком строг для вашего раздела'; same file step 4 expected output '…with the section \"<ваш якорь>\"; 3 required'; src/gdskills/reference-proof.ts line 15 SUMMARY_MIN_SHARED_WORDS = 3; flow.json history entry ac-updated for AC10.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "runbook-two-words-threshold",
+    "location_class": "in-diff"
+  },
+  {
+    "id": "review-style-w1:F-002",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "Ожидаем итоговую строку `0 errors, 0 warnings`. Ошибки (`missing`,",
+    "problem": "The runbook names the check errors `missing`, `anchor not found`, `oversized`. The finding codes the command emits (ReferencesFindingCode in src/gdskills/references-check.ts, and the table in the guide and CLI reference) are `document-missing`, `anchor-not-found`, `document-too-large`. The same file refers to 'PRD (риск 6)', but the PRD risk table (README section 6) has five unnumbered rows, so there is no risk 6; the summary-fabrication row is the fourth.",
+    "impact": "An operator comparing the output of `references check` with the runbook cannot match the names; a reader looking up the 'risk 6' reference finds nothing. Naming drift between the runbook and the shipped vocabulary.",
+    "suggested_fix": "Use the shipped codes (`document-missing`, `anchor-not-found`, `document-too-large`) and replace 'риск 6' with 'раздел 6 PRD, строка про выдуманный пересказ' (or number the risk rows).",
+    "evidence": "src/gdskills/references-check.ts ReferencesFindingCode union lines 30-42; docs/docs/guides/apply-project-rules.md finding table; PRD README section 6 table has 5 rows.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w1:F-002",
+    "location_class": "in-diff"
+  },
+  {
+    "id": "review-style-w1:F-003",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+    "problem": "The PRD points at AC18 for the live run. In the criteria file AC18 is the end-to-end fixture test (conditional-reads.e2e.test.ts) and the live run is AC20; live-run.md itself is titled AC20.",
+    "impact": "A reader following the PRD to the criteria lands on the wrong criterion; the two documents of one flow disagree on a criterion id.",
+    "suggested_fix": "Replace (AC18) with (AC20).",
+    "evidence": "acceptance-criteria.md: '- AC18: A fixture project … conditional-reads.e2e.test.ts' and '- AC20: The operator runbook for a live run on vantage-frontend'; live-run.md first line '(AC20)'.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "prd-ac18-identifier",
+    "location_class": "in-diff"
+  },
+  {
+    "id": "review-style-w1:F-004",
+    "severity": "minor",
+    "file": "docs/requirements/keryx-conditional-reads/README.md",
+    "line": null,
+    "quote": "Flow: 462 (`.metaproject/flows/462-2026-10-18-conditional-reads/`). Status: DRAFT for the operator; criteria are not frozen.",
+    "problem": "The status lines describe the flow as a draft with unfrozen criteria, and the next line says the branch must be rebased once #1047 is merged and that nothing compiles without the 461 resolver. At head the flow is frozen (flow.json history: 'frozen: 22 criteria; checksum recorded' at 08:46, status in-progress, AC10 changed later through ac update with an operator decision), and the branch already carries the resolver work. The same stale wording is in description.md ('Status: draft (PRD and criteria wait for the operator; not frozen)') and in acceptance-criteria.md ('DRAFT: not frozen. Waits for the operator. Test file names are proposals.'). The criteria file's test names are no longer proposals either: the T5-T13 tests exist.",
+    "impact": "Three entry documents of the flow tell a reviewer or the operator that criteria can still move, while the file is checksum-protected and a changed criterion has already gone through ac update. Misleading status comments; they will be copied into the PR description.",
+    "suggested_fix": "Update README.md and description.md to state the real status (frozen, in progress) and drop the rebase and does-not-compile sentence once #1047 is in main. The DRAFT line in acceptance-criteria.md sits in a checksum-protected file: change it only through `keryx flow ac update`, or leave it and say so in the PR.",
+    "evidence": "flow.json: history event 'frozen' and acChecksum set; README.md line 3 and line 5; description.md line 3; acceptance-criteria.md line 14.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w1:F-004",
+    "location_class": "in-diff"
+  },
+  {
+    "id": "review-style-w1:F-005",
+    "severity": "info",
+    "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+    "line": null,
+    "quote": "A promoted entry (reason condition:glob:<g> or condition:keyword:<k>) needs path, sha256, the declared anchor, a summary",
+    "problem": "The statement of what a promoted entry owes (path, whole-file sha256, declared anchor, summary of 40+ characters in own words, three shared words of 5+ letters, how read|followed never n/a) is restated, in different wording and at different levels of detail, in flow-orchestrator SKILL.md, job-orchestrator SKILL.md, this orchestrator-prompt.md, task-implementer SKILL.md (2.0c) and tests-creator SKILL.md (1.2b), plus the schema descriptions. Some copies omit the word rule and some state it.",
+    "impact": "Maintenance cost: the threshold already changed once during this flow (two to three) and one copy (F-001) was missed. Each future change has to find six places.",
+    "suggested_fix": "Keep the full statement in task-implementer 2.0c (the worker's source of truth) and have the orchestrator copies say 'a promoted entry needs the proof described in task-implementer 2.0c', or add a sync test that fails when the numbers (40, three, five) differ between the copies. Optional; the skill files are tightly worded and may be left as they are.",
+    "evidence": "slice-01.diff hunks for flow-orchestrator/SKILL.md, job-orchestrator/SKILL.md, orchestrator-prompt.md, task-implementer/SKILL.md, tests-creator/SKILL.md.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w1:F-005",
+    "location_class": "in-diff"
+  },
+  {
+    "id": "review-style-w1:F-006",
+    "severity": "info",
+    "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+    "line": null,
+    "quote": "k() { bun /home/altsay/keryx/.worktrees/conditional-reads/src/cli.ts \"$@\"; }",
+    "problem": "The committed runbook hard-codes one person's home directory (/home/altsay/keryx/.worktrees/..., /home/altsay/work/vantage-frontend) and is written in Russian, while the other files of the same PRD folder (README.md, TUI-states.md, schemas) are English.",
+    "impact": "The runbook only works on one machine and the folder mixes two languages. Low cost, since it is a one-operator document; the bundled-skill verifier forbids personal home paths in shipped files, which this folder is not.",
+    "suggested_fix": "Use placeholders (<keryx-worktree>, <vantage-frontend>) or a shell variable set once in section 0. Keep Russian only if the operator wants it; otherwise translate for consistency.",
+    "evidence": "live-run.md section 0 code block; README.md and TUI-states.md in the same folder are English.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w1:F-006",
+    "location_class": "in-diff"
+  },
+  {
+    "id": "review-style-w2:F-001",
+    "severity": "minor",
+    "file": "src/commands/skills-references.ts",
+    "line": null,
+    "quote": "Warnings: a description under 20 characters, a keyword under 4, a cited document with",
+    "problem": "The help text and USAGE hard-code values that src/gdskills/references-check.ts already exports as named constants: `20` (MIN_DESCRIPTION_CHARACTERS), `4` (MIN_KEYWORD_CHARACTERS) and the string `keryx skills references suggest` (REFERENCES_SUGGEST_COMMAND, used in the same file's sibling hint). The same diff does it the right way one file over: printResolveContextHelp in skills.ts interpolates `${TASK_TEXT_MAX_CHARS}`. The test file likewise writes `262145` where the size limit is CONTRACT_MAX_BYTES (262144) + 1.",
+    "impact": "Changing a threshold or the command name updates the check and the hint but leaves the help (and the oversize-document test) stating the old number. The tests that match on these strings keep passing, so the drift is silent.",
+    "suggested_fix": "Import MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAND from ../gdskills/references-check and interpolate them in printReferencesHelp and USAGE (as printResolveContextHelp does with TASK_TEXT_MAX_CHARS). In skills-references.test.ts build the oversize body from CONTRACT_MAX_BYTES: `\"x\".repeat(CONTRACT_MAX_BYTES + 1)`.",
+    "evidence": "references-check.ts lines 26-28 export the three constants; skills-references.ts help repeats `under 20 characters`, `a keyword under 4` and `keryx skills references suggest` (also in USAGE); skills-references.test.ts has `\"x\".repeat(262145)`; context-resolver.ts:82 `export const CONTRACT_MAX_BYTES = 262144;`. Sites: skills-references.ts (help text, USAGE), skills-references.test.ts (size test). Distinct from the wave-1 finding on proof thresholds in skill prose.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "help-thresholds-hardcoded"
+  },
+  {
+    "id": "review-style-w2:F-002",
+    "severity": "minor",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "...\"anchor\" in overrides ? (overrides.anchor === undefined ? {} : { anchor: overrides.anchor }) : { anchor: entry.anchor },",
+    "problem": "The `declaration()` fixture builder nests a ternary inside a ternary inside an object spread to express 'a key present in overrides with value undefined removes the field'. It is the hardest line to read in a 329-line file, and every test in the file goes through it.",
+    "impact": "A reader changing a fixture (adding a field, or another optional one like `anchor`) has to decode the double ternary and its `in` test first; the next optional field would copy the same pattern.",
+    "suggested_fix": "Merge then delete: `const merged = { ...entry, ...overrides }; if (merged.anchor === undefined) delete merged.anchor; return merged as Declaration;` (the `Overrides` type already admits `undefined`), or an early-return `if` for the anchor case.",
+    "evidence": "src/commands/skills-references.test.ts, function `declaration`: the `\"anchor\" in overrides ? (... ? {} : {...}) : {...}` expression inside the returned object literal.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "declaration-helper-ternary"
+  },
+  {
+    "id": "review-style-w2:F-003",
+    "severity": "info",
+    "file": "src/commands/skills-references.ts",
+    "line": null,
+    "quote": "lines.push(\"\", `${report.errors} ${report.errors === 1 ? \"error\" : \"errors\"}, ${report.warnings} ${report.warnings === 1 ? \"warning\" : \"warnings\"}`);",
+    "problem": "Pluralisation is written inline twice in the summary line, while references-check.ts has a `plural(count, noun)` helper for the same job (used by undeclaredCitationHint). It is module-private there, so the command re-implements it.",
+    "impact": "Two spellings of the same rule in one feature; a third count line copies the ternary again.",
+    "suggested_fix": "Export `plural` from references-check.ts (or a shared lib) and write `${plural(report.errors, \"error\")}, ${plural(report.warnings, \"warning\")}`.",
+    "evidence": "references-check.ts line 85 `const plural = (count: number, noun: string): string => ...`; skills-references.ts renderReferencesReport.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w2:F-003"
+  },
+  {
+    "id": "review-style-w2:F-004",
+    "severity": "info",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "test(\"references suggest: skills import --rules ends with the count of undeclared citations and the command to run\", async () => {",
+    "problem": "Three tests of the `skills import --rules` hint (this one, the 'prints no hint when every citation is declared or none exists' one, and the '--json stays pure JSON' one) carry the prefix `references suggest:`, but they exercise `skillsCommand([\"import\", \"--rules\", ...])`, not `references suggest`. The file header also labels itself 'T9', a plan task id.",
+    "impact": "A filtered run (`-t \"references suggest\"`) pulls in import tests, and one for the import hint (`-t \"import\"`) misses them; a failure line misattributes the broken command.",
+    "suggested_fix": "Prefix those three titles `skills import --rules hint:` (or group them in their own describe), and replace the 'T9' label in the header comment with the behaviour it covers.",
+    "evidence": "skills-references.test.ts: the three titles above; header comment `// Flow 462, T9: ...`.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w2:F-004"
+  },
+  {
+    "id": "review-style-w2:F-005",
+    "severity": "info",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "\"---\\ndescription: s\\nglobs: src/**/*.css\\nalwaysApply: false\\n---\\n\\nNo citation.\\n\"",
+    "problem": "The rule front matter is written out three times as a string literal: the `RULE` constant, an inline variant in the 'no rule cites' test, and this one in the import-hint test. They differ only in the body line.",
+    "impact": "A change to the rule fixture shape (a new required front-matter key) has to be applied at three places.",
+    "suggested_fix": "Add `const rule = (body: string) => `---\\ndescription: styling\\nglobs: src/**/*.css\\nalwaysApply: false\\n---\\n\\n${body}\\n`;` and build RULE and the two variants from it.",
+    "evidence": "skills-references.test.ts: RULE constant, the `rules: { \"styling.mdc\": \"---\\ndescription: styling...No document is cited here.\\n\" }` literal, and the `withoutCitation` literal.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w2:F-005"
+  },
+  {
+    "id": "review-style-w2:F-006",
+    "severity": "info",
+    "file": "src/commands/agent-commands.ts",
+    "line": null,
+    "quote": "// Flow 461: project rules and implementation context — the last resolve, the cap,",
+    "problem": "The comment above `/projectctx` still lists three things (last resolve, cap, warn/block), while the description edited in this diff now also advertises `refs` and 'conditional references'. The comment was not updated with the line below it.",
+    "impact": "A reader of the registry entry gets two different accounts of what the modal shows.",
+    "suggested_fix": "Add 'and the conditional references (flow 462)' to the comment; mention the `refs` tab in the same place.",
+    "evidence": "agent-commands.ts, the `/projectctx` entry: comment (flow 461 contents) next to the new description ending `[warn|block|refs]`.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w2:F-006"
+  },
+  {
+    "id": "review-style-w3:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "async function readDeclaredFile(projectRoot: string, rootReal: string, rel: string, maxFileBytes: number): Promise<ReadOutcome> {",
+    "problem": "readDeclaredFile (reference-entries.ts) and inspectDocument (references-check.ts) repeat the same sequence for the same declared path: lstat, realpath, isPathInside(rootReal, real), regular-file test, size cap against CONTRACT_MAX_BYTES, utf8 read. They differ only in the shape of the outcome (a `why` string vs a status code) and in a few message words.",
+    "impact": "A change to the containment or size policy has to be made in both places; if one is missed, `keryx skills references check` and `resolve-context` disagree about whether a declared document is usable (check says ok, resolve warns 'not listed', or the reverse).",
+    "suggested_fix": "Keep one inspector (the status-code form in references-check.ts is richer) in a shared module and have reference-entries.ts map its status to the `why` string for the warning.",
+    "evidence": "Both functions are in the diff: reference-entries.ts lines 654-673 of the slice and references-check.ts `inspectDocument`. Same order of checks and same CONTRACT_MAX_BYTES value is passed in as maxFileBytes.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "read-declared-file-duplicated"
+  },
+  {
+    "id": "review-style-w3:F-002",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+    "problem": "The module exports WORD_MIN_LETTERS = 5 and the failure message and the doc comment cite it, but distinctWords hardcodes the same number inside the regex literal.",
+    "impact": "Changing WORD_MIN_LETTERS changes the message and the doc but not the behaviour: the proof would report 'words of N or more letters' while still counting words of 5 letters.",
+    "suggested_fix": "Build the pattern from the constant: new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\").",
+    "evidence": "WORD_MIN_LETTERS is used in wordsFailure's message and in the doc comment of distinctWords; the regex literal is the only place that decides the length.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "word-min-letters-hardcoded"
+  },
+  {
+    "id": "review-style-w3:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+    "problem": "Whether an entry is 'promoted' is decided by a prefix of the free-text `reason` string that reference-entries.ts builds (`condition:glob:${glob}`, `condition:keyword:${keyword}`). The literal prefix lives in two files with nothing tying them together.",
+    "impact": "Renaming the reason format in reference-entries.ts silently turns off the proof for every promoted entry (isPromoted returns false, no miss is raised) with no type or compile error.",
+    "suggested_fix": "Export a CONDITION_REASON_PREFIX constant (or a builder and an `isConditionReason` predicate) from reference-entries.ts and use it in both places.",
+    "evidence": "reference-entries.ts: `return `condition:glob:${glob}`` and `condition:keyword:${keyword}`; reference-proof.ts isPromoted uses the bare literal.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "promoted-reason-string-prefix"
+  },
+  {
+    "id": "review-style-w3:F-004",
+    "severity": "minor",
+    "file": "src/gdskills/resolve-context-command.ts",
+    "line": null,
+    "quote": "entry.anchor ? `anchor \"${entry.anchor}\"${entry.section_bytes !== undefined ? `, section ${entry.section_bytes} bytes` : \"\"}` : \"\"",
+    "problem": "A ternary nested inside a template literal that is itself the branch of a ternary, packed on one line into an array of four other ternaries (the `flags` array is now one line of several hundred characters).",
+    "impact": "Hard to read and to review; adding the next flag means editing a line that is already past what the eye can parse.",
+    "suggested_fix": "Extract a small `anchorFlag(entry)` helper returning the string or \"\", and put the flags array one element per line.",
+    "evidence": "Single added line in renderResolutionMarkdown.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w3:F-004"
+  },
+  {
+    "id": "review-style-w3:F-005",
+    "severity": "minor",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "const contracts = await collectContracts(projectRoot, cited, new Set([...taken, ...declaredPaths]), new Set((declarations ?? []).map((declaration) => declaration.path)), warnings);",
+    "problem": "resolveProjectContext gains task truncation, reference resolution, a promoted-bytes budget check and the `undeclared` output on top of rule, skill, bundled and contract collection; it is now roughly 110 lines with well over ten decision points. `declarations ?? []` is repeated three times, and the 'undefined means no file' versus '[]' distinction is carried by a nullable value.",
+    "impact": "The function is the place every future context feature lands; its length and the repeated null-coalescing make the budget arithmetic (used, promotedBytes, total, overCap) hard to follow and easy to misread.",
+    "suggested_fix": "Bind `const declared = declarations ?? [];` once, and move the reference part (truncation warning, resolveReferences, promoted-bytes cap warning) into a helper that returns {entries, total, warnings}.",
+    "evidence": "Diff hunks 'context-resolver.ts @@ 438,552' show the three `declarations ?? []` uses and the new tail of the function.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w3:F-005"
+  },
+  {
+    "id": "review-style-w3:F-006",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return Array.from(text.trim()).length;",
+    "problem": "Small helpers are re-created per file: charCount (reference-proof.ts) and lengthOf (`[...text.trim()].length`, references-check.ts) count code points the same way; `compare` is defined in both context-resolver.ts and references-check.ts; the `realpath(projectRoot).catch(() => projectRoot)` fallback is written inline in context-resolver.ts and reference-entries.ts and as `rootRealPath` in references-check.ts.",
+    "impact": "Each copy can drift (for instance one starts to normalise differently), and the three spellings of 'root real path' are three places to change a fallback rule.",
+    "suggested_fix": "Move codePointLength and rootRealPath to ../lib/fs (or a local references-util) and import compare from one place.",
+    "evidence": "`keryx ctx rg 'const compare = ' src` returns two files; the other helpers are visible in the diff.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "char-count-helper-duplicated"
+  },
+  {
+    "id": "review-style-w3:F-007",
+    "severity": "minor",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "const shown = headings.slice(0, 12).join(\", \");",
+    "problem": "The number 12 appears twice (`slice(0, 12)` and `headings.length > 12`) as an unnamed cap on how many headings the message lists.",
+    "impact": "Two literals that must agree; changing one leaves the '...' marker wrong.",
+    "suggested_fix": "const MAX_HEADINGS_SHOWN = 12; and use it in both expressions.",
+    "evidence": "declarationFindings, anchor-not-found branch.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "heading-cap-12-literal"
+  },
+  {
+    "id": "review-style-w3:F-008",
+    "severity": "info",
+    "file": "src/gdskills/context-resolver.ts",
+    "line": null,
+    "quote": "import { resolveReferences } from \"./reference-entries\";",
+    "problem": "The two new import lines are inserted between ./project-context-config and ./project-rules, breaking the alphabetical order the rest of the block follows (project-context-config, project-rules, project-skills, rule-frontmatter, skill-frontmatter). Also, the file is 552 lines at head, past the 500-line info threshold.",
+    "impact": "Cosmetic; the file length is the larger long-term cost (the reference logic could live next to reference-entries.ts).",
+    "suggested_fix": "Place ./reference-entries and ./references-config after ./project-skills; consider moving more of the reference handling out of context-resolver.ts.",
+    "evidence": "Import block in the diff; `wc -l` gives 552.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w3:F-008"
+  },
+  {
+    "id": "review-style-w3:F-009",
+    "severity": "info",
+    "file": "src/gdskills/references-config.ts",
+    "line": null,
+    "quote": "\".metaproject/rules/project/references.json. See README.md section 5.1.",
+    "problem": "The schema description (a runtime constant a user may print) points to 'README.md section 5.1', but the repository root README.md has no such section; section 5.1 'Declarations' is in docs/requirements/keryx-conditional-reads/README.md.",
+    "impact": "A reader following the pointer lands in the wrong file.",
+    "suggested_fix": "Write the full path: docs/requirements/keryx-conditional-reads/README.md section 5.1.",
+    "evidence": "`keryx ctx rg '^#+ .*5\\.1' docs/requirements/keryx-conditional-reads README.md` matches only the requirements README ('### 5.1 Declarations').",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w3:F-009"
+  },
+  {
+    "id": "review-style-w3:F-010",
+    "severity": "info",
+    "file": "src/gdskills/resolved-context-check.ts",
+    "line": null,
+    "quote": "rule?: ProofRule;",
+    "problem": "In a codebase where 'rule' already means a project rule (.mdc), ResolvedMiss.rule names a proof rule. Similarly `report(...)` in references-check.ts is a noun used as a function name that builds a ReferencesCheckReport.",
+    "impact": "Slight ambiguity when reading code that also handles RuleCandidate and project rules; naming only.",
+    "suggested_fix": "Rename the field to `proofRule` and the function to `buildReport`.",
+    "evidence": "ResolvedMiss type in the diff; `function report(present: boolean, declared: number, findings: ReferencesFinding[])`.",
+    "confidence": "low",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w3:F-010"
+  },
+  {
+    "id": "review-style-w4:F-001",
+    "severity": "minor",
+    "file": "src/gdskills/resolved-context-check.test.ts",
+    "line": null,
+    "quote": "bytes: text.length,",
+    "problem": "docFixture fills the ContextEntry `bytes` field (and budget `usedBytes`) with `text.length`, a character count. The same slice's context-resolver tests use Buffer.byteLength for the same field, and the Russian-section test in this file passes Cyrillic text through docFixture, so the fixture's `bytes` is not a byte count there.",
+    "impact": "The field name says bytes and the project cares about the bytes/characters difference (references-section.test.ts asserts it). A reader copying this fixture gets a wrong value for non-ASCII text; a future check on `bytes` would pass or fail for the wrong reason.",
+    "suggested_fix": "Use Buffer.byteLength(text, \"utf8\") for `bytes` and `usedBytes` in docFixture.",
+    "evidence": "In the diff of src/gdskills/resolved-context-check.test.ts, docFixture sets `bytes: text.length` and `usedBytes: text.length`; the test 'summary: letters of any script count...' calls docFixture({ text: \"## Токены...\" }).",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "doc-fixture-bytes-length"
+  },
+  {
+    "id": "review-style-w4:F-002",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.test.ts",
+    "line": null,
+    "quote": "import type { ReferenceDeclaration } from \"../gdskills/references-config\";",
+    "problem": "The two new type imports from ../gdskills/ are inserted after the `./modal-host` import, inside the sibling-import group, and `references-config` precedes `references-check`. The file's existing order is ../gdskills/* first, then ./* siblings.",
+    "impact": "Breaks the group-then-alphabetical ordering the rest of the file follows, so the next import added has no obvious place. ESLint config does not enforce import order, so nothing else will catch it.",
+    "suggested_fix": "Move both imports up beside the other ../gdskills/ type imports, ordered references-check before references-config.",
+    "evidence": "Diff hunk at the top of src/tui/project-context-inspector.test.ts: after `import type { OpenModalInput } from \"./modal-host\";` come the two `../gdskills/references-*` imports.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w4:F-002"
+  },
+  {
+    "id": "review-style-w4:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/resolved-context-check.test.ts",
+    "line": null,
+    "quote": "test(\"summary: a promoted entry cited with its anchor and a summary in the section's own words passes\", async () => {",
+    "problem": "The new block repeats `await checkResolvedContext({ projectRoot: root, resolved, result: ... })` more than twenty times, many of them wrapped over five lines, only to read `.misses` or `.drifted`. docFixture already returns `{ root, resolved, sha }`, so a local `check(fixture, extra)` helper fits.",
+    "impact": "The meaning of each test (what is cited, which rule is expected) is buried in call plumbing, and a change to the checker's input shape touches every test.",
+    "suggested_fix": "Add a small helper, for example `const rulesOf = async (f, extra) => (await checkResolvedContext({ projectRoot: f.root, resolved: f.resolved, result: cite(f.sha, extra) })).misses.map((m) => m.rule)`, and assert on its result.",
+    "evidence": "The hunks 'summary: a missing or different anchor...', 'summary: fewer than 40 characters...', 'summary: exactly two shared words...' and 'summary: letters of any script count...' all repeat the same call shape.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w4:F-003"
+  },
+  {
+    "id": "review-style-w4:F-004",
+    "severity": "info",
+    "file": "src/gdskills/output-schema.test.ts",
+    "line": null,
+    "quote": "expect(read(file)).toBe(read(source));",
+    "problem": "The loop runs over `[source, ...copies]`, so for the first iteration `file` is `source` and the assertion compares the file with itself. It cannot fail.",
+    "impact": "Reads as if the source were being checked against something; a reader has to work out that one iteration is a no-op.",
+    "suggested_fix": "Compare only `copies` against `source` with `toBe`, and run the property-key check over `[source, ...copies]` separately.",
+    "evidence": "In 'the synced copies carry the same schema as the bundled source': `for (const file of [source, ...copies]) { expect(read(file)).toBe(read(source)); ...`.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w4:F-004"
+  },
+  {
+    "id": "review-style-w4:F-005",
+    "severity": "info",
+    "file": "src/gdskills/references-config.test.ts",
+    "line": null,
+    "quote": "type Node = Record<string, unknown>;",
+    "problem": "The local alias is named `Node`, the name of the DOM global type. It shadows it in this module.",
+    "impact": "A reader seeing `Node` in a test file will first think of the DOM; no functional effect.",
+    "suggested_fix": "Rename to `SchemaNode` or `JsonObject`.",
+    "evidence": "Declared above the `validates(schema: Node, value: unknown)` helper.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w4:F-005"
+  },
+  {
+    "id": "review-style-w4:F-006",
+    "severity": "info",
+    "file": "src/gdskills/skill-sync.test.ts",
+    "line": null,
+    "quote": "const root = path.resolve(import.meta.dir, \"../..\");",
+    "problem": "Module-level path constants are mixed: `root` is lowerCamel while its siblings `BUNDLED`, `MANAGED` and `CONTRACTS` are UPPER_SNAKE. `CONTRACTS` also names a directory here, while `CONTRACTS` in ./contracts (imported by output-schema.test.ts in the same slice) is the registry of contract definitions.",
+    "impact": "Inconsistent naming within one block, and one identifier with two meanings across neighbouring test files.",
+    "suggested_fix": "Name it `ROOT` (or `REPO_ROOT`, as output-schema.test.ts does) and rename the directory constant to `CONTRACTS_DIR`.",
+    "evidence": "Constants block at the top of skill-sync.test.ts; REPO_ROOT is used for the same purpose in output-schema.test.ts.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w4:F-006"
+  },
+  {
+    "id": "review-style-w4:F-007",
+    "severity": "info",
+    "file": "src/gdskills/context-resolver.test.ts",
+    "line": null,
+    "quote": "a declared reference whose keyword promotes it matches the task text case-insensitively on a word boundary; a task matching neither keeps description, anchor and condition on_demand",
+    "problem": "Several new test titles run past 150 characters and join two behaviours with a semicolon, and each test then asserts both. The titles of 'cap keeps promoted references...' and 'a rule that cites a declared document as ./STYLING.md...' are of the same kind.",
+    "impact": "A failure report shows a sentence that does not say which half failed; titles are hard to scan in a test list.",
+    "suggested_fix": "Split into two tests (promotion by keyword; on_demand when nothing matches) or shorten the title and put the second behaviour in its own test.",
+    "evidence": "New tests appended after the '--- flow 462: conditional mandatory reads ---' comment in context-resolver.test.ts.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w4:F-007"
+  },
+  {
+    "id": "review-style-w5:F-001",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "let tab: string = options.initialTab ?? \"status\";",
+    "problem": "This flow adds `export type ProjectContextTab = \"status\" | \"last\" | \"references\"` and uses it for `initialTab`, but the working variable `tab` is widened to `string`, and the literal `\"references\"` is repeated as the separate single-member type `tab?: \"references\"` in the `open` command variant and in `showProjectContext(tab?: \"references\")` in tui-shell.ts. The tab ids are therefore spelled in four places that the compiler does not tie together; the tab list in `openModalFn` repeats them again as strings.",
+    "impact": "Renaming or adding a tab id compiles cleanly and leaves one of the sites silently stale (for example a `paint` branch that never matches). Convention-consistency cost only; no wrong behaviour today.",
+    "suggested_fix": "Declare `let tab: ProjectContextTab = options.initialTab ?? \"status\";`, narrow the `renderTab` argument with a guard or cast once, and type the command and shell parameter as `Extract<ProjectContextTab, \"references\">` (or a named `ProjectContextOpenTab`) so one type owns the ids.",
+    "evidence": "Slice diff: `export type ProjectContextTab` (line 23 of the hunk), `let tab: string = ...`, `{ kind: \"open\"; /** Absent: the Status tab. */ tab?: \"references\" }`, and `const showProjectContext = (tab?: \"references\"): void` in tui-shell.ts.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w5:F-001"
+  },
+  {
+    "id": "review-style-w5:F-002",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "        : tab === \"references\"\n          ? formatProjectReferencesLines(status)\n          : formatProjectContextStatusLines(status);",
+    "problem": "`paint` chooses the formatter with a ternary chain (a ternary inside a ternary), and `contentRows` separately lists the same three formatters in a `Math.max(...)`. The tab-to-formatter mapping exists twice and is open-coded, so the next tab adds a third nesting level and a fourth place to edit.",
+    "impact": "Readability and a drift risk: a tab added to one of the two sites but not the other paints correctly yet gets a modal sized too small, or the reverse.",
+    "suggested_fix": "Hold one lookup, e.g. `const FORMATTERS: Record<ProjectContextTab, (s: ProjectContextStatus) => string[]> = { status: formatProjectContextStatusLines, last: formatProjectContextLastLines, references: formatProjectReferencesLines };`, then `FORMATTERS[tab](status)` in `paint` and `Math.max(...Object.values(FORMATTERS).map((f) => f(status).length)) + 2` for `contentRows`.",
+    "evidence": "Slice diff, `paint` and the `openModalFn` call in presentProjectContext: both enumerate the status/last/references formatters.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "tab-formatter-mapping"
+  },
+  {
+    "id": "review-style-w5:F-003",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.ts",
+    "line": null,
+    "quote": "export { formatProjectReferencesLines, NO_REFERENCES_TEXT } from \"./project-references-view\";",
+    "problem": "`formatProjectReferencesLines` is imported a few lines above for use in this file and then re-exported from the same module. Production code imports neither symbol from the inspector (tui-shell.ts does not); only project-context-inspector.test.ts reads them through it, while both are defined and exported by project-references-view.ts.",
+    "impact": "Unnecessary indirection: two import paths for one symbol, and the inspector looks like the owner of text that lives in project-references-view.ts. Small maintenance cost.",
+    "suggested_fix": "Drop the re-export and have the test import `NO_REFERENCES_TEXT` and `formatProjectReferencesLines` from `./project-references-view`.",
+    "evidence": "keryx ctx rg for NO_REFERENCES_TEXT|formatProjectReferencesLines|createProjectContextFeed over src and docs: consumers outside the view file are project-context-inspector.test.ts and the inspector itself; tui-shell.ts imports only createProjectContextFeed among the new names.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "single:review-style-w5:F-003"
+  },
+  {
+    "id": "review-style-w5:F-004",
+    "severity": "info",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "const projectContextFeed = createProjectContextFeed({",
+    "problem": "`ProjectContextFeed` exposes `stop()` and the factory starts the poller immediately, but nothing in tui-shell.ts calls `projectContextFeed.stop()` (the only uses are `current`, `reload` and `subscribe`). The interval is `unref`'d, so it cannot keep the process alive.",
+    "impact": "Dead API surface in the shell; a reader cannot tell whether the poller is meant to live for the whole session. Not a defect on its own, and the shell teardown path is outside this slice, so what would settle it is whether the shell has a dispose hook this should join.",
+    "suggested_fix": "Register `projectContextFeed.stop` with the shell's existing teardown, or add a comment at the creation site that the poll runs for the session by design.",
+    "evidence": "keryx ctx rg 'projectContextFeed\\.(stop|reload|subscribe)' src/tui/tui-shell.ts returned only subscribe (twice) and reload.",
+    "confidence": "medium",
+    "reviewer": "review-style",
+    "dedupe_key": "feed-stop-never-called"
+  },
+  {
+    "id": "review-testing-practices-w1:F-001",
+    "severity": "minor",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "expect((JSON.parse(out) as ReferencesSuggestion).references.map((entry) => entry.path)).toEqual([\"STYLING.md\", \"THEMING.md\"]);",
+    "problem": "The fixture cannot separate the ordering, de-duplication and attribution code in references-check.ts from its absence. In the test the citations enter the Map in rule-text order (STYLING.md, then THEMING.md), which already equals the sorted order, so deleting `.sort(compare)` in undeclaredCitations (references-check.ts:145) leaves the assertion green. Only one rule file exists in any test, so `.sort(compare)` over rule refs (line 96), the `!by.includes(rulePath)` de-duplication (line 109) and the 'cited by <rules>' message of undeclared-citation (line 225) are never exercised; the undeclared-citation test asserts only `code:path`, never the message.",
+    "impact": "Sorted output is a stated property of suggest ('Sorted by path' in the doc comment) and makes the printed skeleton and the check report stable across file systems. A later edit to the scan can reorder output or double-list a rule that cites one document twice with the suite green.",
+    "suggested_fix": "In the 'lists only citations that name a file inside the project' test, cite THEMING.md before STYLING.md in the rule text and add a second rule that also cites STYLING.md (twice in one rule). Assert the path order, and in the check test assert that the undeclared-citation message names each citing rule once.",
+    "evidence": "Read references-check.ts:93-114 and 143-151 at head and the fixture text at skills-references.test.ts (RULE then `Also see ... THEMING.md`). Reasoned, not run: deleting the `.sort` leaves insertion order = sorted order. mutant candidates m3, m4 below.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w1:F-001"
+  },
+  {
+    "id": "review-testing-practices-w1:F-002",
+    "severity": "minor",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "await project({ references: [declaration({ description: \"Styling rules.\" })] });",
+    "problem": "The three numeric thresholds are pinned only far from the boundary. The description fixture is 14 characters against a limit of 20 (references-check.ts:188, `< MIN_DESCRIPTION_CHARACTERS`), the keywords are 3 and 2 characters against 4 (line 192), and the oversize document is 262145 'x' plus a heading against CONTRACT_MAX_BYTES 262144 (line 133, `>`). Changing `<` to `<=` or `>` to `>=` in any of the three, or moving a limit by a few units, keeps the suite green. No fixture has a 19/20-character description, a 3/4-character keyword, or a document of exactly 262144 bytes.",
+    "impact": "AC14 states the limits as numbers ('under 20 characters', 'under 4 characters'); an off-by-one edit changes which declarations warn without any test noticing. The cost is to the next editor of these constants.",
+    "suggested_fix": "Add boundary rows: a description of exactly 20 characters and one of 19, a keyword of exactly 4 and one of 3 (expect no warning, one warning), and a document of exactly CONTRACT_MAX_BYTES bytes (no error) beside the existing one-over case.",
+    "evidence": "Read the fixtures in the description-short, keyword-short and document-too-large tests against the guards at references-check.ts:133, 188, 192. Reasoned, not run. mutant candidates m5, m6, m7 below.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w1:F-002"
+  },
+  {
+    "id": "review-testing-practices-w1:F-003",
+    "severity": "minor",
+    "file": "src/commands/skills-references.test.ts",
+    "line": null,
+    "quote": "rules: { \"styling.mdc\": `${RULE}\\nAlso see \\`docs/missing.md\\`, \\`../outside.md\\` and \\`THEMING.md\\`; rule \\`core/other.mdc\\`.\\n` },",
+    "problem": "The test is named 'lists only citations that name a file inside the project' but no cited path in it is outside the project AND exists. `../outside.md` is never created beside the temp root, so it is excluded by inspectDocument returning 'missing', exactly as `docs/missing.md` is; it does not exercise the escaping-path rejection in normaliseCitedPath (references-config.ts) that the name claims. `core/other.mdc` is never captured at all, because DOCUMENT_CITATION (references-check.ts:82) only matches a backticked `.md`. Deleting the escape rejection in normaliseCitedPath therefore leaves this test green (the other test that creates a symlink out of the root covers the declared path via isPathInside, not a cited, undeclared one).",
+    "impact": "The next author reads the test as coverage of the 'inside the project' filter for undeclared citations. A cited `../SECRET.md` that exists would be offered by suggest if the normaliser guard regressed, with this suite green. May already be pinned by references-config.test.ts, which is outside this slice.",
+    "suggested_fix": "Create `outside.md` in the parent of the temp root (or a sibling temp dir reached through `../`) before running suggest, so the only thing excluding it is the path guard; keep `docs/missing.md` as the separate 'does not exist' case.",
+    "evidence": "Read the fixture (files: STYLING.md, THEMING.md only), references-check.ts:82,106 and inspectDocument. I did not open references-config.ts's tests (other slice), hence the lowered confidence.",
+    "confidence": "low",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w1:F-003"
+  },
+  {
+    "id": "review-testing-practices-w1:F-004",
+    "severity": "minor",
+    "file": "src/gdskills/skill-sync.test.ts",
+    "line": null,
+    "quote": "expect(text).toMatch(/--task-text/);",
+    "problem": "This test (the AC17 pin for the instruction edits in this slice) asks only that each of the five instruction files contains `--task-text` once. job-orchestrator/SKILL.md carries the flag at two resolve sites in the diff (Step A and the fix loop) and orchestrator-prompt.md at two (the test resolve and the fix step); removing it from the fix-loop line leaves the file matching through the other site. The same holds for the per-file 'promoted entry needs path, sha256, anchor and a summary' paragraph test, which is satisfied by any single paragraph.",
+    "impact": "The fix dispatch is the case that re-resolves on a new head; if its line loses `--task-text`, a keyword-only document silently stops promoting on the fix attempt while AC17's test stays green. The test file itself is outside the slice diff; the lines it guards are in it.",
+    "suggested_fix": "Assert per site rather than per file: count the `keryx skills resolve-context` occurrences that carry a `--out` and require `--task-text` on each, or snapshot the specific lines the diff touched.",
+    "evidence": "Read skill-sync.test.ts lines 40-52 and the diff hunks for job-orchestrator SKILL.md (resolve-context at Step A and fix step 3) and orchestrator-prompt.md (step 1 and FIX step 2). Reasoned, not run. mutant candidates m11, m12 below.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w1:F-004"
+  },
+  {
+    "id": "review-testing-practices-w1:F-005",
+    "severity": "info",
+    "file": "src/gdskills/references-check.ts",
+    "line": null,
+    "quote": "case \"not-file\":\n      return { severity: \"error\", code: \"document-not-file\", path: where, message: \"the declared path is not a regular file\" };",
+    "problem": "Four finding codes and one inspection branch have no test in skills-references.test.ts: `document-not-file` (a declared directory), `document-unreadable`, the dangling-symlink branch of inspectDocument ('a link that points nowhere'), and `rule-unreadable`. AC14 names none of them, so this is not an unpinned acceptance criterion; it is code the suite never enters.",
+    "impact": "These are the branches that run only on odd file systems; a regression there turns an error into a crash or a silent pass. Observation only: no failing input is named.",
+    "suggested_fix": "Add one test with a declared directory (`mkdir STYLING.md`), and one with a dangling symlink; skip the unreadable cases unless the harness can chmod portably.",
+    "evidence": "Read references-check.ts:116-138, 155-169 and the full test file: no fixture creates a directory, a dangling link or an unreadable rule.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w1:F-005"
+  },
+  {
+    "id": "review-testing-practices-w2:F-001",
+    "severity": "minor",
+    "file": "src/mcp/metaproject-tools.ts",
+    "line": null,
+    "quote": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+    "problem": "The MCP projection forwards task_text to the resolver, and AC3 names the MCP surface. The only MCP test that calls skills_resolve_context (the AC16 test in src/mcp/metaproject-tools.test.ts, unchanged by the slice) passes no task_text, and the slice adds no MCP test. Deleting this spread keeps every test green.",
+    "impact": "A refactor of the MCP handler could drop task_text. Keyword conditions would then never promote over MCP, and the only visible effect is a silent absence of must_read entries for MCP clients.",
+    "suggested_fix": "Add an MCP test with a recording fake port: call skills_resolve_context with task_text and assert the port received taskText; call it with a blank task_text and assert taskText is absent from the port input.",
+    "evidence": "Read src/mcp/metaproject-tools.test.ts in full: no test passes task_text. The slice hunk for metaproject-tools.ts is production-only. Only the op layer (metaproject-operations.test.ts, 'passes task_text to the port as taskText and drops a blank one') is pinned. mutant:w2-M-01 survived (suite green, no other mutant in the file killed).",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "mcp-task-text-untested"
+  },
+  {
+    "id": "review-testing-practices-w2:F-002",
+    "severity": "minor",
+    "file": "src/harness/tool/metaproject-adapter.ts",
+    "line": null,
+    "quote": "...(input.taskText !== undefined ? { taskText: input.taskText } : {}),",
+    "problem": "The adapter that turns the port call into the resolver call forwards taskText, but src/harness/tool/metaproject-adapter.test.ts has no skillsResolveContext test and the slice adds none. Removing the spread keeps every test green.",
+    "impact": "The harness tool path could lose task_text between the op layer and the resolver while the op-layer test stays green, so keyword promotion would silently stop working for harness agents.",
+    "suggested_fix": "Add an adapter test over a tmp project that has a references.json with a keyword condition: call skillsResolveContext with taskText containing the keyword and assert the entry is must_read with reason condition:keyword:<k>; call it without taskText and assert on_demand.",
+    "evidence": "Read src/harness/tool/metaproject-adapter.test.ts in full: no skillsResolveContext case. Slice hunk for metaproject-adapter.ts is production-only. mutant:w2-M-02 survived (suite green, no other mutant in the file killed).",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-002"
+  },
+  {
+    "id": "review-testing-practices-w2:F-003",
+    "severity": "minor",
+    "file": "src/gdskills/context-resolver.test.ts",
+    "line": null,
+    "quote": "test(\"cap keeps promoted references: an over-cap promoted reference stays must_read and the warning gives the sizes, while rules keep flow 461 behaviour\", async () => {",
+    "problem": "The test is the AC7 pin (promoted references are never demoted by the cap) but only one promoted reference competes with the cap. THEMING.md (size 6000) has the glob docs/** and the task files match src/**, so it is not promoted; it is on_demand because its condition does not match, not because the cap spared it. The assertion usedBytes: 12000 therefore mixes a 10000-byte promoted entry with a 2000-byte rule, and a mutant that demotes the second-largest promoted reference by the cap would not be caught.",
+    "impact": "AC7 says promoted references stay must_read under the cap. The test would still pass if the resolver demoted a second over-cap promoted reference, which is the case the criterion exists for.",
+    "suggested_fix": "Give THEMING.md the glob src/** so both STYLING.md and THEMING.md are promoted, then assert both stay must_read, the budget is exceeded, usedBytes equals the sum, and the warning names both sizes.",
+    "evidence": "Fixture in the slice lines 580-808: STYLING.md ruleText({ size: 10000 }) glob src/**; THEMING.md size 6000 glob docs/**; small.mdc 2000 bytes; maxBytes 4096; assertion expect(result.budget).toEqual({ limitBytes: 4096, usedBytes: 12000, exceeded: true, limitSource: \"flag\" }).",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-003"
+  },
+  {
+    "id": "review-testing-practices-w2:F-004",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.test.ts",
+    "line": null,
+    "quote": "expect(text).toContain(\"over the cap: 109 of 131072 bytes\");",
+    "problem": "The R4 fixture sets exceeded: true with usedBytes: 109 against limitBytes: 131072, a state the resolver can never produce (exceeded means usedBytes is over limitBytes). The test then asserts the sentence 'over the cap: 109 of 131072 bytes', which is false for those numbers.",
+    "impact": "The test pins the wording of an impossible record, so it will not catch a presenter bug that prints the wrong pair of numbers, and it documents misleading output for a future reader.",
+    "suggested_fix": "Build the over-cap record with usedBytes greater than limitBytes (for example limitBytes 100, usedBytes 109) and assert 'over the cap: 109 of 100 bytes'.",
+    "evidence": "Fixture line in the slice: budget: { limitBytes: 131072, usedBytes: 109, exceeded, limitSource: \"default\" }, with section_bytes 120.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-004"
+  },
+  {
+    "id": "review-testing-practices-w2:F-005",
+    "severity": "minor",
+    "file": "src/tui/project-references-view.ts",
+    "line": null,
+    "quote": "return status.last?.result.entries.find((entry) => entry.path === declaration.path && entry.condition !== undefined);",
+    "problem": "The 'R2 only declared entries count' test cites OTHER.md, which is not a declared path, so the entry.path === declaration.path half of the predicate excludes it and the entry.condition !== undefined half is never decisive. Removing the condition clause keeps the test green.",
+    "impact": "A cited contract at a declared path, with no condition, would be shown as a promoted or resolved reference of the declaration. The R2 count would then include documents the rules cited rather than the conditions promoted.",
+    "suggested_fix": "Add a resolved entry for a declared path with no condition field (a rule-cited contract) and assert the declaration stays unresolved (R2 count excludes it).",
+    "evidence": "Fixture line: const cited: RefEntry = { kind: \"contract\", source: \"project\", path: \"OTHER.md\", sha256: \"q\", bytes: 5, reason: \"cited by AGENTS.mdc\", tier: \"must_read\" }; mutant:w2-M-03 survived (suite green, no other mutant in the file killed).",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-005"
+  },
+  {
+    "id": "review-testing-practices-w2:F-006",
+    "severity": "minor",
+    "file": "src/tui/project-context-inspector.test.ts",
+    "line": null,
+    "quote": "  h.tab(\"status\");\n  expect(h.text()).toContain(\"Enforcement: warn (default)\");\n  h.handle.close();",
+    "problem": "The R7 test pushes a feed update after close and then asserts the Status text. The Status text is the same for the 'before' and 'after' snapshots, so the assertion passes whether or not the closed inspector kept repainting.",
+    "impact": "A regression that repaints or re-subscribes after close (the 'closed ||' guards in the presenter) would not be caught; it would leak listeners and render into a disposed node.",
+    "suggested_fix": "Push a record that changes visible text (for example a different budget) after close and assert the text is unchanged, or compare node identity from h.node() before and after the post-close push, and assert the feed has zero subscribers after close.",
+    "evidence": "Test flow: push?.(before) is followed by a post-close push and the Status assertion above; both snapshots render identical Status text.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-006"
+  },
+  {
+    "id": "review-testing-practices-w2:F-007",
+    "severity": "info",
+    "file": "src/tui/project-references-view.ts",
+    "line": null,
+    "quote": "if (total === 0) lines.push(\"\", NO_REFERENCES_TEXT);",
+    "problem": "The declared-but-empty state (references.json present with an empty list) has no test: neither the sidebar segment for zero declarations nor the tab text NO_REFERENCES_TEXT is asserted.",
+    "impact": "Removing the branch leaves an empty References tab with only a header, which is a cosmetic loss.",
+    "suggested_fix": "Add a presenter test with a declared state and an empty list; assert the tab contains the no-references text and the sidebar segment reads as an empty count.",
+    "evidence": "No test in project-context-inspector.test.ts or the slice builds a declared state with zero references.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-007"
+  },
+  {
+    "id": "review-testing-practices-w2:F-008",
+    "severity": "minor",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "${escapeRegExp(keyword)}",
+    "problem": "keywordOccurs builds a Unicode-aware whole-word regex with lookarounds over letters, digits and underscore, and escapes the keyword. The tests only use 'tailwinds are mentioned' and 'the pretailwind thing'. Digit adjacency (tailwind2), underscore adjacency (_tailwind), a non-ASCII neighbour letter, and a keyword with regex metacharacters (a.b versus axb, c++) are not pinned.",
+    "impact": "Dropping \\p{N} or _ from the lookarounds, or the escape, keeps the suite green. A keyword such as c++ would then throw or match wrongly, and identifiers like tailwind2 would wrongly promote a document.",
+    "suggested_fix": "Add cases: keyword tailwind not matching in tailwind2, _tailwind and the Cyrillic-adjacent text; keyword a.b matching 'a.b' but not 'axb'; keyword c++ matching 'use c++ here' without throwing.",
+    "evidence": "Resolver tests in the slice (lines 580-808) use only the two ASCII phrases above. Production confirms escapeRegExp exists, so c++ does not crash, but nothing asserts it. mutant:w2-M-05 survived (suite green, no other mutant in the file killed); mutant:w2-M-06 survived (suite green, no other mutant in the file killed).",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-008"
+  },
+  {
+    "id": "review-testing-practices-w2:F-009",
+    "severity": "minor",
+    "file": "src/gdskills/reference-entries.ts",
+    "line": null,
+    "quote": "if (input.taken.has(declaration.path)) {",
+    "problem": "Several resolveReferences branches have no assertion in the diff: the taken collision (a declared path already listed as a rule or skill is skipped with a warning), the maxFileBytes limit (info.size > maxFileBytes), glob-before-keyword precedence in the reason, and the 'Headings in the file' text for a missing anchor. Coverage elsewhere in the repository was not searched, so this is limited to the slice.",
+    "impact": "Removing the taken check would list one file twice (as a rule and as a reference) and double its bytes in the budget. Changing > to >= or swapping glob and keyword order would change reasons the validator and the TUI print.",
+    "suggested_fix": "Add resolver cases: a declaration whose path is already a listed rule (expect one entry and a warning); a file of exactly maxFileBytes (accepted) and maxFileBytes+1 (skipped with warning); a declaration matching by both glob and keyword (expect condition:glob:<g>); a missing anchor warning that lists the headings.",
+    "evidence": "Read the resolver tests added in the slice and context-resolver.test.ts additions; none exercises these branches. Production branches read in reference-entries.ts. mutant:w2-M-07 survived (suite green, no other mutant in the file killed); mutant:w2-M-08 survived (suite green, no other mutant in the file killed).",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-009"
+  },
+  {
+    "id": "review-testing-practices-w2:F-010",
+    "severity": "minor",
+    "file": "src/gdskills/reference-proof.ts",
+    "line": null,
+    "quote": "return Array.from(text.trim()).length;",
+    "problem": "The summary proof is well covered for length 28 versus 40, the 2/3 shared words boundary, case, and Cyrillic. Not pinned: code-point counting (an astral character counts as one, not two), NFC normalisation in distinctWords, the three-tier fallback of pickProofItem beyond the n/a-plus-followed pair, the Math.min clamp is pinned only for 1 and 0 section words, and the letter threshold {5,} (a four-letter and a five-letter word on the boundary).",
+    "impact": "Replacing Array.from with .length, dropping .normalize('NFC'), or changing {5,} to {4,} would pass the suite. A decomposed accent in a Russian or French summary would then fail to match the composed section word.",
+    "suggested_fix": "Add: a 39-code-point summary containing an emoji (rejected by length) and a 40-code-point one (accepted); a decomposed (NFD) summary word matching a composed section word; a section whose only shared word has exactly four letters (must not count).",
+    "evidence": "Read resolved-context-check.test.ts additions in the slice (lines 1522-1830) against reference-proof.ts at head.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-010"
+  },
+  {
+    "id": "review-testing-practices-w2:F-011",
+    "severity": "minor",
+    "file": "src/gdskills/references-section.ts",
+    "line": null,
+    "quote": null,
+    "problem": "references-section.test.ts pins backtick fences only with a plain opener and closer. The fence-closing conditions (tilde fences, a closing run shorter than the opening one, a different marker, a closing line with trailing text) and a heading made only of closing hashes have no case.",
+    "impact": "A fence that is closed too early or too late would change which headings count, and so the section bytes that become the budget and the obligation. Mutating the comparison from >= to > or dropping the marker equality would pass the suite.",
+    "suggested_fix": "Add cases: a ~~~ fence containing a '# not a heading' line; a four-backtick opener that a three-backtick line does not close; a backtick fence not closed by ~~~; a heading line '## ##'.",
+    "evidence": "Read src/gdskills/references-section.test.ts in the slice (lines 1315-1467): one fenced case only.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-011"
+  },
+  {
+    "id": "review-testing-practices-w2:F-012",
+    "severity": "info",
+    "file": "src/gdskills/output-schema.test.ts",
+    "line": null,
+    "quote": null,
+    "problem": "Smaller gaps: the task-text truncation test uses ASCII only, so the code-point versus UTF-16 slice is unpinned; project-context-status.test.ts pins only two of the finding codes; output-schema.test.ts mixes a shape assertion with behavioural validation (validate a citation with and without anchor and summary and assert the verdict, rather than the schema shape).",
+    "impact": "Low. A surrogate pair at the 4000 boundary could be cut in half; a renamed finding code would pass.",
+    "suggested_fix": "Add a truncation case with a 4001st astral character; add one status test per finding code that production emits; prefer verdict assertions over schema shape.",
+    "evidence": "Slice test files read in full.",
+    "confidence": "low",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-012",
+    "publication": "finding"
+  },
+  {
+    "id": "review-testing-practices-w2:F-013",
+    "severity": "info",
+    "file": null,
+    "line": null,
+    "quote": null,
+    "problem": "The glue that turns the parsed '/projectctx refs' command into the inspector's initialTab lives outside slice-04 and was not located. The slice pins the parse result and the presenter's initialTab, but not the dispatcher between them, so AC for the command is pinned in two halves with the join unread by this reviewer.",
+    "impact": "Unknown. Reported as not covered, not as a defect.",
+    "suggested_fix": "Confirm an integration-level test opens the inspector through the slash-command dispatcher and lands on the References tab.",
+    "evidence": "Raw search was blocked by a hook and the brief limits commands to git log, git blame and git show; the dispatcher was not read.",
+    "confidence": "low",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "single:review-testing-practices-w2:F-013",
+    "publication": "question"
+  }
+]
+```
+
+## Token spend
+
+token spend: unknown (43 dispatch(es), none reported usage)

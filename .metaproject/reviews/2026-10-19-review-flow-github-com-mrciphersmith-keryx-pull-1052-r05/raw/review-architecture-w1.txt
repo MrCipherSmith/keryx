@@ -1,0 +1,89 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Architecture review of the r05 fix slice (slice-01, b1c6da0e6..77d2eff20, flow 464). No blocker or major violation. The claimed fixes for the architecture-owned items (E-04, E-06, E-10, E-35, E-58) are complete and introduce no dependency cycle or layer inversion; E-05 is closed for the harness nudge. E-52 and E-53 stay open as known minors. One info observation on a tool-name literal in the agent loop.",
+  "findings": [
+    {
+      "id": "A-01",
+      "severity": "info",
+      "file": "src/commands/agent.ts",
+      "line": null,
+      "quote": "cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\"),",
+      "problem": "The E-05 fix derives cardAvailable inside the agent loop by matching the literal tool name \"review_complete\" against the session roster. The loop (harness layer) now knows the name of one commands-layer card tool, and the same name is also written in closeStep and the review.ts refusal texts. This is a coupling note, not a violation: the default (cardAvailable omitted) is true, and the roster check is the right source of truth.",
+      "impact": "If the card tool is renamed, the nudge silently falls back to the command wording for every session, with no compile-time signal. Low risk, the name is part of the TM-04 contract.",
+      "suggested_fix": "Export the tool name as a constant from the operator-confirm tool registry (or a small review-contract module) and import it in agent.ts and completion-gate.ts, so the roster check and the wording share one definition. Optional.",
+      "evidence": "src/commands/agent.ts holdReviewGate: decideReviewGate({ ..., cardAvailable: deps.tools.some(...) }); src/review/completion-gate.ts closeStep(card) switches wording on the same boolean.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch-card-tool-name-literal",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "E-01", "disposition": "closed"},
+    {"id": "E-02", "disposition": "closed"},
+    {"id": "E-04", "disposition": "closed"},
+    {"id": "E-05", "disposition": "partial"},
+    {"id": "E-06", "disposition": "closed"},
+    {"id": "E-07", "disposition": "closed"},
+    {"id": "E-10", "disposition": "closed"},
+    {"id": "E-25", "disposition": "open"},
+    {"id": "E-35", "disposition": "closed"},
+    {"id": "E-44", "disposition": "open"},
+    {"id": "E-45", "disposition": "open"},
+    {"id": "E-52", "disposition": "open"},
+    {"id": "E-53", "disposition": "open"},
+    {"id": "E-58", "disposition": "closed"}
+  ],
+  "follow_ups": [
+    "Regression reviewer: src/commands/review.ts lines 4558 and 4562 (the --waive-coverage and --waive refusals) still say 'then call the review_complete card' unconditionally. This is a sibling of the E-05 class (wording that assumes the card tool exists). E-05 stays partial until those two texts are roster-aware or the refusals are shown only where a card exists."
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+## Architecture Review (r05, slice-01)
+
+### Review Scope
+- PR: MrCipherSmith/keryx#1052, flow 464
+- Range: b1c6da0e6..77d2eff20 (fix slice)
+- Stack detected: generic-ts (commands / review / tui / remote layers)
+
+### Summary
+The fix commit tidies the structure it was asked to. completion-gate.ts now has a single closeStep, so the E-10 triplication is gone and the card/command choice is one boolean. operator-confirm-review.ts apply is orchestration only (runCompletionGates, writeCompletionRecord, completionOutput), which closes E-06. approval-mirror.ts gains onTopicEnded and imports only the type RemoteApprovalAnswer from remote/shell-bridge, so no cycle appears. The tui-shell.ts closure is reduced to dispatch through askUnmirroredCard and raceMirroredCard, and remoteApproval moved into operator-confirmations.ts with an injectable clock (E-35, E-58). No blocker or major.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. operator-confirmations.ts (tui) now value-imports raceApproval from ./approval-mirror and type-imports from ../commands/agent and ../remote/shell-bridge; the direction is tui -> commands/remote types, with no back edge.
+
+### Module Boundary Violations
+None detected. Known residue, not re-raised as new: E-53 (a value import of REMOTE_CARD_TTL_MS from ../commands/operator-confirm-tools in the tui view-model) is unchanged.
+
+### Design Pattern Misuse
+None new. E-52 (the place/yes mapping is re-implemented with log.answer inside askUnmirroredCard) persists, now in one helper rather than the shell closure; stays open as a minor.
+
+### SOLID Violations
+None detected. Observation, not a finding: operator-confirmations.ts now holds the view-model log, the protocol response builder and the lifecycle orchestration; splitting the orchestration helpers into a sibling module would be cleaner later.
+
+### Framework-Specific
+N/A
+
+### Prior dispositions
+- Closed: E-01, E-02, E-04, E-06, E-07, E-10, E-35, E-58.
+- Partial: E-05 (harness nudge is roster-aware through cardAvailable; the CLI refusal texts at review.ts:4558 and :4562 still name the card unconditionally, handed to the regression reviewer).
+- Open: E-25 (completion-confirmation.json side-file still written after the gates), E-52, E-53, and E-44 and E-45 (nothing in this slice changes them; I did not find a fix for them in the diff and mark them open rather than guess).
+
+### Suggested Patches
+None.

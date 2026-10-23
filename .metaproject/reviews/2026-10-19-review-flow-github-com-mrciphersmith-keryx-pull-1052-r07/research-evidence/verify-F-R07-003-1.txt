@@ -1,0 +1,16 @@
+# keryx review verify-run
+finding: F-R07-003
+command: bun /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/r07-probe-disp21.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T07:36:06.598Z
+exit: 1
+
+--- stdout ---
+{
+ "at20": "dispositions[0]: disposition must be one of unknown, acted-on, dismissed-incorrect, dismissed-wont-fix, dismissed-out-of-scope, dismissed-deprioritised, answered-disagree",
+ "at21": "dispositions holds 21 entries; a card shows at most 20",
+ "at35": "dispositions holds 35 entries; a card shows at most 20"
+}
+DEFECT REPRODUCED: a fix round with 21 or 35 earlier findings cannot record its dispositions through review_complete; the refusal names the cap and no other route
+--- stderr ---
+

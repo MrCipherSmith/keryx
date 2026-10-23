@@ -1,0 +1,61 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 delta b1c6da0e6..77d2eff20 checked against E-01..E-08. E-01 (review-orchestrator skill imperative plus bundled mirrors), E-03 (readiness_waivers press fields in the closed manifest schema), E-05 (cardAvailable derived from the roster) and E-06 (completeManagedReview split into runCompletionGates / writeCompletionRecord / completionOutput) are complete and introduce no layering regression. E-02 is only partly closed: the card now carries dispositions, but the sibling job-orchestrator instructions still send the agent to the plain CLI for dispositions (bypassing the card), and the card refuses an already-closed round that the CLI would still accept. One minor duplication of the error-to-text helper across the two sibling operator-confirm modules. E-04 is covered in this slice by tests only; E-07 and E-08 are outside slice-02.",
+  "findings": [
+    {
+      "id": "A2-001",
+      "severity": "minor",
+      "title": "E-02 sibling sites: job-orchestrator still directs the agent to run `keryx review complete ... --disposition` itself",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "line": 193,
+      "quote": "keryx review complete <review-id> --finding F-001 --disposition acted-on --evidence \"<commit>\"",
+      "problem": "Commit 77d2eff20 moved the review-orchestrator skill (and its bundled mirrors) to 'call review_complete' and gave the card a `dispositions` input, but the sibling skill that owns the next-round disposition step was not updated. Same instruction remains at orchestrator-prompt.md:27 ('keryx review complete --finding … --disposition … --evidence …'), job-orchestrator/SKILL.md:1002 and job-orchestrator/SKILL.md:1325 ('keryx review complete <previous-review-id-or-path> \\'), and in the identical bundled mirrors under src/gdskills/bundled/skills/orchestration/job-orchestrator/. An agent following the job-orchestrator therefore still runs the completion CLI itself, the TM-04 path that E-01/E-02 closed in the review skill.",
+      "why_it_matters": "Two skills now give the agent contradictory instructions for the same step (card vs raw CLI). The dispositions path reaches the closed manifest without the operator's yes, which is the gap the card was introduced to remove, and the .metaproject and bundled copies must stay byte-identical so both need the same edit.",
+      "suggested_fix": "Reword the four job-orchestrator sites to 'call review_complete with dispositions (finding, disposition, evidence)', keeping the raw CLI only as the human-terminal fallback, and apply the same edit to the bundled mirrors."
+    },
+    {
+      "id": "A2-002",
+      "severity": "minor",
+      "title": "review_complete card and `completeManagedReview` disagree on re-closing an already-closed round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 764,
+      "quote": "if (facts.status === \"closed\") return { refusal: `${facts.reviewId} is already complete` };",
+      "problem": "The card refuses a closed round outright, while completeManagedReview in src/review/managed.ts records dispositions before closing and does not refuse a closed package. With the dispositions input now on the card, the only card-side route to add late dispositions to a closed round is rejected, and the CLI route (A2-001) remains the one that works. The gate rule is stated in two layers with different answers.",
+      "why_it_matters": "A single completion rule is split between the card spec and the domain function, so the card cannot serve as the sole path for dispositions (the E-02 intent) for a round closed earlier.",
+      "suggested_fix": "Either let the card accept dispositions-only input on a closed round (call recordDispositions without re-running the gates), or state in the skill that late dispositions on a closed round go through the human terminal; keep the check in one layer."
+    },
+    {
+      "id": "A2-003",
+      "severity": "info",
+      "title": "Error-to-text helper duplicated across sibling operator-confirm modules",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 813,
+      "quote": "const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "operator-confirm-other.ts:82 already defines the same helper (`function errorText(error: unknown): string {`), and operator-confirm-review.ts still repeats the inline form at lines 87 and 715 (`error instanceof Error ? error.message : String(error)`) next to its new module-level helper; operator-confirm-tools.ts:183 and :235 repeat it again.",
+      "why_it_matters": "Three modules of one family each carry their own copy, so a change to error presentation (for example card-safe redaction) has to be made in several places.",
+      "suggested_fix": "Export one `errorText` from a shared operator-confirm helper and use it in the siblings, including the inline sites at operator-confirm-review.ts:87 and :715."
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-01", "disposition": "fixed", "note": "Imperative 'run keryx review complete' replaced by 'call review_complete' in review-orchestrator SKILL.md:782 and SKILL.detail.md:386, tail wording reworded at SKILL.detail.md:866; bundled mirrors match; remaining mentions in review-orchestrator are descriptive or the human-terminal fallback."},
+    {"id": "E-02", "disposition": "partial", "note": "Card validates, shows and records dispositions, but sibling job-orchestrator sites still direct the CLI (A2-001) and the card refuses a closed round (A2-002)."},
+    {"id": "E-03", "disposition": "fixed", "note": "managed-review-package.schema.json readiness_waivers items now declare confirmedVia, pressedBy, pressedAt; schema validation test added."},
+    {"id": "E-04", "disposition": "not-in-slice", "note": "Only the tests are in slice-02; they exercise onTopicEnded and are consistent with the production change."},
+    {"id": "E-05", "disposition": "fixed", "note": "agent.ts:3501 derives cardAvailable from the roster ('deps.tools.some((tool) => tool.definition.name === \"review_complete\")'); completion-gate tests cover with and without the card."},
+    {"id": "E-06", "disposition": "fixed", "note": "apply split into runCompletionGates, writeCompletionRecord and completionOutput; no leftover 'reason' helper; only the duplicate errorText noted in A2-003."},
+    {"id": "E-07", "disposition": "not-in-slice", "note": "Outside slice-02."},
+    {"id": "E-08", "disposition": "not-in-slice", "note": "Outside slice-02."}
+  ],
+  "slices": [
+    {"id": "slice-02", "coverage": "slice-02.diff read in full; head files operator-confirm-review.ts, operator-confirm-other.ts, agent.ts cardAvailable site, managed.ts completeManagedReview, closed schema, review-orchestrator and job-orchestrator skill files and mirrors checked at 77d2eff20", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 1}
+}
+```

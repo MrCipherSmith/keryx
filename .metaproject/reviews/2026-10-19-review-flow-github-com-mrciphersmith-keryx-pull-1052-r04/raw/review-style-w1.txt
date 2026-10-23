@@ -1,0 +1,97 @@
+STATUS: DONE
+
+# Style Review Report (review-style, wave 1, slice-01, round r04)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+slice-01 closes D-01 and D-08 and half of D-03. D-12 is marked fixed but the slice adds no test for the four recorders it named, so it stays open. One residual of D-03 (`keryx review complete` lists them all, completion-gate.ts) still sends the agent to the CLI. Only minor and info style items remain.
+
+## Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66; head b1c6da0e6992e4df473bae6b2fde78bc94d28776
+- Scope mode: delta 6f47bf35f..b1c6da0e6 (commit b1c6da0e6 read in full; slice-01.diff read)
+- Slices covered: slice-01
+
+## Verification of the claimed fixes
+- D-01 closed. At head all four strings say "call review_complete" (operator-confirm-review.ts:262 and 312 descriptions, :296 and :358 results), the header comment at :24 now reads "Closing the review is the review_complete card", and the two refusal messages in review.ts (--waive-coverage, --waive) say "then call the review_complete card". The remaining `keryx review complete` mentions (8, 9, 18, 261, 705) are accurate CLI equivalences. Test: only the readiness result is pinned (operator-confirm-review-tools.test.ts:346-347); the coverage result (:296) and the two descriptions are not asserted.
+- D-03 partial. completion-gate.ts:788 now says "call the `review_complete` card to close the package". Line 791 was not touched: "- … and N more (`keryx review complete` lists them all)" still points the agent at the CLI that nextStep says it never runs (F-001).
+- D-08 closed. docs/docs/guides/autonomous-review.md and cli-reference.md now state the autonomous exception (no card tools, closes through `keryx review complete`, a waiver stops it at the floor), which agrees with the exit-0 row of the table and with the deliberate autonomous-profile.ts wording.
+- D-12 open. The delta touches operator-confirm-review-tools.test.ts by two lines only (the D-01 assertion). Remote-press assertions (pressedBy/pressedAt) still exist only for review_chunks_answer, review_decide_premise, review_confirm_plan and review_complete; none for review_publish, review_waive_coverage, review_waive_readiness or the mutation-waiver/reviewer-override decisions. The claim "fix slice slice-01" is not backed by anything in slice-01.
+- D-02 (carried, not in this slice): completion-gate.ts nextStep still carries the clause three times (lines 756, 759, 761 at head). Still open.
+
+## Stats
+- major: 0
+- minor: 1
+- info: 2
+
+## Minor & Info
+See findings in the REVIEW_RESULT block (F-001 minor, F-002 info, F-003 info).
+
+## Positive Notes
+The four tool strings, the header comment and the two CLI refusal messages were fixed together, so the agent-facing text now agrees across the files. The doc exception is stated once in the guide and once in the CLI reference rather than left implied.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "slice-01 closes D-01 and D-08, half-closes D-03 (completion-gate.ts:791 still points at the CLI) and leaves D-12 open: the slice adds no pressedBy/pressedAt test for review_publish, review_waive_coverage, review_waive_readiness or the decision recorders. Only one minor and two info style findings.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": [ { "id": "slice-01", "coverage": "slice-01.diff and commit b1c6da0e6 read; head files checked for every named D-01 site", "status": "DONE" } ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "reviewer": "review-style-w1",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "lists them all",
+      "problem": "describeBlockers line 788 was changed to the card, but the overflow line 791 still reads \"- … and N more (`keryx review complete` lists them all)\". It names the CLI as the way to list blockers, in the same message whose nextStep says \"you never run `keryx review complete` yourself\".",
+      "impact": "The same nudge still carries two opposite instructions about the same command; an agent that wants the full blocker list is told to run the command it must not run. This is the second half of D-03 that the fix slice left.",
+      "suggested_fix": "Reword to `(\\`keryx review status <package>\\` lists them all)` or \"(the review_complete card lists them all when it is refused)\", matching line 804.",
+      "evidence": "git show b1c6da0e6:src/review/completion-gate.ts lines 788 (fixed) and 791 (unchanged); slice-01.diff shows the context line 77 unchanged next to the edited line 73.",
+      "confidence": "high",
+      "dedupe_key": "completion-gate:791:cli-in-blocker-overflow"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "reviewer": "review-style-w1",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "file(s) not reviewed. Call review_complete to close the review.",
+      "problem": "The same instruction is worded three ways: \"Call review_complete to close the review.\" (tool results at 296 and 358, bare identifier), \"call the `review_complete` card\" (completion-gate.ts, review.ts errors) and \"call review_complete afterwards\" (descriptions 262 and 312).",
+      "impact": "Small drift in the one phrase the agent reads last; a later rename of the card means hunting three spellings. Cosmetic.",
+      "suggested_fix": "Use one form, e.g. \"call the `review_complete` card\" with backticks, in the four tool strings.",
+      "evidence": "slice-01.diff lines 47-48 against completion-gate.ts:788 and review.ts refusal messages at head.",
+      "confidence": "medium",
+      "dedupe_key": "review-complete-wording-drift"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "reviewer": "review-style-w1",
+      "file": "docs/docs/guides/autonomous-review.md",
+      "line": null,
+      "quote": "- **The review acts (`review_confirm_plan`",
+      "problem": "The new bullet is one line of roughly 700 characters and covers five tools, the Telegram rules, the unattended exception and the human fallback. Its sibling bullets wrap at about 95 columns and each covers one behaviour.",
+      "impact": "Hard to diff and to read in source; the unattended exception, the point of the fix, is buried at the end of the line.",
+      "suggested_fix": "Wrap to the file's width and split into the interactive rule and a second sentence or sub-bullet for the autonomous exception.",
+      "evidence": "slice-01.diff line 23 against lines 24-31 of the same list.",
+      "confidence": "high",
+      "dedupe_key": "autonomous-review-long-bullet"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-02", "disposition": "open" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-12", "disposition": "open" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```

@@ -1,0 +1,239 @@
+{
+  "v": 1,
+  "package": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1052",
+    "base": "77d2eff20509cbb82bcd35ce87128e9a76cb44ed",
+    "head": "0f980c4078eb937fcb0806fe5a25e7235bf34465"
+  },
+  "round": {
+    "number": 5,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05",
+    "range": {
+      "base": "77d2eff20509cbb82bcd35ce87128e9a76cb44ed",
+      "head": "0f980c4078eb937fcb0806fe5a25e7235bf34465"
+    },
+    "fixHunks": 1,
+    "newHunks": 5,
+    "priorFindings": 35,
+    "carried": 33,
+    "line": "round 5 (source: local-package; previous 2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05 at 77d2eff20509; delta 77d2eff20509..0f980c4078eb)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          "src/commands/operator-confirm-review.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-regression",
+          "review-security-code",
+          "review-testing-practices"
+        ],
+        "findingIds": [
+          "F5-24",
+          "S-401"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-02",
+        "files": [
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "src/commands/operator-confirm-review.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/commands/review.ts",
+          "src/tui/tui-shell.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-04",
+        "files": [
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md",
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/context.md",
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md",
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/journal.md",
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/plan.md",
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/tasks.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+          ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/flow.json",
+          "CHANGELOG.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-05",
+        "files": [
+          "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/commands-by-task.md",
+          "docs/docs/guides/autonomous-review.md",
+          "docs/docs/guides/review-with-a-record.md",
+          "docs/docs/limitations.md",
+          "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+          "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+          "package.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-06",
+        "files": [
+          "src/commands/agent-commands.ts",
+          "src/commands/agent.ts",
+          "src/commands/operator-confirm-other.ts",
+          "src/commands/operator-confirm-review.ts",
+          "src/commands/operator-confirm-tools.ts",
+          "src/commands/review.ts",
+          "src/commands/shell.ts",
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "src/commands/operator-confirm-rosters.test.ts",
+          "src/commands/operator-confirm-tools.test.ts",
+          "src/commands/shell.test.ts",
+          "src/flow/confirm-token.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-07",
+        "files": [
+          "src/flow/confirm-token.ts",
+          "src/flow/schema.ts",
+          "src/flow/service.ts",
+          "src/flow/types.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+          "src/harness/external/write-land.ts",
+          "src/harness/tool/builtin/interactive-tools.ts",
+          "src/learning/decisions.ts",
+          "src/remote/client.ts",
+          "src/remote/shell-bridge.ts",
+          "src/remote/mirror-undelivered.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-08",
+        "files": [
+          "src/review/chunks-estimate.ts",
+          "src/review/complete-gated.ts",
+          "src/review/completion-gate.ts",
+          "src/review/coverage-complete.ts",
+          "src/review/estimate.ts",
+          "src/review/evidence-level.ts",
+          "src/review/operator-decisions.ts",
+          "src/review/plan-confirmation.ts",
+          "src/review/premise-question.ts",
+          "src/review/publish.ts",
+          "src/review/readiness.ts",
+          "src/review/types.ts",
+          "src/review/completion-gate.test.ts",
+          "src/standard/help-groups.ts",
+          "src/trigger/unattended.ts",
+          "src/tui/approval-mirror.ts",
+          "src/tui/decisions-surface.ts",
+          "src/tui/operator-confirmations.ts",
+          "src/tui/remote-control-surface.ts",
+          "src/tui/tui-shell.ts",
+          "src/tui/card-lifecycle.test.ts",
+          "src/tui/operator-confirmations.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-clean-code",
+    "review-logic",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices"
+  ],
+  "dispatches": 19,
+  "minutes": {
+    "min": 14,
+    "max": 35
+  },
+  "split": {
+    "fix": {
+      "slices": 1,
+      "dispatches": 4
+    },
+    "new": {
+      "slices": 2,
+      "dispatches": 5
+    },
+    "secondLook": {
+      "slices": 5,
+      "dispatches": 10
+    }
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "735d171886de949b",
+  "warnings": [],
+  "next": "dispatch"
+}

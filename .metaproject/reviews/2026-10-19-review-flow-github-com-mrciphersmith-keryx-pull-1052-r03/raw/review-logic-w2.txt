@@ -1,0 +1,83 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "round": 3,
+  "wave": 2,
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "C-02", "disposition": "closed", "evidence": "src/commands/shell.test.ts roster now lists review_complete in sorted position; the ten buildReviewConfirmSpecs entries match the registry at 6f47bf35f."},
+    {"id": "C-04", "disposition": "closed", "evidence": "completeSpec inputSchema in src/commands/operator-confirm-review.ts has only `package` (additionalProperties false); apply calls completeReviewGated without `head`, so completeManagedReview never replaces manifest.target.head. The card prints the recorded head (cardSafe) and the digest covers it."},
+    {"id": "C-07", "disposition": "closed", "evidence": "src/commands/operator-confirm-tools.test.ts:345 drives allowedUserIds returning undefined: remote answer refused, token spent; fail-closed branch at operator-confirm-tools.ts:215 is pinned."},
+    {"id": "C-08", "disposition": "closed", "evidence": "operator-confirm-review-tools.test.ts now drives merged PR (739), moved head (744), held finding (749), missing run-profile (755), mutation/override waivers on the card (621), waiver added between card and yes (679), unreadable research.json (649), and the head-not-suppliable schema (692). Each asserts the specific refusal text."},
+    {"id": "C-09", "disposition": "open", "evidence": "answerChunkEstimate (chunks-estimate.ts:160) and recordCoverageWaiver (coverage-complete.ts:215) still take `press?: CardPress` as a trailing positional parameter. Minor style; no behavioural defect."},
+    {"id": "C-10", "disposition": "closed", "evidence": "completionFacts now reads readOperatorDecisions(dir) and appends mutation-waiver and reviewer-override rows to the card waivers; they are inside factsDigest, so a decision added between card and yes records nothing (test at line 679). Operator decision: uphold."},
+    {"id": "C-11", "disposition": "open", "evidence": "cardPressFields (review/types.ts:95) still spreads whatever press it receives regardless of confirmedVia; the remote-card-only rule is enforced in operatorConfirmTool alone. Defence in depth only."},
+    {"id": "C-12", "disposition": "open", "evidence": "pressedBy/pressedAt are still re-declared by hand in estimate.ts:199, learning/decisions.ts:33, write-land.ts:173, confirm-token.ts:76, operator-confirm-other.ts:109/625, flow/types.ts:188/785, agent.ts:303 instead of CardPress. Minor."},
+    {"id": "C-14", "disposition": "closed", "evidence": "operator-confirmations.ts waiting() now filters on now - askedAt <= REMOTE_CARD_TTL_MS, and the pending line reads 'Telegram token expired, answer in the shell' once past the TTL."},
+    {"id": "C-15", "disposition": "open", "evidence": "answer() (operator-confirmations.ts:49-60) still evicts answered entries by insertion order via items.filter(...).slice(0, n - 5), and entries() reverses insertion order, not answer order. A slow card answered last can be evicted ahead of a quicker one when approvals overlap."},
+    {"id": "C-25", "disposition": "withdrawn", "evidence": "Operator decision already applied: dismiss. age()/clock helpers remain duplicated but are not re-filed."},
+    {"id": "C-27", "disposition": "open", "evidence": "operatorConfirmTool.invoke still uses `pending.delete(token as string)`, `pressedBy as number`, `pressedAt as string` (operator-confirm-tools.ts:206-229) and remains one long function mixing lookup, authorization, build and apply. Style only."},
+    {"id": "C-28", "disposition": "open", "evidence": "shell-bridge.ts mapApprovalAnswer still reads `(o as { undelivered?: unknown }).undelivered` through an inline re-cast instead of declaring it in the narrowed type."},
+    {"id": "C-29", "disposition": "closed", "evidence": "TM-04 now counts nineteen decisions, carries the three review rows, and states what the CLI gate checks (commit 6f47bf35f); cli-reference and CHANGELOG list the card."},
+    {"id": "C-30", "disposition": "open", "evidence": "docs/docs/limitations.md:187 still carries the long parenthetical naming the review acts inside one sentence. Prose-density item, no logic effect."},
+    {"id": "C-31", "disposition": "open", "evidence": "docs/docs/guides/drive-keryx-remotely.md has no mention of the review cards (no 'card' match at all); cli-reference covers review_complete but the Telegram guide, named in the finding, is unchanged."},
+    {"id": "C-33", "disposition": "partial", "evidence": "The gate-table tests and the C-08/C-07 cases are added, but publish/waive tests stay on the tui path and the RemoteClient undelivered test still covers one return site; nothing here is a logic defect."},
+    {"id": "C-34", "disposition": "open", "evidence": "pr-context.md (collected at 6f47bf35f) still shows a three-box test plan with no review-tty-refusal.test.ts or `bun test src/trigger/ src/gdskills/` command. PR-body item, not code."},
+    {"id": "C-35", "disposition": "open", "evidence": "help-groups.ts:600 and agent-commands.ts:187 still hand-write the list of Telegram-answerable review cards in the strings."},
+    {"id": "C-36", "disposition": "open", "evidence": "remote-control-surface.ts projectRemoteRow still returns on waiting cards before the unconfirmed-approvals branch, dropping the 'N unconfirmed' note on the sidebar row (the status tab still prints it)."},
+    {"id": "C-37", "disposition": "open", "evidence": "requestApprovalForTelegramTurn (tui-shell.ts ~6028-6089) makes no operatorCards.ask/answer calls and has no undelivered fallback; only mirrorApprovalToTopic does the bookkeeping. A card raised in a Telegram-started turn never shows in the sidebar or /decisions log."},
+    {"id": "C-38", "disposition": "open", "evidence": "client.ts askApproval still marks undelivered in the catch around post + response.json() (lost response, false positive) and a post-POST disconnect returns { decision: 'deny' } with no flag. Edge cases of an info-level finding; the shell fails closed either way."},
+    {"id": "C-40", "disposition": "closed", "evidence": "consumeConfirmationToken now copies pressedBy/pressedAt from the stored token into the SignatureConfirmation (confirm-token.ts, types.ts, schema.ts, flow-state.schema.json)."},
+    {"id": "C-42", "disposition": "open", "evidence": "The pending token map in operatorConfirmTool is still removed only by invoke or confirmationDeclined; issuedAt is used for the TTL check but entries are never swept. Negligible growth."},
+    {"id": "C-43", "disposition": "open", "evidence": "completionFacts still reads manifest, report and research synchronously and is called in buildCard, apply and the gate. The finding itself says no change required; negligible."},
+    {"id": "C-44", "disposition": "partial", "evidence": "prBound is gone, but `import { writeFileAtomic } from \"../lib/fs\"` still sits mid-group in operator-confirm-review.ts:43 and factsDigest is still an arrow const among function declarations. Cosmetic."}
+  ]
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: flow 464 PR 1052, round r03, wave 2
+- Delta: d2cb377f5..6f47bf35f (slice-02), judged against source at 6f47bf35f
+- Spec compliance gate: skipped (no issue URL; flow criteria AC1-AC10 read via the PR context)
+
+### Summary
+The delta adds the `review_complete` card, tightens it (no model-supplied head, digest over head, evidence, waivers and status, operator-decisions waivers on the card), carries pressedBy/pressedAt through the flow confirm token, and makes the pending-card log expiry-aware. I traced the card's `apply` path (digest compare, gate throw after the manifest is closed, closed inference from the manifest status, atomic record write) and the mirror wrapper's `settle`/`markUndelivered` bookkeeping and found no observable logic defect.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected. A gate throw after the manifest closed is reported as a closed round with a problem line and isError, which matches the engine order (manifest closed before bookkeeping).
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Suggested Patches
+None.
+
+### Notes on prior dispositions
+- Of the 26 round-1 findings: closed 8 (C-02, C-04, C-07, C-08, C-10, C-14, C-29, C-40), partial 2 (C-33, C-44), withdrawn 1 (C-25, operator dismiss), open 15.
+- The open ones are mostly minor or info style/doc items. C-15 (answered-card eviction order) and C-37 (the Telegram-turn path has no card bookkeeping) are the two with a visible behavioural effect; both are display-only and neither affects what gets recorded or confirmed.
+- The slice diff's tui-shell hunk shows an older inline-answer shape than HEAD, which uses `OperatorConfirmationLog.settle`. HEAD was used.

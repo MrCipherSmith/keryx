@@ -1,0 +1,138 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review (wave 5, slice-05, the TUI part)
+
+### Review Scope
+- PR 1052, flow 464, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-05 (help-groups.ts, unattended.ts, approval-mirror.ts, decisions-surface.ts, operator-confirmations.ts(+test), remote-control-surface.ts, tui-shell.ts)
+- Spec compliance gate: skipped, no issue_url given. The PR context names AC6 (cards visible in sidebar, status tab and /decisions) and AC5 (mirror-not-delivered note); both were checked as behaviour.
+- Not re-filed (already on the list): operatorCards ask/settle missing in requestApprovalForTelegramTurn; waiting() cutoff applied only on repaint; duplicated place/yes rule in the unmirrored branch; failed topic send after card open leaves the card unchanged (PC-008); readiness.ts waiver fields; review_complete missing from the readline roster. r03 minors D-02..D-14 left alone.
+
+### Summary
+The race and the settle mapping are sound for the cases the slice targets. A dock answer, a topic press, an aborted turn and a throwing race each map to the right place/yes pair. `answer.fromId` reaches both `pressedBy` in the log (`settle`) and `pressedBy`/`pressedAt` in `remoteApproval`, through `mapApprovalAnswer` and `isTopicPress`, with no hop lost. `settled` guards against a stale undelivered flag after the dock won. One real lifecycle gap remains: a topic leg that ends without a press is never reflected in the log, so a dead card keeps showing as waiting in Telegram. Two smaller items are noted.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 1  |  info: 1
+
+### Verification run
+A probe script (scratchpad, not in the repo) drove `raceApproval` plus `OperatorConfirmationLog` with the shell's wiring:
+1. Topic leg resolves `{decision:"deny"}` with no fromId and no undelivered flag, which is exactly what `client.failApprovals()` returns on a stream drop (client.ts:1119-1124, called from 820 and 404). Result: `waiting(): 1`, `mirrored: true`.
+2. Seven cards asked, six answered, the first answered last. Result: the card answered last is dropped at once; the log holds Q6,Q5,Q4,Q3,Q2.
+
+### Spec Gaps
+None detected.
+
+### Logic Bugs
+
+### [F-001] A topic leg that ends without a press leaves the card "waiting in Telegram"
+
+- **Severity**: major
+- **File**: src/tui/approval-mirror.ts:50-54 (consumer: src/tui/operator-confirmations.ts:81-84, src/tui/tui-shell.ts:6127-6130)
+- **Problem**: `raceApproval` calls `onUndelivered` only when the answer carries `undelivered: true`. Every other non-press end of the topic leg falls through at `if (!isTopicPress(answer)) return;` and the log is not told. Those ends are real. `RemoteClient.failApprovals()` resolves `{ decision: "deny" }` when the event stream drops (client.ts:820) and when the client is stopped, which is what `/remote-control off` does (client.ts:404). Neither answer is flagged undelivered, and neither carries a fromId. The 1-hour server wait also ends this way. The log entry keeps `mirrored: true` and `answered: undefined`, so `waiting()` counts it, the Remote sidebar row says `<topic> · 1 card waiting` in the attention role, and the status tab prints `waiting ... N m left of the 1-hour token`.
+- **Why it matters**: After a stream drop and reconnect, or after `/remote-control off` followed by `on`, the sidebar and the status tab send the operator to Telegram for a card that nobody listens to any more. The topic leg promise is gone, and the client documents that a late press finds nothing. The operator presses in the topic and gets no effect. The text only changes after the full hour ("Telegram token expired") or when the dock is answered. This is the same signal AC6 exists to give, and it is wrong for as long as the dock stays open. It is not the filed H4-01 (cutoff applied only on repaint) or PC-008 (failed send after open): the send succeeded and the leg ended later.
+- **Reproduction scenario**: Run `/remote-control on` and let `review_complete` ask a card. The card is posted to the topic. The serve connection drops and reconnects. `failApprovals` resolves the waiter with deny. The sidebar still shows "1 card waiting" and the dock is still open. Probe output above: `waiting(): 1 mirrored: true` after the leg returned a plain deny.
+- **Fix**: Treat any topic-leg end that is not a press and not caused by this shell (`settled` false, `topicAbort.signal.aborted` false) as "no longer waiting in the topic". Either widen `onUndelivered` into `onTopicEnded(reason)` and call it for every non-press while `!settled`, or have `markUndelivered` accept a reason and render "Telegram card closed, answer in the shell". The timeout case at the 1-hour mark then also drops out of `waiting()` without the repaint dependency. Add a test with a topic leg that resolves `{decision:"deny"}` and assert `waiting().length === 0`.
+- **Patch**:
+  ```diff
+  -          if (answer.undelivered === true) options.onUndelivered?.();
+  -          if (!isTopicPress(answer)) return;
+  +          if (answer.undelivered === true) options.onUndelivered?.();
+  +          if (!isTopicPress(answer)) {
+  +            // the leg ended on its own (stream drop, remote off, 1-hour wait): the topic no longer holds this question
+  +            if (answer.undelivered !== true) options.onTopicClosed?.();
+  +            return;
+  +          }
+  ```
+  with `onTopicClosed` wired in tui-shell.ts next to `onUndelivered` to call a log method that sets `mirrored: false`.
+
+### Async & Concurrency
+None detected beyond F-001. Checked and found correct:
+- `settled` is set in `finally` after the dock resolves, and the topic `.then` returns early on it, so a late undelivered answer after a dock win cannot mark an answered card.
+- A topic press that lands between the dock resolving and the continuation wins (`topicAnswer !== undefined`), and `confirmOperatorCard` returns false through `topicWon()` in the same case. The log then records `telegram` with `pressedBy`.
+- `settle` runs in `finally`, so a throwing race gives `withdrawn`. The unmirrored branch does the same through `verdict === undefined`.
+- `pressedAt` in `remoteApproval` is taken a few synchronous statements after the race returns, so it tracks the press closely.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+### [F-002] Answered-entry pruning keeps the newest asked, not the newest answered
+
+- **Severity**: minor
+- **File**: src/tui/operator-confirmations.ts:57-60 and 87-91
+- **Problem**: `answer()` prunes `answered.slice(0, length - 5)`, where `answered` is in ask order, and `entries()` reverses the same order and the doc says "newest first". Both use the ask id, not the answer time. A card asked first and answered last is the first one pruned and sorts below cards answered earlier.
+- **Why it matters**: The log is serial today (one dock at a time), where ask order equals answer order, so this is latent. It bites when two cards overlap: a long-waiting card answered in Telegram after six faster ones is pruned the moment it is answered, and the "who pressed" line the log exists to show vanishes. Probe output: after answering Q1..Q6 and then Q0 (with `pressedBy: 9`), `entries()` is `Q6,Q5,Q4,Q3,Q2`. The serial-order test at operator-confirmations.test.ts:1448 does not cover it.
+- **Fix**: Sort answered entries by `answered.at` (ties by id) for both the prune and the listing, or keep a separate array appended in answer order.
+
+### [F-003] The log records a yes for an allow that the tool then refuses
+
+- **Severity**: info
+- **File**: src/tui/operator-confirmations.ts:68 (against src/commands/operator-confirm-tools.ts:211-216)
+- **Problem**: `settle` maps any topic `allow` to `yes: true`, with `pressedBy` undefined when the answer lacks a fromId. The tool refuses a remote answer that does not name who pressed, or whose user is not on the allowed list (operator-confirm-tools.ts:214-216), and refuses a token older than the hour. The log line still reads `yes · pressed by a Telegram user`.
+- **Why it matters**: No defect while the server always sends fromId. If it does not, the surfaces report a confirmation while the tool did not apply. The log records the press, not the outcome, which may be the intent. Say so in the line, or leave it.
+- **Fix**: Optional. Record `yes: false` with a short reason, or label the entry "press not accepted" when `fromId` is undefined on an allow.
+
+### Suggested Patches
+See the patch in F-001.
+
+### Routing audit
+graph_used: no (not-relevant, the question was a lifecycle trace in six files). wiki_used: no (not-relevant). ctx_used: yes (`keryx ctx read`, `keryx ctx rg`). raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Race, settle mapping and the answer.fromId to pressedBy/pressedAt hop are correct. A topic leg that ends without a press (stream drop, remote off, 1-hour wait) is never reflected in the card log, so the sidebar and status tab keep showing a dead Telegram card as waiting. Answered-entry pruning is by ask order, not answer order (latent). The log records yes for an allow the tool may refuse (info).",
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/tui/approval-mirror.ts",
+      "line": 53,
+      "quote": "if (!isTopicPress(answer)) return;",
+      "problem": "raceApproval informs the card log only when the topic answer is flagged undelivered. Any other end of the topic leg without a press (RemoteClient.failApprovals resolves { decision: 'deny' } on a stream drop at client.ts:820 and on stop at client.ts:404; the 1-hour wait ends the same way) returns silently. The log entry stays mirrored:true and unanswered, so waiting() counts it and the sidebar and status tab present it as waiting for a press in the topic.",
+      "impact": "After a reconnect or a /remote-control off then on, the operator is pointed at Telegram for a card no leg listens to; a press there has no effect. The text corrects itself only after the full hour or when the dock is answered. Distinct from H4-01 and PC-008.",
+      "suggested_fix": "Treat any non-press end of the topic leg while !settled and the topic signal is not aborted as 'no longer in the topic': add onTopicClosed (or widen onUndelivered) and have it set mirrored:false in OperatorConfirmationLog; add a test where the topic leg resolves { decision: 'deny' } and waiting() must be empty.",
+      "evidence": "Probe in the scratchpad: raceApproval with topic: async () => ({decision:'deny',always:false}) and onUndelivered wired to markUndelivered printed 'waiting(): 1 mirrored: true'. Code: approval-mirror.ts:50-54, client.ts:1119-1124, operator-confirmations.ts:81-84.",
+      "confidence": 0.8
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 58,
+      "quote": "for (const old of answered.slice(0, Math.max(0, answered.length - ANSWERED_CARDS_KEPT))) {",
+      "problem": "Pruning and the 'newest first' listing both use ask order. A card asked earlier but answered last is pruned first and listed below cards answered before it.",
+      "impact": "Latent while cards are serial. With two overlapping cards, the card answered last (and its pressedBy line) disappears the moment it is answered once five others are held.",
+      "suggested_fix": "Order and prune answered entries by answered.at (ties by id), in answer() and entries(); add a test that answers an early-asked card last.",
+      "evidence": "Probe: asked Q0..Q6, answered Q1..Q6 then Q0 with pressedBy 9; entries() returned Q6,Q5,Q4,Q3,Q2 and Q0 was gone.",
+      "confidence": 0.75
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 68,
+      "quote": "else this.answer(id, { place: \"telegram\", yes: outcome.answer.decision === \"allow\", ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });",
+      "problem": "A topic allow without fromId is logged as 'yes · pressed by a Telegram user', but the tool refuses a remote answer that does not say who pressed it (operator-confirm-tools.ts:214), a user off the allowed list (215-216) and a token older than an hour (218).",
+      "impact": "No current defect if serve always sends fromId; if it does not, the surfaces show a confirmation the tool did not apply.",
+      "suggested_fix": "Optional: mark the entry 'press not accepted' when an allow has no fromId, or state in the line that it records the press and not the outcome.",
+      "evidence": "operator-confirm-tools.ts:211-216 versus operator-confirmations.ts:68 and the test at operator-confirmations.test.ts:1525.",
+      "confidence": 0.5
+    }
+  ]
+}
+```

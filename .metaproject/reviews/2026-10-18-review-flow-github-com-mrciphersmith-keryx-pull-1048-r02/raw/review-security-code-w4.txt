@@ -1,0 +1,82 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slice-04 is mostly tests plus the task_text plumbing (MCP, adapter, operation, port). That plumbing is sound: task_text is type-checked, blank text is dropped, it is truncated to 4000 code points in the resolver, keywordOccurs escapes the keyword before building a RegExp, and the text never reaches a result file, a warning or the TUI. Two majors and one minor were found. (1) The PR makes `last.json` persist the raw task text, and that file is untracked, not ignored by .gitignore or the managed ignore block, and written with default mode. (2) The orchestrator skills tell an LLM to splice the task title and description into a double-quoted shell argument, where backticks and $() in that text are executed by the shell. (3) A task text starting with `--` is silently dropped by optionValue, so keyword promotion fails open without a warning.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {})",
+      "problem": "recordLastResolve now writes up to 4000 characters of the raw --task-text into .metaproject/data/skills/project-context/last.json. Before this PR that file held only rule paths, hashes and warnings. The path is not in .gitignore (only .metaproject/data/skills/stocktake/ is) and not in renderMetaprojectGitignoreBlock(), and writeContained is called without a mode, so the file is created 0664 (the worktree's own copy is 664). `git check-ignore -v` exits 1 for it, `git status` lists .metaproject/data/skills/ as untracked, and the file here already holds a taskText entry. Nothing in src/ reads taskText back: project-context-status.readLast passes it through, and no TUI view, validator or command uses it. The only reason given is a docs sentence that last.json 'records' the cut text, with no consumer named.",
+      "impact": "Trigger: an orchestrator or operator runs `keryx skills resolve-context --task-text \"<issue title and body>\"`, as the five orchestration skills now instruct for every dispatch. Issue and task bodies routinely hold pasted tokens, connection strings, customer data and logs. Outcome: the text lands in an untracked, non-ignored, group-readable file. A later `git add -A`, `git add .metaproject` or `git add .` commits it and a push publishes it; the repo already tracks hundreds of files under .metaproject/data/review*, so broad adds there are routine. The file also sits where any other local process or agent can read it.",
+      "suggested_fix": "Do not persist the text, since nothing consumes it. Record only what the TUI can use: `taskTextTruncated`, the length, and the keywords that matched (already in each entry's reason). If the text must stay, then (a) add `.metaproject/data/skills/project-context/` to renderMetaprojectGitignoreBlock() and to .gitignore, (b) pass `{ mode: 0o600 }` to writeContained (it applies only to a new file, so an existing 0664 last.json needs a chmod or a delete-and-recreate), and (c) cut it to a short prefix. Add a test that last.json is ignored and not world-readable.",
+      "evidence": "context-resolver.ts recordLastResolve (lines 529-541) builds `record` with taskText and calls writeContained(projectRoot, LAST_RESOLVE_PATH, ...) with no mode. LAST_RESOLVE_PATH = .metaproject/data/skills/project-context/last.json (line 84). The baseline recordLastResolve at merge-base 1658f77d3 wrote only { recordedAt, result }. `git check-ignore -v .metaproject/data/skills/project-context/last.json` exits 1; `git status --short` shows `?? .metaproject/data/skills/`; `ls -la` shows `-rw-rw-r-- last.json`; the file holds `\"taskText\": \"documentation for conditional reads\"`. src/lib/metaproject-gitignore.ts:386 lists only data/skills/stocktake/, and the sibling `.metaproject/data/decisions/` entry (lines 413-415) documents the 0o600 and ignored precedent for personal runtime state. A search for taskText in non-test src/tui and src/gdskills finds no reader.",
+      "confidence": 0.85,
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/gdskills/context-resolver.ts:529 recordLastResolve (the only writer of last.json)", "src/gdskills/resolve-context-command.ts:50 (its only non-test caller)"],
+        "enumeration_method": "keryx ctx rg for recordLastResolve|LAST_RESOLVE_PATH|taskText over src excluding tests: one writer, one caller; the --out file and the MCP/adapter path never contain the text (resolveProjectContext does not return it), so last.json is the only place the text reaches disk"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "--task-text \"<the task's title and description>\"",
+      "problem": "Five bundled skill files, with byte-identical managed copies under .metaproject/skills/gdskills, tell the executing agent to substitute the task title and description into a double-quoted shell argument of `keryx skills resolve-context`. Inside double quotes a POSIX shell still expands $(...), backticks and $VAR. Markdown task descriptions use backticks all the time. The CLI has no way to read the text from a file or stdin, so the argv string is the only route, and the instruction never says to escape it. The docs example also uses double quotes.",
+      "impact": "Trigger: a task or issue description contains `cmd` or $(cmd), either by accident (inline code is ubiquitous) or planted by whoever authors the issue. An orchestrator or implementer that follows the template literally runs that command with its own shell permissions before keryx starts. Outcome: arbitrary command execution on the developer's machine or CI, or at minimum a mangled task text that silently stops keyword promotion. The MCP and agent-tool route (`task_text` field) does not go through a shell and is not affected.",
+      "suggested_fix": "Give the command a shell-safe input path and name it in the skills: a `--task-text-file <path>` (or `--task-text -` for stdin) option, with the instruction to write the description to a file with a quoted heredoc first. Failing that, change the templates to say the text must be single-quoted with embedded single quotes escaped, or passed as `--task-text=$'...'`, and state in the skill that the description is untrusted. Update the bundled and managed copies together (skill-sync.test.ts already checks they are byte-identical).",
+      "evidence": "flow-orchestrator/SKILL.md line 323 reads: `run keryx skills resolve-context --for test|implement --files ... --task-text \"<the task's title and description>\" --out ...`. job-orchestrator/orchestrator-prompt.md:132 and :188 and job-orchestrator/SKILL.md:749 and :1307 use `--task-text \"<task title and description>\"` and `--task-text \"<fix task description>\"`. task-implementer/SKILL.md:182 and tests-creator/SKILL.md:93 give the same form, and docs/docs/guides/apply-project-rules.md:170 shows it. resolve-context-command.ts reads the text only through optionValue(args, \"--task-text\"), with no file or stdin option.",
+      "confidence": 0.7,
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "the same lines in the managed copies under .metaproject/skills/gdskills/",
+          "docs/docs/guides/apply-project-rules.md:170"
+        ],
+        "enumeration_method": "keryx ctx rg for task-text over src/gdskills/bundled and .metaproject/skills/gdskills (*.md): 14 matches in 10 files, 7 distinct bundled sites, each with a double-quoted placeholder; docs found by a separate rg over docs/"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/lib/args.ts",
+      "line": null,
+      "quote": "return next !== undefined && !next.startsWith(\"--\") ? next : undefined;",
+      "problem": "`--task-text <text>` goes through optionValue, which treats any following token that starts with `--` as the next flag and returns undefined. A task title or description that begins with `--` (a CLI flag as the topic, or a markdown `-- ` aside) is therefore dropped without a word: resolve-context-command treats it as no task text, records none, and warns about nothing.",
+      "impact": "Trigger: `keryx skills resolve-context ... --task-text \"--no-cache build flag\"`. Outcome: keyword-declared references are not promoted, the worker is not obliged to read them, and nothing says why. The only visible sign is the missing promotion, so the gate fails open. Narrow: it needs a text starting with `--`, and the `--task-text=<text>` spelling is unaffected.",
+      "suggested_fix": "In runResolveContextCommand, read `--task-text` with a parser that accepts a leading `--` (for example take args[index + 1] verbatim for this option), or fail loudly with 'use --task-text=<text>' when the flag is present with no usable value. Add a test for a text starting with `--`.",
+      "evidence": "src/lib/args.ts lines 18-28 (the guard on line 24); resolve-context-command.ts line 40 `const taskText = optionValue(args, \"--task-text\");` followed by the `taskText !== undefined && taskText.trim() !== \"\"` guards; no warning is emitted for the dropped text.",
+      "confidence": 0.8,
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 1, "info": 0 },
+  "slices": ["slice-04"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Clean areas, checked and found sound:
+- MCP, operation, adapter and port: task_text is typed (`typeof === "string"`), blank text is dropped, and the adapter wraps resolveProjectContext in try/catch. The input schema has no maxLength, but the resolver cuts the text to 4000 code points (truncateTaskText) before use.
+- keywordOccurs: the keyword is escaped by escapeRegExp before it is placed in a RegExp, and the escaped characters are valid in unicode mode. There is no regex injection and no throw.
+- Where task text goes: it is not echoed in warnings, in the `--out` result, in stdout or in the TUI. formatProjectContextLastLines and project-references-view render only paths, reasons, anchors and declaration fields. The text reaches disk only through last.json (F-001).
+- Declared-document reads in reference-entries.ts and references-check.ts use lstat, realpath, isPathInside, an isFile check and a size cap. The `--resolved` path read in reference-proof.ts and resolved-context-check.ts is the known earlier-wave finding and is not repeated.
+- Proof logic: `how: "n/a"` is refused for a promoted entry, the anchor must equal the declared one, and the summary needs length and shared words. This is the accepted vocabulary proxy.
+- No crypto, auth, CSRF, redirect or SQL surface in this slice. The rest of the slice is test files and the help-group and subcommand lists.
+
+keryx routing audit: graph_used: no (not-relevant, the questions were file-local); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg and keryx ctx read); raw_rg_used: no (a few escaped raw git object reads: `git show` on the baseline file, one `git status`, `git check-ignore` and `ls -la`, none of them project-code searches).

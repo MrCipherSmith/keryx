@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "scopeFingerprint": "4c54686a2001d498051cefa4dfb2db584fce4724dd70c8710bf3f6e26499d614",
+  "reviewers": {
+    "review-architecture": {
+      "attempt": 0,
+      "status": "DONE_WITH_CONCERNS",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "c823ca1dd525"
+      ]
+    },
+    "review-clean-code": {
+      "attempt": 0,
+      "status": "DONE_WITH_CONCERNS",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "2d2d08fe76dd"
+      ]
+    },
+    "review-highload": {
+      "attempt": 0,
+      "status": "DONE",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "3f94d297aebf"
+      ]
+    },
+    "review-logic": {
+      "attempt": 0,
+      "status": "DONE_WITH_CONCERNS",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "cfa28be49d43"
+      ]
+    },
+    "review-performance": {
+      "attempt": 0,
+      "status": "DONE",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "fd391d6c8220"
+      ]
+    },
+    "review-pr-contract": {
+      "attempt": 0,
+      "status": "DONE",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "aefc7448d988"
+      ]
+    },
+    "review-regression": {
+      "attempt": 0,
+      "status": "DONE_WITH_CONCERNS",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "d433400486b2",
+        "bec1616461a4",
+        "cb2da7de7025"
+      ]
+    },
+    "review-security-code": {
+      "attempt": 0,
+      "status": "DONE_WITH_CONCERNS",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "0a589d4916ea"
+      ]
+    },
+    "review-style": {
+      "attempt": 0,
+      "status": "DONE",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-01",
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "892b77764a36"
+      ]
+    },
+    "review-testing-practices": {
+      "attempt": 0,
+      "status": "DONE_WITH_CONCERNS",
+      "notRun": false,
+      "stalls": 0,
+      "covered": [
+        "slice-02",
+        "slice-03",
+        "slice-04"
+      ],
+      "processed": [
+        "4333128cd1a7"
+      ]
+    }
+  }
+}

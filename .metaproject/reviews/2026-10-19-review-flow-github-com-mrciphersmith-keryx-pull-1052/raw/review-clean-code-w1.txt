@@ -1,0 +1,51 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-01 is docs, flow files and SKILL files, no source code. Two minor documentation contradictions found, both checked against the code at head. No duplication defect between SKILL.md and SKILL.detail.md that this PR introduces: the 'never send the operator to a terminal' sentence is repeated, but the two files are summary and detail by design and the new wording is consistent between them and with review-premise/SKILL.md. Checked and clean: TM-04 section 6a against operator-confirm-tools.ts (the token is deleted before the allowed-id and 1-hour checks, so 'each refusal leaves the token spent' is true; the allowed-list-empty refusal is true); the CHANGELOG and TM-04 claims about pressedBy/pressedAt; the SKILL.md host table row against the new Operator decisions bullet; review-premise wording; SKILL.detail items 2, 11 and the readiness paragraph; package.json/CHANGELOG version 0.3.124.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal.",
+      "problem": "The rewritten paragraph says plain `complete` is an operator-only step that needs a terminal. It does not. The code refuses `review complete` without a TTY only when `--waive-coverage` or `--waive` is present (src/commands/review.ts:4557 and :4561); plain `keryx review complete` runs without a terminal. The same paragraph ends with 'keryx review complete then closes the review without the flags', and SKILL.detail.md (readiness paragraph) says 'you call the review_complete card (...) or run keryx review complete'. Three instructions disagree about whether the agent may run plain `complete` itself.",
+      "impact": "A reader, or an agent following cli-reference, concludes that plain `complete` is refused outside a terminal, while SKILL.detail.md tells the agent it may run it, and the code lets it. The false claim sits next to the PR's own invariant that the agent never records an operator act itself, so the reader cannot tell whether the unguarded CLI path is intended or a gap.",
+      "suggested_fix": "Drop `complete` from the 'need a terminal' list and keep `complete --waive-coverage` / `complete --waive` there. Then decide, and state in cli-reference and SKILL.detail.md alike, whether the agent may run plain `keryx review complete` or must call the `review_complete` card; if the card is meant to be the only path in keryx shell, say so and remove 'or run `keryx review complete`' from SKILL.detail.md.",
+      "evidence": "src/commands/review.ts:4557 `if (waiver !== undefined && !isTerminal())` and :4561 `if (readinessWaivers.length > 0 && !isTerminal())` are the only terminal checks in the complete path; the refusal messages there (:4558, :4562) still end 'then run `keryx review complete`'. Diff hunk docs/docs/cli-reference.md @@ 4873: the new paragraph lists `complete` among the terminal-only steps and ends with 'The two waiver tools only record the waiver; `keryx review complete` then closes the review without the flags (TM-04).'",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/autonomous-review.md",
+      "line": null,
+      "quote": "An autonomous run has nobody to answer them: it stops at the floor and never tells you to run the terminal command.",
+      "problem": "The new bullet says an autonomous run that meets one of the review cards 'stops at the floor'. The other instructions for the same case say the item is recorded as Not run and the run continues: src/trigger/unattended.ts:59-61 ('an unattended run has nobody to answer them: it never sends the operator to a terminal and records the item as Not run'), review-orchestrator SKILL.md ('unattended, the item is Not run') and TM-04 section 7. The guide's own exit-code table says a complete run is 'closed by keryx review complete' (exit 0), which a floor stop (exit 3) contradicts. The word 'floor' in this guide means the calls that always need a human and end the run with exit code 3.",
+      "impact": "An operator reading the guide expects exit 3 and a stopped run whenever a card would have been needed, but the skill and unattended.ts tell the agent to record Not run and carry on, so the run can end at exit 0 or 2 with items recorded as Not run. The guide misstates what the operator will see.",
+      "suggested_fix": "Rewrite the bullet to match the skill and unattended.ts: the cards are refused to an unattended run by name, the item is recorded as Not run, the run does not tell you to run the terminal command, and the terminal commands remain the fallback when you finish the package yourself. Keep 'floor' for the exit-3 case only.",
+      "evidence": "Diff hunk docs/docs/guides/autonomous-review.md @@ 15: new first bullet under 'What it does where a person would answer'. src/trigger/unattended.ts:59-61 and :71-73 (card tool names listed as interactive-only). Whether a refused card call counts as a floor refusal in the autonomous runner was not traced through src/review/autonomous-run.ts, hence medium confidence.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+## Clean Code Review (slice-01, docs and SKILL files)
+
+Scope: PR 1052, head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66. Slice-01 holds docs, flow records, the three SKILL files (review-orchestrator SKILL.md and SKILL.detail.md, review-premise SKILL.md), CHANGELOG and package.json; no source code. Naming, function, SOLID and error-handling parts of the checklist do not apply to this slice. The lens here is duplication of instructions and contradictory instructions.
+
+Findings: F-001 (cli-reference says plain `complete` needs a terminal; code and SKILL.detail.md say it does not), F-002 (autonomous guide says 'stops at the floor'; skill and unattended.ts say 'record Not run').
+
+Clean areas: SKILL.md vs SKILL.detail.md vs review-premise SKILL.md wording on cards (consistent); TM-04 section 6a vs operator-confirm-tools.ts (token deleted before the allowed-id and TTL checks, so 'each refusal leaves the token spent' holds); CHANGELOG 0.3.124 vs package.json; commands-by-task and limitations.md additions; review-with-a-record.md edits.
+
+Pre-existing, not filed: the data churn in .metaproject/data/gdgraph and the flow.json scaffold tasks T1-T4 still `todo` (flow bookkeeping, not a defect of the docs).

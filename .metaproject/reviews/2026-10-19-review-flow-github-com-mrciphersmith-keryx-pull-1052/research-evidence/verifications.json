@@ -1,0 +1,56 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "8 findings checked, 8 confirmed (4 by saved or own execution, 4 by site-check), 0 refuted, 0 unverifiable",
+  "verifications": [
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-01",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-C-01-1.txt: `bun test src/commands/operator-confirm-rosters.test.ts` -> 5 pass, 1 fail. Failing test: 'there are 18 operator card tools to keep out of the other rosters'. Line 17 `expect(NAMES).toHaveLength(18)` printed `Expected length: 18, Received length: 19`. The registry (operatorConfirmToolNames) has 19 tools, including the new review_complete."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-02",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-C-02-1.txt: `bun test src/commands/shell.test.ts` -> 66 pass, 1 fail. Failing test: 'shellCommand wires web_search into the agent TUI tool set'. Line 849 `expect(toolNames.sort()).toEqual([...])` printed a diff `+ \"review_complete\"` between review_comments_reply and review_confirm_plan: the received list has review_complete, the expected list does not."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-03",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Own probe (scratch bun test, own temp package): the press-record write was made to fail by putting a directory where completion-confirmation.json goes, then the review_complete card was answered yes. Output was `review_complete refused: EISDIR: illegal operation on a directory, rename ... -> '.../completion-confirmation.json' — nothing was recorded`, isError true. Afterwards manifest.json status was `closed`. A second card for the same package is refused at buildCard (src/commands/operator-confirm-review.ts line 716, status closed) with `probe-round is already complete`. Site-check: operator-confirm-review.ts lines 749-775 put completeReviewGated (750) and writeFileAtomic (765) in one try; the catch at 774 says 'nothing was recorded'. Caveat: completeReviewGated/completeManagedReview have no closed-status check, so a CLI retry is probably not refused by the gate; a CLI retry was not run."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-04",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Own probe: manifest recorded head 0123456..., a PR lookup returning OPEN with headSha fedcba98.... Without `head`, yes -> `review_complete refused: Cannot complete managed review; the PR head moved (reviewed 0123456, now fedcba9)...` and status stayed draft. With the agent passing head=fedcba98..., the card read `reviewed head: fedcba98... (given by the agent, replaces the recorded head)`. Yes -> `review probe-round complete at fedcba987654 ... readiness: READY; warning: --head fedcba9 replaces the head recorded when the round started (0123456)`. Status became closed and the manifest head became the agent's value. Site-check: managed.ts 972-983 swaps manifest.target.head before completeHeadGate; operator-confirm-review.ts line 679 `head: headInput ?? recorded`. factsDigest (line 690) hashes the whole facts object, so it covers the head the card displayed, not the old recorded head. The card labels the value as given by the agent but does not show the head it replaces."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-05",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "research-evidence/verify-C-05-1.txt: both .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:669 and src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669 contain 'or run `keryx review complete`' after the review_complete card. runComplete in src/commands/review.ts 4539-4572: the only isTerminal checks are for --waive-coverage (4557) and --waive (4561); plain `keryx review complete` and --head have none. src/lib/command-risk.ts has a floor only for the --waive-coverage flag (lines 629-746), nothing for plain complete. The factual premise holds. Whether the sentence presents it as gated is a judgement; nothing was run for it."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-06",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/tui/tui-shell.ts 6116 creates the log entry with `operatorCards.ask(..., true)` (mirrored=true) before raceApproval. At 6119 onUndelivered only calls io.onSystem with the transcript line. src/tui/approval-mirror.ts 52 just invokes that callback. OperatorConfirmationLog (src/tui/operator-confirmations.ts) has only ask, answer, waiting, entries and subscribe; there is no setter for `mirrored`. operatorCards is used only at tui-shell.ts 3940/3941/4584/6103/6105/6116/6126/6131/7338 and none touches the entry on undelivered. waiting() (line 62) filters `mirrored && unanswered`, so getWaitingCards (4584), the sidebar, the status tab and /decisions keep reporting the card as waiting in the topic until the dock answers it (6126)."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-07",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "The fail-closed branch is src/commands/operator-confirm-tools.ts 213-217 (`allowed === undefined || !allowed.includes(pressedBy)`). The only test that makes the list not match is src/commands/operator-confirm-tools.test.ts:214, which passes `allowedUserIds: []`; that exercises `!includes`, not `undefined`. testGate at line 108 does `options.allowedUserIds ?? ALLOWED`, so undefined can never reach the binding. Every remote invoke (331-397) passes `allowedUserIds: () => ALLOWED`. operator-confirm-review-tools.test.ts:39 always returns `[ALLOWED_ID]`. No test makes the allow list undefined and expects refusal."
+    },
+    {
+      "finding": "2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052#C-08",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/commands/operator-confirm-review-tools.test.ts 553-663 (describe 'review_complete'): happy path; tui press record; waiver listing; a no closes nothing; one refusal (stamped report with no evidence level); a waiver added after the card (digest mismatch); already-closed and head-on-non-PR refused before the card. The tool factory at line 37 passes `prLookup: async () => null`, so completeHeadGate only warns and can never refuse a moved head or merged PR through the card. No test drives the run-profile refusal, the narrowed-routing refusal, a readiness-failure refusal or a waiver-rule refusal through review_complete."
+    }
+  ],
+  "stats": { "confirmed": 8, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}

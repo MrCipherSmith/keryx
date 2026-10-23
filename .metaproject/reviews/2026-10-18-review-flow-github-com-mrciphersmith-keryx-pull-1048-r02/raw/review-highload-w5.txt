@@ -1,0 +1,58 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice 05 adds the References tab, the `refs` sidebar segment and a 5-second status poll (createProjectContextFeed) to the TUI. The view functions are pure and bounded. The poll is the only load-relevant change: it re-runs the full loadProjectContextStatus (including checkReferences, which re-reads every project rule and every declared or cited document) every 5 seconds for the life of the shell, and its reload() has no in-flight guard or ordering, so a slow poll can publish an older status after a newer one. Neither reaches blocker or major: reads are async, bounded per document (262144 bytes), and the stale status self-heals on the next poll. Load profile not provided; a single-user TUI is assumed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "const stop = (options.interval ?? defaultInterval)(poll, options.pollMs ?? PROJECT_CONTEXT_POLL_MS);",
+      "problem": "Every 5 seconds the poll calls load -> loadProjectContextStatus -> readReferences -> checkReferences, which reads every project rule (scanCitations), every declared document and every cited-but-undeclared document in full (inspectDocument -> readFile, up to CONTRACT_MAX_BYTES = 262144 each), then JSON.stringify-compares the whole status. There is no cheap change test (mtime/size) in front of the full load, and the shell never calls feed.stop().",
+      "impact": "Trigger: the TUI is open in a project that has references.json. Outcome: N rule reads plus M document reads (up to ~256 KiB each, sequential awaits) every 5 s for the whole session, idle or not, so a project with a few dozen declared documents re-reads megabytes per minute for a sidebar counter that almost never changes. Async reads do not block the event loop, so this is wasted I/O and wake-ups, not an outage.",
+      "suggested_fix": "Gate the full load behind a cheap signature: stat references.json, tasks.config.json, last.json, the rules directory and the declared documents (mtimeMs+size) each tick, and call load only when the signature changed. Alternatively poll only last.json (the one file a worker writes) and recompute the findings on reload/open. Also call projectContextFeed.stop() on shell teardown (next to sessionSwitches.stop()).",
+      "evidence": "references-check.ts scanCitations: `text = await readFile(path.join(projectRoot, rulePath), \"utf8\")` per rule; inspectDocument: `text: await readFile(real, \"utf8\")` per declaration; project-context-status.ts readReferences calls `await checkReferences(projectRoot)` on every load; a search for `.stop()` in tui-shell.ts finds no call on projectContextFeed (only sessionSwitches.stop()).",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;",
+      "problem": "reload() has no in-flight guard and no ordering. The interval fires poll() regardless of whether the previous load finished, and the modal's `e` toggle and showProjectContext also call reload() concurrently. Whichever load resolves last wins, so a poll that began before the toggle write but resolves after the post-write reload replaces `current` with the older status and notifies the sidebar and the open modal with it.",
+      "impact": "Trigger: a poll load (which now includes checkReferences over all documents) overlapping the `e` toggle's write-then-reload, or any load slower than 5 s (network or slow disk) so polls stack. Outcome: the sidebar and modal show the old enforcement mode until the next successful poll (up to 5 s), and an `e` press in that window computes its target from the stale value (`status.enforcement === \"warn\" ? \"block\" : \"warn\"`), writing the mode already on disk, so the toggle appears to do nothing. On a slow filesystem the polls also pile up without bound, each holding its own reads. Self-heals; no persisted data is wrong.",
+      "suggested_fix": "Serialise loads in the feed: keep one in-flight promise and return it from reload() and skip the tick in poll() while it is pending; or stamp each load with an increasing generation and ignore a result older than the last applied one.",
+      "evidence": "createProjectContextFeed: `setInterval(() => { void tick(); }, ms)` with `poll` -> `await reload()`; reload assigns `current = next` unconditionally when it differs; presentProjectContext keypress handler: `.setEnforcement(status.enforcement === \"warn\" ? \"block\" : \"warn\")` then `.then(() => options.loadStatus())` -> `status = next`.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## High-Load Review
+
+### Review Scope
+- Head: d6267d4a5099f39b74e86a71e5c8f61ca47aa63d, slice-05 only (project-context-inspector.ts, project-references-view.ts, tui-shell.ts)
+- Load profile: not provided; single-user TUI assumed
+
+### Summary
+The new References view is pure and bounded. The 5-second status poll is the only load-relevant change. It re-reads all rules and documents on every tick with no change detection (F-001) and has no in-flight guard or ordering (F-002). Both are minor.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 2 | info: 0
+
+### Clean Areas
+Shared mutable state (the feed is single-threaded JS; only the ordering in F-002 matters), connection pools, caching, database, queues, retry and idempotency do not apply to this slice. Listener sets are cleaned on modal close (unsubscribeStatus) and the interval is unref'd, so it does not hold the process open.
+
+routing audit: graph_used: no (not-relevant, two-file slice); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg / read); raw_rg_used: no

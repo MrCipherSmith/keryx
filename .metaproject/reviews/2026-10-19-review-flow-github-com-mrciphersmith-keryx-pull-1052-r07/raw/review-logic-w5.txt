@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-07 (skill text moving agents to the review_complete / review_decide_premise / review_confirm_plan cards; flow 464 pressedBy/pressedAt plumbing through write-land, decisions, interactive-tools; the `undelivered` flag in RemoteClient, RemoteBridge and raceApproval; mirror-undelivered tests). Checked against head 5444f96e4: the card name and `dispositions` input the docs now name exist in operator-confirm-review.ts, the pressedBy/pressedAt chain (remoteApproval -> agent.ts -> InteractiveToolContext -> operator-confirm-tools invoke -> record() -> landWriteRun decision file) is consistent and fails closed (a remote answer with no pressedBy, an id off the allowed list, or a card older than 1 hour is refused), withMirrorNote keeps the subject last for every operator-confirm card (title + lines + subject), and raceApproval cannot fire onUndelivered/onTopicEnded for a press or for the dock-first abort. One minor inaccuracy found in how `undelivered` is assigned; nothing blocking.",
+  "findings": [
+    {
+      "id": "L11-001",
+      "severity": "minor",
+      "file": "src/remote/client.ts",
+      "line": 455,
+      "quote": "const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;",
+      "problem": "RemoteClient.askApproval flags the answer `undelivered: true` for every failure after `this.post(\"approval\", ...)` is attempted: a non-ok status, a body that is not valid JSON or has no approvalId, and any thrown error, including the request timeout (AbortSignal.timeout(requestTimeoutMs) in post). A timeout or a response-parse failure can happen after serve already accepted the question and put the Yes/No buttons in the topic. The flag then claims the card never reached the topic.",
+      "impact": "In that case the shell tells the operator 'Telegram mirror not delivered ... Answer it here' and the confirmation log marks the card unmirrored, while live buttons sit in the topic. The client has no approvalId, so it never calls closePrompt and the buttons stay until serve's own timeout. A Yes pressed there arrives as an early decision for an id nobody waits on and is dropped after earlyDecisionMs. The operator believes they answered and nothing happens. The flaw is a wrong status line and stale buttons; the answer still fails closed, so no unconfirmed action runs.",
+      "suggested_fix": "Set `undelivered: true` only when the post is known not to have been accepted: not connected, signal already aborted, or a non-ok response. For a thrown error or an unreadable body after a possible send, return a plain deny (the race then reports it through onTopicEnded, 'Telegram is no longer waiting', which is also the safer wording). Or keep the flag and word the note as 'may not have been delivered'.",
+      "evidence": "client.ts:439-462 wraps post(), response.ok, response.json() and the id check in one try/catch whose catch returns { decision: \"deny\", undelivered: true }; post() (client.ts:667-675) bounds the call with AbortSignal.timeout(this.requestTimeoutMs). A timeout is indistinguishable from a refusal there, and raceApproval (approval-mirror.ts:54) turns the flag into onUndelivered -> log.markUndelivered(id) plus the 'did not take the card' system line. The test 'a RemoteClient with no stream answers a card deny with undelivered' only covers the not-connected branch (and a rejected fetch), not a timeout after the server answered.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "slices": ["slice-07"],
+  "questions": []
+}
+```

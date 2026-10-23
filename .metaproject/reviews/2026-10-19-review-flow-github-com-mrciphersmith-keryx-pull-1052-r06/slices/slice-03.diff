@@ -1,0 +1,64 @@
+--- src/commands/review.ts
+@@ 5,44 @@
+ import { optionValue, optionValues } from "../lib/args";
+ import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+ import { assertGitRevision, revisionOperand } from "../lib/git-revision";
+ // Through the security facade, not `security/redact` directly — same
+ // discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
+ import { redactSensitiveText } from "../security/service";
+ import { learnProjectSkill } from "../gdskills/learn";
+ import { applyReviewerProfile, parseLearnArgs } from "../learning/service";
+ import { loadSchema, validateJson } from "../gdskills/contracts";
+ import {
+   learningRecordPath,
+   learningSourcePath,
+   loadReviewLearningConfig,
+   renderLearningRecord,
+   renderLearningSource,
+   reviewLearningConfigPath,
+   selectLearnableComments,
+   type LearningSelection,
+ } from "../review/review-learning";
+ import {
+-  completeManagedReview,
+   createManagedReviewPackage,
+   getManagedReviewStatus,
+   parseEmbeddedPremises,
+   resolveGitHead,
+   resolveReviewPackagePath,
+   upsertPreFilterScopeBlock,
+   type FindingDispositionRecord,
+   type ManagedReviewIngestInput,
+ } from "../review/managed";
+ import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
+ import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
+ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
+ import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+ import { auditPackage } from "../review/severity-audit";
+ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
+ import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
+ import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
+ import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
+ import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
+ import { readJsonFileOr } from "../lib/json";
+
+--- src/tui/tui-shell.ts
+@@ 92,108 @@
+-import { type DockRace, raceApproval } from "./approval-mirror";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+ import type { CommandOutcome } from "../remote/command-router";
+ import { ChannelsClient } from "../remote/channels-client";
+ import {
+   type ChannelsPanelHandle,
+   isChannelsCommand,
+   loadChannelsSnapshot,
+   mountChannelsPanel,
+   openChannels,
+   parseChannelsArgs,
+ } from "./channels-surface";
+ import {
+   HISTORY_COMMAND,
+   isHistoryCommand,
+   isRemoteControlCommand,
+   commandEchoText,

@@ -1,0 +1,98 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Delta round r03, slice-01. Of 21 attached prior findings, 14 are closed at head, 2 are partial and 5 are open. The heading scanner is now linear (hand-written parseHeadingLine/stripClosingHashes; a 200000-space heading line scans in about 10 ms), the feed ordering guard (started/applied) drops stale loads, last.json no longer stores the task text, keywordOccurs demands a boundary only on word-character edges, the validator falls back to the whole file on a dead anchor, and scanCitations now reads linked rules at their origin. Open: the BOM heading case, the merged task-implementer 2.0c bullet, the tab-formatter ternary mapping, and the listener throw sharing the load catch. Two new minor defects: the single-quote swap in four skills lacks the apostrophe escape that only flow-orchestrator states, and the apply-project-rules guide still says linked rules are not scanned.",
+  "slices": [
+    { "id": "slice-01", "coverage": "read the full diff and the head versions of references-section.ts, project-context-inspector.ts, references-check.ts, context-resolver.ts, reference-entries(.test).ts, reference-proof.ts and the five skill copies", "status": "DONE" }
+  ],
+  "findings": [
+    {
+      "id": "review-highload-w1:F-001",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "problem": "The fix for the double-quoted --task-text template swapped the quotes to single quotes in task-implementer 2.0c, tests-creator 1.2b, job-orchestrator SKILL.md (two places) and orchestrator-prompt.md (two places), but only flow-orchestrator/SKILL.md says that a `'` inside the text must be written `'\\''`. In the other four the placeholder is `'<task.description>'` with no escape rule. Before the swap an apostrophe in the text was harmless inside double quotes; now it ends the quoted argument.",
+      "impact": "Trigger: a task title or description with an apostrophe (\"don't\", \"the task's file\", \"user's\"), which is ordinary English and far more common than a backtick. A worker that pastes the text into the single-quoted placeholder gets an unterminated quote (the command fails, no resolved file is written, so resolved_context_file is missing and the proof check has nothing to compare), or with a second apostrophe later in the text the span between them is parsed by the shell, so `$(...)` or a backtick there runs. The injection the swap was meant to stop is therefore only closed where the escape rule is stated. The four skills that omit it are the ones a worker or the job orchestrator follows without reading flow-orchestrator.",
+      "suggested_fix": "Put the same sentence as in flow-orchestrator/SKILL.md next to each placeholder: \"write the text single-quoted; a `'` inside it becomes `'\\\\''`\", in task-implementer 2.0c, tests-creator 1.2b, job-orchestrator SKILL.md Step A and fix-loop item 3, and orchestrator-prompt.md steps 1 and FIX item 2, in both the bundled and the managed copies (skill-sync.test.ts requires them identical). A `--task-text-file` option would remove the class, but is a feature.",
+      "evidence": "keryx ctx rg for task-text over src/gdskills/bundled and .metaproject/skills shows the single-quoted placeholder in all five skills (task-implementer/SKILL.md:182, tests-creator/SKILL.md:93, job-orchestrator/SKILL.md:749 and :1307, orchestrator-prompt.md:132 and :188). A fixed-string search for `'\\''` over the same bundled files matches only flow-orchestrator/SKILL.md.",
+      "confidence": "medium",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task.description>'",
+      "dedupe_key": "single-quote-escape-missing",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (already states the escape)",
+          "the same lines in the byte-identical copies under .metaproject/skills/gdskills"
+        ],
+        "enumeration_method": "keryx ctx rg 'task-text' over src/gdskills/bundled, .metaproject/skills, docs/docs and README.md, then a fixed-string search for the escape sequence over the bundled skill files."
+      }
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "problem": "The guide still states the old limit of the citation scan: a rule imported with --link is not scanned. At head scanCitations reads linked rules at their origin (references-check.ts:97-109) and the file header says so.",
+      "impact": "A reader (or the next reviewer) of docs/docs/guides/apply-project-rules.md is told that `references check` and `suggest` ignore linked rules, so a project that links its rules may add declarations by hand that suggest would have listed, or distrust an `unused-declaration` that is correct. The documented limit and the behaviour disagree.",
+      "suggested_fix": "Rewrite the sentence: the scan covers copied rules and rules imported with --link (read where they live); bundled rules are not scanned. Mention that a linked file whose hash changed since the link is still scanned here although the resolver excludes it until `keryx skills update --rules`.",
+      "evidence": "docs/docs/guides/apply-project-rules.md:259-262 versus src/gdskills/references-check.ts:16 and :97-109 at head. The doc line was not touched by the delta diff.",
+      "confidence": "high",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "line": null,
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "dedupe_key": "docs-linked-rules-not-scanned"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "review-architecture-w3:F-002", "disposition": "closed" },
+    { "id": "review-logic-w2:F-001", "disposition": "closed" },
+    { "id": "review-clean-code-w1:F-003", "disposition": "open" },
+    { "id": "review-clean-code-w2:F-004", "disposition": "closed" },
+    { "id": "review-clean-code-w5:F-001", "disposition": "open" },
+    { "id": "review-style-w5:F-002", "disposition": "open" },
+    { "id": "review-clean-code-w5:F-003", "disposition": "open" },
+    { "id": "review-highload-w2:F-001", "disposition": "partial" },
+    { "id": "review-security-code-w4:F-002", "disposition": "partial" },
+    { "id": "review-highload-w2:F-002", "disposition": "closed" },
+    { "id": "review-highload-w3:F-001", "disposition": "closed" },
+    { "id": "review-security-code-w1:F-001", "disposition": "closed" },
+    { "id": "review-security-code-w3:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-003", "disposition": "open" },
+    { "id": "review-highload-w5:F-002", "disposition": "closed" },
+    { "id": "review-performance-w5:F-002", "disposition": "closed" },
+    { "id": "review-logic-w3:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-002", "disposition": "closed" },
+    { "id": "review-testing-practices-w2:F-008", "disposition": "closed" },
+    { "id": "review-security-code-w1:F-002", "disposition": "closed" },
+    { "id": "review-security-code-w4:F-001", "disposition": "closed" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+Disposition notes (checked against the code at head, not the commit messages):
+
+- review-architecture-w3:F-002 and review-logic-w2:F-001 (linked rules not scanned): closed in code. scanCitations (references-check.ts:94-119) now unions the copied refs with registry entries of mode link that have no copy, and reads those at resolveOriginPath, as collectProjectRules does. import-rules.ts calls undeclaredCitationHint after the registry upsert (line 231 before 275), so the hint sees the link. Residual differences, not graded: the resolver excludes a linked file whose sha256 changed or that cannot be read (context-resolver.ts:219-226), the scan does not check the hash; and the "cited by" label for a linked rule is the nonexistent copy path. The guide was not updated (new finding F-002).
+- review-clean-code-w1:F-003: open. The 2.0c bullet in task-implementer/SKILL.md is still one run: the promoted-entry rule first, then "Cite what you used ... `n/a` needs a reason in `notes`. Never edit a resolved file" in the same bullet.
+- review-clean-code-w2:F-004: closed. skills-references.test.ts imports CONTRACT_MAX_BYTES (line 7) and uses `CONTRACT_MAX_BYTES + 1` (line 143). The premise was challenged, but the change is harmless.
+- review-clean-code-w5:F-001 and review-style-w5:F-002: open. project-context-inspector.ts still has `let tab: string` (line 218), the nested ternary in paint() (232-237) and the Math.max list in contentRows (251-256); no keyed table.
+- review-clean-code-w5:F-003: open. The listener loop `for (const listener of [...listeners]) listener(next)` (line 178) is unchanged, so a throwing subscriber still skips the rest and surfaces as a poll failure. The new ordering guard adds a small interaction: because `applied = Math.max(applied, mine)` (line 180) runs after the loop, a throw leaves `applied` behind, and an older in-flight load can then pass `mine > applied` and overwrite `current`. Fixing the isolation (try/catch per listener) closes both.
+- review-highload-w2:F-001 and review-security-code-w4:F-002 (double-quoted --task-text): partial. All five skills and their managed copies now single-quote the text, which closes the backtick and `$(...)` expansion in the template, and README uses single quotes. But the escape rule for an embedded apostrophe is stated only in flow-orchestrator (new minor finding F-001 above), there is still no file/stdin route, and the docs example at apply-project-rules.md:172 keeps double quotes (a fixed example string, harmless). The 128 KiB argv limit named in the first finding is unchanged.
+- review-highload-w2:F-002 (info, parallel last.json writes): closed. Nothing to fix; writeContained is unchanged, and the record now holds result plus a length, so the "result and task text together" property no longer matters.
+- review-highload-w3:F-001, review-security-code-w1:F-001, review-security-code-w3:F-001 (quadratic heading regexes): closed. HEADING is gone. parseHeadingLine and stripClosingHashes (references-section.ts:54-80) are single left-to-right scans; the remaining regexes are anchored with no nested quantifier (FENCE, `/^#+$/`, the 3-character class test). I ran extractSection under bun on heading lines of 200000 spaces, `" "` plus `#` and 100000 tab-space pairs: 10 ms in total. Behaviour checks: `## a ##` gives "a", `## C#` keeps "C#", `##   ` is skipped.
+- review-logic-w3:F-003 (BOM): open. scanHeadings does not strip U+FEFF. I ran extractSection("﻿# Title\ntext\n## B\nx\n", "Title") at head: found false, available ["B"].
+- review-highload-w5:F-002 and review-performance-w5:F-002 (reload ordering): closed. reload() takes a sequence number (`started`), applies and notifies only when `mine > applied`, and poll() skips a tick while one is in flight (`polling`). I walked the interleavings (poll overtaken by the toggle reload, two reloads finishing in either order, a later poll finishing first): `current` never goes backwards; a skipped load still returns its own value, which the toggle path only uses after its own post-write read. The single caveat is the listener-throw interaction recorded under review-clean-code-w5:F-003.
+- review-logic-w3:F-001 (dead anchor): closed. currentSection (reference-proof.ts:241-246) now returns the whole file with `what` naming the dead anchor, so wordsFailure compares the summary against the file the resolver told the worker to read. The anchor-equality rule is unchanged. I found no other extractSection consumer that disagrees with the resolver (references-check's anchor-not-found is the intended authoring error).
+- review-logic-w3:F-002 and review-testing-practices-w2:F-008 (keywordOccurs): closed. The lookbehind and lookahead are added only on a side where the keyword's edge character is a letter, digit or underscore (reference-entries.ts:48-54); WORD_CHAR has no g flag so `.test` is stateless; the keyword stays escaped. reference-entries.test.ts now pins `.css`, `@apply`, `c++`, css3, my_css, css_modules, Cyrillic neighbours, `a.b` versus `axb` and `a+` as literal.
+- review-security-code-w1:F-002 and review-security-code-w4:F-001 (task text persisted in last.json): closed. RecordedResolve holds `taskTextLength` and `taskTextTruncated` only; the resolution `result` carries no task text (warnings quote only the declared keyword). No reader of the old `taskText` field remains outside tests. An old last.json with a taskText key is overwritten by the next resolve.
+
+Summary: the delta fixes the load-relevant defects of r02 (quadratic heading scan, stale-load overwrite in the feed, task text on disk) and the logic ones (linked rules, dead anchor, keyword edges). What remains is small: the BOM case, three readability findings, the listener-isolation gap, and the two new minors above, one of which is a gap in the single-quote fix (apostrophe escaping stated in one of five skills) and one a guide sentence that now contradicts the code.

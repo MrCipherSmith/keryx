@@ -1,0 +1,9 @@
+[
+  {
+    "file": "src/review/harness-robustness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "buildReviewConfirmSpecs"
+    ]
+  }
+]

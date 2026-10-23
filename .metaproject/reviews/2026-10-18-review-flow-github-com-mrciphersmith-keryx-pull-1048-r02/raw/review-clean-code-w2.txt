@@ -1,0 +1,109 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 02 (src/commands, command tests, flow tests, bundled skill copies) is in good shape against Clean Code and SOLID: skills-references.ts is a small single-purpose command module with the analysis delegated to gdskills/references-check.ts, the router entry and help-table entry are one line each, and the tests are named by behaviour. No blocker or major. Four minor findings (help drift, an ellipsis in skill prose, shell quoting of free text, a test magic number) and one info on a test helper.",
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "whole slice-02.diff read (1321 lines); surrounding source read at head for skills.ts help, resolve-context-command.ts and context-resolver.ts constants",
+      "status": "DONE"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/skills.ts",
+      "line": null,
+      "quote": "      [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]",
+      "problem": "The flag --task-text was added to the resolve-context subcommand help (printResolveContextHelp) and is in the USAGE string of resolve-context-command.ts, and the group help gained the two `skills references` lines, but the resolve-context usage block in printSkillsHelp (the group help) was not updated. One command is now described with two different flag sets inside one file.",
+      "impact": "An operator reading `keryx skills --help` does not learn that --task-text exists, which is the flag that makes keyword promotion work; it is discoverable only through `keryx skills resolve-context --help`. Maintenance cost: three hand-kept copies of one usage line (group help, subcommand help, USAGE const) drifted on the first change.",
+      "suggested_fix": "Add `[--task-text <text>]` to the resolve-context usage lines in printSkillsHelp. Optionally build both help blocks from one shared usage string so they cannot drift again.",
+      "evidence": "Diff hunk skills.ts @@1828,1936: the group-help context line `[--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]` is unchanged, while hunk @@1998,2046 changes printResolveContextHelp to `[--task-text <text>] [--max-bytes ...`. resolve-context-command.ts line 6 USAGE already lists --task-text.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "skills-help-group-task-text-missing"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "keryx skills resolve-context --for implement ... --out <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json",
+      "problem": "Step A of the wave pattern now spells out `--task-text \"<task title and description>\"`, but Step B (implement) is written with an ellipsis (`--for implement ... --out`), which a literal reader takes as the flags of an older command. The same asymmetry is in orchestrator-prompt.md item 3 (`keryx skills resolve-context --for implement ... --out <...>/<task_id>.implement.resolved.json`). The implement dispatch is the one where a declared keyword matters most.",
+      "impact": "An orchestrator model that copies the implement line literally resolves without --task-text, so only glob conditions promote a reference; a document declared by keyword never becomes must_read for the implementer and no proof is required, with no warning (the resolver warns only on truncation).",
+      "suggested_fix": "Replace the ellipsis in the implement lines of both files with the full flag list used in Step A (--files, --task-type, --task-text), or add one sentence saying the ellipsis stands for the same flags as Step A including --task-text.",
+      "evidence": "Diff hunk job-orchestrator/SKILL.md @@729,782: the -/+ pair adds --task-text to Step A only; the `--for implement ...` line is unchanged context. orchestrator-prompt.md @@112,160: item 1 gains --task-text, item 3 keeps `--for implement ... --out` and the added note describes the proof, not the flag.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "skill-implement-resolve-ellipsis-task-text"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "--task-text \"<the task's title and description>\"",
+      "problem": "The instruction tells the dispatching model to put free text (a task title and description, which routinely contain double quotes, backticks and `$`) inside double quotes on a shell command line. No quoting guidance is given and the CLI has no file or stdin alternative.",
+      "impact": "Trigger: a task description containing a double quote, backtick or `$(`. Outcome: the command is split or a substitution runs in the operator's shell, or the text is cut at the first quote so a keyword after it cannot promote its reference. The same shape is repeated in the other bundled skill copies.",
+      "suggested_fix": "Add one line at the first occurrence: pass the text single-quoted (embedded single quotes escaped) or as a short plain summary; longer term accept a `--task-text-file` or stdin in resolve-context-command.ts.",
+      "evidence": "Added in flow-orchestrator/SKILL.md (@@303,366), job-orchestrator/SKILL.md (two places), orchestrator-prompt.md (two places), task-implementer/SKILL.md 2.0c and tests-creator/SKILL.md 1.2b.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "task-text-shell-quoting"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "files: { \"STYLING.md\": `# Styling\\n\\n${\"x\".repeat(262145)}\\n` },",
+      "problem": "The size-limit test hard-codes 262145, one more than CONTRACT_MAX_BYTES (262144, exported from src/gdskills/context-resolver.ts). The test does not say where the number comes from.",
+      "impact": "If the limit is raised the test stops reaching the limit and fails with a confusing missing-error assertion; if it is lowered the test passes without testing the boundary. The reader has to know the constant to understand the literal.",
+      "suggested_fix": "Import CONTRACT_MAX_BYTES and write `\"x\".repeat(CONTRACT_MAX_BYTES + 1)`.",
+      "evidence": "`git grep CONTRACT_MAX_BYTES` finds context-resolver.ts:82 `export const CONTRACT_MAX_BYTES = 262144;`. context-resolver.test.ts:303 uses the same literal, so the habit pre-exists.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "test-magic-262145"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "...\"anchor\" in overrides ? (overrides.anchor === undefined ? {} : { anchor: overrides.anchor }) : { anchor: entry.anchor },",
+      "problem": "The `declaration()` test helper spreads a nested ternary to express three states for one field (key absent -> default anchor, key present and undefined -> no anchor, key present -> that anchor), next to a three-line `Overrides` type whose only job is to allow `undefined`.",
+      "impact": "Readers must decode the nested ternary to see that `declaration({ anchor: undefined })` means 'no anchor'; the intent is correct and covered by tests, so this is readability only.",
+      "suggested_fix": "Name the intent: give the helper a `withoutAnchor()` variant or a small `anchorFor(overrides)` function, so call sites read `declaration({ path: 'docs/GONE.md' })` and `declarationWholeFile(...)`.",
+      "evidence": "Used at the call sites `declaration({ anchor: undefined })` in four tests of the same file.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "test-declaration-helper-ternary"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 }
+}
+```
+
+## Clean Code Review (slice-02)
+
+Scope: PR 1048, branch feat/conditional-reads, merge-base 1658f77d374b2d20189a55eaf44b95d64768d6b6, head d6267d4a5099f39b74e86a71e5c8f61ca47aa63d, scope_mode diff. Slice: slice-02.diff, read in full.
+
+Summary: no function design, naming, error-handling, DRY or SOLID violations in the TypeScript. skills-references.ts keeps command parsing, rendering and exit-code policy apart from the analysis (checkReferences/suggestReferences in gdskills/references-check.ts), all functions are under 20 lines, and the router and SKILLS_SUBCOMMAND_HELP changes are one line each. Findings are help/prose consistency and test readability only.
+
+Stats: blocker 0 | major 0 | minor 4 | info 1
+
+Naming: no issues found.
+Functions: no issues found (referencesCommand is a short dispatcher; renderReferencesReport is a pure formatter).
+Comments: no issues found; the header comment of skills-references.ts states intent and where the analysis lives.
+Error handling: no issues found; failures set process.exitCode and print to stderr, a malformed references.json is reported instead of guessed at.
+DRY: F-001 (usage line kept in three places), F-003 (the same quoting pattern repeated across bundled skill copies). The five-way restatement of the proof thresholds in prose is already reported in wave 1 and not repeated.
+SOLID: no violations found.
+
+Clean areas: Parts A (names), B (functions), C (comments), D (error handling), F (SOLID) reviewed on skills-references.ts, the skills.ts router/help changes, agent-commands.ts description, and both test files. The bundled skill prose was read for consistency only. Not re-raised: everything listed under settled / wave 1.
+
+Routing audit: graph_used no (not-relevant: read-only slice review), wiki_used no (not-relevant), ctx_used no (hook blocked raw sed/cat; files read through Read), raw_rg_used no (git grep used for three constant/usage lookups).

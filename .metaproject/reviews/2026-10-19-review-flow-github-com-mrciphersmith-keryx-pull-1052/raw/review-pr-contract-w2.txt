@@ -1,0 +1,61 @@
+STATUS: DONE
+
+Checklist form (pr-context.md read first; every box and claim is a row). Slice covered: slice-02 (commands, flow token plumbing, tests). Documents outside the diff were searched with `keryx ctx rg`.
+
+| Box or claim (quoted) | State | What the diff / docs show | Expectation |
+|---|---|---|---|
+| `- [ ] CI green` | unticked | CI is `pending` in pr-context.md (typecheck-and-tests, AC8 full suite, client matrix (terminal), darwin-x64 pending) | Unticked is consistent with pending CI. No disagreement. |
+| `- [ ] bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` | unticked | slice-02 changes both named test files (new `describe("AC2: a remote answer is accepted only for this question, once, within an hour"`, `describe("review_complete"`) | A run-it step, not a "tests updated" claim. The named files exist and carry the new cases. No disagreement. |
+| `- [ ] Owner live check from the Telegram topic` | unticked | AC9, the owner's own check | Not a defect of the code (dispatch brief). |
+| "A remote-card answer now records `pressedBy` and `pressedAt`; it is accepted only from an allowed user id, once, for one question, within 1 hour." | claim | operator-confirm-tools.ts: `if (allowed === undefined \|\| !allowed.includes(pressedBy))`, `pending.delete(token as string)`, `now().getTime() - entry.issuedAt > REMOTE_CARD_TTL_MS`; tests under "AC2" cover each leg | Holds in this slice. |
+| "New `review_complete` card (SHA, evidence level, waivers); `review_confirm_plan` and `review_decide_premise` answer through the card too." | claim | `completeSpec` registered in `buildReviewConfirmSpecs`; new describe "review_confirm_plan and review_decide_premise through the remote card"; `completeReviewGated` (src/review/complete-gated.ts:11) is called by both the CLI (review.ts) and the card | Holds. Same gate function on both paths. |
+| "`flow ac confirm` is unchanged (operator decision)." | claim | The diff touches `flow confirmMint` (src/flow/service.ts, confirm-token.ts, types.ts) to carry `pressedBy`/`pressedAt`; no line changes `flow ac confirm` | Holds. |
+| "Docs: TM-04 section, review guides, cli-reference, review skills." | claim | TM-04 (lines 104, 114), review-with-a-record.md (603, 734), autonomous-review.md (35), cli-reference.md (4916, 4921), commands-by-task.md (150, 153), limitations.md (187) all name the cards. cli-reference.md:955-967 (`/remote-control`) and :2092-2096 (`/decisions`) and drive-keryx-remotely.md do not | See PC-001. |
+| "TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`." | claim | agent-commands.ts descriptions for `/remote-control` and `/decisions` now say so; commands-by-task.md rows say so | Partly documented, see PC-001. |
+| Documentation needed / Tests updated / Breaking change / Screenshots | no such box in the PR body | Diff adds user-visible text (two slash-command descriptions, new tool `review_complete`, new persisted file `completion-confirmation.json`); optional `allowedUserIds` in `OperatorConfirmBinding` makes every remote card answer refuse when a host does not bind it (only shell.ts binds it; `interactive-agent-tools.ts` is the only other builder and takes the binding from shell.ts) | No box to contradict. No removed or renamed export in slice-02. Nothing filed. |
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "PR 1052 slice-02: the PR body has only three Test plan boxes, all unticked, and none is contradicted by the diff (CI is pending, the named test files are changed). The body's behavioural claims (allowed id, once, one question, 1 hour, pressedBy/pressedAt only for remote-card, review_complete through the same gate function as the CLI, flow ac confirm untouched) hold against the slice. Documentation named in the body was updated; two reader-facing pages that describe the changed slash commands were not (minor). One self-claim of the new tool is contradicted by its own code order (info, for review-logic).",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
+      "problem": "The diff changes the `/remote-control` slash-command description to say it \"Shows the review cards (...) waiting for a press\" and the `/decisions` description to say it \"also lists the Telegram review cards waiting or answered\". The PR body lists cli-reference as updated and says the cards appear \"in the remote status tab, sidebar and `/decisions`\". commands-by-task.md rows 150 and 153 were updated, but the prose that describes the same two commands was not: docs/docs/cli-reference.md:955-967 (`/remote-control`: \"In the full-screen shell the sidebar row and the `/remote-control` modal (key `o` toggles) show the same state\", no cards) and docs/docs/cli-reference.md:2092-2096 (`/decisions`: report, reason, change, no cards). docs/docs/guides/drive-keryx-remotely.md, the page that explains driving a shell from a topic, has no sentence on operator cards, the allowed-user check, the 1-hour token or the 'mirror not delivered' note (a search for card, hour and pressedBy there finds nothing).",
+      "impact": "A reader of the CLI reference or the remote-control guide is told the status modal and /decisions show the session state and the journal, and does not learn that a pending review card with a 1-hour token can sit there, or that a press from a non-allowed account is refused. The cards are documented in TM-04, the review guides and commands-by-task.md, so the information exists; it is missing where the commands themselves are described.",
+      "suggested_fix": "Add one sentence to cli-reference.md under `/remote-control` and under `/decisions` naming the pending and answered review cards (age, time left of the 1-hour token, who pressed), and a short paragraph to drive-keryx-remotely.md: allowed ids only, once, one question, 1 hour, and what the card says when the Telegram mirror was not delivered.",
+      "evidence": "src/commands/agent-commands.ts (slice-02, hunks at /remote-control and /decisions); `keryx ctx rg \"review_complete|completion-confirmation|review cards|status tab|time left\"` over docs/docs and README.md: matches in commands-by-task.md, autonomous-review.md, limitations.md, review-with-a-record.md, cli-reference.md:4916/4921 only; none in cli-reference.md:955-967, :2092-2096 or drive-keryx-remotely.md. Whether those two cli-reference paragraphs changed elsewhere in the PR could not be seen from slice-02; the lines quoted are the head versions.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract-docs-remote-control-cards",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-002",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE)",
+      "problem": "The tool's own description says \"A refused gate closes nothing\" and its catch reports \"review_complete refused: ... — nothing was recorded\". In `apply`, `completeReviewGated(...)` (which closes the round) runs first and `writeFileAtomic(... COMPLETION_FILE ...)` runs after it, inside the same try. If the write throws (disk full, permission), the round is already closed but the output says the review was refused and nothing was recorded.",
+      "impact": "The operator is told nothing happened while the package status is `closed` and there is no completion-confirmation.json naming who pressed. Unverified: needs a failing write on the package directory; no such test exists in the diff.",
+      "suggested_fix": "Write the confirmation record before closing, or catch the write error separately and report that the round closed without its record. Hand to review-logic to settle.",
+      "evidence": "slice-02, operator-confirm-review.ts `completeSpec.apply`: `const done = await completeReviewGated(...)`, then `const record = {...}`, then `await writeFileAtomic(...)`, all inside one try whose catch returns `review_complete refused: ... nothing was recorded`.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract-complete-write-after-close",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-02"],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Summary: no checklist box in the PR body is contradicted by slice-02; the body's behavioural claims hold. One minor docs gap (cli-reference.md /remote-control and /decisions prose, drive-keryx-remotely.md) and one info lead for review-logic (completion record written after the round is closed, message says nothing was recorded).

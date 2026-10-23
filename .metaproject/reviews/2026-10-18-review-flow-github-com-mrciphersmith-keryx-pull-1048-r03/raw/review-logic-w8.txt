@@ -1,0 +1,203 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- PR: #1048 (flow 462), branch `feat/conditional-reads`, head `5382b56abf17d23db61108554f3c6c68c8e3c036`
+- Merge-base for this delta round: `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d` (r02 head)
+- Slice: slice-03 only (the supplied slice diff shows removed lines and context; the added lines were read from `git diff -U0 d6267d4a5 HEAD` for the same files, plus the files at head)
+- Spec compliance gate: skipped, no issue or acceptance criteria in the payload (flow acceptance-criteria.md not part of this slice)
+
+### Summary
+The delta does three things in this slice: it rewrites the `--task-text` instruction from double to single quotes across the orchestration skills (and their byte-identical managed copies, which I checked with `cmp`), it stops recording the task text in `last.json` (length and truncation flag only), and it hardens the project-context feed (overlap latch, ordering counters, `cardSafe` on tab bodies). The feed ordering and the privacy change are sound in the main path. Two defects remain: the single-quote fix is incomplete across the instruction class, and the new ordering guard is bypassed if a subscriber throws.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 1  |  info: 2
+
+### r02 findings re-checked (not re-filed)
+- review-security-code-w4:F-002 (shell-quote hazard in task-text instruction): the delta closes it at flow-orchestrator only; the remaining sites are filed below as F-001 because the class is still open.
+- review-highload-w4:F-001, review-highload-w5:F-002, review-performance-w5:F-002 (no in-flight guard, no ordering in the feed): addressed by `polling`, `started` and `applied`; the ordering test R7 is correct. The residual hole is F-002 below.
+- review-security-code-w5:F-001 (control bytes from reference text reach the terminal): closed for the tab body by `lines.map(cardSafe)`.
+- review-clean-code-w5:F-003 (a throwing subscriber is reported as a failed poll): still applies unchanged, cited by F-002 below.
+- review-logic-w5:F-003 (modal height computed once at open): still applies unchanged, `contentRows` is not recomputed.
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+#### [F-001] Single-quote fix for `--task-text` is stated at 1 of 6 instruction sites; the other 5 give no escape rule
+
+- **Severity**: major
+- **File**: src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+- **Problem**: The r02 security finding was that a double-quoted task description lets the shell run backticks and `$(...)`. The fix switches every site to single quotes, but only flow-orchestrator adds the rule that makes single quotes safe: "Write the text single-quoted (a `'` inside it becomes `'\''`)". task-implementer, job-orchestrator (2 sites), orchestrator-prompt (2 sites) and tests-creator now say only `--task-text '<...>'`. A worker substituting a description that contains an apostrophe, which task descriptions routinely do, produces a broken command. Example: `--task-text 'Don't touch the user's menu' --out x` parses as `Dont` (one argument) then `touch the user` as stray arguments then `s menu`; `optionValue` takes `Dont` and the rest of the text never reaches the resolver, so a keyword in the cut-off part cannot promote its reference. The failure is silent for even-apostrophe text and a hung or failed shell for odd-apostrophe text. In the odd case the unquoted remainder is also exactly the `$(...)` execution path the change was meant to close.
+- **Why it matters**: The feature's purpose is that a keyword in the task text promotes a document to `must_read`. With the text silently cut at the first apostrophe, the promotion is lost for those tasks, and the prior security major is only partly closed.
+- **Fix**: Put the escape sentence at every site, or better, point each site at one place that states it (or pass the text via a file or stdin if the CLI supports it). Minimal wording for each site: "single-quoted; a `'` in the text becomes `'\''`".
+- **Evidence**: `keryx ctx rg "'\\\\''"` over `src/gdskills/bundled/skills` and `.metaproject/skills/gdskills/orchestration` returns only the two flow-orchestrator files. The other sites were listed with `keryx ctx rg "task-text [\"']"` and the `grep -o` of the tests-creator line (`--task-text '<task description>' --out <project-relative path>`).
+- **Quote**: `--task-text '<task.description>'`
+- **Confidence**: medium (the harm depends on the worker not escaping unprompted; the instruction is what the worker is told to follow)
+- **class_scope**:
+  - sites: `src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md` (line 182), `src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md` (lines 749, 1307), `src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md` (lines 132, 188), `src/gdskills/bundled/skills/quality/tests-creator/SKILL.md` (line 93), and the managed copies of each under `.metaproject/skills/gdskills/` (byte-identical, `cmp` confirmed for the four orchestration files); `src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md` (line 323) already states the rule
+  - enumeration_method: `keryx ctx rg --hidden "task-text [\"']"` over README.md, docs, src, .metaproject/skills, .metaproject/core excluding reviews and flows (19 matches, 13 files), then `keryx ctx rg -c "'\\\\''"` to find which carry the escape rule (2 files, both flow-orchestrator). The literal examples in docs and live-run.md are fixed strings and are safe.
+
+### Async & Concurrency
+
+#### [F-002] `applied` is advanced after the subscribers run, so a throwing subscriber lets an older load overwrite a newer status
+
+- **Severity**: minor
+- **File**: src/tui/project-context-inspector.ts
+- **Problem**: In `reload`, `current = next` and the `for (const listener of [...listeners]) listener(next)` loop run before `applied = Math.max(applied, mine)`. If a listener throws (the sidebar repaint or modal paint on a destroyed renderable, as in review-clean-code-w5:F-003), the function exits before `applied` is updated. A slower, older load that finishes next then passes `mine > applied` and replaces `current` with older data. The ordering guard this delta adds is therefore bypassed in exactly the case the subscribers are failing. The throw also skips any listener after the failing one and is reported by `poll` as a failed load.
+- **Why it matters**: Narrow trigger (a throwing subscriber plus overlapping loads), outcome is a stale sidebar or tab until the next poll five seconds later.
+- **Fix**: Advance `applied` before notifying, and isolate listener errors:
+  ```diff
+  -    if (mine > applied && !sameStatus(current, next)) {
+  -      current = next;
+  -      for (const listener of [...listeners]) listener(next);
+  -    }
+  -    applied = Math.max(applied, mine);
+  +    const fresh = mine > applied;
+  +    applied = Math.max(applied, mine);
+  +    if (fresh && !sameStatus(current, next)) {
+  +      current = next;
+  +      for (const listener of [...listeners]) {
+  +        try { listener(next); } catch { /* one broken subscriber must not starve the others */ }
+  +      }
+  +    }
+  ```
+- **Evidence**: Read at head, `reload` lines 172-182; R7 test (project-context-inspector.test.ts line 515) covers ordering only with non-throwing subscribers.
+- **Quote**: `applied = Math.max(applied, mine);`
+- **Confidence**: medium
+
+### Error Handling
+None detected beyond F-002.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+#### [F-003] `cardSafe` on the sidebar value has no reachable input to clean
+
+- **Severity**: info
+- **File**: src/tui/project-context-inspector.ts
+- **Problem**: `renderProjectContextSidebarValue` builds its string from `status.enforcement` (typed `"warn" | "block"`, produced by the config loader), `plural(ruleCount, "rule")`, `referencesSidebarSegment` (digits, `-`, `?`, `!`) and two fixed phrases. None of these carries file text, so the new `cardSafe` call changes nothing. The sibling test "control characters from a reference never reach the terminal" asserts the sidebar is clean, but it would pass without the call. The tab-body `cardSafe` is the one that matters.
+- **Why it matters**: No defect; it reads as protection that is not doing anything. If the sidebar later gains a path or keyword, the call becomes useful, so it is harmless to keep.
+- **Fix**: Keep with a comment, or drop; no action required.
+- **Evidence**: Negative enumeration of the parts pushed at lines 99-105: `status.enforcement` (closed set), rule count (number), refs segment (numbers), "cap exceeded", "config unreadable". Nothing else enters `parts`.
+- **Quote**: `return cardSafe(parts.join(" · "));`
+- **Confidence**: high
+- **class_scope**:
+  - sites: `src/tui/project-context-inspector.ts:105`
+  - enumeration_method: read the whole `renderProjectContextSidebarValue` body and `referencesSidebarSegment` in project-references-view.ts; the candidate set of strings that reach the join is the five listed above and none carries file text.
+
+#### [F-004] The new `polling` latch never clears if a load never settles
+
+- **Severity**: info
+- **File**: src/tui/project-context-inspector.ts
+- **Problem**: `poll` returns early while `polling` is true and clears it only in `finally`. If `options.load` returns a promise that never settles (the load reads project files, so a stalled network or FUSE mount would do it), no later tick ever loads again and the sidebar and open tab stop following the project for the rest of the session. Before the latch, each tick started its own load. No path in this repo is known to hang: `loadProjectContextStatus` is plain file reads. I could not reproduce it, so this is an observation.
+- **Why it matters**: Only on a stalled filesystem; the trade-off against the pile-up the latch removes is reasonable.
+- **Fix**: Optional: reset the latch after a timeout (for example 3 x `pollMs`), or document the assumption on the latch comment.
+- **Evidence**: Read `poll` at lines 184-197. Settling would be shown by a load wrapper with a deadline; none exists.
+- **Quote**: `if (polling) return;`
+- **Confidence**: low
+
+### Suggested Patches
+See the diff in F-002.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Delta slice-03: the task-text privacy change and the feed ordering/overlap guards are correct on their main paths. The single-quote hardening of the --task-text instruction is stated at 1 of 6 sites (the other 5 omit the apostrophe escape, so a description with an apostrophe is silently cut or breaks the command). The ordering counter is bypassed if a subscriber throws. Two info observations.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task.description>'",
+      "problem": "The r02 shell-injection fix moves --task-text to single quotes, but only flow-orchestrator states the rule that makes that safe (a ' in the text becomes '\\''). task-implementer, job-orchestrator (2 sites), orchestrator-prompt (2 sites) and tests-creator give only the quoted placeholder. A description with an apostrophe (\"Don't touch the user's menu\") parses as one truncated argument plus stray arguments, or an unterminated quote.",
+      "impact": "Keywords after the first apostrophe never reach the resolver, so the promotion the feature exists for is silently lost for such tasks; with an odd number of apostrophes the unquoted remainder reopens the $(...) execution path the change was meant to close.",
+      "suggested_fix": "State the single-quote and '\\'' rule at every site, or point all sites at one statement of it, or pass the text through a file or stdin.",
+      "evidence": "keryx ctx rg for \"'\\\\''\" over src/gdskills/bundled/skills and .metaproject/skills/gdskills/orchestration matches only the two flow-orchestrator files; keryx ctx rg --hidden \"task-text [\\\"']\" lists the other quoted sites; cmp confirmed the managed copies are identical to the bundled ones.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1307",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md:93",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (already states the rule)"
+        ],
+        "enumeration_method": "keryx ctx rg --hidden for task-text followed by a quote character over README.md, docs, src, .metaproject/skills, .metaproject/core excluding reviews and flows (19 matches, 13 files); keryx ctx rg -c for the escape sequence '\\'' to find which sites state the rule (2 files, both flow-orchestrator). Literal examples in docs and live-run.md are fixed strings and are safe."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "applied = Math.max(applied, mine);",
+      "problem": "In reload, applied is advanced after the subscriber loop. If a subscriber throws, applied is not advanced, and a slower older load then passes mine > applied and overwrites the newer status. A throwing subscriber also starves the listeners after it and is reported as a failed poll.",
+      "impact": "Stale sidebar or tab until the next 5 s poll, only when a subscriber throws while loads overlap.",
+      "suggested_fix": "Compute freshness and advance applied before notifying, and wrap each listener call in try/catch.",
+      "evidence": "reload lines 172-182 at head; the R7 test (line 515) covers ordering with non-throwing subscribers only. Related earlier finding: review-clean-code-w5:F-003.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "return cardSafe(parts.join(\" · \"));",
+      "problem": "The sidebar value is built only from a closed enforcement value, numbers and fixed phrases; no file text reaches it, so the new cardSafe call cleans nothing.",
+      "impact": "None today; reads as protection that is not doing anything.",
+      "suggested_fix": "Keep with a comment or drop; no action needed.",
+      "evidence": "Negative enumeration of the strings pushed to parts at lines 99-105 and of referencesSidebarSegment in project-references-view.ts.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "blocking_merge": false,
+      "publication": "omit",
+      "class_scope": {
+        "sites": ["src/tui/project-context-inspector.ts:105"],
+        "enumeration_method": "read renderProjectContextSidebarValue and referencesSidebarSegment in full; the candidate strings are enforcement (closed set), rule count, refs counters, 'cap exceeded', 'config unreadable', none carrying file text."
+      }
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "if (polling) return;",
+      "problem": "The polling latch clears only in finally. A load that never settles would stop all later polling for the session. No current path hangs; not reproduced.",
+      "impact": "Only on a stalled filesystem; the sidebar and tab would stop following the project.",
+      "suggested_fix": "Optional: time-box the latch or note the assumption in the comment.",
+      "evidence": "poll lines 184-197 at head; loadProjectContextStatus is plain file reads.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "blocking_merge": false,
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 2 },
+  "slices": [{ "id": "slice-03", "coverage": "supplied slice diff read; added lines of the delta and the files at head read", "status": "DONE" }]
+}
+```
+
+routing audit: graph_used: no (not-relevant, delta of skill text and one self-contained TUI module; callers checked with ctx rg); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg for all searches, keryx ctx hooks for reads); raw_rg_used: no

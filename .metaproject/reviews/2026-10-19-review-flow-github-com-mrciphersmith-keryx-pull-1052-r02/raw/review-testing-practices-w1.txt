@@ -1,0 +1,130 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round 2 delta d2cb377f5..672e37687, test files only. The operator-focus areas are mostly pinned by behavioural tests: the review_complete card (recorded head, mutation waiver and reviewer-override lines, readiness and coverage waivers, unreadable research.json), allowed-id fail-closed (undefined list, missing provider, empty list), one-time token, TTL boundary on both sides, and pressedBy/pressedAt through the real agent loop and into the stores. Five gaps remain where a deletion of production behaviour would not fail any test: the card-settling wiring in tui-shell.ts is pinned only by a source-text grep (T-01), remoteApproval() is untested (T-02), the single-field-missing refusal and burn-on-rejection for the not-allowed id are unpinned (T-03), the thrown-gate-after-close path has no test (T-04), and a model-supplied head is never passed to yes (T-05). No blocker or major. No real-network leak, fixed sleep or shared-data mutation found in the delta. No mutation pass was run (operator-only waiver); tests were read, not executed.",
+  "findings": [
+    {
+      "id": "T-01",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": null,
+      "quote": "expect(mirror.match(/\\} finally \\{/g)).toHaveLength(2);",
+      "problem": "The behaviour 'the card is settled on every exit of mirrorApprovalToTopic and an undelivered mirror is marked' is pinned by a source-text grep over tui-shell.ts (slice from `const mirrorApprovalToTopic =` to `io.requestApproval = trackApproval(`): it asserts the text contains `operatorCards.markUndelivered(cardId)`, exactly two `} finally {` blocks, and one `outcome === undefined) operatorCards.answer(cardId, { place: \"withdrawn\"` fragment. Nothing executes the wrapper. Deleting the `answer(...)` call in the unmirrored-path finally, or the `telegram`/`shell` settle branches, still passes (the finally count stays 2). A throwing dock or a rejecting raceApproval is never driven, so 'withdrawn on every exit' is not shown to hold. The markUndelivered/TTL/idempotency unit tests on OperatorConfirmationLog and the onUndelivered test in src/remote/mirror-undelivered.test.ts cover the parts, not the wiring between them.",
+      "impact": "Operator focus (d). The wiring is the part that regressed before (a card left 'waiting' forever after an abort); a rename or reformat of the source breaks the grep while a real regression of the wiring can pass it. Brittle in both directions.",
+      "suggested_fix": "Extract the wrapper body of mirrorApprovalToTopic into a function in src/tui/approval-mirror.ts (or a small module) that takes the card log, the dock, the topic leg and the turn signal, and returns the outcome. Test it with a stub log and: (1) dock resolves, topic answered first -> entry answered with place telegram; (2) dock resolves first -> place shell; (3) dock throws -> entry withdrawn; (4) raceApproval rejects -> entry withdrawn; (5) topic leg reports undelivered -> markUndelivered called once and the dock result still returned. Drop the source-text assertions.",
+      "evidence": "src/tui/operator-confirmations.test.ts (delta, test pinning mirrorApprovalToTopic by source slice); src/tui/tui-shell.ts:6103-6141 (the two finally blocks) and :6128 (operatorCards.markUndelivered(cardId)); src/tui/approval-mirror.ts:28-71 (raceApproval, onUndelivered at :36 and :52).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:card-settle-source-grep"
+    },
+    {
+      "id": "T-02",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 572,
+      "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+      "problem": "remoteApproval() builds the ApprovalResponse that carries via: \"remote\", pressedBy and pressedAt (the shell's clock) into the agent loop. It is not exported and no test exercises it; its two call sites (tui-shell.ts:6088 and :6151) are covered only by the source grep in T-01 or not at all. Every test that checks 'pressedBy/pressedAt carried into the answer' hand-builds the ApprovalResponse (`confirmationPressedBy`, `confirmationPressedAt` in the test helpers), so dropping pressedBy, passing the wrong id, or taking pressedAt from the wrong clock does not fail any test.",
+      "impact": "Operator focus (c). The tests prove the framework honours the fields once given; nothing proves the shell supplies them. A regression here makes every remote answer fail closed (safe) or, if pressedAt were stamped at card time, would defeat the TTL check silently.",
+      "suggested_fix": "Export remoteApproval (or move it next to the approval-mirror helpers) and unit-test it: with fromId 42 and a fixed shell clock it returns { approved: true, via: \"remote\", pressedBy: 42, pressedAt: <clock ISO> }, with fromId undefined it carries no pressedBy, and the fingerprint is the one passed in.",
+      "evidence": "src/tui/tui-shell.ts:572-574 (definition), :6088 and :6151 (call sites); src/commands/operator-confirm-tools.test.ts agent-loop test builds the remote ApprovalResponse by hand; src/commands/operator-confirm-review-tools.test.ts:55-57 builds the press fields in the `yes` helper.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:remoteApproval-untested"
+    },
+    {
+      "id": "T-03",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": 214,
+      "quote": "if (pressedBy === undefined || pressedAt === undefined) return refuse(\"the remote answer did not say who pressed it\");",
+      "problem": "Two corners of the remote-answer checks have no failing test. (1) The refusal covers pressedBy OR pressedAt missing, but the test omits both together, so changing `||` to `&&` (or dropping the pressedAt half) passes: an answer with an allowed id and no pressedAt would be accepted and `pressedAt as string` would record undefined. (2) 'Token burned on rejection' (pending.delete at :206, before every remote check) is asserted for the TTL, undefined-list and wrong-input refusals, but not for the not-allowed id (777), the no-provider case, or the missing-who refusal; a refactor that deletes the token only after the checks would still pass those three tests. The behaviour is correct today because there is one delete before all checks.",
+      "impact": "Operator focus (b). A card could be replayed after an unauthorised press if the delete moved below the allowed-id check, and a half-filled remote answer could be recorded.",
+      "suggested_fix": "In the AC2 describe of operator-confirm-tools.test.ts add: a remote answer with pressedBy set and pressedAt omitted (and the reverse) -> refused; and, for the not-allowed id, the no-provider case and the missing-who case, a second invoke with the same token and a now-allowed press that must also be refused with 'no operator-confirmed card'.",
+      "evidence": "src/commands/operator-confirm-tools.ts:206 (`pending.delete(token as string);`), :214-220 (the three remote refusals); src/commands/operator-confirm-tools.test.ts AC2 describe: replay asserted only for the undefined-list, wrong-input and TTL cases.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:remote-checks-corners"
+    },
+    {
+      "id": "T-04",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 787,
+      "quote": "if (gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${reason(gateError)}`);",
+      "problem": "The branch where completeReviewGated throws after the manifest already closed (the `closed` re-check at :764, then the 'bookkeeping stopped' line and isError) has no test; the string appears in no test file. The neighbouring record-write failure is tested (unwritable completion-confirmation.json), the throw-after-close path is not. Removing the `closed` re-check, so that any throw reports 'nothing was recorded' for a round that is in fact closed, passes the whole suite.",
+      "impact": "Operator focus (a). This is the C-05/C-10 family fix (672e37687) for 'closed but reported as not closed'; half of it is pinned, the half that reports a closed round after an engine throw is not.",
+      "suggested_fix": "Add a review_complete test with a seam (or a prLookup/prFiles stub placed after the manifest write) that makes completeReviewGated throw once the manifest is closed; assert status() is closed, result.isError is true, the output contains 'the round is closed but its bookkeeping stopped', does not contain 'nothing was recorded', and completion-confirmation.json is written.",
+      "evidence": "src/commands/operator-confirm-review.ts:752-767 (done/gateError and the closed re-check), :786-787 (problems); src/commands/operator-confirm-review-tools.test.ts:706-714 covers only the recordError branch.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:review-complete-throw-after-close"
+    },
+    {
+      "id": "T-05",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "const card = asked(await ask(t, { package: pkg, head: \"deadbeefdead\" }));",
+      "problem": "The 'model cannot supply a head' test checks the schema text and the card drawn by `ask` with a supplied head, but never calls `yes` or `invoke` with one. A regression that reads `input.head` only in apply, or that lets a supplied head reach completeReviewGated, passes. The recorded-head claim is therefore pinned for the card and for the digest (the manifest head is hashed) but not for the gate call that follows the yes.",
+      "impact": "Operator focus (a), 'recorded head only'. Low residual risk because apply uses prepared.head today and the schema has no head property.",
+      "suggested_fix": "Extend the test: after the ask, run `yes(t, { package: pkg, head: \"deadbeefdead\" })` with a prLookup stub returning headSha HEAD, assert the round closes and completion-confirmation.json holds head HEAD (not deadbeefdead); optionally assert the prLookup seam received the recorded head.",
+      "evidence": "src/commands/operator-confirm-review-tools.test.ts (test 'the model cannot supply a head: the schema has none, and the gate runs against the recorded head', lines ~692-698); src/commands/operator-confirm-review.ts:741-760 (apply uses prepared.head and prepared.dir).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:head-supplied-not-invoked"
+    },
+    {
+      "id": "T-06",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "sneaked in",
+      "problem": "Two assertions are weaker than their titles. The test that a reviewer-facing operator decision (mutation-waiver) added between the card and the yes 'records nothing' asserts isError and the absence of completion-confirmation.json but not the 'changed after the card was shown' text, so it would also pass if the refusal came from an unrelated failure; the sibling test for a readiness waiver (line 688) does assert the text. The unreadable research.json case uses a SyntaxError (`{ not json`); the missing-file case is not asserted.",
+      "impact": "Small: a different failure could satisfy the first test. Not a coverage claim.",
+      "suggested_fix": "Add `expect(result.output).toContain(\"changed after the card was shown\")` to the decision-added test, and add one case with research.json deleted.",
+      "evidence": "src/commands/operator-confirm-review-tools.test.ts:640-647 (no text assertion) versus :679-690 (asserts it).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:weak-assertions-complete",
+      "publication": "finding"
+    }
+  ],
+  "pre_existing": [
+    {
+      "id": "T-P01",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "problem": "A test title hard-codes a tool count (the delta moves it 18 to 19). Not a coverage gate, but a title that must be edited on every new gate; the assertion could derive the count from operatorConfirmToolNames().",
+      "location_class": "pre-existing"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 1 }
+}
+```
+
+## Summary by operator focus
+
+(a) review_complete card. Pinned: head shown is the manifest-recorded head; no `head` property in the schema; mutation waiver and reviewer override listed with item, quote and confirmedVia; readiness and coverage waivers listed; an unreadable research.json is shown instead of 'waivers: none'; a waiver added between card and yes is refused (digest); same-gates describe (merged PR, moved head, held finding, no run-profile, slice too narrow); closed round with unwritable record reported as closed. Gaps: a supplied head is never sent through yes (T-05); the throw-after-close branch has no test (T-04); the decision-added test lacks the text assertion (T-06).
+
+(b) Allowed-id, token, TTL. Pinned: allowed accepted; undefined list, missing provider and empty list refused (empty list also through the real agent loop); replay refused; TTL exactly 1 h accepted and 1 h + 1 ms refused and spent; wrong-input token spent. Gaps: missing pressedBy only or pressedAt only (T-03); burn-on-rejection not asserted for not-allowed id, no provider, missing-who (T-03).
+
+(c) pressedBy/pressedAt carried. Pinned: through the real agent loop into the tool context; into plan, premise, uphold and complete stores; into the confirm-token signature; a shell yes records neither. Gap: remoteApproval() in tui-shell.ts, the producer, is untested (T-02).
+
+(d) Card settled on every exit, undelivered mirror marked. Pinned behaviourally: OperatorConfirmationLog markUndelivered (marks, stops waiting, notifies once, idempotent, no-op after answer), the TTL boundary in waiting(), the 'token expired' wording, and raceApproval onUndelivered (src/remote/mirror-undelivered.test.ts). Gap: the wiring in tui-shell.ts that settles in finally on both paths is pinned only by a source-text grep (T-01).
+
+Determinism: no fixed sleeps, no real-network paths, no shared-data mutation in the delta; tests use temp roots, fixed clocks (NOW, PRESSED_AT) and seams for the PR lookup.
+
+## Not run
+- Mutation pass: not run this round (operator-only waiver). No mutation table is given; the 'removing the behaviour' statements above come from reading the tests against the code, not from executed mutants.
+- Tests were not executed (read-only review); the full suite and CI results are not part of this report.
+- The repository index read (hard gate) was not repeated by this reviewer for the bounded task; navigation went through the slice, the named files and `keryx ctx rg`.
+
+Routing audit: graph_used: no (not-relevant, the delta was read from the slice and the named files); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

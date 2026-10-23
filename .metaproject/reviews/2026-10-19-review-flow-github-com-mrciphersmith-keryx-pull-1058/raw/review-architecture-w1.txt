@@ -1,0 +1,118 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Architecture Review
+
+Slice 01 holds the review-finding schema change (both copies), the flow 467 folder, the review-orchestrator / job-orchestrator / review-premise skill edits, SKILL.detail.md and the README. The `src/**` code is not in this slice; it was read only where needed to check contract consistency. Verdict: the host-question record is modelled consistently (one `HostQuestion` shape, a shared source enum, a schema/TS pair), but the skill rewrite left terminal-only instructions for the same acts in place, which AC9 forbids.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice 01 (schema, flow folder, skills, README) is structurally sound for the host-question record, but the skill rewrite is incomplete: review-orchestrator SKILL.md:124 and flow-orchestrator SKILL.md:440 (and their bundled copies) still send the operator to a terminal for override-reviewers and decide-premise, contradicting the new path and AC9. The schema does not enforce the confirmedVia/hostQuestion pairing that the TS validator enforces.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 124,
+      "quote": "`review_override_reviewers`, or `keryx review override-reviewers` in their terminal",
+      "problem": "The rewrite replaced the terminal-only wording for the four acts at the sites it touched, but left it at others. review-orchestrator SKILL.md:124 still reads \"Only the operator can accept a smaller set than that (`review_override_reviewers`, or `keryx review override-reviewers` in their terminal)\". flow-orchestrator SKILL.md:440 still reads \"elsewhere the question tool, then the exact `keryx review decide-premise` command for them to run in their terminal\". The new canonical text in the same skill (Hosts > Operator decisions, diff line 1006) says that for these acts an agent never sends the operator to a terminal and records the host-question answer with --answered-by instead. The same skill now gives two opposite instructions for override-reviewers.",
+      "impact": "An agent that reads the dispatch section, or the flow loop's held-finding step, follows the terminal-only instruction and either stalls waiting for an operator terminal that does not exist (Claude Code, Codex) or never reaches the host-question verb. AC9 says the skills 'no longer send the operator to a terminal for these four acts'; review-orchestrator itself still does for override-reviewers, so AC9 is not met as written. flow-orchestrator is the skill that runs the fix loop where held findings are met (SKILL.md:440), so decide-premise from a flow is the main path the PR 1052 case (AC11) needs.",
+      "suggested_fix": "In both copies of review-orchestrator/SKILL.md line 124 write: `review_override_reviewers`, or their answer to the host question recorded with `keryx review override-reviewers --package <package> --reason \"<why>\" --answered-by … --answer-text … --question-text …`. In both copies of flow-orchestrator/SKILL.md line 440 replace 'then the exact `keryx review decide-premise` command for them to run in their terminal' with 'then record their answer with `keryx review decide-premise … --answered-by …` (a host question)'. Add a test in src/gdskills that fails when any of the four verb names appears in a skill within 200 characters of 'terminal' without 'answered-by'.",
+      "evidence": "git grep at head: `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:124` and `src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:124` contain 'override-reviewers` in their terminal'; `.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:440` and `src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md` contain 'command for them to run in their terminal'. `git diff --stat base..head` lists no change to flow-orchestrator and shows review-orchestrator/SKILL.md changed 16 lines, none at 124.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "host-question:stale-terminal-only-skill-wording",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:124",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:124",
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:440",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md (same sentence)"
+        ],
+        "enumeration_method": "git grep -n -E 'in (their|a) terminal|exact terminal command' over .metaproject/skills/gdskills and src/gdskills/bundled, then kept the hits that name one of the four verbs (confirm-plan, waive-mutation, override-reviewers, decide-premise); the other hits (complete --waive, chunks estimate, publish, comments reply, readiness waivers) are acts the PRD leaves on the card/terminal path and are correct"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"confirmedVia\": { \"type\": \"string\", \"enum\": [\"tui-card\", \"remote-card\", \"terminal\", \"host-question\"] },",
+      "problem": "The schema declares `hostQuestion` as optional and describes it as \"Set with confirmedVia host-question only\", but states no pairing rule. The TS reader does: `viaConsistent` in src/review/operator-decisions.ts rejects a record whose confirmedVia is host-question without a complete hostQuestion. A schema-valid finding.operator with confirmedVia: \"host-question\" and no hostQuestion, or hostQuestion on a tui-card record, is accepted by the contract and rejected (or ignored) by the code.",
+      "impact": "Two contracts for one record that disagree on a case a writer can reach. Anything that validates findings against the schema (the ingest path, external tooling reading the published contract) will accept a host-question record with no question or answer text, which is the whole evidence the design keeps in place of keryx verification.",
+      "suggested_fix": "Add an allOf/if-then to the `operator` object in both schema copies: if confirmedVia const host-question then required [\"hostQuestion\"]; if confirmedVia is not host-question then hostQuestion is not allowed (`not: {required: [\"hostQuestion\"]}`). Alternatively say in the description that the TS validator is the enforcing contract.",
+      "evidence": "Schema diff lines 23-37 add the enum member and the optional object with `required` only inside hostQuestion. src/review/operator-decisions.ts (head) `function viaConsistent(d) { return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true; }`.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "host-question:schema-vs-ts-pairing"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Ask the operator with the host's own question tool (`AskUserQuestion`, Codex's question tool, a Telegram poll through Helyx, `ask_user`)",
+      "problem": "The same paragraph says a card is first choice 'wherever one exists' and 'In keryx shell call the card and never send the operator to a terminal', then lists `ask_user` (a keryx shell tool) as a host-question tool, and the Hosts table still names the card tool as the keryx shell's operator-decision path. The source enum includes `keryx-shell`. Whether a keryx shell session may record a host question instead of a card for these four acts is not stated.",
+      "impact": "An agent in keryx shell can reasonably pick either path; the weaker one (no press verification) is then used where the stronger one exists. What would settle it: one sentence stating that in keryx shell the card is required and `keryx-shell` as a source is for the case the card tool is unavailable (or remove `ask_user`/`keryx-shell` from the host-question list).",
+      "suggested_fix": "State the rule for keryx shell explicitly in Hosts > Operator decisions, in both copies.",
+      "evidence": "Diff lines 1005-1006 (Hosts table row `| Operator decision | the card tool | AskUserQuestion, then the verb ...`; bullet text 'A card is a keryx-verified press and the stronger path: first choice wherever one exists' next to the `ask_user` listing).",
+      "confidence": "low",
+      "reviewer": "review-architecture",
+      "dedupe_key": "host-question:keryx-shell-path-ambiguous",
+      "publication": "question"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "You never run `--mode automatic` or `--yes`, and never write an operator quote yourself; unattended, the item is Not run.",
+      "problem": "The unchanged closing sentence of the Operator decisions bullet says the agent never writes an operator quote, in the same bullet that now has the agent pass `--answer-text \"<their words, verbatim>\"`. The earlier sentence ('Record only an answer the operator gave ... words you wrote is not a decision') narrows it, but the two sentences sit about 100 words apart and read as opposites.",
+      "impact": "Wording only; a reader could take the last sentence as forbidding the verb that was just introduced. What would settle it: say 'never write an operator quote yourself (`--quote`); `--answer-text` carries their words verbatim'.",
+      "suggested_fix": "Qualify the sentence with the flag it governs.",
+      "evidence": "Diff line 1006, last sentence of the bullet.",
+      "confidence": "low",
+      "reviewer": "review-architecture",
+      "dedupe_key": "host-question:never-write-quote-wording",
+      "publication": "omit"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "`keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason \"<why>\" --answered-by <source>:<ref> --answer-text \"<their words>\" --question-text \"<the question>\"`",
+      "problem": "The full flag grammar and the five-value source list are restated in at least seven places: review-orchestrator SKILL.md (Hosts, Wave D), SKILL.detail.md (readiness item 11, Preflight 4, mutation pass), README, the schema (two copies) and src/review/types.ts HOST_QUESTION_SOURCES. The skills name 'Hosts, Operator decisions' as canonical in some places but spell the flags out in others. F-001 is the first instance of the drift this invites.",
+      "impact": "Maintenance cost: the next change to the flag set or to the source enum has to find every copy. No defect today. What would settle it: a test that compares the skill's `<claude-code|codex|keryx-shell|helyx-poll|other>` list and the schema enum to HOST_QUESTION_SOURCES.",
+      "suggested_fix": "Add one guard test over the enum copies; in the secondary sites point at 'Hosts, Operator decisions' for the grammar instead of repeating it.",
+      "evidence": "Diff lines 848, 953, 1006, 1016, 1134, README line 1289 and schema lines 31-34.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "host-question:flag-grammar-duplicated",
+      "publication": "omit"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "line": null,
+      "quote": "-Skipped generated/static directories: 18",
+      "problem": "The tracked graph artifacts were rebuilt in this worktree and committed. The diff changes 'Skipped generated/static directories' from 18 to 15 and drops `.git`, `dist` and `node_modules` from the skipped list, so the numbers reflect this worktree's layout (no node_modules or dist) rather than the repository's. provenance.json now names this branch's head.",
+      "impact": "Generated, environment-dependent churn in a tracked file; the next build in a normal checkout flips it back. Not a code defect. What would settle it: whether the project intends tracked graph artifacts to be committed from worktrees.",
+      "suggested_fix": "Drop the three gdgraph artifact changes from the PR, or rebuild in a full checkout.",
+      "evidence": "Diff lines 488-570 (summary.md) and 59-68 (.provenance.json).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "pr:gdgraph-artifacts-worktree-churn",
+      "location_class": "pr-process",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 4 }
+}
+```
+
+Inputs not read: none of the slice was unread. The src/** code is outside this slice and was read only for contract consistency (src/review/types.ts, src/review/operator-decisions.ts, src/decisions/types.ts diffs). Layers (graph, tests, wiki, memory) were not consulted: no payload `layers` block was supplied and the task forbade commands.

@@ -1,0 +1,91 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-highload",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-01"],
+  "scope": {
+    "branch": "feat/conditional-reads",
+    "base_sha": "1658f77d374b2d20189a55eaf44b95d64768d6b6",
+    "head": "d6267d4a5099f39b74e86a71e5c8f61ca47aa63d",
+    "load_profile": "not provided (CLI / skill-instruction tooling; severity assumes single-process use per task)"
+  },
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+      "problem": "The operator runbook states the summary threshold as two shared words in two places (the preamble and the failure criteria: 'порог в два слова слишком строг'). The validator at head requires three: SUMMARY_MIN_SHARED_WORDS = 3 in src/gdskills/reference-proof.ts, AC10, docs/docs/guides/apply-project-rules.md, and the same runbook's own step 4 expected output ('3 required').",
+      "impact": "The operator runs the AC20 live run against this document. A worker summary sharing exactly two words is rejected with '3 required', which the runbook's criterion 5 and failure notes would read as a finding about the threshold being too strict at two. The recorded journal entry for AC20 would then reason about a threshold that does not exist, and the runbook contradicts itself between step 4 and the preamble.",
+      "suggested_fix": "Replace 'два различных слова' with 'три различных слова' in the preamble and 'порог в два слова' with 'порог в три слова' in section 5. Better, state the number once and refer to it, so the runbook cannot drift from SUMMARY_MIN_SHARED_WORDS again.",
+      "evidence": "slice-01.diff lines 1396-1400 and 1618-1620 (two words); line 1582 (same file, step 4: '3 required'); src/gdskills/reference-proof.ts:15 `export const SUMMARY_MIN_SHARED_WORDS = 3;`; acceptance-criteria.md AC10 'at least three distinct words'.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+      "problem": "The PRD names the live-run criterion AC18. In the frozen-to-be criteria file the live run is AC20; AC18 is the end-to-end fixture test (conditional-reads.e2e.test.ts). live-run.md itself titles the run 'AC20'.",
+      "impact": "A reader following the PRD to confirm the live run would look at AC18 (an exec criterion confirmed by a test) and either confirm the wrong criterion or find the runbook unreferenced. Maintenance cost only; the criteria file is the single source and is correct.",
+      "suggested_fix": "Change '(AC18)' to '(AC20)' in section 7 of README.md. Also correct the sibling cross-references in the same PRD, such as '(AC13)' in the risks table, after checking each against acceptance-criteria.md.",
+      "evidence": "slice-01.diff line 1320 (README section 7) against line 205 (AC20 is the live run) and line 203 (AC18 is the e2e test); live-run.md line 1359 heading 'AC20'.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    }
+  ]
+}
+```
+
+## High-Load Review
+
+### Review Scope
+- Branch: `feat/conditional-reads`
+- Parent ref: `main`
+- Merge-base: `1658f77d374b2d20189a55eaf44b95d64768d6b6`
+- Scope mode: supplied slice (slice-01.diff, 1827 lines read in full), head `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Load profile: not provided
+- Changed files reviewed: 23 (output-contract schemas x4, flow 462 files x2, five skill SKILL.md/prompt files, README.md, CLI reference, commands-by-task, apply-project-rules guide, PRD README, TUI-states.md, live-run.md, references.schema.json, resolve-context result schema, package.json)
+
+### Summary
+Slice 01 holds no runtime code: it is skill instruction text, JSON schemas, docs and one package script. There is no shared mutable state, pool, queue, cache, retry or distributed-lock path in it, so the high-load checklist finds nothing to flag. The only defects are two documentation inconsistencies in the operator runbook and PRD (a wrong threshold and a wrong criterion number). I read `src/gdskills/resolved-context-check.ts` and `src/gdskills/reference-proof.ts` at head only to check the docs' claims against the code.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Findings
+
+#### Concurrency & Race Conditions
+None detected. Not covered (outside this slice): the writer of `.metaproject/data/skills/project-context/last.json`. job-orchestrator dispatches one resolve-context per task in a parallel wave, each with its own `--out`, but all share that one `last.json`. Whether the write is atomic, and whether the TUI refs counters tolerate last-writer-wins, belongs to the slice holding the resolver and TUI source.
+
+#### Resource Management
+None detected. The documented limits (task text cut at 4000 characters, declared file over 262144 bytes left out, promoted section never dropped by the cap) bound the per-run read; the validator re-reads each promoted document once per check. I did not verify the constants in source, since the resolver is not in this slice.
+
+#### Caching
+None detected. Nothing in the slice caches.
+
+#### Database Under Load
+None detected. Not applicable.
+
+#### Async / Queues
+None detected. Not applicable.
+
+#### Retry / Timeout / Circuit Breaker
+None detected. The fix-dispatch loop text keeps its 3-iteration cap and only gains `--task-text`.
+
+#### Idempotency & Distributed Invariants
+None detected. `suggest` writes nothing and `check` is read-only, as documented. The four `project_context_applied` schema copies (two under core/contracts, two under the skills folders) carry identical hunks, keep the `how` enum and `additionalProperties: false`.
+
+#### Documentation consistency (outside the high-load checklist, found while verifying claims)
+- [F-001] live-run.md states a two-word summary threshold; the code and the other docs say three (minor).
+- [F-002] PRD README section 7 calls the live run AC18; it is AC20 (minor).
+
+### Clean Areas
+- Parts A to G reviewed against the slice: no findings (no runtime code in scope).
+- Not covered: resolver, references loader, TUI source, `skills-references` command and tests, which are in other slices. This DONE_WITH_CONCERNS covers slice-01 only.
+- Settled items not re-raised: summary check is a vocabulary proxy; `suggest` output not pasteable as is; references-check.ts separate citation scan; ci-triage-source.test.ts environment failures; mkdocs not run locally; duplicate path rejection, shared citation normalisation, truncation warning, BOM handling.

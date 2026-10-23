@@ -1,0 +1,33 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No performance finding on slice-03 or slice-04 at head 77d2eff20. The new code is a per-card lifecycle (raceMirroredCard, askUnmirroredCard, OperatorConfirmationLog.markUndelivered) that runs once per operator card, over a log bounded by ANSWERED_CARDS_KEPT; the completion-gate wording change builds one string per gate decision. The onTopicEnded hook in raceApproval is guarded by `settled` and `topicAbort.signal.aborted`, so it fires at most once and never after the dock answered; the topic leg is aborted in the finally block, so no timer or listener outlives the card. slice-04 is skill-text, docs and an import removal with no executable hot-path change; the tui-shell.ts hunk in slice-04 is cut off in the slice file after the removed `const outcome = await raceApproval({` line, so I read the replacement at src/tui/tui-shell.ts:6108-6126 directly at head.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": [
+    {
+      "id": "slice-03",
+      "coverage": "Read in full: completion-gate.ts closeStep/nextStep/describeBlockers/decideReviewGate, approval-mirror.ts onTopicEnded, operator-confirmations.ts markUndelivered/remoteApproval/askUnmirroredCard/raceMirroredCard, tui-shell.ts import hunks, card-lifecycle.test.ts, operator-confirmations.test.ts. Checked at head: approval-mirror.ts:52-55 (`if (settled) return;` then onUndelivered or onTopicEnded, once per leg), tui-shell.ts:6099 and 6109-6117 (one log entry per card, settled in raceMirroredCard's finally).",
+      "status": "DONE"
+    },
+    {
+      "id": "slice-04",
+      "coverage": "Read in full: review-orchestrator SKILL.md (both copies), cli-reference.md, review.ts import removal, tui-shell.ts import removal. The tui-shell.ts replacement hunk is truncated in the slice; read src/tui/tui-shell.ts:6090-6127 at head instead.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "findings_total": 0,
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

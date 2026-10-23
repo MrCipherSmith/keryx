@@ -1,0 +1,802 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (Two different 'hidden in card' predicates enforce one rule. shownBody (:62-66) accepts a line when c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:62.",
+      "reason": "Merged into S-701: Two different 'hidden in card' predicates enforce one rule. shownBody (:62-66) accepts a line when cardSafe(line) === li...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The r07 commit establishes 'the card shows what is stored' with three policies: refuse (reason :377,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F-002.",
+      "reason": "Kept as F-002.",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (The review_publish tool description still promises a preview ('the start of the body') but the card ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F-003.",
+      "reason": "Kept as F-003.",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (After the cap removal listFiles only indents (files.map((file) => `  ${file}`)) and has one call sit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-002: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:93.",
+      "reason": "Merged into F-002: After the cap removal listFiles only indents (files.map((file) => ` ${file}`)) and has one call site (:282), which also...",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-clean-code-w1:CC-701",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC-701 (shownBody (lines 62-67) refuses a line only when cardSafe(line) !== line. cardSafe (src/lib/card-saf) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:64.",
+      "reason": "Merged into S-701: shownBody (lines 62-67) refuses a line only when cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:10-16) removes ...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-clean-code-w1:CC-702",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC-702 (One character gets three outcomes on three sites of one rule. shownBody (63) turns a tab into a spac) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as CC-702.",
+      "reason": "Kept as CC-702.",
+      "finding": "CC-702"
+    },
+    {
+      "id": "review-clean-code-w1:CC-703",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC-703 (completionDispositions grew to 28 lines with 9 early returns (lines 691-718): shape check, count cap) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as CC-703.",
+      "reason": "Kept as CC-703.",
+      "finding": "CC-703"
+    },
+    {
+      "id": "review-clean-code-w1:CC-704",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC-704 (Prior F5-04 (claimed_disposition fixed, 'commit 5444f96e4') asked the card to require evidence for e) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "F5-04 is a prior finding (prior_findings.json, status open) carried open by the ledger; the delta changed only the schema text and review-logic-w1 prior_dispositions reports it open. completionDispositions still accepts missing or blank evidence for every state.",
+      "reason": "Already filed as F5-04 and still open; not re-reported as a new finding."
+    },
+    {
+      "id": "review-clean-code-w1:CC-705",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC-705 (Naming and one redundant call around the new helpers. hiddenInCard (672) is a boolean without an is/) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as CC-705.",
+      "reason": "Kept as CC-705.",
+      "finding": "CC-705"
+    },
+    {
+      "id": "review-clean-code-w1:CC-706",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC-706 (Missing space after the comma before the \"yes:\" line in the reply card line array.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into CC-705: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:516.",
+      "reason": "Merged into CC-705: Missing space after the comma before the \"yes:\" line in the reply card line array....",
+      "finding": "CC-705"
+    },
+    {
+      "id": "review-clean-code-w2:CC-8-1",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-8-1 (Clean Code, DRY E1 / consistent vocabulary: the rule 'the card must show this text exactly as stored) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:672.",
+      "reason": "Merged into S-701: Clean Code, DRY E1 / consistent vocabulary: the rule 'the card must show this text exactly as stored' is now implemented...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-clean-code-w2:CC-8-2",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-8-2 (Clean Code, functions B3 / SRP at module level: HIDDEN_IN_CARD and hiddenInCard are shared helpers () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:669.",
+      "reason": "Merged into S-701: Clean Code, functions B3 / SRP at module level: HIDDEN_IN_CARD and hiddenInCard are shared helpers (reasonOf at line 373...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-clean-code-w2:CC-8-3",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-8-3 (Clean Code, functions B1/B3 and magic strings E2: completionDispositions (lines 691-718, 28 lines) w) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into CC-703: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:708.",
+      "reason": "Merged into CC-703: Clean Code, functions B1/B3 and magic strings E2: completionDispositions (lines 691-718, 28 lines) walks the array, coer...",
+      "finding": "CC-703"
+    },
+    {
+      "id": "review-highload-w1:HL-701",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-701 (shownBody (lines 62-67) only tests cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:7-17) str) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:62.",
+      "reason": "Merged into S-701: shownBody (lines 62-67) only tests cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:7-17) strips ANSI, C0/C1 and ...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-highload-w1:HL-702",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-702 (apply runs commentsReplyPass(prepared.argv, true) at line 527, compares JSON.stringify(requests) wit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as HL-702.",
+      "reason": "Kept as HL-702.",
+      "finding": "HL-702"
+    },
+    {
+      "id": "review-highload-w1:HL-703",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-703 (The review body is shown whole (lines 219-220), so any realistic review body exceeds MAX_APPROVAL_PR) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-R07-001: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:219.",
+      "reason": "Merged into F-R07-001: The review body is shown whole (lines 219-220), so any realistic review body exceeds MAX_APPROVAL_PROMPT_CHARS and opera...",
+      "finding": "F-R07-001"
+    },
+    {
+      "id": "review-logic-w1:L7-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L7-001 (Post and reply bodies are checked with a weaker hidden-text rule than dispositions. shownBody (:62-6) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:64.",
+      "reason": "Merged into S-701: Post and reply bodies are checked with a weaker hidden-text rule than dispositions. shownBody (:62-66) refuses a line on...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-logic-w1:L7-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L7-002 (F5-04 is not fixed. The diff only appends the length and plain-text sentence to the evidence descrip) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "F5-04 is a prior finding (prior_findings.json, status open) carried open by the ledger; the delta changed only the schema text and review-logic-w1 prior_dispositions reports it open. completionDispositions still accepts missing or blank evidence for every state.",
+      "reason": "Already filed as F5-04 and still open; not re-reported as a new finding."
+    },
+    {
+      "id": "review-logic-w1:L7-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L7-003 (The reply card path (shownBody per reply, the 'Reply N holds ...' refusal, the 'reply N:' headers) h) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into T-702: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:681.",
+      "reason": "Merged into T-702: The reply card path (shownBody per reply, the 'Reply N holds ...' refusal, the 'reply N:' headers) has no test....",
+      "finding": "T-702"
+    },
+    {
+      "id": "review-logic-w1:L7-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L7-004 (The Telegram copy of a card is redacted, so a whole-body card still differs from what is stored and ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as L7-004.",
+      "reason": "Kept as L7-004.",
+      "finding": "L7-004"
+    },
+    {
+      "id": "review-logic-w1:L7-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L7-005 (The review_publish tool description is model-facing and still says the operator sees 'the start of t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-003: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:178.",
+      "reason": "Merged into F-003: The review_publish tool description is model-facing and still says the operator sees 'the start of the body'; the card n...",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-logic-w1:L7-006",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L7-006 (Design question, not a defect: consequences of 'shown whole' on the remote path. MAX_APPROVAL_PROMPT) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-R07-001: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:219.",
+      "reason": "Merged into F-R07-001: Design question, not a defect: consequences of 'shown whole' on the remote path. MAX_APPROVAL_PROMPT_CHARS is 3000 (src/...",
+      "finding": "F-R07-001"
+    },
+    {
+      "id": "review-logic-w2:L8-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding L8-001 (The 'Done when' rule makes a managed round done only when the `review_complete` card has been answer) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as L8-001.",
+      "reason": "Kept as L8-001.",
+      "finding": "L8-001"
+    },
+    {
+      "id": "review-logic-w5:L11-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding L11-001 (RemoteClient.askApproval flags the answer `undelivered: true` for every failure after `this.post(\"ap) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as L11-001.",
+      "reason": "Kept as L11-001.",
+      "finding": "L11-001"
+    },
+    {
+      "id": "review-logic-w7:L13-001",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is review-logic finding L13-001 (shownBody, which decides whether a review_publish body or a review_comments_reply body is 'shown who) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:64.",
+      "reason": "Merged into S-701: shownBody, which decides whether a review_publish body or a review_comments_reply body is 'shown whole', refuses only te...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-logic-w7:L13-002",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is review-logic finding L13-002 (The list items the operator decision binds to are shown through cardSafe but stored raw. For review_) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-002: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:415.",
+      "reason": "Merged into F-002: The list items the operator decision binds to are shown through cardSafe but stored raw. For review_waive_mutation, subj...",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-logic-w7:L13-003",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is review-logic finding L13-003 (The reply card shows 'reply N:' and the body of each request but not the request's method and path, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-703: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:512.",
+      "reason": "Merged into F-703: The reply card shows 'reply N:' and the body of each request but not the request's method and path, which is what says w...",
+      "finding": "F-703"
+    },
+    {
+      "id": "review-performance-w1:P-701",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding P-701 (Operator cards are now unbounded in line count, and the dock adds one TextRenderable per card line t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as P-701.",
+      "reason": "Kept as P-701.",
+      "finding": "P-701"
+    },
+    {
+      "id": "review-performance-w1:P-702",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding P-702 (hiddenInCard runs cardSafe over model-supplied text that reasonOf (:373-377) does not length-cap, wh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as P-702.",
+      "reason": "Kept as P-702.",
+      "finding": "P-702"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-701",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-701 (The review_publish tool description (model-facing) still says the operator sees \"the start of the bo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-003: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:178.",
+      "reason": "Merged into F-003: The review_publish tool description (model-facing) still says the operator sees \"the start of the body\". The delta (slic...",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-702",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-702 (PR body claim: \"Docs: TM-04 section, review guides, cli-reference, review skills.\" The delta adds mo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as PC-702.",
+      "reason": "Kept as PC-702.",
+      "finding": "PC-702"
+    },
+    {
+      "id": "review-regression-w1:F-R07-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-R07-001 (Showing every card whole pushes review_publish, review_comments_reply, review_complete and other car) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F-R07-001.",
+      "reason": "Kept as F-R07-001.",
+      "finding": "F-R07-001"
+    },
+    {
+      "id": "review-regression-w1:F-R07-002",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-R07-002 (shownBody refuses a line only when cardSafe(line) !== line, while dispositions, reasons and waiver q) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:62.",
+      "reason": "Merged into S-701: shownBody refuses a line only when cardSafe(line) !== line, while dispositions, reasons and waiver quotes also refuse Cf...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-regression-w2:F-R07-003",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding F-R07-003 (completionDispositions (operator-confirm-review.ts:691) now refuses any dispositions list longer tha) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F-R07-003.",
+      "reason": "Kept as F-R07-003.",
+      "finding": "F-R07-003"
+    },
+    {
+      "id": "review-security-code-w1:F-701",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-701 (shownBody (:62-67) refuses a line only when cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as S-701.",
+      "reason": "Kept as S-701.",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-security-code-w1:F-702",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-702 (dispositionsSchema (:683) still describes evidence as 'Optional'; completionDispositions (:706-716) ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "F5-04 is a prior finding (prior_findings.json, status open) carried open by the ledger; the delta changed only the schema text and review-logic-w1 prior_dispositions reports it open. completionDispositions still accepts missing or blank evidence for every state.",
+      "reason": "Already filed as F5-04 and still open; not re-reported as a new finding."
+    },
+    {
+      "id": "review-security-code-w1:F-703",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-703 (Each planned request is { method: 'POST', path: reply.endpoint, body: { body } } (src/review/pr-comm) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F-703.",
+      "reason": "Kept as F-703.",
+      "finding": "F-703"
+    },
+    {
+      "id": "review-security-code-w1:F-704",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-704 (The schedule card renders `prompt: ${request.prompt}` and maps every line through cardSafe (:375, :4) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-002: the same defect or the same fix site, reported at src/trigger/schedules.ts:375.",
+      "reason": "Merged into F-002: The schedule card renders `prompt: ${request.prompt}` and maps every line through cardSafe (:375, :402); only trim and n...",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-security-code-w1:F-705",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-705 (Only text the model passes as a tool argument is now refused when the card would change it. Text rea) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-002: the same defect or the same fix site, reported at src/commands/operator-confirm-other.ts:292.",
+      "reason": "Merged into F-002: Only text the model passes as a tool argument is now refused when the card would change it. Text read from the package o...",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-security-code-w1:F-706",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-706 (\\p{Cf}, \\p{Zl} and \\p{Zp} do not include U+3164 HANGUL FILLER, U+115F, U+1160, U+FFA0, U+2800, U+034) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F-706.",
+      "reason": "Kept as F-706.",
+      "finding": "F-706"
+    },
+    {
+      "id": "review-security-code-w4:S-1001",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding S-1001 (parseStoredToken validates the token's hash, flow, target, checksum and timestamps but not the new p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as S-1001.",
+      "reason": "Kept as S-1001.",
+      "finding": "S-1001"
+    },
+    {
+      "id": "review-security-code-w6:S-12-01",
+      "source": "raw/review-security-code-w6.txt",
+      "question": "Is review-security-code finding S-12-01 (The package label is the raw relative directory path and is interpolated unsanitized into card title) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as S-12-01.",
+      "reason": "Kept as S-12-01.",
+      "finding": "S-12-01"
+    },
+    {
+      "id": "review-security-code-w7:S-1301",
+      "source": "raw/review-security-code-w7.txt",
+      "question": "Is review-security-code finding S-1301 (shownBody, which replaced the body preview in review_publish (line 208-220) and the reply preview in) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:64.",
+      "reason": "Merged into S-701: shownBody, which replaced the body preview in review_publish (line 208-220) and the reply preview in review_comments_rep...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-style-w1:ST-701",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-701 (Two 'would the card hide this' predicates with different strictness, and the shared one is defined i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:672.",
+      "reason": "Merged into S-701: Two 'would the card hide this' predicates with different strictness, and the shared one is defined in the wrong section....",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-style-w1:ST-702",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-702 (completionDispositions grew past ten branches and now holds a tuple loop and a vague local name. Lin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into CC-703: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:691.",
+      "reason": "Merged into CC-703: completionDispositions grew past ten branches and now holds a tuple loop and a vague local name. Lines 691-720 hold one ...",
+      "finding": "CC-703"
+    },
+    {
+      "id": "review-style-w1:ST-703",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-703 (reasonOf now validates and refuses, but keeps its accessor name, and both callers repeat the same un) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into CC-705: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:373.",
+      "reason": "Merged into CC-705: reasonOf now validates and refuses, but keeps its accessor name, and both callers repeat the same unwrap. It returns { r...",
+      "finding": "CC-705"
+    },
+    {
+      "id": "review-style-w1:ST-704",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-704 (quoteWhole is not whole when the quote holds hidden characters, and it carries an inline message lit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into CC-705: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:763.",
+      "reason": "Merged into CC-705: quoteWhole is not whole when the quote holds hidden characters, and it carries an inline message literal. The function r...",
+      "finding": "CC-705"
+    },
+    {
+      "id": "review-testing-practices-w1:T-701",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-701 (The S-401 fix replaced clip() with quoteWhole() at three sites: readiness waivers (line 736), the co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-701.",
+      "reason": "Kept as T-701.",
+      "finding": "T-701"
+    },
+    {
+      "id": "review-testing-practices-w1:T-702",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-702 (Lines 508-516 are new: a loop over every reply body, a refusal 'Reply N holds control, escape or bid) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-702.",
+      "reason": "Kept as T-702.",
+      "finding": "T-702"
+    },
+    {
+      "id": "review-testing-practices-w1:T-703",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-703 (Three more removed list caps have no over-the-cap fixture: review_waive_coverage listFiles (line 94,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-703.",
+      "reason": "Kept as T-703.",
+      "finding": "T-703"
+    },
+    {
+      "id": "review-testing-practices-w1:T-704",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-704 (shownBody (lines 62-66) refuses a line only when cardSafe(line) !== line. hiddenInCard (line 672) ad) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-701: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:64.",
+      "reason": "Merged into S-701: shownBody (lines 62-66) refuses a line only when cardSafe(line) !== line. hiddenInCard (line 672) additionally refuses \\...",
+      "finding": "S-701"
+    },
+    {
+      "id": "review-testing-practices-w1:T-705",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-705 (Tests whose subject is an invisible character embed the literal invisible character in the source: U) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-705.",
+      "reason": "Kept as T-705.",
+      "finding": "T-705"
+    },
+    {
+      "id": "review-testing-practices-w1:T-706",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-706 (Branches of the hidden-text path with no row: the S-402 table (operator-confirm-review-tools.test.ts) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-706.",
+      "reason": "Kept as T-706.",
+      "finding": "T-706"
+    },
+    {
+      "id": "review-testing-practices-w1:T-707",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-707 (S-401 and S-402 are defined as stored differing from shown. The at-cap and plain-text rows (lines 74) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-707.",
+      "reason": "Kept as T-707.",
+      "finding": "T-707"
+    },
+    {
+      "id": "review-testing-practices-w1:T-708",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-708 (review_waive_coverage shows the cardSafe-rewritten path but prepared.files (line 286) and the stored) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F-002: the same defect or the same fix site, reported at src/commands/operator-confirm-review.ts:282.",
+      "reason": "Merged into F-002: review_waive_coverage shows the cardSafe-rewritten path but prepared.files (line 286) and the stored waiver keep the raw...",
+      "finding": "F-002"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "F5-01": "open",
+      "F5-02": "open",
+      "F5-03": "open",
+      "F5-04": "open",
+      "F5-05": "open",
+      "F5-06": "open",
+      "F5-07": "open",
+      "F5-08": "open",
+      "F5-09": "open",
+      "F5-10": "open",
+      "F5-11": "open",
+      "F5-12": "open",
+      "F5-13": "open",
+      "F5-14": "open",
+      "F5-15": "open",
+      "F5-16": "open",
+      "F5-17": "open",
+      "F5-18": "open",
+      "F5-19": "open",
+      "F5-20": "open",
+      "F5-21": "open",
+      "F5-22": "open",
+      "F5-23": "open",
+      "F5-24": "closed",
+      "F5-25": "open",
+      "F5-26": "open",
+      "F5-27": "open",
+      "F5-28": "open",
+      "F5-29": "open",
+      "F5-30": "open",
+      "F5-31": "open",
+      "F5-32": "open",
+      "F5-33": "open",
+      "F5-34": "open",
+      "S-401": "closed",
+      "S-402": "closed"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:2f561f04aef3",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:2f561f04aef3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:82c234001352",
+        "rawEvidence": "raw/review-clean-code-w2.txt#sha256:82c234001352",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:2d2dc204cc42",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:2d2dc204cc42",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:df98c3f1430a",
+        "rawEvidence": "raw/review-logic-w7.txt#sha256:df98c3f1430a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:e4766f8cc41a",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:e4766f8cc41a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:d720bed189f6",
+        "rawEvidence": "raw/review-pr-contract-w1.txt#sha256:d720bed189f6",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:6b0b5dcadb28",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:6b0b5dcadb28",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:a2c1159c371d",
+        "rawEvidence": "raw/review-security-code-w6.txt#sha256:a2c1159c371d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:cdd1eabe4038",
+        "rawEvidence": "raw/review-style-w1.txt#sha256:cdd1eabe4038",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:ba261bd5b4dc",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:ba261bd5b4dc",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 24,
+    "known": 0,
+    "unknown": 24,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

@@ -1,0 +1,127 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 01 holds no TypeScript: it is output-contract schemas, skill instructions, README, CLI reference, the guide, the PRD folder, the live-run runbook, the references schema and one package.json script. The documents were read in full against the code at head (reference-proof.ts, resolved-context-check.ts). No function, class, error-handling or SOLID finding is possible in this slice. Four minor documentation findings: the runbook states a two-word threshold where the code and every other document say three, two PRD files carry stale status or AC references, one instruction bullet in task-implementer mixes the general and the promoted-entry rule, and the proof thresholds are restated in prose in eight places with nothing tying them to the code.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "line": null,
+      "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+      "problem": "The operator runbook says a summary must share at least two distinct words of five or more letters with the section. The code has SUMMARY_MIN_SHARED_WORDS = 3 (src/gdskills/reference-proof.ts:15), and AC10, the PRD (5.3), the guide and the CLI reference all say three; the runbook's own expected output in step 4 prints '3 required'. The same file repeats the wrong number where it tells the operator how to read a failed honest result ('это сигнал, что порог в два слова слишком строг'). It also names the check errors 'missing', 'anchor not found', 'oversized', while the checker's codes are document-missing, anchor-not-found and document-too-large.",
+      "impact": "AC20 is the one criterion that is a live run with an operator decision on the thresholds. An operator who follows the failure guidance reasons about a two-word threshold that does not exist, and cannot match the runbook's error names to the 'references check' output. The cost lands on whoever reads the runbook, not on runtime behaviour.",
+      "suggested_fix": "Change both 'два' sites to 'три' (the paragraph 'Проверка пересказа остаётся заменителем чтения' and the 'порог в два слова' bullet in section 5), and use the real codes document-missing, anchor-not-found, document-too-large in section 1.",
+      "evidence": "reference-proof.ts:15 SUMMARY_MIN_SHARED_WORDS = 3 and line 74 Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size); live-run.md step 4 expected output reads '3 required'; cli-reference.md in this slice lists document-missing, document-too-large and anchor-not-found.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "docs-stale-live-run-threshold"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "line": null,
+      "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+      "problem": "Two PRD documents disagree with the frozen criteria. The PRD README points the live run at AC18, but AC18 is the end-to-end fixture test and the live run is AC20. The PRD README header ('Status: DRAFT for the operator; criteria are not frozen') and description.md ('Status: draft (PRD and criteria wait for the operator; not frozen)') say the criteria are not frozen, while flow.json records the event 'frozen' with '22 criteria; checksum recorded'. acceptance-criteria.md carries the same 'DRAFT: not frozen' line; it is checksum-protected and can only change through 'keryx flow ac update'.",
+      "impact": "A reader of the PRD folder is sent to the wrong criterion for the operator run and is told the criteria are still open when they are fixed. A maintenance cost for whoever reads the PRD.",
+      "suggested_fix": "In README.md section 7 write AC20, and set the README header and description.md Status line to the real state. Handle the acceptance-criteria.md line through 'keryx flow ac update', or leave it and say so, since a plain edit fails every gate.",
+      "evidence": "acceptance-criteria.md lists AC18 as the fixture e2e and AC20 as the live-run runbook; flow.json lines 301-302 record 'frozen' / '22 criteria; checksum recorded'.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "docs-stale-prd-status"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "quote": "An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition and carries an `anchor`, a `description` and `section_bytes`: read the anchored section in full.",
+      "problem": "The 2.0c bullet that used to say only 'cite what you used in project_context_applied with the resolver's sha256; n/a needs a reason in notes; never edit a resolved file' now opens with the promoted-entry rule, and the general sentences follow it in the same bullet. The general rule for every entry ('n/a needs a reason in notes') now reads as the continuation of a paragraph that has just said promoted entries may never use n/a, and the bullet is one run of about 140 words covering two audiences.",
+      "impact": "A worker reading the bullet linearly can take 'n/a needs a reason in notes' as applying to promoted entries, or miss that the drift sentence applies to every entry. The shape is a general statement displaced by an inserted special case. A readability cost to the next editor of the skill, not a behaviour defect.",
+      "suggested_fix": "Split into two bullets: first the general citation rule (cite each entry, resolver's sha256, n/a needs a reason in notes, never edit a resolved file), then 'A promoted entry (condition:glob / condition:keyword) additionally ...' with the anchor, summary and how rules.",
+      "evidence": "Diff hunk of task-implementer/SKILL.md at @@ 162,204 @@: the old general bullet is replaced by one that prepends the promoted-entry paragraph to the unchanged general sentences.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "skill-bullet-mixes-general-and-promoted"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "a summary of 40+ characters in the worker's own words, and how read|followed, never n/a",
+      "problem": "The proof rule (path, whole-file sha256, declared anchor, summary of 40 characters, three shared words of five letters, how read|followed) is restated in prose in eight places in this slice. The numbers live in code in one place (reference-proof.ts: SUMMARY_MIN_CHARS, SUMMARY_MIN_SHARED_WORDS, WORD_MIN_LETTERS) and nothing ties the prose to them. F-001 is a drift that has already happened at one of these sites, and the orchestrator files already differ: job-orchestrator names '40+ characters' and no word count, task-implementer and tests-creator name three words, flow-orchestrator names both.",
+      "impact": "Changing one threshold means editing about eight prose sites by hand; the managed-copy sync test checks that copies match each other, not that the numbers match the code.",
+      "suggested_fix": "State the full rule once in task-implementer and tests-creator (the workers), and let the orchestrator files, the CLI reference and the PRD refer to it without repeating the numbers; or add a test that checks the prose against the constants' values.",
+      "evidence": "Sites listed in class_scope; constants at src/gdskills/reference-proof.ts:14-16.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "proof-rule-restated-in-prose",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/apply-project-rules.md",
+          "docs/requirements/keryx-conditional-reads/README.md"
+        ],
+        "enumeration_method": "Read the full slice diff (1827 lines) and listed every hunk that states the summary or anchor thresholds; compared with the constants in reference-proof.ts."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 0 },
+  "slices": ["slice-01"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/conditional-reads`
+- Merge-base: `1658f77d374b2d20189a55eaf44b95d64768d6b6`, head `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: diff (slice-01 only)
+- Changed files reviewed: the documents and configs of slice-01 (contract schemas, skill and prompt files, README, CLI reference, commands-by-task, the guide, the PRD folder, flow files, package.json). The slice has no TypeScript, so the function, class, error-handling and SOLID checks have nothing to apply to.
+
+### Summary
+The slice is documentation and contract text. It matches the code at head except for one runbook that states a different threshold than the code, two PRD references that went stale at the freeze, and one instruction bullet that mixes a general rule and a special case. The proof rule is copied in prose to eight places, which is the common cause of the drift.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 4  |  info: 0
+
+### Findings
+
+#### Naming
+No naming issues found (reason strings `condition:glob:<g>`, `condition:keyword:<k>`, `declared` and the check codes are used consistently across the CLI reference, guide and schema; the exception is the runbook, see F-001).
+
+#### Functions
+Not applicable: no code in the slice.
+
+#### Comments
+[F-001], [F-002], [F-003] (documentation drift, checklist C1a).
+
+#### Error Handling
+Not applicable: no code in the slice.
+
+#### DRY
+[F-004]
+
+#### SOLID
+Not applicable: no code in the slice.
+
+### Clean Areas
+- The four output-contract schema copies carry identical, minimal `anchor` and `summary` additions with `additionalProperties: false` kept and the `how` enum unchanged.
+- cli-reference.md, the guide and the schema agree on the check codes, the 4000-character cut, the 262144-byte limit and the three-word rule.
+- package.json: the new `docs:check` script only composes existing scripts and tests.
+- Not re-raised (settled in PR #1048 "Known limits"): summary check is a vocabulary proxy; `suggest` output not pasteable; separate citation scan in references-check.ts; ci-triage-source.test.ts failures; mkdocs not run.
+
+Coverage: slice-01 read completely (lines 1-1827 of the diff). Code at head read only where needed to check a documented value (reference-proof.ts, resolved-context-check.ts).

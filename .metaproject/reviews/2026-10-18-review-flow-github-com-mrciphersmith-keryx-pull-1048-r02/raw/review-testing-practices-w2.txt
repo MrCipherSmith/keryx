@@ -1,0 +1,227 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-04 (tests for flow 462 conditional reads) read in full, with the production code each test targets read at head. No blocker or major: no test hits the network, sleeps on a timer, or mutates shared data; temp roots are created and removed per test; the AC18 e2e fixture is built from the real producer. The test set is strong on the validator (every proof rule has its own failing case) and on the resolver promotion path. Ten minor gaps remain: task_text is pinned only at the op layer and not at the MCP and adapter layers that AC3 names; the AC7 cap test has only one promoted reference competing with the cap; the R4 fixture asserts a false sentence; the R2 and R7 TUI assertions cannot fail for the behaviour they are named after; and several production branches (keyword lookarounds and escaping, taken, maxFileBytes, glob-before-keyword, astral and NFC handling, fence closing) have no assertion. No coverage percentage is claimed. Mutants were not run (listed for the orchestrator); all are not reached.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/mcp/metaproject-tools.ts",
+      "line": null,
+      "quote": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+      "problem": "The MCP projection forwards task_text to the resolver, and AC3 names the MCP surface. The only MCP test that calls skills_resolve_context (the AC16 test in src/mcp/metaproject-tools.test.ts, unchanged by the slice) passes no task_text, and the slice adds no MCP test. Deleting this spread keeps every test green.",
+      "impact": "A refactor of the MCP handler could drop task_text. Keyword conditions would then never promote over MCP, and the only visible effect is a silent absence of must_read entries for MCP clients.",
+      "suggested_fix": "Add an MCP test with a recording fake port: call skills_resolve_context with task_text and assert the port received taskText; call it with a blank task_text and assert taskText is absent from the port input.",
+      "evidence": "Read src/mcp/metaproject-tools.test.ts in full: no test passes task_text. The slice hunk for metaproject-tools.ts is production-only. Only the op layer (metaproject-operations.test.ts, 'passes task_text to the port as taskText and drops a blank one') is pinned.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "line": null,
+      "quote": "...(input.taskText !== undefined ? { taskText: input.taskText } : {}),",
+      "problem": "The adapter that turns the port call into the resolver call forwards taskText, but src/harness/tool/metaproject-adapter.test.ts has no skillsResolveContext test and the slice adds none. Removing the spread keeps every test green.",
+      "impact": "The harness tool path could lose task_text between the op layer and the resolver while the op-layer test stays green, so keyword promotion would silently stop working for harness agents.",
+      "suggested_fix": "Add an adapter test over a tmp project that has a references.json with a keyword condition: call skillsResolveContext with taskText containing the keyword and assert the entry is must_read with reason condition:keyword:<k>; call it without taskText and assert on_demand.",
+      "evidence": "Read src/harness/tool/metaproject-adapter.test.ts in full: no skillsResolveContext case. Slice hunk for metaproject-adapter.ts is production-only.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.test.ts",
+      "line": null,
+      "quote": "test(\"cap keeps promoted references: an over-cap promoted reference stays must_read and the warning gives the sizes, while rules keep flow 461 behaviour\", async () => {",
+      "problem": "The test is the AC7 pin (promoted references are never demoted by the cap) but only one promoted reference competes with the cap. THEMING.md (size 6000) has the glob docs/** and the task files match src/**, so it is not promoted; it is on_demand because its condition does not match, not because the cap spared it. The assertion usedBytes: 12000 therefore mixes a 10000-byte promoted entry with a 2000-byte rule, and a mutant that demotes the second-largest promoted reference by the cap would not be caught.",
+      "impact": "AC7 says promoted references stay must_read under the cap. The test would still pass if the resolver demoted a second over-cap promoted reference, which is the case the criterion exists for.",
+      "suggested_fix": "Give THEMING.md the glob src/** so both STYLING.md and THEMING.md are promoted, then assert both stay must_read, the budget is exceeded, usedBytes equals the sum, and the warning names both sizes.",
+      "evidence": "Fixture in the slice lines 580-808: STYLING.md ruleText({ size: 10000 }) glob src/**; THEMING.md size 6000 glob docs/**; small.mdc 2000 bytes; maxBytes 4096; assertion expect(result.budget).toEqual({ limitBytes: 4096, usedBytes: 12000, exceeded: true, limitSource: \"flag\" }).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": null,
+      "quote": "expect(text).toContain(\"over the cap: 109 of 131072 bytes\");",
+      "problem": "The R4 fixture sets exceeded: true with usedBytes: 109 against limitBytes: 131072, a state the resolver can never produce (exceeded means usedBytes is over limitBytes). The test then asserts the sentence 'over the cap: 109 of 131072 bytes', which is false for those numbers.",
+      "impact": "The test pins the wording of an impossible record, so it will not catch a presenter bug that prints the wrong pair of numbers, and it documents misleading output for a future reader.",
+      "suggested_fix": "Build the over-cap record with usedBytes greater than limitBytes (for example limitBytes 100, usedBytes 109) and assert 'over the cap: 109 of 100 bytes'.",
+      "evidence": "Fixture line in the slice: budget: { limitBytes: 131072, usedBytes: 109, exceeded, limitSource: \"default\" }, with section_bytes 120.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/tui/project-references-view.ts",
+      "line": null,
+      "quote": "return status.last?.result.entries.find((entry) => entry.path === declaration.path && entry.condition !== undefined);",
+      "problem": "The 'R2 only declared entries count' test cites OTHER.md, which is not a declared path, so the entry.path === declaration.path half of the predicate excludes it and the entry.condition !== undefined half is never decisive. Removing the condition clause keeps the test green.",
+      "impact": "A cited contract at a declared path, with no condition, would be shown as a promoted or resolved reference of the declaration. The R2 count would then include documents the rules cited rather than the conditions promoted.",
+      "suggested_fix": "Add a resolved entry for a declared path with no condition field (a rule-cited contract) and assert the declaration stays unresolved (R2 count excludes it).",
+      "evidence": "Fixture line: const cited: RefEntry = { kind: \"contract\", source: \"project\", path: \"OTHER.md\", sha256: \"q\", bytes: 5, reason: \"cited by AGENTS.mdc\", tier: \"must_read\" };",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": null,
+      "quote": "expect(h.text()).toContain(\"Enforcement: warn (default)\");",
+      "problem": "The R7 test pushes a feed update after close and then asserts the Status text. The Status text is the same for the 'before' and 'after' snapshots, so the assertion passes whether or not the closed inspector kept repainting.",
+      "impact": "A regression that repaints or re-subscribes after close (the 'closed ||' guards in the presenter) would not be caught; it would leak listeners and render into a disposed node.",
+      "suggested_fix": "Push a record that changes visible text (for example a different budget) after close and assert the text is unchanged, or compare node identity from h.node() before and after the post-close push, and assert the feed has zero subscribers after close.",
+      "evidence": "Test flow: push?.(before) is followed by a post-close push and the Status assertion above; both snapshots render identical Status text.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/tui/project-references-view.ts",
+      "line": null,
+      "quote": "if (total === 0) lines.push(\"\", NO_REFERENCES_TEXT);",
+      "problem": "The declared-but-empty state (references.json present with an empty list) has no test: neither the sidebar segment for zero declarations nor the tab text NO_REFERENCES_TEXT is asserted.",
+      "impact": "Removing the branch leaves an empty References tab with only a header, which is a cosmetic loss.",
+      "suggested_fix": "Add a presenter test with a declared state and an empty list; assert the tab contains the no-references text and the sidebar segment reads as an empty count.",
+      "evidence": "No test in project-context-inspector.test.ts or the slice builds a declared state with zero references.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-008",
+      "severity": "minor",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "${escapeRegExp(keyword)}",
+      "problem": "keywordOccurs builds a Unicode-aware whole-word regex with lookarounds over letters, digits and underscore, and escapes the keyword. The tests only use 'tailwinds are mentioned' and 'the pretailwind thing'. Digit adjacency (tailwind2), underscore adjacency (_tailwind), a non-ASCII neighbour letter, and a keyword with regex metacharacters (a.b versus axb, c++) are not pinned.",
+      "impact": "Dropping \\p{N} or _ from the lookarounds, or the escape, keeps the suite green. A keyword such as c++ would then throw or match wrongly, and identifiers like tailwind2 would wrongly promote a document.",
+      "suggested_fix": "Add cases: keyword tailwind not matching in tailwind2, _tailwind and the Cyrillic-adjacent text; keyword a.b matching 'a.b' but not 'axb'; keyword c++ matching 'use c++ here' without throwing.",
+      "evidence": "Resolver tests in the slice (lines 580-808) use only the two ASCII phrases above. Production confirms escapeRegExp exists, so c++ does not crash, but nothing asserts it.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-009",
+      "severity": "minor",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "if (input.taken.has(declaration.path)) {",
+      "problem": "Several resolveReferences branches have no assertion in the diff: the taken collision (a declared path already listed as a rule or skill is skipped with a warning), the maxFileBytes limit (info.size > maxFileBytes), glob-before-keyword precedence in the reason, and the 'Headings in the file' text for a missing anchor. Coverage elsewhere in the repository was not searched, so this is limited to the slice.",
+      "impact": "Removing the taken check would list one file twice (as a rule and as a reference) and double its bytes in the budget. Changing > to >= or swapping glob and keyword order would change reasons the validator and the TUI print.",
+      "suggested_fix": "Add resolver cases: a declaration whose path is already a listed rule (expect one entry and a warning); a file of exactly maxFileBytes (accepted) and maxFileBytes+1 (skipped with warning); a declaration matching by both glob and keyword (expect condition:glob:<g>); a missing anchor warning that lists the headings.",
+      "evidence": "Read the resolver tests added in the slice and context-resolver.test.ts additions; none exercises these branches. Production branches read in reference-entries.ts.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-010",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return Array.from(text.trim()).length;",
+      "problem": "The summary proof is well covered for length 28 versus 40, the 2/3 shared words boundary, case, and Cyrillic. Not pinned: code-point counting (an astral character counts as one, not two), NFC normalisation in distinctWords, the three-tier fallback of pickProofItem beyond the n/a-plus-followed pair, the Math.min clamp is pinned only for 1 and 0 section words, and the letter threshold {5,} (a four-letter and a five-letter word on the boundary).",
+      "impact": "Replacing Array.from with .length, dropping .normalize('NFC'), or changing {5,} to {4,} would pass the suite. A decomposed accent in a Russian or French summary would then fail to match the composed section word.",
+      "suggested_fix": "Add: a 39-code-point summary containing an emoji (rejected by length) and a 40-code-point one (accepted); a decomposed (NFD) summary word matching a composed section word; a section whose only shared word has exactly four letters (must not count).",
+      "evidence": "Read resolved-context-check.test.ts additions in the slice (lines 1522-1830) against reference-proof.ts at head.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-011",
+      "severity": "minor",
+      "file": "src/gdskills/references-section.ts",
+      "line": null,
+      "quote": null,
+      "problem": "references-section.test.ts pins backtick fences only with a plain opener and closer. The fence-closing conditions (tilde fences, a closing run shorter than the opening one, a different marker, a closing line with trailing text) and a heading made only of closing hashes have no case.",
+      "impact": "A fence that is closed too early or too late would change which headings count, and so the section bytes that become the budget and the obligation. Mutating the comparison from >= to > or dropping the marker equality would pass the suite.",
+      "suggested_fix": "Add cases: a ~~~ fence containing a '# not a heading' line; a four-backtick opener that a three-backtick line does not close; a backtick fence not closed by ~~~; a heading line '## ##'.",
+      "evidence": "Read src/gdskills/references-section.test.ts in the slice (lines 1315-1467): one fenced case only.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-012",
+      "severity": "info",
+      "file": "src/gdskills/output-schema.test.ts",
+      "line": null,
+      "quote": null,
+      "problem": "Smaller gaps: the task-text truncation test uses ASCII only, so the code-point versus UTF-16 slice is unpinned; project-context-status.test.ts pins only two of the finding codes; output-schema.test.ts mixes a shape assertion with behavioural validation (validate a citation with and without anchor and summary and assert the verdict, rather than the schema shape).",
+      "impact": "Low. A surrogate pair at the 4000 boundary could be cut in half; a renamed finding code would pass.",
+      "suggested_fix": "Add a truncation case with a 4001st astral character; add one status test per finding code that production emits; prefer verdict assertions over schema shape.",
+      "evidence": "Slice test files read in full.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "publication": "finding"
+    },
+    {
+      "id": "F-013",
+      "severity": "info",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "The glue that turns the parsed '/projectctx refs' command into the inspector's initialTab lives outside slice-04 and was not located. The slice pins the parse result and the presenter's initialTab, but not the dispatcher between them, so AC for the command is pinned in two halves with the join unread by this reviewer.",
+      "impact": "Unknown. Reported as not covered, not as a defect.",
+      "suggested_fix": "Confirm an integration-level test opens the inspector through the slash-command dispatcher and lands on the References tab.",
+      "evidence": "Raw search was blocked by a hook and the brief limits commands to git log, git blame and git show; the dispatcher was not read.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "publication": "question"
+    }
+  ],
+  "slices": [
+    { "id": "slice-04", "coverage": "Read in full, with the production code each test targets. The /projectctx refs dispatcher outside the slice was not read." }
+  ],
+  "mutant_candidates": [
+    { "id": "M-01", "file": "src/mcp/metaproject-tools.ts", "anchor": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),", "replacement": "", "kind": "behavior" },
+    { "id": "M-02", "file": "src/harness/tool/metaproject-adapter.ts", "anchor": "...(input.taskText !== undefined ? { taskText: input.taskText } : {}),", "replacement": "", "kind": "behavior" },
+    { "id": "M-03", "file": "src/tui/project-references-view.ts", "anchor": "return status.last?.result.entries.find((entry) => entry.path === declaration.path && entry.condition !== undefined);", "replacement": "return status.last?.result.entries.find((entry) => entry.path === declaration.path);", "kind": "behavior" },
+    { "id": "M-04", "file": "src/tui/project-references-view.ts", "anchor": "if (total === 0) lines.push(\"\", NO_REFERENCES_TEXT);", "replacement": "", "kind": "presentation" },
+    { "id": "M-05", "file": "src/gdskills/reference-entries.ts", "anchor": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);", "replacement": "return new RegExp(`(?<![\\\\p{L}])${escapeRegExp(keyword)}(?![\\\\p{L}])`, \"iu\").test(text);", "kind": "behavior" },
+    { "id": "M-06", "file": "src/gdskills/reference-entries.ts", "anchor": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);", "replacement": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${keyword}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);", "kind": "behavior" },
+    { "id": "M-07", "file": "src/gdskills/reference-entries.ts", "anchor": "if (input.taken.has(declaration.path)) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "M-08", "file": "src/gdskills/reference-entries.ts", "anchor": "if (info.size > maxFileBytes) return { ok: false, why: `is larger than ${maxFileBytes} bytes` };", "replacement": "if (info.size >= maxFileBytes) return { ok: false, why: `is larger than ${maxFileBytes} bytes` };", "kind": "behavior" },
+    { "id": "M-09", "file": "src/gdskills/reference-proof.ts", "anchor": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");", "replacement": "return false;", "kind": "behavior" },
+    { "id": "M-10", "file": "src/gdskills/reference-proof.ts", "anchor": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);", "replacement": "return new Set(text.toLowerCase().match(/\\p{L}{5,}/gu) ?? []);", "kind": "behavior" },
+    { "id": "M-11", "file": "src/gdskills/reference-proof.ts", "anchor": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);", "replacement": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{4,}/gu) ?? []);", "kind": "behavior" },
+    { "id": "M-12", "file": "src/gdskills/reference-proof.ts", "anchor": "return Array.from(text.trim()).length;", "replacement": "return text.trim().length;", "kind": "behavior" },
+    { "id": "M-13", "file": "src/gdskills/reference-proof.ts", "anchor": "const required = Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size);", "replacement": "const required = SUMMARY_MIN_SHARED_WORDS;", "kind": "behavior" },
+    { "id": "M-14", "file": "src/gdskills/reference-proof.ts", "anchor": "if (shared >= required) return undefined;", "replacement": "if (shared > required) return undefined;", "kind": "behavior" },
+    { "id": "M-15", "file": "src/gdskills/reference-proof.ts", "anchor": "if (length < SUMMARY_MIN_CHARS) {", "replacement": "if (length <= SUMMARY_MIN_CHARS) {", "kind": "behavior" },
+    { "id": "M-16", "file": "src/gdskills/reference-proof.ts", "anchor": "if (entry.anchor !== undefined && item.anchor !== entry.anchor) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "M-17", "file": "src/gdskills/reference-proof.ts", "anchor": "return items.find((item) => item.sha256 === pinned && item.how !== \"n/a\") ?? items.find((item) => item.how !== \"n/a\") ?? items[0];", "replacement": "return items.find((item) => item.sha256 === pinned && item.how !== \"n/a\");", "kind": "behavior" },
+    { "id": "M-18", "file": "src/gdskills/references-config.ts", "anchor": "if (normal === \"..\" || normal.startsWith(\"../\")) return { problem: \"path escapes the project root\" };", "replacement": "", "kind": "behavior" },
+    { "id": "M-19", "file": "src/gdskills/references-config.ts", "anchor": "return relative.endsWith(\".md\") && !relative.startsWith(\".metaproject/rules/\");", "replacement": "return relative.endsWith(\".md\");", "kind": "behavior" },
+    { "id": "M-20", "file": "src/gdskills/references-config.ts", "anchor": "parsed = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);", "replacement": "parsed = JSON.parse(text);", "kind": "behavior" }
+  ],
+  "mutant_coverage_note": "Mutants are listed with verbatim anchors only for lines read in this session. Changed branches in context-resolver.ts (promotion, cap and warning, usedBytes accounting, TASK_TEXT_MAX_CHARS truncation), project-context-status.ts (finding codes), references-section.ts (fence close, same-level stop, slug match), group-subcommands.ts, help-groups.ts (presentation) and the presenter's closed guards in project-context-inspector.ts were not given verbatim anchors here; the orchestrator should derive them from the diff. Count of mutants run: 0. Not reached: all.",
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 10, "info": 3 }
+}
+```
+
+Summary
+
+No blocker or major in slice-04. The tests are deterministic (no network, no sleeps, per-test tmp roots removed in afterEach), and the validator is the strongest part: each proof rule fails in its own case and the report lines are checked to be distinct. The AC18 e2e fixture uses the real resolver and validator.
+
+Main gaps, all minor:
+- task_text is pinned at the op layer only. The MCP projection (F-001) and the adapter (F-002) are not covered, though AC3 names them.
+- The AC7 cap test has one promoted reference competing with the cap, so it cannot show that the cap spares promoted references generally (F-003).
+- TUI: the R4 test asserts a false sentence for an impossible record (F-004); R2 does not pin the condition filter (F-005); R7's after-close assertion is vacuous (F-006).
+- Unpinned production branches: keyword lookarounds and escaping (F-008), taken, maxFileBytes and glob-before-keyword (F-009), code-point, NFC and the 5-letter threshold (F-010), fence closing (F-011).
+
+Info: total === 0 branch (F-007), assorted small gaps (F-012), and the /projectctx refs dispatcher glue outside the slice, which was not read (F-013).
+
+Mutants were not run; 20 candidates are listed with verbatim anchors, the rest are for the orchestrator to derive from the diff. Mutants run: 0; not reached: all.
+
+Routing audit: graph_used: no (not-relevant, reviewing a bounded diff slice); wiki_used: no (not-relevant); ctx_used: no (raw search was blocked by a hook and the brief limits commands to git log, git blame and git show, so only the Read tool was used); raw_rg_used: no.

@@ -1,0 +1,21 @@
+# keryx review verify-run
+finding: review-security-code-w5:F-001
+command: python3 /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/v_escape.py
+cwd: /home/altsay/keryx/.worktrees/conditional-reads
+time: 2026-10-18T15:33:33.597Z
+exit: 0
+
+--- stdout ---
+RULE   .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+NORULE .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md
+NORULE .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md
+NORULE .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md
+NORULE .metaproject/skills/gdskills/quality/tests-creator/SKILL.md
+RULE   src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+NORULE src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+NORULE src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md
+NORULE src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+NORULE src/gdskills/bundled/skills/quality/tests-creator/SKILL.md
+files using single-quoted --task-text: 10 ; with the escape rule: 2
+--- stderr ---
+

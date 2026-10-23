@@ -1,0 +1,103 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice 02 (src/commands, command tests, flow tests, bundled skill copies) is logically sound on the traced paths: argument parsing, exit codes, JSON purity of `references check --json` and `import --rules --json`, and the block/warn/standalone paths of the task-project-context check all behave as the acceptance criteria and tests state. One major defect: the authoring tools (`references check|suggest` and the `skills import --rules` hint) do not scan rules registered with `--link`, while the resolver does, so for a project that imports rules by link they give false or missing results. Two info observations.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "for (const ref of (await listRuleRefs(projectRoot)).sort(compare)) {",
+      "problem": "scanCitations reads only rule files that exist on disk under .metaproject/rules/project/ (listRuleRefs is a readdir). A rule imported with `keryx skills import --rules <dir> --link` is registered in place and has no copy there (import-rules.ts writes only the registry entry), so its citations are never seen. The resolver does read linked rules (collectProjectRules reads the registry's link entries and feeds their text to the citation pass), so the two disagree about which documents are cited.",
+      "impact": "Trigger: a project whose rules came in by `--link` and cite STYLING.md. (1) `skills import --rules <dir> --link` prints no 'N cited documents have no declaration' hint, although AC15 says import --rules ends with the undeclared count and the command to run. (2) `references suggest` prints an empty list while `resolve-context` lists the same document under `undeclared`. (3) `references check` reports a declaration for STYLING.md as `unused-declaration` ('no project rule cites this document') although a linked rule does cite it, and reports no `undeclared-citation` for an undeclared one. The comment in references-check.ts says a linked rule is not scanned, but gives no reason, and the user-facing help text does not mention the limit.",
+      "suggested_fix": "Build the rule list the way the resolver does: take the on-disk refs plus the registry's `link` entries whose origin is readable and whose sha256 still matches (reuse collectProjectRules or export a shared 'project rule texts' helper from context-resolver.ts), and scan those texts. If linked rules are to stay out of scope, say so in `keryx skills references --help` and in the import hint, and make `unused-declaration` not fire while any linked rule exists.",
+      "evidence": "references-check.ts:93-114 (scanCitations over listRuleRefs); context-resolver.ts:156-175 (listRuleFiles = readdir only) versus context-resolver.ts:205-230 (collectProjectRules also reads registry link entries) and 455-462 (citations taken from those candidates); import-rules.ts:196-203 (link mode writes no copy), :274-277 (hint calls undeclaredCitationHint, which uses the same scan).",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/references-check.ts:96 (scanCitations, used by checkReferences and suggestReferences)",
+          "src/gdskills/references-check.ts:262 (undeclaredCitationHint, called from src/gdskills/import-rules.ts:275)"
+        ],
+        "enumeration_method": "searched src for listRuleRefs/scanCitations/undeclaredCitationHint: scanCitations has two callers (checkReferences, suggestReferences), the hint goes through suggestReferences; the only other listRuleRefs user is project-context-status.ts (status display, not a citation scan)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/import-rules.ts",
+      "line": null,
+      "quote": "const hint = await undeclaredCitationHint(process.cwd());",
+      "problem": "The hint is computed from the rules on disk after the command returns, including on `--dry-run`, where nothing was imported. It then reads 'N cited documents have no declaration' about whatever was already installed, immediately after a dry-run listing of would-import rows.",
+      "impact": "No wrong state; the count describes the project, not the import, so on a dry run it can differ from what the import would produce. Settle by deciding whether the hint should be suppressed on --dry-run (or worded 'currently').",
+      "suggested_fix": "Skip the hint when `args.includes(\"--dry-run\")`, or label it as the current state of the project.",
+      "evidence": "import-rules.ts:270-277; the dry-run path writes nothing (line 221).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return items.find((item) => item.sha256 === pinned && item.how !== \"n/a\") ?? items.find((item) => item.how !== \"n/a\") ?? items[0];",
+      "problem": "The hash check takes the LAST citation of a path (flow 461 rule) while the proof takes the first item with the pinned hash and a real `how`, falling back to the first item with any real `how` whatever its hash. A result that cites a path twice, first with a stale sha256 and a good summary and `how: read`, then with the pinned sha256 and `how: n/a`, passes the hash check on the last item and the proof on the first, so the `n/a` miss (AC11) is not reported.",
+      "impact": "Needs a worker that cites the same promoted path twice with different hashes; no input a normal worker produces. Listed so the two selection rules are known to differ.",
+      "suggested_fix": "In the fallback, require the item to carry the pinned sha256 (or report the pinned-hash item's `n/a` when one exists).",
+      "evidence": "resolved-context-check.ts:106-113 (last citation for the hash) versus reference-proof.ts:45-47 (pickProofItem).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 2 },
+  "slices": [
+    { "id": "slice-02", "coverage": "src/commands/{agent-commands,skills,skills-references}.ts, skills-references.test.ts, src/flow/task-project-context.test.ts, bundled SKILL.md/orchestrator-prompt copies; read in full (1321 diff lines). Surrounding source at head read for: references-check.ts, references-config.ts, reference-proof.ts, resolved-context-check.ts, resolve-context-command.ts, context-resolver.ts, import-rules.ts, flow/task-project-context.ts, the contracts-validate branch of skills.ts.", "status": "DONE" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: feat/conditional-reads, merge-base 1658f77d374b2d20189a55eaf44b95d64768d6b6, head d6267d4a5099f39b74e86a71e5c8f61ca47aa63d
+- Scope mode: diff (slice-02)
+- Spec compliance gate: ran against flow 462 AC1-AC22 for the parts this slice carries (AC14, AC15, AC12, AC17). Not covered by this slice: AC1-AC11, AC13, AC16, AC18-AC22 (other slices).
+
+### Summary
+The CLI router, the `references check|suggest` command, the help text and the flow tests behave as specified: exit 1 on errors only, warnings never fail, `--json` carries the same findings as the text, `suggest` writes nothing, `import --rules --json` stays pure JSON, and the block/warn/standalone paths print the same lines (refusal message lines equal the standalone `- project context` lines; warn writes the journal line and exits 0). The one real defect is that linked rules are invisible to the authoring tools while the resolver reads them (F-001).
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 0  |  info: 2
+
+### Spec Gaps (blocker)
+None detected. AC15 is met for copied rules; see F-001 for the `--link` import mode.
+
+### Logic Bugs
+F-001 (major), F-003 (info).
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected. checkReferences/suggestReferences return failures as values; the router needs no try/catch for them.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+F-002 (info).
+
+### Suggested Patches
+None; F-001 needs a design choice (scan linked rules, or state the limit).
+
+Routing audit: graph_used: no (not-relevant, diff-scoped review); wiki_used: no (not-relevant); ctx_used: no (the ctx hook blocked raw git diff/grep, files were read directly); raw_rg_used: no (keryx search_code used for four lookups).

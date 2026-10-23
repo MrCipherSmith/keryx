@@ -1,0 +1,53 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slices 02 and 03 (reasonOf/hiddenInCard refusal, disposition caps and whole evidence line, removal of the list and preview caps, dead-import cleanup) are logically sound for the paths they touch: reason and disposition text is now refused unless cardSafe is the identity on it, so the stored value equals the shown value; no leftover references to the removed constants or to raceApproval/completeManagedReview remain at head 5444f96e4; the module-level consts used by earlier-declared functions are only read at call time, so there is no TDZ risk. The same class is not closed on the other new 'shown whole' paths: the publish/reply body check (shownBody) still uses the weaker cardSafe-only test and lets zero-width, other format (Cf) and line/paragraph-separator characters through to be posted unseen, and the list items (mutant ids, uncovered files) are still shown through cardSafe while stored raw. One minor gap: the reply card does not show which comment each reply goes to.",
+  "findings": [
+    {
+      "id": "L13-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "problem": "shownBody, which decides whether a review_publish body or a review_comments_reply body is 'shown whole', refuses only text that cardSafe changes. cardSafe does not touch zero-width and other format characters (U+200B, U+200C/D, U+2060, U+FEFF, U+00AD, the U+E0000 tag block) or U+2028/U+2029, so a body line holding them passes the check, draws nothing (or a line break) on the card, and is posted to GitHub as stored. The same commit adds hiddenInCard (cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u) precisely because 'draws nothing' text must be refused, and applies it to reason, disposition finding/evidence and (as a note) stored quotes, but shownBody does not call it.",
+      "impact": "The operator's yes on 'the review is posted ... shown whole' covers text they could not see: a body built from reviewer/model-written findings can carry invisible content (zero-width text, Unicode tag characters used for hidden instructions to downstream agents, or a U+2028 line break that a terminal renders as a fake extra line) into a public PR comment that cannot be taken back. This is the stored-versus-shown class of S-402, left open for the two highest-consequence cards.",
+      "suggested_fix": "Move hiddenInCard above shownBody (or into a shared helper) and test each line with it: const bad = lines.findIndex((line) => hiddenInCard(line)); keep the tab-to-space normalisation by applying the test to the tab-replaced line, and word the refusal as 'holds control, escape, bidi or zero-width characters on line N'. Add a test with U+200B and U+E0041 in a body line for both review_publish and review_comments_reply.",
+      "evidence": "operator-confirm-review.ts:61-67 shownBody tests cardSafe(line) !== line only. card-safe.ts:8-17 cardSafe removes ANSI, C0/C1, U+200E/F, U+202A-E, U+2066-9 and rewrites newline and tab; it leaves U+200B, U+200D, U+2060, U+FEFF, U+00AD, U+2028 and U+E0000-E007F unchanged, so cardSafe(line) === line for such a line. operator-confirm-review.ts:669-672 defines hiddenInCard with \\p{Cf}\\p{Zl}\\p{Zp} for exactly these characters. shownBody is used at :208 (publish) and :510 (reply).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "L13-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 415,
+      "quote": "cardSafe(subject.items.join(\", \"))",
+      "problem": "The list items the operator decision binds to are shown through cardSafe but stored raw. For review_waive_mutation, subject.items are the mutant ids from research-evidence/mutants.json (written by a reviewer, not validated here) and are stored unchanged in prepared.subject and in operator-decisions.json; for review_waive_coverage the files from computeCoverage are shown as listFiles(files.map(cardSafe)) and recorded raw by recordCoverageWaiver. An id or file name holding a bidi override, escape, control or newline character shows differently on the card (characters removed, newline as the visible mark) than what is recorded. The commit's stated aim ('the card must show what is stored', including lists) removed the caps on these lists but did not add the hiddenInCard refusal that reason and dispositions got.",
+      "impact": "The operator waives the mutation pass or accepts uncovered files for names they saw in a rewritten form; the record carries different strings (for example a file name whose extension was reversed by U+202E). Practical exposure is low because ids and file names rarely hold such characters, and confirmedDecision compares the stored subject by equality, so no gate is bypassed.",
+      "suggested_fix": "In buildCard, refuse when any item of subject.items (mutation), or any uncovered file (coverage), satisfies hiddenInCard, with a message naming the item, or render those items through the quoteWhole style note ('[holds characters this card hides or rewrites]') so the difference is visible on the card.",
+      "evidence": "operator-confirm-review.ts:415 (mutation card) and :282 (coverage card) apply cardSafe for display; :421 stores subject unchanged in prepared and :452 passes prepared.subject to recordOperatorDecision; coverage.ts operatorDecisionSubject (line 677) takes items from pendingMutants(...).map(mutant => mutant.id) without a character check.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "L13-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 512,
+      "quote": "bodies.push(`reply ${index + 1}:`, ...shown.lines);",
+      "problem": "The reply card shows 'reply N:' and the body of each request but not the request's method and path, which is what says which review comment the reply is posted to. The CLI's own output of the same pass prints `${request.method} ${request.path}` before each body (review.ts:2005), and apply posts exactly prepared.requests.",
+      "impact": "The operator approves 'N replies, each shown whole' without seeing which thread each one lands on; a body that does not name its comment (a generic 'Fixed in <sha>') can be attached to a different comment than the operator assumes. The card then does not show everything the yes acts on, the same class this commit fixes for bodies and lists.",
+      "suggested_fix": "Add the target to each reply block: bodies.push(`reply ${index + 1}: ${cardSafe(`${request.method} ${request.path}`)}`, ...shown.lines);",
+      "evidence": "operator-confirm-review.ts:509-513 builds the block from request.body only; review.ts:2004-2007 prints method, path and body for the same result.requests; apply (:527-529) compares and posts the full requests JSON.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "questions": []
+}
+```

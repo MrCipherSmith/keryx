@@ -1,0 +1,154 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice 03 adds the conditional-references stack: a loader (references-config), a section extractor, a resolver stage (reference-entries), a proof module (reference-proof), an authoring checker (references-check), and wiring into the resolver, the validator, the status loader and the import command. Dependency direction is sound (no runtime import cycle; the resolver/reference-entries/reference-proof links are type-only in one direction) and the layering of loader -> resolver -> validator is clear. Two structural inconsistencies produce observable misbehaviour: the validator cannot be satisfied for a dead-anchor declaration the resolver deliberately falls back on, and the authoring checker's citation scan skips linked rules the resolver honours, so `import --rules --link` never prints the undeclared hint and `check` can report a false unused-declaration.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "the anchored section \"${entry.anchor}\" cannot be found in ${entry.path} now",
+      "problem": "The resolver and the validator disagree about a declaration whose anchor no longer matches a heading. reference-entries.ts falls back to the whole file and states the obligation: \"the whole file (${bytes} bytes) is the obligation\" (AC6: fall back with a warning, never silence). The proof module's currentSection returns { ok: false } for the same declaration, wordsFailure turns that into a summary-words failure, and nothing in the worker's control (citing the right anchor, reading the whole file, writing a good summary) can clear it.",
+      "impact": "Trigger: references.json declares an anchor that is renamed or removed in the document, and a task matches the declaration's condition. Outcome: the resolver tells the worker to read the whole file; the worker does, cites path, sha256, the declared anchor and a real summary; checkResolvedContext still emits a 'summary that cannot be checked' miss on every run. Under enforcement block this makes `flow task done` and the standalone check exit 1 until someone edits references.json, a fix the worker was never told about by the validator line. The fallback the resolver advertises is not honoured by the checker that enforces it.",
+      "suggested_fix": "Give the proof the same fallback the resolver uses: in currentSection, when extractSection returns found: false, return { ok: true, text, what: \"the file\" } (the whole file, matching the resolver's stated obligation) and keep the anchor-not-found problem in `references check` and the resolve warning. If fail-closed is intended instead, make the resolver demote or refuse the entry with the same wording rather than promising a whole-file obligation, and say so in the validator line.",
+      "evidence": "Diff, reference-entries.ts resolveReferences: when !section.found it sets sectionBytes = bytes and pushes a warning ending 'the whole file (...) is the obligation', and the entry stays must_read. Diff, reference-proof.ts currentSection: `if (!section.found) return { ok: false, why: ... }`; wordsFailure: `if (!section.ok) return { rule: \"summary-words\", detail: ... cannot be checked ... }`; proofFailures always calls wordsFailure when a summary exists. The only inputs are entry.anchor (from the resolver output) and the file text, so no worker-supplied value can make currentSection succeed.",
+      "confidence": 0.65,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "A linked rule (registered in place, not copied) is not scanned.",
+      "problem": "scanCitations iterates listRuleRefs(), which lists only files copied under .metaproject/rules/project/. The resolver's collectProjectRules also reads rules registered with mode link from their origin and scans their citations. The authoring checker therefore sees a different rule set from the engine it is authoring for. The header comment records the limit but gives no reason for it, and the limit hits the primary import mode: `keryx skills import --rules <dir> --link` registers rules in place and copies nothing.",
+      "impact": "Trigger: a project whose rules are linked (import --rules --link) and which cite STYLING.md or similar. Outcomes: (1) undeclaredCitationHint finds nothing, so the AC15 closing lines (undeclared count and the command to run) never print after a --link import; (2) `references suggest` omits the documents cited only by linked rules; (3) `references check` reports 'unused-declaration: no project rule cites this document' for a declaration that a linked rule does cite and the resolver treats as cited. Check output and resolver output disagree about the same project.",
+      "suggested_fix": "Build the citation set from the same rule source the resolver uses: factor collectProjectRules (or a smaller 'rule texts of this project, copied and linked' function) out of context-resolver.ts and have scanCitations read it, reporting an unreadable or changed link as rule-unreadable. If linked rules are deliberately excluded, state the reason in the header and make the unused-declaration and hint wording say 'copied rules'.",
+      "evidence": "Diff, references-check.ts scanCitations: `for (const ref of (await listRuleRefs(projectRoot)).sort(compare))`. Head src/gdskills/context-resolver.ts: listRuleRefs is `return listRuleFiles(projectRoot)` (copied files only), while collectProjectRules adds `registry.keys()` and reads `resolveOriginPath(entry.origin, projectRoot)` for entries with mode link. Diff, import-rules.ts: the hint is computed by undeclaredCitationHint(process.cwd()) with no regard to --link.",
+      "confidence": 0.7,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/import-rules.ts",
+      "line": null,
+      "quote": "const hint = await undeclaredCitationHint(process.cwd());",
+      "problem": "The hint is computed after importProjectRules for every text-mode run, including --dry-run (and a run where rules were refused). A dry run copies nothing, so the count describes the rules already installed, not the rules the command would import, under the comment 'Documents the imported rules cite but nothing declares'.",
+      "impact": "Trigger: `keryx skills import --rules <dir> --dry-run`. Outcome: the closing lines either say nothing about the rules about to be imported or report documents cited by unrelated, already-installed rules, so the operator reads a count that is not about the preview.",
+      "suggested_fix": "Skip the hint when args.includes(\"--dry-run\"), or when result.rules holds no row with status imported or overwritten.",
+      "evidence": "Diff, runSkillsImportRulesCommand: `const json = args.includes(\"--json\");` ... `if (!json) { const hint = await undeclaredCitationHint(process.cwd()); ... }`; no check of dryRun or of the result rows before it. undeclaredCitationHint reads only files on disk via scanCitations.",
+      "confidence": 0.8,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/resolved-context-check.ts",
+      "line": null,
+      "quote": "Flow 461 semantics: the last citation of each path is the one that counts for the hash.",
+      "problem": "The question 'which citation of this path counts' is answered by two unrelated rules in two modules: the hash check takes the last citation (`cited.get(where)?.at(-1)`), while the proof takes pickProofItem, which prefers a citation with the pinned sha256 and a real reading and otherwise falls back to the first non-n/a item. appliedOf now keeps every citation of a path, which makes the two rules able to pick different items.",
+      "impact": "Trigger: project_context_applied lists a promoted path twice. If the last item carries the pinned sha256 with how n/a and an earlier item carries a different sha256 with how read, a good anchor and a good summary, the hash check passes on the last item and the proof passes on the earlier one, so no miss is emitted for an entry that was last cited with n/a and with a hash that did not match on the item that proved it. AC11 (promoted entry cited with n/a is a miss) is met only for the single-citation case.",
+      "suggested_fix": "Select one citation per path once, in appliedOf or in checkResolvedContext, and feed the same item to the hash check and to proofFailures; or require that the proof item also carries the pinned sha256.",
+      "evidence": "Diff: `const last = cited.get(where)?.at(-1);` feeds `shas`; `pickProofItem(items, entry.sha256)` in proofMisses is `items.find((item) => item.sha256 === pinned && item.how !== \"n/a\") ?? items.find((item) => item.how !== \"n/a\") ?? items[0]`. With items [A{sha: other, how: read}, B{sha: pinned, how: n/a}] the first find returns undefined, the second returns A, and B satisfies `shas.includes(entry.sha256)`.",
+      "confidence": 0.7,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+      "problem": "Whether an entry is a promoted reference is decided by a string prefix of the free-text reason field. The producer is reference-entries.ts (`condition:glob:${glob}`, `condition:keyword:${keyword}`) in another module, with no shared constant or type; the entry already carries the structured field that says it is a declared reference (`condition`).",
+      "impact": "A change to the reason wording in reference-entries.ts, or another entry kind whose reason starts with 'condition:', silently turns the proof obligation off or on in the validator, which reads a --resolved file produced by a different command run.",
+      "suggested_fix": "Export the reason prefix from reference-entries.ts and build and test it there, or discriminate on `entry.condition !== undefined && entry.reason !== \"declared\"`; better, add a typed `promoted: true` field to ContextEntry for declared entries.",
+      "evidence": "Diff, reference-entries.ts: `reason: reason ?? \"declared\"` with promotionReason returning `condition:glob:${glob}` / `condition:keyword:${keyword}`; reference-proof.ts isPromoted matches on `entry.reason.startsWith(\"condition:\")`. The two files share no constant.",
+      "confidence": 0.8,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "async function readDeclaredFile(projectRoot: string, rootReal: string, rel: string, maxFileBytes: number): Promise<ReadOutcome> {",
+      "problem": "The sequence lstat, realpath, containment check, regular-file check, size cap, read is written three times in this slice with small differences: readDeclaredFile here (re-lstats the real path), inspectDocument in references-check.ts (stats the real path, different status vocabulary), and the inline loop in collectContracts. Each caller owns a different result vocabulary, and the same declared document is judged by both readDeclaredFile at resolve time and inspectDocument at check time.",
+      "impact": "A change to what counts as a readable document (for example a symlink or size rule) must be made in several places, and `references check` can accept a document that the resolver then rejects or the reverse, which makes the authoring tool an unreliable predictor of resolve behaviour. This is a maintenance cost; no divergence was demonstrated in the current code.",
+      "suggested_fix": "Extract one `inspectProjectDocument(projectRoot, rootReal, rel, maxBytes)` returning a tagged status plus text (the shape of Inspection in references-check.ts), place it next to the other filesystem helpers, and have reference-entries.ts map the status to a reject reason and references-check.ts map it to a finding.",
+      "evidence": "Diff: readDeclaredFile (reference-entries.ts) and inspectDocument (references-check.ts) both call lstat and realpath, test isPathInside(rootReal, real), check isFile and a byte cap from CONTRACT_MAX_BYTES, then readFile; collectContracts repeats the realpath and containment steps.",
+      "confidence": 0.75,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/gdskills/project-context-status.ts",
+      "line": null,
+      "quote": "const report = await checkReferences(projectRoot);",
+      "problem": "readReferences calls loadReferences, and then checkReferences, which loads the same file again, scans every copied rule, and reads every declared document. The status loader, documented as a 'read-only snapshot' for the TUI sidebar and modal, now runs the full authoring checker on every load, and the declarations it returns and the findings it returns come from two separate reads.",
+      "impact": "Every refresh of the ProjectCtx status performs a second parse of references.json plus a read of all rule files and all declared documents (each up to the 262144-byte cap). The two reads can disagree if the file changes between them (declarations from one version, findings from another).",
+      "suggested_fix": "Let checkReferences accept the already loaded declarations (checkLoadedReferences(projectRoot, loaded)) and call it from readReferences, keeping checkReferences(projectRoot) as the thin wrapper that loads first.",
+      "evidence": "Diff, project-context-status.ts: `const loaded = await loadReferences(projectRoot); ... const report = await checkReferences(projectRoot);`; references-check.ts checkReferences begins with `const loaded = await loadReferences(projectRoot);`.",
+      "confidence": 0.85,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "const rel = normaliseCitedPath(match[1]!) ?? match[1]!;",
+      "problem": "AC2 requires every resolve result to be byte-identical to flow 461 when there is no references file. This line runs for every project. For a rule that cites a non-canonical spelling (`./STYLING.md`, `docs\\X.md`, `a/../b.md`), the contract entry's `path` is now the normalised spelling where flow 461 emitted the spelling as written.",
+      "impact": "Trigger: a project without references.json whose rule cites a document as `./X.md`. Outcome: the contract entry path (and its position in the sort) differs from flow 461 output. The change is deliberate (shared normalisation, so that a citation matches a declaration) and is a repair for those spellings; it only deviates from the literal wording of AC2. Settle by confirming that AC2's test fixtures cite canonical paths only, or by normalising only when a references file is present.",
+      "suggested_fix": "Either record the exception in AC2, or call normaliseCitedPath only when `declarations !== undefined` and keep the raw spelling otherwise.",
+      "evidence": "Diff: the replaced line was `const rel = match[1]!;`. In flow 461, cite './X.md' misses the two rules-folder options in collectContracts and resolves through the third option `cite`, so entry.path was './X.md'; now it is 'X.md'.",
+      "confidence": 0.6,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-009",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "problem": "WORD_MIN_LETTERS is exported and used in the failure message ('words of ${WORD_MIN_LETTERS} or more letters'), but distinctWords hard-codes `{5,}` in its regular expression. The threshold exists in two places and only one of them is enforced.",
+      "impact": "Changing WORD_MIN_LETTERS (it is exported, so a test or another module may change expectations around it) changes the message but not the rule, so the validator reports a threshold it does not apply.",
+      "suggested_fix": "Build the pattern from the constant: new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\"), constructed once at module level.",
+      "evidence": "Diff: `export const WORD_MIN_LETTERS = 5;` and the literal `/\\p{L}{5,}/gu` in distinctWords; WORD_MIN_LETTERS is read only in wordsFailure's message.",
+      "confidence": 0.9,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-010",
+      "severity": "info",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "import type { ContextEntry } from \"./context-resolver\";",
+      "problem": "The module graph has a type-level cycle: context-resolver.ts imports resolveReferences from reference-entries.ts, and reference-entries.ts and reference-proof.ts import ContextEntry from context-resolver.ts. ContextEntry also now carries reference-only fields (anchor, section_bytes, condition).",
+      "impact": "No runtime effect: both back-edges are `import type`, erased at compile time, and no runtime cycle exists (references-check imports values from context-resolver but context-resolver does not import it back). It only matters if a later edit turns one back-edge into a value import, which would create a real cycle.",
+      "suggested_fix": "Optional: move ContextEntry and ContextKind into a small context-types.ts that both sides import, so the dependency runs one way.",
+      "evidence": "Diff: `import { resolveReferences } from \"./reference-entries\";` in context-resolver.ts; `import type { ContextEntry } from \"./context-resolver\";` in reference-entries.ts and reference-proof.ts.",
+      "confidence": 0.9,
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 6, "info": 2 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Architecture Review (slice-03, scope A)
+
+Stack: generic TypeScript (CLI / config / validator modules). No runtime import cycle found; the loader, resolver stage, proof and authoring checker are layered in a sensible direction.
+
+Findings that need action: F-001 (the validator makes the resolver's dead-anchor whole-file fallback unsatisfiable) and F-002 (the authoring checker and the import hint ignore linked rules the resolver honours, which misses AC15 for `import --rules --link` and can print a false `unused-declaration`). The rest are maintenance-cost items (F-003 to F-007, F-009) and two informational notes (F-008, F-010).
+
+Not reported, per the brief: the vocabulary-proxy nature of the summary check, ci-triage-source env failures, `references suggest` output not being pasteable, the separate citation scan in references-check.ts, and the fixes already at this head (duplicate path rejection, shared citation normalisation, truncation warning, BOM handling).

@@ -1,0 +1,83 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-core-boundaries",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-01"],
+  "graph_context": "unavailable: read-only round, no graphify-out query run; dependency direction checked by reading the import lists of every src/gdskills, src/flow and src/commands file the slice documents",
+  "iron_law": "No outward dependency from the shared layer found: src/gdskills/{references-config,references-section,reference-entries,reference-proof,references-check,project-context-status,context-resolver,resolved-context-check} import only node:*, ../lib/* and sibling gdskills modules; src/flow/task-project-context.ts imports inward from ../gdskills. No src/gdskills file imports src/tui, src/commands or src/harness.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md:39",
+      "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+      "problem": "The operator runbook states the summary threshold as two shared words (line 39, and again at line 261: 'порог в два слова слишком строг'). The implementation uses SUMMARY_MIN_SHARED_WORDS = 3 (src/gdskills/reference-proof.ts), AC10 and the PRD say three, and the same runbook's expected output in step 4 says '3 required'.",
+      "impact": "The runbook is the AC20 evidence procedure. An operator who sees an honest result rejected with 2 shared words, or a fabricated one accepted with 2, will read it against a threshold the code does not use and may record a wrong conclusion about whether the threshold is too strict or too weak.",
+      "suggested_fix": "Change both places in live-run.md to 'три' / 'порог в три слова', matching SUMMARY_MIN_SHARED_WORDS and step 4's '3 required'.",
+      "evidence": "reference-proof.ts line 15: SUMMARY_MIN_SHARED_WORDS = 3; live-run.md lines 39, 261 say two; live-run.md step 4 expected output says '3 required'; commit a4a24a35d raised the threshold to three and did not update the runbook.",
+      "confidence": 0.9,
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md:3545",
+      "quote": "and/or `when.keywords` (at least one), and optionally `anchor` (a heading;",
+      "problem": "The Declare bullet in the CLI reference lists `description` after 'optionally', so it reads as optional. The loader (src/gdskills/references-config.ts, lines 62 and 211-212) and the committed JSON schema require it and reject an entry without a non-empty description; AC1 says the same.",
+      "impact": "A project author who follows the CLI reference and omits `description` gets the file rejected, which turns promotion off for the whole run (warning only), so the feature silently stops working until the warning is read.",
+      "suggested_fix": "Reword to 'with `path`, `when.globs` and/or `when.keywords` (at least one) and `description`, and optionally `anchor` (a heading; only that section is required)'.",
+      "evidence": "references-config.ts: required: [\"path\", \"when\", \"description\"]; error 'description must be a non-empty string saying what the document governs'; docs/docs/guides/apply-project-rules.md lists `description` without saying it is required either.",
+      "confidence": 0.85,
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md:98",
+      "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+      "problem": "The PRD cites AC18 for the live run. In the criteria file AC18 is the end-to-end fixture test and the live run is AC20 (live-run.md is titled AC20).",
+      "impact": "A reader tracing the live-run obligation lands on the wrong criterion; the AC20 confirmation could be missed when closing the flow.",
+      "suggested_fix": "Change '(AC18)' to '(AC20)' in README.md section 7. live-run.md line 17 (AC18 for the e2e test) is correct.",
+      "evidence": "acceptance-criteria.md: AC18 = conditional-reads.e2e.test.ts, AC20 = operator runbook and recorded live run.",
+      "confidence": 0.9,
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "package.json",
+      "quote": "\"docs:check\": \"bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts\"",
+      "problem": "AC19 is verified by `bun run docs:check` and also says 'the docs site builds', but the new script does not run `docs:build` (mkdocs build --strict). The script is the new shared entry point for the criterion and does not cover half of it.",
+      "impact": "A green `docs:check` does not show the site builds; that stays with CI or a manual `docs:build`. The PR body already says mkdocs was not run locally, so this is only about what the command name promises.",
+      "suggested_fix": "Either document next to the script (README/PRD) that `docs:check` excludes the mkdocs build, or chain `bun run docs:build` where mkdocs is available. No action needed if CI already runs docs:build.",
+      "evidence": "package.json scripts: docs:build and docs:check are separate; docs:check has no mkdocs step.",
+      "confidence": 0.6,
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/gdskills/reference-entries.ts",
+      "quote": "import type { ContextEntry } from \"./context-resolver\";",
+      "problem": "context-resolver.ts imports resolveReferences from reference-entries.ts, and reference-entries.ts and reference-proof.ts import the ContextEntry type back from context-resolver.ts. The cycle is type-only, so it is erased at runtime and harmless today.",
+      "impact": "If a later change turns one of these into a value import (for example reusing a constant from context-resolver), a real runtime cycle appears inside the shared gdskills layer.",
+      "suggested_fix": "Optional: move ContextEntry (and the other pure entry types) to a leaf types module that both sides import. No change required for this PR.",
+      "evidence": "context-resolver.ts imports `resolveReferences` from ./reference-entries; reference-entries.ts and reference-proof.ts have `import type { ContextEntry } from \"./context-resolver\"`.",
+      "confidence": 0.7,
+      "reviewer": "review-core-boundaries"
+    }
+  ],
+  "not_covered": [],
+  "checks_passed": [
+    "Output contract copies in sync: .metaproject/core/gdskills/contracts/{task-implementer,tests-creator}-output-contract.schema.json, .metaproject/skills/.../output-contract.schema.json and src/gdskills/bundled/skills/.../output-contract.schema.json carry the same optional anchor/summary; `how` enum unchanged, additionalProperties false kept.",
+    "Managed skill copies in sync: flow-orchestrator, job-orchestrator (SKILL.md and orchestrator-prompt.md), task-implementer, tests-creator are byte-identical between .metaproject/skills/gdskills and src/gdskills/bundled/skills.",
+    "docs resolve-context result schema gains undeclared/anchor/section_bytes/condition, matching what context-resolver.ts and reference-entries.ts emit; taskText lives in last.json (RecordedResolve), not in the result, so the schema needs no taskText.",
+    "task_text reaches the CLI (--task-text), MCP (src/mcp/metaproject-tools.ts) and the harness operation (src/harness/tool/metaproject-operations.ts) through one optional input field; no feature knowledge was added to a shared signature."
+  ]
+}
+```
+
+Summary (review-core-boundaries, slice-01): the slice is documentation, skill copies, contract schemas and package.json. I read the source it documents at head and found no dependency pointing outward from the shared gdskills layer, no feature-specific public API in a shared export, and no drift between the .metaproject, core-contract and bundled copies. Three minor documentation inconsistencies (runbook threshold of two words against the implemented three; description shown as optional in the CLI reference though required; PRD cites AC18 for the live run instead of AC20) and two info notes (docs:check does not build the site; type-only import cycle inside src/gdskills). Graph lookup not run (read-only round); findings are from reading code.

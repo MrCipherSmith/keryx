@@ -1,0 +1,27 @@
+STATUS: DONE
+
+## Performance Review (review-performance, wave 3, slice-04)
+
+Scope: PR 1052 (flow 464), r04, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66. Slice read in full (2315 lines of diff, 40 files-hunks): confirm-token, flow schema/service/types, review-orchestrator and review-premise skill text, write-land, interactive-tools, learning decisions, remote client and shell-bridge, review chunks-estimate / complete-gated / completion-gate / coverage-complete / estimate / evidence-level / operator-decisions / plan-confirmation / premise-question / publish / readiness / types.
+
+Result: no performance finding. The slice adds optional metadata fields (pressedBy, pressedAt) and the CardPress type with the cardPressFields helper, a mirror-undelivered flag on the remote approval path, a thin completeReviewGated wrapper, and skill/gate wording.
+
+Checked, clean:
+- N+1 / loops with I/O: no new query or file read inside a loop. cardPressFields is two comparisons and a spread, called once per record write.
+- Redundant reads: completeReviewGated resolves the package path once, then runs two synchronous gate checks and one completeManagedReview call, the same work as before moved into one function. readCoverageWaiver and recordCoverageWaiver keep their single research.json read.
+- Hot path / blocking: confirm-token, operator-decisions, publish and readiness each add one extra spread on a once-per-operator-answer write. The remote client change only adds `undelivered: true` to early-return objects, so no extra await or request. mirrorUndeliveredNote and the RemoteBridge.connected getter are O(1).
+- Memory: no new unbounded collection, listener or timer. The new onUndelivered callback in the race is covered by tests and adds no subscription.
+- evidenceLevelLine: runs the same withoutFences scan as parseEvidenceLevel, once per completion over a report body. The LINE regex has no g flag, so there is no stateful test(). Linear in report size for realistic input; not a hot path.
+- Bundle / React: no frontend change in this slice.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "slice-04 adds optional press-metadata fields, a mirror-undelivered flag and a gated-complete wrapper. All run once per operator answer; no loop, query, blocking call or unbounded growth added. No performance findings.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [{ "id": "slice-04", "coverage": "read in full" }],
+  "findings": []
+}
+```

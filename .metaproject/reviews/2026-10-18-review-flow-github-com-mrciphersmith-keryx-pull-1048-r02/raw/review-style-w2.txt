@@ -1,0 +1,122 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 02 (src/commands, command tests, flow tests, bundled skill copies) is stylistically sound: naming, structure and comments follow the surrounding code, the new command file is small and cohesive, and the help-table registration is the documented one-entry route. Six low-severity observations: the new command file restates thresholds and a command string that references-check.ts already exports, a nested ternary inside a spread in a test helper, and a few test-fixture and naming nits. No major findings.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/skills-references.ts",
+      "line": null,
+      "quote": "Warnings: a description under 20 characters, a keyword under 4, a cited document with",
+      "problem": "The help text and USAGE hard-code values that src/gdskills/references-check.ts already exports as named constants: `20` (MIN_DESCRIPTION_CHARACTERS), `4` (MIN_KEYWORD_CHARACTERS) and the string `keryx skills references suggest` (REFERENCES_SUGGEST_COMMAND, used in the same file's sibling hint). The same diff does it the right way one file over: printResolveContextHelp in skills.ts interpolates `${TASK_TEXT_MAX_CHARS}`. The test file likewise writes `262145` where the size limit is CONTRACT_MAX_BYTES (262144) + 1.",
+      "impact": "Changing a threshold or the command name updates the check and the hint but leaves the help (and the oversize-document test) stating the old number. The tests that match on these strings keep passing, so the drift is silent.",
+      "suggested_fix": "Import MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAND from ../gdskills/references-check and interpolate them in printReferencesHelp and USAGE (as printResolveContextHelp does with TASK_TEXT_MAX_CHARS). In skills-references.test.ts build the oversize body from CONTRACT_MAX_BYTES: `\"x\".repeat(CONTRACT_MAX_BYTES + 1)`.",
+      "evidence": "references-check.ts lines 26-28 export the three constants; skills-references.ts help repeats `under 20 characters`, `a keyword under 4` and `keryx skills references suggest` (also in USAGE); skills-references.test.ts has `\"x\".repeat(262145)`; context-resolver.ts:82 `export const CONTRACT_MAX_BYTES = 262144;`. Sites: skills-references.ts (help text, USAGE), skills-references.test.ts (size test). Distinct from the wave-1 finding on proof thresholds in skill prose.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:hardcoded-references-thresholds-in-help"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "...\"anchor\" in overrides ? (overrides.anchor === undefined ? {} : { anchor: overrides.anchor }) : { anchor: entry.anchor },",
+      "problem": "The `declaration()` fixture builder nests a ternary inside a ternary inside an object spread to express 'a key present in overrides with value undefined removes the field'. It is the hardest line to read in a 329-line file, and every test in the file goes through it.",
+      "impact": "A reader changing a fixture (adding a field, or another optional one like `anchor`) has to decode the double ternary and its `in` test first; the next optional field would copy the same pattern.",
+      "suggested_fix": "Merge then delete: `const merged = { ...entry, ...overrides }; if (merged.anchor === undefined) delete merged.anchor; return merged as Declaration;` (the `Overrides` type already admits `undefined`), or an early-return `if` for the anchor case.",
+      "evidence": "src/commands/skills-references.test.ts, function `declaration`: the `\"anchor\" in overrides ? (... ? {} : {...}) : {...}` expression inside the returned object literal.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:nested-ternary-declaration-fixture"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/skills-references.ts",
+      "line": null,
+      "quote": "lines.push(\"\", `${report.errors} ${report.errors === 1 ? \"error\" : \"errors\"}, ${report.warnings} ${report.warnings === 1 ? \"warning\" : \"warnings\"}`);",
+      "problem": "Pluralisation is written inline twice in the summary line, while references-check.ts has a `plural(count, noun)` helper for the same job (used by undeclaredCitationHint). It is module-private there, so the command re-implements it.",
+      "impact": "Two spellings of the same rule in one feature; a third count line copies the ternary again.",
+      "suggested_fix": "Export `plural` from references-check.ts (or a shared lib) and write `${plural(report.errors, \"error\")}, ${plural(report.warnings, \"warning\")}`.",
+      "evidence": "references-check.ts line 85 `const plural = (count: number, noun: string): string => ...`; skills-references.ts renderReferencesReport.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:inline-pluralisation-references-report"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "test(\"references suggest: skills import --rules ends with the count of undeclared citations and the command to run\", async () => {",
+      "problem": "Three tests of the `skills import --rules` hint (this one, the 'prints no hint when every citation is declared or none exists' one, and the '--json stays pure JSON' one) carry the prefix `references suggest:`, but they exercise `skillsCommand([\"import\", \"--rules\", ...])`, not `references suggest`. The file header also labels itself 'T9', a plan task id.",
+      "impact": "A filtered run (`-t \"references suggest\"`) pulls in import tests, and one for the import hint (`-t \"import\"`) misses them; a failure line misattributes the broken command.",
+      "suggested_fix": "Prefix those three titles `skills import --rules hint:` (or group them in their own describe), and replace the 'T9' label in the header comment with the behaviour it covers.",
+      "evidence": "skills-references.test.ts: the three titles above; header comment `// Flow 462, T9: ...`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:test-title-prefix-import-hint"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "\"---\\ndescription: s\\nglobs: src/**/*.css\\nalwaysApply: false\\n---\\n\\nNo citation.\\n\"",
+      "problem": "The rule front matter is written out three times as a string literal: the `RULE` constant, an inline variant in the 'no rule cites' test, and this one in the import-hint test. They differ only in the body line.",
+      "impact": "A change to the rule fixture shape (a new required front-matter key) has to be applied at three places.",
+      "suggested_fix": "Add `const rule = (body: string) => `---\\ndescription: styling\\nglobs: src/**/*.css\\nalwaysApply: false\\n---\\n\\n${body}\\n`;` and build RULE and the two variants from it.",
+      "evidence": "skills-references.test.ts: RULE constant, the `rules: { \"styling.mdc\": \"---\\ndescription: styling...No document is cited here.\\n\" }` literal, and the `withoutCitation` literal.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:duplicated-rule-front-matter-fixture"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "// Flow 461: project rules and implementation context — the last resolve, the cap,",
+      "problem": "The comment above `/projectctx` still lists three things (last resolve, cap, warn/block), while the description edited in this diff now also advertises `refs` and 'conditional references'. The comment was not updated with the line below it.",
+      "impact": "A reader of the registry entry gets two different accounts of what the modal shows.",
+      "suggested_fix": "Add 'and the conditional references (flow 462)' to the comment; mention the `refs` tab in the same place.",
+      "evidence": "agent-commands.ts, the `/projectctx` entry: comment (flow 461 contents) next to the new description ending `[warn|block|refs]`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:stale-comment-projectctx-entry"
+    }
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "whole slice read: agent-commands.ts, skills-references.ts, skills.ts (imports, router, help table, help text), skills-references.test.ts, task-project-context.test.ts, and the bundled copies of flow-orchestrator, job-orchestrator (SKILL.md and orchestrator-prompt.md), task-implementer and tests-creator; references-check.ts and the head imports of skills.ts read for context", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 4 }
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Slice 02 follows local conventions: the new command file is small, the help-table entry is the documented one-line route, and the bundled skill copies change prose only. Two minor items (thresholds and the suggest command restated in the help text and test where constants exist; a nested ternary in the test fixture builder) and four info items (inline pluralisation, test title prefixes, repeated rule front matter, a stale registry comment). Nothing here is major.
+
+## Review Scope
+- Branch: `feat/conditional-reads`
+- Merge-base: `1658f77d374b2d20189a55eaf44b95d64768d6b6`, head `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: supplied slice (slice-02.diff)
+- Not raised: items settled in PR #1048 "Known limits"; wave-1 findings (docs drift, proof thresholds restated in prose, task-implementer 2.0c bullet)
+
+## Stats
+- major: 0
+- minor: 2
+- info: 4
+
+## Positive Notes
+- printResolveContextHelp interpolates TASK_TEXT_MAX_CHARS instead of repeating the number.
+- Test names state the behaviour and the exit code; `capture` restores console and cwd in finally/afterEach.

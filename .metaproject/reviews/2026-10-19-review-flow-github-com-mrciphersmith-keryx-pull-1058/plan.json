@@ -1,0 +1,169 @@
+{
+  "v": 1,
+  "package": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1058",
+    "base": "origin/main",
+    "head": "5974c976823e1a7134723edf3a9140b991246d45"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+      "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "fixHunks": 0,
+    "newHunks": 115,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/gdgraph/artifacts/module-map.json",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+          ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+          "README.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-core-boundaries",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/autonomous-review.md",
+          "docs/docs/guides/review-with-a-record.md",
+          "docs/docs/limitations.md",
+          "docs/requirements/keryx-card-any-host/prd.md",
+          "src/commands/operator-confirm-review.ts",
+          "src/commands/review-operator.ts",
+          "src/commands/review-host-question.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/decisions/journal.ts",
+          "src/decisions/report.ts",
+          "src/decisions/service.ts",
+          "src/decisions/sources.ts",
+          "src/decisions/types.ts",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+          "src/gdskills/contracts/review-finding.schema.json",
+          "src/review/estimate.ts",
+          "src/review/operator-decisions.ts",
+          "src/review/plan-confirmation.ts",
+          "src/review/premise-question.ts",
+          "src/review/premise.ts",
+          "src/review/readiness.ts",
+          "src/review/types.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-04",
+        "files": [
+          "src/trigger/unattended.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-core-boundaries",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "dispatches": 34,
+  "minutes": {
+    "min": 18,
+    "max": 45
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "6038122ebdd6ac83",
+  "warnings": [],
+  "next": "dispatch"
+}

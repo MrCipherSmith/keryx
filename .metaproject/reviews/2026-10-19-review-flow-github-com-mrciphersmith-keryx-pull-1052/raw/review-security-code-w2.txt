@@ -1,0 +1,98 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "slices": ["slice-02"],
+  "summary": "Slice-02 (src/commands/*, src/flow/*) traced end to end with src/remote/ and src/tui/tui-shell.ts: Telegram press -> hub allowed-id filter -> http-surface pressApproval (single press, session-bound) -> SSE approval event -> client readApprovalEvent -> tui-shell remoteApproval -> agent.ts driver ctx -> operatorConfirmTool.invoke (single-use token, exact-input binding, second allowed-id check, 1h TTL) -> spec.apply. No blocker or major found: the allowed-user check, token binding, single use and expiry hold, there is no tool-result path to via:\"remote\", and the TUI path never records pressedBy/pressedAt. One minor (review_complete reports 'nothing was recorded' when the audit-record write fails after the round is already closed) and three info items (provenance weaknesses that are documented limits or non-exploitable).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "In review_complete.apply the review is closed by completeReviewGated first and the operator-act record (completion-confirmation.json with confirmedVia, pressedBy, pressedAt) is written afterwards, inside the same try. If the write throws (disk full, permission, read-only package dir), the catch returns 'review_complete refused: ... — nothing was recorded' with isError:true although the round is already closed. The pressedBy/pressedAt provenance of the closing act is then lost, and the model is told the close was refused.",
+      "impact": "Attack vector: none by an attacker; this is a fail-open of the audit trail. A closed review with no provenance record, while the agent is told it was refused, can lead it to ask the operator again (a second card that then fails with an already-complete error) and leaves the review without the operator-act record that AC provenance relies on.",
+      "suggested_fix": "Write the record first (or build it before the gated close and write it in a finally/after-close step that is reported separately): on a write failure after a successful close, return success with a 'warning: the confirmation record could not be written: <reason>' line instead of 'nothing was recorded'.",
+      "evidence": "operator-confirm-review.ts apply(): lines 750-775 — completeReviewGated(...) at 750, writeFileAtomic(... COMPLETION_FILE ...) at 765, catch at 773-775 returns 'nothing was recorded'. completeReviewGated (src/review/complete-gated.ts:11-18) ends in completeManagedReview, which has already persisted the closure.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "return { approved: true, fingerprint, via: \"remote\", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };",
+      "problem": "pressedAt is the shell's clock at delivery of the SSE approval event, not the time the operator pressed the Telegram button; the 1h card TTL in operatorConfirmTool.invoke is anchored at issuedAt (card build time, local clock). pressedBy is the id carried by the hub-filtered callback and is re-checked against allowedUserIds() in invoke, so it is trustworthy; only the time is approximate.",
+      "impact": "No attack vector: a press delayed by network or by the mirror queue is stamped later than it happened, and an old card cannot be revived because the TTL runs from card build. Worth knowing when reading pressedAt in the audit record as 'time of the operator act'.",
+      "suggested_fix": "Optional: carry the Telegram callback timestamp through ApprovalEvent and prefer it for pressedAt, keeping the shell clock as the fallback. Otherwise document pressedAt as 'delivered at'.",
+      "evidence": "tui-shell.ts:584 (only producer of via:\"remote\"); agent.ts executeCallUnbounded copies response.pressedBy/pressedAt into the invoke ctx only for via === \"remote\"; operator-confirm-tools.ts invoke compares now() - entry.issuedAt with REMOTE_CARD_TTL_MS.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/flow/confirm-token.ts",
+      "line": null,
+      "quote": "stored.confirmedVia === \"tui-card\" ? \"tui-card-token\" : stored.confirmedVia === \"remote-card\" ? \"remote-card-token\" : \"terminal-token\";",
+      "problem": "The flow-confirm token stores pressedBy/pressedAt (mintConfirmationToken, StoredConfirmationToken) but consumeConfirmationToken builds the SignatureConfirmation with only mechanism, tokenRef, mintedAt, consumedAt and boundTo, so the signature written to the flow does not carry the Telegram user id even for mechanism remote-card-token. The provenance is recoverable only from confirm-token.json and the flow's confirmation block (service.ts confirmMint).",
+      "impact": "No attack vector; an audit-completeness gap. A reader of the signature alone sees 'remote-card-token' without who pressed it.",
+      "suggested_fix": "If the signature is meant to be self-contained provenance, copy pressedBy/pressedAt into the returned SignatureConfirmation (types.ts already allows them on the confirmation block). Otherwise state in TM-04 that the signature references the token and the token record holds the presser.",
+      "evidence": "confirm-token.ts:140 stores pressedBy; confirm-token.ts:215-236 consumeConfirmationToken returns no pressedBy/pressedAt.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "import { completeReviewGated } from \"../review/complete-gated\";",
+      "problem": "Pre-existing, not introduced by the diff: plain `keryx review complete` has no TTY or card gate (a TTY is demanded only for --waive / --waive-coverage), and the TTY checks that exist use process.stdin.isTTY, which an agent running shell_exec can satisfy under a pty. The diff routes the CLI through the same completeReviewGated as the card, so the gates (run profile, narrowed routing, head, evidence level, research, readiness) are now identical; it does not add or remove a human-presence requirement for a plain close.",
+      "impact": "An agent that can run shell_exec can close a review through the CLI without an operator card, as before. The card adds an operator-act record for the in-shell path; it does not make the CLI path require one. TM-04 and AC7 already document that a same-OS-user agent can forge the package stores.",
+      "suggested_fix": "Track separately: either require a mint/confirm token for `review complete` as flow_confirm does, or state in autonomous-review.md that the card is the audited path and the CLI is not.",
+      "evidence": "review.ts COMPLETE_FLAGS and isTerminal seams at lines 574, 1061; complete-gated.ts shared by both paths; TM-04 caveat.",
+      "confidence": "medium",
+      "location_class": "pre-existing",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 },
+  "follow_ups": [
+    "Decide whether `keryx review complete` should require the same operator-act record as the card (F-004, pre-existing)."
+  ]
+}
+```
+
+## Security Review (slice-02)
+
+Scope: PR 1052 (flow 464), head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66, slice-02 diff plus traced sources in src/remote/, src/review/, src/tui/tui-shell.ts.
+
+Summary: blockers 0, major 0, minor 1, info 3.
+
+### Answers to the lens questions
+
+1. Authorization of the remote answer. Telegram callback ids are filtered in src/remote/hub.ts (allowedUserIds.includes(fromId); updates with an undefined fromId are dropped). http-surface pressApproval is session-bound and expiry-checked, drops the approval before writing to SSE, and ignores a second press. client.readApprovalEvent keeps fromId only if it is a safe integer. operatorConfirmTool.invoke repeats the check against binding.allowedUserIds() (loaded from the remote config, positive safe integers, non-empty) and refuses when the list is undefined or does not contain pressedBy. Both missing pressedBy and missing pressedAt on a remote answer fail closed.
+2. Token binding, single use, expiry. confirmation() mints an in-memory token stored with the exact input (JSON.stringify), card and issuedAt; invoke deletes the entry before validating, so a failed attempt also burns it; a different tool or different input is refused; the 1h TTL (REMOTE_CARD_TTL_MS) is measured on the local clock from issuedAt. Nested agents (KERYX_TOOL_CALL=1) are refused by nestedAgentCardRefusal.
+3. No tool-result path. via:"remote" has exactly one producer, tui-shell.remoteApproval, fed by answer.fromId from the hub-filtered event. agent.ts executeCallUnbounded passes confirmationVia/PressedBy/PressedAt into invoke's ctx only together with a confirmationToken minted by the same driver and only when response.via === "remote"; model-supplied tool input cannot set them, and the TUI path ("tui-card") never records pressedBy/pressedAt.
+4. Provenance. Every review tool, record() and recordScheduleDecision spread the press fields into the stored record; flow confirm passes them through service.confirmMint into the token store (F-003 notes the signature does not copy them). pressedAt is delivery time (F-002).
+5. Can an agent record an operator act itself? Not through the card path: the token and the presser id come from the driver and the hub. The only routes are the documented same-OS-user ones (writing package files or running the CLI through shell_exec; F-004, TM-04, AC7), all pre-existing.
+6. review_complete. facts (head, evidence level, waivers) are re-derived at apply and compared with the shown digest; the same completeReviewGated gates as the CLI run at answer time; the head input is validated as 7 to 40 hex characters; the absolute prepared.dir is accepted by resolveReviewPackagePath only when it holds a manifest.json.
+
+### Clean Areas (checked, no finding)
+- Injection (SQL, command, SSTI, eval): no new shell, query or template construction in slice-02.
+- Authentication/authorization of the remote answer: see answers 1 to 3.
+- IDOR: package refs resolve through resolveReviewPackagePath under the reviews root or an existing manifest.json directory; the card shows the package name before the operator answers.
+- Input validation: tool inputs are typed and checked per spec; head regex; limits unchanged.
+- Secrets/logging: token value is never echoed (describeConfirmationFailure, refusal texts); confirm-token.json stores a sha256 hash.
+- Cryptography: tokens are random and compared by hash; no weak primitives added.
+- CSRF, open redirect, path traversal: no new routes or file path inputs from the model beyond the package ref above.
+- Fail-closed paths: missing provenance, undefined allowed list, expired card, mismatched input, digest change all refuse and record nothing.
+
+### Routing audit
+graph_used: no (not-relevant; traced by direct reads of known files), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg and keryx ctx read), raw_rg_used: no.

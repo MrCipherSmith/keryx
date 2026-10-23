@@ -1,0 +1,231 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Clean Code Review (wave 3, slice-03)
+
+### Review Scope
+- PR 1052 (flow 464), head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66.
+- Slice read: slice-03 (140589 bytes, 2516 lines, 12 distinct files: agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts and five test files). Opened the head versions of operator-confirm-review.ts, operator-confirm-tools.ts, operator-confirm-other.ts, agent.ts and review/types.ts for line numbers and context.
+- Read-only: no file edited, no `keryx review` mutating command run. Code search through `keryx ctx rg`.
+- Not re-filed (known): stale "then run `keryx review complete`" in the review-orchestrator skill files, completion-gate.ts:791, missing D-12 remote-press tests, r03 minors D-02..D-14, autonomous-profile.ts wording.
+- Checked and clean in this slice: the four waiver strings behind r03 D-01 (operator-confirm-review.ts description lines for review_waive_coverage and review_waive_readiness, the readiness apply result, the header comment, and both `--waive` / `--waive-coverage` error texts in review.ts) now say `review_complete`; the new test asserts it for the readiness result. No stale `keryx review complete` instruction remains in the slice's changed lines.
+
+### Summary
+The slice is well structured at the module level: the press fields travel through one helper (`cardPressFields`) at nine call sites, the remote-answer checks are in one place, and the new `review_complete` card re-reads its facts before applying. The main Clean Code concern is the `review_complete` `apply`, a 57-line function that runs the gates, infers whether the round closed, writes a record and composes the output with three nullable error variables. The remaining findings are minor: small duplications and casts that a shared helper or a single press object would remove.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 7  |  info: 0
+
+### Findings
+
+#### Naming
+No naming issues found.
+
+#### Functions
+- CC3-001 (major) review_complete `apply` is 57 lines with five jobs
+- CC3-002 (minor) `completionFacts` reads five sources and writes card wording
+- CC3-003 (minor) `operatorConfirmTool.invoke` grew to 43 lines, with two `as` casts
+- CC3-004 (minor) agent.ts carries one answer as three loose variables and three repeated guards
+
+#### Comments
+No comment issues found.
+
+#### Error Handling
+No error handling issues found. The `completeSpec.apply` flow keeps the gate error and reports it ("the round is closed but its bookkeeping stopped"), so nothing is swallowed; the `.catch(() => undefined)` at operator-confirm-review.ts:765 is a best-effort re-read whose failure leaves the original `gateError` to be reported.
+
+#### DRY
+- CC3-005 (minor) operator-confirm-other.ts `record()` re-implements `cardPressFields`
+- CC3-006 (minor) `.slice(0, 12)` three times in `completeSpec`
+- CC3-007 (minor) error-to-message expression written again beside an existing helper
+- CC3-008 (minor) the five card names hardcoded in two slash-command descriptions
+
+#### SOLID
+No SOLID violations found at the function/class level.
+
+### Clean Areas
+- Naming (A1-A3): `completionFacts`, `factsDigest`, `CompletePrepared`, `pressedBy`, `pressedAt` read well; no generic names or ambiguous booleans in new code.
+- Comments (C1-C3): new comments explain intent and constraints (the "engine closes the manifest before its own bookkeeping" note, the research.json ENOENT note); no commented-out code.
+- Error handling (D1-D2): typed `unknown` catches, messages carry context.
+- SOLID (F1-F5): the new spec is injected with seams (`ReviewConfirmSeams`), `allowedUserIds` arrives through the binding; no `new ConcreteService()` inside methods.
+
+### Details
+
+### [CC3-001] review_complete `apply` mixes gate execution, closure inference, record writing and output composition
+
+- **Severity**: major
+- **File**: src/commands/operator-confirm-review.ts:741
+- **Principle**: Clean Code - Functions B1 (size, one thing, one level of abstraction)
+- **Problem**: `apply` of `completeSpec` spans lines 741-797 (57 lines). It (1) re-reads facts and compares the digest, (2) runs `completeReviewGated` inside try/catch into `done` and `gateError`, (3) infers "closed" by re-reading the manifest when the gate threw, (4) builds and atomically writes `completion-confirmation.json` inside a second try/catch into `recordError`, and (5) composes a multi-line output with two kinds of "closed but ..." problems. Three nullable variables (`done`, `gateError`, `recordError`) are carried across the blocks, and the reader has to hold the four outcome combinations (gate ok/threw x closed/not closed x record written/failed) in mind to follow the end.
+- **Fix**: Extract three helpers and leave `apply` as the orchestration: `runCompletionGates(...)` returning `{ done, gateError, closed }`; `writeCompletionRecord(dir, record)` returning the error or undefined; `completionOutput({ closedLine, problems, done })` building the text. Each is then testable alone and `apply` drops below 25 lines.
+
+### [CC3-002] `completionFacts` reads five sources and also writes card wording that is hashed into the digest
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:658
+- **Principle**: Clean Code - Functions B3 (abstraction level consistency)
+- **Problem**: One 35-line function parses manifest.json, report.md and research.json, reads operator decisions, and formats display lines such as "evidence level: the report has no `Evidence level:` line; the gate will refuse" and "could not read research.json (...); the research gate will refuse". Presentation strings thereby become part of the "facts" object whose JSON is hashed by `factsDigest`, so rewording a card line changes what counts as "the package moved".
+- **Fix**: Split into a pure reader returning raw values (head, evidence line or undefined, readiness waivers, coverage waiver or read error, decisions, status) and a small `describeFacts(raw)` that builds the card lines. Hash the raw value.
+
+### [CC3-003] `operatorConfirmTool.invoke` grew to 43 lines and uses two `as` casts to get around narrowing
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-tools.ts:198 (casts at 206 and in the confirmation record, `pressedBy as number`, `pressedAt as string`)
+- **Principle**: Clean Code - Functions B1/B3
+- **Problem**: The remote-press validation (who pressed, allowed list, one-hour TTL) sits inline between token lookup and applying the effect, which puts a security policy, the bookkeeping of a `pending` map and the effect call in one body at the 40-line threshold. `pending.delete(token as string)` and `pressedBy as number` exist because the `remote` boolean does not narrow the `let` variables; the casts hide the fact that they can be undefined if the checks are reordered.
+- **Fix**: Extract `remotePressRefusal(ctx, entry, now, allowed)` returning `{ refusal } | { pressedBy, pressedAt }`. The caller then spreads the returned press object and needs no cast; take the token from `entry` (store it in the map value) instead of casting `token`.
+
+### [CC3-004] agent.ts carries one remote answer as three loose variables and repeats the same guard three times
+
+- **Severity**: minor
+- **File**: src/commands/agent.ts:5816 (declarations), 6123 (assignments), 6190-6192 (spreads into `tool.invoke`)
+- **Principle**: Clean Code - DRY E1 (2 spreads share one guard) / data clumps
+- **Problem**: `confirmationVia`, `confirmationPressedBy` and `confirmationPressedAt` always travel together, yet are three `let` variables set in three statements and passed through three spreads that each repeat `confirmationToken !== undefined && confirmationVia === "remote" && ...`. The next field added to the press (a message id, say) has to be added in four places.
+- **Fix**: Hold one `confirmation?: { via: "local" | "remote"; pressedBy?: number; pressedAt?: string }` and build the `invoke` context with a small helper, or spread `cardPressFields(remote)` once under a single guard.
+
+### [CC3-005] operator-confirm-other.ts `record()` hand-writes what `cardPressFields` already does, and inlines the `CardPress` shape twice
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-other.ts:109 and :625
+- **Principle**: Clean Code - DRY E1
+- **Problem**: `record()` repeats the two `=== undefined ? {} : {...}` spreads, and both its return type and the `recordScheduleDecision` line type spell `pressedBy?: number; pressedAt?: string` by hand. `src/review/types.ts:92-100` exports `CardPress` and `cardPressFields` for exactly this, and operator-confirm-review.ts uses them at nine call sites in the same PR. Two shapes for one concept can drift (the shared type allows `| undefined`).
+- **Fix**: `function record(confirmation): { confirmedVia: string; quote: string } & CardPress { return { confirmedVia: ..., quote: ..., ...cardPressFields(confirmation) }; }` and type the log line `... & CardPress`.
+
+### [CC3-006] Magic number 12 for the abbreviated head, three times in one spec
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:723, :734, :784
+- **Principle**: Clean Code - DRY E2 (magic numbers)
+- **Problem**: `facts.head.slice(0, 12)` / `prepared.head.slice(0, 12)` appears three times in `completeSpec` (card title, subject, result line). The tests assert the 12-character form (`HEAD.slice(0, 12)`), so the length is a contract, but it is written as a bare literal.
+- **Fix**: `const SHORT_HEAD_CHARS = 12;` and a `shortHead(head)` helper next to `clip`.
+
+### [CC3-007] The error-to-message expression is written again next to an existing helper
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:675 and :743
+- **Principle**: Clean Code - DRY E1
+- **Problem**: This diff adds a local arrow `const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error))` (line 743) and an inline copy (line 675), while the same file already has `failed` (line 87) doing the same conversion and operator-confirm-other.ts:82 has `errorText`. Counting operator-confirm-tools.ts:183 and :235 the expression exists seven times in three sibling files. The local name `reason` also collides in meaning with the `reason` field the sibling specs pass around.
+- **Fix**: Export one `errorText` from operator-confirm-tools.ts (the framework file both spec files already import from) and use it at 675, 743, 786-787; name it `errorText`, not `reason`.
+
+### [CC3-008] The five review card names are hardcoded in two slash-command descriptions
+
+- **Severity**: minor
+- **File**: src/commands/agent-commands.ts:187 and :304 (the same list also at src/standard/help-groups.ts:582 and :600, outside this slice - reported as additional sites only)
+- **Principle**: Clean Code - DRY E2 (repeated string literal)
+- **Problem**: "review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete" is pasted into four descriptions. This PR is itself a case of the list changing (review_complete was added); the next card has to be found by text search in four strings, and a missed one gives a help text that omits a card that is waiting.
+- **Fix**: Define the list once (a constant exported next to the Helyx card tool names) and interpolate it into the descriptions, or say "the review cards" without listing names in the one-line description.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-03 is well structured overall (one cardPressFields helper at nine call sites, remote-answer checks in one place, review_complete re-reads its facts before applying). One major: review_complete apply is 57 lines mixing gate execution, closure inference, record writing and output composition. Seven minors: facts reader mixing card wording, invoke at the size threshold with two casts, a data clump in agent.ts, and four small DRY items. The r03 D-01 waiver wording is fixed in this slice.",
+  "stats": { "blocker": 0, "major": 1, "minor": 7, "info": 0 },
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "CC3-001",
+      "reviewer": "review-clean-code",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 741,
+      "quote": "async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {\n      if (prepared === undefined) return { output: \"review_complete: nothing prepared for this card\", isError: true };",
+      "problem": "apply of the new review_complete spec spans lines 741-797 (57 lines) and does five jobs: re-read facts and compare the digest, run completeReviewGated into done/gateError, infer 'closed' by re-reading the manifest when the gate threw, write completion-confirmation.json into recordError, and compose a multi-line output with two kinds of 'closed but ...' problems. Three nullable variables (done, gateError, recordError) are carried across the blocks.",
+      "impact": "The four outcome combinations (gate ok or threw, closed or not, record written or failed) cannot be tested or read in isolation; the next change to the close path (a new bookkeeping step) has to be threaded through all five concerns.",
+      "suggested_fix": "Extract runCompletionGates(...) returning { done, gateError, closed }, writeCompletionRecord(dir, record) returning the error or undefined, and completionOutput({ closedLine, problems, done }) building the text; leave apply as orchestration.",
+      "evidence": "src/commands/operator-confirm-review.ts lines 741-797 at head b1c6da0e6992 (read in full); lines 753-754, 778 declare done, gateError, recordError; line 765 re-reads completionFacts to infer closure.",
+      "confidence": 0.85
+    },
+    {
+      "id": "CC3-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 658,
+      "quote": "evidence: evidenceLine === undefined ? \"evidence level: the report has no `Evidence level:` line; the gate will refuse\" : cardSafe(evidenceLine),",
+      "problem": "completionFacts (about 35 lines) parses manifest.json, report.md and research.json, reads operator decisions and formats card lines; display strings such as 'the gate will refuse' and 'could not read research.json (...)' become part of the facts object that factsDigest hashes.",
+      "impact": "Rewording a card line changes the digest and so what counts as 'the package moved'; the reader mixes IO, parsing and presentation in one body.",
+      "suggested_fix": "Split into a pure raw reader (head, evidence line or undefined, readiness waivers, coverage waiver or read error, decisions, status) and describeFacts(raw) for the card lines; hash the raw value.",
+      "evidence": "operator-confirm-review.ts:658-692 and :698 (factsDigest = sha256 of JSON.stringify(facts)); the slice diff lines 794-828.",
+      "confidence": 0.7
+    },
+    {
+      "id": "CC3-003",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": 198,
+      "quote": "pending.delete(token as string);\n      const remote = ctx?.confirmationVia === \"remote\";",
+      "problem": "invoke is now about 43 lines. The remote-press policy (who pressed, allowed list, one-hour TTL) sits inline between token lookup and the effect call, and two casts (token as string, pressedBy as number / pressedAt as string) exist only because the 'remote' boolean does not narrow the let variables.",
+      "impact": "A policy block and a pending-map bookkeeping block share one body at the 40-line threshold; the casts would hide an undefined if the checks were ever reordered.",
+      "suggested_fix": "Extract remotePressRefusal(ctx, entry, now, allowed) returning { refusal } or { pressedBy, pressedAt }; keep the token in the pending entry instead of casting.",
+      "evidence": "operator-confirm-tools.ts:198-240 at head (invoke); slice diff lines 1121-1163; cast sites at :206 and in the confirmation spread `pressedBy: pressedBy as number, pressedAt: pressedAt as string`.",
+      "confidence": 0.6
+    },
+    {
+      "id": "CC3-004",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/agent.ts",
+      "line": 6191,
+      "quote": "...(confirmationToken !== undefined && confirmationVia === \"remote\" && confirmationPressedBy !== undefined ? { confirmationPressedBy } : {}),",
+      "problem": "confirmationVia, confirmationPressedBy and confirmationPressedAt always travel together, but are three let variables (5816-5817 and the existing via), assigned in three statements (6122-6124) and passed through three spreads that each repeat `confirmationToken !== undefined && confirmationVia === \"remote\" && ...` (6190-6192).",
+      "impact": "A further field on the press needs edits in four places; the repeated guard can drift between spreads.",
+      "suggested_fix": "Hold one confirmation object { via, pressedBy?, pressedAt? } and spread cardPressFields-style once under a single guard.",
+      "evidence": "agent.ts lines 5816-5817, 6121-6125 and 6189-6192 at head; slice diff lines 159-160, 205-210, 253-255.",
+      "confidence": 0.65
+    },
+    {
+      "id": "CC3-005",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-other.ts",
+      "line": 109,
+      "quote": "function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string; pressedBy?: number; pressedAt?: string } {",
+      "problem": "record() hand-writes the two 'x === undefined ? {} : {...}' spreads and, with the recordScheduleDecision line type at :625, spells the shape { pressedBy?: number; pressedAt?: string } twice, although src/review/types.ts:92-100 exports CardPress and cardPressFields for exactly this and operator-confirm-review.ts uses them at nine sites in the same PR.",
+      "impact": "Two definitions of one concept can drift (CardPress allows `| undefined`, the inline copies do not); a third press field is added in more places than needed.",
+      "suggested_fix": "Return type `{ confirmedVia: string; quote: string } & CardPress` with `...cardPressFields(confirmation)`; type the log line `... & CardPress`.",
+      "evidence": "operator-confirm-other.ts:109-116 and :625; src/review/types.ts:92-100; keryx ctx rg 'cardPressFields' lists nine uses in operator-confirm-review.ts.",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC3-006",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 723,
+      "quote": "const at = facts.head === undefined ? \"\" : ` at ${facts.head.slice(0, 12)}`;",
+      "problem": "The abbreviated-head length 12 is a bare literal at lines 723, 734 and 784 inside completeSpec (card title, subject, result line); tests assert the 12-character form, so it is a contract.",
+      "impact": "Changing the abbreviation length means finding three literals, and a miss makes the title and the result line disagree.",
+      "suggested_fix": "const SHORT_HEAD_CHARS = 12 and a shortHead(head) helper beside clip().",
+      "evidence": "operator-confirm-review.ts:723, :734, :784; operator-confirm-review-tools.test.ts uses HEAD.slice(0, 12) in assertions.",
+      "confidence": 0.9
+    },
+    {
+      "id": "CC3-007",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 743,
+      "quote": "const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "The diff adds a local arrow (743) and an inline copy (675) of the error-to-message conversion, while the same file already has `failed` (line 87) doing it and operator-confirm-other.ts:82 defines errorText. With operator-confirm-tools.ts:183 and :235 the expression now exists seven times across three sibling files. The name `reason` also clashes with the `reason` field the sibling specs pass.",
+      "impact": "Small duplication that grows with each new spec; a consistent change to error rendering needs seven edits.",
+      "suggested_fix": "Export one errorText from operator-confirm-tools.ts (already imported by both spec files) and use it at 675, 743, 786 and 787.",
+      "evidence": "keryx ctx rg 'instanceof Error ? \\w+.message : String' over the three operator-confirm files: 7 matches (review.ts 87, 675, 743; other.ts 82-83; tools.ts 183, 235).",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC3-008",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/agent-commands.ts",
+      "line": 187,
+      "quote": "Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
+      "problem": "The same five-name list is pasted into the /remote-control description (187) and the /decisions description (304), and again at src/standard/help-groups.ts:582 and :600 (outside this slice, reported as additional sites only).",
+      "impact": "Adding the next card means finding four strings by text search; a missed one gives a help text that omits a card that is waiting, which is the case this PR itself just hit with review_complete.",
+      "suggested_fix": "Export the list once next to the card tool names and interpolate it into the four descriptions, or describe them as 'the review cards' without naming each.",
+      "evidence": "keryx ctx rg 'review_waive_coverage, review_complete' over src/standard/help-groups.ts and src/commands/agent-commands.ts: 4 matches.",
+      "confidence": 0.75
+    }
+  ]
+}
+```

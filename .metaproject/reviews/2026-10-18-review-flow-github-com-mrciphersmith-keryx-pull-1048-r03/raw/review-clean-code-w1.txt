@@ -1,0 +1,221 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Delta round r03, slice-01, checked against the code at head 5382b56ab. 21 prior findings: 14 closed (linked rules are now scanned in references-check.ts; the dead-anchor proof falls back to the whole file; keywordOccurs demands a boundary only on a word-character edge; heading parsing is hand-written and linear, measured 11 ms on a 250000-space line; last.json no longer stores the task text and docs say so; the load counter drops stale results and polls no longer stack; the size-limit test imports CONTRACT_MAX_BYTES), 2 partial and 5 open. Partial: the task-text quoting fix is single quotes everywhere but the escape rule for an embedded apostrophe exists only in flow-orchestrator (new F-003). Open and unchanged by the fix commits: the task-implementer 2.0c bullet (w1:F-003), the tab-to-formatter mapping (w5:F-001, style-w5:F-002), listener isolation in reload (w5:F-003), and the BOM before a first-line heading (logic-w3:F-003; scanHeadings still sees the BOM as part of the line, verified with extractSection('\\uFEFF# Title...') returning found:false). New defects from the fixes: one minor interaction between the ordering guard and an unfixed listener throw (F-005), two stale or misleading comments (F-001, F-002), one DRY note (F-004) and two info naming/readability notes (F-006, F-007). No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "the rule is read where it lives, as the resolver does.",
+      "problem": "The new comment says a linked rule is read 'as the resolver does', but the resolver does more than read it. collectProjectRules also excludes a linked rule whose origin cannot be read and one whose sha256 no longer equals the registry's, each with a warning. scanCitations reads the origin and scans whatever it finds, with no sha256 pin. The comment claims a parity that is not there (Clean Code C1, a comment that misleads). The registry filter, origin read and fallback are also a second copy of the linked-rule reading logic the finding that prompted this fix asked to share; the long chained filter/map on the `links` line makes the loop harder to read.",
+      "impact": "Trigger: a linked rule edited after `skills import --link` and not yet re-synced with `skills update --rules`. The resolver excludes it (no citations seen, warning printed), while `references check|suggest` still scans its new text. Check and resolver can then disagree about which documents are cited, the same class of disagreement the fix set out to remove, now only for a changed link. Low frequency; the reader of the comment is the one misled.",
+      "suggested_fix": "Either make the comment true (skip a linked rule whose sha256 differs from entry.sha256 and report it as rule-unreadable, as the resolver excludes it) or reword it: 'the rule is read where it lives; unlike the resolver, its sha256 pin is not checked'. Prefer extracting the 'rule texts of this project, copied and linked' function from context-resolver.ts so both callers share it.",
+      "evidence": "references-check.ts scanCitations (head lines 97-109) versus context-resolver.ts collectProjectRules lines 215-227: `if (sha256Hex(text) !== entry.sha256) { warnings.push(...); continue; }` has no counterpart in scanCitations.",
+      "confidence": "medium",
+      "dedupe_key": "linked-rule-scan-parity-comment"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "/** The anchored section of the file as it is now, or the whole file when the declaration has no anchor. */",
+      "problem": "The fix for the dead-anchor proof makes currentSection return the whole file in a second case: when the declared anchor is not found in the file. The doc comment still names only one fallback (no anchor), so it now describes less than the function does (Clean Code C1, stale comment).",
+      "impact": "A reader of the JSDoc, or of the SectionOutcome type above it, concludes that `ok: true` with whole-file text means 'no anchor declared'. The next editor who tightens the dead-anchor case (for example by turning it back into an ok:false) has no signal in the doc that this behaviour is deliberate and mirrors the resolver. Readability only; no wrong behaviour.",
+      "suggested_fix": "Extend the comment: 'The anchored section as it is now; the whole file when the declaration has no anchor or when the anchor is no longer found (the resolver treats a dead anchor the same way).'",
+      "evidence": "reference-proof.ts head lines 51-65: the inline comment at line 62 and the `what` text document the dead-anchor case; the JSDoc on line 51 does not.",
+      "confidence": "high",
+      "dedupe_key": "stale-currentSection-doc"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task.description>'",
+      "problem": "The task-text shell-quoting fix was applied by swapping double quotes for single quotes at every site, but the instruction that makes single quotes safe ('a `'` inside it becomes `'\\''`') was added at one site only: flow-orchestrator/SKILL.md. The other dispatch sites that tell an agent to paste free text into the same argument (task-implementer 2.0c, tests-creator 1.2b, job-orchestrator Step A and the fix loop, orchestrator-prompt step 1 and FIX step 2) give the single-quoted template with no escape rule. Task descriptions contain apostrophes constantly ('don't', 'the task's'). The flow-orchestrator template itself writes `'<the task's title and description>'`, an apostrophe inside the single-quoted example.",
+      "impact": "Trigger: a task description with an apostrophe, pasted by an agent that read only one of these skills. The quote closes early: the command fails with an unterminated string, the text is cut at the apostrophe so a keyword after it silently stops promoting, or, when a backtick or `$(...)` follows the apostrophe, the shell sees it outside quotes. The injection hazard the double-quote template had is closed only where the escape rule is stated. Frequency is moderate because the dispatcher is a model that may escape by habit.",
+      "suggested_fix": "State the escape rule once in a place all five skills share, or repeat the same clause at each site: 'Single-quote the text; a `'` inside it becomes `'\\''`'. Better, add `--task-text-file <path>` so no skill has to explain quoting. Fix the flow-orchestrator placeholder so it contains no apostrophe (`<title and description of the task>`). Update the bundled and managed copies together; skill-sync.test.ts keeps them byte-identical.",
+      "evidence": "Sites carrying the escape clause: flow-orchestrator/SKILL.md line 323 only. Sites with the single-quoted template and no clause: task-implementer/SKILL.md 2.0c, tests-creator/SKILL.md 1.2b, job-orchestrator/SKILL.md lines 749 and 1307, orchestrator-prompt.md lines 132 and 188, each present in .metaproject/skills/gdskills and src/gdskills/bundled/skills. Listed with a script that printed every `--task-text` occurrence in both trees.",
+      "confidence": "medium",
+      "dedupe_key": "task-text-escape-rule-missing",
+      "class_scope": {
+        "sites": [
+          "flow-orchestrator/SKILL.md:323 (has the escape clause)",
+          "task-implementer/SKILL.md 2.0c (no clause)",
+          "tests-creator/SKILL.md 1.2b (no clause)",
+          "job-orchestrator/SKILL.md:749 and :1307 (no clause)",
+          "job-orchestrator/orchestrator-prompt.md:132 and :188 (no clause)",
+          "each of the above exists in both .metaproject/skills/gdskills and src/gdskills/bundled/skills"
+        ],
+        "enumeration_method": "a script walked both skill trees and printed every `--task-text` occurrence with its following text; the clause search was `single-quoted` in the same trees."
+      }
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "const before = WORD_CHAR.test(chars[0] ?? \"\") ? \"(?<![\\\\p{L}\\\\p{N}_])\" : \"\";",
+      "problem": "The word-character class `[\\p{L}\\p{N}_]` is now spelled three times in six lines: the WORD_CHAR regex, the lookbehind string and the lookahead string. The boundary fix has to keep all three equal to be correct, and nothing links them (Clean Code E1, near-duplicate definitions that must change together).",
+      "impact": "Maintenance cost only: someone who adds a character to the class in one place (a hyphen, say) changes the edge test but not the lookaround, or the reverse, and keywordOccurs then demands a boundary the edge test did not expect. No wrong behaviour today; the tests pin the current spelling.",
+      "suggested_fix": "Define the class once, for example `const WORD = \"\\\\p{L}\\\\p{N}_\"; const WORD_CHAR = new RegExp(`^[${WORD}]$`, \"u\");` and build `(?<![${WORD}])` and `(?![${WORD}])` from it.",
+      "evidence": "reference-entries.ts head lines 41, 51 and 52 each contain the class.",
+      "confidence": "high",
+      "dedupe_key": "word-char-class-triplicated"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "    if (mine > applied && !sameStatus(current, next)) {\n      current = next;\n      for (const listener of [...listeners]) listener(next);\n    }\n    applied = Math.max(applied, mine);",
+      "problem": "The ordering guard added for the overlapping-load race records the load as applied only after the listeners have run. The open finding clean-code-w5:F-003 (listeners share the load's error path) was not fixed, and it now has a second consequence: when a subscriber throws, `current` is already advanced but `applied` is not. A load that began earlier and finishes later then passes `mine > applied` and overwrites `current` with older data, which is the race the guard was added to stop.",
+      "impact": "Trigger: a subscriber throws (for example a repaint against a destroyed renderable) while two loads overlap, e.g. a poll that started before the `e` toggle. Outcome: the throw is reported as a failed poll, and the older load then replaces the newer status in `current` and in the sidebar and modal. Self-heals on the next differing poll; needs a throwing subscriber, so rare.",
+      "suggested_fix": "Advance the bookkeeping before notifying: `if (mine <= applied) return next; applied = mine; if (!sameStatus(current, next)) { current = next; notify(next) }`, and isolate each listener in its own try/catch that reports through options.onError (this also closes clean-code-w5:F-003).",
+      "evidence": "project-context-inspector.ts head lines 172-182: `applied = Math.max(applied, mine)` is after the `for (const listener of [...listeners]) listener(next);` loop; a throw in the loop skips it. Reasoned from the code; not executed.",
+      "confidence": "medium",
+      "dedupe_key": "reload-applied-after-listeners"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "reviewer": "review-clean-code",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "  let started = 0;\n  let applied = 0;",
+      "problem": "`started` and `applied` are sequence counters, but their names read as booleans next to `failing` and `polling`, and `mine` for the local ticket says nothing about what it is a ticket for (Clean Code A1).",
+      "impact": "A reader has to open reload() to learn that `applied` is a number compared with `>`. No wrong behaviour.",
+      "suggested_fix": "Rename to `loadsStarted` / `lastAppliedLoad` and `mine` to `loadNumber`, or add a one-line comment above the pair stating they are monotone load counters.",
+      "evidence": "project-context-inspector.ts head lines 168-181.",
+      "confidence": "high",
+      "dedupe_key": "load-counter-names"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "Array.from(options.taskText!).length",
+      "problem": "recordLastResolve tests `options.taskText !== undefined && options.taskText.trim() !== \"\"` on line 531 to compute `task`, then re-asserts the same fact two lines later with a non-null assertion on a line that also nests a conditional spread inside a conditional spread. The guard and the assertion can drift apart.",
+      "impact": "Readability only; the length is correct today.",
+      "suggested_fix": "Hoist the validated text: `const text = options.taskText?.trim() ? options.taskText : undefined;` then `task = text !== undefined ? truncateTaskText(text) : undefined` and use `Array.from(text).length`, or have truncateTaskText return the original length.",
+      "evidence": "context-resolver.ts head lines 529-537.",
+      "confidence": "high",
+      "dedupe_key": "recordLastResolve-nonnull"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 5,
+    "info": 2
+  },
+  "slices": [
+    {
+      "id": "slice-01",
+      "coverage": "read the whole 24924-byte diff and the head versions of every changed file, plus the sibling sites of each prior finding",
+      "status": "DONE"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w3:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-clean-code-w2:F-004",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-clean-code-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "id": "review-clean-code-w5:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "partial"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-highload-w5:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-performance-w5:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w4:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w4:F-002",
+      "disposition": "partial"
+    },
+    {
+      "id": "review-style-w5:F-002",
+      "disposition": "open"
+    },
+    {
+      "id": "review-testing-practices-w2:F-008",
+      "disposition": "closed"
+    }
+  ]
+}
+```
+
+Delta round r03, slice-01, checked against the code at head 5382b56ab. 21 prior findings: 14 closed (linked rules are now scanned in references-check.ts; the dead-anchor proof falls back to the whole file; keywordOccurs demands a boundary only on a word-character edge; heading parsing is hand-written and linear, measured 11 ms on a 250000-space line; last.json no longer stores the task text and docs say so; the load counter drops stale results and polls no longer stack; the size-limit test imports CONTRACT_MAX_BYTES), 2 partial and 5 open. Partial: the task-text quoting fix is single quotes everywhere but the escape rule for an embedded apostrophe exists only in flow-orchestrator (new F-003). Open and unchanged by the fix commits: the task-implementer 2.0c bullet (w1:F-003), the tab-to-formatter mapping (w5:F-001, style-w5:F-002), listener isolation in reload (w5:F-003), and the BOM before a first-line heading (logic-w3:F-003; scanHeadings still sees the BOM as part of the line, verified with extractSection('\uFEFF# Title...') returning found:false). New defects from the fixes: one minor interaction between the ordering guard and an unfixed listener throw (F-005), two stale or misleading comments (F-001, F-002), one DRY note (F-004) and two info naming/readability notes (F-006, F-007). No blocker or major.

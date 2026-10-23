@@ -1,0 +1,234 @@
+{
+  "v": 1,
+  "package": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1048",
+    "base": "origin/main",
+    "head": "a4a24a35d2675ee3f12894e3e3c2986e1eb82d18"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "1658f77d374b2d20189a55eaf44b95d64768d6b6",
+      "head": "a4a24a35d2675ee3f12894e3e3c2986e1eb82d18"
+    },
+    "fixHunks": 0,
+    "newHunks": 189,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+          ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.result.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.implement.json",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.result.json",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+          ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/context.md",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/description.md",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/plan.md",
+          ".metaproject/flows/462-2026-10-18-conditional-reads/tasks.md",
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+          "README.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-core-boundaries",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "docs/docs/cli-reference.md",
+          "docs/docs/commands-by-task.md",
+          "docs/docs/guides/apply-project-rules.md",
+          "docs/requirements/keryx-conditional-reads/README.md",
+          "docs/requirements/keryx-conditional-reads/TUI-states.md",
+          "docs/requirements/keryx-conditional-reads/live-run.md",
+          "docs/requirements/keryx-conditional-reads/schemas/references.schema.json",
+          "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+          "package.json",
+          "src/commands/agent-commands.ts",
+          "src/commands/skills-references.ts",
+          "src/commands/skills.ts",
+          "src/commands/skills-references.test.ts",
+          "src/flow/task-project-context.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+          "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+          "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+          "src/gdskills/context-resolver.ts",
+          "src/gdskills/import-rules.ts",
+          "src/gdskills/project-context-status.ts",
+          "src/gdskills/reference-entries.ts",
+          "src/gdskills/reference-proof.ts",
+          "src/gdskills/references-check.ts",
+          "src/gdskills/references-config.ts",
+          "src/gdskills/references-section.ts",
+          "src/gdskills/resolve-context-command.ts",
+          "src/gdskills/resolved-context-check.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-04",
+        "files": [
+          "src/gdskills/conditional-reads.e2e.test.ts",
+          "src/gdskills/context-resolver.test.ts",
+          "src/gdskills/output-schema.test.ts",
+          "src/gdskills/project-context-status.test.ts",
+          "src/gdskills/references-config.test.ts",
+          "src/gdskills/references-section.test.ts",
+          "src/gdskills/resolved-context-check.test.ts",
+          "src/gdskills/skill-sync.test.ts",
+          "src/harness/tool/metaproject-adapter.ts",
+          "src/harness/tool/metaproject-operations.ts",
+          "src/harness/tool/metaproject-port.ts",
+          "src/harness/tool/metaproject-operations.test.ts",
+          "src/lib/group-subcommands.ts",
+          "src/mcp/metaproject-tools.ts",
+          "src/standard/help-groups.ts",
+          "src/tui/project-context-inspector.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-05",
+        "files": [
+          "src/tui/project-context-inspector.ts",
+          "src/tui/project-references-view.ts",
+          "src/tui/tui-shell.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-core-boundaries",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "dispatches": 43,
+  "minutes": {
+    "min": 22,
+    "max": 55
+  },
+  "overThreshold": true,
+  "overReasons": [
+    "43 dispatches > 40"
+  ],
+  "planKey": "1d4e8223674de507",
+  "warnings": [],
+  "next": "confirm plan (card review_confirm_plan / keryx review confirm-plan)"
+}

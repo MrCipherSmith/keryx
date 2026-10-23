@@ -1,0 +1,88 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Delta r02..r03 (fix commits 4838b1b40 and 5382b56ab), slice-01, checked against the code at head 5382b56abf17. All five prior logic majors/minors that were about behaviour are closed: linked rules are scanned, the dead-anchor proof falls back to the whole file like the resolver, keywordOccurs demands a boundary only on a word-character edge, the heading scan is linear, and last.json no longer stores task text. The feed now drops a load older than the one applied and skips a poll while one is in flight. Left open: the BOM-before-first-heading case, the tab/formatter mapping, listener isolation in the feed, and the readability split of the task-implementer 2.0c bullet. Shell quoting is only partly fixed (single quotes, but the escape rule for an embedded apostrophe is stated in one of five skills). Two new minor defects came from the fixes. Tests run at head: 177 pass across the touched suites.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "applied = Math.max(applied, mine);",
+      "problem": "In createProjectContextFeed.reload the `applied` watermark is advanced after the listener loop. If a subscriber throws (the loop has no isolation, still open as review-clean-code-w5:F-003), reload rejects before `applied` is raised, although `current` already holds the newer status. The ordering guard `mine > applied` then no longer protects against an older load.",
+      "impact": "Trigger: load B (started second) finishes first, a listener throws (for example a sidebar repaint against a renderable that is gone). `current` = B, `applied` stays at its old value. Load A (started first, read older data) now finishes: `mine(A) > applied` is true, so the feed replaces the newer status with the older one and notifies listeners with it. Outcome: the sidebar and the open modal show stale enforcement or reference data until the next change, which is the race the guard was added to remove. Needs a throwing subscriber, so minor.",
+      "suggested_fix": "Advance the watermark before notifying: set `applied = Math.max(applied, mine)` (and `current = next`) first, then run the listeners, each in its own try/catch that reports through options.onError. That also closes review-clean-code-w5:F-003.",
+      "evidence": "src/tui/project-context-inspector.ts reload(): `const mine = ++started; const next = await options.load(); if (mine > applied && !sameStatus(current, next)) { current = next; for (const listener of [...listeners]) listener(next); } applied = Math.max(applied, mine);`. A throw inside the for loop skips the last statement.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "feed-applied-after-listeners",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "text = await readFile(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot), \"utf8\");",
+      "problem": "scanCitations now reads a linked rule at its origin, but it does not apply the resolver's two checks on a link. collectProjectRules excludes a link whose file changed since it was linked (sha256 differs from the registry entry) and warns; scanCitations reads and scans it anyway. For an unreadable link it reports `.metaproject/rules/project/<ref>` as unreadable, a path that does not exist for a link, instead of the origin path.",
+      "impact": "Trigger: a rule linked with `skills import --rules --link` whose origin file was edited afterwards and now cites STYLING.md (or stopped citing it). `resolve-context` warns 'changed since it was linked; the rule is excluded' and ignores its citations, while `references suggest` and the import hint count them and `references check` does not report `unused-declaration` for a declaration only that rule cites. The check and the engine again disagree about which documents are cited, for a changed link only. Small, since the resolver also tells the operator to re-run `skills update --rules`.",
+      "suggested_fix": "Compare sha256Hex(text) with the registry entry's sha256 and treat a mismatch as unreadable (the resolver's behaviour), and name the origin path in unreadableRules for a link. Better, factor the link-reading part of collectProjectRules into one helper both call.",
+      "evidence": "src/gdskills/context-resolver.ts:217-227 (readText(origin), `sha256Hex(text) !== entry.sha256` -> excluded with a warning) versus src/gdskills/references-check.ts:99-109 (links map keeps only `entry.origin`; no hash comparison; unreadable path built from PROJECT_RULES_DIR/ref).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "linked-rules-changed-link-scanned",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-architecture-w3:F-002", "disposition": "closed"},
+    {"id": "review-clean-code-w1:F-003", "disposition": "open"},
+    {"id": "review-clean-code-w2:F-004", "disposition": "closed"},
+    {"id": "review-clean-code-w5:F-001", "disposition": "open"},
+    {"id": "review-clean-code-w5:F-003", "disposition": "open"},
+    {"id": "review-highload-w2:F-001", "disposition": "partial"},
+    {"id": "review-highload-w2:F-002", "disposition": "withdrawn"},
+    {"id": "review-highload-w3:F-001", "disposition": "closed"},
+    {"id": "review-highload-w5:F-002", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-logic-w3:F-003", "disposition": "open"},
+    {"id": "review-performance-w5:F-002", "disposition": "closed"},
+    {"id": "review-security-code-w1:F-001", "disposition": "closed"},
+    {"id": "review-security-code-w1:F-002", "disposition": "closed"},
+    {"id": "review-security-code-w3:F-001", "disposition": "closed"},
+    {"id": "review-security-code-w4:F-001", "disposition": "closed"},
+    {"id": "review-security-code-w4:F-002", "disposition": "partial"},
+    {"id": "review-style-w5:F-002", "disposition": "open"},
+    {"id": "review-testing-practices-w2:F-008", "disposition": "closed"}
+  ],
+  "slices": [
+    {"id": "slice-01", "coverage": "slice diff read in full; every changed file also read at head (references-section.ts, reference-proof.ts, reference-entries.ts, references-check.ts, context-resolver.ts, project-context-inspector.ts, skill files); fixes exercised with a scratch bun script and the touched test suites", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+}
+```
+
+Disposition evidence (checked at head, not from the commit messages):
+
+- review-architecture-w3:F-002 and review-logic-w2:F-001 (linked rules): closed. scanCitations (references-check.ts:94-119) adds registry entries with mode `link` that have no copy and reads them at `resolveOriginPath(origin)`, the same selection rule as collectProjectRules (a copy wins over a link). undeclaredCitationHint runs after the registry is written (import-rules.ts:231 then :275), and skills-references.test.ts:333 pins the case. The header comment is corrected. One residual difference (hash check on a changed link) is the new F-002.
+- review-clean-code-w1:F-003: open. The 2.0c bullet in task-implementer/SKILL.md is unchanged apart from the quote style; the promoted-entry paragraph still sits in front of the general sentences ("n/a needs a reason in notes").
+- review-clean-code-w2:F-004: closed. skills-references.test.ts imports CONTRACT_MAX_BYTES (line 7) and uses `CONTRACT_MAX_BYTES + 1`.
+- review-clean-code-w5:F-001 and review-style-w5:F-002: open. paint() still holds the nested ternary, contentRows still lists the three formatters, and `let tab: string` is untyped; the only change in that area is the cardSafe mapping.
+- review-clean-code-w5:F-003: open. `for (const listener of [...listeners]) listener(next);` is still inside the load path, so a throwing listener is still reported as a failed poll and starves later listeners. It now also leaves `applied` unadvanced (new F-001).
+- review-highload-w2:F-001 and review-security-code-w4:F-002 (shell-quoted --task-text): partial. All eight skill sites (bundled and managed copies of flow-orchestrator, job-orchestrator x2 spots, orchestrator-prompt x2 spots, task-implementer, tests-creator) now use single quotes, which stops `$(...)` and backtick expansion for text without an apostrophe. Only flow-orchestrator states the `'\''` escape rule. In the other skills a description containing an apostrophe ("doesn't ...") ends the quote early and the rest of the text is parsed by the shell again. No file or stdin input was added, so the argv size limit remains. Suggest copying the one-sentence escape rule to the other four skills.
+- review-highload-w2:F-002: withdrawn. It was an info finding stating that no change was needed; the record also no longer holds the task text.
+- review-highload-w3:F-001, review-security-code-w1:F-001, review-security-code-w3:F-001 (quadratic heading regex): closed. HEADING is gone; parseHeadingLine and stripClosingHashes are linear scans. A scratch run with 250000-character blank/tab/hash runs completes in 16 ms for four extractSection calls. Equivalence with the old regex checked on `# A ##`, `## B #x`, `### C \t#`, `#### ###`, 7 hashes, 4-space indent, bare `#`, `#\tT`: same headings as before.
+- review-highload-w5:F-002 and review-performance-w5:F-002 (reload ordering): closed for the stated scenario. A load that started before the applied one is dropped, and polls no longer overlap. A residual that needs a throwing listener is the new F-001.
+- review-logic-w3:F-001 (dead anchor): closed. currentSection (reference-proof.ts:62-63) returns the whole file with an explanatory `what` when the anchor is not found, matching the resolver's whole-file obligation; the anchor-equality rule still holds and is satisfiable. A file that changes after resolve is still caught by the sha256 drift check.
+- review-logic-w3:F-002 (keyword boundary): closed. keywordOccurs applies each lookaround only when the keyword's edge character is a word character. Verified at head: `.css` in "fix styles.css please" true, `@apply` true, `css` in "css3" false. reference-entries.test.ts pins symbols, digits, underscore, Cyrillic, regex metacharacters and `c++`.
+- review-logic-w3:F-003 (BOM): open. scanHeadings/parseHeadingLine strip no BOM; `extractSection("﻿# Title\ntext\n## B\nx\n", "Title")` still returns found:false at head (loadReferences strips it for references.json only).
+- review-security-code-w1:F-002 and review-security-code-w4:F-001 (task text in last.json): closed. recordLastResolve writes `taskTextLength` and `taskTextTruncated` only; no reader of `taskText` remains in src (the remaining `taskText` hits are the resolver input, the CLI/MCP plumbing and the keyword match). Docs and the CLI help are updated; AC3 amended by the operator (poll 218) per the commit.
+- review-testing-practices-w2:F-008: closed. The requested digit, underscore, non-ASCII, `a.b` versus `axb` and `c++` cases are in reference-entries.test.ts.
+
+Summary: the delta fixes the behavioural defects of r02 in this slice and I found no new blocker or major. Two minor residuals came from the fixes (the feed watermark advancing after listeners, and the linked-rule scan skipping the resolver's hash check). Still open from r02 are the BOM case, the tab/formatter mapping, listener isolation and the task-implementer bullet split, and the shell-quoting fix needs its apostrophe rule copied to four of the five skills.

@@ -1,0 +1,44 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B (regression) over slice-02 and slice-03 of delta 77d2eff20..5444f96e4 (PR 1052). One major regression found, outside F-R07-001: review_complete now refuses a dispositions list longer than 20 entries, while the review-orchestrator skill still instructs one disposition per finding and this very round carries 35 prior findings. Checked and clean: (1) every removed constant and helper (MAX_LISTED, limited, LISTED_FILES, BODY_PREVIEW_LINES, BODY_PREVIEW_CHARS, REPLY_PREVIEW, WAIVER_QUOTE_CHARS, clip) has no remaining reference in src (only the unrelated MAX_LISTED_FILES in src/session/compact.ts); (2) the removed imports in slice-03 are dead: completeManagedReview is no longer referenced in src/commands/review.ts (it is still imported by src/review/*.test.ts from ./managed, which still exports it) and raceApproval is no longer referenced in src/tui/tui-shell.ts (DockRace is still imported as a type at tui-shell.ts:125; raceApproval stays used by src/tui/operator-confirmations.ts:202 and its tests); (3) tests that pinned the old preview wording were rewritten in the delta (operator-confirm-review-tools.test.ts:222-224, :796-803; operator-confirm-other-tools.test.ts:338-347), and no other test under src or docs/skills/rules quotes 'the first 8 lines', '140 characters', 'and N more' or 'the first 6 replies' (keryx ctx rg over src, docs, .metaproject/skills, .metaproject/rules); (4) OperatorConfirmation.card (the whole card text) is not persisted by any non-test caller (operator-confirm-tools.ts:229 only), so uncapped card text does not grow stored records; the TUI dock and the readline shell print the card line by line (tui-shell.ts:5424, shell.ts:2013) with no height cap, so a long card scrolls rather than breaks; (5) cardSafe (src/lib/card-safe.ts) leaves ordinary text unchanged, so shownBody and hiddenInCard refuse only control, escape, bidi (and, for hiddenInCard, Cf/Zl/Zp) characters, not normal review prose. Not re-reported: F-R07-001 (cards over 3000 characters lose Telegram buttons), which already covers the uncapped review_publish body, reply bodies, external_apply file list, mutation/override lists and confirm-plan rows. Blast-radius caveat: the computed set is incomplete (droppedByCap 112, plus dropped text-hub and test-consumer entries and unresolved non-code files), so consumers were found by keryx ctx rg and direct reads, not from the graph. The runtime consumers of a card (Telegram topic limit, dock) and the skill text that tells the agent how to call the tools are string-keyed and not in the code graph.",
+  "findings": [
+    {
+      "id": "F-R07-003",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 695,
+      "quote": "  if (raw.length > MAX_DISPOSITIONS) return { refusal: `dispositions holds ${raw.length} entries; a card shows at most ${MAX_DISPOSITIONS}` };",
+      "problem": "completionDispositions (operator-confirm-review.ts:691) now refuses any dispositions list longer than MAX_DISPOSITIONS (20), any evidence longer than MAX_DISPOSITION_EVIDENCE_CHARS (300), any finding id longer than 200 characters, and any evidence or finding holding a newline, control or Cf character. Before this delta review_complete accepted any number of entries (evidence was only clipped on display). The caller contract did not move with it: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284 still tells the agent to pass `dispositions` 'one per finding' with no count or length limit, SKILL.md:297 says closing a fix round without them leaves every finding reading `unknown`, and the inputSchema (dispositionsSchema, :674-688) carries no maxItems, only a 300-character note on `evidence`. A fix round with more than 20 prior findings, which the delta-round rule in SKILL.detail.md (every attached prior finding leaves the round with a disposition) makes normal, now cannot record them through the card.",
+      "impact": "Trigger: the agent calls review_complete with dispositions for a fix round that has more than 20 earlier findings; this PR's own r07 round has 35 prior findings (prior_findings.json). Outcome: buildCard returns a refusal, so no card is asked. Splitting across two calls does not work, because the first successful call closes the round and a second call is refused as already complete (operator-confirm-review.ts:793). The agent is left with two choices: close the round with a truncated list, so the remaining findings read `unknown` (the state SKILL.md:297 names as making the precision figure unreadable), or hand the close to the operator's terminal `keryx review complete --finding ...`, which the skill says agents do not use. A previously working call on a large fix round stops working, and the refusal text does not say how to proceed. A multi-line evidence string (a commit message pasted as evidence) is refused the same way and is recoverable by rewording.",
+      "suggested_fix": "Either remove the count cap and let the card show every entry (the S-401/S-402 rule is that the card shows what is stored, which a 35-line list does), accepting that F-R07-001 then governs the topic buttons; or keep a cap but state it where the agent reads it: put maxItems and maxLength in dispositionsSchema, name the limits in the review_complete description, update SKILL.md:284 and its bundled mirror, and make the refusal say that the remaining dispositions must be recorded with `keryx review complete --finding ...` at a terminal or that findings should be grouped. Add a test that a 21-entry list is either accepted or refused with that guidance.",
+      "evidence": "operator-confirm-review.ts:663-665 define the three limits; :695 is the count check, :708-714 the length and character checks; all five lines are additions in 77d2eff20..5444f96e4 (the delta hunk adds `if (raw.length > MAX_DISPOSITIONS)` and replaces `records.push` with the checked form). SKILL.md:284 (mirrored in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md) says 'one per finding'. managed.ts:1017-1019 shows completeManagedReview records whatever dispositions it is given and no gate requires them, so the damage is lost records, not a failed close; prior_findings.json for this package holds 35 findings. A reviewer's prior_dispositions (closed/open/partial/regressed/withdrawn) feed the ledger separately and do not populate the per-finding disposition state that this card writes, so they do not make the loss harmless.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:695",
+          "src/commands/operator-confirm-review.ts:708",
+          "src/commands/operator-confirm-review.ts:709",
+          "src/commands/operator-confirm-review.ts:712",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:284"
+        ],
+        "enumeration_method": "every caller-visible statement of the review_complete `dispositions` contract: keryx ctx rg --all -i disposition over .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md and SKILL.detail.md (only SKILL.md:247, :284, :285 and :297 describe passing dispositions to the card, with no limit), plus the four refusal checks in completionDispositions; the bundled copy of SKILL.md is a mirror"
+      }
+    }
+  ],
+  "questions": [
+    "Does any reviewer report quote terminal output with ESC or form-feed characters? shownBody (operator-confirm-review.ts:62) now refuses the whole review_publish and review_comments_reply card for one such line where the old preview stripped it. The refusal names the line and the fallback is the terminal, so it is a behaviour change, not reported as a defect; wave 1 raised the same point (F-R07-002 and its question)."
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "all hunks read (reasonOf, hiddenInCard, dispositions, dispositionLine); consumers of reasonOf, completionDispositions and the removed clip enumerated", "status": "DONE" },
+    { "id": "slice-03", "coverage": "all hunks read (removed constants, listFiles, publish/reply/plan/mutation/override cards, premise reason, review.ts and tui-shell.ts import removals); removed names enumerated by keryx ctx rg over src, docs, .metaproject/skills and .metaproject/rules", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```

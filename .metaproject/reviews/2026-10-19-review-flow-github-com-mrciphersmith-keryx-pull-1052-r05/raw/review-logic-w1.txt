@@ -1,0 +1,88 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Fix slice-01 (b1c6da0e6..77d2eff20): the claimed fixes for E-01, E-02, E-03, E-04, E-06, E-07, E-08 and E-10 are complete and introduce no regression I could trace. One new minor: the new review_complete `dispositions` input advertises `evidence` as optional, but the engine refuses every non-`unknown` disposition without evidence, so the failure surfaces only after the operator has pressed yes.",
+  "findings": [
+    {
+      "id": "L5-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 664,
+      "quote": "evidence: { type: \"string\", description: \"Optional: the commit or reasoning behind the disposition.\" },",
+      "problem": "The E-02 fix adds `dispositions` to the review_complete card. The tool schema marks `evidence` optional (required: [\"finding\", \"disposition\"]) and completionDispositions accepts a missing or blank evidence (`...(evidence === undefined || evidence.trim() === \"\" ? {} : { evidence: evidence.trim() })`). The record then goes to completeReviewGated -> recordDispositions in src/review/managed.ts, which validates against the `disposition` branch of review-finding.schema.json: `\"else\": { \"required\": [\"evidence\"] }` for every state other than `unknown`. So an entry such as { finding: \"E-01\", disposition: \"acted-on\" } passes buildCard, is shown to the operator, is answered yes, and is only then refused with `Refusing to record a disposition for ...`. The same late refusal happens for a finding id the package does not hold (`this package holds no such finding`) and for an id that names two findings. buildCard already reads the package directory, so these checks could run before the card is posted.",
+      "impact": "No data is corrupted: recordDispositions validates the whole batch before writing and runs before the manifest is closed, so `apply` returns `review_complete refused: ... nothing was recorded`. But the operator's yes (in the dock or a Telegram topic) is spent on a card that could never have succeeded, the agent has to ask again with a second card, and the tool description steers the agent into this by calling the field optional.",
+      "suggested_fix": "In completionDispositions (or buildCard) refuse a non-`unknown` entry with no evidence, naming the entry, and mark `evidence` as required for any disposition other than `unknown` in dispositionsSchema. Optionally resolve each `finding` against findings.json in buildCard so an unknown or ambiguous id refuses before the card is posted.",
+      "evidence": "operator-confirm-review.ts:664 and :687 at 77d2eff20; src/gdskills/contracts/review-finding.schema.json lines 74-79 (`\"else\": { \"required\": [\"evidence\"] }`); src/review/managed.ts:1941-1967 (recordDispositionsLocked throws for no match, several matches, and a schema error); operator-confirm-review.ts:796-797 (apply returns the refusal after the press).",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "closed" },
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-06", "disposition": "closed" },
+    { "id": "E-07", "disposition": "closed" },
+    { "id": "E-10", "disposition": "closed" },
+    { "id": "E-25", "disposition": "open" },
+    { "id": "E-35", "disposition": "closed" },
+    { "id": "E-44", "disposition": "open" },
+    { "id": "E-45", "disposition": "open" },
+    { "id": "E-52", "disposition": "open" },
+    { "id": "E-53", "disposition": "open" },
+    { "id": "E-58", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## Logic Review (round r05, fix slice-01, b1c6da0e6..77d2eff20)
+
+### Review Scope
+- Project root: /home/altsay/keryx/.worktrees/helyx-confirm
+- Range: b1c6da0e6..77d2eff20 (PR #1052, flow 464), slice-01 only.
+- Spec compliance gate: skipped, no issue URL; the payload's pr_context was used for intent.
+
+### Summary
+The fix commit closes the verified majors E-01 to E-08 as claimed. The only new logic finding is a late refusal on the new `dispositions` input (L5-001, minor).
+
+### Fix verification for the r04 majors
+- **E-01 (skill text said the agent runs the CLI)**: fixed in `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md`, `SKILL.detail.md` and the bundled mirrors under `src/gdskills/bundled/skills/review/review-orchestrator/`; the card wording is consistent at the sites I checked.
+- **E-02 (dispositions could not be recorded through the card)**: fixed. `completionDispositions` validates each entry, `buildCard` lists every entry on the card and carries them in `prepared`, `apply` passes them to `completeReviewGated`, and `writeCompletionRecord` stores them. recordDispositions runs before the manifest is closed and validates the whole batch before writing. Residual: L5-001.
+- **E-03 (manifest schema rejected the attribution fields)**: fixed. `readiness_waivers` items in `managed-review-package.schema.json` now declare `confirmedVia`, `pressedBy`, `pressedAt` with matching types.
+- **E-04 (a topic leg that ended left the card shown as waiting in Telegram)**: fixed. approval-mirror.ts calls `onTopicEnded` only when the topic leg ended without a press and the topic was not aborted by the dock winning; `markUndelivered(id, "ended")` flips `mirrored` and sets `topicEnded`, and `pendingConfirmationLine` prints the shell instruction. A late press after the dock settled is still ignored by the `settled` guard.
+- **E-05 (gate wording named a card tool the session may lack)**: fixed via `cardAvailable` in `holdReviewGate`. The sibling strings at src/commands/review.ts:4558 and :4562 say "Inside keryx shell, call the review_complete card", which is scoped to the keryx shell where the tool exists, so they are not a defect.
+- **E-06 / E-08 (inline lifecycle in tui-shell.ts)**: fixed by `askUnmirroredCard` and `raceMirroredCard`; the settle rules (withdrawn when the turn aborted or the dock threw, shell otherwise) match the removed inline code, and `card-lifecycle.test.ts` covers them.
+- **E-07 (cli-reference wording)**: fixed (`(card review_complete)` and the paragraph at line 98).
+- **E-10 (next-step wording when no card exists)**: fixed via `closeStep(card)`, `nextStep(open, card)`, `describeBlockers(open, card = true)`.
+
+### Other finding ids in this slice (carried, not re-raised)
+- E-25 (completion-confirmation.json still has no reader): unchanged and deferred; the file now also carries `dispositions`.
+- E-35 and E-58: closed by the extraction into operator-confirmations.ts (the mirror closure now dispatches to named helpers and `remoteApproval` moved out of tui-shell.ts).
+- E-44, E-45, E-52, E-53: not claimed fixed and still present at head (E-52: `askUnmirroredCard` still maps place and yes itself rather than calling `settle`; E-53: `import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";` is still there; E-45: the SKILL.md line 136 bullet is unchanged).
+
+### Spec Gaps
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+- L5-001 (minor): the disposition input is validated after the operator's press instead of before the card.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.

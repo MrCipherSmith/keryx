@@ -1,0 +1,182 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Wave 2, slice-02, delta b1c6da0e6..77d2eff20. E-06 (apply split), E-02 (dispositions input on the review_complete card), E-03 (schema now allows confirmedVia/pressedBy/pressedAt, test added) and E-07 (cli-reference wording) are fixed cleanly and no regression found in the extracted helpers. E-01 is partial (bare `complete` left at SKILL.md:59/134 and detail:862/866, mirrored) and E-05 is partial (review.ts:4558/4562 still name the card; completion-gate.ts:800 still sends the card-mode agent to the command). E-04 and E-08 live in tui files outside this slice and were not judged. The new completion-gate flag spreads a boolean over five wording ternaries. No blocker or major finding.",
+  "findings": [
+    {
+      "id": "F-101",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 59,
+      "quote": "the operator's answer to each held finding (Wave D), `readiness`, `complete`.",
+      "principle": "Clean Code - Consistent Vocabulary A3 (the close step is named `complete` here and `review_complete` card elsewhere)",
+      "problem": "E-01 is only partly fixed. Lines 782, 386, 124, 136 and detail:669/866 now say the agent calls the review_complete card. The Step list at SKILL.md:59 still ends the tail with the bare command word `complete` next to CLI verbs (`ledger build`, `ingest`, `readiness`), and SKILL.md:134 and SKILL.detail.md:862/866 still say the round is 'not done until `complete`'. E-01 listed 59 and 134 as sites with the same ambiguity.",
+      "impact": "An agent that follows the numbered step list literally runs `keryx review complete` (no TTY check, no card), which is the exact outcome E-01 was raised against. The bundled mirror is byte-identical (diff -q empty), so the gap ships too.",
+      "suggested_fix": "Name the card in the list: 'readiness, the `review_complete` card'. Reword SKILL.md:134 and SKILL.detail.md:862/866 to 'until the `review_complete` card closes it'. Edit both copies.",
+      "evidence": "git grep at 77d2eff20 of .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md for 'complete' lists :59 and :134 unchanged; diff -q against src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md is empty for SKILL.md and SKILL.detail.md. Same line at src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:59.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-102",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": 4558,
+      "quote": "then call the review_complete card. Outside keryx shell, run this command in a terminal.",
+      "principle": "Clean Code - Error Context D2 / stale message C1 (sibling site of E-05)",
+      "problem": "E-05 is claimed fixed by the cardAvailable flag in completion-gate.ts, but E-05's class_scope also named src/commands/review.ts:4558 and :4562. Both --waive-coverage and --waive refusals still say 'Inside keryx shell, call the review_waive_* tool ... then call the review_complete card' unconditionally. A readline keryx shell session has no operatorConfirm binding (shell.ts:4712 call has none), so none of the named tools exist there.",
+      "impact": "In a readline session the refusal repeats the same missing-tool instruction that the gate nudge was just changed to avoid; the agent is told to call tools it does not have.",
+      "suggested_fix": "Either make the two messages conditional on the same card availability the gate now uses, or state in them that a session without the card tools needs the operator's terminal. Keep the 4558 and 4562 wording in step.",
+      "evidence": "git grep -n 'then call the review_complete card' HEAD -- src/commands/review.ts returns :4558 and :4562; the commit changes only completion-gate.ts and agent.ts for E-05 (agent.ts:3501 adds cardAvailable).",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-103",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 800,
+      "quote": "`- … and ${more} more (\\`keryx review complete\\` lists them all)`",
+      "principle": "Clean Code - Comments/messages that lie C1 (sibling of E-05 / E-01)",
+      "problem": "describeBlockers now takes the card flag and rewrites its 'none listed' line, but the truncation line right below it still tells the agent that `keryx review complete` lists every blocker. In card mode the same message (nextStep/closeStep) says 'you never run `keryx review complete` yourself'. The gate nudge contradicts itself.",
+      "impact": "When more than 20 blockers are shown, the model is invited to run the command it is forbidden to run; plain complete has no TTY check or card, so if the blockers have meanwhile been fixed it closes the round with no operator press (the E-01 outcome).",
+      "suggested_fix": "Branch on `card` here too: card mode says 'ingest or ledger build names the rest' or 'call the review_complete card, which lists them all'; only the no-card mode keeps the command.",
+      "evidence": "Line 800 of src/review/completion-gate.ts at 77d2eff20 is unchanged by the commit (diff hunk @@ -794,6 +803,7 shows it as context); the card-mode text is closeStep at :757.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-104",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 796,
+      "quote": "export function describeBlockers(open: OpenManagedReview, card = true): string {",
+      "principle": "Clean Code - Function Arguments B2 (boolean flag) and DRY E1",
+      "problem": "The E-05 fix threads one boolean `card` through closeStep(card), nextStep(open, card), describeBlockers(open, card = true) and decideReviewGate, and repeats the `card ? <card wording> : <command wording>` ternary at :797, :814, :822 and :829 plus the closeStep body at :756. Five hard-coded copies of the same two phrasings, selected by a flag.",
+      "impact": "The next wording change (a third closer, or a changed card name) has to be made in five places, and a boolean call site such as describeBlockers(open, false) says nothing. It selects text only, so this is minor, not major.",
+      "suggested_fix": "Compute once in decideReviewGate a small descriptor, for example `const closer = card ? CARD_CLOSER : COMMAND_CLOSER` with fields { call, subject, done, refused }, and pass `closer` instead of the boolean.",
+      "evidence": "src/review/completion-gate.ts at 77d2eff20: closeStep(card: boolean) :754, nextStep(open, card) :759, describeBlockers :796-797, ternaries at :797, :814, :822, :829.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-105",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 715,
+      "quote": "waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);",
+      "principle": "Clean Code - DRY E1 (E-06 extraction incomplete for sibling sites)",
+      "problem": "The E-06 refactor introduced `errorText` at :813 and replaced the local `reason` closure, but the identical expression still stands inline at :715 and in `failed` at :87. Three copies of the same one-line conversion in one file, one of them a new helper next to its own duplicates.",
+      "impact": "Small, but the extraction was the point of the fix; a later change to how errors are shown (cause chain, code) will miss two of three.",
+      "suggested_fix": "Move `errorText` above `failed` (it is a const arrow, so order matters only for readability), define `failed = (e) => ({ refusal: errorText(e) })`, and use `errorText(error)` at :715.",
+      "evidence": "git grep -n 'instanceof Error ? error.message : String' HEAD -- src/commands/operator-confirm-review.ts gives :87, :715, :813.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-106",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 683,
+      "quote": "if (typeof state !== \"string\" || !(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)) {",
+      "principle": "Clean Code - DRY E1 / type-guard duplication",
+      "problem": "The E-02 fix hand-writes the 'is this a disposition state' check and then casts `state as FindingDispositionState` at :687. The same cast-and-includes pattern already exists at src/commands/review.ts:4669 and src/review/readiness.ts:286. Three parallel checks of one enum, each with its own cast.",
+      "impact": "A state added to FINDING_DISPOSITION_STATES that needs different handling (readiness.ts already special-cases 'unknown') must be re-found in three places; the card also offers 'unknown' as an agent-selectable disposition because the enum is spread whole at :663.",
+      "suggested_fix": "Add `isFindingDispositionState(value: unknown): value is FindingDispositionState` beside the const in src/review/types.ts and use it at all three sites; drop the `as` cast.",
+      "evidence": "git grep -n 'FINDING_DISPOSITION_STATES as readonly string' HEAD -- src returns operator-confirm-review.ts:683, review.ts:4669, readiness.ts:286.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-107",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 836,
+      "quote": "async function writeCompletionRecord(dir: string, record: Record<string, unknown>): Promise<unknown> {",
+      "principle": "Clean Code - Error Handling D1 (error returned as value, untyped)",
+      "problem": "The extracted helper returns `unknown`: the thrown error on failure, undefined on success. Callers must know that undefined means success; `completionOutput(..., recordError: unknown)` carries it on.",
+      "impact": "Readable today thanks to the doc comment; easy to misuse when a second caller appears (a falsy thrown value reads as success).",
+      "suggested_fix": "Return `{ ok: true } | { ok: false; error: unknown }`, or let it throw and keep the try/catch in apply.",
+      "evidence": "src/commands/operator-confirm-review.ts:835-843 and :845.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-108",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 578,
+      "quote": "findings: (over.findings ?? []) as never,",
+      "principle": "Clean Code - type safety bypass in test helper",
+      "problem": "makeRound now accepts `findings?: Array<Record<string, unknown>>` and forces it through createManagedReviewPackage with `as never`, so a malformed fixture finding is never checked by the compiler. F1 at :63 of the new tests is typed as an untyped literal.",
+      "impact": "A renamed required field in the finding type will not fail these tests at compile time; they fail only at run time, if at all.",
+      "suggested_fix": "Type the parameter with the package's finding input type (or `Parameters<typeof createManagedReviewPackage>[0][\"findings\"]`) and drop the cast.",
+      "evidence": "src/commands/operator-confirm-review-tools.test.ts:578 at 77d2eff20.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-109",
+      "severity": "info",
+      "file": "src/commands/agent.ts",
+      "line": 3501,
+      "quote": "cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\"),",
+      "principle": "Clean Code - Magic strings E2",
+      "problem": "The gate now couples to the card by its literal name; the same literal is the spec name at operator-confirm-review.ts:742 and appears in prose in completion-gate.ts. A rename of the spec would leave cardAvailable false everywhere with no error, so the gate would silently fall back to the command wording the PR forbids.",
+      "impact": "Silent regression of E-05's fix on a rename; no test ties agent.ts to the spec name.",
+      "suggested_fix": "Export `REVIEW_COMPLETE_TOOL = \"review_complete\"` from operator-confirm-review.ts and use it in both places, or derive cardAvailable from the operatorConfirm binding rather than the tool name.",
+      "evidence": "src/commands/agent.ts:3501; src/commands/operator-confirm-review.ts:742.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "job-orchestrator SKILL.md:1002,1326-1328 and orchestrator-prompt.md:27,193 (and bundled copies) still instruct agents to run `keryx review complete --finding ... --disposition ...`; E-02 listed them as sites; unchanged by the PR, outside this slice, decide whether to point them at the card's dispositions input.",
+    "docs/docs/guides/review-with-a-record.md:703 and :1002 and docs/docs/cli-reference.md describe dispositions only at a terminal; the card's new `dispositions` input is not documented there (docs reviewer to confirm)."
+  ],
+  "prior_dispositions": [
+    {
+      "id": "E-01",
+      "disposition": "partial"
+    },
+    {
+      "id": "E-02",
+      "disposition": "closed"
+    },
+    {
+      "id": "E-03",
+      "disposition": "closed"
+    },
+    {
+      "id": "E-05",
+      "disposition": "partial"
+    },
+    {
+      "id": "E-06",
+      "disposition": "closed"
+    },
+    {
+      "id": "E-07",
+      "disposition": "closed"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read the delta diff for operator-confirm-review.ts, agent.ts, completion-gate.ts and the three test files; read operator-confirm-review.ts:640-879, the schema readiness_waivers block, SKILL.md/SKILL.detail.md hits for review complete / review_complete in both copies (diff -q identical), cli-reference.md:4921. Did not review tui-shell.ts, approval-mirror.ts, operator-confirmations.ts or card-lifecycle.test.ts (E-04, E-08 code), not in slice-02.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 6,
+    "info": 3
+  }
+}
+```

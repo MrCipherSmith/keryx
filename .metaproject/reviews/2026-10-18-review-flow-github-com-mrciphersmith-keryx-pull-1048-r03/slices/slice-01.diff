@@ -1,0 +1,407 @@
+--- .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md
+@@ 162,202 @@
+ **2.0 Read job context (if available):**
+ 
+ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
+ - Read `CONTEXT_PATH` (e.g., `<JOBS_ROOT>/<job-name>/ai/context.md`)
+ - Extract relevant sections: library docs, codebase patterns, conventions, best practices
+ - Use this context throughout Phase 2-4 to guide implementation decisions
+ - If the file does not exist, proceed without it — context is optional
+ 
+ **2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+ 
+ Before you rely on a project-skill's guidance, confirm it still matches the code:
+ - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
+ - If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
+ - If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+ - If it is **`fresh`**: apply it. Its rules, templates and conventions for the target are part of the task, not background reading, and they supplement this skill's phases: a project skill never replaces a phase, the TDD order or the output contract. Where it and a bundled rule disagree, the project skill wins; say so in `notes`.
+ - If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
+ 
+ This step is read-only and inline; do not spawn a subagent for it.
+ 
+ **2.0c Resolve the project's standard (before 2.1):**
+-- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --task-text "<task.description>" --out <project-relative path>` (`--task-text` lets a declared keyword promote a document).
++- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --task-text '<task.description>' --out <project-relative path>` (`--task-text` lets a declared keyword promote a document).
+ - Read every `must_read` entry in full, project entries first; read `on_demand` ones only when the work touches them. A project rule listed with `shadows` replaces the bundled one. An entry with `also_at` is one file under several paths: citing any of them, with the entry's sha256, counts.
+ - An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition and carries an `anchor`, a `description` and `section_bytes`: read the anchored section in full. Its `project_context_applied` item needs the `path`, the `sha256` of the whole file as pinned, the `anchor` exactly as declared, a `summary` and `how` `read` or `followed`, never `n/a`. Write the `summary` in your own words, at least 40 characters, naming at least three distinct words of five or more letters taken from the anchored section; `contracts validate --resolved` rejects a copied hash without it. Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
+ 
+ **2.1 Read all target files:**
+ - Read each file from `target_files` in full
+ - If a file does not exist yet, note it as "new file to create"
+ - Read the `context` field for additional type/signature info
+ 
+ **2.2 Read existing tests and stories:**
+ - `existing_tests` and `existing_stories` default to `[]`; the string `"none"` is not a legal value and 1.4 refuses it
+ - Read each file listed in either array
+ - Understand existing test patterns (describe/it structure, mocks, fixtures) and, for every file in `existing_stories`, the story patterns it uses (`Meta`/`StoryObj` shape, how variants are declared, how callbacks are stubbed) — 4.4 builds on what you record here
+ 
+ **2.3 Read module neighbors:**
+ - List sibling files in the same directory as each target file
+ - Read 2-3 similar files to understand module patterns (naming, exports, structure)
+ - Pay attention to import aliases, named vs default exports, interfaces vs types, observer wrapping and props naming, and store patterns (makeObservable(this), explicit decorators, private fields before public, thin public @action.bound UI actions, non-mutating public helpers, private API methods, runInAction after await)
+ 
+ **2.4 Load relevant rules (from `module_patterns` or by detection):**
+ 
+
+--- src/commands/skills-references.test.ts
+@@ 123,163 @@
+   expect(process.exitCode).toBe(1);
+   const text = await check();
+   expect(text.out).toContain("docs/GONE.md");
+   expect(out).toContain("document-missing");
+ });
+ 
+ test("references check: a declared document that resolves outside the project root is an error", async () => {
+   const root = await project({ references: [declaration({ path: "linked.md", anchor: undefined })] });
+   const outside = await mkdtemp(path.join(tmpdir(), "keryx-skills-references-outside-"));
+   roots.push(outside);
+   await writeFile(path.join(outside, "SECRET.md"), "# Secret\n", "utf8");
+   await symlink(path.join(outside, "SECRET.md"), path.join(root, "linked.md"));
+   const { report } = await check("--json");
+   expect(codes(report, "error")).toContain("document-outside-root:linked.md");
+   expect(process.exitCode).toBe(1);
+ });
+ 
+ test("references check: a declared document over the size limit is an error", async () => {
+   await project({
+     references: [declaration({ anchor: undefined })],
+-    files: { "STYLING.md": `# Styling\n\n${"x".repeat(262145)}\n` },
++    files: { "STYLING.md": `# Styling\n\n${"x".repeat(CONTRACT_MAX_BYTES + 1)}\n` },
+   });
+   const { report } = await check("--json");
+   expect(codes(report, "error")).toEqual(["document-too-large:STYLING.md"]);
+   expect(process.exitCode).toBe(1);
+ });
+ 
+ test("references check: an anchor that matches no heading is an error and lists the headings the file has", async () => {
+   await project({ references: [declaration({ anchor: "Nonexistent section" })] });
+   const { report } = await check("--json");
+   expect(codes(report, "error")).toEqual(["anchor-not-found:STYLING.md"]);
+   const finding = report?.findings.find((entry) => entry.code === "anchor-not-found");
+   expect(finding?.message).toContain("Nonexistent section");
+   expect(finding?.message).toContain("Class conventions");
+   expect(process.exitCode).toBe(1);
+ });
+ 
+ test("references check: a description under 20 characters is a warning and does not fail the run", async () => {
+   await project({ references: [declaration({ description: "Styling rules." })] });
+   const { report } = await check("--json");
+   expect(codes(report, "warning")).toEqual(["description-short:STYLING.md"]);
+
+--- src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+@@ 303,343 @@
+ `subagent-dispatch` object
+ (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
+ worker reply is a `subagent-result` object
+ (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
+ line is `STATUS: <status>`
+ (`.metaproject/rules/core/subagent-status-protocol.md`).
+ 
+ `<worktree_path>` below is the absolute root of the checkout this flow's work
+ happens in: the git worktree the flow runs in, or the project root when it runs
+ in the main checkout. Resolve it once, before the first dispatch
+ (`git rev-parse --show-toplevel` from that checkout), check
+ `git -C <worktree_path> branch --show-current` is the branch the work belongs
+ on, and pin every dispatch to it (`rules/core/git-concurrency.mdc`, "Pinning A
+ Dispatch To Its Worktree").
+ 
+ Workers do not commit: flow-orchestrator owns every commit and dispatches with
+ auto-commit off (task-implementer's `automation.auto_commit: false`). A
+ `subagent-dispatch` has no `automation` field, so the setting travels as the
+ explicit constraint below — never as the worker's default, which is `true`.
+ 
+-Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --task-text "<the task's title and description>" --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. `--task-text` (the harness and MCP field is `task_text`) is what lets a keyword of a document declared in `references.json` match; without it only globs promote. A promoted entry comes back as `must_read` with reason `condition:glob:<g>` or `condition:keyword:<k>`, and its `project_context_applied` item must carry the `path`, the `sha256` of the whole file as pinned, the declared `anchor`, a `summary` (at least 40 characters, in the worker's own words, reusing at least three distinct words of five or more letters from the anchored section) and `how` `read` or `followed`, never `n/a`. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
++Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --task-text '<the task's title and description>' --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Write the text single-quoted (a `'` inside it becomes `'\''`): double quotes let the shell run any backtick or `$(...)` a task description contains. `--task-text` (the harness and MCP field is `task_text`) is what lets a keyword of a document declared in `references.json` match; without it only globs promote. A promoted entry comes back as `must_read` with reason `condition:glob:<g>` or `condition:keyword:<k>`, and its `project_context_applied` item must carry the `path`, the `sha256` of the whole file as pinned, the declared `anchor`, a `summary` (at least 40 characters, in the worker's own words, reusing at least three distinct words of five or more letters from the anchored section) and `how` `read` or `followed`, never `n/a`. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
+ 
+ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
+ 
+ ```json
+ {
+   "contract_version": "1.0.0",
+   "run_id": "<flow-id>",
+   "dispatch_id": "<flow-id>-<Tn>",
+   "orchestrator": "flow-orchestrator",
+   "target_skill": "task-implementer",
+   "task": { "title": "<Tn title>", "description": "<what to do>", "intent": "implement" },
+   "acceptance_criteria": ["<the frozen ACn lines this task must satisfy>"],
+   "context_refs": [
+     { "path": ".metaproject/flows/<dir>/context.md", "kind": "context", "exists": true },
+     { "path": ".metaproject/flows/<dir>/plan.md", "kind": "plan", "exists": true },
+     { "path": ".metaproject/flows/<dir>/acceptance-criteria.md", "kind": "custom", "exists": true },
+     { "path": ".metaproject/flows/<dir>/resolved/<Tn>.<for>.json", "kind": "custom", "exists": true }
+   ],
+   "files_to_read": ["<only files gdgraph/gdctx narrowed to>"],
+   "constraints": [
+
+--- src/gdskills/context-resolver.ts
+@@ 530,552 @@
+   try {
+     const task = options.taskText !== undefined && options.taskText.trim() !== "" ? truncateTaskText(options.taskText) : undefined;
+     const record: RecordedResolve = {
+       recordedAt: new Date().toISOString(),
+       result,
+-      ...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),
++      ...(task !== undefined ? { taskTextLength: Array.from(options.taskText!).length, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),
+     };
+     await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\n`);
+   } catch {
+     // nothing to do: the record is a convenience
+   }
+ }
+ 
+ export async function readLastResolve(projectRoot: string): Promise<RecordedResolve | undefined> {
+   try {
+     const parsed: unknown = JSON.parse(await readFile(path.join(projectRoot, LAST_RESOLVE_PATH), "utf8"));
+     if (typeof parsed !== "object" || parsed === null) return undefined;
+     const record = parsed as Partial<RecordedResolve>;
+     return typeof record.recordedAt === "string" && typeof record.result === "object" && record.result !== null ? (record as RecordedResolve) : undefined;
+   } catch {
+     return undefined;
+   }
+ }
+
+--- src/gdskills/reference-entries.ts
+@@ 21,73 @@
+   declarations: readonly ReferenceDeclaration[];
+   /** Normalised project-relative task files. */
+   files: readonly string[];
+   /** The task text, already truncated; matched against keywords. */
+   taskText: string;
+   /** Paths already listed as rules, skills or bundled rules; a declaration naming one is skipped with a warning. */
+   taken: ReadonlySet<string>;
+   /** A declared file bigger than this is not listed. */
+   maxFileBytes: number;
+ };
+ 
+ export type ResolvedReferences = {
+   entries: ContextEntry[];
+   /** Bytes the promoted entries oblige the worker to read (section bytes with an anchor, file bytes without). */
+   promotedBytes: number;
+   warnings: string[];
+ };
+ 
+ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+ 
+-/** Case-insensitive, whole-word match; "word" characters are letters, digits and underscore of any script. */
++const WORD_CHAR = /^[\p{L}\p{N}_]$/u;
++
++/**
++ * Case-insensitive, whole-word match; "word" characters are letters, digits and underscore of any script.
++ * A boundary is demanded only on a side where the keyword itself starts or ends with a word character,
++ * so `.css`, `@apply` and `c++` match where they stand while `css` does not match inside `css3`.
++ */
+ export function keywordOccurs(text: string, keyword: string): boolean {
+   if (keyword === "") return false;
+-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(keyword)}(?![\\p{L}\\p{N}_])`, "iu").test(text);
++  const chars = Array.from(keyword);
++  const before = WORD_CHAR.test(chars[0] ?? "") ? "(?<![\\p{L}\\p{N}_])" : "";
++  const after = WORD_CHAR.test(chars[chars.length - 1] ?? "") ? "(?![\\p{L}\\p{N}_])" : "";
++  return new RegExp(`${before}${escapeRegExp(keyword)}${after}`, "iu").test(text);
+ }
+ 
+ /** The reason a declaration is promoted, or undefined when its condition does not match. Globs are tried before keywords. */
+ export function promotionReason(declaration: ReferenceDeclaration, files: readonly string[], taskText: string): string | undefined {
+   const glob = declaration.when.globs.find((candidate) => files.some((file) => matchesAnyGlobWithBraces(file, [candidate])));
+   if (glob !== undefined) return `condition:glob:${glob}`;
+   const keyword = declaration.when.keywords.find((candidate) => keywordOccurs(taskText, candidate));
+   return keyword !== undefined ? `condition:keyword:${keyword}` : undefined;
+ }
+ 
+ type ReadOutcome = { ok: true; text: string } | { ok: false; why: string };
+ 
+ async function readDeclaredFile(projectRoot: string, rootReal: string, rel: string, maxFileBytes: number): Promise<ReadOutcome> {
+   const absolute = path.join(projectRoot, rel);
+   let real: string;
+   try {
+     await lstat(absolute);
+     real = await realpath(absolute);
+   } catch (error) {
+     if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT") return { ok: false, why: "does not exist" };
+
+--- src/gdskills/reference-proof.ts
+@@ 42,83 @@
+ }
+ 
+ /** The item that stands for the entry: pinned hash and a real reading first, then a real reading, then whatever was cited. */
+ export function pickProofItem(items: readonly CitedItem[], pinned: string): CitedItem | undefined {
+   return items.find((item) => item.sha256 === pinned && item.how !== "n/a") ?? items.find((item) => item.how !== "n/a") ?? items[0];
+ }
+ 
+ type SectionOutcome = { ok: true; text: string; what: string } | { ok: false; why: string };
+ 
+ /** The anchored section of the file as it is now, or the whole file when the declaration has no anchor. */
+ async function currentSection(projectRoot: string, entry: ContextEntry): Promise<SectionOutcome> {
+   const file = path.isAbsolute(entry.path) ? entry.path : path.join(projectRoot, entry.path);
+   let text: string;
+   try {
+     text = await readFile(file, "utf8");
+   } catch (error) {
+     return { ok: false, why: `${entry.path} cannot be read now (${error instanceof Error ? error.message : String(error)})` };
+   }
+   if (entry.anchor === undefined) return { ok: true, text, what: "the file" };
+   const section = extractSection(text, entry.anchor);
+-  if (!section.found) return { ok: false, why: `the anchored section "${entry.anchor}" cannot be found in ${entry.path} now (${section.reason})` };
++  // A dead anchor makes the whole file the obligation (the resolver says so); demanding the section's words would be an impossible proof.
++  if (!section.found) return { ok: true, text, what: `the file (the anchor "${entry.anchor}" is not found in it, so the whole file is the obligation)` };
+   return { ok: true, text: section.text, what: `the section "${entry.anchor}"` };
+ }
+ 
+ function charCount(text: string): number {
+   return Array.from(text.trim()).length;
+ }
+ 
+ async function wordsFailure(projectRoot: string, entry: ContextEntry, summary: string): Promise<ProofFailure | undefined> {
+   const section = await currentSection(projectRoot, entry);
+   if (!section.ok) return { rule: "summary-words", detail: `has a summary that cannot be checked: ${section.why}` };
+   const sectionWords = distinctWords(section.text);
+   const required = Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size);
+   const shared = [...distinctWords(summary)].filter((word) => sectionWords.has(word)).length;
+   if (shared >= required) return undefined;
+   return {
+     rule: "summary-words",
+     detail:
+       `has a summary that shares ${shared} distinct word(s) of ${WORD_MIN_LETTERS} or more letters with ${section.what}; ` +
+       `${required} required. Write the summary in the wording of the text you read`,
+   };
+
+--- src/gdskills/references-check.ts
+@@ 1,19 @@
+ // Authoring help for conditional references (flow 462): what `keryx skills
+ // references check|suggest` and the `skills import --rules` hint report.
+ //
+ // The analysis reads files and decides nothing about them: it compares the
+ // documents project rules cite (a backticked `X.md`) with the declarations in
+ // `.metaproject/rules/project/references.json`, and looks at each declared
+ // document. Expected failures come back as values (a finding, `ok: false`);
+ // nothing here throws for a missing or unreadable file.
+ //
+ // Citation scan. The resolver (context-resolver.ts) scans the contracts a
+ // *selected* rule cites; both normalise a cited path and decide what counts as a
+ // document with the helpers in references-config.ts. This scan differs on two
+ // points: it reads every rule under `.metaproject/rules/project/` (authoring is
+ // about the whole project, not one task), and it takes `.md` documents only,
+ // because a cited `.mdc` is another rule, not a document someone must be told to
+-// read. A linked rule (registered in place, not copied) is not scanned.
++// read. A linked rule (registered in place, not copied) is scanned at its origin.
+ 
+ import { lstat, readFile, realpath, stat } from "node:fs/promises";
+ import path from "node:path";
+
+--- src/gdskills/references-check.ts
+@@ 77,101 @@
+ export type SuggestResult = { ok: true; suggestion: ReferencesSuggestion } | { ok: false; errors: string[] };
+ 
+ type Inspection =
+   | { status: "ok"; bytes: number; text: string }
+   | { status: "missing" | "outside-root" | "not-file" | "too-large" | "unreadable"; detail?: string };
+ 
+ const DOCUMENT_CITATION = /`([^`\s]+\.md)`/g;
+ const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+ const lengthOf = (text: string): number => [...text.trim()].length;
+ const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
+ 
+ type CitationScan = {
+   /** Every project-relative `.md` path a rule cites, with the rules that cite it. */
+   cited: Map<string, string[]>;
+   unreadableRules: string[];
+ };
+ 
+ async function scanCitations(projectRoot: string): Promise<CitationScan> {
+   const cited = new Map<string, string[]>();
+   const unreadableRules: string[] = [];
+-  for (const ref of (await listRuleRefs(projectRoot)).sort(compare)) {
++  const copies = await listRuleRefs(projectRoot);
++  // `skills import --link` leaves no copy: the rule is read where it lives, as the resolver does.
++  const links = new Map((await readProjectRuleRegistry(projectRoot)).filter((entry) => entry.mode === "link" && !copies.includes(entry.ref)).map((entry) => [entry.ref, entry.origin]));
++  for (const ref of [...copies, ...links.keys()].sort(compare)) {
+     const rulePath = `${PROJECT_RULES_DIR}/${ref}`;
+
+--- src/gdskills/references-section.ts
+@@ 17,42 @@
+   heading: string;
+   level: number;
+   /** The section, heading line included, byte for byte as in the file. */
+   text: string;
+   /** UTF-8 size of {@link text}: what the resolver counts against the budget. */
+   bytes: number;
+ };
+ 
+ export type SectionMissing = {
+   found: false;
+   anchor: string;
+   reason: string;
+   /** Heading texts the file does have, in order, so a caller can suggest one. */
+   available: string[];
+ };
+ 
+ export type SectionResult = SectionFound | SectionMissing;
+ 
+ type HeadingLine = MarkdownHeading & { start: number };
+ 
+-const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*$/;
+ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+ 
+ /** GitHub-style slug: lower case, punctuation dropped, spaces to hyphens. Letters of any script are kept. */
+ export function slugifyHeading(text: string): string {
+   return text
+     .trim()
+
+--- src/tui/project-context-inspector.ts
+@@ 173,182 @@
++    const mine = ++started;
+     const next = await options.load();
+-    if (!sameStatus(current, next)) {
++    // A load that began before the one already applied is older news, whatever order they finished in.
++    if (mine > applied && !sameStatus(current, next)) {
+       current = next;
+       for (const listener of [...listeners]) listener(next);
+     }
++    applied = Math.max(applied, mine);
+     return next;
+   };
+
+--- src/tui/project-context-inspector.ts
+@@ 218,259 @@
+   let tab: string = options.initialTab ?? "status";
+   let closed = false;
+   let busy = false;
+   let body: Body | undefined;
+   let off: () => void = () => {};
+   let unsubscribeTheme: () => void = () => {};
+   let unsubscribeStatus: () => void = () => {};
+   const renderer = (chrome as { renderer?: unknown } | undefined)?.renderer;
+ 
+   const paint = (): void => {
+     if (closed || body?.add === undefined) return;
+     const Ctor = (otui as { TextRenderable?: TextCtor }).TextRenderable;
+     if (Ctor === undefined) return;
+     for (const child of [...(body.getChildren?.() ?? [])]) body.remove?.(child);
+     const lines =
+       tab === "last"
+         ? formatProjectContextLastLines(status)
+         : tab === "references"
+           ? formatProjectReferencesLines(status)
+           : formatProjectContextStatusLines(status);
+-    body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.join("\n"), "plain") }));
++    // Reference descriptions, anchors and keywords are file text; control bytes must not reach the terminal.
++    body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.map(cardSafe).join("\n"), "plain") }));
+   };
+ 
+   const handle = openModalFn(otui as never, chrome as never, {
+     title: PROJECT_CONTEXT_COMMAND,
+     tabs: [
+       { id: "status", label: "Status" },
+       { id: "last", label: "Last resolve" },
+       { id: "references", label: "References" },
+     ],
+     initialTab: options.initialTab ?? "status",
+     footer: projectContextFooter(status),
+     contentRows:
+       Math.max(
+         formatProjectContextStatusLines(status).length,
+         formatProjectContextLastLines(status).length,
+         formatProjectReferencesLines(status).length,
+       ) + 2,
+     renderTab: (tabId, nextBody) => {
+       tab = tabId;
+       body = nextBody as Body;

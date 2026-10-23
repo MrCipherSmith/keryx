@@ -1,0 +1,31 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "S-402",
+      "verdict": "upheld",
+      "reasoning": "Nothing at operator-confirm-review.ts:676-702 suggests the gap is deliberate. cardSafe (card-safe.ts:7-16) removes escape spans along with their payload so the card cannot be forged, but the record stores evidence.trim() raw (line 696), so the text the operator confirms and the text that is stored can differ. The verifier confirmed this by running it. Refusing strings that cardSafe would change, or storing what is shown, matches the shown-equals-stored invariant of S-401. Security finding: upheld, not downgradable."
+    },
+    {
+      "finding_id": "L6-501",
+      "verdict": "upheld",
+      "reasoning": "client.ts:136 defines undelivered as 'the question never reached the topic'. The catch at :461 also covers the AbortSignal.timeout at :675, a failed response.text() at :677 and a proof failure at :678-679. In each of those, serve may already have posted the card. Nothing in the code says these cases count as undelivered on purpose. One part of the claim is weak: an already-aborted signal at :440 is in fact undelivered. The timeout and body-read paths still carry the finding."
+    },
+    {
+      "finding_id": "T6-02",
+      "verdict": "upheld",
+      "reasoning": "A one-sided boundary test that misses off-by-one mutants is a test gap. No intent signal and no practice source makes it smaller, and a minor is not re-graded."
+    },
+    {
+      "finding_id": "F6-02",
+      "verdict": "upheld",
+      "reasoning": "evidence.trim() is computed several times between the check (:693-694) and the store (:696). Binding the trimmed text once and validating that same value is the usual DRY fix. It also guards the check-vs-store split that S-402 lives in. No sign this is deliberate."
+    },
+    {
+      "finding_id": "F6-03",
+      "verdict": "upheld",
+      "reasoning": "The schema description at :668 hard-codes 300 while MAX_DISPOSITION_EVIDENCE_CHARS (:657) holds the same limit. Interpolating the constant keeps the model-facing text and the check in step. Nothing suggests the duplication is intentional."
+    }
+  ]
+}

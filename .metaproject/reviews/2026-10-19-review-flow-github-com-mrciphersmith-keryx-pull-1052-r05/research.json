@@ -1,0 +1,1281 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:A-01",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding A-01 (The E-05 fix derives cardAvailable inside the agent loop by matching the literal tool name \"review_c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-27",
+      "reason": "reported as canonical finding F5-27",
+      "finding": "F5-27"
+    },
+    {
+      "id": "review-architecture-w1:fu1",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is the parent follow-up from review-architecture done or ruled out, and where is that recorded? Regression reviewer: src/commands/review.ts lines 4558 and 4562 (the --waive-coverage and --waive refusals) still say 'then call the review_complete card' unconditionally. This is a sibling of the E-0",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-16",
+      "reason": "review.ts:4558/4562 wording is F5-16",
+      "finding": "F5-16"
+    },
+    {
+      "id": "review-architecture-w2:A2-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding A2-001 (Commit 77d2eff20 moved the review-orchestrator skill (and its bundled mirrors) to 'call review_compl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-03",
+      "reason": "reported as canonical finding F5-03",
+      "finding": "F5-03"
+    },
+    {
+      "id": "review-architecture-w2:A2-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding A2-002 (The card refuses a closed round outright, while completeManagedReview in src/review/managed.ts recor) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-07",
+      "reason": "reported as canonical finding F5-07",
+      "finding": "F5-07"
+    },
+    {
+      "id": "review-architecture-w2:A2-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding A2-003 (operator-confirm-other.ts:82 already defines the same helper (`function errorText(error: unknown): s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-09",
+      "reason": "reported as canonical finding F5-09",
+      "finding": "F5-09"
+    },
+    {
+      "id": "review-architecture-w3:A3-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding A3-001 (The E-08 fix put the card control flow into the module that is documented as a passive live view. op) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-10",
+      "reason": "reported as canonical finding F5-10",
+      "finding": "F5-10"
+    },
+    {
+      "id": "review-architecture-w3:A3-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding A3-002 (The E-04 fix models the third topic state (delivered, then ended) as a second flag on top of `mirror) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-11",
+      "reason": "reported as canonical finding F5-11",
+      "finding": "F5-11"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (The E-10 fix introduced closeStep(card: boolean) for nextStep only. The same card-versus-command cla) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-12",
+      "reason": "reported as canonical finding F5-12",
+      "finding": "F5-12"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The new branch evaluates isTopicPress(answer) twice (here and on the next line, 'if (!isTopicPress(a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-13",
+      "reason": "reported as canonical finding F5-13",
+      "finding": "F5-13"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (markUndelivered now also records a card that WAS delivered and whose topic leg later ended; the name) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-11",
+      "reason": "reported as canonical finding F5-11",
+      "finding": "F5-11"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-004 (E-52 is only partly fixed. The tui-shell closure no longer maps outcomes by hand, but askUnmirroredC) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-14",
+      "reason": "reported as canonical finding F5-14",
+      "finding": "F5-14"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-005 (The header comment describes a read-only in-memory view for the sidebar, /remote-control and /decisi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-10",
+      "reason": "reported as canonical finding F5-10",
+      "finding": "F5-10"
+    },
+    {
+      "id": "review-clean-code-w1:F-006",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-006 (The E-06 split added errorText as a new helper but left the same expression written inline at line 7) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-09",
+      "reason": "reported as canonical finding F5-09",
+      "finding": "F5-09"
+    },
+    {
+      "id": "review-clean-code-w1:F-007",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-007 (The card's disposition validation (completionDispositions with dispositionsSchema) restates the memb) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-28",
+      "reason": "reported as canonical finding F5-28",
+      "finding": "F5-28"
+    },
+    {
+      "id": "review-clean-code-w2:F-101",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-101 (E-01 is only partly fixed. Lines 782, 386, 124, 136 and detail:669/866 now say the agent calls the r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-01",
+      "reason": "reported as canonical finding F5-01",
+      "finding": "F5-01"
+    },
+    {
+      "id": "review-clean-code-w2:F-102",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-102 (E-05 is claimed fixed by the cardAvailable flag in completion-gate.ts, but E-05's class_scope also n) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-16",
+      "reason": "reported as canonical finding F5-16",
+      "finding": "F5-16"
+    },
+    {
+      "id": "review-clean-code-w2:F-103",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-103 (describeBlockers now takes the card flag and rewrites its 'none listed' line, but the truncation lin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-15",
+      "reason": "reported as canonical finding F5-15",
+      "finding": "F5-15"
+    },
+    {
+      "id": "review-clean-code-w2:F-104",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-104 (The E-05 fix threads one boolean `card` through closeStep(card), nextStep(open, card), describeBlock) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-12",
+      "reason": "reported as canonical finding F5-12",
+      "finding": "F5-12"
+    },
+    {
+      "id": "review-clean-code-w2:F-105",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-105 (The E-06 refactor introduced `errorText` at :813 and replaced the local `reason` closure, but the id) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-09",
+      "reason": "reported as canonical finding F5-09",
+      "finding": "F5-09"
+    },
+    {
+      "id": "review-clean-code-w2:F-106",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-106 (The E-02 fix hand-writes the 'is this a disposition state' check and then casts `state as FindingDis) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-17",
+      "reason": "reported as canonical finding F5-17",
+      "finding": "F5-17"
+    },
+    {
+      "id": "review-clean-code-w2:F-107",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-107 (The extracted helper returns `unknown`: the thrown error on failure, undefined on success. Callers m) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-29",
+      "reason": "reported as canonical finding F5-29",
+      "finding": "F5-29"
+    },
+    {
+      "id": "review-clean-code-w2:F-108",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-108 (makeRound now accepts `findings?: Array<Record<string, unknown>>` and forces it through createManage) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-30",
+      "reason": "reported as canonical finding F5-30",
+      "finding": "F5-30"
+    },
+    {
+      "id": "review-clean-code-w2:F-109",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-109 (The gate now couples to the card by its literal name; the same literal is the spec name at operator-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-27",
+      "reason": "reported as canonical finding F5-27",
+      "finding": "F5-27"
+    },
+    {
+      "id": "review-clean-code-w2:fu1",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is the parent follow-up from review-clean-code done or ruled out, and where is that recorded? job-orchestrator SKILL.md:1002,1326-1328 and orchestrator-prompt.md:27,193 (and bundled copies) still instruct agents to run `keryx review complete --finding ... --disposition ...`; E-02 listed them a",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-03",
+      "reason": "job-orchestrator sites are F5-03",
+      "finding": "F5-03"
+    },
+    {
+      "id": "review-clean-code-w2:fu2",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is the parent follow-up from review-clean-code done or ruled out, and where is that recorded? docs/docs/guides/review-with-a-record.md:703 and :1002 and docs/docs/cli-reference.md describe dispositions only at a terminal; the card's new `dispositions` input is not documented there (docs review",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-08",
+      "reason": "docs gap is F5-08",
+      "finding": "F5-08"
+    },
+    {
+      "id": "review-clean-code-w3:F-201",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-201 (E-08 moved the construction of the remote approval into remoteApproval, but the decision around it i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-18",
+      "reason": "reported as canonical finding F5-18",
+      "finding": "F5-18"
+    },
+    {
+      "id": "review-clean-code-w3:F-202",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-202 (After the E-08 extraction the mirrorApprovalToTopic closure (lines 6092-6126, about 35 lines) still ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-19",
+      "reason": "reported as canonical finding F5-19",
+      "finding": "F5-19"
+    },
+    {
+      "id": "review-clean-code-w3:F-203",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-203 (raceMirroredCard does two different things depending on whether `question` is undefined: with a ques) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-20",
+      "reason": "reported as canonical finding F5-20",
+      "finding": "F5-20"
+    },
+    {
+      "id": "review-clean-code-w3:fu1",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is the parent follow-up from review-clean-code done or ruled out, and where is that recorded? src/commands/review.ts:4558 and :4562 hold the same ~400-character 'needs a terminal ... call the review_complete card' message twice with two words changed; unchanged by this delta (only the complete",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-16",
+      "reason": "review.ts:4558/4562 duplicate message is F5-16",
+      "finding": "F5-16"
+    },
+    {
+      "id": "review-clean-code-w3:fu2",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is the parent follow-up from review-clean-code done or ruled out, and where is that recorded? src/tui/card-lifecycle.test.ts lets the topic leg settle with `setTimeout(resolve, 10)` inside the dock callbacks (lines 483, 521, 545); a timing wait rather than an awaited event is a testing-practic",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-22",
+      "reason": "fixed sleeps are F5-22",
+      "finding": "F5-22"
+    },
+    {
+      "id": "review-highload-w1:H-01",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding H-01 (completeManagedReview writes the operator-confirmed dispositions to findings.json (under withOperato) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-06",
+      "reason": "reported as canonical finding F5-06",
+      "finding": "F5-06"
+    },
+    {
+      "id": "review-logic-w1:L5-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L5-001 (The E-02 fix adds `dispositions` to the review_complete card. The tool schema marks `evidence` optio) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-04",
+      "reason": "reported as canonical finding F5-04",
+      "finding": "F5-04"
+    },
+    {
+      "id": "review-logic-w2:L5-101",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding L5-101 (The Done-when bullet makes the review_complete card the only way an agent closes a managed round and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-02",
+      "reason": "reported as canonical finding F5-02",
+      "finding": "F5-02"
+    },
+    {
+      "id": "review-logic-w3:fu1",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Minor, not raised as a finding: the card clips each disposition's evidence to 300 chars (WAIVER_QUOTE_CHARS) while the recorded evidence is the full trimmed text, so an operator confirms a shortened v",
+      "status": "finding",
+      "evidence": "report.md keryx:findings S-401",
+      "reason": "clipped card evidence vs stored evidence is S-401",
+      "finding": "S-401"
+    },
+    {
+      "id": "review-logic-w3:fu2",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Minor, not raised as a finding: the number of dispositions shown on one card is not capped, so a very large batch can exceed the Telegram message limit; consider a count cap with an explicit 'N more' ",
+      "status": "finding",
+      "evidence": "report.md keryx:findings S-401",
+      "reason": "uncapped disposition count is part of S-401",
+      "finding": "S-401"
+    },
+    {
+      "id": "review-logic-w6:L5-501",
+      "source": "raw/review-logic-w6.txt",
+      "question": "Is review-logic finding L5-501 (The dispositions input tells the model that evidence is optional and buildCard (completionDispositio) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-04",
+      "reason": "reported as canonical finding F5-04",
+      "finding": "F5-04"
+    },
+    {
+      "id": "review-logic-w6:L5-502",
+      "source": "raw/review-logic-w6.txt",
+      "question": "Is review-logic finding L5-502 (recordDispositionsLocked validates every record against the finding as it stands in findings.json an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-05",
+      "reason": "reported as canonical finding F5-05",
+      "finding": "F5-05"
+    },
+    {
+      "id": "review-logic-w6:L5-503",
+      "source": "raw/review-logic-w6.txt",
+      "question": "Is review-logic finding L5-503 (findings.json is rewritten at 1019, before the closed manifest is validated (1026-1029) and written ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-06",
+      "reason": "reported as canonical finding F5-06",
+      "finding": "F5-06"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (Test-plan box: \"- [ ] `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-31",
+      "reason": "reported as canonical finding F5-31",
+      "finding": "F5-31"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-101",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-101 (E-05 was fixed by making the gate say 'run `keryx review complete`' in a session with no review_comp) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-02",
+      "reason": "reported as canonical finding F5-02",
+      "finding": "F5-02"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-102",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-102 (The PR's rule (SKILL.md:136 'an agent never runs `keryx review complete`') is the fix for E-01, and ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-03",
+      "reason": "reported as canonical finding F5-03",
+      "finding": "F5-03"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-103",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-103 (Commit 77d2eff20 adds two user-visible behaviours that no user-facing document in the diff or outsid) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-08",
+      "reason": "reported as canonical finding F5-08",
+      "finding": "F5-08"
+    },
+    {
+      "id": "review-pr-contract-w2:fu1",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is the parent follow-up from review-pr-contract done or ruled out, and where is that recorded? PC-102: trace completeManagedReview on an already-complete package to settle whether job-orchestrator step 7 re-runs the gates or only records dispositions.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-03",
+      "reason": "PC-102 is F5-03",
+      "finding": "F5-03"
+    },
+    {
+      "id": "review-pr-contract-w2:fu2",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is the parent follow-up from review-pr-contract done or ruled out, and where is that recorded? E-13, E-14 and D-03 remain open as deferred minors; not re-raised.",
+      "status": "out-of-scope",
+      "evidence": "raw/review-pr-contract-w2.txt",
+      "reason": "E-13, E-14 and D-03 are r04/r03 deferred minors carried unchanged; D-03 is raised again as F5-15; the others stay open follow-ups, not part of this delta"
+    },
+    {
+      "id": "review-regression-w2:fu1",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Card/runtime mismatch on the review_complete card (src/commands/operator-confirm-review.ts dispositionsSchema vs src/review/managed.ts recordDispositions): the card schema describes dispositions `evid",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-04",
+      "reason": "optional evidence vs engine refusal is F5-04",
+      "finding": "F5-04"
+    },
+    {
+      "id": "review-regression-w2:fu2",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Unbounded dispositions list on the review_complete card: with roughly 30 or more entries the card text exceeds MAX_APPROVAL_PROMPT_CHARS (3000), operatorCardTooLongForTopic is true, and the card gets ",
+      "status": "finding",
+      "evidence": "report.md keryx:findings S-401",
+      "reason": "unbounded disposition list on the card is part of S-401",
+      "finding": "S-401"
+    },
+    {
+      "id": "review-regression-w2:fu3",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Stale instructions outside the changed set and outside the blast radius: .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:27 and :193 and job-orchestrator/SKILL.md:10",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-03",
+      "reason": "stale job-orchestrator instructions are F5-03",
+      "finding": "F5-03"
+    },
+    {
+      "id": "review-regression-w2:fu4",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? D-03 residual, still deferred: src/review/completion-gate.ts:800 still reads `more (\\`keryx review complete\\` lists them all)` in the overflow line of describeBlockers, which does not honour the new `",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-15",
+      "reason": "completion-gate.ts:800 overflow line is F5-15",
+      "finding": "F5-15"
+    },
+    {
+      "id": "review-regression-w2:fu5",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Residual ambiguous wording in the review-orchestrator SKILL.md at :59 and :134 mentions the completion step without saying which surface answers it; harmless after the E-01 rewording but worth a pass.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-01",
+      "reason": "ambiguous SKILL.md:59/134 wording is F5-01",
+      "finding": "F5-01"
+    },
+    {
+      "id": "review-regression-w3:fu1",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Settle by running src/tui/card-lifecycle.test.ts, src/tui/operator-confirmations.test.ts, src/tui/approval-mirror.test.ts, src/remote/mirror-undelivered.test.ts and src/review/completion-gate.test.ts ",
+      "status": "refuted",
+      "evidence": "research-evidence/verify-F5-26-1.txt",
+      "reason": "ran the named test files at 77d2eff20: 156 pass, 0 fail, exit 0; the equivalence holds"
+    },
+    {
+      "id": "review-regression-w3:fu2",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? The overflow line at src/review/completion-gate.ts:800 (`- … and ${more} more (\\`keryx review complete\\` lists them all)`) still ignores the new `card` argument; it is the deferred D-03 and stays card",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-15",
+      "reason": "completion-gate.ts:800 is F5-15",
+      "finding": "F5-15"
+    },
+    {
+      "id": "review-regression-w3:fu3",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? A topic-ended card whose 1-hour token has also expired reads `Telegram token expired, answer in the shell` followed by `Telegram is no longer waiting for this card, answer in the shell` (operator-conf",
+      "status": "out-of-scope",
+      "evidence": "raw/review-regression-w3.txt",
+      "reason": "cosmetic double wording on an expired-token topic-ended card; the reviewer classed it as a follow-up with no behavioural risk; not raised as a finding"
+    },
+    {
+      "id": "review-security-code-w3:fu1",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? Informational, not a finding: pressedBy/pressedAt are written into JSON records that live in the package or flow directory and are readable back without a check that confirmedVia is remote-card (cover",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-w3.txt",
+      "reason": "reviewer marked it informational and not a finding; pressedBy/pressedAt are operator-authored records inside the package"
+    },
+    {
+      "id": "review-security-code-w5:S-401",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is review-security-code finding S-401 (The dispositions the agent passes to review_complete are shown on the card with the evidence cut to ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings S-401",
+      "reason": "reported as canonical finding S-401",
+      "finding": "S-401"
+    },
+    {
+      "id": "review-security-code-w5:fu1",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? info: recordDispositions (managed.ts:1019) writes findings.json before the manifest schema check and the manifest write (managed.ts:1026-1030); the catch at 1031-1039 restores only the research and wa",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-06",
+      "reason": "findings.json written before manifest validation is F5-06",
+      "finding": "F5-06"
+    },
+    {
+      "id": "review-security-code-w5:fu2",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? info: the card names a finding by id and state only; it does not show the finding's severity or problem, so the operator cannot see that a blocker is being dismissed without opening the package. Desig",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-w5.txt",
+      "reason": "reviewer marked it info and a design choice: the card names finding id and state by design; the hidden-evidence defect is S-401"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The E-10 fix replaced the clause pasted in three returns of nextStep with a closeStep(card) helper, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-12",
+      "reason": "reported as canonical finding F5-12",
+      "finding": "F5-12"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The module header still says the file is only the in-memory live view that the sidebar, /remote-cont) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-10",
+      "reason": "reported as canonical finding F5-10",
+      "finding": "F5-10"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The extraction of apply (E-06) promoted the in-function `reason` arrow to a module-level `errorText`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-09",
+      "reason": "reported as canonical finding F5-09",
+      "finding": "F5-09"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (The new onTopicEnded branch (line 55) evaluates `!isTopicPress(answer)` and, one line later, line 56) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-13",
+      "reason": "reported as canonical finding F5-13",
+      "finding": "F5-13"
+    },
+    {
+      "id": "review-style-w2:F-101",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-101 (E-01's fix is incomplete for the descriptive tail sites. SKILL.md:124 and SKILL.detail.md:866 (first) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-01",
+      "reason": "reported as canonical finding F5-01",
+      "finding": "F5-01"
+    },
+    {
+      "id": "review-style-w2:F-102",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-102 (The E-06 extraction replaced the apply-local `reason` closure with a new module-level helper, but th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-09",
+      "reason": "reported as canonical finding F5-09",
+      "finding": "F5-09"
+    },
+    {
+      "id": "review-style-w3:F-201",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-201 (The card-or-command wording is now held by closeStep (line 755) for nextStep only. Four more inline ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-12",
+      "reason": "reported as canonical finding F5-12",
+      "finding": "F5-12"
+    },
+    {
+      "id": "review-style-w3:F-202",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-202 (E-04's fix reuses markUndelivered for a card that WAS delivered and whose topic leg later ended; the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-11",
+      "reason": "reported as canonical finding F5-11",
+      "finding": "F5-11"
+    },
+    {
+      "id": "review-style-w3:F-203",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-203 (The module header says this file is only the in-memory live view and that the stores own the durable) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-10",
+      "reason": "reported as canonical finding F5-10",
+      "finding": "F5-10"
+    },
+    {
+      "id": "review-style-w3:F-204",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-204 (The skill states the rule without exception, but the same PR adds `cardAvailable` to the gate (compl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-02",
+      "reason": "reported as canonical finding F5-02",
+      "finding": "F5-02"
+    },
+    {
+      "id": "review-style-w3:F-205",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-205 (The header cites a review finding id (E-08) that exists only in one review package's ledger; the tes) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-34",
+      "reason": "reported as canonical finding F5-34",
+      "finding": "F5-34"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The E-08 fix extracted remoteApproval, raceMirroredCard and askUnmirroredCard and tests them, but th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-21",
+      "reason": "reported as canonical finding F5-21",
+      "finding": "F5-21"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The fix adds new fixed sleeps to let the topic leg settle before asserting: card-lifecycle.test.ts:2) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-22",
+      "reason": "reported as canonical finding F5-22",
+      "finding": "F5-22"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (The `!topicAbort.signal.aborted` half of the E-04 fix cannot be reached: topicAbort is aborted only ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-32",
+      "reason": "reported as canonical finding F5-32",
+      "finding": "F5-32"
+    },
+    {
+      "id": "review-testing-practices-w2:F-101",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-101 (The E-03 test (line 355-361) validates a waiver the test builds by hand against schema.properties.re) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-23",
+      "reason": "reported as canonical finding F5-23",
+      "finding": "F5-23"
+    },
+    {
+      "id": "review-testing-practices-w2:F-102",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-102 (The new disposition lines carry model-supplied text onto an operator card, and dispositionLine guard) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-24",
+      "reason": "reported as canonical finding F5-24",
+      "finding": "F5-24"
+    },
+    {
+      "id": "review-testing-practices-w2:F-103",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-103 (E-05 is fixed by deriving cardAvailable from the session's tool roster. The new tests in completion-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-25",
+      "reason": "reported as canonical finding F5-25",
+      "finding": "F5-25"
+    },
+    {
+      "id": "review-testing-practices-w2:fu1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-1: in operator-confirm-review.ts buildCard, remove `...dispositions.map(dispositionLine),` (line 775). Expected killed by tools.test.ts:675 (card lacks the disposition line).",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E02-1 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu2",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-2: in buildCard set `prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions: [] }`. Expected killed by :679 (findings.json disposition) and :680 (completion-confirmat",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E02-2 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu3",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-3: in apply, drop `dispositions: prepared.dispositions` from the completion-confirmation.json record, or from the completeReviewGated call. Expected killed by :680 / :679.",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E02-3 and M-E02-3b killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu4",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-4: in completionDispositions replace the FINDING_DISPOSITION_STATES membership test (line 683) with `false`-guard removal (accept any state). Expected killed by :698 (`disposition must be",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E02-4 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu5",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-5: remove the `finding === \"\"` refusal (line 682), the `typeof evidence !== \"string\"` refusal (line 686), or the `Array.isArray` refusal (line 675). Each expected killed by the matching a",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E02-5a, 5b and 5c killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu6",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-6 (expected to SURVIVE, backs F-102): in dispositionLine replace `cardSafe(record.finding)` by `record.finding`, or `cardSafe(clip(record.evidence))` by `record.evidence`.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-24",
+      "reason": "M-E02-6 and M-E02-6b survived: F5-24",
+      "finding": "F5-24"
+    },
+    {
+      "id": "review-testing-practices-w2:fu7",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-7 (expected to SURVIVE, backs F-102): drop `.trim()` on evidence at line 687, so whitespace-only evidence is recorded.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-24",
+      "reason": "M-E02-7 survived: F5-24",
+      "finding": "F5-24"
+    },
+    {
+      "id": "review-testing-practices-w2:fu8",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E02-8 (expected to SURVIVE): in apply read dispositions from the invoke-time input via completionDispositions(input) instead of prepared.dispositions. No test changes the input between card a",
+      "status": "narrowed",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "M-E02-8 survived (apply reading the invoke-time input instead of prepared.dispositions); the reviewer expected this",
+      "remains": "no test changes the input between card and apply, so apply reading the invoke-time input is not pinned; minor, not raised as a canonical finding"
+    },
+    {
+      "id": "review-testing-practices-w2:fu9",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E03-1: in docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json remove the `confirmedVia` property from readiness_waivers items. Expected killed by tools.t",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E03-1 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu10",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E03-2: widen the `confirmedVia` enum to `{ \"type\": \"string\" }`. Expected killed by :360 (`somewhere` must error).",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E03-2 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu11",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E03-3: remove `pressedBy` or `pressedAt`, or change `pressedBy` to `\"type\": \"string\"`. Expected killed by :359 (remote-card waiver).",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E03-3a, 3b and 3c killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu12",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E03-4 (expected to SURVIVE, backs F-101): in the waiver writer (readiness.ts / operator-confirm-review.ts waiver record) add an extra field such as `foo: 1`, or change `time` to a number. The",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-23",
+      "reason": "M-E03-4 was killed, so the writer shape is pinned elsewhere; the assertion-source gap is F5-23",
+      "finding": "F5-23"
+    },
+    {
+      "id": "review-testing-practices-w2:fu13",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E05-1 (expected to SURVIVE, backs F-103): agent.ts:3501 replace the predicate with `cardAvailable: true` and, separately, `cardAvailable: false`.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-25",
+      "reason": "M-E05-1a and M-E05-1b survived: F5-25",
+      "finding": "F5-25"
+    },
+    {
+      "id": "review-testing-practices-w2:fu14",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E05-2: in completion-gate.ts make nextStep ignore `card` (always the card wording) or default describeBlockers' `card = true` to `false` for the card path. Expected killed by the two new comp",
+      "status": "narrowed",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "M-E05-2a killed but M-E05-2b (describeBlockers default arg card=false) survived; nextStep is pinned, the describeBlockers default argument is not",
+      "remains": "describeBlockers default `card = true` can flip without a failing test (M-E05-2b)"
+    },
+    {
+      "id": "review-testing-practices-w2:fu15",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E05-3: in closeStep(card) return the same text for both values. Expected killed by the `stop` report assertions with `continues: 20` in completion-gate.test.ts.",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E05-3 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w2:fu16",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E04-1 (context): in approval-mirror.ts drop `&& !topicAbort.signal.aborted` (line 55). Expected killed by the dock-answers-first test in mirror-undelivered.test.ts; drop `else` so onTopicEnde",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-32",
+      "reason": "M-E04-1a survived and agrees that the guard cannot change behaviour (F5-32); M-E04-1b was killed",
+      "finding": "F5-32"
+    },
+    {
+      "id": "review-testing-practices-w3:F-201",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-201 (The E-08 fix moved the topic-answer-to-record hop into settle and raceMirroredCard, and card-lifecyc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-26",
+      "reason": "reported as canonical finding F5-26",
+      "finding": "F5-26"
+    },
+    {
+      "id": "review-testing-practices-w3:F-202",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-202 (The askUnmirroredCard test asserts that a card whose turn stopped is logged `withdrawn` with yes ===) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-33",
+      "reason": "reported as canonical finding F5-33",
+      "finding": "F5-33"
+    },
+    {
+      "id": "review-testing-practices-w3:fu1",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E04-a: operator-confirmations.ts raceMirroredCard, delete the `onTopicEnded: () => options.log.markUndelivered(id, \"ended\"),` line. Expected killed by card-lifecycle.test.ts 'a topic leg that",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E04-a killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu2",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E04-b: markUndelivered(id, \"ended\") ignores reason (always the undelivered wording). Expected killed by operator-confirmations.test.ts:~68-74 ('no longer waiting' and not 'not delivered') and",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E04-b killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu3",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E04-c: change the wiring to `onTopicEnded: () => options.onUndelivered?.()`. Expected killed by `expect(told).toBe(0)` in the ended test.",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E04-c killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu4",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E04-d: pendingConfirmationLine, invert the topicEnded ternary. Expected killed by both wording tests (undelivered and ended).",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E04-d killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu5",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E08-a: remoteApproval drops `pressedBy` or `pressedAt`, or stamps `new Date()` instead of `now()`. Expected killed by the toEqual in 'remoteApproval names who pressed'.",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E08-a1 and M-E08-a2 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu6",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E08-b: raceMirroredCard finally skips `options.log.settle(...)`. Expected killed by the allow, deny, dock-throw and stopped-turn tests (waiting() or answered missing).",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E08-b killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu7",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E08-c: settle ignores turnAborted (`place: \"shell\"` for an aborted dock). Expected killed by 'a turn that stopped withdraws the card' and operator-confirmations.test.ts settle row with aborte",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E08-c killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu8",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E08-d: askUnmirroredCard logs `shell` when the turn aborted, or `answered` flag removed so a throw logs shell. Expected killed by the third card-lifecycle askUnmirroredCard test.",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E08-d1 and M-E08-d2 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu9",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E08-e: raceMirroredCard passes `question` through even when undefined (log.ask(undefined ...)). Expected killed by 'a question that is not an operator card logs nothing'.",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E08-e killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu10",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-201 (backs F-201, expected to SURVIVE): operator-confirmations.ts:73 replace the conditional spread with `pressedBy: outcome.answer.fromId ?? 0`.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-26",
+      "reason": "M-201 survived: F5-26",
+      "finding": "F5-26"
+    },
+    {
+      "id": "review-testing-practices-w3:fu11",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-202 (backs F-202, expected to be KILLED although behaviour is unchanged): askUnmirroredCard `yes: answered && verdict !== false` -> `yes: !turnSignal.aborted && answered && verdict !== false`",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-202 killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu12",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-E05-g: completion-gate.ts describeBlockers, make the empty-list branch ignore `card` (always the card wording). Expected killed by the no-card test loop over {blockers: []} (completion-gate.t",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.json",
+      "reason": "mutation pass: M-E05-g killed by the suite; the suspected unpinned behaviour is pinned"
+    },
+    {
+      "id": "review-testing-practices-w3:fu13",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Mutant M-001 (carried from wave 1, still expected to survive): tui-shell.ts:6125 replace `outcome.answer.fromId` with `undefined`; tui-shell.ts:6083 replace `answer.fromId` with `undefined`.",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-21",
+      "reason": "M-001a and M-001b survived: F5-21",
+      "finding": "F5-21"
+    },
+    {
+      "id": "review-testing-practices-w3:fu14",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Carried, deferred and not re-raised: D-03 (overflow line at completion-gate.ts:68 still says `keryx review complete` lists them all, now also true in card mode where the same message forbids that comm",
+      "status": "finding",
+      "evidence": "report.md keryx:findings F5-15",
+      "reason": "carried D-03 overflow line is F5-15",
+      "finding": "F5-15"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "D-03": "open",
+      "D-12": "open",
+      "E-01": "partial",
+      "E-02": "closed",
+      "E-03": "closed",
+      "E-04": "closed",
+      "E-05": "partial",
+      "E-06": "closed",
+      "E-07": "closed",
+      "E-08": "closed",
+      "E-09": "open",
+      "E-10": "partial",
+      "E-11": "open",
+      "E-12": "open",
+      "E-13": "open",
+      "E-14": "open",
+      "E-15": "open",
+      "E-16": "open",
+      "E-17": "open",
+      "E-18": "open",
+      "E-19": "open",
+      "E-20": "open",
+      "E-21": "open",
+      "E-22": "open",
+      "E-23": "open",
+      "E-24": "open",
+      "E-25": "open",
+      "E-26": "open",
+      "E-27": "open",
+      "E-28": "open",
+      "E-29": "open",
+      "E-30": "open",
+      "E-31": "open",
+      "E-32": "open",
+      "E-33": "open",
+      "E-34": "open",
+      "E-35": "closed",
+      "E-36": "open",
+      "E-37": "open",
+      "E-38": "open",
+      "E-39": "open",
+      "E-40": "open",
+      "E-41": "open",
+      "E-42": "open",
+      "E-43": "open",
+      "E-44": "open",
+      "E-45": "open",
+      "E-46": "open",
+      "E-47": "open",
+      "E-48": "open",
+      "E-49": "open",
+      "E-50": "open",
+      "E-51": "open",
+      "E-52": "partial",
+      "E-53": "open",
+      "E-54": "open",
+      "E-55": "open",
+      "E-56": "open",
+      "E-57": "open",
+      "E-58": "closed",
+      "E-59": "open",
+      "E-60": "open",
+      "E-61": "open",
+      "E-62": "open",
+      "E-63": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:9984bd01e616",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:9984bd01e616",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:bec49b97df93",
+        "rawEvidence": "raw/review-clean-code-w3.txt#sha256:bec49b97df93",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:f9223578b6b8",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:f9223578b6b8",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:d4e7b1bd2453",
+        "rawEvidence": "raw/review-logic-w7.txt#sha256:d4e7b1bd2453",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:20dd51f87021",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:20dd51f87021",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:9f91928ec4ea",
+        "rawEvidence": "raw/review-pr-contract-w2.txt#sha256:9f91928ec4ea",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:06e3fe3451cb",
+        "rawEvidence": "raw/review-regression-w3.txt#sha256:06e3fe3451cb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:014cd16c7507",
+        "rawEvidence": "raw/review-security-code-w6.txt#sha256:014cd16c7507",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:cd7f9cb48900",
+        "rawEvidence": "raw/review-style-w3.txt#sha256:cd7f9cb48900",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:dac23f3f01cd",
+        "rawEvidence": "raw/review-testing-practices-w3.txt#sha256:dac23f3f01cd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 34,
+    "known": 0,
+    "unknown": 34,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}
