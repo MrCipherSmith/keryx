@@ -117,12 +117,15 @@ test("durable transcript redacts nested output, answers, keys and system message
 });
 test("durable error text is redacted and failed requests remain charged", async () => {
   const f = await fixture(); f.port.turn = async () => { throw new Error(fakeSecret); };
-  const result = await runProbeSession(f.root, f.plan, s => executeProbe(s, task, f.port, { baseline: "baseline", reservationUsd: 0.2 }));
+  const result = await runProbeSession(f.root, f.plan, async s => ({
+    ...await executeProbe(s, task, f.port, { baseline: "baseline", reservationUsd: 0.2 }),
+    checkpoint: s.checkpoint,
+  }));
   if (!result.ok) throw new Error(result.message);
   expect(result.value.comparison.reason).toBe("run-failed");
   const run = result.value.comparison.runs[0]!;
   const text = await readFile(path.join(f.root, run.transcript), "utf8");
-  expect(text).not.toContain(fakeSecret); expect(run.chargedUsd).toBe(0.2);
+  expect(text).not.toContain(fakeSecret); expect(result.value.checkpoint.seeds[0]!.chargedUsd).toBe(0.2);
   expect(f.counts().cleanups).toBe(1);
 });
 import { readFileSync, readdirSync } from "node:fs";
