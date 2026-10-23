@@ -7323,7 +7323,21 @@ export async function launchTuiAgentShell(opts: {
       foregroundOperation.invalidateSession();
       io.resetStream();
       blockIo.resetReasoningLiveState();
-      forceHandoff.clear();
+      // Not `forceHandoff.clear()`: a forced line has already been taken out of
+      // the visible queue, so clearing the handoff on `/new`, `/clear` or
+      // `/resume` deleted the operator's message. Give the parked lines back to
+      // the queue; the waiter that owns the handoff then finds it empty and adds
+      // nothing twice.
+      const parked = forceHandoff.drainPending();
+      if (parked.length > 0) {
+        turnLoop.replaceQueue([...parked, ...turnLoop.queue]);
+        paintMainQueue();
+        io.onSystem?.(
+          parked.length === 1
+            ? "◇ the forced line is back in the main queue.\n"
+            : `◇ ${parked.length} forced lines are back in the main queue.\n`,
+        );
+      }
       suggestionGate.cancel();
       if (sessionPersistTimer !== undefined) {
         clearTimeout(sessionPersistTimer);
@@ -9112,7 +9126,26 @@ export async function launchTuiAgentShell(opts: {
       // guard was therefore covered only by a source-text audit — which review
       // showed stays green with the guard deleted.
       void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {
-        announce: () => io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`),
+        // Only claim an interruption the owner performed: with nothing active
+        // `cancel` is a no-op, and the old unconditional line said the main turn
+        // was interrupted when nothing had been.
+        announce: (interrupted) =>
+          io.onSystem?.(
+            interrupted
+              ? `◇ main turn interrupted — q${index + 1} will run next.\n`
+              : `◇ q${index + 1} will run next.\n`,
+          ),
+        // `runQueued` goes through `runLine`, whose busy branch diverts the line
+        // to the recipient dock or a side worker. Ask before dispatching, and hand
+        // the line back to the queue while the chrome is still busy.
+        isBusy: () => chrome.isBusy(),
+        resume: () => drainSites.onLeaseRelease(),
+        requeue: (items) => {
+          if (foregroundOperation.isDisposed) return;
+          turnLoop.replaceQueue([...items, ...turnLoop.queue]);
+          paintMainQueue();
+          drainSites.onLeaseRelease();
+        },
         run: (next) => remoteQueue.runQueued(next),
       });
     };

@@ -376,14 +376,17 @@ test("a settlement handoff cannot dispatch into a replacement session", async ()
 });
 
 
-test("session switch clears old Force selections and permits a fresh settlement handoff", async () => {
+test("session switch parks old Force selections and permits a fresh settlement handoff", async () => {
   const owner = createForegroundOperationOwner();
   const token = owner.begin();
   const handoff = createForegroundForceHandoff<string>();
   const dispatched: string[] = [];
   const old = forceForegroundQueueItem(owner, handoff, "old", { run: item => dispatched.push(item) });
   owner.invalidateSession();
-  handoff.clear();
+  // The session switch takes the parked line back (the shell re-queues it)
+  // instead of clearing it — clearing is what made the operator's message vanish.
+  expect(handoff.drainPending()).toEqual(["old"]);
+  expect(handoff.isAwaitingSettlement).toBe(false);
   const fresh = forceForegroundQueueItem(owner, handoff, "fresh", { run: item => dispatched.push(item) });
   owner.settle(token);
   await Promise.all([old, fresh]);
