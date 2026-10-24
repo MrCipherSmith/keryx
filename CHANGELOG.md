@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **`keryx review mutate` stops each mutant at the first red test.** When `--test` is a plain `bun test <paths>` command (optionally behind `env` or `NAME=value`), mutants run with `--bail`; the baseline still runs in full, and any other command shape runs as given. `--no-bail` turns it off. The `mutation-<n>.json` record now says whether it was applied (`bail`) and carries `startedAt`, `head`, `treeHash`, `loadavg`, `copyMs` and `mutantsMs`; older records still read. Flow 473.
+
 ### Fixed
 - Restored 13 review packages left in local worktrees during October 2026 reviews, preserving the more complete processed #1058 report already on `main` (PR #1060). This restores review evidence, not changes to the review completion or operator decision gates.
 

@@ -775,6 +775,16 @@ and `.json`. A mutant is `killed` (the suite went red), `survived` (nothing pins
 behaviour), `timeout`, or `invalid` (anchor missing or not unique, file outside the copy).
 A survivor is evidence for the finding that names it.
 
+When `--test` is a plain `[env] [NAME=value] bun test <paths>` command, each mutant runs with
+`--bail` inserted right after `bun test`: the first red test ends that run, so a killed mutant
+costs the time to its first failure, not the whole suite. The baseline always runs in full, and
+a green run is the same with or without the flag, so no status changes. Any other command shape
+(`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off. The `.json` record
+then carries `bail: true` when it was applied, and, for the next measurement, `startedAt`, `head`
+and `treeHash` (the commit and a hash of the uncommitted state judged; absent outside git),
+`loadavg` (at the end of the pass), `copyMs` and `mutantsMs`. Records written before these fields
+exist stay valid.
+
 `keryx review complete` refuses while proposed mutants are unrun on an attended round, unless the
 operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or their answer to
 the host question recorded with `keryx review waive-mutation --package <review-dir> --reason "<why>"
