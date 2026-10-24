@@ -128,7 +128,8 @@
               "health",
               "memory",
               "observation",
-              "reviewer-comment"
+              "reviewer-comment",
+              "probe"
             ]
           },
           "sourceRef": {

@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true,
+    "confirmation": true
+  },
+  "id": "469",
+  "slug": "keryx-learn-probe-paired-pattern-measure",
+  "title": "Keryx learn probe: paired pattern measurement, evidence and guarded CLI",
+  "status": "initializing",
+  "createdAt": "2026-10-20T19:50:57.728Z",
+  "updatedAt": "2026-10-20T20:35:56.832Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "docs/keryx-learn-probe-docpack",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by bounded runtime T7-T12 with exclusive lane ownership"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "TDD embedded in T7-T12 and independent verification T13"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T13",
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Correct learn-probe docpack contracts before freeze per operator decisions",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-10-20T19:59:04.512Z",
+            "outcome": "started",
+            "detail": "469-T5: agent-1 docpack-only correction before freeze; operator decisions recorded"
+          },
+          {
+            "at": "2026-10-20T20:01:01.146Z",
+            "outcome": "blocked",
+            "detail": "Resolved by operator: comparison publication cut-off; post-publication drift skips evidence with exit 3"
+          },
+          {
+            "at": "2026-10-20T20:01:01.322Z",
+            "outcome": "started",
+            "detail": "469-T5 resumes with recorded cut-off clarification"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Independently verify corrected docpack schemas examples and operator decisions before freeze",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T20:15:37.590Z",
+            "outcome": "started",
+            "detail": "Independent docpack review dispatched to agent-2; no runtime before explicit operator freeze"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent report DONE_WITH_CONCERNS accepted: no blocker/major; 746 offline checks and subagent-result schema verified; minor AC11 audit clarification remains pre-freeze; runtime not started"
+    },
+    {
+      "id": "T7",
+      "title": "Lane A: TDD pure Newcombe scoring and exhaustive verdict precedence",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Lane A: TDD probe sourceType schemas config and immutable plan checkpoint contracts",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Lane A: TDD core identity resume durable spend exactly-once finalization and retention",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Lane B: TDD isolated paired runner gold checks usage checkpoints cancellation and cleanup",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Lane B: TDD CLI dry-run TTY budget validation JSON envelope and recovery outcomes",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Lane A: integrate learn router prune hook and decision-module regression guards",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Independent integration quality gate and failure-scenario AC verification on working-tree CLI",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Update implementation docs and verified handoff report; select completion target with operator",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-20T19:50:57.728Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-20T19:57:31.463Z",
+      "event": "task-added",
+      "detail": "T5: Correct learn-probe docpack contracts before freeze per operator decisions"
+    },
+    {
+      "at": "2026-10-20T19:59:04.513Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 469-T5: agent-1 docpack-only correction before freeze; operator decisions recorded"
+    },
+    {
+      "at": "2026-10-20T20:01:01.146Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 2) — Resolved by operator: comparison publication cut-off; post-publication drift skips evidence with exit 3"
+    },
+    {
+      "at": "2026-10-20T20:01:01.322Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 3) — 469-T5 resumes with recorded cut-off clarification"
+    },
+    {
+      "at": "2026-10-20T20:02:45.537Z",
+      "event": "task-added",
+      "detail": "T6: Independently verify corrected docpack schemas examples and operator decisions before freeze"
+    },
+    {
+      "at": "2026-10-20T20:02:45.707Z",
+      "event": "task-added",
+      "detail": "T7: Lane A: TDD pure Newcombe scoring and exhaustive verdict precedence"
+    },
+    {
+      "at": "2026-10-20T20:02:45.870Z",
+      "event": "task-added",
+      "detail": "T8: Lane A: TDD probe sourceType schemas config and immutable plan checkpoint contracts"
+    },
+    {
+      "at": "2026-10-20T20:02:46.038Z",
+      "event": "task-added",
+      "detail": "T9: Lane A: TDD core identity resume durable spend exactly-once finalization and retention"
+    },
+    {
+      "at": "2026-10-20T20:02:46.200Z",
+      "event": "task-added",
+      "detail": "T10: Lane B: TDD isolated paired runner gold checks usage checkpoints cancellation and cleanup"
+    },
+    {
+      "at": "2026-10-20T20:02:46.362Z",
+      "event": "task-added",
+      "detail": "T11: Lane B: TDD CLI dry-run TTY budget validation JSON envelope and recovery outcomes"
+    },
+    {
+      "at": "2026-10-20T20:02:46.538Z",
+      "event": "task-added",
+      "detail": "T12: Lane A: integrate learn router prune hook and decision-module regression guards"
+    },
+    {
+      "at": "2026-10-20T20:02:46.718Z",
+      "event": "task-added",
+      "detail": "T13: Independent integration quality gate and failure-scenario AC verification on working-tree CLI"
+    },
+    {
+      "at": "2026-10-20T20:02:46.885Z",
+      "event": "task-added",
+      "detail": "T14: Update implementation docs and verified handoff report; select completion target with operator"
+    },
+    {
+      "at": "2026-10-20T20:03:20.090Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-20T20:03:20.271Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-20T20:03:20.444Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T13, T14 (was empty) — Review only after verified integration and handoff report; no PR without operator target"
+    },
+    {
+      "at": "2026-10-20T20:15:37.247Z",
+      "event": "task-done",
+      "detail": "T5: Correct learn-probe docpack contracts before freeze per operator decisions"
+    },
+    {
+      "at": "2026-10-20T20:15:37.590Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Independent docpack review dispatched to agent-2; no runtime before explicit operator freeze"
+    },
+    {
+      "at": "2026-10-20T20:35:56.832Z",
+      "event": "task-done",
+      "detail": "T6: Independently verify corrected docpack schemas examples and operator decisions before freeze"
+    }
+  ]
+}

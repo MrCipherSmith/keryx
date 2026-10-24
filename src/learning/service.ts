@@ -17,3 +17,6 @@
 // policy looks for. Both names now serve the same content; new outside
 // imports should prefer `"../learning/service"`.
 export * from "./index";
+export { buildProbePlan, hashProbeBytes, runProbeSession, findPublishedProbePlan } from "./probe";
+export { validateProbeTaskSet, type ProbeTaskSet } from "./probe-schema";
+export { scoreProbe, type ProbeArmCounts } from "./probe-score";

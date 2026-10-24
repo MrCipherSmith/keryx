@@ -1,0 +1,442 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "probeId",
+    "identityDigest",
+    "patternId",
+    "patternDigest",
+    "taskId",
+    "createdAt",
+    "resumed",
+    "environment",
+    "arms",
+    "delta",
+    "verdict",
+    "runs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "probeId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{12}$"
+    },
+    "identityDigest": {
+      "$ref": "probe-plan.schema.json#/$defs/digest"
+    },
+    "patternId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "patternDigest": {
+      "$ref": "probe-plan.schema.json#/$defs/digest"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resumed": {
+      "type": "boolean"
+    },
+    "environment": {
+      "$ref": "probe-plan.schema.json#/$defs/environment"
+    },
+    "arms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base",
+        "probe"
+      ],
+      "properties": {
+        "base": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "seeds",
+                "successes",
+                "rate",
+                "ci"
+              ],
+              "properties": {
+                "seeds": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "successes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "ci": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                  },
+                  "maxItems": 2
+                },
+                "tokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "toolCalls": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probe": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "seeds",
+                "successes",
+                "rate",
+                "ci"
+              ],
+              "properties": {
+                "seeds": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "successes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "ci": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                  },
+                  "maxItems": 2
+                },
+                "tokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "toolCalls": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "delta": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rate",
+            "ci"
+          ],
+          "properties": {
+            "rate": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1
+            },
+            "ci": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              },
+              "maxItems": 2
+            },
+            "tokens": {
+              "type": "integer"
+            },
+            "toolCalls": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verdict": {
+      "enum": [
+        "improved",
+        "regressed",
+        "indistinguishable",
+        "unmeasurable"
+      ]
+    },
+    "reason": {
+      "enum": [
+        "no-task",
+        "gold-leak",
+        "run-failed",
+        "underpowered",
+        "budget-exceeded",
+        "environment-drift"
+      ]
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arm",
+          "seed",
+          "answered",
+          "success",
+          "transcript"
+        ],
+        "properties": {
+          "arm": {
+            "enum": [
+              "base",
+              "probe"
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answered": {
+            "type": "boolean"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "transcript": {
+            "$ref": "probe-plan.schema.json#/$defs/relativePath"
+          }
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/learn-probe/comparison.schema.json",
+  "title": "Learn Probe Immutable Comparison",
+  "description": "Schema version 1; null arms/delta for every unmeasurable, actual runs on partial failures. Aggregate consistency requires semantic validation.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "unmeasurable"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "arms": {
+            "properties": {
+              "base": {
+                "type": "null"
+              },
+              "probe": {
+                "type": "null"
+              }
+            }
+          },
+          "delta": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "reason"
+          ]
+        },
+        "properties": {
+          "arms": {
+            "properties": {
+              "base": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "seeds",
+                  "successes",
+                  "rate",
+                  "ci"
+                ],
+                "properties": {
+                  "seeds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "successes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "ci": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    },
+                    "maxItems": 2
+                  },
+                  "tokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "toolCalls": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "probe": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "seeds",
+                  "successes",
+                  "rate",
+                  "ci"
+                ],
+                "properties": {
+                  "seeds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "successes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "ci": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    },
+                    "maxItems": 2
+                  },
+                  "tokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "toolCalls": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "delta": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rate",
+              "ci"
+            ],
+            "properties": {
+              "rate": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              },
+              "ci": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                },
+                "maxItems": 2
+              },
+              "tokens": {
+                "type": "integer"
+              },
+              "toolCalls": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "enum": [
+              "no-task",
+              "underpowered",
+              "gold-leak"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runs": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ]
+}

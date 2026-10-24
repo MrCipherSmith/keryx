@@ -681,6 +681,13 @@ export async function learnCommand(args: string[] = [], deps: LearnCommandDeps =
   const env = resolveEnv(deps);
   const resolvedDeps: LearnCommandDeps = { ...deps, env };
 
+  if (command === "probe") {
+    const { runLearnProbe } = await import("./learn-probe");
+    process.exitCode = await runLearnProbe(rest, { root: resolveRoot(deps),
+      ...(deps.isTerminal === undefined ? {} : { isTerminal: deps.isTerminal }),
+      ...(deps.readLine === undefined ? {} : { readLine: deps.readLine }) });
+    return;
+  }
   if (command === "observe") return runObserve(rest, resolvedDeps);
   if (command === "extract") return runExtractCommand(rest, resolvedDeps);
   if (command === "list") return runList(rest, resolvedDeps);
@@ -711,6 +718,7 @@ Usage:
   keryx learn graduate [--domain <d>] [--json]
   keryx learn graduate apply <proposal-id>
   keryx learn prune [--dry-run] [--json]
+  keryx learn probe <id> --task <task-id> [--max-usd <n>] [--dry-run] [--json]
 
 \`observe --hook claude\` reads one host-hook payload from stdin, always exits 0 and
 prints nothing to stdout — it is the command an opt-in Claude Code hook runs. Without

@@ -531,3 +531,15 @@ export async function updateIndex(
     return next;
   });
 }
+
+/** Hold the scope lock while publishing an artifact tied to a current record snapshot.
+ * Read-only for the record; record mutations must still use updatePattern.
+ */
+export async function withPatternSnapshot<T>(
+  root: string, id: string, scope: LearningScope,
+  publish: (record: LearnedPattern | undefined) => Promise<T>,
+  options: StoreEnvOptions = {},
+): Promise<T> {
+  assertValidLearningId(id);
+  return withFileLock(lockPathFor(root, scope, options), async () => publish(await readPattern(root, id, scope, options)));
+}

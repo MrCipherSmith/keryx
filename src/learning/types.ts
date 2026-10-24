@@ -31,7 +31,8 @@ export type EvidenceSourceType =
   | "health"
   | "memory"
   | "observation"
-  | "reviewer-comment";
+  | "reviewer-comment"
+  | "probe";
 
 export interface EvidenceItem {
   kind: EvidenceKind;
