@@ -4,7 +4,8 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { BaselineError, EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, writeMutationEvidence } from "./mutate";
+import { reviewCommand } from "../commands/review";
+import { BaselineError, doneMutantIds, EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, unjudgedMutants, withBail, worktreeProvenance, writeMutationEvidence } from "./mutate";
 
 let base: string;
 let tree: string;
@@ -280,6 +281,304 @@ describe("renderMutationTable", () => {
     delete old.command;
     const row = renderMutationTable(record([old])).split("\n").find((line) => line.startsWith("| A |"))!;
     expect(row).toContain("`bun test f.test.ts`");
+  });
+
+  test("the header of a new record states the bail, the copy and mutant time, the load, and what was judged", () => {
+    const text = renderMutationTable({
+      ...record([mutant({})]),
+      bail: true,
+      copyMs: 1234,
+      mutantsMs: 56789,
+      loadavg: [3.14, 2.8, 2.5],
+      startedAt: "2026-10-24T05:00:00.000Z",
+      head: "0123456789abcdef0123",
+      treeHash: "fedcba9876543210fedcba",
+    });
+    const lines = text.split("\n");
+    expect(lines).toContain("Bail: applied (mutants ran with --bail; baseline in full).");
+    expect(lines).toContain("Cost: copy 1234 ms, mutants 56789 ms, load 3.1/2.8/2.5.");
+    expect(lines).toContain("started 2026-10-24T05:00:00.000Z, head 0123456789ab, treeHash fedcba987654.");
+    expect(text).not.toContain("undefined");
+  });
+
+  test("a new record without a bail has no Bail line", () => {
+    const text = renderMutationTable({ ...record([mutant({})]), copyMs: 1, mutantsMs: 2, loadavg: [0, 0, 0] });
+    expect(text).not.toContain("Bail:");
+    expect(text).toContain("Cost: copy 1 ms, mutants 2 ms, load 0.0/0.0/0.0.");
+  });
+});
+
+describe("withBail", () => {
+  test("puts --bail right after bun test, behind env and NAME=value prefixes too", () => {
+    expect(withBail("bun test src/a.test.ts src/b.test.ts")).toBe("bun test --bail src/a.test.ts src/b.test.ts");
+    expect(withBail("bun test")).toBe("bun test --bail");
+    expect(withBail("bun test --timeout 20000 src/a.test.ts")).toBe("bun test --bail --timeout 20000 src/a.test.ts");
+    expect(withBail("bun   test  -t name@v1.2,x src/a.test.ts")).toBe("bun test --bail -t name@v1.2,x src/a.test.ts");
+    expect(withBail("FOO=1 BAR=a/b:c,d bun test src/a.test.ts")).toBe("FOO=1 BAR=a/b:c,d bun test --bail src/a.test.ts");
+    expect(withBail("env CI=true bun test src/a.test.ts")).toBe("env CI=true bun test --bail src/a.test.ts");
+    expect(withBail("env bun test x")).toBe("env bun test --bail x");
+  });
+
+  test("returns undefined for any other tool, for a command with a shell metacharacter, and when --bail is already there", () => {
+    const rejected = [
+      "",
+      "   ",
+      "sh run.sh",
+      "bunx vitest",
+      "bun x test",
+      "npm test",
+      "bun run test",
+      "bun",
+      "node bun test",
+      "bun testx a.test.ts",
+      "env -i bun test a",
+      "bun test --bail a.test.ts",
+      "bun test a.test.ts --bail",
+      "bun test --bail=2 a.test.ts",
+      'bun test "a b.test.ts"',
+      "bun test 'a.test.ts'",
+      "bun test $FILE",
+      "bun test `ls`",
+      "bun test $(ls)",
+      "bun test a; echo hi",
+      "bun test a && bun test b",
+      "bun test a & ",
+      "bun test a | tee out",
+      "bun test a > out",
+      "bun test < in",
+      "bun test src/*.test.ts",
+      "bun test src/?.test.ts",
+      "bun test src/[ab].test.ts",
+      "bun test a\\ b",
+      "bun test a\nbun test b",
+      "bun test a\tb",
+      "bun test (a)",
+      "bun test {a,b}",
+      "bun test ~/a",
+      "bun test !a",
+      "bun test a #c",
+      "FOO=$X bun test a",
+      'FOO="a b" bun test a',
+      "cd x && bun test a",
+    ];
+    for (const command of rejected) expect([command, withBail(command)]).toEqual([command, undefined]);
+  });
+});
+
+describe("bun fixture", () => {
+  const TEST_CMD = "bun test";
+  let proj: string;
+
+  beforeEach(async () => {
+    proj = path.join(base, "proj");
+    await mkdir(proj, { recursive: true });
+    await writeFile(path.join(proj, "calc.ts"), 'export const add = (a: number, b: number) => a + b;\nexport const label = (n: number) => (n > 0 ? "pos" : "neg");\nexport const spin = (n: number) => n;\n');
+    await writeFile(path.join(proj, "a.test.ts"), 'import { expect, test } from "bun:test";\nimport { add } from "./calc";\ntest("add", () => expect(add(2, 3)).toBe(5));\n');
+    await writeFile(path.join(proj, "b.test.ts"), 'import { expect, test } from "bun:test";\nimport { add, label } from "./calc";\ntest("label", () => expect(label(1)).toBe("pos"));\ntest("add again", () => expect(add(1, 1)).toBe(2));\n');
+    await writeFile(path.join(proj, "c.test.ts"), 'import { test } from "bun:test";\nimport { spin } from "./calc";\ntest("spin", () => {\n  if (spin(1) !== 1) while (true) {}\n});\n');
+  });
+
+  const specs = () =>
+    parseMutantSpec([
+      { id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" },
+      { id: "both", file: "calc.ts", anchor: "a + b", replacement: "0" },
+      { id: "live", file: "calc.ts", anchor: "n > 0", replacement: "n >= 0" },
+      { id: "hang", file: "calc.ts", anchor: "spin = (n: number) => n;", replacement: "spin = (n: number) => n + 1;" },
+      { id: "bad", file: "calc.ts", anchor: "no such text", replacement: "x" },
+    ]);
+  const statuses = (record: MutationRecord) => record.mutants.map((m) => [m.id, m.status]);
+  const run = (extra: { bail?: boolean; command?: string; worktree?: string } = {}) => runMutation({ worktree: proj, command: TEST_CMD, scratchRoot: scratch, timeoutMs: 8000, mutants: specs(), ...extra });
+
+  describe("bail applied", () => {
+    test("the mutants run with --bail, the baseline and the record keep the command as given, and the record says so", async () => {
+      const record = await run();
+      expect(record.bail).toBe(true);
+      expect(record.command).toBe(TEST_CMD);
+      expect(record.mutants.length).toBe(5);
+      for (const m of record.mutants) expect(m.command).toBe("bun test --bail");
+    }, 90_000);
+
+    test("a command withBail rejects runs unchanged and leaves bail unset", async () => {
+      await writeFile(path.join(proj, "run.sh"), `${process.execPath} test\n`);
+      const record = await run({ command: "sh run.sh" });
+      expect(record.bail).toBeUndefined();
+      expect("bail" in record).toBe(false);
+      expect(record.command).toBe("sh run.sh");
+      for (const m of record.mutants) expect(m.command).toBe("sh run.sh");
+      expect(statuses(record)).toEqual([["kill", "killed"], ["both", "killed"], ["live", "survived"], ["hang", "timeout"], ["bad", "invalid"]]);
+    }, 90_000);
+  });
+
+  describe("bail status parity", () => {
+    test("killed, survived, timeout and invalid keep their status with and without --bail on a project with several test files", async () => {
+      const bailed = await run();
+      const full = await run({ bail: false });
+      expect(statuses(bailed)).toEqual([["kill", "killed"], ["both", "killed"], ["live", "survived"], ["hang", "timeout"], ["bad", "invalid"]]);
+      expect(statuses(full)).toEqual(statuses(bailed));
+      expect(bailed.totals).toEqual({ killed: 2, survived: 1, invalid: 1, timeout: 1 });
+    }, 90_000);
+  });
+
+  describe("no-bail", () => {
+    test("runMutation({ bail: false }) runs the original command and writes no bail field", async () => {
+      const record = await run({ bail: false });
+      expect("bail" in record).toBe(false);
+      for (const m of record.mutants) expect(m.command).toBe(TEST_CMD);
+    }, 90_000);
+
+    test("--no-bail is accepted by the mutate flag allowlist, switches the bail off, and an unknown flag is still refused", async () => {
+      const pkg = path.join(base, "pkg");
+      await mkdir(path.join(pkg, EVIDENCE_DIR), { recursive: true });
+      await writeFile(path.join(pkg, EVIDENCE_DIR, MUTANTS_SPEC), JSON.stringify({ mutants: [{ id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" }] }));
+      const flags = ["--test", TEST_CMD, "--package", pkg, "--worktree", proj, "--json"];
+      const output = async (extra: string[]): Promise<{ bail?: boolean; mutants: { command: string }[] }> => {
+        const saved = console.log;
+        let printed = "";
+        console.log = (...parts: unknown[]) => void (printed += parts.join(" "));
+        try {
+          await reviewCommand(["mutate", ...flags, ...extra]);
+        } finally {
+          console.log = saved;
+        }
+        return JSON.parse(printed);
+      };
+      const off = await output(["--no-bail"]);
+      expect("bail" in off).toBe(false);
+      expect(off.mutants[0]!.command).toBe(TEST_CMD);
+      const on = await output([]);
+      expect(on.bail).toBe(true);
+      expect(on.mutants[0]!.command).toBe("bun test --bail");
+      const logError = console.error;
+      const errors: string[] = [];
+      console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+      try {
+        process.exitCode = 0;
+        await reviewCommand(["mutate", ...flags, "--no-bial"]);
+        expect(process.exitCode).toBe(1);
+      } finally {
+        console.error = logError;
+        process.exitCode = 0;
+      }
+      expect(errors.join("\n")).toContain("Unknown option for `keryx review mutate`: --no-bial");
+    }, 90_000);
+  });
+});
+
+async function git(dir: string, ...args: string[]): Promise<string> {
+  const proc = Bun.spawn(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (code !== 0) throw new Error(`git ${args.join(" ")} exited ${code}`);
+  return out.trim();
+}
+
+async function gitCommit(dir: string): Promise<void> {
+  await git(dir, "init", "-q");
+  await git(dir, "add", "-A");
+  await git(dir, "commit", "-q", "-m", "init");
+}
+
+describe("provenance", () => {
+  const specs = () => parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }, { id: "B", file: "calc.js", anchor: "n > 0", replacement: "n >= 0" }]);
+
+  test("a record from a git checkout carries the time, load, copy and mutant time, the commit and the tree hash", async () => {
+    await gitCommit(tree);
+    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: specs() });
+    expect(new Date(record.startedAt!).toISOString()).toBe(record.startedAt!);
+    expect(record.loadavg).toHaveLength(3);
+    for (const n of record.loadavg!) expect(typeof n).toBe("number");
+    expect(record.copyMs).toBeGreaterThanOrEqual(0);
+    expect(record.mutantsMs).toBe(record.mutants.reduce((sum, m) => sum + m.ms, 0));
+    expect(record.head).toBe(await git(tree, "rev-parse", "HEAD"));
+    expect(record.treeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(record.schemaVersion).toBe(1);
+  });
+
+  test("outside git head and treeHash are absent and the pass still succeeds", async () => {
+    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: specs() });
+    expect(record.mutants.map((m) => m.status)).toEqual(["killed", "survived"]);
+    expect("head" in record).toBe(false);
+    expect("treeHash" in record).toBe(false);
+    expect(record.startedAt).toBeDefined();
+    expect(record.copyMs).toBeDefined();
+    expect(await worktreeProvenance(tree)).toEqual({});
+  });
+
+  test("a repository with no commit has no head and no treeHash", async () => {
+    await git(tree, "init", "-q");
+    expect(await worktreeProvenance(tree)).toEqual({});
+  });
+});
+
+describe("treeHash", () => {
+  beforeEach(async () => {
+    await writeFile(path.join(tree, ".gitignore"), "ignored.txt\n");
+    await gitCommit(tree);
+  });
+
+  const hashOf = async () => (await worktreeProvenance(tree)).treeHash;
+
+  test("is identical for an unchanged worktree, also across two real passes with the default scratch directory", async () => {
+    const first = await hashOf();
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+    expect(await hashOf()).toBe(first);
+    const spec = parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]);
+    const one = await runMutation({ worktree: tree, command: command(), mutants: spec });
+    const two = await runMutation({ worktree: tree, command: command(), mutants: spec });
+    expect(one.treeHash).toBe(first!);
+    expect(two.treeHash).toBe(first!);
+  });
+
+  test("differs after a tracked file changes and after an untracked non-ignored file appears", async () => {
+    const clean = await hashOf();
+    await writeFile(path.join(tree, "calc.js"), `${CALC}// edit\n`);
+    const edited = await hashOf();
+    expect(edited).not.toBe(clean);
+    await writeFile(path.join(tree, "new.txt"), "one");
+    const untracked = await hashOf();
+    expect(untracked).not.toBe(edited);
+    await writeFile(path.join(tree, "new.txt"), "two");
+    expect(await hashOf()).not.toBe(untracked);
+  });
+
+  test("ignores a gitignored file", async () => {
+    const clean = await hashOf();
+    await writeFile(path.join(tree, "ignored.txt"), "noise");
+    expect(await hashOf()).toBe(clean);
+  });
+});
+
+describe("legacy record", () => {
+  test("is still read by doneMutantIds, unjudgedMutants and pendingMutants, and rendered with no bail, cost or provenance line", async () => {
+    const pkg = path.join(base, "pkg");
+    await mkdir(path.join(pkg, EVIDENCE_DIR), { recursive: true });
+    const specs = [
+      { id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" },
+      { id: "B", file: "calc.js", anchor: "n > 0", replacement: "n >= 0" },
+    ];
+    await writeFile(path.join(pkg, EVIDENCE_DIR, MUTANTS_SPEC), JSON.stringify({ mutants: specs }));
+    const legacy: MutationRecord = {
+      schemaVersion: 1,
+      worktree: "/w",
+      command: "bun test f.test.ts",
+      baseline: { exitCode: 0, ms: 7 },
+      mutants: [{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b", status: "killed", exitCode: 1, ms: 5 }],
+      totals: { killed: 1, survived: 0, invalid: 0, timeout: 0 },
+    };
+    await writeFile(path.join(pkg, EVIDENCE_DIR, "mutation-1.json"), JSON.stringify(legacy));
+    expect([...(await doneMutantIds(pkg))]).toEqual(["A"]);
+    expect((await unjudgedMutants(pkg, parseMutantSpec(specs))).map((m) => m.id)).toEqual(["B"]);
+    expect((await pendingMutants(pkg)).map((m) => m.id)).toEqual(["B"]);
+
+    const text = renderMutationTable(legacy);
+    expect(text).not.toMatch(/Bail|Cost|started|treeHash|head |undefined/);
+    expect(text).not.toContain("\n\n\n");
+    expect(text.split("\n").slice(0, 5)).toEqual([
+      "# Mutation pass",
+      "",
+      "Command: `bun test f.test.ts` (baseline exit 0, 7 ms). Run in a scratch copy; the worktree was not written.",
+      "",
+      "Killed 1, survived 0, timeout 0, invalid 0.",
+    ]);
   });
 });
 
