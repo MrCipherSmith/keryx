@@ -16,3 +16,5 @@
 - 2026-10-25T17:55:12.659Z - ac-confirmed: AC8: bun run typecheck clean; src/review src/tui src/commands/review tests green except two pre-existing ci-triage failures also failing off main (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-25T17:55:12.885Z - ac-confirmed: AC9: cp -a copies; originals fingerprint identical before and after (verification.md) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-25T17:55:13.118Z - ac-confirmed: AC10: verification.md written (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:57:50.966Z - ac-confirmed: AC11: Committed and pushed on the operator's word (poll 306); draft PR #1087; no AI attribution in files, commit or PR text. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:57:51.476Z - task-done: T4: Self-review and prepare draft PR
