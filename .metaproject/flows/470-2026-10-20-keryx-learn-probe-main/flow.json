@@ -1,0 +1,522 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true,
+    "confirmation": true
+  },
+  "id": "470",
+  "slug": "keryx-learn-probe-main",
+  "title": "Keryx learn probe paired-pattern measurement",
+  "status": "in-progress",
+  "createdAt": "2026-10-20T20:47:34.299Z",
+  "updatedAt": "2026-10-20T22:59:11.871Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6fae162d7d6558d89ceb0f22d3cec004daf0abc2d3e7c2553339e192c34246e9",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [
+        ".metaproject/flows/470-2026-10-20-keryx-learn-probe-main/prefreeze-recheck-result.txt"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Migrated docpack reconciled; independent prefreeze recheck ready for operator approval; runtime verification remains pending"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by bounded implementation tasks T7-T12"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by TDD in each implementation task and independent T13 gate"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T13",
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Inherited docpack correction from flow 469 T5; no new execution",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [
+        "docs/requirements/keryx-learn-probe/docpack-update-result.json"
+      ],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Inherited completed docpack correction from flow469 T5; no new execution in 470"
+    },
+    {
+      "id": "T6",
+      "title": "Inherited independent docpack verification from flow 469 T6; no new execution",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [
+        ".metaproject/flows/469-2026-10-20-keryx-learn-probe-paired-pattern-measure/docpack-review-result.json"
+      ],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Inherited independent docpack verification from flow469 T6; migrated flow package still requires fresh pre-freeze review"
+    },
+    {
+      "id": "T7",
+      "title": "Lane A: pure scoring, intervals and verdict precedence",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1",
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T21:38:05.340Z",
+            "outcome": "started",
+            "detail": "Operator explicitly approved freeze; dispatch agent-1 pure scoring TDD only"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Lane A: evidence schemas, config and plan/checkpoint contracts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1",
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T22:32:36.676Z",
+            "outcome": "started",
+            "detail": "Agent-1 bounded dispatch prepared and both input schemas validated; resolved/T8.implement.json pinned. T7 boundary commit 77072154f."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent T8-independent-review.md PASS; contracts test suite reverified; downstream integration not accepted"
+    },
+    {
+      "id": "T9",
+      "title": "Lane A: identity, durable recovery, evidence finalization and retention",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T22:59:11.871Z",
+            "outcome": "started",
+            "detail": "Operator requested solo implementation; no peer dispatch. TDD identity and durable finalization."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Lane B: isolated runner, gold checks, usage, signals and cleanup",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Lane B: CLI gates, budget, dry-run, JSON and recovery outcomes",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Lane A: router/prune integration and decision regression guards",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Independent integration quality gate and AC verification",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Implementation documentation and verified handoff report",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-20T20:47:34.299Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-20T21:08:03.817Z",
+      "event": "task-added",
+      "detail": "T5: Inherited docpack correction from flow 469 T5; no new execution"
+    },
+    {
+      "at": "2026-10-20T21:08:04.209Z",
+      "event": "task-added",
+      "detail": "T6: Inherited independent docpack verification from flow 469 T6; no new execution"
+    },
+    {
+      "at": "2026-10-20T21:08:04.624Z",
+      "event": "task-added",
+      "detail": "T7: Lane A: pure scoring, intervals and verdict precedence"
+    },
+    {
+      "at": "2026-10-20T21:08:05.022Z",
+      "event": "task-added",
+      "detail": "T8: Lane A: evidence schemas, config and plan/checkpoint contracts"
+    },
+    {
+      "at": "2026-10-20T21:08:05.433Z",
+      "event": "task-added",
+      "detail": "T9: Lane A: identity, durable recovery, evidence finalization and retention"
+    },
+    {
+      "at": "2026-10-20T21:08:05.829Z",
+      "event": "task-added",
+      "detail": "T10: Lane B: isolated runner, gold checks, usage, signals and cleanup"
+    },
+    {
+      "at": "2026-10-20T21:08:06.199Z",
+      "event": "task-added",
+      "detail": "T11: Lane B: CLI gates, budget, dry-run, JSON and recovery outcomes"
+    },
+    {
+      "at": "2026-10-20T21:08:06.578Z",
+      "event": "task-added",
+      "detail": "T12: Lane A: router/prune integration and decision regression guards"
+    },
+    {
+      "at": "2026-10-20T21:08:06.974Z",
+      "event": "task-added",
+      "detail": "T13: Independent integration quality gate and AC verification"
+    },
+    {
+      "at": "2026-10-20T21:08:07.365Z",
+      "event": "task-added",
+      "detail": "T14: Implementation documentation and verified handoff report"
+    },
+    {
+      "at": "2026-10-20T21:08:07.773Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T13, T14 (was empty) — Independent managed review follows verified integration and implementation report"
+    },
+    {
+      "at": "2026-10-20T21:08:08.175Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-20T21:08:08.554Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-20T21:08:08.929Z",
+      "event": "task-done",
+      "detail": "T5: Inherited docpack correction from flow 469 T5; no new execution"
+    },
+    {
+      "at": "2026-10-20T21:08:09.330Z",
+      "event": "task-done",
+      "detail": "T6: Inherited independent docpack verification from flow 469 T6; no new execution"
+    },
+    {
+      "at": "2026-10-20T21:35:22.018Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T1, T6 (was T6) — Prefreeze review: scoring waits for T1 context and inherited T6 verification"
+    },
+    {
+      "at": "2026-10-20T21:35:22.423Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T1, T6 (was T6) — Prefreeze review: schemas wait for T1 context and inherited T6 verification"
+    },
+    {
+      "at": "2026-10-20T21:36:49.389Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-20T21:38:03.743Z",
+      "event": "frozen",
+      "detail": "24 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-20T21:38:04.140Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-20T21:38:05.340Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — Operator explicitly approved freeze; dispatch agent-1 pure scoring TDD only"
+    },
+    {
+      "at": "2026-10-20T22:29:50.644Z",
+      "event": "task-done",
+      "detail": "T7: Lane A: pure scoring, intervals and verdict precedence"
+    },
+    {
+      "at": "2026-10-20T22:32:36.676Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — Agent-1 bounded dispatch prepared and both input schemas validated; resolved/T8.implement.json pinned. T7 boundary commit 77072154f."
+    },
+    {
+      "at": "2026-10-20T22:59:11.464Z",
+      "event": "task-done",
+      "detail": "T8: Lane A: evidence schemas, config and plan/checkpoint contracts"
+    },
+    {
+      "at": "2026-10-20T22:59:11.871Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — Operator requested solo implementation; no peer dispatch. TDD identity and durable finalization."
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun ./src/cli.ts learn probe --help"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/commands/learn-probe.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/learn-probe.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/learn-probe.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts src/commands/learn-probe.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/harness/probe/runner.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/harness/probe/runner.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe-score.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts src/harness/probe/runner.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts src/commands/learn-probe.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts src/commands/learn-probe.test.ts"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun test src/commands/learn-probe.test.ts"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/harness/probe/runner.test.ts src/commands/learn-probe.test.ts"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "bun test src/harness/probe/runner.test.ts"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "bun test src/learning/probe.test.ts src/learning/prune.test.ts src/learning/gitignore-guard.test.ts src/commands/init.test.ts"
+    },
+    "AC20": {
+      "kind": "exec",
+      "check": "bun test src/learning/apply.test.ts src/learning/probe.test.ts src/lib/import-policy.live.test.ts"
+    },
+    "AC21": {
+      "kind": "exec",
+      "check": "bun test src/learning/config.test.ts"
+    },
+    "AC22": {
+      "kind": "exec",
+      "check": "bun test src/commands/learn-probe.test.ts"
+    },
+    "AC23": {
+      "kind": "exec",
+      "check": "bun run check && bun run test:guards"
+    },
+    "AC24": {
+      "kind": "judged"
+    }
+  }
+}
