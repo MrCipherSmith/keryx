@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "473",
+  "slug": "mutation-cost-p0",
+  "title": "Cheaper mutation pass: early exit on red, run provenance, timing in the record",
+  "status": "in-progress",
+  "createdAt": "2026-10-24T05:16:37.889Z",
+  "updatedAt": "2026-10-25T07:41:34.214Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "origin": {
+    "kind": "human-request",
+    "quote": "максимально оптимизировать",
+    "source": "operator helyx 221734 and 221759 (fragment as quoted in arena/ideas/keryx-mutation-cost/README.md; the full message was not re-read)"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Replay sample with and without --bail, write replay-bail.md",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T2",
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-24T05:16:37.889Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-24T05:19:37.860Z",
+      "event": "task-added",
+      "detail": "T5: Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG"
+    },
+    {
+      "at": "2026-10-24T05:19:38.088Z",
+      "event": "task-added",
+      "detail": "T6: Replay sample with and without --bail, write replay-bail.md"
+    },
+    {
+      "at": "2026-10-24T05:19:38.316Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-24T05:19:41.431Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-24T05:19:41.707Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-24T05:27:53.642Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-24T05:27:53.877Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-24T05:28:55.017Z",
+      "event": "task-done",
+      "detail": "T5: Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG"
+    },
+    {
+      "at": "2026-10-25T07:27:55.666Z",
+      "event": "task-done",
+      "detail": "T6: Replay sample with and without --bail, write replay-bail.md"
+    },
+    {
+      "at": "2026-10-25T07:41:34.214Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"withBail\""
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"bail applied\""
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"bail status parity\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"no-bail\""
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"provenance\""
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"treeHash\""
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"legacy record\""
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"renderMutationTable\""
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "sh -c 'cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md && grep -q -e \"--no-bail\" src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md && grep -q -e \"--no-bail\" docs/docs/cli-reference.md && grep -q -e \"--no-bail\" CHANGELOG.md'"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "sh -c 'bun run typecheck && bun test src/review/mutate.test.ts src/review/mutate-not-reached.test.ts src/review/severity-audit.test.ts src/review/ledger.test.ts src/review/pr-replay.test.ts src/commands/review-ledger.test.ts'"
+    },
+    "AC12": {
+      "kind": "judged"
+    }
+  }
+}
