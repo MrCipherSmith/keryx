@@ -34,3 +34,13 @@ test("a finished reply that names no slices covers none; one that names its slic
   await writeFile(raw, `{"reviewer":"review-logic","status":"DONE","slices":["slice-01","slice-09"]}\n${usage}\n`);
   expect(await collectLateResults(pkg, "review-logic", new Set())).toEqual({ covered: ["slice-01"], collected: 1 });
 });
+
+test("needs_context: an object question keeps a finished reply from counting, as a string question does", async () => {
+  const raw = path.join(pkg, "raw", "review-logic-w1.txt");
+  await writeFile(raw, `{"reviewer":"review-logic","status":"DONE","slices":["slice-01"],"needs_context":[{"question":"is it rotated?"}]}\n`);
+  expect(await collectLateResults(pkg, "review-logic", new Set())).toEqual({ covered: [], collected: 0 });
+  await writeFile(raw, `{"reviewer":"review-logic","status":"DONE","slices":["slice-01"],"needs_context":["is it rotated?"]}\n`);
+  expect(await collectLateResults(pkg, "review-logic", new Set())).toEqual({ covered: [], collected: 0 });
+  await writeFile(raw, `{"reviewer":"review-logic","status":"DONE","slices":["slice-01"],"needs_context":[{}, ""]}\n`);
+  expect(await collectLateResults(pkg, "review-logic", new Set())).toEqual({ covered: ["slice-01"], collected: 1 });
+});

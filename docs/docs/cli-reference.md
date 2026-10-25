@@ -5653,9 +5653,19 @@ Only the operator can accept a smaller set than that, with their own quote at
 `review next --package <review-dir>` answers the same question for the whole package at
 once, so the orchestrator runs it after each batch instead of polling `retry-plan` per
 reviewer (a Claude Code review of a 151-file PR made 132 such polls, mostly with no
-change). It reads the manifest and its routing, `raw/` (each reviewer's latest reply),
-the late results the drivers name and the retry state, and decides every reviewer with
-`retry-plan`'s own logic. Each dispatch lists the reviewer, `wave` (and `wavesLeft`), the
+change). It reads the manifest and its routing, `raw/` (every valid reply of each
+reviewer), the late results the drivers name and the retry state, and decides every
+reviewer with `retry-plan`'s own logic. A reviewer's replies are counted in wave order
+(the number in `-w<n>`, or the driver's `wave`; the file mtime only orders replies with no
+number), so a slice covered in `-w1` stays covered when `-w2` is the newer file, and a
+major finding in an older reply still escalates its slice. Files matching `*.prev*.txt`
+are saved earlier copies and never take part. A `DONE` or `DONE_WITH_CONCERNS` reply with
+no `slices` list is not accepted: it is listed as `rejected` (with the reason, in the text
+and in `--json`), its slices stay open and the reviewer is dispatched again; a list that is
+present, even an empty one, is read as written. A `needs_context` entry may be a string or
+an object (`question`, `text`, `message`, `ask`, `request`, `description` or `id`); either
+is an open question. A `retry-state.json` from an older build is read, with missing or
+malformed fields ignored. Each dispatch lists the reviewer, `wave` (and `wavesLeft`), the
 slice ids and their absolute paths, the `model` the reviewer's driver or last reply
 recorded, the `result` path its reply goes to, and a reason: `missing` (no result for
 these slices), `retry` (an unfinished result, or questions to answer), `stalled` (nothing

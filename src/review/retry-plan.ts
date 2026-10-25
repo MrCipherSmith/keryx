@@ -40,7 +40,8 @@ export type ReviewerResult = {
   attempt?: number;
   /** The slices this result covered: id strings, or objects carrying an `id` (reviewers write both). An object whose `status` is set and not done-like does not cover its slice. */
   slices?: unknown;
-  needs_context?: string[];
+  /** Open questions: strings, or objects carrying the question (read through {@link needsContextQuestions}). */
+  needs_context?: unknown;
   /** The reviewer's findings; a major-or-worse one on a light slice re-opens that slice deep. */
   findings?: unknown;
 };
@@ -145,6 +146,38 @@ export function emptyRetryState(): RetryState {
   return { schemaVersion: 1, reviewers: {} };
 }
 
+const stringList = (value: unknown): string[] | undefined => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined);
+
+/**
+ * A `retry-state.json` read from disk as a well-formed state. An older build wrote entries without `stalls`, `covered`,
+ * `questions` or `processed`, and a hand-edited file can hold anything: a field of the wrong type is dropped, an entry that is
+ * not an object is ignored, a document that is not an object is an empty state. The scope fingerprint is kept only as a string.
+ */
+export function normalizeRetryState(raw: unknown): RetryState {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return emptyRetryState();
+  const source = raw as { scopeFingerprint?: unknown; reviewers?: unknown };
+  const reviewers: Record<string, ReviewerRetryState> = {};
+  if (source.reviewers !== null && typeof source.reviewers === "object" && !Array.isArray(source.reviewers)) {
+    for (const [name, entry] of Object.entries(source.reviewers as Record<string, unknown>)) {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const item = entry as Record<string, unknown>;
+      const covered = stringList(item.covered);
+      const questions = stringList(item.questions);
+      const processed = stringList(item.processed);
+      reviewers[name] = {
+        attempt: typeof item.attempt === "number" && Number.isFinite(item.attempt) && item.attempt >= 0 ? Math.floor(item.attempt) : 0,
+        status: typeof item.status === "string" ? item.status : "",
+        notRun: item.notRun === true,
+        ...(typeof item.stalls === "number" && Number.isFinite(item.stalls) && item.stalls >= 0 ? { stalls: Math.floor(item.stalls) } : {}),
+        ...(covered === undefined ? {} : { covered }),
+        ...(questions === undefined ? {} : { questions }),
+        ...(processed === undefined ? {} : { processed }),
+      };
+    }
+  }
+  return { schemaVersion: 1, ...(typeof source.scopeFingerprint === "string" ? { scopeFingerprint: source.scopeFingerprint } : {}), reviewers };
+}
+
 export function safeReviewerName(reviewer: string): string {
   return reviewer.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "reviewer";
 }
@@ -186,6 +219,31 @@ export type PlanRetryInput = {
 };
 
 const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item !== "") : []);
+
+const QUESTION_KEYS = ["question", "text", "message", "ask", "request", "description", "id"] as const;
+
+/**
+ * The open questions of a reply's `needs_context`: a string is one question, an object is read through its first non-empty
+ * `question` / `text` / `message` / `ask` / `request` / `description` / `id` (else its JSON), a number or boolean by its text; null and
+ * blanks are dropped. The retry plan, the late-result collector and the ledger all call this, so they cannot disagree on
+ * whether a reply is still asking.
+ */
+export function needsContextQuestions(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  const out: string[] = [];
+  for (const item of items) {
+    let question = "";
+    if (typeof item === "string") question = item;
+    else if (typeof item === "number" || typeof item === "boolean") question = String(item);
+    else if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+      const record = item as Record<string, unknown>;
+      const key = QUESTION_KEYS.find((name) => typeof record[name] === "string" && (record[name] as string).trim() !== "");
+      question = key !== undefined ? (record[key] as string) : Object.keys(record).length > 0 ? JSON.stringify(item) : "";
+    }
+    if (question.trim() !== "") out.push(question.trim());
+  }
+  return out;
+}
 
 /** An object entry in a reviewer's `slices` covers its slice only when it carries no status or one of these. */
 const DONE_SLICE_STATUSES = new Set(["DONE", "COMPLETE", "COMPLETED", "COVERED", "OK"]);
@@ -273,7 +331,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   const covered = new Set([...priorCovered, ...reported]);
   const progress = reported.some((id) => !priorCovered.has(id));
   const evaluated = status !== "";
-  const questions = [...new Set(asStrings(result.needs_context).map((item) => item.trim().replace(/\s+/g, " ").toLowerCase()).filter((item) => item !== ""))].sort();
+  const questions = [...new Set(needsContextQuestions(result.needs_context).map((item) => item.trim().replace(/\s+/g, " ").toLowerCase()).filter((item) => item !== ""))].sort();
   const asksForContext = status === "NEEDS_CONTEXT" || questions.length > 0;
   // A NEEDS_CONTEXT with a question it has not asked before moves the dispatch forward as a new slice does.
   const newQuestion = asksForContext && known?.questions !== undefined && questions.some((item) => !known.questions!.includes(item));
@@ -312,7 +370,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     return plan("not-run", reason, { reportLine: notRunLine(reviewer, status), wave: [], remaining: summarizeWaves([]) });
   };
 
-  const hasContext = asStrings(result.needs_context).some((item) => item.trim() !== "");
+  const hasContext = needsContextQuestions(result.needs_context).length > 0;
   const planningOnly = status === "" && input.nextWave === true;
   const finished = !hasContext && (status === "DONE" || status === "DONE_WITH_CONCERNS" || planningOnly);
   if (!finished && status !== "NEEDS_CONTEXT" && !RETRYABLE_STATUSES.includes(status) && !hasContext) return notRun(`unrecognized or missing reviewer status: ${status || "missing"}`);
@@ -338,7 +396,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     // One refill is the contract. A second NEEDS_CONTEXT that covered no new slice and asks nothing new means the host
     // cannot supply it (a shell host has no browser for review-layout): record the gap as Not run instead of looping on
     // the same question. One that moved the scope or asked something new still gets its refill, within the usual bounds.
-    const reason = stalledContextReason(reviewer, asStrings(result.needs_context));
+    const reason = stalledContextReason(reviewer, needsContextQuestions(result.needs_context));
     remember({ notRun: true });
     return plan("not-run", reason, { reportLine: `- **Not run:** ${reviewer} — ${reason}; it asked for context twice and nothing was supplied that moved it, never counted as a clean pass`, wave: [], remaining: summarizeWaves([]) });
   }
@@ -354,7 +412,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     // The reviewer stopped to ask. Folding that into the verdict as finished is the false pass this exists to prevent:
     // the questions are put to it, and a reviewer that asks again having covered nothing new is a gap, not a pass.
     remember({ attempt: rounds });
-    const needsContext = asStrings(result.needs_context).filter((item) => item.trim() !== "");
+    const needsContext = needsContextQuestions(result.needs_context);
     const redo = open.length > 0 ? open : graph.open(wanted.filter((id) => ids.has(id)), new Set());
     const waves = packWavesByKind(redo, budget);
     return plan("context", `${status}; answer ${needsContext.length || "its"} open question(s) and re-dispatch ${progress ? "the uncovered slices" : "the same slices"} — the scope is not closed`, {

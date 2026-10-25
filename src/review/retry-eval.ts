@@ -4,7 +4,7 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { hasStatus, parseReviewResult, unreadableInputClaim } from "./ledger";
 import { splitUsage } from "./dispatch-usage";
-import { type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "./retry-plan";
+import { type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, needsContextQuestions, normalizeRetryState, planRetry, readSliceIds, scopeFingerprint } from "./retry-plan";
 import type { SliceEntry, SliceManifest } from "./slice";
 
 /**
@@ -75,7 +75,7 @@ export async function collectLateResults(packageDir: string, reviewer: string, k
     const result = wholeFileResult(raw) ?? parseReviewResult(raw);
     if (result === undefined) continue;
     const status = String(result.status ?? "").trim().toUpperCase();
-    const open = (Array.isArray(result.needs_context) ? result.needs_context : []).some((item) => String(item).trim() !== "");
+    const open = needsContextQuestions(result.needs_context).length > 0;
     if (open || (status !== "DONE" && status !== "DONE_WITH_CONCERNS") || unreadableInputClaim(result) !== undefined) continue;
     if (result.reviewer !== undefined && result.reviewer !== reviewer) continue;
     const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
@@ -136,7 +136,7 @@ export async function evaluateRetry(input: {
   const manifestDir = path.dirname(manifestSource);
   const manifest = input.manifest ?? await readJsonSource<SliceManifest>(manifestSource, "manifest");
   const statePath = input.statePath ?? path.join(manifestDir, RETRY_STATE_NAME);
-  const state = input.state ?? (existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState());
+  const state = input.state ?? (existsSync(statePath) ? normalizeRetryState(await readJsonSource<unknown>(statePath, "state")) : emptyRetryState());
   const packageSource = input.packageSource ?? packageOfManifest(manifestDir);
   if (packageSource !== undefined && (!existsSync(packageSource) || !statSync(packageSource).isDirectory())) {
     throw new Error(`--package ${packageSource} is not a directory.`);

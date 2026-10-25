@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type RetryState, applyEscalations, emptyRetryState, noEngineReason, planRetry, scopeFingerprint } from "./retry-plan";
+import { type RetryState, applyEscalations, emptyRetryState, needsContextQuestions, noEngineReason, planRetry, scopeFingerprint } from "./retry-plan";
 import { type SliceManifest, buildSlices, sliceSourceFromDiff } from "./slice";
 import { DEEP_ROLES } from "./slice-routing";
 import { requiredSlices } from "./waves";
@@ -12,7 +12,7 @@ function gitFile(filePath: string, count: number): string {
 const built = buildSlices(sliceSourceFromDiff(gitFile("src/admin/ExamplePage.tsx", 40)), { maxBytes: 20_000 });
 const textOf = (id: string): string => built.slices.find((slice) => slice.id === id)!.text;
 
-function ask(reviewer: string, state: RetryState, needs: string[] = ["browser measurements at 1280px"]) {
+function ask(reviewer: string, state: RetryState, needs: unknown = ["browser measurements at 1280px"]) {
   return planRetry({
     manifest: built.manifest,
     reviewer,
@@ -145,5 +145,34 @@ describe("a major-or-worse finding on a light slice re-opens it deep", () => {
   test("a deep slice never escalates: it is read by the core set already", () => {
     const deep: SliceManifest = { ...light, slices: light.slices.map((slice) => ({ ...slice, depth: "deep" as const })) };
     expect(run([{ id: "F-1", severity: "major", file: "src/data/b.ts" }], deep).escalations).toEqual([]);
+  });
+});
+
+describe("needs_context entries that are objects", () => {
+  test("needs_context: the helper reads a string, a question object and a plain value, and drops blanks", () => {
+    expect(needsContextQuestions(["a", "  b  ", "", "   ", null, undefined])).toEqual(["a", "b"]);
+    expect(needsContextQuestions("one question")).toEqual(["one question"]);
+    expect(needsContextQuestions([{ question: "which branch?" }, { text: "t" }, { message: "m" }, { id: "Q-1" }, { question: " ", text: "falls through" }])).toEqual(["which branch?", "t", "m", "Q-1", "falls through"]);
+    expect(needsContextQuestions([{ other: 1 }, {}, 7, true])).toEqual(['{"other":1}', "7", "true"]);
+    expect(needsContextQuestions(undefined)).toEqual([]);
+    expect(needsContextQuestions([])).toEqual([]);
+    expect(needsContextQuestions({})).toEqual([]);
+  });
+
+  test("needs_context: a reply whose questions are objects gives decision context, not accepted", () => {
+    const plan = ask("review-security-code", emptyRetryState(), [{ question: "is the token rotated?", slice: "slice-01" }, { id: "Q-2" }]);
+    expect(plan.decision).toBe("context");
+    expect(plan.needsContext).toEqual(["is the token rotated?", "Q-2"]);
+  });
+
+  test("needs_context: objects that name nothing are not a question", () => {
+    const plan = planRetry({
+      manifest: built.manifest,
+      reviewer: "review-logic",
+      result: { reviewer: "review-logic", status: "DONE", slices: built.manifest.slices.map((slice) => slice.id), needs_context: [{}, null, ""] },
+      state: emptyRetryState(),
+      readSliceText: (entry) => textOf(entry.id),
+    });
+    expect(plan.decision).toBe("accepted");
   });
 });
