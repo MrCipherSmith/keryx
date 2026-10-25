@@ -14,6 +14,7 @@ import {
   recordChunkEstimate,
   renderChunkEstimate,
 } from "../review/chunks-estimate";
+import { describePassFinding, passFindingsNotInRound, readRoundSites } from "../review/chunk-findings";
 import { coverageLine, writeCoverage } from "../review/coverage-complete";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { resolvePackageDir, wantsHelp } from "./review-layers";
@@ -42,7 +43,9 @@ Chunks run one at a time through review-regression on the middle tier. \`next\` 
 dispatch; \`record\` takes what the pass returned (a status, or a JSON result {"status", "findings"}) and
 applies the retry plan: a failed chunk is handed back in smaller pieces while the plan allows it, and
 stays pending afterwards. \`merge\` writes <dir>/chunk-pass.json: the state of each chunk (done, failed or
-pending) and the findings of the finished ones, two on the same file and line counted once.
+pending) and the findings of the finished ones, two on the same file and line counted once. When the pass found
+something, \`merge\` prints each finding (id, severity, file:line, chunk) and how many of them \`findings.json\` does not hold;
+\`--json\` adds \`notInRound\`. \`keryx review ingest\` brings them in; \`keryx review complete\` warns about the ones still out.
 
 \`estimate\` says what a run will cost before it starts: chunks, files, tokens, cost at the middle tier
 and duration. The ceiling is ${DEFAULT_MAX_PASSES} passes of ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${DEFAULT_MAX_PASSES * DEFAULT_BLAST_RADIUS_MAX_FILES} files);
@@ -183,8 +186,18 @@ export async function runChunks(args: string[], deps: ChunksDeps, seams?: Chunks
       out(json, { pass: null }, ["no chunks: the blast radius dropped no files"]);
       return;
     }
-    out(json, pass, [
-      `chunk-pass.json: ${pass.totals.done}/${pass.totals.chunks} chunk(s) done, ${pass.totals.failed} failed, ${pass.totals.pending} pending; ${pass.uncoveredFiles.length} file(s) uncovered; ${pass.findings.length} finding(s)`,
+    const summary = `chunk-pass.json: ${pass.totals.done}/${pass.totals.chunks} chunk(s) done, ${pass.totals.failed} failed, ${pass.totals.pending} pending; ${pass.uncoveredFiles.length} file(s) uncovered; ${pass.findings.length} finding(s)`;
+    if (pass.findings.length === 0) {
+      out(json, pass, [summary]);
+      return;
+    }
+    // A pass that found something names it here: chunk-pass.json is read by nobody else until the round ingests it.
+    const missing = passFindingsNotInRound(pass, await readRoundSites(packageDir));
+    const missingIds = new Set(missing);
+    out(json, { ...pass, notInRound: missing }, [
+      summary,
+      ...pass.findings.map((finding) => `  ${describePassFinding(finding)}${missingIds.has(finding) ? "" : " (in round)"}`),
+      ...(missing.length > 0 ? [`${missing.length} chunk-pass findings not in round: \`keryx review ingest --review-id <id>\` brings them in.`] : []),
     ]);
     return;
   }

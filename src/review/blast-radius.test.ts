@@ -336,6 +336,27 @@ function finding(overrides: Partial<StructuredReviewFinding>): Partial<Structure
 describe("screenBlastRadiusFindings — AC3: rejection in code, not in prose", () => {
   const set = radius();
 
+  test("a chunk-pass finding is not held to outside-set or no-link-to-change, and the record says so", () => {
+    const isPass = (candidate: Partial<StructuredReviewFinding>): boolean => candidate.reviewer?.includes("/chunk-") === true;
+    const claim = finding({ reviewer: "review-regression/chunk-001", file: "src/somewhere/else.ts", problem: "this function is long", impact: "future maintenance", evidence: "none" });
+    const result = screenBlastRadiusFindings([claim], set, { chunkPass: isPass });
+    expect(result.rejected).toHaveLength(0);
+    expect(result.accepted).toHaveLength(1);
+    expect(result.exempted[0]).toMatchObject({ reason: "chunk-pass" });
+    expect(renderBlastRadiusScreenMarkdown(result)).toContain("chunk-pass");
+  });
+
+  test("a minor chunk-pass finding is still dropped by the severity floor", () => {
+    const result = screenBlastRadiusFindings([finding({ reviewer: "review-regression/chunk-001", severity: "minor" })], set, { chunkPass: () => true });
+    expect(result.accepted).toHaveLength(0);
+    expect(result.rejected[0]?.rule).toBe("non-regression-severity");
+  });
+
+  test("the exemption is the caller's to grant: a finding that only carries the name is screened as before", () => {
+    const result = screenBlastRadiusFindings([finding({ reviewer: "review-regression/chunk-001", file: "src/somewhere/else.ts" })], set);
+    expect(result.rejected[0]?.rule).toBe("outside-set");
+  });
+
   test("a regression claim inside the set is accepted", () => {
     const result = screenBlastRadiusFindings([finding({})], set);
     expect(result.accepted).toHaveLength(1);
