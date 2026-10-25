@@ -54,6 +54,8 @@ import {
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { hashedDisplayIdMessage, hashedDisplayIds } from "./display-id";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
+import { computeChunkPass } from "./chunks";
+import { describePassFinding, injectablePassFindings, missingWarning, passNotInRound, upsertMissingSection } from "./chunk-findings";
 import { flowReviewsRoot, readManifestHead, reviewsRoot } from "./package-location";
 import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
 import { promoteParentExecutions } from "./verify-run";
@@ -260,12 +262,28 @@ export type ScopeBScreenRecord = {
   screen?: BlastRadiusScreenResult<NormalizedReviewFinding> | undefined;
 };
 
+/** What an ingest did with the findings of the package's chunk pass. */
+export type ChunkPassIngest = {
+  /** Ids of the pass findings brought into the round. */
+  brought: string[];
+  /** Pass findings the report already carried at the same site, described for the record. */
+  alreadyReported: string[];
+};
+
+function renderChunkPassMarkdown(record: ChunkPassIngest): string {
+  if (record.brought.length === 0 && record.alreadyReported.length === 0) return "";
+  const lines = ["", "## Chunk pass findings", "", `brought_in: ${record.brought.length}${record.brought.length === 0 ? "" : ` (${record.brought.join(", ")})`}`];
+  if (record.alreadyReported.length > 0) lines.push(`already_in_report: ${record.alreadyReported.join("; ")}`);
+  lines.push("", "Brought in from chunk-state.json as reviewer `<reviewer>/<chunk>`; the screen did not apply `outside-set` and `no-link-to-change` to them.", "");
+  return lines.join("\n");
+}
+
 /** The file name every copy of the blast-radius record is read from and written to. */
 const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
-): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[]; chunkPass: ChunkPassIngest }> {
   const at = (input.now ?? new Date()).toISOString();
   // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
   const premiseClaims = parsePremiseClaimSets(input.premises);
@@ -291,6 +309,12 @@ export async function createManagedReviewPackage(
   // report's own ordering already contained.
   const repairs = repairMechanicalOmissions(reported);
 
+  // What a chunk pass found reaches the round here, from the live pass state and before the findings are located, so the
+  // verifier and the premise judge see it like any other finding. The report's own findings win a same-site tie.
+  const passIn = input.mode === "ingest" ? injectablePassFindings(await computeChunkPass(packageDir), reported) : undefined;
+  const passFindings = passIn === undefined ? [] : triage(passIn.findings, { mode: input.mode, attachedToFlow: flowMatch !== null });
+  reported.push(...passFindings);
+
   // Resolved HERE rather than beside `buildManifest`, because the locator needs
   // it: a round is a claim about a commit, and its findings are located at that
   // commit rather than against whatever the tree currently holds.
@@ -309,6 +333,11 @@ export async function createManagedReviewPackage(
   // `global_id` and the key has to exist for it to be resolvable. Round N+1
   // carries round N's key verbatim; only a finding without one is minted here.
   assignGlobalIds(reported, reviewId);
+  const chunkPassIngest: ChunkPassIngest = {
+    brought: passFindings.map((finding) => finding.id),
+    alreadyReported: passIn?.alreadyReported.map(describePassFinding) ?? [],
+  };
+  const passKeys = new Set(passFindings.flatMap((finding) => (finding.global_id === undefined ? [] : [finding.global_id])));
 
   // The verifier, which can only delete. In `annotate` — the default for one
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
@@ -354,7 +383,7 @@ export async function createManagedReviewPackage(
   // completion at the review gate — the opposite of the promise. It runs BEFORE
   // the findings cap so a rejected finding cannot spend a reviewer's reading
   // budget on its way out.
-  const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
+  const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal, passKeys);
 
   // Flow 458 AC5. One defect reported by several reviewers becomes ONE finding
   // with the highest severity (the verifier's, when it confirmed one) and every
@@ -541,7 +570,8 @@ export async function createManagedReviewPackage(
     path.join(packageDir, "scope.md"),
     renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, filterStats, allFindings: findings }) +
       premiseBlock +
-      renderDuplicatesMarkdown(deduped.merges),
+      renderDuplicatesMarkdown(deduped.merges) +
+      renderChunkPassMarkdown(chunkPassIngest),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0); a re-ingest
@@ -599,6 +629,7 @@ export async function createManagedReviewPackage(
     // on the terminal they were already looking at, as "there was nothing more".
     scopeBScreen: scopeB.record,
     duplicates: deduped.merges,
+    chunkPass: chunkPassIngest,
   };
 }
 
@@ -631,15 +662,20 @@ async function screenScopeBFindings(
   input: ManagedReviewIngestInput,
   packageDir: string,
   findings: readonly NormalizedReviewFinding[],
+  passKeys: ReadonlySet<string> = new Set(),
 ): Promise<{ retained: NormalizedReviewFinding[]; record: ScopeBScreenRecord; resolved: ResolvedScreenRadius | undefined }> {
   const resolved = await resolveScreenRadius(input, packageDir);
   const reviewers = resolved?.radius.reviewers ?? [BLAST_RADIUS_SCOPE_REVIEWER];
+  const isPass = (finding: NormalizedReviewFinding): boolean => finding.global_id !== undefined && passKeys.has(finding.global_id);
   const scopeB = findings.filter((finding) => isBlastRadiusScopedFinding(finding, reviewers));
 
   if (resolved === undefined) {
-    if (scopeB.length > 0) {
+    // A chunk-pass finding is scope-B by name but the screen would not judge it by the set anyway, so a package whose
+    // only scope-B findings came from its own pass is not refused for lacking the record.
+    if (scopeB.some((finding) => !isPass(finding))) {
       throw new Error(
-        `Refusing to record ${scopeB.length} finding(s) raised under scope B (${scopeB
+        `Refusing to record ${scopeB.filter((finding) => !isPass(finding)).length} finding(s) raised under scope B (${scopeB
+          .filter((finding) => !isPass(finding))
           .map((finding) => `${finding.id} by ${finding.reviewer}`)
           .join(
             ", ",
@@ -655,7 +691,7 @@ async function screenScopeBFindings(
     return { retained: [...findings], record: { source: "none", scopeBFindings: 0 }, resolved: undefined };
   }
 
-  const screen = screenBlastRadiusFindings(scopeB, resolved.radius, { minSeverity: resolved.radius.minSeverity });
+  const screen = screenBlastRadiusFindings(scopeB, resolved.radius, { minSeverity: resolved.radius.minSeverity, chunkPass: isPass });
   const rejected = new Set(screen.rejected.map((rejection) => rejection.finding));
   // The rejected findings do NOT go on to `findings.json`, and that is the
   // decision rather than an oversight. `findings.json` is what this round is
@@ -991,6 +1027,10 @@ export async function completeManagedReview(
   // A warning, never a refusal: leftovers (Not run candidates, held severities, open follow-ups) the report does not name.
   warnings.push(...(await packageParityWarnings(packageDir, reportText).catch(() => [])));
   warnings.push(...(await packageCoverageWarnings(packageDir)));
+  // Variant A (poll 283): a pass finding the round does not hold is said, in the output and in report.md, never refused.
+  const passGap = await passNotInRound(packageDir).catch(() => null);
+  const passMissing = passGap?.missing ?? [];
+  if (passMissing.length > 0) warnings.push(missingWarning(passMissing));
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
   // so the next run does not pass the same gate without the flag.
@@ -1028,6 +1068,9 @@ export async function completeManagedReview(
       throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
     }
     await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+    // Before the round is recorded as finished, because the registry hashes the package.
+    const marked = upsertMissingSection(reportText, passMissing);
+    if (marked !== reportText) await writeFileAtomic(path.join(packageDir, "report.md"), marked);
   } catch (error) {
     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
     if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
@@ -1378,7 +1421,7 @@ function refuseStubReport(input: ManagedReviewInput, report: string, from: "inpu
 
 function triage(
   findings: Array<StructuredReviewFinding & { summary: string; class_scope_present?: boolean | undefined }>,
-  args: NormalizeFindingsArgs,
+  args: Pick<NormalizeFindingsArgs, "mode" | "attachedToFlow">,
 ): NormalizedReviewFinding[] {
   const classification = args.mode === "ingest" ? "valid_followup" : "skill_learning_candidate";
   return findings.map((finding) => {

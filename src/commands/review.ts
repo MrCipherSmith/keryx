@@ -1255,6 +1255,13 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
       );
     }
   }
+  // A chunk pass that raised findings is part of the round once ingested; say how many came in, so the count is not a silence.
+  const chunkPass = result.chunkPass;
+  if (chunkPass.brought.length > 0 || chunkPass.alreadyReported.length > 0) {
+    console.log(`chunk-pass findings: brought_in=${chunkPass.brought.length} already_in_report=${chunkPass.alreadyReported.length}`);
+    for (const id of chunkPass.brought) console.log(`  brought in ${id}`);
+    for (const line of chunkPass.alreadyReported) console.log(`  already in the report: ${line}`);
+  }
   const concurrency = caps.concurrency;
   if (concurrency !== undefined) {
     console.log(
@@ -4880,6 +4887,9 @@ function printIngestHelp(): void {
 
 Records a finished review report as a package. All accepted flags: ${CREATE_FLAGS.join(" ")}.
 Without --research the package stays PENDING and \`review complete\` refuses.
+With --review-id of a package whose chunk pass found something, each finding the report does not already hold at the same
+file:line is recorded as \`review-regression/<chunk>\`: the scope-B screen does not apply outside-set or no-link-to-change to it,
+and a minor is still dropped. A major without a class_scope of its own carries one that says NOT ENUMERATED.
 ${GRAPH_TIMEOUT_HELP}`);
 }
 
@@ -4912,7 +4922,8 @@ function printCompleteHelp(): void {
 
 Marks the review complete once scope, raw reconciliation, dispatch evidence and coverage hold. --finding, --disposition
 and --evidence record one finding's disposition (repeatable); --waive-coverage and --waive record an operator waiver;
---head is the pull request head the round must match.`);
+--head is the pull request head the round must match. A chunk-pass finding that findings.json does not hold is a warning, in the
+output and in report.md, never a refusal: "keryx review ingest --review-id <id>" brings it in.`);
 }
 
 function printStatusHelp(): void {
