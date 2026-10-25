@@ -18,3 +18,6 @@
 - 2026-10-25T14:33:18.609Z - ac-confirmed: AC12: typecheck clean; 170 tests pass in the four existing files; src/commands/review-next.test.ts does not exist on this branch (comes with PR 1083), treated as filter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-25T14:57:16.657Z - ac-confirmed: AC8: Operator poll 301: confirmed with caveats from verification.md (3 dispatches on #8174, two open for real needs_context; first --apply call differs from the next) (signed: MrCipherSmith [stated])
 - 2026-10-25T14:57:16.884Z - ac-confirmed: AC9: Operator poll 301: confirmed; #8111/#8158/#8086 identical to baseline, originals fingerprint-identical, discrepancies in verification.md (signed: MrCipherSmith [stated])
+- 2026-10-25T14:58:08.828Z - ac-confirmed: AC13: Commit and draft PR #1084 only on operator word (poll 301); attribution scan of diff, commit message and flow text clean (signed: MrCipherSmith [stated])
+- 2026-10-25T14:58:09.046Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-25T14:58:11.039Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1084 (base: main)
