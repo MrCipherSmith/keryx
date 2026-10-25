@@ -1,0 +1,28 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check of slice-03 (kind new, r03 delta d6267d4a5099..5382b56abf17). I found no change in this slice that breaks an existing behaviour of a dependent. Moved contracts, each traced to its consumers at head: (1) the skill instructions (flow-orchestrator, job-orchestrator SKILL and orchestrator-prompt, task-implementer) now tell the reader to pass --task-text single-quoted instead of double-quoted. These are prose instructions to agents, and no code parses them. keryx ctx rg for 'task-text \"' and \"task-text '\" over src, docs, README and .metaproject/skills returns no test or code that asserts the old quoting. All five changed skills are byte-identical between .metaproject/skills/gdskills and src/gdskills/bundled/skills (cmp), so skill-sync parity holds. (2) context-resolver.test.ts now imports LAST_RESOLVE_PATH. It is exported at src/gdskills/context-resolver.ts:84 ('export const LAST_RESOLVE_PATH = \".metaproject/data/skills/project-context/last.json\";'), and the test's new assertions (taskTextLength equal to the code-point length, text absent from the file) match recordLastResolve at head. RecordedResolve dropping taskText has no non-test reader: project-context-status.ts readLast checks only recordedAt, result and result.schema, so an old last.json that still carries taskText loads unchanged. (3) In src/tui/project-context-inspector.ts the sidebar value is wrapped in cardSafe and each modal line goes through lines.map(cardSafe) before the join. cardSafe (src/lib/card-safe.ts) removes ANSI sequences and C0/C1/bidi controls, turns newlines into ' ⏎ ' and tabs into spaces. Neither project-context-inspector.ts nor project-references-view.ts builds a line that contains an embedded newline, a tab or an escape byte (keryx ctx rg), and styling is applied after cardSafe in stylePlanText, so every line the code builds renders byte-identically. (4) The docs/docs/cli-reference.md resolve-context row now says last.json records only the length of the text. That matches the code. Prior findings still open and not re-filed: the stale cli-reference 'references check' sentence 'a linked rule is not scanned', which I raised as a scope-A note in r03 wave 2 (raw/review-regression-w2.txt), still reads the same at head. It is a doc mismatch, not a regression. Limits of the blast radius: the record keeps 20 files and drops 117 (49 text hubs, 39 with unrelated symbols, 29 test consumers; 0 by the 40-file cap). It leaves 16 of the 33 changed files unresolved, because they are not code-graph nodes. Every skill and docs file in this slice is among them. For those files the radius cannot answer the question, so I checked their consumers by search instead.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-03",
+      "coverage": "Read the whole of slice-03.diff (224 lines; flow-orchestrator SKILL, job-orchestrator SKILL and orchestrator-prompt, task-implementer SKILL, all in both the .metaproject and bundled copies, plus docs/docs/cli-reference.md, src/gdskills/context-resolver.test.ts and src/tui/project-context-inspector.ts), and the full delta diff of those files via keryx ctx run git diff d6267d4a5..HEAD. At head: context-resolver.ts (LAST_RESOLVE_PATH, RecordedResolve, recordLastResolve, readLastResolve), project-context-status.ts readLast, src/lib/card-safe.ts. Searches with keryx ctx rg: LAST_RESOLVE_PATH over src; task-text quoting over src, docs, README and .metaproject/skills; taskText readers over src/tui, src/mcp, src/harness and docs/requirements; embedded newline, tab and escape bytes in the TUI formatters. Ran cmp on the five changed skills, .metaproject against bundled.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Summary: No regression findings on slice-03 at head 5382b56abf17. The single-quoting edits in the skills are instructions to agents: no code or test reads the old quoting, and the bundled copies are byte-identical. LAST_RESOLVE_PATH, the export the test now uses, exists. No production code reads the removed recorded task text. The new cardSafe wrapping leaves every line the TUI builds unchanged. The stale cli-reference line "a linked rule is not scanned", noted in r03 wave 2, is still there; it is a scope-A doc issue and not re-filed here. The blast radius leaves 16 changed non-code files unresolved, every skill and docs file in this slice among them, so I checked their consumers by search rather than through the graph.
+
+Routing audit: graph_used: blast-radius record (no fresh build, read-only), wiki_used: not-relevant (narrow delta), ctx_used: yes (keryx ctx read/rg/run/show), raw_rg_used: no

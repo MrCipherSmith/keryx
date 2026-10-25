@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-style",
+  "wave": 3,
+  "waves": 5,
+  "slices": [
+    "slice-03"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-03",
+      "path": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/slices/slice-03.diff",
+      "bytes": 112326
+    }
+  ],
+  "result": "raw/review-style-w3.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+}

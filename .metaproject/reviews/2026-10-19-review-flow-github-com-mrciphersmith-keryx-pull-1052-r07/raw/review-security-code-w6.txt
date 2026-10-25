@@ -1,0 +1,27 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slice-08 second look at head 5444f96e4. The remote-press trust chain holds: mapApprovalAnswer validates fromId as a safe integer, operatorConfirmTool.invoke requires pressedBy and pressedAt from a remote answer, checks allowedUserIds, enforces the 1h TTL and binds the one-time token to the exact input; agent.ts takes pressedBy/pressedAt only from response.via === remote; review_complete is refused to unattended runs; completeReviewGated is the single close path. One defence-in-depth gap: the package label used in operator-confirm-review.ts card titles and subjects is not passed through cardSafe, unlike every other agent-influenced string in the card builders.",
+  "findings": [
+    {
+      "id": "S-12-01",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 89,
+      "quote": "const label = (dir: string, projectRoot: string): string => path.relative(projectRoot, dir) || \".\";",
+      "problem": "The package label is the raw relative directory path and is interpolated unsanitized into card titles and subjects (lines 135, 136, 145, 223, 279, 285, 341, 348, 413, 420, 429, 438, 558, 566, 623, 633, 807). Every other agent-influenced value in the same cards (finding key and severity, target, flow title, run id, file paths) goes through cardSafe, which strips ANSI/OSC, C0/C1 and bidi characters and folds newlines. A package directory directly under .metaproject/reviews/ or a flow reviews root is accepted by isReviewPackageDir when it holds manifest.json, and the isReviewPackageDir doc comment itself records that an agent can write such directories through an approved apply_patch. Linux directory names may contain newline, ESC and bidi characters. The label then reaches the TUI dialog and the card is mirrored to the Telegram topic (describeApprovalForTopic), and the title is also stored as entry.question and printed by OperatorConfirmationLog.clip, which flattens only whitespace and strips no control characters.",
+      "impact": "An agent that creates a package directory named with a newline or terminal escape sequence can make the operator's yes/no card for a waiver, ceiling lift or review_complete show a forged line or a misleading title (for example a fake 'subject:' or a benign-looking question) above the real decision lines, or inject escape sequences into the sidebar, /decisions modal and /remote-control status. The decision lines and the stored quote still reflect the real state, and the operator still presses yes or no, so this is a display-spoofing hardening gap rather than an authority bypass.",
+      "suggested_fix": "Sanitize at the source: const label = (dir, projectRoot) => cardSafe(path.relative(projectRoot, dir) || \".\"); import cardSafe from ../lib/card-safe is already present in the file. Optionally also have operatorConfirmTool.confirmation run cardSafe over title, lines and subject (refuse the card when cardSafe(x) !== x), so a future spec that forgets one value cannot reach the card.",
+      "evidence": "label at operator-confirm-review.ts:89 has no cardSafe; callers at 130, 212, 277, 339, 407, 556, 621, 794 use it raw in title/subject templates; cardSafe is applied to found.key, found.severity and target in the same templates (223, 623, 633). isReviewPackageDir (src/review/package-location.ts:108) only checks the parent directory and manifest.json, not the name. operator-confirmations.ts clip() flattens \\s+ only. Exploit path needs an agent that can write a control-character directory name with a manifest.json under the reviews root, which has not been exercised.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "slices": ["slice-08"],
+  "questions": []
+}
+```

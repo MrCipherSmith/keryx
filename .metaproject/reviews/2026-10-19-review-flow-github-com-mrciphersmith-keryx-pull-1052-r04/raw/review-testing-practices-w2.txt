@@ -1,0 +1,117 @@
+STATUS: DONE
+
+Reviewer review-testing-practices, wave 2, slice-03 (tests: operator-confirm-review-tools, operator-confirm-tools, operator-confirm-rosters, shell, confirm-token; read against the production hunks in the same slice). Head b1c6da0e6992e4df473bae6b2fde78bc94d28776.
+
+Mutation pass: not run (allowed_tools = read-only). Candidates are listed in mutant_candidates; none was executed, so no finding below claims a mutation result. Each finding is backed by a grep or a read that shows no test drives the input that separates the gate.
+
+Checklist result: no fixed sleeps (the one-hour TTL is driven through an injected clock, with the exact-hour and hour+1ms edges); no real-network path (every review_complete / review_publish test passes prLookup/prFiles/postReview seams, the default `tool()` returns null); each package lives in its own mkdtemp root removed in afterEach; negative assertions are paired with a positive artifact (asked() card or a recorded refusal text); tests are co-located. The AC2 framework tests (allowed list, undefined provider, replay, other question's token, TTL edges, missing press, token-less answer) and the review_complete refusal tests (merged PR, moved head, held finding, missing run profile, narrowed routing, stamped report without evidence level, waiver or decision added after the card) are well pinned. Remaining points are minor.
+
+### F-001 Press fields (pressedBy/pressedAt) are asserted for 4 of the 9 review specs and for none of the schedule/flow/learn specs
+- Severity: minor
+- The remote-press record is the audit trail AC3 adds. Tests drive a remote press only through review_chunks_answer, review_decide_premise, review_confirm_plan and review_complete. The other five `...cardPressFields(confirmation)` sites in operator-confirm-review.ts (lines 236 publish, 294 waive_coverage, 357 waive_readiness, 444 mutation/override decisions, plus the comments-reply path) and the central `record()` in operator-confirm-other.ts:109-115 (used at lines 227, 329, 438, 504, 587, 696) have no test that passes confirmationVia "remote" and reads back pressedBy. grep for `pressedBy` under src finds test hits only in operator-confirm-tools.test.ts, operator-confirm-review-tools.test.ts, confirm-token.test.ts, archive.test.ts and operator-confirmations.test.ts; operator-confirm-other-tools.test.ts has none. Library readers/writers (coverage-complete.ts:100 readCoverageWaiver, readiness.ts:577 waiveReadiness, publish.ts:175, operator-decisions.ts:233/278) are not pinned either. Removing a spread silently drops "who pressed" for that gate while the suite stays green.
+- Fix: parametrize one remote-yes test over the waiver/publish/decision specs (assert confirmedVia "remote-card", pressedBy ALLOWED_ID, pressedAt PRESSED_AT in manifest.readiness_waivers[0], research.json dispatch.coverageWaiver, operator-decisions.json, the publish log) and one remote flow_confirm/schedule_pause case in operator-confirm-other-tools.test.ts.
+
+### F-002 The "model cannot supply a head" test never drives apply with a model-supplied head
+- Severity: minor
+- File: src/commands/operator-confirm-review-tools.test.ts:694
+- The test name promises the gate runs against the recorded head. It only calls `ask(t, { package, head: "deadbeefdead" })`; buildCard ignores input.head, so the card line cannot differ whether or not apply forwards it. The schema assertion is not enforced by the framework (apply receives raw input). apply (operator-confirm-review.ts, completeSpec) takes `_input` and calls completeReviewGated without `head`; a change to forward `input.head` would leave this test green, and the "head that moved" test only varies the tracker's headSha, not the input. The test the name describes is `yes(t, { package, head: "deadbeefdead" })` expecting success against the recorded HEAD (or the moved-head refusal when prLookup disagrees).
+- Fix: use `yes()` with the extra `head` input and assert the closed round used HEAD (the completion-confirmation.json head and the gate's refusal when prLookup returns another sha).
+
+### F-003 The remote completeness check is pinned only for "both fields missing"
+- Severity: minor
+- File: src/commands/operator-confirm-tools.test.ts:408 (gate at operator-confirm-tools.ts:214)
+- `if (pressedBy === undefined || pressedAt === undefined)` is exercised only with neither field present. Dropping the `pressedAt` half (or the `pressedAt` forward at agent.ts:255) stays green: the real-loop test and the helper always supply both. A press with an id and no time would be recorded with `pressedAt` undefined and the cast `pressedAt as string`.
+- Fix: add one case with only confirmationPressedBy and one with only confirmationPressedAt, each expecting "did not say who pressed it".
+
+### F-004 "a no, local or remote" loops run the same call twice
+- Severity: info
+- File: src/commands/operator-confirm-review-tools.test.ts:508 and :537
+- `for attempt < 2` repeats `confirmationDeclined(token)` identically; nothing differs between "local" and "remote", and confirmationDeclined takes only a token. The name overclaims the AC3 "both paths, no included" coverage. Harmless today because a decline is path-independent; rename to "a no records nothing (twice)", or drive the decline through runAgentTurn with a remote refusal.
+
+mutant_candidates are in the JSON block (not run).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE",
+  "summary": "Slice-03 tests are deterministic and offline (injected clock, per-test tmp roots, seam-mocked tracker); the AC2 framework and review_complete refusal paths are well pinned. Four minor/info gaps: press-field recording unpinned for most specs, the head-injection test does not drive apply, the remote completeness check is half-pinned, and a no-loop overclaims. Mutation pass not run (read-only).",
+  "stats": { "files_reviewed": 5, "findings": 4, "blocker": 0, "major": 0, "minor": 3, "info": 1, "mutants_run": 0 },
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 1,
+      "quote": "grep pressedBy in tests: operator-confirm-tools.test.ts, operator-confirm-review-tools.test.ts (chunks, premise, plan, complete only), confirm-token.test.ts",
+      "problem": "A remote press is driven and read back (pressedBy/pressedAt) for review_chunks_answer, review_decide_premise, review_confirm_plan and review_complete only. The cardPressFields spreads at operator-confirm-review.ts:236, 294, 357, 444 and the record() helper at operator-confirm-other.ts:109-115 (sites 227, 329, 438, 504, 587, 696) have no test with confirmationVia remote.",
+      "impact": "Removing a spread silently drops who pressed the card for publish, coverage and readiness waivers, mutation/override decisions, flow_confirm and schedule decisions with the suite still green.",
+      "suggested_fix": "Parametrize one remote-yes test over the waiver/publish/decision specs and add a remote case to operator-confirm-other-tools.test.ts, asserting confirmedVia remote-card, pressedBy and pressedAt in the stored record.",
+      "evidence": "grep -n pressedBy over src (keryx ctx rg): test hits in 5 files, none in operator-confirm-other-tools.test.ts; grep -n cardPressFields operator-confirm-review.ts shows 8 call sites; test file shows yes(..., 'remote') at chunks, premise, plan, complete only. Mutation pass not run.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": ["src/commands/operator-confirm-review.ts:236", "src/commands/operator-confirm-review.ts:294", "src/commands/operator-confirm-review.ts:357", "src/commands/operator-confirm-review.ts:444", "src/commands/operator-confirm-other.ts:109"],
+        "enumeration_method": "keryx ctx rg cardPressFields over src minus tests; grep -F 'record(confirmation)' in operator-confirm-other.ts; compared against the yes(..., 'remote') call sites in the test files"
+      }
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 694,
+      "quote": "the model cannot supply a head: the schema has none, and the gate runs against the recorded head",
+      "problem": "The test only calls ask() with a bogus head input. buildCard ignores input.head and apply is never invoked, so a change that forwards input.head to completeReviewGated stays green; the schema check is not enforced by the framework.",
+      "impact": "The one property the test names (the model cannot choose the head the gate compares) is unpinned.",
+      "suggested_fix": "Use yes(t, { package: pkg, head: 'deadbeefdead' }) and assert the round closes against HEAD (completion-confirmation.json head) and refuses when prLookup returns another sha.",
+      "evidence": "operator-confirm-review.ts completeSpec apply takes _input and calls completeReviewGated without head; complete-gated.ts passes options through; test body at line 694-700 calls ask only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "line": 408,
+      "quote": "if (pressedBy === undefined || pressedAt === undefined) return refuse(\"the remote answer did not say who pressed it\")",
+      "problem": "The test for the remote completeness check passes neither confirmationPressedBy nor confirmationPressedAt; every other test passes both. Each half of the || is not separately pinned.",
+      "impact": "Dropping the pressedAt half leaves the suite green and lets a remote record be written with pressedAt undefined (cast to string).",
+      "suggested_fix": "Add two cases, one with only confirmationPressedBy and one with only confirmationPressedAt, each expecting 'did not say who pressed it'.",
+      "evidence": "operator-confirm-tools.ts:214 gate; operator-confirm-tools.test.ts:400-409 sends { confirmationToken, confirmationVia: 'remote' } only. Mutation pass not run.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 508,
+      "quote": "for (let attempt = 0; attempt < 2; attempt += 1) {",
+      "problem": "'a no, local or remote, records nothing' (confirm_plan, line 508; decide_premise, line 537) repeats the same confirmationDeclined(token) call twice; nothing distinguishes local from remote.",
+      "impact": "The name claims AC3's 'both paths, no included' coverage the body does not exercise; harmless while a decline is path-independent.",
+      "suggested_fix": "Rename to reflect the single path, or drive the decline through runAgentTurn with a remote refusal.",
+      "evidence": "test bodies at lines 508-516 and 537-545; confirmationDeclined(token) takes no via.",
+      "confidence": "high"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "M-01", "file": "src/commands/operator-confirm-review.ts", "anchor": "return { output: \"The head, the evidence level or the waivers changed after the card was shown", "replacement": "(delete the factsDigest comparison)", "kind": "behavior", "note": "likely killed by the two 'added between the card and the yes' tests" },
+    { "id": "M-02", "file": "src/commands/operator-confirm-review.ts", "anchor": "...cardPressFields(confirmation), at: confirmation.at, subject: prepared.subject", "replacement": "(drop the spread in decisionSpec)", "kind": "behavior", "note": "expected to survive (F-001)" },
+    { "id": "M-03", "file": "src/commands/operator-confirm-review.ts", "anchor": "...cardPressFields(confirmation) });  // waiveReadiness", "replacement": "(drop the spread)", "kind": "behavior", "note": "expected to survive (F-001)" },
+    { "id": "M-04", "file": "src/commands/operator-confirm-review.ts", "anchor": "cardPressFields(confirmation));  // recordCoverageWaiver", "replacement": "(drop the argument)", "kind": "behavior", "note": "expected to survive (F-001)" },
+    { "id": "M-05", "file": "src/commands/operator-confirm-review.ts", "anchor": "...cardPressFields(confirmation),\n        abort", "replacement": "(drop the spread in publishReview options)", "kind": "behavior", "note": "expected to survive (F-001)" },
+    { "id": "M-06", "file": "src/commands/operator-confirm-other.ts", "anchor": "...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy })", "replacement": "{}", "kind": "behavior", "note": "expected to survive (F-001)" },
+    { "id": "M-07", "file": "src/commands/operator-confirm-tools.ts", "anchor": "pressedBy === undefined || pressedAt === undefined", "replacement": "pressedBy === undefined", "kind": "behavior", "note": "expected to survive (F-003)" },
+    { "id": "M-08", "file": "src/commands/operator-confirm-review.ts", "anchor": "completeReviewGated(ctx.projectRoot, prepared.dir, {", "replacement": "add head: _input[\"head\"]", "kind": "behavior", "note": "expected to survive (F-002)" },
+    { "id": "M-09", "file": "src/commands/operator-confirm-review.ts", "anchor": "text.length > WAIVER_QUOTE_CHARS ? `${text.slice(0, WAIVER_QUOTE_CHARS)}…` : text", "replacement": "text", "kind": "behavior", "note": "no test with a quote over 300 chars" },
+    { "id": "M-10", "file": "src/commands/operator-confirm-review.ts", "anchor": "reviewed head: not recorded (the package does not carry a commit)", "replacement": "(branch inverted)", "kind": "behavior", "note": "no test builds a card for a package without a recorded head" },
+    { "id": "M-11", "file": "src/commands/operator-confirm-review.ts", "anchor": "if (gateError !== undefined) problems.push(", "replacement": "(delete)", "kind": "behavior", "note": "no test makes completeReviewGated throw after the manifest closed" },
+    { "id": "M-12", "file": "src/commands/operator-confirm-review.ts", "anchor": "!== \"ENOENT\"", "replacement": "=== \"ENOENT\"", "kind": "behavior", "note": "makeRound always writes research.json; the missing-file branch is unpinned" },
+    { "id": "M-13", "file": "src/commands/operator-confirm-tools.ts", "anchor": "now().getTime() - entry.issuedAt > REMOTE_CARD_TTL_MS", "replacement": ">=", "kind": "behavior", "note": "expected killed by the exact-hour test" },
+    { "id": "M-14", "file": "src/commands/agent.ts", "anchor": "confirmationVia === \"remote\" && confirmationPressedAt !== undefined", "replacement": "(drop the pressedAt forward)", "kind": "behavior", "note": "expected killed by the real-loop remote test" }
+  ],
+  "mutants_not_reached": 14
+}
+```

@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 110208,
+      "contentHash": "bbb47a8ecadcf28ef289e98e5d8f6df71c14af736eb65655ad3dcd3583971277",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        ".metaproject/data/gdgraph/.provenance.json",
+        ".metaproject/data/gdgraph/artifacts/module-map.json",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+        ".metaproject/data/gdgraph/artifacts/summary.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        "README.md"
+      ],
+      "domain": ".metaproject, .metaproject [docs], . [docs]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "agent instructions: .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (+1)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 129844,
+      "contentHash": "b069e5d512419f0c5d67d02a0dbf653e61e28ccf6d415426c95b0fc80a305a31",
+      "files": [
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/docs/limitations.md",
+        "docs/requirements/keryx-card-any-host/prd.md",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review-operator.ts",
+        "src/commands/review-host-question.test.ts"
+      ],
+      "domain": "docs [docs], src/commands, src/commands [test]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/operator-confirm-review.ts, src/commands/review-operator.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 146393,
+      "contentHash": "db4f896246543d90e7c1ce2aa7ee56cc1f42c721ef7ba5e8027907a4b8c30940",
+      "files": [
+        "src/decisions/journal.ts",
+        "src/decisions/report.ts",
+        "src/decisions/service.ts",
+        "src/decisions/sources.ts",
+        "src/decisions/types.ts",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/gdskills/contracts/review-finding.schema.json",
+        "src/review/estimate.ts",
+        "src/review/operator-decisions.ts",
+        "src/review/plan-confirmation.ts",
+        "src/review/premise-question.ts",
+        "src/review/premise.ts",
+        "src/review/readiness.ts",
+        "src/review/types.ts"
+      ],
+      "domain": "src/decisions, src/gdskills [docs], src/gdskills +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/contracts/review-finding.schema.json",
+          "source code: src/decisions/journal.ts, src/decisions/report.ts, src/decisions/service.ts (+7)",
+          "schema: src/decisions/types.ts, src/gdskills/contracts/review-finding.schema.json, src/review/types.ts",
+          "agent instructions: src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md (+1)"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 4740,
+      "contentHash": "5d7f3e81b18bdb3231d22d019a703843ed09f445c92cb1250781dc282edf0345",
+      "files": [
+        "src/trigger/unattended.ts"
+      ],
+      "domain": "src/trigger",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/trigger/unattended.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "path": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "data-ledger",
+      "detail": "data ledger: tabular or line-delimited data, not code",
+      "bytes": 22466
+    }
+  ],
+  "totals": {
+    "slices": 4,
+    "bytes": 391185,
+    "files": 43,
+    "omittedFiles": 1,
+    "omittedBytes": 22466,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

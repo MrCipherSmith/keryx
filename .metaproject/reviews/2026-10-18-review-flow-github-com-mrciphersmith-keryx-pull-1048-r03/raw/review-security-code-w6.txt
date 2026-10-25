@@ -1,0 +1,70 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-08 (project-context-inspector.ts, project-references-view.ts, tui-shell.ts) at head 5382b56. The r02 major (w5 F-001, escape sequences reaching the References tab) is closed for ESC/CSI/OSC, C0/C1, CR and bidi: paint() now maps every line through cardSafe and the sidebar value is cardSafe'd. Two things the earlier rounds did not report. (1) major: the new always-on feed polls loadProjectContextStatus every 5 s, and once a references.json exists that runs checkReferences -> scanCitations, which readFile()s the origin of every linked rule with no regular-file or size check; the origin string comes from the tracked .metaproject/metaproject.json, so a cloned repository can name /dev/zero, /dev/stdin or a FIFO and make the TUI allocate without bound or block a thread-pool thread on open. (2) minor: cardSafe is weaker than the repository's own terminalSafe: zero-width, Unicode tag-block and U+2028/9 characters still reach the References tab invisibly. No injection, authz, secret, crypto, CSRF, path-traversal or redirect issue in the slice.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "text = await readFile(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot), \"utf8\");",
+      "problem": "scanCitations reads the origin of every link-mode project rule with a bare readFile: no lstat/stat, no isFile check, no size cap, no check that the path is inside the project. The origin is the `origin` string of a projectRuleRegistry entry in .metaproject/metaproject.json (readProjectRuleRegistry only checks kind, ref, mode and sha256 are present), and resolveOriginPath returns any absolute path or ~/ path verbatim. This slice makes the read unattended: tui-shell.ts creates createProjectContextFeed({ load: () => loadProjectContextStatus(projectContextDir()) }) at shell start and the feed polls it every PROJECT_CONTEXT_POLL_MS (5000 ms); loadProjectContextStatus -> readReferences -> checkReferences -> scanCitations runs whenever .metaproject/rules/project/references.json exists. The sibling reader in the same file, inspectDocument, does the right thing (lstat, realpath, isPathInside, stat().isFile(), size <= CONTRACT_MAX_BYTES) for the declared documents, so the guarded pattern exists one function below. The resolver's readText (context-resolver.ts:177) has the same bare readFile and also runs on the link origin, but it is only reached when an agent runs resolve-context; before this flow nothing read a link origin merely because the TUI was open.",
+      "impact": "Attack vector: an attacker publishes a repository whose tracked .metaproject/metaproject.json registers a link-mode rule with origin \"/dev/zero\" (and no copy under .metaproject/rules/project/, so the link branch is taken) next to a valid references.json. The victim clones it and opens keryx in that directory. Within the first tick, and every 5 s after, scanCitations calls readFile(\"/dev/zero\"). Probed: under `ulimit -v 6000000`, bun -e 'readFile(\"/dev/zero\",\"utf8\")' fails with ENOMEM after about 0.9 s, so the read buffers until the allocator refuses; I did not run it without a limit, where the process can be killed by the OOM killer instead. With origin \"/dev/stdin\" or \"/dev/tty\" (or any FIFO the attacker can name on the victim's machine) readFile blocks instead: the poll guard then keeps later polls from piling up, but every showProjectContext()/`/projectctx` awaits a fresh loadProjectContextStatus that never resolves, each pinning another libuv thread-pool thread, and a tty origin competes with the TUI for keystrokes (not probed). Outcome is availability of the operator's TUI session (memory exhaustion or a frozen /projectctx and enforcement toggle), triggered by opening an untrusted checkout. No data is disclosed: only backticked *.md tokens that name existing files are echoed back.",
+      "suggested_fix": "Read the origin through one bounded helper and use it in scanCitations (and, while there, the resolver's readText): lstat/stat the resolved path, require isFile(), require size <= CONTRACT_MAX_BYTES, then readFile; treat anything else as `unreadable` so the rule lands in unreadableRules and produces the existing `rule-unreadable` warning. Optionally skip a linked rule whose sha256 no longer equals entry.sha256, as collectProjectRules does, so the check never scans text the operator has not reviewed. Add a test with a link origin pointing at a directory, a FIFO and a file over the cap: checkReferences must return `rule-unreadable` without reading it.",
+      "evidence": "src/gdskills/references-check.ts:99-109 (links map built from readProjectRuleRegistry, then readFile(resolveOriginPath(origin, projectRoot))); src/gdskills/project-skills.ts:309-315 resolveOriginPath returns path.resolve(projectRoot, ref) so an absolute ref is unchanged; src/gdskills/project-rules.ts:51-68 isEntry/readProjectRuleRegistry do not validate `origin`; src/gdskills/project-context-status.ts:74-80 readReferences calls checkReferences; slice-08 tui-shell.ts hunk @@ 5252,5294 @@ createProjectContextFeed + PROJECT_CONTEXT_POLL_MS in project-context-inspector.ts; .metaproject/metaproject.json is PROJECT_SKILLS_MANIFEST_PATH (tracked). Probe: bun readFile(\"/dev/zero\") under ulimit -v -> ENOMEM in 920 ms.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/references-check.ts:105 (scanCitations, new in this PR, reached by the TUI poll)",
+          "src/gdskills/context-resolver.ts:177-183 and :217-218 (readText on the link origin, reached by resolve-context; existing)",
+          "src/review/reviewers.ts:271 (readFile(resolveOriginPath(origin, projectRoot)); existing, not reached from this slice)",
+          "src/gdskills/update-rules.ts:69 (originPath for an explicit `skills update --rules`; existing, operator-invoked)",
+          "src/gdskills/references-check.ts:121-143 inspectDocument (already guarded; the model for the fix)"
+        ],
+        "enumeration_method": "keryx ctx rg --all resolveOriginPath src (15 matches in 7 files); read each caller. Only references-check.ts:105 is both new in this PR and reachable unattended from the TUI poll; the others are listed so the fix can share one helper."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.map(cardSafe).join(\"\\n\"), \"plain\") }));",
+      "problem": "The r02 fix for the References tab escaping routes every line through cardSafe (src/lib/card-safe.ts), which was written for model-supplied card text. The repository's helper for committed, attacker-controlled files is terminalSafe/terminalSafeBlock (src/lib/terminal-safe.ts), whose header says why: it must also cover zero-width and other format characters, the Unicode tag block, variation selectors, default-ignorables and U+2028/2029, and it must render them visibly rather than drop them. cardSafe removes ESC sequences, C0/C1 controls, CR/LF, tabs and the bidi override ranges only. Probed on the same input: cardSafe(\"STYLING\\u200b.md \\u{E0041}\\u{E0042} a\\u2028b \\u2800 \\u001b[2Kx\\u001b\\u0001[1Ay\") keeps the zero-width space, both tag characters, U+2028 and U+2800 unchanged and, for the split escape, leaves the printable remainder \"x[1Ay\" with no marker that anything was removed; terminalSafe renders each of them as a visible \\uXXXX/\\xHH escape. Escape-sequence injection is closed by this fix (all ESC bytes are gone: the final C0 pass removes any ESC the CSI/OSC regexes missed).",
+      "impact": "Attack vector: a repository author puts invisible code points in references.json (description, anchor, path, keyword, glob) or in a heading of a declared document, for example U+200B inside a path so `STYLING\\u200b.md` reads as `STYLING.md`, or Unicode tag characters carrying hidden words. The /projectctx References tab, the view an operator uses to see which documents will be forced on the agent and why, shows text that differs from what is stored, and silently drops removed bytes. The description and anchor are the same strings handed to the agent in the resolve output, so hidden text there is unreviewable by the operator in this UI. No terminal control is gained; this is a display-fidelity and review-evasion gap against the repository's own stated standard, hence minor.",
+      "suggested_fix": "Use the repository helper in the one sink: import { terminalSafeBlock } from \"../lib/terminal-safe\" and pass terminalSafeBlock(lines.join(\"\\n\")).text instead of lines.map(cardSafe).join(\"\\n\"); keep cardSafe on the sidebar value or switch it to terminalSafe(...).text as well. Line counts and the contentRows computation are unaffected because \\n is kept. Add a test with U+200B, U+E0041, U+2028 and a split escape in a description and assert the renderable content contains the visible \\uXXXX forms and no raw code point.",
+      "evidence": "src/lib/card-safe.ts (regex ranges: \\u007f-\\u009f, \\u200e\\u200f, \\u202a-\\u202e, \\u2066-\\u2069 only); src/lib/terminal-safe.ts header and UNSAFE_CODE_POINT_RE; probe output: cardSafe keeps U+200B, U+E0041, U+E0042, U+2028 and U+2800 verbatim and ends with \"x[1Ay\"; terminalSafe -> \"STYLING\\\\u200b.md \\\\ue0041\\\\ue0042 a\\\\u2028b \\\\u2800 \\\\x1b[2Kx\\\\x1b\\\\x01[1Ay\"; r02 review-security-code-w5 F-001 suggested terminalSafeBlock.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "publication": "finding"
+    }
+  ],
+  "prior_dispositions": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+  "slices": [{ "id": "slice-08", "coverage": "project-context-inspector.ts, project-references-view.ts and the tui-shell.ts hunks read in the diff and at head; sinks, feed, status loader and the reference scan traced", "status": "DONE" }],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Security Review (slice-08, second look, round r03)
+
+Changed files reviewed: src/tui/project-context-inspector.ts, src/tui/project-references-view.ts, src/tui/tui-shell.ts (hunks), plus the callees the slice newly triggers (project-context-status.ts readReferences, references-check.ts, references-config.ts) read at head 5382b56.
+
+r02 findings: w5 F-001 (major, escape sequences in the References tab) is addressed for ESC/CSI/OSC/C0/C1/CR/bidi by the cardSafe mapping at the single sink (verified at head); the residual is F-002 here. The other r02 security findings (w1 F-001..F-003, w3 F-001..F-003, w4 F-001..F-003) sit in files outside slice-08 and are not re-filed or re-judged here.
+
+Clean areas checked in this slice:
+- Sidebar: referencesSidebarSegment emits only counts, `!k` and `?`; renderProjectContextSidebarValue is cardSafe'd as a whole. No file text reaches it.
+- `/projectctx` parsing: the argument is compared with fixed words; nothing spawns a process or builds a path from it.
+- Declared documents: inspectDocument does lstat, realpath, isPathInside(rootReal, real), stat().isFile() and the CONTRACT_MAX_BYTES cap before readFile; a symlink out of the root, a FIFO, or a large file is not read. Declaration paths are normalised and `..`/absolute are rejected in parseEntry.
+- Feed: poll() skips overlapping loads, drops stale results, and reports an error once; error text is an fs message or a JSON parse reason, not file content. The interval is unref'd.
+- Secrets, crypto, CSRF, open redirect, authn/authz, injection (SQL/command/template/eval): not present in the slice.
+
+Not security, left to other reviewers: JSON.stringify of the whole status on every 5 s tick and in subscribers (sameStatus), and checkReferences re-reading every rule and declared document on each tick; the feed's stop() is never called from tui-shell (timer is unref'd).
+
+Routing audit: graph_used: no (not-relevant, slice-bound second look; callers traced with keryx ctx rg); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, keryx ctx run); raw_rg_used: no

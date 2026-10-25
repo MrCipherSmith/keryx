@@ -1,0 +1,100 @@
+STATUS: DONE_WITH_CONCERNS
+
+# Style Review, slice-02 (wave 2)
+
+Verdict: APPROVE_WITH_SUGGESTIONS on style, with one doc statement that is actively wrong (F-001).
+
+Slice-02 holds no TypeScript. It carries flow 464 records, the two review-orchestrator SKILL copies, review-premise, CHANGELOG, TM-04, cli-reference, commands-by-task, the review guide, limitations, a schema and the version bump. I checked naming (the card tool names are consistent across all docs), the wording of the new prose, repetition and comment accuracy. flow.json, journal.md, context.md and the schema addition are machine-written or structurally fine; I raised nothing on them. Open r03 minors D-02..D-14 and the autonomous-profile.ts wording were not re-filed.
+
+Positive notes: card tool names (`review_confirm_plan`, `review_decide_premise`, `review_complete`) are spelled the same everywhere; the SKILL.md copies and TM-04 agree on "an agent never runs `keryx review complete`"; the new CHANGELOG entry follows the existing Added/Docs layout.
+
+## Findings
+
+### F-001 cli-reference says plain `review complete` needs a terminal; it does not
+- Severity: major (actively wrong statement)
+- File: docs/docs/cli-reference.md:4921
+- The added sentence lists `complete` among "the operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, ...) need a terminal". In src/commands/review.ts (complete handler, about lines 4554-4562) the TTY check applies only to `--waive-coverage` and `--waive`; plain `complete` has none. TM-04 section 8, in the same diff, says so ("A plain `review complete` has no TTY check"). The two docs contradict each other, and the CLI reference overstates a guard that does not exist.
+- Fix: write "`complete --waive-coverage`, `complete --waive`" in the terminal-only list and add that plain `complete` has no terminal check (the card rule binds the agent, as TM-04 section 8 says).
+
+### F-002 limitations.md: parenthetical contradicts the sentence it sits in
+- Severity: minor
+- File: docs/docs/limitations.md:187
+- The sentence reads "A Telegram or web card for these approvals (the review acts ... already have one in a shell driven from a topic: a Telegram press proves ... see decision TM-04), session-wide grants from a remote answer, and approvals for unattended trigger runs are not built." The 400-character parenthetical splits subject and predicate and says the card exists inside a sentence that ends "are not built". It is hard to read and easy to misread.
+- Fix: leave the original sentence as it was and move the five-tool note into the existing parenthetical about `/remote-control` a few lines below, or into its own sentence.
+
+### F-003 TM-04 count of decisions does not match its own table
+- Severity: info
+- File: docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:15
+- "Nineteen keryx decisions" (was "Thirteen") while section 2 lists 17 tool rows at head (14 at the base, so the base count was already one off). The diff adds three tools and three decision kinds, which is not +6.
+- Fix: count from the table and say "Seventeen" (or drop the number).
+
+### F-004 Same long paragraph pasted twice; new prose breaks the file's hard wrap
+- Severity: info
+- Files: docs/docs/guides/review-with-a-record.md:603 and :734 (also .metaproject/skills/gdskills/review/review-premise/SKILL.md:99)
+- The clause "an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell" appears word for word at 603 and 734 (about 500 characters each), and again in cli-reference and TM-04 6a. The surrounding text in these two files is hard-wrapped near 80 columns; the new lines are single 400-500 character lines.
+- Fix: state the rule once in the guide (the premise section) and have the waiver section point to it, as line 967 already does with "see above"; wrap the new lines like their neighbours.
+
+## REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-02 is docs, skills, flow records and a version bump. One doc statement is wrong (cli-reference says plain review complete needs a terminal; the code and TM-04 say it does not). One hard-to-read inserted parenthetical, one stale decision count, one duplicated paragraph. Card tool naming is consistent.",
+  "stats": {"blocker": 0, "major": 1, "minor": 1, "info": 2},
+  "slices": [{"id": "slice-02", "coverage": "read in full"}],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-style",
+      "severity": "major",
+      "file": "docs/docs/cli-reference.md",
+      "line": 4921,
+      "quote": "The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal.",
+      "problem": "The sentence says plain `review complete` needs a terminal. The complete handler in src/commands/review.ts checks for a terminal only when --waive-coverage or --waive is passed. TM-04 section 8 in the same diff states that plain `review complete` has no TTY check.",
+      "impact": "The CLI reference describes a guard that does not exist and contradicts TM-04; a reader may rely on the terminal check to keep an agent from closing a review through the CLI.",
+      "suggested_fix": "List only `complete --waive-coverage` and `complete --waive` as terminal-only, and add that plain `complete` has no terminal check, so the card rule binds the agent (TM-04 section 8).",
+      "evidence": "src/commands/review.ts:4554-4562 (isTerminal guards only waiver !== undefined and readinessWaivers.length > 0); TM-04 section 8 text in slice-02 diff, line 655.",
+      "confidence": 0.85
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "docs/docs/limitations.md",
+      "line": 187,
+      "quote": "A Telegram or web card for these approvals (the review acts `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage` and `review_complete` already have one in a shell driven from a topic",
+      "problem": "A 400-character parenthetical sits between the subject and the predicate of a sentence that ends 'are not built', and it says the card already exists.",
+      "impact": "The sentence is hard to parse and reads as self-contradicting.",
+      "suggested_fix": "Keep the original sentence and move the note about the five review acts into the existing /remote-control parenthetical below it, or give it its own sentence.",
+      "evidence": "docs/docs/limitations.md:187-189 at head b1c6da0e.",
+      "confidence": 0.7
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": 15,
+      "quote": "Nineteen keryx decisions are the operator's alone",
+      "problem": "The count does not match the table in section 2, which lists 17 tools at head (14 at the base, where the text said Thirteen). The diff adds three tools.",
+      "impact": "A stale number in a decision record that is cited as the authority on what the cards cover.",
+      "suggested_fix": "Count from the table (Seventeen) or remove the number.",
+      "evidence": "TM-04 section 2 rows at head: review_chunks_answer, review_confirm_plan, review_decide_premise, review_complete, review_publish, review_waive_coverage, review_waive_readiness, flow_confirm, external_apply, learn x3, schedule x5.",
+      "confidence": 0.6
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": 734,
+      "quote": "an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell.",
+      "problem": "The same roughly 500-character clause appears word for word at line 603 and line 734, as single long lines inside a file that is hard-wrapped near 80 columns. review-premise/SKILL.md:99 also gained an over-long line in a wrapped paragraph.",
+      "impact": "Two copies of one rule drift apart on the next edit; the long lines make diffs and review harder.",
+      "suggested_fix": "State the rule once (at the premise section) and point to it from the waiver section, as line 967 already does with 'see above'; wrap the new lines like their neighbours.",
+      "evidence": "docs/docs/guides/review-with-a-record.md lines 603 and 734 (498 and 495 characters).",
+      "confidence": 0.6
+    }
+  ]
+}
+```

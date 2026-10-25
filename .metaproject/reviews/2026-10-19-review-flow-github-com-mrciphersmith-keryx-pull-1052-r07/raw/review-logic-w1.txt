@@ -1,0 +1,130 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 (fix slice) of r07, head 5444f96e4. Prior-finding verdicts: S-401 closed (entries capped at 20, finding at 200 and trimmed evidence at 300, the card shows the evidence uncut, clip and WAIVER_QUOTE_CHARS removed, boundary and hidden-tail tests added; no regression). S-402 closed for the disposition path (hiddenInCard refuses OSC, CSI, controls, bidi, newline, tab, Cf, Zl and Zp in finding and evidence, so stored text equals shown text; eleven shapes tested); the same class is NOT closed for post and reply bodies, raised as L7-001. F5-04 open: claimed fixed, but the diff only changes a description and no evidence-required or finding-id check was added (L7-002). F5-24 closed: the new tests would fail if hiddenInCard, the caps or cardSafe on the shown line were dropped. Waiver quotes (readiness, coverage, decision) are now shown whole through quoteWhole with an explicit flag when the card must rewrite something; every 'and N more' tail and list slice in the operator-confirm-review.ts and operator-confirm-other.ts cards is removed. New: L7-001 major (shownBody lacks the Cf/Zl/Zp rule, so zero-width and tag-block text in a posted body is unseen), L7-002 and L7-003 and L7-004 minor, L7-005 and L7-006 info. Static reading only; nothing was run.",
+  "findings": [
+    {
+      "id": "L7-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "problem": "Post and reply bodies are checked with a weaker hidden-text rule than dispositions. shownBody (:62-66) refuses a line only when cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:10-16) does not touch U+200B-200D, U+2060, U+FEFF, the Unicode tag block U+E0001-E007F (all category Cf) or U+2028/2029 (Zl/Zp). The S-402 fix added exactly that second half for dispositions through hiddenInCard (:672: cardSafe changed || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u), and the new dispositions test pins zero-width space, joiner, BOM and line separator as refused. shownBody does not call hiddenInCard, and the same helper serves review_comments_reply (:682-684).",
+      "impact": "A report.md or reply line holding tag-block text or U+200B is accepted, drawn as nothing on the card, and posted verbatim: apply compares the body only to prepared.body (:224, :244-245), so the unseen bytes are posted. This is the S-401/S-402 defect (the operator answers a text other than the one recorded) on the post and reply paths, reachable from a body a prompt-injected package controls; the posted text is later read by agents that fetch PR comments. The new body test lists only ESC, bidi and BEL, so the gap is not pinned.",
+      "suggested_fix": "In shownBody replace cardSafe(line) !== line with hiddenInCard(line) and use the HIDDEN_IN_CARD wording in the refusal. Add zero-width, tag-block and U+2028 cases to the body test and to a reply-body test.",
+      "evidence": "Static reading at head 5444f96e4: operator-confirm-review.ts:62-66 (shownBody), :672 (hiddenInCard), :208-210 and :680-685 (callers), :224 and :244-245 (posted body equals prepared.body); card-safe.ts:10-16 character ranges; slice-01 test 'a body holding an escape or bidi character the card would hide'. Not executed.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L7-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 683,
+      "quote": "Optional: the commit or reasoning behind the disposition.",
+      "problem": "F5-04 is not fixed. The diff only appends the length and plain-text sentence to the evidence description, which still starts 'Optional:'. completionDispositions (:691-718) still accepts missing or blank evidence for every state and any finding id.",
+      "impact": "The engine still refuses after the press (managed.ts:475-478 'Refusing to record a disposition with no evidence'; managed.ts:1963), so a model that follows the tool schema builds a card that can never close and the operator spends a press (a Telegram press) on it. The claimed disposition 'fixed' for F5-04 is wrong.",
+      "suggested_fix": "In the per-entry loop refuse state !== 'unknown' with empty evidence ('evidence is required unless the disposition is unknown') and change the schema text to 'Required unless disposition is unknown'. Optionally resolve finding against the package findings in buildCard.",
+      "evidence": "operator-confirm-review.ts:683 and :697-716 at head; managed.ts:475-478 and :1963; src/commands/review.ts:5338 and bundled review-orchestrator SKILL.md:288 ('Everything except unknown must cite where the outcome is written down').",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L7-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 681,
+      "quote": "for (const [index, request] of requests.entries()) {",
+      "problem": "The reply card path (shownBody per reply, the 'Reply N holds ...' refusal, the 'reply N:' headers) has no test.",
+      "impact": "The loop could lose its refusal or revert to a slice with the suite green; L7-001 shows the reply path shares the weak helper.",
+      "suggested_fix": "Add a review_comments_reply card test with a commentsReplyPass seam returning a long 25-line reply and a tab-bearing one, asserting every line is on the card, and one with an ESC and a U+200B body asserting the refusal names 'Reply 2'.",
+      "evidence": "keryx ctx rg for review_comments_reply, commentsReplyPass and 'each shown whole' in operator-confirm-review-tools.test.ts, operator-confirm-rosters.test.ts and shell.test.ts finds only roster names (rosters.test.ts:91, shell.test.ts:879).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L7-004",
+      "severity": "minor",
+      "file": "src/remote/shell-bridge.ts",
+      "line": 214,
+      "quote": "const safe = redactSensitiveText(prompt).trim();",
+      "problem": "The Telegram copy of a card is redacted, so a whole-body card still differs from what is stored and posted. composeApprovalPrompt (:213-218) and operatorCardTooLongForTopic (:286) run redactSensitiveText, which masks secret, PII (email, phone, address) and entropy spans with fixed-width masks (redact.ts:147-164).",
+      "impact": "In the topic a review body, reply, evidence or quote holding such a span is shown masked while prepared.body (operator-confirm-review.ts:224) is posted raw, so the remote operator cannot see a secret or personal datum that will be posted publicly. The local dock prints the lines verbatim (tui-shell.ts:5424-5426), so only the remote leg differs. Exfil matches carry no mask (redact.ts:108-110). The slice widens the reach by putting whole bodies on the card.",
+      "suggested_fix": "Give no remote buttons when redactSensitiveText(card) !== card (the operatorCardTooLongForTopic route, answered in the shell), or refuse at card build a body that redaction would change.",
+      "evidence": "shell-bridge.ts:213-218 and :286; src/security/redact.ts:98-129 and :147-164; tui-shell.ts:5424-5426 and :6104-6116. Static reading, not run.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L7-005",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 178,
+      "quote": "the operator sees the target, the verdict and the start of the body first.",
+      "problem": "The review_publish tool description is model-facing and still says the operator sees 'the start of the body'; the card now shows the whole body (:219 'shown whole').",
+      "impact": "A stale tool description misleads the agent about what the operator reads before yes.",
+      "suggested_fix": "Say 'the whole body'.",
+      "evidence": "operator-confirm-review.ts:178 against :219 at head.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "L7-006",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 219,
+      "quote": "`body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:`,",
+      "problem": "Design question, not a defect: consequences of 'shown whole' on the remote path. MAX_APPROVAL_PROMPT_CHARS is 3000 (src/remote/protocol.ts:160); a whole-report publish card, a whole reply card and a 20-entry dispositions card (about 500 characters each) will usually exceed it. Also hiddenInCard (:672) refuses or flags every Cf character, including emoji ZWJ and Persian or Indic ZWNJ, and a tab in a body is accepted by shownBody while the dispositions path refuses it.",
+      "impact": "tui-shell.ts:6029 and :6104 then give the topic no buttons and the card is answered in the shell (documented as 'A long card is not answered remotely'). Fail-closed, but the Telegram answer for review_publish is rarely available. The tab and Cf points are harmless inconsistencies.",
+      "suggested_fix": "None required; confirm shell-only answers for long publish cards are intended and listed in limitations.",
+      "evidence": "protocol.ts:160; tui-shell.ts:6029 and :6104; operator-confirm-review.ts:62-66 and :672.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "S-401",
+      "disposition": "closed"
+    },
+    {
+      "id": "S-402",
+      "disposition": "closed"
+    },
+    {
+      "id": "F5-04",
+      "disposition": "open"
+    },
+    {
+      "id": "F5-24",
+      "disposition": "closed"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-01",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 3,
+    "info": 2
+  },
+  "questions": [
+    "Is a masked (redacted) Telegram copy of a posting card acceptable (L7-004), or must a card whose redaction would change it be refused remotely?",
+    "Should the per-entry limits on dispositions (300 evidence, 20 entries) be tied to what MAX_APPROVAL_PROMPT_CHARS can carry, so a dispositions card stays answerable remotely (L7-006)?"
+  ]
+}
+```

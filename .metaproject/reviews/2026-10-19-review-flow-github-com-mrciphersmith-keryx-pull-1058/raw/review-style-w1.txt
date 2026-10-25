@@ -1,0 +1,111 @@
+STATUS: DONE
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Slice 01 is the contract schema, the flow 467 package files, skill text (review-orchestrator, job-orchestrator, review-premise), and the README. No TypeScript is in this slice, so naming, imports, console use and complexity do not apply. Naming of the new schema fields is consistent with the sibling fields (camelCase `questionText`, `answerText`). The findings are readability and duplication in the skill prose: one very dense bullet, the same flag template written five different ways, and one wording that contradicts itself about who supplies `--reason`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 01 (schema, flow package, skills, README) has no code-style defects. Three minor readability/duplication points in the skill prose and three info notes. Nothing major.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Record only an answer they gave and never write their words or their reason yourself.",
+      "problem": "The Wave D instruction tells the agent to run `decide-premise ... --reason \"<why>\"` and in the same sentence says never to write the operator's reason. The Hosts bullet also lists `--reason \"<why>\"` on waive-mutation, override-reviewers and decide-premise without saying where the text comes from. A reader cannot tell whether the reason is the operator's words (taken from the answer) or the agent's summary.",
+      "impact": "Ambiguous instruction; an agent will either invent a reason (the thing the sentence forbids) or skip the required flag and hit the refusal for a missing `--reason` (AC3).",
+      "suggested_fix": "Say where `--reason` comes from, for example: \"`--reason` is the reason the operator gave in the same answer; if they gave none, ask once more and record what they said.\" Use the same sentence in Hosts, Wave D, job-orchestrator and SKILL.detail.md.",
+      "evidence": "Wave D line: `--answer uphold|dismiss --reason \"<why>\" --answered-by <source>:<ref> ...` followed by \"Record only an answer they gave and never write their words or their reason yourself.\" Hosts bullet: \"plus `--reason \"<why>\"` on `waive-mutation`, `override-reviewers` and `decide-premise`\" with no source named. The removed text said \"never write their reason\" for a command the operator ran themselves; the new flow has the agent running it.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:host-question-reason-source"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "**Host question, for four acts:**",
+      "problem": "The \"Operator decisions\" bullet in Hosts is now one list item of roughly 450 words that holds three separate topics: the card path, the host-question path (tool choice, command template, flag semantics, what counts as an answer, refusals) and the acts that stay terminal-only. It was one sentence of commands before.",
+      "impact": "The most-read paragraph of the skill is hard to scan; the host-question rules (verbatim answer, free text is not a decision, unattended refuses) are buried mid-bullet.",
+      "suggested_fix": "Split into three sub-bullets under \"Operator decisions\": Cards (keryx shell), Host question (four acts), Still terminal-only (complete, chunks estimate, publish, comments reply). Keep the command template once, as a code block.",
+      "evidence": "diff lines 1005-1006 of slice-01.diff: the old bullet (one sentence plus one command list) is replaced by a single bullet that runs from \"In keryx shell the operator answers a card\" to \"unattended, the item is Not run.\"",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-decisions-dense-bullet"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "`keryx review confirm-plan --package <package> --answered-by … --answer-text … --question-text …`",
+      "problem": "The same flag set (`--answered-by <source>:<ref> --answer-text --question-text`) is written out in at least six places, each in a different shape: full `<claude-code|codex|keryx-shell|helyx-poll|other>:<ref>` with quoted placeholders (Hosts), `<source>:<ref>` with quoted placeholders (Wave D, SKILL.detail.md item 4 and item 11), bare ellipses `--answered-by … --answer-text … --question-text …` (Round plan step 6, override-reviewers sentence, mutation pass), and `--answered-by …` alone (waive-mutation in Dispatching Reviewers, job-orchestrator). Placeholder vocabulary also varies: \"their words, verbatim\", \"their words\", \"<the question as asked>\", \"<the question>\".",
+      "impact": "When the flag set changes (a fifth flag, a renamed source), six hand-edited copies drift; the skill byte-identity and line-ceiling tests do not catch a stale copy. An agent copying the ellipsis form gets a refused command.",
+      "suggested_fix": "Define the template once (Hosts, Operator decisions) and have the other sites say \"with the host-question flags (\\\"Hosts\\\")\". Where a full command must appear, use one placeholder spelling everywhere.",
+      "evidence": "Sites: review-orchestrator/SKILL.md Hosts (Operator decisions bullet), Round plan step 6, Dispatching Reviewers (override-reviewers sentence and the waive-mutation sentence), Wave D bullet; review-orchestrator/SKILL.detail.md mutation pass, Preflight 4 item 4, Readiness item 11; job-orchestrator/SKILL.md HELD paragraph; README.md (Operator decisions section).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:host-question-flag-template-duplication"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "the job until answered. Ask the operator about each one with the host's question tool and record the answer with",
+      "problem": "The edit pushes two wrapped lines of the paragraph to well over the surrounding ~90-column wrap, and leaves the \"Wave\" / \"D\" break from the original wrap in the middle of the line pair, so the paragraph is ragged.",
+      "impact": "Cosmetic; makes the diff of this paragraph noisy next time it is edited.",
+      "suggested_fix": "Reflow the paragraph to the existing wrap width.",
+      "evidence": "diff lines 800-803: the two `+` lines are about 190 and 80 characters; neighbouring lines are about 90.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:job-orchestrator-rewrap"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "| Operator decision | the card tool | `AskUserQuestion`, then the verb (\"Operator decisions\") | its question tool, else the question in your reply, then the verb | refused: recorded Not run |",
+      "problem": "The table row reads as a sequence with no wait: \"the question in your reply, then the verb\". The verb needs the operator's answer, so the Codex cell skips the step where the agent stops and waits for it. The keryx shell cell says only \"the card tool\", while the bullet below lists `ask_user` among the host-question tools and keryx-shell as a valid `--answered-by` source.",
+      "impact": "A reader of the table alone may run the verb straight after posting the question.",
+      "suggested_fix": "Write \"the question in your reply, wait for the answer, then the verb\", and for keryx shell \"the card tool (`ask_user` host question only if no card exists)\".",
+      "evidence": "Table row above; Hosts bullet: \"(`AskUserQuestion`, Codex's question tool, a Telegram poll through Helyx, `ask_user`)\".",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:hosts-table-wait-step",
+      "publication": "question"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "line": null,
+      "quote": "- Skipped generated/static directories: 15",
+      "problem": "Regenerated gdgraph artifacts (provenance, module-map, summary) are committed with this change. The summary changes unrelated facts (skipped directories 18 to 15, `.git`, `dist` and `node_modules` dropped from the list) and the provenance records a feature branch and head.",
+      "impact": "Review noise: the unrelated lines hide the one real change (one new test file). Reviewers cannot tell if the skipped-directory change is intended.",
+      "suggested_fix": "Drop these three files from the PR, or say in the PR body that they are a rebuild and why the skipped-directory list shrank.",
+      "evidence": "diff lines 59-68 (provenance), 70-92 (module-map: one added line `src/commands/review-host-question.test.ts`), 488-580 (summary: counts and skipped directories).",
+      "confidence": "low",
+      "reviewer": "review-style",
+      "dedupe_key": "style:gdgraph-artifact-churn",
+      "location_class": "pr-process"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 3 }
+}
+```
+
+## Positive Notes
+- The new `hostQuestion` schema block follows the sibling fields: camelCase names, `additionalProperties: false`, a `required` list, and a description that says when the object is set.
+- The edits to the existing prose keep the "card first, host question second" order consistent across review-orchestrator, review-premise and job-orchestrator.

@@ -1,0 +1,148 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Style and readability of slice-03 (context-resolver, reference-entries, reference-proof, references-check/config/section, resolved-context-check and small CLI/status hooks) is generally good: names are consistent, comments explain why, expected failures come back as values. No major findings. Minor maintenance costs: a near-duplicate file-inspection routine, a regex that hardcodes a value that has a named constant, a stringly-typed 'condition:' coupling across two files, a nested ternary in the markdown renderer, and a growing resolveProjectContext. A few info items.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "async function readDeclaredFile(projectRoot: string, rootReal: string, rel: string, maxFileBytes: number): Promise<ReadOutcome> {",
+      "problem": "readDeclaredFile (reference-entries.ts) and inspectDocument (references-check.ts) repeat the same sequence for the same declared path: lstat, realpath, isPathInside(rootReal, real), regular-file test, size cap against CONTRACT_MAX_BYTES, utf8 read. They differ only in the shape of the outcome (a `why` string vs a status code) and in a few message words.",
+      "impact": "A change to the containment or size policy has to be made in both places; if one is missed, `keryx skills references check` and `resolve-context` disagree about whether a declared document is usable (check says ok, resolve warns 'not listed', or the reverse).",
+      "suggested_fix": "Keep one inspector (the status-code form in references-check.ts is richer) in a shared module and have reference-entries.ts map its status to the `why` string for the warning.",
+      "evidence": "Both functions are in the diff: reference-entries.ts lines 654-673 of the slice and references-check.ts `inspectDocument`. Same order of checks and same CONTRACT_MAX_BYTES value is passed in as maxFileBytes.",
+      "confidence": 0.85,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "problem": "The module exports WORD_MIN_LETTERS = 5 and the failure message and the doc comment cite it, but distinctWords hardcodes the same number inside the regex literal.",
+      "impact": "Changing WORD_MIN_LETTERS changes the message and the doc but not the behaviour: the proof would report 'words of N or more letters' while still counting words of 5 letters.",
+      "suggested_fix": "Build the pattern from the constant: new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\").",
+      "evidence": "WORD_MIN_LETTERS is used in wordsFailure's message and in the doc comment of distinctWords; the regex literal is the only place that decides the length.",
+      "confidence": 0.95,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+      "problem": "Whether an entry is 'promoted' is decided by a prefix of the free-text `reason` string that reference-entries.ts builds (`condition:glob:${glob}`, `condition:keyword:${keyword}`). The literal prefix lives in two files with nothing tying them together.",
+      "impact": "Renaming the reason format in reference-entries.ts silently turns off the proof for every promoted entry (isPromoted returns false, no miss is raised) with no type or compile error.",
+      "suggested_fix": "Export a CONDITION_REASON_PREFIX constant (or a builder and an `isConditionReason` predicate) from reference-entries.ts and use it in both places.",
+      "evidence": "reference-entries.ts: `return `condition:glob:${glob}`` and `condition:keyword:${keyword}`; reference-proof.ts isPromoted uses the bare literal.",
+      "confidence": 0.9,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/resolve-context-command.ts",
+      "line": null,
+      "quote": "entry.anchor ? `anchor \"${entry.anchor}\"${entry.section_bytes !== undefined ? `, section ${entry.section_bytes} bytes` : \"\"}` : \"\"",
+      "problem": "A ternary nested inside a template literal that is itself the branch of a ternary, packed on one line into an array of four other ternaries (the `flags` array is now one line of several hundred characters).",
+      "impact": "Hard to read and to review; adding the next flag means editing a line that is already past what the eye can parse.",
+      "suggested_fix": "Extract a small `anchorFlag(entry)` helper returning the string or \"\", and put the flags array one element per line.",
+      "evidence": "Single added line in renderResolutionMarkdown.",
+      "confidence": 0.9,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "const contracts = await collectContracts(projectRoot, cited, new Set([...taken, ...declaredPaths]), new Set((declarations ?? []).map((declaration) => declaration.path)), warnings);",
+      "problem": "resolveProjectContext gains task truncation, reference resolution, a promoted-bytes budget check and the `undeclared` output on top of rule, skill, bundled and contract collection; it is now roughly 110 lines with well over ten decision points. `declarations ?? []` is repeated three times, and the 'undefined means no file' versus '[]' distinction is carried by a nullable value.",
+      "impact": "The function is the place every future context feature lands; its length and the repeated null-coalescing make the budget arithmetic (used, promotedBytes, total, overCap) hard to follow and easy to misread.",
+      "suggested_fix": "Bind `const declared = declarations ?? [];` once, and move the reference part (truncation warning, resolveReferences, promoted-bytes cap warning) into a helper that returns {entries, total, warnings}.",
+      "evidence": "Diff hunks 'context-resolver.ts @@ 438,552' show the three `declarations ?? []` uses and the new tail of the function.",
+      "confidence": 0.7,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return Array.from(text.trim()).length;",
+      "problem": "Small helpers are re-created per file: charCount (reference-proof.ts) and lengthOf (`[...text.trim()].length`, references-check.ts) count code points the same way; `compare` is defined in both context-resolver.ts and references-check.ts; the `realpath(projectRoot).catch(() => projectRoot)` fallback is written inline in context-resolver.ts and reference-entries.ts and as `rootRealPath` in references-check.ts.",
+      "impact": "Each copy can drift (for instance one starts to normalise differently), and the three spellings of 'root real path' are three places to change a fallback rule.",
+      "suggested_fix": "Move codePointLength and rootRealPath to ../lib/fs (or a local references-util) and import compare from one place.",
+      "evidence": "`keryx ctx rg 'const compare = ' src` returns two files; the other helpers are visible in the diff.",
+      "confidence": 0.85,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "const shown = headings.slice(0, 12).join(\", \");",
+      "problem": "The number 12 appears twice (`slice(0, 12)` and `headings.length > 12`) as an unnamed cap on how many headings the message lists.",
+      "impact": "Two literals that must agree; changing one leaves the '...' marker wrong.",
+      "suggested_fix": "const MAX_HEADINGS_SHOWN = 12; and use it in both expressions.",
+      "evidence": "declarationFindings, anchor-not-found branch.",
+      "confidence": 0.9,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "import { resolveReferences } from \"./reference-entries\";",
+      "problem": "The two new import lines are inserted between ./project-context-config and ./project-rules, breaking the alphabetical order the rest of the block follows (project-context-config, project-rules, project-skills, rule-frontmatter, skill-frontmatter). Also, the file is 552 lines at head, past the 500-line info threshold.",
+      "impact": "Cosmetic; the file length is the larger long-term cost (the reference logic could live next to reference-entries.ts).",
+      "suggested_fix": "Place ./reference-entries and ./references-config after ./project-skills; consider moving more of the reference handling out of context-resolver.ts.",
+      "evidence": "Import block in the diff; `wc -l` gives 552.",
+      "confidence": 0.8,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-009",
+      "severity": "info",
+      "file": "src/gdskills/references-config.ts",
+      "line": null,
+      "quote": "\".metaproject/rules/project/references.json. See README.md section 5.1.",
+      "problem": "The schema description (a runtime constant a user may print) points to 'README.md section 5.1', but the repository root README.md has no such section; section 5.1 'Declarations' is in docs/requirements/keryx-conditional-reads/README.md.",
+      "impact": "A reader following the pointer lands in the wrong file.",
+      "suggested_fix": "Write the full path: docs/requirements/keryx-conditional-reads/README.md section 5.1.",
+      "evidence": "`keryx ctx rg '^#+ .*5\\.1' docs/requirements/keryx-conditional-reads README.md` matches only the requirements README ('### 5.1 Declarations').",
+      "confidence": 0.85,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-010",
+      "severity": "info",
+      "file": "src/gdskills/resolved-context-check.ts",
+      "line": null,
+      "quote": "rule?: ProofRule;",
+      "problem": "In a codebase where 'rule' already means a project rule (.mdc), ResolvedMiss.rule names a proof rule. Similarly `report(...)` in references-check.ts is a noun used as a function name that builds a ReferencesCheckReport.",
+      "impact": "Slight ambiguity when reading code that also handles RuleCandidate and project rules; naming only.",
+      "suggested_fix": "Rename the field to `proofRule` and the function to `buildReport`.",
+      "evidence": "ResolvedMiss type in the diff; `function report(present: boolean, declared: number, findings: ReferencesFinding[])`.",
+      "confidence": 0.5,
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 7, "info": 3 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Style review of slice-03 (scope A). No major findings. Positive notes: comments explain why (header blocks, the truncation warning, the 'cap never demotes' note), failures are values not throws, names are consistent (camelCase, UPPER_SNAKE constants, `is*` predicates), and the `.json` schema additions are tidy.

@@ -1,0 +1,36 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slices slice-03 and slice-04, head 77d2eff20 (delta b1c6da0e6..77d2eff20). No major or blocker regression found, so findings is empty. What was checked, by the boundary where the change meets its callers. (1) src/review/completion-gate.ts: describeBlockers(open, card = true) keeps the old card wording for every caller that omits the argument; its only callers are decideReviewGate and nextStep inside the same file (keryx ctx rg over src, non-test), and decideReviewGate reads `input.cardAvailable !== false`, so the one external caller (src/commands/agent.ts:3495-3501, holdReviewGate) is the only place that can switch to the command wording; closeStep(card) is used by all three nextStep branches (lines 763, 766, 768), so no branch kept a hard-coded card or command string. The overflow line at completion-gate.ts:800 still names `keryx review complete`; that is the known deferred D-03 and I did not re-raise it. (2) src/tui/approval-mirror.ts raceApproval: onTopicEnded is optional and fires only when the topic leg resolved with no press, was not undelivered, and topicAbort had not been aborted (line 55), so a dock answer, a topic press, a turn stop and the undelivered path behave as before; every existing raceApproval caller (approval-mirror.test.ts, mirror-undelivered.test.ts, operator-confirmations.ts) passes without the new option. (3) src/tui/operator-confirmations.ts: markUndelivered(id, reason = \"undelivered\") keeps its one-argument call shape (operator-confirmations.test.ts:56-63 still calls it that way); topicEnded is set only for reason \"ended\"; pendingConfirmationLine keeps the old `Telegram mirror not delivered` text for every entry without topicEnded; raceMirroredCard passes onUndelivered/onTopicEnded only when a card id exists, which matches the old `...(isCard ? {onUndelivered} : {})`; askUnmirroredCard matches the old inline try/finally except that a verdict of undefined can no longer occur (LocalApproval returns boolean or an approval object). (4) src/tui/tui-shell.ts: the old inline race at 6108-6140 (ask, markUndelivered, settle) is replaced by raceMirroredCard with the same ordering (ask before the race, settle in finally, withdrawn on a throw), remoteApproval moved unchanged apart from an injectable clock (pressedAt still new Date().toISOString()), the removed ApprovalResponse/raceApproval/ApprovalRaceOutcome imports have no remaining use in tui-shell.ts (DockRace stays as a type import and is used at 2056, 5421, 5463), and the source-text audit in tui-shell.test.ts:2957-2972 still holds (the mirror block still contains `inner(tool, inputJson, meta, race)` and not `telegramTurnActive`). (5) src/commands/review.ts: the `completeManagedReview` import is removed and nothing else in the file uses it; runComplete now calls completeReviewGated (src/review/complete-gated.ts), which runs the same two refusals the file ran inline (runProfileRefusal, then packageRoutingRefusal with refuseUnreadable:true, both with the `review complete refused:` prefix) on the package dir resolved the same way before calling completeManagedReview; the runProfileRefusal/packageRoutingRefusal imports are removed from review.ts and not referenced again. completeManagedReview now has exactly two non-test callers (complete-gated.ts and managed.ts itself), both gated. (6) SKILL.md / bundled mirror / cli-reference.md wording: word-diffed b1c6da0e6..77d2eff20; the claims `--waive`, `--waive-coverage`, `--answer`, `--confirm` need a terminal match the guards at review.ts:3403, 4557, 4561 and review-chunks.ts:109; memory-outside-stage is a readiness item evaluated inside completeManagedReview, so it blocks the review_complete card as the new text says. Limits of the check: the code graph cannot see non-code files, and 6 blast-radius entries (the SKILL files and mirrors, cli-reference.md, the package schema) are unresolved as not-a-graph-node, plus 199 candidates were dropped by the cap, so the radius did not answer for them and I read the changed text by hand instead; no tests were run (read-only role); slice-03 and slice-04 hold the same SKILL.md hunks that slice-02 carried, which I did not re-judge beyond the wording checks above.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Settle by running src/tui/card-lifecycle.test.ts, src/tui/operator-confirmations.test.ts, src/tui/approval-mirror.test.ts, src/remote/mirror-undelivered.test.ts and src/review/completion-gate.test.ts at 77d2eff20: the equivalence of the extracted raceMirroredCard / askUnmirroredCard with the inline code they replaced was established by reading, not by running.",
+    "The overflow line at src/review/completion-gate.ts:800 (`- … and ${more} more (\\`keryx review complete\\` lists them all)`) still ignores the new `card` argument; it is the deferred D-03 and stays card-agnostic wording, no behaviour breaks.",
+    "A topic-ended card whose 1-hour token has also expired reads `Telegram token expired, answer in the shell` followed by `Telegram is no longer waiting for this card, answer in the shell` (operator-confirmations.ts pendingConfirmationLine); redundant wording only."
+  ],
+  "prior_dispositions": [
+    {"id": "E-01", "disposition": "closed"},
+    {"id": "E-04", "disposition": "closed"},
+    {"id": "E-05", "disposition": "closed"},
+    {"id": "E-08", "disposition": "closed"}
+  ],
+  "slices": [
+    {
+      "id": "slice-03",
+      "coverage": "Read slice-03.diff and the head files: completion-gate.ts 750-831, approval-mirror.ts in full, operator-confirmations.ts 1-40 and the log/line/helper sections, tui-shell.ts 6040-6160 plus the b1c6da0e6..77d2eff20 diff with context, tui-shell.test.ts 2935-3014, and every non-test caller of the changed symbols (keryx ctx rg over src). The two test files in the slice were read for what they pin, not judged as tests.",
+      "status": "DONE"
+    },
+    {
+      "id": "slice-04",
+      "coverage": "Read slice-04.diff; word-diffed SKILL.md between b1c6da0e6 and 77d2eff20; read docs/docs/cli-reference.md at head around 4921; read src/commands/review.ts diff against the base and complete-gated.ts in full; grepped the terminal guards the docs name and the callers of completeManagedReview/completeReviewGated; checked memory-outside-stage in readiness.ts.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

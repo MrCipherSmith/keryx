@@ -1,0 +1,112 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-02 (wave 1) read in full: skills-references.test.ts (new), task-project-context.test.ts (extended), skills.ts / skills-references.ts router and help, agent-commands.ts description, and the five skill instruction files. No real-network leak, no fixed sleep, no shared-data mutation: every test builds its own mkdtemp project and restores cwd, exitCode and console. The mutation pass was NOT run (read-only round; the orchestrator runs the mutants listed below). Five minor/info findings, all of the kind 'gate or boundary the fixture cannot separate'. Every AC in this slice that names a test (AC12, AC14, AC15, AC17 text) is pinned by assertions that fail against the parent: the block/warn proof-miss tests need the new 'shares N distinct word(s)' line the parent does not produce, the check/suggest/import tests need code that does not exist on the parent. Two positive controls (good summary closes the task, standalone exit 0) keep the refusal tests from passing vacuously.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "quote": "expect((JSON.parse(out) as ReferencesSuggestion).references.map((entry) => entry.path)).toEqual([\"STYLING.md\", \"THEMING.md\"]);",
+      "problem": "The fixture cannot separate the ordering, de-duplication and attribution code in references-check.ts from its absence. In the test the citations enter the Map in rule-text order (STYLING.md, then THEMING.md), which already equals the sorted order, so deleting `.sort(compare)` in undeclaredCitations (references-check.ts:145) leaves the assertion green. Only one rule file exists in any test, so `.sort(compare)` over rule refs (line 96), the `!by.includes(rulePath)` de-duplication (line 109) and the 'cited by <rules>' message of undeclared-citation (line 225) are never exercised; the undeclared-citation test asserts only `code:path`, never the message.",
+      "impact": "Sorted output is a stated property of suggest ('Sorted by path' in the doc comment) and makes the printed skeleton and the check report stable across file systems. A later edit to the scan can reorder output or double-list a rule that cites one document twice with the suite green.",
+      "suggested_fix": "In the 'lists only citations that name a file inside the project' test, cite THEMING.md before STYLING.md in the rule text and add a second rule that also cites STYLING.md (twice in one rule). Assert the path order, and in the check test assert that the undeclared-citation message names each citing rule once.",
+      "evidence": "Read references-check.ts:93-114 and 143-151 at head and the fixture text at skills-references.test.ts (RULE then `Also see ... THEMING.md`). Reasoned, not run: deleting the `.sort` leaves insertion order = sorted order. mutant candidates m3, m4 below.",
+      "confidence": 0.8,
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "quote": "await project({ references: [declaration({ description: \"Styling rules.\" })] });",
+      "problem": "The three numeric thresholds are pinned only far from the boundary. The description fixture is 14 characters against a limit of 20 (references-check.ts:188, `< MIN_DESCRIPTION_CHARACTERS`), the keywords are 3 and 2 characters against 4 (line 192), and the oversize document is 262145 'x' plus a heading against CONTRACT_MAX_BYTES 262144 (line 133, `>`). Changing `<` to `<=` or `>` to `>=` in any of the three, or moving a limit by a few units, keeps the suite green. No fixture has a 19/20-character description, a 3/4-character keyword, or a document of exactly 262144 bytes.",
+      "impact": "AC14 states the limits as numbers ('under 20 characters', 'under 4 characters'); an off-by-one edit changes which declarations warn without any test noticing. The cost is to the next editor of these constants.",
+      "suggested_fix": "Add boundary rows: a description of exactly 20 characters and one of 19, a keyword of exactly 4 and one of 3 (expect no warning, one warning), and a document of exactly CONTRACT_MAX_BYTES bytes (no error) beside the existing one-over case.",
+      "evidence": "Read the fixtures in the description-short, keyword-short and document-too-large tests against the guards at references-check.ts:133, 188, 192. Reasoned, not run. mutant candidates m5, m6, m7 below.",
+      "confidence": 0.85,
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "quote": "rules: { \"styling.mdc\": `${RULE}\\nAlso see \\`docs/missing.md\\`, \\`../outside.md\\` and \\`THEMING.md\\`; rule \\`core/other.mdc\\`.\\n` },",
+      "problem": "The test is named 'lists only citations that name a file inside the project' but no cited path in it is outside the project AND exists. `../outside.md` is never created beside the temp root, so it is excluded by inspectDocument returning 'missing', exactly as `docs/missing.md` is; it does not exercise the escaping-path rejection in normaliseCitedPath (references-config.ts) that the name claims. `core/other.mdc` is never captured at all, because DOCUMENT_CITATION (references-check.ts:82) only matches a backticked `.md`. Deleting the escape rejection in normaliseCitedPath therefore leaves this test green (the other test that creates a symlink out of the root covers the declared path via isPathInside, not a cited, undeclared one).",
+      "impact": "The next author reads the test as coverage of the 'inside the project' filter for undeclared citations. A cited `../SECRET.md` that exists would be offered by suggest if the normaliser guard regressed, with this suite green. May already be pinned by references-config.test.ts, which is outside this slice.",
+      "suggested_fix": "Create `outside.md` in the parent of the temp root (or a sibling temp dir reached through `../`) before running suggest, so the only thing excluding it is the path guard; keep `docs/missing.md` as the separate 'does not exist' case.",
+      "evidence": "Read the fixture (files: STYLING.md, THEMING.md only), references-check.ts:82,106 and inspectDocument. I did not open references-config.ts's tests (other slice), hence the lowered confidence.",
+      "confidence": 0.55,
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/skill-sync.test.ts",
+      "quote": "expect(text).toMatch(/--task-text/);",
+      "problem": "This test (the AC17 pin for the instruction edits in this slice) asks only that each of the five instruction files contains `--task-text` once. job-orchestrator/SKILL.md carries the flag at two resolve sites in the diff (Step A and the fix loop) and orchestrator-prompt.md at two (the test resolve and the fix step); removing it from the fix-loop line leaves the file matching through the other site. The same holds for the per-file 'promoted entry needs path, sha256, anchor and a summary' paragraph test, which is satisfied by any single paragraph.",
+      "impact": "The fix dispatch is the case that re-resolves on a new head; if its line loses `--task-text`, a keyword-only document silently stops promoting on the fix attempt while AC17's test stays green. The test file itself is outside the slice diff; the lines it guards are in it.",
+      "suggested_fix": "Assert per site rather than per file: count the `keryx skills resolve-context` occurrences that carry a `--out` and require `--task-text` on each, or snapshot the specific lines the diff touched.",
+      "evidence": "Read skill-sync.test.ts lines 40-52 and the diff hunks for job-orchestrator SKILL.md (resolve-context at Step A and fix step 3) and orchestrator-prompt.md (step 1 and FIX step 2). Reasoned, not run. mutant candidates m11, m12 below.",
+      "confidence": 0.6,
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/gdskills/references-check.ts",
+      "quote": "case \"not-file\":\n      return { severity: \"error\", code: \"document-not-file\", path: where, message: \"the declared path is not a regular file\" };",
+      "problem": "Four finding codes and one inspection branch have no test in skills-references.test.ts: `document-not-file` (a declared directory), `document-unreadable`, the dangling-symlink branch of inspectDocument ('a link that points nowhere'), and `rule-unreadable`. AC14 names none of them, so this is not an unpinned acceptance criterion; it is code the suite never enters.",
+      "impact": "These are the branches that run only on odd file systems; a regression there turns an error into a crash or a silent pass. Observation only: no failing input is named.",
+      "suggested_fix": "Add one test with a declared directory (`mkdir STYLING.md`), and one with a dangling symlink; skip the unreadable cases unless the harness can chmod portably.",
+      "evidence": "Read references-check.ts:116-138, 155-169 and the full test file: no fixture creates a directory, a dangling link or an unreadable rule.",
+      "confidence": 0.7,
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "m1", "file": "src/commands/skills-references.ts", "anchor": "if (!report.ok) process.exitCode = 1;", "replacement": "", "kind": "behavior" },
+    { "id": "m2", "file": "src/commands/skills-references.ts", "anchor": "console.log(args.includes(\"--json\") ? JSON.stringify(report, null, 2) : renderReferencesReport(report));", "replacement": "console.log(renderReferencesReport(report));", "kind": "behavior" },
+    { "id": "m3", "file": "src/gdskills/references-check.ts", "anchor": "for (const relative of [...cited.keys()].sort(compare)) {", "replacement": "for (const relative of [...cited.keys()]) {", "kind": "behavior" },
+    { "id": "m4", "file": "src/gdskills/references-check.ts", "anchor": "if (!by.includes(rulePath)) by.push(rulePath);", "replacement": "by.push(rulePath);", "kind": "behavior" },
+    { "id": "m5", "file": "src/gdskills/references-check.ts", "anchor": "if (lengthOf(declaration.description) < MIN_DESCRIPTION_CHARACTERS) {", "replacement": "if (lengthOf(declaration.description) <= MIN_DESCRIPTION_CHARACTERS) {", "kind": "behavior" },
+    { "id": "m6", "file": "src/gdskills/references-check.ts", "anchor": "if (lengthOf(keyword) < MIN_KEYWORD_CHARACTERS) {", "replacement": "if (lengthOf(keyword) <= MIN_KEYWORD_CHARACTERS) {", "kind": "behavior" },
+    { "id": "m7", "file": "src/gdskills/references-check.ts", "anchor": "if (info.size > CONTRACT_MAX_BYTES) return", "replacement": "if (info.size >= CONTRACT_MAX_BYTES) return", "kind": "behavior" },
+    { "id": "m8", "file": "src/gdskills/references-check.ts", "anchor": "if (!isPathInside(rootReal, real)) return { status: \"outside-root\" };", "replacement": "", "kind": "behavior" },
+    { "id": "m9", "file": "src/gdskills/references-check.ts", "anchor": "if (declared.has(relative) || !isDocumentCitation(relative)) continue;", "replacement": "if (!isDocumentCitation(relative)) continue;", "kind": "behavior" },
+    { "id": "m10", "file": "src/gdskills/import-rules.ts", "anchor": "if (!json) {\n    const hint = await undeclaredCitationHint(process.cwd());", "replacement": "if (true) {\n    const hint = await undeclaredCitationHint(process.cwd());", "kind": "behavior" },
+    { "id": "m11", "file": "src/gdskills/references-check.ts", "anchor": "if (!result.ok || result.suggestion.references.length === 0) return [];", "replacement": "if (result.ok && result.suggestion.references.length === 0) return [];", "kind": "behavior" },
+    { "id": "m12", "file": "src/gdskills/references-check.ts", "anchor": "if (!cited.has(where)) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "m13", "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md", "anchor": "(with `--task-text \"<fix task description>\"` and a fresh `--out`)", "replacement": "(with a fresh `--out`)", "kind": "presentation" },
+    { "id": "m14", "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md", "anchor": "(with `--task-text \"<fix task description>\"`)", "replacement": "", "kind": "presentation" },
+    { "id": "m15", "file": "src/commands/skills-references.ts", "anchor": "if (!result.ok) {\n      for (const message of result.errors) console.error(message);\n      process.exitCode = 1;", "replacement": "if (!result.ok) {\n      for (const message of result.errors) console.error(message);", "kind": "behavior" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Mutation pass not run by this reviewer (read-only round): 15 candidates listed above, 0 executed. m1, m2, m15 and m10-m12 are expected to be caught by existing tests (exit code, --json, malformed JSON in suggest, --json import purity, undeclared hint, unused-declaration); m3, m4, m5, m6, m7, m8 (declared-symlink test covers it), m13, m14 are the ones this reading predicts survive or are weakly pinned. These are predictions, not results."
+  ]
+}
+```
+
+## Summary
+
+Scope read in full: slice-02.diff (1321 lines, all hunks), plus at head references-check.ts, resolved-context-check.ts, reference-proof.ts, task-project-context.ts, import-rules.ts (hint call), cli-registry/group-subcommands (subcommand registration), skill-sync.test.ts, the acceptance criteria. Not covered: the TUI and resolver test files and production code of other slices; references-config.test.ts (relevant to F-003).
+
+Mutation table: not run (read-only dispatch). 15 mutant candidates proposed, 0 executed, 15 not reached; the orchestrator should run them.
+
+What passes the checklist: tests are co-located; each builds a unique mkdtemp project and removes it; cwd, process.exitCode and console are restored in finally/afterEach; no network, no timers, no shared data; the CLI is reached through the router (skillsCommand), the way an operator reaches it; refusal tests have positive controls (a good summary closes the task; the standalone check exits 0); the service refusal lines are compared with the standalone check lines, which pins AC12 parity. Help-table entries for `references` are already pinned by cli.test.ts (SKILLS_SUBCOMMAND_HELP keys read from source), so no finding there.
+
+AC pin check for this slice:
+- AC12: task-project-context.test.ts block/warn/standalone tests fail on the parent (the 'shares 0 distinct word(s)' line is new). Pinned.
+- AC13: drift is exercised for a must_read promoted entry only; the on_demand tier is pinned in resolved-context-check.test.ts (other slice). The drift and good-summary tests also pass on the parent: they are regression guards, not new gates.
+- AC14: all six codes named in the criterion have a test; boundaries are not pinned (F-002).
+- AC15: skeleton fields, no-file-written (name listing only), the import hint, and --json purity are pinned.
+- AC17 text: pinned per file only (F-004).
+
+Routing audit: graph_used: no (not-relevant, tests read against their targets directly); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

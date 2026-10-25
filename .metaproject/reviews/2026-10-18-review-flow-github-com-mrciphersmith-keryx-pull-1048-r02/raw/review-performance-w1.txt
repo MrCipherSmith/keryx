@@ -1,0 +1,32 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-01 read in full (1827 diff lines). It holds no executable code: JSON schema edits, skill and orchestrator instruction text, README, docs, PRD/runbook, flow files and one package.json script. No hot path, loop, query, render or I/O path is introduced, so there is no performance finding.",
+  "findings": [],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Performance review: slice-01
+
+Scope: branch feat/conditional-reads, base 1658f77d3, head d6267d4a5, mode diff. Settled items from PR #1048 "Known limits" and the four fixes already in d6267d4a5 were not re-raised.
+
+What the slice contains, and why nothing qualifies:
+- Output-contract schemas (task-implementer, tests-creator, plus their synced copies): two optional string properties, `anchor` and `summary`. Static JSON, no runtime cost.
+- Skill and orchestrator text (flow-orchestrator, job-orchestrator, task-implementer, tests-creator, orchestrator-prompt): adds `--task-text` to resolve-context calls and describes the proof fields. Instruction text only.
+- `skills-resolve-context-result.schema.json`: new optional `undeclared`, `anchor`, `section_bytes`, `condition`. Static.
+- README, cli-reference, commands-by-task, apply-project-rules guide, PRD README, TUI-states, live-run runbook, `references.schema.json`, flow 462 files: prose and one schema.
+- `package.json`: new script `docs:check` (doc-link check, retired-spelling check, three test files). Not a hot path.
+
+Checklist categories (N+1, re-renders, hot-path computation, indexes, memory leaks, bundle imports, sync blocking, pagination, redundant calls, MobX derived state): no code in this slice, so nothing to flag.
+
+Not covered by this slice: the resolver (`context-resolver`, `references-config`, `references-section`), the validator (`resolved-context-check`), `references-check.ts`, the CLI commands and the TUI sidebar/References tab are in other slices. The documents describe behaviour whose cost belongs to those slices: section extraction and keyword matching per resolve, the 5-second status re-read in the TUI (TUI-states R7), and the 262144-byte declared-file limit. This reviewer did not assess them here. Iron Law 4: nothing outside the diff was raised.
+
+Routing audit: graph_used no (not-relevant, docs-only slice), wiki_used no (not-relevant), ctx_used no (read-only reviewer, slice read directly), raw_rg_used no.

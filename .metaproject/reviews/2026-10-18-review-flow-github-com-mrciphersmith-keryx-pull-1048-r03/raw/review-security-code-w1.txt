@@ -1,0 +1,154 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Delta round r03, slice-01, security-code. Of 21 prior findings: 14 closed (the heading scan is now a hand-written linear parser and a 250000-character blank run scans in about 16 ms; last.json keeps only taskTextLength and taskTextTruncated, never the text; keywordOccurs demands a boundary only on word-character edges and its tests pin digits, underscore, Cyrillic and metacharacters; dead anchors fall back to the whole file in the validator; linked rules are scanned at their origin; feed loads are sequenced and polls do not overlap; TUI lines pass cardSafe), 2 partial (task-text shell quoting: single quotes everywhere, but the apostrophe escape rule is only in flow-orchestrator and there is no file or stdin path), 5 open and unchanged (UTF-8 BOM before the first heading, TUI tab-to-formatter duplication in two findings, feed listener isolation, task-implementer 2.0c bullet split). Two new minor findings, no blocker or major.",
+  "findings": [
+    {
+      "id": "review-security-code-w1:F-101",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task.description>' --out <project-relative path>",
+      "problem": "The r02 shell-injection finding (w4:F-002) is fixed in quote style at all seven bundled sites and their managed copies (double quotes became single quotes), but only flow-orchestrator/SKILL.md also tells the dispatcher how to write a `'` inside the text (`'\\''`). task-implementer/SKILL.md, tests-creator/SKILL.md, job-orchestrator/SKILL.md (two sites) and orchestrator-prompt.md (two sites) show `'<...>'` with no escape rule. Task descriptions routinely contain apostrophes. An input path for text longer than the argv limit (a file or stdin form) is also still absent.",
+      "impact": "Trigger: a task description with two or more apostrophes and a backtick span or `$(...)` between them, for example: Fix the user's `config` loader, it's broken. An agent that copies the placeholder literally closes the single quote at the first apostrophe, and the shell then runs the backticked span as a command in the dispatcher's shell. Outcome: unintended command execution from issue or plan text; with an odd number of apostrophes the command fails with an unterminated-quote error and the resolve is lost. The residual is narrower than r02's: flow-orchestrator is covered, and a dispatching agent often escapes unprompted.",
+      "suggested_fix": "Carry the sentence flow-orchestrator now has (\"Write the text single-quoted (a `'` inside it becomes `'\\''`)\") into the other four skills, in the bundled and the managed copies, or add `--task-text-file <path>` / `--task-text -` and have the skills write the description to a file with a quoted heredoc. skill-sync.test.ts already keeps the two copies identical.",
+      "evidence": "Read at head: flow-orchestrator/SKILL.md:323 contains the escape sentence; a text search of the other four bundled files and their .metaproject/skills/gdskills copies for --task-text shows only the single-quoted placeholder (task-implementer:182, tests-creator:93, job-orchestrator:749 and 1307, orchestrator-prompt:132 and 188). docs/docs/guides/apply-project-rules.md:172 and live-run.md still use double quotes, but with fixed example strings an operator types by hand.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "task-text-quote-escape-missing",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (correct, carries the escape rule)",
+          "the same lines in the managed copies under .metaproject/skills/gdskills/"
+        ],
+        "enumeration_method": "Text search for --task-text over the five bundled skill files, their managed copies, README.md and docs/ at head; only flow-orchestrator names the apostrophe rule."
+      }
+    },
+    {
+      "id": "review-security-code-w1:F-102",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": ".filter((entry) => entry.mode === \"link\" && !copies.includes(entry.ref))",
+      "problem": "The linked-rule fix reads each `--link` rule at its origin but does not compare the file with the registered sha256. The resolver's collectProjectRules (context-resolver.ts) excludes a linked rule whose origin changed since it was linked, with the warning 'changed since it was linked; the rule is excluded. Review it, then run keryx skills update --rules'. scanCitations takes the citations of such a changed, unreviewed file at face value.",
+      "impact": "The authoring checker and the engine disagree again, in the opposite direction: after a linked file is edited outside the project, `references check` counts a declaration as used and `references suggest` and the import hint propose documents on the strength of text the resolver refuses to apply. The effect is advisory (nothing is written, and every suggested path is still checked to resolve inside the project root), so the harm is a misleading report, not a bypass.",
+      "suggested_fix": "Compare sha256Hex(text) with entry.sha256 for link entries and report a mismatch like an unreadable rule (unreadableRules), or share collectProjectRules' read-and-verify step between the two scanners.",
+      "evidence": "Read references-check.ts:94-119 and context-resolver.ts:205-230 at head: the resolver has the sha256 gate at lines 223-226; scanCitations imports only PROJECT_RULES_DIR and readProjectRuleRegistry and has no hash comparison. The new test in skills-references.test.ts registers links with a matching sha256 only.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "linked-rule-scan-skips-sha-gate"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-01",
+      "coverage": "read in full; every hunk checked against the code at head",
+      "status": "DONE"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w3:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-clean-code-w2:F-004",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-clean-code-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "id": "review-clean-code-w5:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "partial"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-highload-w5:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-performance-w5:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w4:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w4:F-002",
+      "disposition": "partial"
+    },
+    {
+      "id": "review-style-w5:F-002",
+      "disposition": "open"
+    },
+    {
+      "id": "review-testing-practices-w2:F-008",
+      "disposition": "closed"
+    }
+  ]
+}
+```
+
+Summary: slice-01 of the r03 delta was read in full and checked against head. The security-relevant r02 defects are fixed: the quadratic heading regexes are gone (hand-written scan, linear, measured 16 ms on a 250000-character blank run), the last-resolve record no longer persists task text, keyword matching handles symbol-edged keywords, and the TUI feed no longer applies stale loads. The shell-quoting finding is only partly closed (the apostrophe escape rule exists in flow-orchestrator alone), and five unchanged minors stay open (BOM, tab duplication twice, listener isolation, the 2.0c bullet). New: the linked-rule scan skips the resolver's sha256 gate (minor). No blocker or major. Read-only: no files changed, GitHub untouched.

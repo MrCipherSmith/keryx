@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-clean-code",
+  "wave": 1,
+  "waves": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/slices/slice-01.diff",
+      "bytes": 143336
+    }
+  ],
+  "result": "raw/review-clean-code-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+}

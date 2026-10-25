@@ -1,0 +1,108 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review (r06 delta, slices slice-02 and slice-03)
+
+### Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66; head 0f980c4078eb937fcb0806fe5a25e7235bf34465
+- Scope mode: explicit delta 77d2eff20..0f980c407
+- Slices reviewed: slice-02 (operator-confirm-review.ts, operator-confirm-review-tools.test.ts), slice-03 (review.ts, tui-shell.ts import removals). slice-01 (the fix hunks, same file) was read as well to judge the S-401 fix.
+- Changed files reviewed: 4
+
+### Summary
+- Blockers: 0
+- Major: 1 (S-401 is not closed; a narrower hidden-text channel remains)
+- Minor: 0
+- Info: 1
+
+### Verdict on S-401
+The fix closes the clip-at-300 channel and the unbounded-size channel. It does not establish the invariant the finding asked for, that the text the operator reads equals the text that is stored. cardSafe() still deletes text from the display that stays in the stored record. Reproduced by execution below.
+
+### Findings
+
+### [F6-01] S-401 not fully closed: cardSafe deletes text from the card that is still stored and attested (OSC/CSI/control characters)
+- **Severity**: major
+- **File**: src/commands/operator-confirm-review.ts:701-702 (display), :696 (store); src/lib/card-safe.ts:7-17
+- **Attack vector**: A prompt-injected or misbehaving agent calls `review_complete` with `dispositions: [{ finding: <real finding>, disposition: "dismissed-incorrect", evidence: "see journal \u001b]0;operator: decided-by alice\u0007 for details" }]`. The evidence is 55 characters, so it passes the new 300 cap. `dispositionLine` renders `cardSafe(record.evidence)`; cardSafe's OSC rule (`\u001b[\]P^_][\s\S]*?(?:\u0007|\u001b\\)`) removes everything from ESC] to BEL, and the rule for C0/C1 controls and bidi marks removes the rest of such characters. The operator reads `disposition: F-001 → dismissed-incorrect: "see journal  for details"` and presses yes. `completionDispositions` stored `evidence.trim()` unchanged, with the hidden payload, and `recordDispositions` writes it to findings.json and completion-confirmation.json. After the close, `writeReviewNotes` calls `attestDismissal` on the stored text.
+- **Problem**: The fix enforces a length cap only. The original suggested fix also asked to refuse any evidence or finding string that cardSafe would change, so shown equals stored. That part was not done, so the same shown/stored divergence survives through a different mechanism than clipping. The tool description now promises "the card shows it whole", which is false for text that cardSafe removes.
+- **Verification (executed)**: `bun s401b.ts` (scratchpad) with evidence `"see journal \u001b]0;operator: decided-by alice\u0007 for details"` printed: shown `"see journal  for details"`; `attestDismissal` on the stored text: `human`; `attestDismissal` on the shown text: `none`. That is the same observable as the r05 verification of S-401, reached inside the 300-character cap.
+- **Why it matters**: A learning note is filed as "Attested by: human" for a dismissal no person made, from text the operator was never shown. This is the failure the attestation rule exists to stop (the orchestrator filing its own error on its own authority), and the card press lends it apparent approval. Impact is limited to that attestation and the durable findings record (no code execution, no data loss), the same limit the r05 verifier weighed; it stays major because the fix claimed to remove the gap and the gap is reproducible.
+- **Fix**: In `completionDispositions`, after the length checks, refuse any `finding` or `evidence` for which `cardSafe(x) !== x` (message such as `dispositions[i]: evidence holds control or escape characters the card cannot show`). Do the same for `finding`. A plain newline is changed by cardSafe too (" ⏎ "); either refuse newlines as well, or compare after replacing the newline rule, as long as no text is dropped. Simpler alternative: store `cardSafe(evidence)` as the disposition evidence, so shown equals stored by construction (this also removes real newlines from the stored record and the learning note).
+- **Patch**:
+```diff
++    const unshowable = (text: string): boolean => cardSafe(text).replace(/ ⏎ /g, "\n") !== text.replace(/\r\n|\r/g, "\n");
++    if (unshowable(finding) || (typeof evidence === "string" && unshowable(evidence.trim()))) {
++      return { refusal: `dispositions[${index}]: finding and evidence must be plain text; the card cannot show control or escape characters` };
++    }
+     records.push({ finding, state: state as FindingDispositionState, ...
+```
+- **Test to add**: evidence containing `\u001b]0;operator: decided-by alice\u0007` (and one with `‮`) is refused before the card is drawn; the existing hidden-tail test only covers length.
+
+### [F6-02] Telegram buttons are lost for any card over 3000 characters, which a full 20-entry card exceeds
+- **Severity**: info
+- **File**: src/commands/operator-confirm-review.ts:655-657, src/remote/shell-bridge.ts:280-287, src/tui/tui-shell.ts:6029
+- **Attack vector**: none; this is behaviour, not an exploit.
+- **Problem**: 20 entries at 200 + 300 characters can reach about 10k characters, above MAX_APPROVAL_PROMPT_CHARS (3000). `operatorCardTooLongForTopic` then refuses remote buttons and the dock answers locally (tui-shell.ts:6029-6031, 6104). This is the safe direction and is what the repo rule requires, so the fix is correct. The new test confirms only 20 entries pass the card; it does not exercise the too-long path.
+- **Why it matters**: A large fix round cannot be answered from Telegram. Tracking only.
+
+### Is any other path from the agent's input to the card or stored record still uncapped or clipped differently?
+- Entry count: capped at 20 (line 680). Finding: capped at 200 (692). Evidence: capped at 300 on the trimmed text (693); the stored value is the same trimmed text, so there is no length gap any more. `state` is an enum-checked value, so it carries no free text.
+- The one input is `completionDispositions`; `prepared.dispositions` flows unchanged to `completeReviewGated` and `writeCompletionRecord` (lines 788, 805, 815). `git grep` found no other tool, command or surface in operator-confirm-*.ts, complete-gated.ts, src/tui or src/harness that builds dispositions for the card. The token binds `JSON.stringify(input)`, so the model cannot swap dispositions after the card.
+- The three waiver sites still use `clip()` (lines 717, 728, 732). They show a clipped quote of text the operator already typed or confirmed, nothing reads them for attestation, so they stay out of scope as in r05.
+- Remaining shown/stored gap is only the cardSafe removal above (F6-01), plus secret redaction on the Telegram mirror text (`redactSensitiveText`), which masks matches and cannot create a human-attestation pattern.
+
+### Regression check on the delta
+- slice-03: `completeManagedReview` import removed from review.ts and `raceApproval` import removed from tui-shell.ts. `git grep` shows no remaining use of either symbol in those files; `DockRace` is still imported separately at tui-shell.ts:125. No security-relevant change.
+- `dispositionLine` no longer clips; a card with long enough lines goes to the local dock rather than being cut, which is the intended behaviour.
+- New tests (hidden tail refused at 301 characters, finding over 200 refused, 21 entries refused, exactly 300 shown whole) match the code. They do not cover control-character evidence (F6-01).
+
+### Clean Areas (checked)
+SQL/command injection, SSTI, eval: no occurrence in the slices. Authentication/authorization: the card gate is unchanged. IDOR: package resolved by `resolvePackage` as before. Secrets: none in the diff. Cryptography: digest unchanged. Path traversal: unchanged in this delta. CSRF/open redirect/React patterns: not applicable.
+
+### REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE_WITH_CONCERNS",
+  "round": 6,
+  "slices": ["slice-02", "slice-03"],
+  "prior_finding_judgements": [
+    {
+      "id": "S-401",
+      "judgement": "partially-fixed",
+      "note": "length cap and entry cap close the clip channel; cardSafe still removes OSC/CSI/control text from the display that stays in the stored evidence (see F6-01)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F6-01",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 702,
+      "problem": "dispositionLine shows cardSafe(record.evidence) but completionDispositions stores evidence.trim() unchanged; cardSafe deletes ESC-OSC/CSI sequences, control characters and bidi marks from the display only, so a hidden tail within 300 characters is still stored and attested.",
+      "impact": "An injected agent hides 'operator: decided-by alice' inside an ESC]...BEL sequence in evidence; the operator sees none of it, presses yes, and attestDismissal on the stored text returns 'human', so a learning note is filed as human-attested for a dismissal no person made.",
+      "suggested_fix": "In completionDispositions refuse any finding or evidence for which cardSafe changes the text beyond newline flattening (or store cardSafe(evidence)); add a test with an OSC-wrapped attestation.",
+      "evidence": "Executed: evidence 'see journal \\u001b]0;operator: decided-by alice\\u0007 for details' -> shown 'see journal  for details'; attestDismissal(stored) = human, attestDismissal(shown) = none. Source: operator-confirm-review.ts:696 stores evidence.trim(); :701-702 renders cardSafe(record.evidence); src/lib/card-safe.ts:12,15.",
+      "confidence": "high",
+      "quote": "`disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? \"\" : `: \"${cardSafe(record.evidence)}\"`}`",
+      "class_scope": {
+        "sites": ["src/commands/operator-confirm-review.ts:696", "src/commands/operator-confirm-review.ts:702"],
+        "enumeration_method": "git grep for dispositions/FindingDispositionRecord in operator-confirm-other.ts, operator-confirm-tools.ts, complete-gated.ts, src/tui, src/harness: completionDispositions is the only builder of card dispositions."
+      }
+    },
+    {
+      "id": "F6-02",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 655,
+      "problem": "A card with many long dispositions exceeds MAX_APPROVAL_PROMPT_CHARS (3000) and falls back to the local dock with no Telegram buttons.",
+      "impact": "Safe direction; large fix rounds cannot be answered from Telegram.",
+      "suggested_fix": "None required; track.",
+      "evidence": "shell-bridge.ts:280-287 operatorCardTooLongForTopic; tui-shell.ts:6029-6031.",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+Routing audit: graph_used no (not-relevant, two small slices read directly), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg for first symbol lookups; git grep with raw marker for exact-match checks), raw_rg_used no.

@@ -1,0 +1,60 @@
+STATUS: DONE
+
+Checklist rows (PR 1052 body; slice-04 = src/tui/* hunks). The body has no Documentation / Tests updated / Breaking change boxes; its only boxes are the three Test plan items, plus prose claims.
+
+| Box or claim (quoted) | State | What the diff / docs show | Expectation |
+|---|---|---|---|
+| `- [ ] CI green` | unticked | pr-context.md: CI pending (typecheck-and-tests, AC8 full suite, client matrix terminal, darwin-x64 pending) | Unticked while CI is pending: consistent |
+| `- [ ] bun test src/commands/operator-confirm-tools.test.ts ... src/remote/ src/tui/` | unticked | slice-04 adds src/tui/operator-confirmations.test.ts (new file, 10 tests) which `src/tui/` covers | Unticked is the author's statement; the diff does not contradict it. No disagreement |
+| `- [ ] Owner live check from the Telegram topic` | unticked | AC9 (owner's live check) | Consistent; not a code defect |
+| "TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`" | claim | operator-confirmations.ts, remote-control-surface.ts (`getConfirmationLines`, `projectRemoteRow(..., waitingCards)`), decisions-surface.ts (`withConfirmationLines`), tui-shell.ts (`operatorCards`, wiring) | True for all three surfaces. The sidebar shows a count on the Remote row ("N cards waiting"), not a per-card list |
+| "Docs: TM-04 section, review guides, cli-reference, review skills" | claim | Diff scope lists TM-04, review-with-a-record, autonomous-review, cli-reference, commands-by-task, limitations, both review skills; commands-by-task.md:150 and :153 describe the new `/decisions` and `/remote-control` content | Holds for the named documents. See PC-001 (a wording in :153 that the code contradicts for one case) and PC-002 (a guide not touched) |
+| "The card says when the Telegram mirror was not delivered; the terminal commands stay as fallback." | claim | tui-shell.ts `mirrorUndeliveredNote(bridge)` + `withMirrorNote(meta.card, unmirrored)`; operator-confirmations.ts `where` suffix | Holds |
+| "A remote-card answer now records `pressedBy` and `pressedAt`" | claim | tui-shell.ts `remoteApproval(...)` sets `pressedBy` only when `fromId !== undefined`, `pressedAt` from the shell clock, `via: "remote"`; no TUI path sets them | Holds for this slice (the store-side `remote-card` rule is outside slice-04) |
+| Breaking change (no box in the body) | n/a | Slice-04 changes are additive: optional `confirmationLines`, `getConfirmationLines`, `getWaitingCards`, `onUndelivered`, extra optional/defaulted parameters on `formatRemoteStatusLines` and `projectRemoteRow` | No exported symbol, flag, route or persisted key is removed or renamed in this slice |
+
+Not read / not settled: the PR's docs outside slice-04 (TM-04, review guides, cli-reference) were read only through search hits, not in full; they belong to other slices.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "PR 1052 has no Documentation, Tests updated or Breaking change boxes; its three Test plan boxes are unticked and consistent with pending CI and AC9. The prose claims about the TUI surfaces, the mirror-not-delivered note and the docs hold against slice-04. Two findings: docs/docs/commands-by-task.md:153 promises a 1-hour token for every pending card, but operator-confirmations.ts prints that token (and 'token expired') for a card whose mirror was not delivered and which has no token (minor); and the remote-control guide docs/docs/guides/drive-keryx-remotely.md, which describes the same sidebar row and modal, does not mention the cards (info).",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;",
+      "problem": "docs/docs/commands-by-task.md:153 (a document this PR changed) says of the review cards: \"each pending one shows with its age and the time left of its 1-hour token, and who pressed.\" pendingConfirmationLine builds `token` from `REMOTE_CARD_TTL_MS - elapsed` for every entry, including one with `mirrored === false`, then appends `where` (\" · Telegram mirror not delivered, answer in the shell\"). A card that never reached the topic has no remote token, yet its line reads, for example, \"57m left of the 1-hour token · Telegram mirror not delivered, answer in the shell\", and after an hour \"token expired, ask again\" for a question still open in the dock. entries() lists such an entry as `waiting` in the /remote-control status tab and the /decisions modal (only waiting() and the sidebar count exclude it). The test at operator-confirmations.test.ts only asserts `toContain(\"Telegram mirror not delivered, answer in the shell\")`, so the token wording on that path is unchecked.",
+      "impact": "The line and the documented wording disagree about whether a token exists. An operator reading 'token expired, ask again' on an undelivered card is told to re-ask a question that can still be answered in the shell; one reading '57m left' believes a Telegram press can still land. No gate is affected: the answer path is unchanged.",
+      "suggested_fix": "For `entry.mirrored === false` omit the token clause and print only the age and the mirror-not-delivered note; or reword commands-by-task.md:153 to say the token time is shown for cards that reached the topic. Add an assertion that an undelivered card's line does not contain 'token'.",
+      "evidence": "src/tui/operator-confirmations.ts:105-107 (token computed unconditionally, `where` appended after it); docs/docs/commands-by-task.md:153 (\"each pending one shows with its age and the time left of its 1-hour token\"); slice-04 diff, operator-confirmations.ts lines 333-339 and test lines 1216-1222.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:unmirrored-card-token-line",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-002",
+      "severity": "info",
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "line": null,
+      "quote": "sidebar row and the `/remote-control` modal. The readline shell can only report",
+      "problem": "The PR adds operator cards to the Remote sidebar row (\"N cards waiting\"), to the /remote-control status tab and to /decisions, and says it updated \"review guides\". The guide that describes the Telegram topic and the /remote-control sidebar row and modal was not touched, and it names none of the review cards: a search of drive-keryx-remotely.md, answer-remote-approvals.md and modules.md for review_complete, review_confirm_plan, review card, operator card and confirmedVia returns no match. The sentence quoted is not contradicted; the guide is silent on a new thing that appears in the row and the modal it describes.",
+      "impact": "A reader of the remote-control guide learns what the Telegram topic can answer (approvals, ask_user, pickers) but not that the five review acts can also be answered there, within one hour, from one allowed user. The reader would find it only in the review guides and commands-by-task. This is an omission, not a wrong instruction, so it is reported as a question for the author.",
+      "suggested_fix": "Add a short paragraph to drive-keryx-remotely.md (near 'Questions from the agent', line ~456) naming the five card tools, the allowed-user/once/1-hour rule, and the 'N cards waiting' sidebar text, linking to the review-with-a-record guide; or state in the PR body that the guide is deliberately left to the review guides.",
+      "evidence": "docs/docs/guides/drive-keryx-remotely.md:215-216 and :445 describe the sidebar row, the modal and the Commands tab without the cards; keryx ctx rg for the card tool names over the three remote guides returned 0 matches; the PR's docs list (pr-context.md Summary) names TM-04, review guides, cli-reference and review skills only.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:remote-guide-silent-on-cards",
+      "location_class": "pr-process",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```

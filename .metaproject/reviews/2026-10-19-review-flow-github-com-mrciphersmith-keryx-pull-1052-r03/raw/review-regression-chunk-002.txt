@@ -1,0 +1,24 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "chunk": "chunk-002",
+  "files_read": [
+    "src/acp/server.ts",
+    "src/decisions/context.ts",
+    "src/harness/tool/builtin/workspace-context-tool.ts",
+    "src/tui/chat-shell.ts",
+    "src/wiki/deep-enrich.ts",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-01.diff",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-02.diff"
+  ],
+  "stats": {
+    "files_checked": 5,
+    "findings": 0,
+    "notes": "Searched the five files for ApprovalResponse, SignatureConfirmation, OPERATOR_CONFIRM_TOOL_NAMES, completion-gate, operator-confirm*, pressedBy/pressedAt, confirm-token, OperatorConfirmationLog, review_complete, requestApproval, flow/types, flow/schema, review/types: none imports or reads a changed symbol. src/acp/server.ts builds its session tools via buildAcpSessionTools (explicit roster, no operator card tools; pinned by operator-confirm-rosters.test.ts) and only widens-compatibly consumes boolean approvals (ApprovalResponse change is two optional fields, already present before the delta; the delta changed a comment only). src/wiki/deep-enrich.ts passes requestApproval: async () => false (still a valid ApprovalResponse) and grants only read-risk METAPROJECT_OPERATIONS, so the roster and the completion-gate nudge text do not reach it. src/decisions/context.ts imports only flow/store (readFlow, listFlowDirs); flow-state schema and SignatureConfirmation gained optional fields (additionalProperties true), so old and new flow.json both still read. src/tui/chat-shell.ts has no tools (sidebar says 'chat · no tools') and does not use the shell approval mirror. workspace-context-tool.ts only imports InteractiveTool. The graph radius cannot see runtime edges (string-keyed tool names, hooks); the roster test covers the MCP, ACP, spawn_subagent and readline rosters."
+  },
+  "findings": []
+}
+```

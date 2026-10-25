@@ -1,0 +1,51 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second-look read of slice-07 (diff b1c6da0e6..77d2eff20, unchanged since r03) for code-level security defects: no finding. The slice only threads the optional press record (pressedBy, pressedAt) through the confirm token, signatures, write-land decision file, coverage/readiness/plan/premise/publish/operator-decision records, adds the `undelivered` flag on a deny-only path, registers review_complete in OPERATOR_CONFIRM_TOOL_NAMES (so unattended runs exclude it), and carries skill wording that now names the card. No injection, auth bypass, IDOR, secret, crypto, path or redirect surface is introduced by these hunks.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Informational, not a finding: pressedBy/pressedAt are written into JSON records that live in the package or flow directory and are readable back without a check that confirmedVia is remote-card (coverage-complete.ts readCoverageWaiver accepts them whatever confirmedVia says; estimate.ts isPlanConfirmation and confirm-token.ts parseStoredToken do not validate them). They are an audit trail, not a gate input, and the same files are agent-writable under the already-documented TM-03/TM-04 limit (a record of a mechanism, not an identity), so nothing here gains an attacker anything new."
+  ],
+  "prior_dispositions": [
+    {
+      "finding": "E-01",
+      "disposition": "closed",
+      "evidence": "git grep at 77d2eff20 over the four review-orchestrator skill files (the two under .metaproject/skills and the two bundled copies): SKILL.md:782 now reads 'then call `review_complete`; elsewhere the operator runs `keryx review complete <package> --waive-coverage ...`', SKILL.detail.md:386 'then call `review_complete`; outside keryx shell `keryx review complete <package> --waive memory-outside-stage ...`', SKILL.md:136 'an agent never runs `keryx review complete`; that command is for a human in a terminal', SKILL.detail.md:669 'An agent completes a review only through that card', :866 and SKILL.md:124/:65 name the card first. Remaining mentions of the CLI are explicitly the human-terminal fallback. The bundled slice-07 copies (SKILL.md Done-when, Operator decisions row, Round plan step 6; SKILL.detail.md readiness paragraph) match."
+    },
+    {
+      "finding": "E-07",
+      "disposition": "not-in-slice",
+      "evidence": "docs/docs/cli-reference.md is in slice-01 and slice-04, not slice-07; not judged here."
+    },
+    {
+      "finding": "E-02",
+      "disposition": "not-in-slice",
+      "evidence": "operator-confirm-review.ts is in slice-01/02/06, not slice-07; not judged here."
+    },
+    {
+      "finding": "E-03",
+      "disposition": "not-in-slice",
+      "evidence": "The schema file managed-review-package.schema.json is in slice-02. The slice-07 side of E-03 (readiness.ts:577 waiveReadiness now spreads confirmedVia plus cardPressFields into readiness_waivers items; types.ts ReadinessWaiver is `{...} & CardPress`) is unchanged, so the fix belongs in the schema and is judged where that file is."
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-07",
+      "coverage": "Read the whole 2330-line slice-07.diff once: flow/confirm-token.ts, schema.ts, service.ts, types.ts; bundled review-orchestrator SKILL.md and SKILL.detail.md and review-premise SKILL.md; harness/external/write-land.ts and tool/builtin/interactive-tools.ts; learning/decisions.ts; remote/client.ts, shell-bridge.ts and mirror-undelivered.test.ts; review/chunks-estimate, complete-gated, coverage-complete, estimate, evidence-level, operator-decisions, plan-confirmation, premise-question, publish, readiness, types; standard/help-groups.ts; trigger/unattended.ts. Checked: fail-closed mapping of the approval answer (undelivered only on a deny; fromId kept only as a safe integer), the unattended exclusion of review_complete, that no model-supplied value reaches a path, shell command or SQL, and that complete-gated.ts runs the run-profile and narrowed-routing refusals before completeManagedReview. Plus a targeted git grep of the E-01 wording at 77d2eff20.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "findings": 0,
+    "blockers": 0,
+    "majors": 0,
+    "minors": 0,
+    "info": 0
+  }
+}
+```

@@ -1,0 +1,59 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-core-boundaries",
+  "summary": "Slice 01 is the shared review-finding contract plus skill prose, README and flow artefacts. Dependency direction is clean (no feature import into core, no new export). The contract copy under .metaproject/core is byte-identical to src/gdskills/contracts (cmp printed SAME), the writer in src/review/premise.ts:693-701 emits only fields the schema allows, and every TS type that carries confirmedVia gained host-question. Two minor contract-stability gaps: the schema does not enforce the host-question/hostQuestion pairing that the TS reader enforces, and the five-name source enum is declared in the schema, in TS and in skill prose with no parity test.",
+  "findings": [
+    {
+      "id": "CB-001",
+      "severity": "minor",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"description\": \"Set with confirmedVia host-question only: the question the host asked the operator and the answer that came back, as the agent reported them.\",",
+      "problem": "The shared contract says hostQuestion is set with confirmedVia host-question only, but states it only in a description. There is no if/then pairing (confirmedVia const host-question requires hostQuestion; hostQuestion requires confirmedVia const host-question). The TS side enforces the pairing at read time (src/review/operator-decisions.ts:118-119 `return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;`), so the two definitions of a valid record differ. review-finding.schema.json is the contract managed.ts:507 validates findings against, and the same file already uses allOf/if/then for verdict.",
+      "impact": "A finding whose premise.operator reads confirmedVia host-question with no hostQuestion, or hostQuestion beside confirmedVia terminal, passes the contract. Every consumer that renders the source (report, /decisions modal, readiness.ts:253) must then re-check. Today the only writer (premise.ts:693-701) pairs them correctly, so no path produces the bad shape yet; this is a gap in the contract's stability, not a live defect.",
+      "suggested_fix": "Add to the operator object an allOf with two if/then rules: confirmedVia const host-question requires hostQuestion, and hostQuestion present requires confirmedVia const host-question. Keep the copies under .metaproject/core and src/gdskills/contracts identical.",
+      "evidence": "slice-01.diff lines 23-37 add the two properties without a conditional; the file's allOf block (diff lines 41-54) shows the pattern in use for verdict. cmp of the two copies printed SAME.",
+      "confidence": "high",
+      "reviewer": "review-core-boundaries",
+      "dedupe_key": "schema-host-question-pairing-not-enforced"
+    },
+    {
+      "id": "CB-002",
+      "severity": "minor",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"source\": { \"type\": \"string\", \"enum\": [\"claude-code\", \"codex\", \"keryx-shell\", \"helyx-poll\", \"other\"] },",
+      "problem": "The set of host-question sources is declared in the schema enum above, in HOST_QUESTION_SOURCES at src/review/types.ts:106 (`[\"claude-code\", \"codex\", \"keryx-shell\", \"helyx-poll\", \"other\"] as const`), and in the review-orchestrator SKILL.md 'Operator decisions' bullet. Nothing pins them to each other: a search for HOST_QUESTION_SOURCES in src/commands/review-host-question.test.ts finds no match, and the schema is not derived from the constant.",
+      "impact": "Adding a host to the TS constant makes validHostQuestion and the CLI accept it, while a finding's premise.operator carrying it fails review-finding.schema.json validation at managed.ts:507, so a premise answer recorded through that source could not be written to findings.json. Trigger: a new source added in one place; outcome: refused findings write. Not reachable with today's five names.",
+      "suggested_fix": "Add one test that reads the schema's hostQuestion.properties.source.enum and asserts deep equality with [...HOST_QUESTION_SOURCES].",
+      "evidence": "src/review/types.ts:106 and the schema enum hold the same five names today; ctx rg for HOST_QUESTION_SOURCES in the host-question test returned no matches.",
+      "confidence": "medium",
+      "reviewer": "review-core-boundaries",
+      "dedupe_key": "host-question-source-enum-multi-declared"
+    },
+    {
+      "id": "CB-003",
+      "severity": "info",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"quote\": { \"type\": \"string\", \"minLength\": 1, \"description\": \"The operator's own words: what they typed at the terminal, or the card text they said yes to.\" },",
+      "problem": "The unchanged description of operator.quote still names only the terminal and the card, though with host-question the quote is the agent-reported answerText (src/commands/review-operator.ts:401 `quote: answerText`).",
+      "impact": "A reader of the contract is told quote is a first-hand operator statement; for a host-question record it is what the agent says the operator answered. Documentation drift only; settled by naming the host-question case in the description.",
+      "suggested_fix": "Extend the description of operator.quote to name the host-question case.",
+      "evidence": "slice-01.diff line 20 (unchanged description) against review-operator.ts:401.",
+      "confidence": "high",
+      "reviewer": "review-core-boundaries",
+      "dedupe_key": "schema-quote-description-stale",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+Summary: no boundary leaks. The new hostQuestion contract is domain-neutral and additive (older records stay valid), the .metaproject/core copy matches src, and the writer and readers agree on the shape. Slice-01 holds no executable code beyond the schema; the flow artefacts, gdgraph data, skills and README carry no core-boundary concern. Routing audit: graph_used no (bounded slice), wiki_used not-relevant, ctx_used yes (keryx ctx rg), raw_rg_used no.

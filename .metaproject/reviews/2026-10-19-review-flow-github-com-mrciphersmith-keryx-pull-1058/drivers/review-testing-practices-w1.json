@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-testing-practices",
+  "wave": 1,
+  "waves": 1,
+  "slices": [
+    "slice-02"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-02",
+      "path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/slices/slice-02.diff",
+      "bytes": 129844
+    }
+  ],
+  "result": "raw/review-testing-practices-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+}

@@ -1,0 +1,91 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, wave 4 of 4, slice-05 only (src/standard/help-groups.ts, src/trigger/unattended.ts, src/tui/approval-mirror.ts, src/tui/decisions-surface.ts, src/tui/operator-confirmations.ts (+ test), src/tui/remote-control-surface.ts, src/tui/tui-shell.ts). Head b1c6da0e6992e4df473bae6b2fde78bc94d28776. PC-001..PC-006 are not re-filed.
+
+## Checklist form (pr-context.md)
+
+The body has no Documentation / Tests / Breaking-change / Screenshots boxes. Its three boxes are the Test plan. Stated claims that touch this slice are rows too.
+
+| Box or claim (quoted) | State | What the slice diff shows | Expectation |
+|---|---|---|---|
+| `CI green` | unticked | CI section lists every check passing | Unticked is conservative, not contradicted. No finding. |
+| `bun test ... src/remote/ src/tui/` | unticked | `src/tui/operator-confirmations.test.ts` is added, and `src/tui/` is in the command | The new test is covered by the named command. No finding. |
+| `Owner live check from the Telegram topic` | unticked | no diff signal either way (AC9 is judged) | No finding. |
+| "TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`." | claim | status tab: `confirmationLines` adds a waiting and an answered section (operator-confirmations.ts:98-109 of the new file, remote-control-surface.ts `formatRemoteStatusLines`). `/decisions`: `withConfirmationLines` appends the same lines. Sidebar: `remote-control-surface.ts:392` `const cards = waitingCardsText(waitingCards);` shows only "N card(s) waiting". | The sidebar half is narrower than the claim. Filed as PC-007. |
+| "The card says when the Telegram mirror was not delivered" | claim | `tui-shell.ts` unmirrored branch calls `withMirrorNote(meta.card, unmirrored)`, so the card text carries the note when remote control is off or the channel is not connected. When the bridge looks connected and the topic leg then returns `undelivered`, `onUndelivered` marks the log entry and calls `io.onSystem?.("◇ Telegram mirror not delivered: ...")`. The dock is already open and its card is not changed. | Partly true. Filed as PC-008. |
+| "`flow ac confirm` is unchanged" | claim | no slice-05 file touches flow confirm. `unattended.ts` still lists `flow_confirm` and adds only `review_complete`. | Consistent. No finding. |
+| "accepted only from an allowed user id, once, for one question, within 1 hour" | claim | not implemented in this slice. The slice only shows `REMOTE_CARD_TTL_MS` (60 * 60 * 1000, operator-confirm-tools.ts:117) as the "1-hour token". | Out of slice. The 1-hour display matches the constant. |
+| "New `review_complete` card" / "Docs: TM-04 section, review guides, cli-reference, review skills" | claim | `unattended.ts` adds `review_complete` to `OPERATOR_CONFIRM_TOOL_NAMES`, and the registry has `name: "review_complete"` at operator-confirm-review.ts:702. | Consistent for this slice. |
+
+## Documentation outside the diff
+
+- `docs/docs/commands-by-task.md:150,153` is generated from `help-groups.ts` and is in the PR diff, so it follows the new `/decisions` and `/remote-control` summaries.
+- `docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md` lines 107 and 119 are in the diff and make the same claims as the PR body. They are named as sites in PC-007 and PC-008.
+- `docs/docs/cli-reference.md:955-971` (the `/remote-control` paragraph: "the sidebar row and the `/remote-control` modal ... show the same state") and `:2092` (the `/decisions` paragraph) are not in the diff and do not mention the cards. Nothing there is contradicted ("same state" stays true), and TM-04 and commands-by-task do describe the surfaces. I judged this merely related and did not file it.
+- `keryx ctx rg` for "Not run" confirms it is an existing review-skill concept, so the `unattended.ts` comment "records the item as Not run" is not an invented behaviour.
+
+## Additional sites of PC-005 (not re-filed)
+
+`src/standard/help-groups.ts` (the `/decisions` and `/remote-control` summaries), and through them `docs/docs/commands-by-task.md:150,153` (generated from them), name exactly five review cards. In `tui-shell.ts` `isCard` is true for any `alwaysAsk` approval with a non-empty `card` that is not `user_prompt`. So the cards logged in `operatorCards` and shown under the same heading also cover `review_publish`, `review_chunks_answer`, `review_waive_mutation`, `flow_confirm`, `external_apply`, the `learn_*` cards and the schedule cards. This is the same shape as PC-005, so please add these sites to PC-005 instead of opening a new id.
+
+## Findings
+
+PC-007 (minor): the sidebar half of the surfaces claim is narrower than stated.
+PC-008 (minor): "the card says" holds only for the cards that open without a mirror. A card whose topic send fails after it opens gets a transcript line, not a card note.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-pr-contract",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-05 checked against the PR body, TM-04 section 6a and the flow 464 AC6/AC5 wording. Two minor disagreements: the sidebar Remote row shows only a count of waiting cards, while the body and TM-04 say pending and answered cards appear there; and the \"card says the mirror was not delivered\" claim holds only for cards opened without a mirror, while a late undelivered result is a transcript line. Sibling sites of PC-005 (help-groups.ts and commands-by-task.md) are noted in prose, not re-filed.",
+  "stats": { "rows_checked": 8, "findings": 2, "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "PC-007",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "file": "src/tui/remote-control-surface.ts",
+      "line": 392,
+      "quote": "const cards = waitingCardsText(waitingCards);",
+      "problem": "The PR body says \"TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`.\" and TM-04 section 6a (docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:119) says \"The pending cards (age and time left of the token) and the answered ones (with `pressedBy`) are shown in the `/remote-control` status tab, the sidebar Remote row and the `/decisions` modal.\" The sidebar Remote row only gets `getWaitingCards: () => operatorCards.waiting().length` (tui-shell.ts:4584) and `waitingCardsText` returns \"N card(s) waiting\". It shows no age, no time left and no answered cards or pressedBy. Only the status tab and the `/decisions` modal carry the full lines.",
+      "impact": "A reader of the PR body or TM-04 expects to see who pressed a card, and when it expires, in the sidebar. The sidebar shows a count only, and the detail needs the modal. No runtime fault; the cost is a reader who trusts the sentence.",
+      "suggested_fix": "Reword both sentences: the status tab and `/decisions` show pending (age, time left) and answered (pressedBy) cards, and the sidebar Remote row shows how many cards wait. Alternatively extend the row. The wording change is smaller.",
+      "evidence": "pr-context.md line 13 (quoted above); TM-04 line 119; remote-control-surface.ts projectRemoteRow lines 385-396 at head (the waiting count is the only card input); tui-shell.ts:4584; operator-confirmations.ts waitingCardsText returns only the count text. Flow 464 AC6 requires the question, age and time left in the pending-confirmation line and the decisions surface, so the sidebar count is not an AC gap, only a wording one.",
+      "confidence": "high"
+    },
+    {
+      "id": "PC-008",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6129,
+      "quote": "io.onSystem?.(\"◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\\n\");",
+      "problem": "The PR body says \"The card says when the Telegram mirror was not delivered\" and TM-04 section 6a (line 107) says \"If the topic cannot be reached, the card says \\\"Telegram mirror not delivered\\\" and is answered in the shell.\" In the diff the note is put on the card (`withMirrorNote(meta.card, unmirrored)`) only when `mirrorUndeliveredNote(bridge)` fires before the dock opens, which means remote control is off or the channel is not connected. When the channel looks connected and the topic send then fails, the topic leg returns `undelivered` after the dock is already open. `raceApproval` then calls `onUndelivered`, which marks the log entry and writes a transcript line. The dock's card text is not changed in that case.",
+      "impact": "In the failing-send case (the one AC5 names, \"a failing send\") the card the operator is answering carries no mirror note. The operator sees it only in the transcript line and in the /remote-control status tab. A reader of the body or TM-04 expects the note on the card.",
+      "suggested_fix": "Say in the body and in TM-04 line 107 that the note is on the card when the mirror is known to be unavailable at open time, and appears as a transcript line and a status-tab line when the send fails later. Or repaint the open card with the note.",
+      "evidence": "pr-context.md line 13 area (the Summary bullet quoted above); TM-04:107; tui-shell.ts lines 6101-6111 (note put on the card before the dock opens) against 6125-6131 (onUndelivered: log mark plus io.onSystem only); approval-mirror.ts:50-54 (onUndelivered is called from the topic leg that starts in `opened()`, after the dock is open). The test file adds markUndelivered unit tests but no test that asserts card text for the late case.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-06", "disposition": "still open (deferred)", "evidence": "tui-shell.ts unmirrored finally still hand-maps `foregroundOperation.signal.aborted || verdict === undefined ? \"withdrawn\" : \"shell\"` instead of `settle` (slice-05 diff, line 1219 of the slice file). Not a contract matter." },
+    { "id": "D-10", "disposition": "still open (deferred)", "evidence": "the wiring of onUndelivered and settle in mirrorApprovalToTopic is still not driven by a behavioural test in this slice. Not a contract matter." },
+    { "id": "D-01", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-02", "disposition": "not in slice-05", "evidence": "completion-gate.ts is outside this slice" },
+    { "id": "D-03", "disposition": "not in slice-05", "evidence": "completion-gate.ts is outside this slice" },
+    { "id": "D-04", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-05", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-07", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-08", "disposition": "not in slice-05", "evidence": "autonomous-review.md and autonomous-profile.ts are outside this slice (wording deliberate per the request)" },
+    { "id": "D-09", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-11", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-12", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-13", "disposition": "not in slice-05", "evidence": "operator-confirm-review.ts is outside this slice" },
+    { "id": "D-14", "disposition": "not in slice-05", "evidence": "completion-gate.ts is outside this slice" }
+  ]
+}
+```
+
+Routing audit: graph_used no (not-relevant, the claims are checkable from the slice and docs); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg and gdctx summaries); raw_rg_used no; raw git show/diff used only to read files and line numbers at the PR head (marked keryx:raw).

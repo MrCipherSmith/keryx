@@ -1,0 +1,57 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-04 (second-look) reviewed for logic correctness: the four output-contract schema additions (optional anchor and summary on project_context_applied items), the skill instruction edits and the README section, each checked against reference-proof.ts, resolved-context-check.ts, reference-entries.ts and resolve-context-command.ts at head. The schema copies are byte-identical per schema and the instructions match the validator on every enforced rule. Two info-level wording or robustness notes only; no blocker or major, and no r02 finding re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "quote": "carries an `anchor`, a `description` and `section_bytes`",
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "problem": "The instruction says every entry promoted by a condition carries an anchor and section_bytes and that the worker's item needs the anchor exactly as declared. In the resolver the anchor is optional: reference-entries.ts emits `anchor` and `section_bytes` only when the declaration has an anchor, and proofFailures in reference-proof.ts demands an anchor only `if (entry.anchor !== undefined ...)`. The flow-orchestrator constraint ('an entry promoted by a condition also needs its anchor and a summary') and the same sentence in the bundled and job-orchestrator copies repeat the unconditional wording.",
+      "impact": "No observable defect: a worker that finds no anchor on a promoted entry has nothing to copy and the validator does not ask for one. The wording could push a worker to invent an anchor for an anchorless declaration, which the validator does not forbid but which is noise.",
+      "suggested_fix": "Say 'carries, when the declaration has one, an `anchor` and `section_bytes`' in task-implementer SKILL.md (all three copies) and 'also needs its anchor (when the entry has one) and a summary' in flow-orchestrator SKILL.md (all copies), keeping the copies in sync.",
+      "evidence": "reference-entries.ts: `...(declaration.anchor !== undefined ? { anchor: declaration.anchor } : {})`; reference-proof.ts proofFailures: `if (entry.anchor !== undefined && item.anchor !== entry.anchor)`; task-implementer SKILL.md line 184 and flow-orchestrator SKILL.md line 346 at head.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": null
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "quote": "if (entry.anchor !== undefined && item.anchor !== entry.anchor) {",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "problem": "The anchor in the proof item is compared with the declared anchor by raw string equality, while the summary words are NFC-normalised (distinctWords) and the schema adds the anchor as a free string. An anchor containing a non-ASCII character (for example an accented or Cyrillic heading) that the worker re-types or copies through a tool that decomposes it (NFD) differs in code points from the declared one although it reads identically. The loader trims the anchor but does not normalise it either.",
+      "impact": "A worker that cites the right section is reported as 'cites anchor X; the declaration says X' with two visually identical strings, and the only way out is to retry. Unlikely in practice (workers copy the anchor from the resolver output) and the failure is loud, not silent.",
+      "suggested_fix": "Compare `item.anchor.normalize(\"NFC\").trim()` with `entry.anchor.normalize(\"NFC\")`, or normalise the anchor once in references-config.ts when it is loaded.",
+      "evidence": "reference-proof.ts line 93 compares with `!==`; distinctWords at line 41 calls `text.normalize(\"NFC\")`; references-config.ts trims the anchor without normalising.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "class_scope": null
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-04",
+      "coverage": "Whole slice-04.diff read (schemas, skill edits, README, flow 462 bookkeeping); reference-proof.ts, resolved-context-check.ts, reference-entries.ts, resolve-context-command.ts and references-config.ts read at head; schema copies compared by md5 (task-implementer x3 and tests-creator x3 identical); prior_findings.json consulted so that no r02 finding is re-filed.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 2
+  }
+}
+```
+
+Summary: No blocker or major in slice-04 at head 5382b56abf17. The new optional anchor and summary properties are identical in all three copies of each output-contract schema, keep `how` and `additionalProperties: false` unchanged, and match what proofFailures reads (anchor equal to the declared one, summary of at least 40 characters, at least min(3, section words) shared distinct words of five or more letters, how read or followed). The skill and README statements about the last citation pinning the hash, the dead-anchor fallback to the whole file and the never-dropped promoted entries agree with resolved-context-check.ts and reference-entries.ts. Two info notes: the skill text states an anchor as unconditional while it is optional (F-001), and the anchor comparison is not NFC-normalised (F-002). The stale status lines in the PRD and flow documents and the two-word threshold in live-run.md are already filed (review-clean-code-w1:F-002, review-style-w1:F-001, review-style-w1:F-004) and are not repeated; nothing in the flow bookkeeping contradicts the code beyond them.
+
+STATUS: DONE

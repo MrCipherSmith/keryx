@@ -1,0 +1,134 @@
+STATUS: DONE
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+The fix slice is mostly clean: names, JSDoc placement and the `completeSpec` apply flow read well, and 12 of the 19 prior findings are closed. Five are only partly addressed (C-05, C-21, C-26, C-32, C-45) and two are not addressed (C-16, C-41). One new minor finding: the skill and guide text now says flatly that an agent never runs `keryx review complete`, while the autonomous profile prompt and the guide's exit-code table still rely on exactly that command.
+
+## Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Parent ref: `main`
+- Merge-base: `d2cb377f5`
+- Head: `6f47bf35f`
+- Scope mode: explicit-hash-range (slice-01, read in full)
+- Changed files in slice: 8 (SKILL.detail.md, CHANGELOG.md, TM-04 doc, autonomous-review.md, operator-confirm-review.ts, operator-confirm-rosters.test.ts, bundled SKILL.md, tui-shell.ts)
+
+## Stats
+- major: 0
+- minor: 1
+- info: 0
+
+## Prior dispositions
+
+Verified against source at head 6f47bf35f, not against the claimed disposition text. Mapping to schema values: fixed = closed, partially = partial, not fixed = open.
+
+| id | claimed | verified | evidence |
+|----|---------|----------|----------|
+| C-01 | fixed | closed | `operator-confirm-rosters.test.ts` now asserts `toHaveLength(19)`; `src/trigger/unattended.ts` lists 19 card names including `review_complete`. |
+| C-03 | fixed | closed | `operator-confirm-review.ts` `completeSpec.apply` runs the gate in its own try (`gateError`), decides `closed` from `done` or `completionFacts(dir).status === "closed"`, writes the record in its own try (`recordError`), and reports "the round is closed but..." with `isError`. A record-write failure no longer masquerades as a gate failure. |
+| C-05 | fixed | partial | The shipped skill texts (SKILL.md 47/136, SKILL.detail.md 669) now route the agent to the `review_complete` card. Still open: `src/review/autonomous-profile.ts:144,153` still prompts the agent to run `keryx review complete`, and `operator-confirm-review.ts` lines 24-25, 261-262, 296, 312, 358 still carry text telling the agent to run it. Same root as the new finding F-001. |
+| C-06 | fixed | closed | `tui-shell.ts` `mirrorApprovalToTopic` `onUndelivered` now calls `operatorCards.markUndelivered(cardId)`; `OperatorConfirmationLog.markUndelivered` (operator-confirmations.ts 61-67) flips the mirrored state, and `pendingConfirmationLine` shows "Telegram token expired, answer in the shell". |
+| C-13 | fixed | closed | `mirrorApprovalToTopic` (tui-shell.ts ~6095-6152) settles the log entry in `finally` in both the mirrored and unmirrored branches. |
+| C-16 | fixed | open | `docs/docs/guides/autonomous-review.md:35` still reads "it stops at the floor and never tells you to run the terminal command". `unattended.ts` (~240-243) refuses card tools as "is not offered to an unattended run", which is a different mechanism from a floor refusal (`isFloorRefusal`, `autonomous-profile.ts` 171-179). The sentence added after it does not correct the wording. |
+| C-17 | fixed | closed | The CHANGELOG sentence in the slice no longer claims a refused remote answer "changes nothing". |
+| C-18 | fixed | closed | TM-04 section 6a (lines ~105-119) now states that a press is evidence of an allowed account, not of an unreachable channel, and covers the bot-token holder case. |
+| C-19 | fixed | closed | TM-04 "Message order" bullet updated in the slice; the dropped/delayed card wording now matches the TTL behaviour in `OperatorConfirmationLog.waiting()`. |
+| C-20 | fixed | closed | The `[0.3.124]` section and the `[Unreleased]` block are reordered/updated in the slice; nothing shipping in 0.3.124 is left under `[Unreleased]`. |
+| C-21 | fixed | partial | `src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:136` no longer says "then run `keryx review complete`" and now says the agent never runs it. The contradiction moved rather than went away: the autonomous profile prompt (`autonomous-profile.ts:144,153`) and the guide's exit table (row 0, "closed by `keryx review complete`") still say the opposite. See F-001. |
+| C-22 | fixed | closed | `completionFacts` (operator-confirm-review.ts ~658-692) is kept in the commands layer, but its read set is now one documented helper used by build and apply and also feeds `factsDigest`; the re-derivation concern is reduced to a single place. |
+| C-23 | fixed | closed | The research.json read no longer collapses every error into "no waiver"; the card output distinguishes an unreadable ledger from "waivers: none". |
+| C-24 | fixed | closed | `remoteApproval` (tui-shell.ts 571-574) now has its own JSDoc and the Flow 173 F-003 block sits directly above `isToolAvailableToSideWorker` again. |
+| C-26 | fixed | partial | The repeated head normalisation is gone, but the unnamed `.slice(0, 12)` still appears at `operator-confirm-review.ts` 723, 734 and 784, and the refusal text is still built twice (748 and 767). No named constant (for example `SHORT_SHA_LENGTH`) and no shared refusal helper. |
+| C-32 | fixed | partial | `operator-confirmations.test.ts` gained behavioural tests for the log plus a source-text wiring test. The Telegram-callback to `remoteApproval` to `pressedBy`/`pressedAt` path in `tui-shell.ts` is still covered only by a source-text assertion, not by running the wrapper. |
+| C-39 | fixed | closed | `src/commands/agent.ts` `pressedAt` comment now says it is the shell clock at delivery, not the Telegram press time. |
+| C-41 | fixed | open | `completeSpec.apply` still compares `factsDigest` synchronously before the awaited PR lookup inside `completeReviewGated`, so the digest covers the facts at gate entry, not at close time. The slice adds the "closed" re-check after a gate error but does not move or repeat the drift check. Info-level, unchanged. |
+| C-45 | fixed | partial | `markUndelivered` fixes the undelivered case, but `tui-shell.ts` ~6141 still writes `operatorCards.answer(cardId, { place: "telegram", ... })` from the transport event rather than from the gate's accepted answer. The log is still a second copy of state the gate owns. |
+
+## Major Issues
+None.
+
+## Minor & Info
+
+### [F-001] Skill and guide text says an agent never runs `keryx review complete`, but the autonomous profile prompt and the exit table still direct it to
+
+- **Severity**: minor
+- **File**: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:136
+- **Problem**: The text now states "an agent never runs `keryx review complete`; that command is for a human in a terminal". The same wording is at `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:136`, SKILL.detail.md:669 and `docs/docs/guides/autonomous-review.md:35`. In the same tree, `src/review/autonomous-profile.ts:144,153` still prompts the autonomous agent to run `keryx review complete`, and the guide's exit-code table (row 0) says "closed by `keryx review complete`". Unattended runs do not get the card tools, so they have no other way to close.
+- **Why it matters**: Convention consistency and reader trust. A skill, a guide and a prompt that disagree on one command is the same contradiction C-21 was raised for; the text moved but the disagreement remained. An agent reading the skill and the profile prompt gets two instructions.
+- **Fix**: Make the skill and guide wording conditional on the run mode: "in an attended shell, close through the `review_complete` card; an unattended run closes with `keryx review complete`". Or update the autonomous prompt and the exit-table row to match the new rule. Either way, one statement of the rule, referenced from the other sites.
+- **Evidence**: `src/review/autonomous-profile.ts:144,153` (prompt text); `src/trigger/unattended.ts:55-83` (card tools excluded from unattended runs, including `review_complete`); the four sites above.
+- **Confidence**: medium
+
+## Positive Notes
+- `remoteApproval` now carries its own JSDoc and no longer splits the Flow 173 F-003 block.
+- `completeSpec.apply` reads as a short sequence (gate, closed check, record, output) with distinct error names (`gateError`, `recordError`).
+- The roster test count (19) matches the registry.
+
+```json keryx:findings
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "line": 136,
+    "quote": "an agent never runs `keryx review complete`; that command is for a human in a terminal",
+    "problem": "Skill and guide text (bundled SKILL.md:136, the .metaproject copy, SKILL.detail.md:669, autonomous-review.md:35) now says an agent never runs `keryx review complete`, while src/review/autonomous-profile.ts:144,153 still prompts the autonomous agent to run it and the guide's exit-code table row 0 says 'closed by `keryx review complete`'. Unattended runs are not offered the card tools, so the command is their only way to close.",
+    "impact": "Two instructions for one command in the same tree; an agent reading the skill and the autonomous prompt gets conflicting directions. The C-21 contradiction moved rather than closed.",
+    "suggested_fix": "State the rule once and make it conditional on run mode: attended shell closes through the `review_complete` card, an unattended run closes with `keryx review complete`; or change the autonomous prompt and the exit-table row to match the new rule.",
+    "evidence": "src/review/autonomous-profile.ts:144,153; src/trigger/unattended.ts:55-83 (review_complete excluded from unattended runs); src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:136; docs/docs/guides/autonomous-review.md:35",
+    "confidence": "medium"
+  }
+]
+```
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "One new minor style/consistency finding: skill and guide text now says an agent never runs `keryx review complete` while the autonomous profile prompt and exit-code table still rely on it. Of 19 prior findings, 12 are closed, 5 partial (C-05, C-21, C-26, C-32, C-45) and 2 still open (C-16, C-41). No blockers, no majors.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 136,
+      "quote": "an agent never runs `keryx review complete`; that command is for a human in a terminal",
+      "problem": "Skill and guide text says an agent never runs `keryx review complete`, while src/review/autonomous-profile.ts:144,153 still prompts the autonomous agent to run it and the guide's exit-code table row 0 says 'closed by `keryx review complete`'. Unattended runs are not offered the card tools.",
+      "impact": "Two instructions for one command in the same tree; the C-21 contradiction moved rather than closed.",
+      "suggested_fix": "State the rule once, conditional on run mode (attended: review_complete card; unattended: keryx review complete), or update the autonomous prompt and exit-table row to match.",
+      "evidence": "src/review/autonomous-profile.ts:144,153; src/trigger/unattended.ts:55-83; SKILL.md:136; autonomous-review.md:35",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "C-01", "disposition": "closed" },
+    { "id": "C-03", "disposition": "closed" },
+    { "id": "C-05", "disposition": "partial" },
+    { "id": "C-06", "disposition": "closed" },
+    { "id": "C-13", "disposition": "closed" },
+    { "id": "C-16", "disposition": "open" },
+    { "id": "C-17", "disposition": "closed" },
+    { "id": "C-18", "disposition": "closed" },
+    { "id": "C-19", "disposition": "closed" },
+    { "id": "C-20", "disposition": "closed" },
+    { "id": "C-21", "disposition": "partial" },
+    { "id": "C-22", "disposition": "closed" },
+    { "id": "C-23", "disposition": "closed" },
+    { "id": "C-24", "disposition": "closed" },
+    { "id": "C-26", "disposition": "partial" },
+    { "id": "C-32", "disposition": "partial" },
+    { "id": "C-39", "disposition": "closed" },
+    { "id": "C-41", "disposition": "open" },
+    { "id": "C-45", "disposition": "partial" }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```

@@ -1,0 +1,482 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (apply() in the review_complete card decides whether the round closed by catching the gate's throw an) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The delta makes consumeConfirmationToken copy pressedBy and pressedAt from the token store into the ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (The delta removes the head input from the review_complete card (inputSchema, buildCard, apply), but ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (The pressedBy/pressedAt pair is now declared independently in six places across four layers: harness) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-005",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-005 (The settle logic derives the card's yes/no from `!== false`, but ApprovalResponse (commands/agent.ts) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (Clean Code B1 (function size, single responsibility, one level of abstraction): `completeSpec().appl) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (Clean Code E1 (DRY, 3+ copies): the expression `error instanceof Error ? error.message : String(erro) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (Clean Code E1 (one rule written twice, with different boundaries): 'is this card still inside the 1-) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-004 (Clean Code B1/B3: the closure returned by `mirrorApprovalToTopic` (from line 6095, about 70 lines af) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-005 (Clean Code D1 (swallowed error, decides control flow): when the gate threw, the code re-reads the pa) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-006",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-006 (Clean Code E1: `CardPress` and `cardPressFields()` already exist (src/review/types.ts:92 and the fun) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-007",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-007 (Clean Code A1 (a name that changes meaning): `ConfirmationEntry.mirrored` is set by `ask(question, m) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-008",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-008 (The new wiring test pins source text: it slices tui-shell.ts between two string anchors, counts `} f) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:HL-01",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-01 (The 1-hour remote-card TTL is judged against the time invoke runs, not against the time of the Teleg) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:HL-02",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-02 (The card log is settled as 'yes, pressed by Telegram user N' in the finally block of the raced branc) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:HL-03",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-03 (The sidebar line treats the token as expired at exactly 1h (left <= 0), while waiting() (<=) and inv) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:HL-04",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-04 (review_complete closes the round first and writes completion-confirmation.json second. If the write ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:HL-05",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-05 (completionFacts is now async and calls readOperatorDecisions (to include mutation-waiver and reviewe) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The delta adds pressedBy and pressedAt to confirmation.properties in flowStateSchema() (src/flow/sch) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (The header comment still describes the card as taking [--head], but the card no longer accepts a hea) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (When the topic leg wins, the TUI log records 'yes, pressed by Telegram user N' from the bridge answe) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-004 (parseStoredToken does not type-check pressedBy/pressedAt from the stored confirm-token.json before c) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-005 (completionFacts shows 'the research gate will refuse' for any non-ENOENT error reading research.json) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-regression-w1:F-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-001 (The delta changes the review-orchestrator SKILL (src/gdskills/bundled/skills/review/review-orchestra) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-regression-w1:F-002",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-002 (The delta's TM-04 change (docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md section ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-security-code-w1:S-01",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding S-01 (buildCard of the review_complete card interpolates the recorded head raw at lines 723, 725, 729 and ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-security-code-w1:S-02",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding S-02 (parsedCoverageWaiver (src/lib/command-risk.ts:715-728) and touchesCoverageWaiver (743-748) gate only) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-security-code-w1:S-03",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding S-03 (completeHeadGate (src/review/complete-head-gate.ts) lets a merged or moved PR through when the repor) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The expression `error instanceof Error ? error.message : String(error)` now appears four times in op) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The review_complete `apply` is now about 55 lines with roughly 13 branches: four early-return or gua) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The new test pins the shell wiring by slicing tui-shell.ts source between two string markers and cou) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (The new `seams` parameter is typed `Partial<Parameters<typeof buildReviewConfirmSpecs>[0]>`. The mod) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-005",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-005 (The two new `node:` imports are placed above `import { expect, test } from \"bun:test\"`. The sibling ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-006",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-006 (A read failure is pushed into the `waivers` array under the prefix `waiver: coverage`, so the array ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-007",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-007 (The prose count (Nineteen) and the sentence that follows do not map to the table in section 2. The t) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-008",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-008 (The two clauses say nearly the same thing: \"records nothing\" and \"nothing is applied\". The bullet is) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:T-01",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-01 (The behaviour 'the card is settled on every exit of mirrorApprovalToTopic and an undelivered mirror ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:T-02",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-02 (remoteApproval() builds the ApprovalResponse that carries via: \"remote\", pressedBy and pressedAt (th) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:T-03",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-03 (Two corners of the remote-answer checks have no failing test. (1) The refusal covers pressedBy OR pr) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:T-04",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-04 (The branch where completeReviewGated throws after the manifest already closed (the `closed` re-check) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:T-05",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-05 (The 'model cannot supply a head' test checks the schema text and the card drawn by `ask` with a supp) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:T-06",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-06 (Two assertions are weaker than their titles. The test that a reviewer-facing operator decision (muta) real, and where is it reported?",
+      "status": "unresolved"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:d644efd4453e",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:d644efd4453e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:9402f60efaf1",
+        "rawEvidence": "raw/review-clean-code-w1.txt#sha256:9402f60efaf1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:98699ae1ca74",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:98699ae1ca74",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:fccf19b8e778",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:fccf19b8e778",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:aed558096511",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:aed558096511",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:9710eeedb7e9",
+        "rawEvidence": "raw/review-regression-w1.txt#sha256:9710eeedb7e9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:1cf9b9f96667",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:1cf9b9f96667",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:70983afa0044",
+        "rawEvidence": "raw/review-style-w1.txt#sha256:70983afa0044",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:1ea601b0b4c5",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:1ea601b0b4c5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 9,
+    "known": 0,
+    "unknown": 9,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

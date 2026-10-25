@@ -1,0 +1,83 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 (the r02-to-r03 delta: AC3 rewrite so last.json records only taskTextLength and taskTextTruncated, single-quoted --task-text in the orchestrator skills, the hand-written ATX heading parser, linked-rule scanning in references check/suggest, keyword boundary handling, the TUI project-context feed with started/applied/polling guards and cardSafe, plus docs and tests) was read in full as a diff and against the files at head 5382b56abf17. No new blocker, major, minor or info defect was found. The r02 correctness defects this delta targets no longer reproduce at head: review-logic-w2:F-001 (linked rules unseen by check/suggest) is closed by scanCitations reading registry link entries at their origin; review-logic-w3:F-002 (lookarounds demanded on non-word keyword edges) is closed by keywordOccurs applying a boundary only on a side that starts or ends with a word character; review-security-code-w1:F-001 and review-security-code-w3:F-001 (quadratic heading regexes) are closed by parseHeadingLine and stripClosingHashes; review-security-code-w1:F-002 and review-security-code-w4:F-001 (task text persisted to an untracked file) are closed by recordLastResolve storing only a length and a truncation flag. Two earlier findings still apply unchanged and are not re-filed: review-logic-w3:F-003 (a UTF-8 BOM before the first heading hides it from extractSection) and review-logic-w6:F-002 (reload() returns its own stale result to its caller after the feed dropped it).",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "slice-02.diff read in full. At head: context-resolver.ts (resolveProjectContext, truncateTaskText, recordLastResolve), resolve-context-command.ts (the only caller of recordLastResolve), reference-entries.ts (keywordOccurs, promotionReason, resolveReferences), references-section.ts (parseHeadingLine, stripClosingHashes, scanHeadings, extractSection), references-check.ts (scanCitations with link entries, inspectDocument, declarationFindings), project-context-inspector.ts (createProjectContextFeed, paint, toggle path), tui-shell.ts feed wiring, docs/requirements/keryx-conditional-reads/README.md and apply-project-rules.md checked for stale claims about a recorded task text. Flow 462 bookkeeping read for coverage only.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+## Logic Review (wave 7, r03, slice-02, delta on r02)
+
+### Review Scope
+- Branch: `feat/conditional-reads`
+- Parent ref: `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d` (base of the round)
+- Head: `5382b56abf17d23db61108554f3c6c68c8e3c036`
+- Scope mode: explicit slice of the round package (`slices/slice-02.diff`, 143720 bytes), verified against files at head
+- Spec compliance gate: ran against flow 462 acceptance criteria, with AC3 as rewritten by operator poll 218 (no issue URL)
+
+### Summary
+The delta is logically sound. The AC3 rewrite is implemented the same way in code, tests, help text and docs: the record holds `taskTextLength` and `taskTextTruncated` and never the text, and the single caller that records (`resolve-context-command.ts`) is the only path that writes the file. The heading parser, linked-rule scan and keyword matcher behave as their tests state. No new defect is filed.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+AC3 (rewritten): `recordLastResolve` builds the record from `task = truncateTaskText(options.taskText)` when the text is non-blank, and writes `taskTextLength: Array.from(options.taskText!).length` plus `taskTextTruncated: true` only when cut. The `!` is guarded by `task !== undefined`, which is true only when `options.taskText` is defined. The truncation warning carries no task text, and a promotion reason carries the declared keyword, not the task wording. `project-context-status` and the TUI have no consumer of a stored text. The README (lines 18, 61, 65), `TUI-states.md`, `apply-project-rules.md` and `cli-reference.md` do not still say the record holds the text.
+
+### Logic Bugs
+None detected.
+
+Checked and found correct:
+- `parseHeadingLine`: up to three leading spaces; four spaces is not a heading; seven hashes is not a heading; `#` plus tab is a valid separator; trailing blanks are trimmed; a bare `#` with no separator is not a heading. `stripClosingHashes`: `# C#` keeps `C#` (the hash is not preceded by a blank), `Title ##` becomes `Title`, `# ##` and `## ###` become empty and are skipped. Each case matches the expectation in `references-section.test.ts`.
+- `extractSection`: `findIndex` returning -1 gives `headings[-1]` undefined and the missing branch; the section ends at the next heading of the same or higher level; `bytes` is the UTF-8 size of exactly the sliced text.
+- `keywordOccurs`: boundaries only on a word-character side, so `.css` and `@apply` match where they stand and `css` does not match in `css3`; the keyword is regex-escaped.
+- `scanCitations`: link entries absent from the copy list are read at `resolveOriginPath(origin, projectRoot)`; a read error lands in `unreadableRules` and the loop continues, so a missing origin degrades to a `rule-unreadable` warning rather than a throw.
+- `resolveReferences`: a `taken` collision, a missing file, a file outside the root and an oversize file each add a warning and `continue`; an unfound anchor falls back to the whole file and is counted at full size in `promotedBytes`.
+- Feed (`createProjectContextFeed`): a load that began before an already-applied one is discarded whatever order they finish in; `polling` stops overlapping polls; a rejected load is reported once; teardown is called from the shell's destroy path; `paint` maps every line through `cardSafe`.
+- Single-quote instruction in the flow-orchestrator, job-orchestrator (SKILL.md and orchestrator-prompt.md), task-implementer and tests-creator skills (project and bundled copies): `'` inside the task becomes `'\''` consistently, which stops backtick and `$(...)` expansion.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None new.
+
+### Earlier findings that still apply unchanged (not re-filed)
+- review-logic-w3:F-003 (minor): a UTF-8 BOM before the first heading keeps the first-line heading from being recognised. At head, `parseHeadingLine` requires `#` at position 0 to 3 and nothing in `readDeclaredFile`, `inspectDocument` or `extractSection` strips `﻿`; no match for BOM handling exists in references-section.ts, reference-entries.ts, references-check.ts or context-resolver.ts.
+- review-logic-w6:F-002 (minor): `reload()` returns its own result to the caller even when the feed discarded it as stale, and the modal toggle path (`.then(() => options.loadStatus()).then((next) => { status = next; ... })`) takes it. Same file as this slice; unchanged.
+- review-logic-w5:F-003 (info): modal height and footer are computed once at open.
+- review-clean-code-w5:F-003 (minor): listeners run inside the load's own try block in `reload()`.
+- Closed by this delta, so no longer open against head: review-logic-w2:F-001, review-logic-w3:F-002, review-security-code-w1:F-001, review-security-code-w3:F-001, review-security-code-w1:F-002, review-security-code-w4:F-001, review-security-code-w5:F-001 (cardSafe), review-highload-w4:F-001 and review-highload-w5:F-002 (overlap guard and ordering), review-architecture-w3:F-002 (same cause as review-logic-w2:F-001).
+
+### Suggested Patches
+None.
+
+routing audit: graph_used: no (not-relevant, bounded slice read); wiki_used: no (not-relevant, the flow 462 criteria and PRD were the spec); ctx_used: yes (keryx ctx rg for searches); raw_rg_used: no

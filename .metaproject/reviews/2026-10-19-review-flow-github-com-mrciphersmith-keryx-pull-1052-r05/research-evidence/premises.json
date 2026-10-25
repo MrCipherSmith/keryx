@@ -1,0 +1,141 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "S-401",
+      "verdict": "upheld",
+      "reasoning": "Held or upheld only. Code read at operator-confirm-review.ts:687 and :693: stored evidence is evidence.trim() whole while the card shows cardSafe(clip(evidence)) cut at 300; managed.ts:1959 records it unchanged. No intent signal: nothing in the code marks the shown/stored gap as chosen, and the repo's own rule (an operator never answers a decision they could not read in full) is against it. Prior verifier confirmed by execution."
+    },
+    {
+      "finding_id": "F5-01",
+      "verdict": "upheld",
+      "reasoning": "Fact is a leftover bare `complete` in the step list after the commit fixed the sibling sites. No intent signal that the bare word is deliberate; the fix is consistent with the branch's own rule."
+    },
+    {
+      "finding_id": "F5-02",
+      "verdict": "upheld",
+      "reasoning": "No signal the omission is chosen: the Done-when rule is introduced by this branch, and a signal the branch adds cannot ratify itself. The hosts table gives interactive non-shell hosts terminal commands, so a plain close command missing there is a gap."
+    },
+    {
+      "finding_id": "F5-03",
+      "verdict": "upheld",
+      "reasoning": "job-orchestrator is untouched by the PR and still tells the agent to run the CLI. Sibling skills that did not move are not intent; the branch's own rule says an agent never runs it. Suggested fix is consistent."
+    },
+    {
+      "finding_id": "F5-04",
+      "verdict": "upheld",
+      "reasoning": "The model-facing schema calls evidence optional while the engine (managed.ts:1958-1967) refuses a non-unknown disposition without it only after the press. No comment or exemption makes this deliberate; refusing at card time matches the card's own card-time checks."
+    },
+    {
+      "finding_id": "F5-05",
+      "verdict": "upheld",
+      "reasoning": "recordDispositionsLocked validates each record on its own (managed.ts:1937-1996) and the later assignment wins; no code or comment treats duplicates as intended. The fix is cheap and consistent."
+    },
+    {
+      "finding_id": "F5-06",
+      "verdict": "upheld",
+      "reasoning": "findings.json is written at managed.ts:1019 before the manifest validation at 1026, and the catch at 1031-1038 restores research.json and the manifest but not findings.json. The ordering predates the PR but no signal says leaving dispositions behind is chosen; the card's 'nothing was recorded' message is new on this branch."
+    },
+    {
+      "finding_id": "F5-07",
+      "verdict": "upheld",
+      "reasoning": "The card refuses a closed round at operator-confirm-review.ts:764 (added on this branch, 6528f9a973) while completeManagedReview has no such refusal. Branch-introduced code is not a prior choice. The split of the rule between layers stands as reported."
+    },
+    {
+      "finding_id": "F5-08",
+      "verdict": "upheld",
+      "reasoning": "Docs lag behind the new wording and the dispositions input; the project rule is that docs stay current with code. No signal against."
+    },
+    {
+      "finding_id": "F5-09",
+      "verdict": "upheld",
+      "reasoning": "Same one-liner written at four sites, new errorText helper left unused at two of them in the same file. No intent signal; extraction is the idiomatic fix."
+    },
+    {
+      "finding_id": "F5-10",
+      "verdict": "upheld",
+      "reasoning": "operator-confirmations.ts header still describes a passive view while the commit added race and approval-record helpers and a value import of raceApproval. Module boundary and test name disagree. No signal this was chosen."
+    },
+    {
+      "finding_id": "F5-11",
+      "verdict": "upheld",
+      "reasoning": "`mirrored` is documented as whether the question reached the topic, yet 'ended' sets it false (operator-confirmations.ts:81). The type admits an invalid combination. No intent signal; a single enum field is the standard fix."
+    },
+    {
+      "finding_id": "F5-12",
+      "verdict": "upheld",
+      "reasoning": "closeStep was introduced only for nextStep; describeBlockers and decideReviewGate repeat the ternary at 797, 814, 822, 829. Same wording in several places, no signal of intent."
+    },
+    {
+      "finding_id": "F5-13",
+      "verdict": "upheld",
+      "reasoning": "approval-mirror.ts:55 is added by 77d2eff205. topicAbort is aborted only in the finally after settled is true, and line 53 already returns when settled, so the guard is unreachable. No comment gives a case it covers."
+    },
+    {
+      "finding_id": "F5-14",
+      "verdict": "upheld",
+      "reasoning": "askUnmirroredCard re-derives the place/yes mapping already owned by OperatorConfirmationLog.settle, and takes positional parameters where its sibling takes an options object. No comment explains why; a duplicated rule is the finding."
+    },
+    {
+      "finding_id": "F5-15",
+      "verdict": "upheld",
+      "reasoning": "completion-gate.ts:800 still names `keryx review complete` as the lister in a function that is now card-aware; the line predates the commit (53ea4f1bb0) but sits inside the changed function and contradicts closeStep. No signal of intent."
+    },
+    {
+      "finding_id": "F5-16",
+      "verdict": "upheld",
+      "reasoning": "review.ts:4558 and :4562 were edited on this branch (b1c6da0e69) and still tell the agent to call the card unconditionally, while the gate now branches on cardAvailable. Branch-added text is not a prior choice; the inconsistency stands."
+    },
+    {
+      "finding_id": "F5-17",
+      "verdict": "upheld",
+      "reasoning": "Hand-written enum check plus a cast, repeated at review.ts:4669 and readiness.ts:286. A type guard beside the const is the common fix. Sibling copies are the same duplication, not a chosen pattern."
+    },
+    {
+      "finding_id": "F5-18",
+      "verdict": "upheld",
+      "reasoning": "The remote-approval decision is written twice in tui-shell.ts (6083, 6125). Two copies only, reported as minor; no intent signal."
+    },
+    {
+      "finding_id": "F5-19",
+      "verdict": "upheld",
+      "reasoning": "mirrorApprovalToTopic derives the card title twice and interleaves several jobs; the repeated narrowing is a clarity issue. No signal of intent."
+    },
+    {
+      "finding_id": "F5-20",
+      "verdict": "upheld",
+      "reasoning": "raceMirroredCard's undefined question is a hidden mode switch that drops onUndelivered; the reviewer notes there is no behaviour change, only a coupling. No comment or signal makes the mode switch deliberate."
+    },
+    {
+      "finding_id": "F5-21",
+      "verdict": "upheld",
+      "reasoning": "The wiring hop at tui-shell.ts:6083 and :6125 is untested; mutation pass shows both fromId mutants survived. Test gap stands, and a minor is upheld or challenged, never re-graded."
+    },
+    {
+      "finding_id": "F5-22",
+      "verdict": "upheld",
+      "reasoning": "New fixed sleeps in card-lifecycle.test.ts and mirror-undelivered.test.ts; sibling sleeps at :106 and :125 come from the same branch (e378eb5319) and are already open as E-42, so they do not ratify the pattern."
+    },
+    {
+      "finding_id": "F5-23",
+      "verdict": "upheld",
+      "reasoning": "The E-03 test validates a hand-built waiver rather than the writer's output, and the manifest schema stub is {\"type\":\"object\"}. Test-source-of-truth gap; mutation note shows the writer shape is pinned elsewhere, which the reviewer already states and which does not remove the gap."
+    },
+    {
+      "finding_id": "F5-24",
+      "verdict": "upheld",
+      "reasoning": "Mutation pass shows dropping cardSafe and clip survives the suite; the tests use only benign text. The guard on a model-chosen string shown to the operator is unpinned. No signal against."
+    },
+    {
+      "finding_id": "F5-25",
+      "verdict": "upheld",
+      "reasoning": "Mutation pass shows replacing the cardAvailable roster predicate at agent.ts:3501 by true or false survives. No test drives the real predicate. Test gap stands."
+    },
+    {
+      "finding_id": "F5-26",
+      "verdict": "upheld",
+      "reasoning": "The absent-fromId half of the topic answer is asserted with objectContaining only; mutant M-201 (fromId ?? 0) survived. Test gap stands as reported."
+    }
+  ]
+}

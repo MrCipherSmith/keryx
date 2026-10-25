@@ -1,0 +1,97 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "slice-03 is clean on naming and imports; the helper cardPressFields/CardPress is a good single owner for the press fields. Remaining style points: the same two fields are still declared inline in other places, one nested-spread line in write-land.ts is hard to read, one cast in mapApprovalAnswer re-declares a type, and the two help summaries grew very long. Nothing above minor. Hand-copied press fields point skipped as instructed.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/harness/external/write-land.ts",
+      "line": null,
+      "quote": "...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote, ...(input.confirmation.pressedBy !== undefined ? { pressedBy: input.confirmation.pressedBy } : {}), ...(input.confirmation.pressedAt !== undefined ? { pressedAt: input.confirmation.pressedAt } : {}) } : {}),",
+      "problem": "One line of about 230 characters holds three levels of conditional spread. Every other writer in this slice used the new cardPressFields helper to avoid exactly this shape.",
+      "evidence": "write-land.ts diff hunk @@ 209,249 @@; the same PR adds cardPressFields (src/review/types.ts) and uses it in chunks-estimate.ts, coverage-complete.ts, operator-decisions.ts, plan-confirmation.ts, premise-question.ts, publish.ts and readiness.ts.",
+      "impact": "Hard to read and to review; the press-field rule (set only when present) is restated by hand here instead of living in one helper.",
+      "suggested_fix": "Build the confirmation fields in a short local const before decisionBody: const via = input.confirmation; ...(via === undefined ? {} : { confirmedVia: via.confirmedVia, quote: via.quote, ...cardPressFields(via) }). cardPressFields lives in src/review/types.ts; if a harness module should not import from review, move CardPress/cardPressFields to a neutral lib module.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/estimate.ts",
+      "line": null,
+      "quote": "  pressedBy?: number | undefined;",
+      "problem": "CardPress was introduced as the one shape for pressedBy/pressedAt, but other declarations still spell the two fields out: PlanConfirmation in estimate.ts, DecisionConfirmation in src/learning/decisions.ts, the confirmation type in write-land.ts, confirmationPressedBy/confirmationPressedAt in interactive-tools.ts, and the inline binding types in src/flow/confirm-token.ts. The review/ types use `& CardPress`, the others do not.",
+      "evidence": "keryx ctx rg 'pressedBy\\??: number' src lists 17 matches in 12 files; in this slice estimate.ts, decisions.ts, write-land.ts and interactive-tools.ts declare them inline while chunks-estimate.ts, coverage-complete.ts, operator-decisions.ts, plan-confirmation.ts, premise-question.ts, publish.ts, readiness.ts and types.ts use CardPress.",
+      "impact": "Two conventions for one concept. A change to the press record (a third field, a different type for the id) must be made in many places and one will be missed. estimate.ts also keeps a second PlanConfirmation type next to plan-confirmation.ts's, which already uses CardPress (the duplicate type pre-dates the PR).",
+      "suggested_fix": "Use CardPress (or an Omit/extends of it) in estimate.ts PlanConfirmation, learning/decisions.ts DecisionConfirmation and write-land.ts. Where a module must not import from review/types, move CardPress to a shared lib module and import it from both sides.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/remote/shell-bridge.ts",
+      "line": null,
+      "quote": "...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),",
+      "problem": "`o` is already cast a few lines above to { decision?, approvalId?, fromId? }; this line casts it a second time to read one more field.",
+      "evidence": "shell-bridge.ts mapApprovalAnswer: `const o = got as { decision?: unknown; approvalId?: unknown; fromId?: unknown };` then the inline re-cast.",
+      "impact": "Readability: the reader sees two views of the same object, and the real input shape is not in one place.",
+      "suggested_fix": "Add `undelivered?: unknown` to the cast on `o` and write `!yes && o.undelivered === true ? { undelivered: true as const } : {}`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/standard/help-groups.ts",
+      "line": null,
+      "quote": "summary: \"Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row), and the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete).\",",
+      "problem": "The /decisions summary grew to a single sentence of about 330 characters with a list of five internal tool names, and /remote-control's grew to about 560. The other entries in the same table are one short clause each. The tool-name list is also written out in three places (these two summaries and the OPERATOR_CONFIRM_TOOL_NAMES comment in unattended.ts).",
+      "evidence": "help-groups.ts diff hunk @@ 562,620 @@; compare the neighbouring /product, /reviews, /history entries.",
+      "impact": "Help text that wraps over many lines is skimmed, and a sixth review card would have to be added to each copy.",
+      "suggested_fix": "Say 'and the Telegram review cards (waiting or answered)' and leave the tool names to the docs. Same for /remote-control: keep the age/time-left/who-pressed detail in docs/docs/limitations.md.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/review/types.ts",
+      "line": null,
+      "quote": "/** A readiness item the operator waived in their own words (`keryx review complete --waive <item> \"<quote>\"`). */",
+      "problem": "This JSDoc is stacked on top of the ConfirmedVia comment and describes ReadinessWaiver, which is now two declarations further down (CardPress and cardPressFields sit between). The dangling comment pre-dates the PR; the PR adds more code between it and its subject. Also, a runtime function (cardPressFields) now lives in a file named types.ts; it already exports FINDING_DISPOSITION_STATES, so there is precedent.",
+      "evidence": "types.ts diff hunk @@ 71,122 @@.",
+      "impact": "A reader of ReadinessWaiver finds no doc; a reader of ConfirmedVia finds two.",
+      "suggested_fix": "Move the readiness-waiver comment to sit directly above `export type ReadinessWaiver`. Optional: put cardPressFields beside the other review helpers instead of in types.ts.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+# Style Review Report (slice-03)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Naming is consistent (pressedBy, pressedAt, CardPress, cardPressFields, MIRROR_NOT_DELIVERED, mirrorUndeliveredNote follow the project's camelCase/UPPER_SNAKE_CASE use and the "Flow N" comment convention). Imports are grouped and ordered in every touched import line and in the new test file. The style debt is the press-field shape declared inline in several places beside the new shared type, one hard-to-read nested spread in write-land.ts, a double cast in mapApprovalAnswer, and long help summaries.
+
+## Checked
+Naming of new exports and fields; import order in all touched import lines and in mirror-undelivered.test.ts; dead code and unused imports (none found: every added import is used); magic numbers (none new); comments (new JSDoc is accurate for MIRROR_NOT_DELIVERED, mirrorUndeliveredNote, evidenceLevelLine, CardPress, completeReviewGated); the two SKILL.md / SKILL.detail.md copies (identical edits, expected mirror); file length (complete-gated.ts is 18 lines, no touched file grew past a threshold in this slice); console usage (none added).
+
+## Positive Notes
+completeReviewGated has one short doc comment that says why the CLI and the card share it. mirror-undelivered.test.ts names each case after the behaviour it pins, including the negative case (a delivered question that timed out does not fire onUndelivered).

@@ -1,0 +1,112 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, PR 1052 (flow 464), round r04, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, wave 1, slice-02 (read in full, 1110 lines).
+
+Checklist of PR-body claims against the diff and the code at the head:
+- "pressedBy and pressedAt recorded on a remote answer; allowed user id, once, one question, within 1 hour": matches. operator-confirm-tools.ts refuses an undefined or non-matching allowedUserIds, deletes the token on every path, TTL 1 hour (REMOTE_CARD_TTL_MS). TM-04 section 6a and flow-state.schema.json (pressedBy integer, pressedAt string) agree with src/flow/schema.ts and confirm-token.ts.
+- "New review_complete card (SHA, evidence level, waivers); confirm_plan and decide_premise answer through the card": documented in TM-04 section 2, cli-reference, commands-by-task, the review skills. Matches the tool descriptions in operator-confirm-review.ts.
+- "The card says when the Telegram mirror was not delivered; terminal commands stay as fallback": the doc text matches MIRROR_NOT_DELIVERED in src/remote/shell-bridge.ts; the fallback is stated in TM-04 section 8 and cli-reference.
+- "TUI: pending and answered cards in the remote status tab, sidebar, /decisions": documented in the TUI-facing guide pages of the slice; no contradiction found.
+- "Docs: TM-04 section, review guides, cli-reference, review skills. flow ac confirm is unchanged": TM-04 and the CLI docs say flow ac confirm is unchanged. See PC-001 and PC-002 for the places where the docs disagree with themselves.
+- "AC1-AC10 (AC9 owner live check, AC10 release)": flow 464 acceptance-criteria matches. AC10 is backed by package.json 0.3.124 and CHANGELOG [0.3.124] - 2026-10-19. The body does not mention either (PC-004, info).
+- Test plan: three boxes unticked. CI (20 checks) is passing, so box 1 is settleable by the owner; box 3 is AC9 and belongs to the owner. Not a defect.
+- Unattended exclusion: autonomous-profile wording is deliberate (given as known context); OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts has 19 names, which is where the TM-04 "Nineteen" comes from (PC-001).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-pr-contract",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-02 read in full. The PR body's claims (remote answer rules, pressedBy/pressedAt, review_complete card, mirror-not-delivered fallback, TUI surfaces, flow ac confirm unchanged, AC1-AC10) match the diff and the code. Three minor documentation disagreements remain: TM-04 says nineteen decisions but its table lists seventeen; two sentences in review-with-a-record.md still describe a shell review as finished by `keryx review complete`; the flow 464 description and plan still read as an unapproved draft. One info note on the body leaving out the version bump.",
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": null,
+      "quote": "Nineteen keryx decisions are the operator's alone",
+      "problem": "TM-04 Purpose states nineteen operator-only decisions, but the section 2 table lists seventeen tool rows. review_waive_mutation, review_override_reviewers and review_comments_reply are registered in OPERATOR_CONFIRM_TOOL_NAMES (src/trigger/unattended.ts, 19 names) and are absent from the table. The number is right, the table is incomplete (or the number must name what it counts).",
+      "impact": "A reader who uses the table as the list of what needs a card misses three decisions an agent also cannot take alone. The decision record disagrees with itself and with the registry it summarises.",
+      "suggested_fix": "Add the three missing rows to the section 2 table, or reword the Purpose line to the number the table lists and point to OPERATOR_CONFIRM_TOOL_NAMES for the full set.",
+      "evidence": "TM-04 line 15 (Purpose) versus the section 2 table in the same file (17 rows) versus src/trigger/unattended.ts lines 55-83 (19 names; schedule_create is excluded separately in UNATTENDED_EXCLUDED_TOOLS).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pc:tm04-decision-count",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": 893,
+      "quote": "A review run in the shell is finished when `keryx review complete` accepts the package, not when the",
+      "problem": "The PR adds the rule that an agent never runs `keryx review complete` and closes a review only through the review_complete card. Two sentences of the same guide, outside the diff hunks, still say a shell review run is finished when `keryx review complete` has closed or accepts the package (line 893 and line 1072), without naming the card.",
+      "impact": "The guide the PR names as updated contradicts its own new rule for the shell case. A reader or an agent following those two sentences reads the CLI as the way to finish the run.",
+      "suggested_fix": "Reword both sentences to say the run is finished when the package is closed, through the review_complete card in the shell (the operator runs `keryx review complete` only as the terminal fallback), keeping the point that the report on its own does not finish it.",
+      "evidence": "git grep at the head: review-with-a-record.md lines 893 ('...has closed the package, not when the') and 1072 ('...accepts the package, not when the'). The new rule is in review-orchestrator SKILL.md, TM-04 section 6a and section 8, and src/review/completion-gate.ts nextStep.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pc:guide-shell-review-complete",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md",
+      "line": 3,
+      "quote": "Status: draft for operator approval",
+      "problem": "description.md and plan.md of flow 464 both still open with 'Status: draft for operator approval', while flow.json in the same diff records the criteria as frozen and the flow as started, and the PR body presents AC1-AC10 as the agreed criteria.",
+      "impact": "The flow record's own documents say the plan was never approved, which contradicts the flow state and the PR body. Low consequence; a reader checking approval status gets two answers.",
+      "suggested_fix": "Update the Status line of description.md and plan.md to the approved state, or drop the line if flow.json is the source of truth.",
+      "evidence": "description.md line 3 and plan.md line 3 of the flow 464 folder versus the frozen and started markers in flow.json (same slice).",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pc:flow464-status-draft",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-004",
+      "severity": "info",
+      "file": "package.json",
+      "line": null,
+      "quote": null,
+      "problem": "The PR body does not mention the version bump to 0.3.124 or the dated CHANGELOG section [0.3.124] - 2026-10-19 that the diff carries (AC10 covers the release in the criteria, not the body). Separately, AC7 names 'the flow skill docs', but no flow skill doc is in the diff; the existing flow-orchestrator text (line 440) already says 'the card in keryx shell; elsewhere ... the exact `keryx review decide-premise` command', which is consistent, so nothing is contradicted.",
+      "impact": "A reviewer reading only the body does not learn that merging bumps the package version. No behaviour effect.",
+      "suggested_fix": "Add one line to the PR body: 'Bumps the package to 0.3.124 with its CHANGELOG entry.'",
+      "evidence": "pr-context.md summary (five bullets, no version mention) versus the package.json and CHANGELOG hunks of slice-02.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pc:body-omits-version-bump",
+      "location_class": "pr-process",
+      "publication": "omit"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-02", "disposition": "open" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-04", "disposition": "open" },
+    { "id": "D-05", "disposition": "open" },
+    { "id": "D-06", "disposition": "open" },
+    { "id": "D-07", "disposition": "open" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-09", "disposition": "open" },
+    { "id": "D-10", "disposition": "open" },
+    { "id": "D-11", "disposition": "open" },
+    { "id": "D-12", "disposition": "open" },
+    { "id": "D-13", "disposition": "open" },
+    { "id": "D-14", "disposition": "open" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes on prior_dispositions (checked at the head with git grep, outside my slice for the code items):
+- D-01 closed: the waiver tool descriptions and result strings in src/commands/operator-confirm-review.ts (lines 261-262, 312) now say to call review_complete afterwards; the only remaining CLI mentions are header comments naming the CLI equivalent.
+- D-03 partial: src/review/completion-gate.ts line 791 still reads "(`keryx review complete` lists them all)" in describeBlockers; line 788 no longer carries the instruction.
+- D-08 closed: docs/docs/guides/autonomous-review.md line 35 now states that an autonomous (unattended) run is excluded from the card gate and is not given the card tools.
+- D-02, D-04 to D-07, D-09 to D-14 are code and test items outside this reviewer's lane; left open as agreed (D-12 was claimed fixed by slice-01 but the test was not examined here, so it stays open).

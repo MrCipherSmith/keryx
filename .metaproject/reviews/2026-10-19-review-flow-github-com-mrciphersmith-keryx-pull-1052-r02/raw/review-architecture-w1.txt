@@ -1,0 +1,115 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Delta d2cb377f5..672e37687 (stack: TypeScript CLI/TUI, layers flow < review < commands < tui). No blocker or major. The settle-on-every-exit change in tui-shell closes every exit of both approval branches (unmirrored branch via try/finally, mirrored branch via try/finally over raceApproval with an explicit undefined-outcome case), and markUndelivered/waiting() keep the log consistent. Remote answer validation stays in one place (operatorConfirmTool.invoke: pressedBy/pressedAt present, allowlist, 1h TTL) and the allowlist is wired in shell.ts. Dependency direction is unchanged: flow does not import review, review does not import commands, tui imports commands only for the pre-existing TTL constant. The project and bundled review-orchestrator SKILL.md and SKILL.detail.md are byte-identical. One minor structural finding (commands layer re-derives the engine's close state) and four info items.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === \"closed\";",
+      "problem": "apply() in the review_complete card decides whether the round closed by catching the gate's throw and re-reading manifest.json from the commands layer. The comment above it states the premise: 'The engine closes the manifest before its own bookkeeping'. That ordering invariant is internal to review/managed.ts (manifest written at managed.ts:1030, then clearActiveReview at :1040, recordFinishedRound at :1043, writeReviewNotes at :1057 and a findings.json read at :1056, all after it). The commands layer now depends on it without the engine exposing it.",
+      "impact": "If completeManagedReview reorders its steps (for example moves the manifest write after the notes), review_complete would report 'refused ... nothing was recorded' for a round that is in fact closed, or the reverse, with no compile-time or engine-level signal. keryx review complete (review.ts) has no such inference, so the two entry points that completeReviewGated says 'meet the same gates' diverge in how they report a post-close failure.",
+      "suggested_fix": "Keep the invariant inside src/review: make completeManagedReview/completeReviewGated turn post-close bookkeeping failures into warnings on the result (or throw a typed error carrying closed: true and the manifest), and have apply() read that instead of re-reading the manifest. Then drop the completionFacts re-read and the gateError/closed bookkeeping.",
+      "evidence": "src/commands/operator-confirm-review.ts apply() (the 'closed' inference after the try/catch around completeReviewGated); src/review/managed.ts:1030 (manifest write) versus :1040-1057 (post-close steps that can throw); src/review/complete-gated.ts:11-18 returns the engine result unchanged.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch:review-complete-closed-inference",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/flow/confirm-token.ts",
+      "line": null,
+      "quote": "return record as unknown as StoredConfirmationToken;",
+      "problem": "The delta makes consumeConfirmationToken copy pressedBy and pressedAt from the token store into the signature record (confirm-token.ts:235-236), but parseStoredToken validates neither field; it casts the parsed JSON. The review layer's readers of the same two fields do validate them (src/review/coverage-complete.ts:98-99: safe integer / non-empty text).",
+      "impact": "A malformed pressedBy (string, float) in confirm-token.json would be written into the signed record and then fail the new schema.ts entry (type integer) later, instead of being refused at the boundary. Same trust boundary as the rest of the file, so low impact.",
+      "suggested_fix": "In parseStoredToken, accept pressedBy only when Number.isSafeInteger and pressedAt only when isInstant, otherwise treat the token as token_unreadable (or drop the field).",
+      "evidence": "src/flow/confirm-token.ts:173 and :235-236 versus src/review/coverage-complete.ts:98-99.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch:confirm-token-press-fields-unvalidated",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's",
+      "problem": "The delta removes the head input from the review_complete card (inputSchema, buildCard, apply), but the module header still documents the tool as taking [--head]. The same header lists the CLI mapping for every other card, so it reads as the contract.",
+      "impact": "A reader or the next author assumes the card can replace the recorded head; the engine option (CompleteManagedReviewOptions.head) is still reachable only from the CLI.",
+      "suggested_fix": "Change the header to 'keryx review complete <package>' and, if the omission is deliberate, add one line that --head stays CLI-only.",
+      "evidence": "src/commands/operator-confirm-review.ts:18 against completeSpec's inputSchema (properties: package only).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch:stale-head-comment",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/types.ts",
+      "line": null,
+      "quote": "export type CardPress = { pressedBy?: number | undefined; pressedAt?: string | undefined };",
+      "problem": "The pressedBy/pressedAt pair is now declared independently in six places across four layers: harness/tool/builtin/interactive-tools.ts:67-68 (confirmationPressedBy/At), commands/agent.ts:303-304 (ApprovalResponse), commands/operator-confirm-tools.ts:57-59 (OperatorConfirmation), flow/confirm-token.ts:76-77, flow/types.ts (SignatureConfirmation) and review/types.ts:92 (CardPress). Each delta edit had to restate the same 'shell's clock, not Telegram's' meaning in each copy.",
+      "impact": "Drift risk only: the meaning of pressedAt (shell clock at arrival) is documented in four comments that can diverge. flow cannot import review, so CardPress cannot simply be reused there.",
+      "suggested_fix": "If this is touched again, put the pair and its one-line semantics in a neutral module that flow, review and commands can all import (for example src/lib or src/flow/types.ts as the lowest layer) and derive the others from it. No change needed for this PR.",
+      "evidence": "keryx ctx rg over pressedBy|pressedAt|CardPress in src (non-test): matches in the six files above.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch:press-fields-duplicated",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "yes: outcome.result !== false",
+      "problem": "The settle logic derives the card's yes/no from `!== false`, but ApprovalResponse (commands/agent.ts:291-305) also admits { approved: false }, which isApprovalFor (agent.ts:5305-5313) treats as a refusal. The delta touches two of these sites (tui-shell.ts:6109 and :6140) and a third exists at :5787.",
+      "impact": "Latent only: no approver in src/tui or commands/agent.ts produces approved:false today (keryx ctx rg 'approved: false' finds none), so the sidebar cannot show a wrong 'yes' now; a future approver that returns the object form would be logged as yes.",
+      "suggested_fix": "Add a small helper next to remoteApproval, for example `const approvedOf = (r: ApprovalResponse) => typeof r === 'boolean' ? r : r.approved`, and use it at the three sites instead of `!== false`.",
+      "evidence": "src/tui/tui-shell.ts:6109 and :6140 (delta), :5787 (pre-existing); src/commands/agent.ts:291-313.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "arch:approval-yes-derivation",
+      "location_class": "in-diff"
+    }
+  ],
+  "pre_existing": [
+    "src/commands/operator-confirm-tools.ts:36 declares ConfirmedVia = \"tui-card\" | \"remote-card\" and src/review/types.ts:89 declares the identical union; two definitions of one vocabulary (not in the delta).",
+    "src/tui/tui-shell.ts:6115-6117: an operator card too long for the topic returns inner(...) without an operatorCards.ask, so the sidebar log does not hold it (noticeCardTooLong tells the operator; not in the delta, and arguably by design since the log is of mirrored cards).",
+    "src/tui/tui-shell.ts is a single 6000+ line module and the approval wrapper (mirrorApprovalToTopic) grows inline with each flow; the delta adds a three-way settle branch to it. A settleCard(outcome) helper would shorten it, but this is not a violation."
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 4 }
+}
+```
+
+## Architecture Review (r02 delta)
+
+### Review Scope
+- Reviewed head: 672e37687b7c27184e88c5d6571f8c509a2c671e, delta base d2cb377f59f7f9c8553d9f377f99360bff3f6328
+- Stack detected: generic TypeScript (CLI engine + OpenTUI shell), layers flow < review < commands < tui
+- Slice read: slice-01 code files (the 8 named source files, their tests skimmed through the diff stat) and both copies of review-orchestrator SKILL.md / SKILL.detail.md (identical, verified with diff -q).
+
+### Operator focus
+- review_complete card: head input removed consistently (schema, buildCard, apply, description). The post-close handling is the only structural concern (F-001). Waivers now include operator-decisions (mutation, reviewer override) through readOperatorDecisions, which is the review layer's public reader; the digest covers them.
+- Remote answer validation: one place (operatorConfirmTool.invoke, operator-confirm-tools.ts:207-221) for every spec: both press fields required, allowlist checked against a per-call fresh config read (shell.ts:4224), 1h TTL on the card's own issuedAt. Not duplicated per spec.
+- pressedBy/pressedAt layering: the fields travel ApprovalResponse -> InteractiveToolContext -> OperatorConfirmation -> stores/mint -> SignatureConfirmation without any layer importing upward. Only the repeated declarations (F-004) and the unvalidated read in flow (F-002) are noted.
+- Settle in tui-shell: unmirrored branch settles in finally (withdrawn when inner throws); mirrored branch settles in finally with the undefined-outcome case, dock, and telegram outcomes; onUndelivered flips the entry via markUndelivered; waiting() excludes expired tokens. No unsettled exit found. Only F-005 (info) on how yes is derived.
+
+### Stats
+blocker 0 | major 0 | minor 1 | info 4
+
+Routing audit: graph_used no (not-relevant: delta small, read directly); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg / run); raw_rg_used no.

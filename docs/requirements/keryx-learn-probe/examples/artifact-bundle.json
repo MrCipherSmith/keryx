@@ -1,0 +1,127 @@
+{
+  "plan": {
+    "schemaVersion": 1,
+    "probeId": "353527ac9c67",
+    "identityDigest": "353527ac9c67ac61b68a6310c14769c4f26a092437f4885c74db2d223c622bef",
+    "patternId": "pattern-example",
+    "patternDigest": "84b0afc894dcaffcef837c913ab10a903ce821c2314108f1231b3bab534a9db1",
+    "taskId": "wilson-interval",
+    "createdAt": "2026-10-20T20:00:00Z",
+    "snapshot": {
+      "status": "candidate",
+      "trigger": "When estimating binary outcome uncertainty",
+      "action": "Use Wilson intervals and name the exported helper."
+    },
+    "environment": {
+      "model": "fixture-model",
+      "provider": "fixture",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "baseRef": "fixture-base",
+      "taskSetDigest": "fe6ea1a07d27ba013ab06e5c38f2a3decde7a7411e67ea5b4e12964da92961f8",
+      "baselineDigest": "4052d468ce849540f446eadd55013c00a1a78333aa3f9efbcc10a45f32b87bc9"
+    },
+    "request": {
+      "runs": 1,
+      "maxUsd": 2
+    },
+    "estimateUsd": null
+  },
+  "comparison": {
+    "schemaVersion": 1,
+    "probeId": "353527ac9c67",
+    "identityDigest": "353527ac9c67ac61b68a6310c14769c4f26a092437f4885c74db2d223c622bef",
+    "patternId": "pattern-example",
+    "patternDigest": "84b0afc894dcaffcef837c913ab10a903ce821c2314108f1231b3bab534a9db1",
+    "taskId": "wilson-interval",
+    "createdAt": "2026-10-20T20:01:00Z",
+    "resumed": false,
+    "environment": {
+      "model": "fixture-model",
+      "provider": "fixture",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "baseRef": "fixture-base",
+      "taskSetDigest": "fe6ea1a07d27ba013ab06e5c38f2a3decde7a7411e67ea5b4e12964da92961f8",
+      "baselineDigest": "4052d468ce849540f446eadd55013c00a1a78333aa3f9efbcc10a45f32b87bc9"
+    },
+    "arms": {
+      "base": {
+        "seeds": 1,
+        "successes": 1,
+        "rate": 1,
+        "ci": [
+          0.20654931437723745,
+          1
+        ]
+      },
+      "probe": {
+        "seeds": 1,
+        "successes": 1,
+        "rate": 1,
+        "ci": [
+          0.20654931437723745,
+          1
+        ]
+      }
+    },
+    "delta": {
+      "rate": 0,
+      "ci": [
+        -0.7934506856227626,
+        0.7934506856227626
+      ]
+    },
+    "verdict": "indistinguishable",
+    "runs": [
+      {
+        "arm": "base",
+        "seed": 0,
+        "answered": true,
+        "success": true,
+        "transcript": "runs/base/0.ndjson"
+      },
+      {
+        "arm": "probe",
+        "seed": 0,
+        "answered": true,
+        "success": true,
+        "transcript": "runs/probe/0.ndjson"
+      }
+    ]
+  },
+  "checkpoint": {
+    "schemaVersion": 1,
+    "probeId": "353527ac9c67",
+    "planDigest": "59094b1fbb7e1edc46f8e9511b554056662781d46329f26a524f138ba6fba008",
+    "updatedAt": "2026-10-20T20:01:01Z",
+    "phase": "finalized",
+    "spendUsd": 0.2,
+    "reservedUsd": 0,
+    "seeds": [
+      {
+        "planDigest": "59094b1fbb7e1edc46f8e9511b554056662781d46329f26a524f138ba6fba008",
+        "arm": "base",
+        "seed": 0,
+        "state": "completed",
+        "transcript": "runs/base/0.ndjson",
+        "answered": true,
+        "success": true,
+        "chargedUsd": 0.1,
+        "reservedUsd": 0
+      },
+      {
+        "planDigest": "59094b1fbb7e1edc46f8e9511b554056662781d46329f26a524f138ba6fba008",
+        "arm": "probe",
+        "seed": 0,
+        "state": "completed",
+        "transcript": "runs/probe/0.ndjson",
+        "answered": true,
+        "success": true,
+        "chargedUsd": 0.1,
+        "reservedUsd": 0
+      }
+    ],
+    "finalization": {
+      "evidence": "not-needed"
+    }
+  }
+}

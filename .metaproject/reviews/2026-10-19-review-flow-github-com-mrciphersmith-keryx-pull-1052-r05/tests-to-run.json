@@ -1,0 +1,526 @@
+[
+  {
+    "file": "scripts/benchmark/long-runner-turn.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/agents/compile.spawn-subagent.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/bus/delivery.integration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-binding.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-context-p0.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-approval-context.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-bus-notification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-commands.confusable.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-commands.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-destructive-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-fewer-prompts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-granted-json.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-hooks.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-instruction-roster.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-lifecycle-hooks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-permission-mode.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-review-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-rewind-seam.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-task-notification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-tool-call-budget.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-trust-orchestration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-untrusted-batch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.context-guard.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.error-hint.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.host-contracts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.overflow-retry.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.recovery.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.repeat-guard-prune.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.slate-trail.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.working-memory.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agents-catalog-commands.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-antigravity.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-run.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-write.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents.monitor.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/goal-command.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runGoalCommand"
+    ]
+  },
+  {
+    "file": "src/commands/interactive-agent-tools.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/mcp-tool-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-untrusted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/operator-confirm-rosters.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/commands/operator-confirm-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-security.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/shell-agent-repl.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentRepl"
+    ]
+  },
+  {
+    "file": "src/commands/shell-bus.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-cli-validation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-launch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ShellCommandRuntime",
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-slash-registry.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentRepl"
+    ]
+  },
+  {
+    "file": "src/commands/shell-task-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BlockIoChrome",
+      "TuiAgentIo",
+      "attachBlockIo",
+      "attachUsageIo",
+      "createTuiAgentIo",
+      "launchTuiAgentShell"
+    ]
+  },
+  {
+    "file": "src/commands/shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-agent-task.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/trigger-unattended.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createSpawnSubagentTool"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/remote/telegram-permission.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/review/harness-robustness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "buildReviewConfirmSpecs"
+    ]
+  },
+  {
+    "file": "src/security/web-taint-durable-boundary.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/tui/approval-mirror.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "raceApproval"
+    ]
+  },
+  {
+    "file": "src/tui/remote-control-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createTuiAgentIo"
+    ]
+  },
+  {
+    "file": "src/tui/tui-shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "attachBlockIo",
+      "attachUsageIo",
+      "createTuiAgentIo"
+    ]
+  },
+  {
+    "file": "src/wiki/deep-enrich.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "enrichPageDeep"
+    ]
+  }
+]

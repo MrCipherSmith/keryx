@@ -1,0 +1,33 @@
+{
+  "requested": "auto",
+  "depth": "full",
+  "reason": "auto: 24 files exceeds 5",
+  "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+  "files": [
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "CHANGELOG.md",
+    "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/autonomous-review.md",
+    "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+    "src/commands/agent.ts",
+    "src/commands/operator-confirm-review-tools.test.ts",
+    "src/commands/operator-confirm-review.ts",
+    "src/commands/operator-confirm-rosters.test.ts",
+    "src/commands/operator-confirm-tools.test.ts",
+    "src/commands/shell.test.ts",
+    "src/flow/confirm-token.test.ts",
+    "src/flow/confirm-token.ts",
+    "src/flow/schema.ts",
+    "src/flow/types.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/review/completion-gate.ts",
+    "src/review/types.ts",
+    "src/tui/operator-confirmations.test.ts",
+    "src/tui/operator-confirmations.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "changedLines": 438
+}

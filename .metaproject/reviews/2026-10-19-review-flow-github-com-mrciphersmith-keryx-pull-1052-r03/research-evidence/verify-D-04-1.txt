@@ -1,0 +1,32 @@
+# keryx review verify-run
+finding: D-04
+command: keryx ctx rg -n function completeSpec|apply: async|apply\( src/commands/operator-confirm-review.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T03:14:50.166Z
+exit: 0
+
+--- stdout ---
+# gdctx rg summary
+
+Command: `rg --with-filename --line-number --column --no-heading -n -- function completeSpec|apply: async|apply\( src/commands/operator-confirm-review.ts`
+Exit code: `0`
+Matches: `10` (4 shown below; full output in raw)
+Files: `1`
+Raw lines: `10`
+Scope: `ripgrep defaults` — NOT searched: hidden paths not named on the command line (any dot-directory, `.metaproject/` included); `.gitignore`d files; binary files (anything holding a NUL byte, which ripgrep always skips silently). There, a nil result means "not looked at", not "not present". Widen with `--hidden` / `--no-ignore`.
+Completeness: `partial` — 4 of 10 matches across 1 of 1 files are listed below. This is NOT an enumeration: re-run with `--all` for every match, or `--json` for the full machine-readable set.
+
+## Top Files
+
+- src/commands/operator-confirm-review.ts: 10
+
+## Matches
+
+- src/commands/operator-confirm-review.ts
+  - 149:11 async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+  - 226:11 async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+  - 288:11 async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+  - 351:11 async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+  … omitted 6 of 10 matches in this file — full output in raw
+--- stderr ---
+

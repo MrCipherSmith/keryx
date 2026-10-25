@@ -1,0 +1,40 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "reviewer": "review-security-code",
+  "slices": ["slice-05"],
+  "slice_kind": "second-look",
+  "status": "DONE",
+  "findings": [],
+  "prior_dispositions": [],
+  "clean_areas": [
+    "TM-04 section 6a and section 8 claims checked against source: allowedUserIds second check at the record (operator-confirm-tools.ts:213-217), one-hour REMOTE_CARD_TTL_MS (:117, :218), token deleted before any check (:206) so each refusal leaves it spent, pressedBy/pressedAt recorded only on remote answers (:227), nestedAgentCardRefusal for KERYX_TOOL_CALL=1 (:129)",
+    "flow-state.schema.json pressedBy (integer) / pressedAt (string) sit inside signatures.confirmation, identical to src/flow/schema.ts:331-332; additionalProperties stays true there, no widening",
+    "managed-review-package.schema.json readiness_waivers: additionalProperties false kept, confirmedVia enum closed to tui-card|remote-card, pressedBy integer, pressedAt minLength 1; no free-form field added",
+    "src/trigger/unattended.ts lists the five new review card tools as interactive-only (lines 59-73), matching the autonomous-review.md and cli-reference.md statements; the unattended carve-out wording is deliberate per the request",
+    "Docs state the honest limits (same-OS-user agent can write stores, bot token reachable, plain `review complete` has no TTY check); no doc overclaims what a Telegram press proves",
+    "package.json: version bump 0.3.123 to 0.3.124 only, no dependency, script or bin change"
+  ]
+}
+
+## Security Review (slice-05, second look)
+
+### Scope
+- Branch: docs/flow-helyx-operator-confirm, delta 77d2eff20..0f980c407 over the r05 package
+- Slice: slice-05 only (docs, two JSON schemas, package.json); unchanged since r05
+- Changed files reviewed: 9
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None. Nothing in this slice is executable; the only security-relevant content is documentation of the card trust model and two schema additions, and both match the code they describe. No r05 ledger finding is re-reported. The S-401 fix itself (operator-confirm-review.ts, slices 01 and 02) is outside this slice and is judged there.
+
+### Clean Areas
+Injection, authn/authz, IDOR, input validation, secrets, crypto, CSRF, path traversal, open redirect, React/NestJS patterns: no code in this slice. Schema and trust-model claims checked as listed above.
+
+Routing audit: graph_used no (not-relevant: docs/schema slice), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no.

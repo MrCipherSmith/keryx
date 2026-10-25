@@ -1,0 +1,67 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-02 (E-02 dispositions on the review_complete card, E-03 manifest schema) read in full at head 77d2eff20, with recordDispositions, completeManagedReview, completeReviewGated and the card framework (operator-confirm-tools.ts) as downstream context. E-03 is complete: the three added properties match the ReadinessWaiver / ConfirmedVia / cardPressFields types and no second schema copy exists. E-02 is wired correctly end to end: the dispositions travel through `prepared` (bound to the card by the one-time token and by JSON.stringify(input) equality in invoke), reach completeReviewGated, and are written by the engine only after the readiness gate; the apply error paths keep the closed/not-closed inference. No blocker or major. Three minors: the card accepts dispositions the engine will refuse (missing evidence, unknown id) so the refusal arrives after the operator's yes; duplicate entries for one finding are shown as two lines and recorded last-wins; and the pre-existing write order in completeManagedReview (findings.json before manifest validation) now sits behind an apply message that says nothing was recorded.",
+  "findings": [
+    {
+      "id": "L5-501",
+      "severity": "minor",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 664,
+      "quote": "evidence: { type: \"string\", description: \"Optional: the commit or reasoning behind the disposition.\" },",
+      "problem": "The dispositions input tells the model that evidence is optional and buildCard (completionDispositions, lines 672-690) accepts a missing or blank evidence for every state, and any finding id. The engine refuses both after the press: review-finding.schema.json requires `evidence` for every state except `unknown` (the `else: required: [evidence]` branch), and recordDispositionsLocked (managed.ts:1941-1948 and 1960-1966) throws on a finding id the package does not hold or on a disposition without evidence. That check runs inside completeManagedReview, after the readiness gate, so it is reached only when the operator has already pressed yes.",
+      "impact": "A model that follows the tool schema (evidence optional) builds a card that lists `disposition: E-01 → acted-on` with no citation; the operator reads it, presses yes (the one-time token is consumed, a Telegram press is spent), and apply answers `review_complete refused: Refusing to record a disposition ... must cite where the outcome is written down — nothing was recorded`. Nothing is corrupted (the batch is validated whole before any write and the waivers are rolled back), but the operator is asked to approve a card that can never close, and the same happens for a mistyped finding id. At a terminal the human sees the same refusal on the command they typed; on the card the approval is the cost.",
+      "suggested_fix": "In completionDispositions, refuse at card time what the engine refuses: for `state !== \"unknown\"` require non-empty evidence (`dispositions[i]: evidence is required unless the disposition is unknown`), and change the schema text to `Required unless disposition is unknown: where the outcome is written down`. Optionally resolve each `finding` against the package's findings.json in buildCard (same global_id / id match as recordDispositionsLocked) and refuse an unknown or ambiguous id before the card is shown."
+    },
+    {
+      "id": "L5-502",
+      "severity": "minor",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "file": "src/review/managed.ts",
+      "line": 1999,
+      "quote": "finding.disposition = disposition;",
+      "problem": "recordDispositionsLocked validates every record against the finding as it stands in findings.json and pushes it to `pending` (line 1995); it never compares two records of the same batch. Two entries for the same finding (the same id twice, or one by global_id and one by display id) both pass the existing-disposition check, because neither sees the other, and the second loop at 1998-2000 assigns both to the same object, so the later one silently wins. completionDispositions (operator-confirm-review.ts:672-690) adds no duplicate check either.",
+      "impact": "Repro: review_complete with dispositions [{finding:\"E-01\",disposition:\"acted-on\",evidence:\"abc123\"},{finding:\"E-01\",disposition:\"dismissed-incorrect\",evidence:\"see journal\"}]. The card lists both lines, one yes is pressed, findings.json ends with `dismissed-incorrect`, and completion-confirmation.json records both entries (prepared.dispositions) while the findings carry one. A recorded verdict then differs from what the operator approved line by line, and the precision figure (acted-on vs dismissed-incorrect) reads the last line only. The CLI has the same ordering, but the card path adds a presented list that the operator signs as a whole.",
+      "suggested_fix": "Reject a repeated finding in the batch: in recordDispositionsLocked keep a Set of resolved finding objects and throw `\"<id>\" is recorded twice in one close` when matches[0] is already in it; mirror the check by trimmed finding string in completionDispositions so the card is refused before it is shown."
+    },
+    {
+      "id": "L5-503",
+      "severity": "minor",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "file": "src/review/managed.ts",
+      "line": 1019,
+      "quote": "await recordDispositions(packageDir, dispositions);",
+      "problem": "findings.json is rewritten at 1019, before the closed manifest is validated (1026-1029) and written (1030). If validateManagedReviewManifest fails or the manifest write throws, the catch at 1031-1038 restores research.json and the manifest/report waiver backups (its own comment says a failure before the manifest is closed takes the waiver back) but does not restore findings.json. The round stays open while its dispositions are on disk. recordDispositionsLocked then treats every non-unknown state as immutable (1969-1993), so a retry with different evidence or a different state is refused as an overwrite; only an identical retry passes. The ordering is the CLI's own and predates this PR, but on the card path apply (operator-confirm-review.ts:797) prints `review_complete refused: ... — nothing was recorded`, which is false for the dispositions.",
+      "impact": "Reachable: this very PR hit a schema-validation refusal after READY (E-03) and a disk-write failure at 1030 has the same shape. Repro: close a fix round with dispositions in a project whose manifest schema rejects the closed manifest; apply reports nothing recorded, findings.json holds acted-on/dismissed entries, and the model's corrected second call (different evidence) fails with `already recorded as ... refusing to replace that citation`. Low probability after E-03, hence minor; the damage is a permanent verdict written by a close that did not happen, plus a wrong message.",
+      "suggested_fix": "Snapshot findings.json before line 1019 (readFile) and write it back in the catch next to the other restores; or build `updated` and run validateManagedReviewManifest first (it does not depend on findings.json) so only the final atomic write can fail after the dispositions. Either way keep the apply message, or change it to say `no round was closed` when dispositions were passed."
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    { "id": "E-02", "disposition": "closed" },
+    { "id": "E-03", "disposition": "closed" }
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "read in full: dispositionsSchema, completionDispositions, dispositionLine, buildCard/apply of the review_complete spec, runCompletionGates, writeCompletionRecord, completionOutput, the managed-review-package.schema.json hunk, the agent.ts cardAvailable hunk and the skill hunks; downstream read at head 77d2eff20: managed.ts completeManagedReview 950-1066 and recordDispositionsLocked 1920-2002, complete-gated.ts, operator-confirm-tools.ts 150-239, review.ts parseDispositions, readiness.ts waiveReadiness, types.ts ConfirmedVia / FINDING_DISPOSITION_STATES, review-finding.schema.json disposition subschema",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+Notes for the parent, not part of the result object.
+- E-02 closed: dispositions reach the engine (`dispositions: prepared.dispositions` in runCompletionGates), are shown on the card, and cannot be swapped between card and yes (invoke requires entry.input === key(input) and apply uses the prepared value, not the input). They are not in factsDigest, which is correct because the card holds them in `prepared`. The remaining weaknesses are L5-501 to L5-503.
+- E-03 closed: confirmedVia (enum tui-card, remote-card), pressedBy (integer), pressedAt (string, minLength 1) equal the ReadinessWaiver type (types.ts:89, 102); waiveReadiness at readiness.ts:577 is the only writer and the schema file has no second copy (git ls-files lists one).
+- Security's follow-up (findings.json written before the manifest check, managed.ts:1019 against 1026-1030): judged an existing CLI ordering, but worth the minor L5-503 because the card's apply text asserts nothing was recorded and the immutability rule makes the stray dispositions permanent. The S-401 clipping (card shows 300 chars, whole evidence stored) is left to security as stated.

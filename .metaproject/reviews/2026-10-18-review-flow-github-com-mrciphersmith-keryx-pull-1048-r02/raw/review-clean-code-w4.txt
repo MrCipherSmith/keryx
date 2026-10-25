@@ -1,0 +1,81 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 04 is almost entirely tests plus the small taskText plumbing through the harness port, the operation descriptor, the adapter and the MCP projection. The production lines are short, follow the neighbouring pattern and have no function-size, argument-count, error-handling or SOLID problems. Findings are limited to maintenance cost in the tests: an unnamed size ratio and tolerance, the same synced-copy path table kept in two test files, and a fixture that mislabels character counts as bytes.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "line": null,
+      "quote": "expect(styling.section_bytes).toBeLessThan(styling.bytes / 20);",
+      "problem": "The ratio 20 (the anchored section must be under one twentieth of the document) is an unnamed literal repeated in three assertions (`styling.bytes / 20`, `Buffer.byteLength(text) / 20`, `theming.bytes / 20`), and the size tolerance `+ 2_000` is repeated four times in the fixture test. The file names its other sizes (STYLING_TARGET_BYTES, THEMING_TARGET_BYTES) but not these two.",
+      "impact": "If the fixture is retuned (for example the anchored sections grow), four to seven literals must be found and changed together, and a reader cannot tell that the three `/ 20` checks assert one rule: the budget counts the section, not the file.",
+      "suggested_fix": "Add `const MAX_SECTION_SHARE = 1 / 20;` and `const SIZE_TOLERANCE_BYTES = 2_000;` beside the other fixture constants and use them in all assertions.",
+      "evidence": "Diff of src/gdskills/conditional-reads.e2e.test.ts: `/ 20` appears in the fixture test, scenario 1 and scenario 2; `+ 2_000` appears in the four upper-bound expectations of the fixture test.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/output-schema.test.ts",
+      "line": null,
+      "quote": "\".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json\",",
+      "problem": "The table of which synced copies exist for each output schema is written twice: in output-schema.test.ts (SCHEMA_SOURCES, test \"the synced copies carry the same schema as the bundled source\") and in skill-sync.test.ts (schemaFiles and contractCopies, the byte-identity loops). Both assert `read(copy)` equals `read(source)` for the same four output-contract files under .metaproject/skills/gdskills and .metaproject/core/gdskills/contracts.",
+      "impact": "When a contract copy is added, renamed or moved, two test files must be edited in step; if only one is, the other keeps passing on a stale list and the sync guarantee quietly covers fewer files than the author believes. The byte-identity assertion also runs twice for every output schema.",
+      "suggested_fix": "Keep the byte-identity check in skill-sync.test.ts, which already owns the managed-copy sync, and reduce output-schema.test.ts to the property-key assertion on the bundled source (or export the path table from one module both tests import).",
+      "evidence": "Diff: output-schema.test.ts lines for SCHEMA_SOURCES and the last test; skill-sync.test.ts `schemaFiles`, `contractCopies` and the `is byte-identical to the bundled` tests name the same files.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "line": null,
+      "quote": "bytes: text.length,",
+      "problem": "docFixture fills the resolver entry's `bytes` and the budget's `usedBytes` with `text.length` (UTF-16 code units), while every other test in the diff and the resolver itself use `Buffer.byteLength` for these fields. The Russian-section test passes a Cyrillic `text` through the same fixture, so there the recorded `bytes` is smaller than the real byte size.",
+      "impact": "No assertion in the diff reads these two fields, so nothing fails today. The fixture does not model what the resolver emits, and a later check that compares `bytes` with the file (for example a size drift rule) would pass on ASCII text and fail only on the Cyrillic case.",
+      "suggested_fix": "Use `Buffer.byteLength(text)` for `bytes` and `usedBytes` in docFixture.",
+      "evidence": "Diff: docFixture builds `bytes: text.length` and `budget: { limitBytes: 1000, usedBytes: text.length, ... }`; the e2e and context-resolver tests assert `Buffer.byteLength(...)`.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/mcp/metaproject-tools.ts",
+      "line": null,
+      "quote": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+      "problem": "The rule \"a blank task_text is dropped\" is implemented separately in the operation descriptor (`typeof input.task_text === \"string\" && input.task_text.trim() !== \"\" ? input.task_text : undefined`) and in the MCP projection above, next to the already duplicated parsing of task_type and max_bytes. The new line extends that pattern rather than introducing it.",
+      "impact": "Only two copies, so this is not yet a DRY violation by this reviewer's threshold. A third surface, or a change such as trimming the stored text, would have to be made in both places, and the two tests (operations and MCP) cover it separately.",
+      "suggested_fix": "No action needed for this change; if a third surface appears, extract a shared `normaliseTaskText(value: unknown): string | undefined` next to `requireString` and use it in both.",
+      "evidence": "Diff of src/harness/tool/metaproject-operations.ts (`const taskText = typeof input.task_text === \"string\" && input.task_text.trim() !== \"\" ? input.task_text : undefined;`) and src/mcp/metaproject-tools.ts.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 },
+  "slices": ["slice-04"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Clean Code Review
+
+Scope: slice-04 (22 diff hunks across 15 files; roughly 2,500 diff lines, mostly new and extended tests). Production changes are the `taskText` pass-through in src/harness/tool/metaproject-port.ts, metaproject-adapter.ts, metaproject-operations.ts and src/mcp/metaproject-tools.ts, plus the `references` entry in src/lib/group-subcommands.ts and the `/projectctx` help text.
+
+- Naming: no issues. Test names are long and multi-assertion in places (context-resolver.test.ts) but name the AC they pin; not raised.
+- Functions: no production function grew past the thresholds; the `validates` helper in references-config.test.ts (about 28 lines) is a deliberate minimal evaluator for the keywords the committed schema uses, not raised.
+- Comments: header comments in the new test files state intent and limits (the summary check is a proxy), and the files they cite (live-run.md, TUI-states.md, references.schema.json) exist.
+- Error handling: the adapter keeps its existing catch-and-structured-error path; nothing swallowed.
+- DRY: F-001, F-002, F-004.
+- SOLID: no violations; the port stays an optional-method interface and the new field is optional.
+
+Routing audit: graph_used no (not-relevant, diff-only slice), wiki_used no (not-relevant), ctx_used yes (keryx ctx read / rg), raw_rg_used no.

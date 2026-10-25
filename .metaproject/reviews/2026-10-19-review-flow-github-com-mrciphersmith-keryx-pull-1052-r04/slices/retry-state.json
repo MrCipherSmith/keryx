@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "scopeFingerprint": "705a974ea86bf829c7faf4c9fbc219ef7fd48e34854926030e5cb403b9093a77",
+  "reviewers": {
+    "review-architecture": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-clean-code": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-highload": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-logic": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-performance": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-pr-contract": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-regression": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-security-code": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-style": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-testing-practices": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    }
+  }
+}

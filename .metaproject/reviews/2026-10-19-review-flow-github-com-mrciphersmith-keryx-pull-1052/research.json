@@ -1,0 +1,1652 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (Section 2 'The tools' and the count in section 1 ('Thirteen keryx decisions are the operator's alone) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w1:F-001 is the same defect as canonical C-29 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-29: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-29"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The header says Status Implemented, Frozen 2026-10-15, Task flow 456, but the record now also carrie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w1:F-002 is the same defect as canonical C-29 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-29: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-29"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (The review_complete card re-derives the completion preconditions in the commands layer (completionFa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w2:F-001 is the same defect as canonical C-22 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-22: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-22"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (The operator's act for review_complete (quote, confirmedVia, pressedBy and pressedAt, head, evidence) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w2:F-002 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-architecture-w2:F-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-003 (The invariant 'pressedBy and pressedAt are recorded only when confirmedVia is remote-card' is enforc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w2:F-003 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-11"
+    },
+    {
+      "id": "review-architecture-w3:F-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-001 (The who-pressed shape (`pressedBy`, `pressedAt`) and its spread helper live in src/review/types.ts () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-001 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-architecture-w3:F-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-002 (The diff adds `review_complete` to OPERATOR_CONFIRM_TOOL_NAMES (src/trigger/unattended.ts) and to th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-002 is the same defect as canonical C-01 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-01: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-01"
+    },
+    {
+      "id": "review-architecture-w3:F-003",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-003 (The extraction is the right shape (one function, two callers: commands/review.ts and the review_comp) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-003 is the same defect as canonical C-22 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-22: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-22"
+    },
+    {
+      "id": "review-architecture-w3:F-004",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-004 (The harness tool context gains two loose optionals, `confirmationPressedBy` and `confirmationPressed) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-004 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-11"
+    },
+    {
+      "id": "review-architecture-w3:F-005",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-005 (The list of the five Telegram-answerable review cards is now written out by hand in four user-facing) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w3:F-005 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-35"
+    },
+    {
+      "id": "review-architecture-w3:fu1",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is the parent follow-up from review-architecture done or ruled out, and where is that recorded? F-002 is inferred from counting the registry and reading the unchanged test; the parent can confirm it by running `bun test src/commands/operator-confirm-rosters.test.ts` (this reviewer runs no comman",
+      "status": "finding",
+      "evidence": "research-evidence/verify-C-01-1.txt: bun test operator-confirm-rosters.test.ts fails, Expected length 18, Received 19.",
+      "reason": "Parent ran the suggested command; the inference was right.",
+      "finding": "C-01"
+    },
+    {
+      "id": "review-architecture-w4:F-001",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-001 (OperatorConfirmationLog is a second, unauthoritative copy of state the gate owns, and it reads no de) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-001 is the same defect as canonical C-45 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-45: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-45"
+    },
+    {
+      "id": "review-architecture-w4:F-002",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-002 ('Mirror not delivered' is held in two places that can disagree. Before the race, mirrorUndeliveredNo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-002 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-architecture-w4:F-003",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-003 (The card log is fed from only one of the shell's two approval entry points. operatorCards.ask/answer) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-003 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-37"
+    },
+    {
+      "id": "review-architecture-w4:F-004",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-004 (New logic went into the 7,000-line shell file while the new module holds only a log and formatters. ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-004 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-architecture-w4:F-005",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-005 (remoteApproval was inserted between the 11-line JSDoc of isToolAvailableToSideWorker (lines 571-581,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-005 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-architecture-w4:F-006",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-006 (projectRemoteRow returns early on waiting cards, ahead of the existing flow-397 branch, so when both) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w4:F-006 is the same defect as canonical C-36 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-36: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-36"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (The rewritten paragraph says plain `complete` is an operator-only step that needs a terminal. It doe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w1:F-001 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The new bullet says an autonomous run that meets one of the review cards 'stops at the floor'. The o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w1:F-002 is the same defect as canonical C-16 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-16: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-16"
+    },
+    {
+      "id": "review-clean-code-w2:F-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-001 (review_complete.apply calls completeReviewGated (which closes the round in manifest.json) and only t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-001 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-clean-code-w2:F-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-002 (invoke() is now 40 lines and mixes four levels: token lookup, remote authorization (who, allow-list,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-002 is the same defect as canonical C-27 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-27: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-27"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-003 (The pressedBy/pressedAt pair is a data clump that the PR copies by hand into several record builders) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-003 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-clean-code-w2:F-004",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-004 (completeSpec repeats two small pieces of logic. The expression that turns input.head into a normalis) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-004 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-26"
+    },
+    {
+      "id": "review-clean-code-w2:F-005",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-005 (completionFacts swallows every error from reading research.json (missing file, corrupt JSON, wrong s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-005 is the same defect as canonical C-23 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-23: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-23"
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-006 (This PR adds review_complete so the operator can close the round from a card, but the header comment) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-006 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-21"
+    },
+    {
+      "id": "review-clean-code-w2:F-007",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-007 (In buildCard, `at` is not a time but the title suffix ` at <sha>`, and it collides in meaning with `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-007 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-26"
+    },
+    {
+      "id": "review-clean-code-w2:F-008",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-008 (The same hand-written list of five tool names (review_confirm_plan, review_decide_premise, review_wa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:F-008 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-35"
+    },
+    {
+      "id": "review-clean-code-w3:F-001",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-001 (Clean Code B2 (function arguments): the PR appends `press?: CardPress` as a sixth positional paramet) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:F-001 is the same defect as canonical C-09 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-09: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-09"
+    },
+    {
+      "id": "review-clean-code-w3:F-002",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-002 (Clean Code, dead code / misleading intent: `...decision` on the same line already copies `pressedBy`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:F-002 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-clean-code-w3:F-003",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-003 (Clean Code, type safety/readability: mapApprovalAnswer already narrows `got` to `{ decision?: unknow) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:F-003 is the same defect as canonical C-28 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-28: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-28"
+    },
+    {
+      "id": "review-clean-code-w3:F-004",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-004 (Clean Code C1/C2, misplaced comment: this doc comment describes ReadinessWaiver but sits above a sec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w3:F-004 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-44"
+    },
+    {
+      "id": "review-clean-code-w4:F-001",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding F-001 (Clean Code C1 (stale or misplaced comment). `remoteApproval` was inserted between the long Flow 173 ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:F-001 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-clean-code-w4:F-002",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding F-002 (Clean Code B1/E1/D1. The `mirrorApprovalToTopic` wrapper now carries the card-log lifecycle inline i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:F-002 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-clean-code-w4:F-003",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding F-003 (Clean Code E1 (DRY, two occurrences). `age` and `clock` are new private helpers that repeat `formatA) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w4:F-003 is the same defect as canonical C-25 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-25: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-25"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (The doc says an autonomous run 'stops at the floor' when it meets a review-act card. The runner sets) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w1:F-001 is the same defect as canonical C-16 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-16: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-16"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (The section on ordering and delay does not say that the card token lives only in the shell process m) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w1:F-002 is the same defect as canonical C-19 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-19: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-19"
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-003 (The pending line prints 'token expired, ask again' once 60 minutes have passed for every card, but t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w1:F-003 is the same defect as canonical C-14 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-14: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-14"
+    },
+    {
+      "id": "review-highload-w1:fu1",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is the parent follow-up from review-highload done or ruled out, and where is that recorded? Code slices: check that the answered view in the TUI is written only after the invoke-time checks pass, or label it 'pressed' rather than 'accepted'.",
+      "status": "finding",
+      "evidence": "operator-confirm-tools.ts invoke and the TUI log: the 'pressed by' view is written before the gate re-checks (site-read by the parent).",
+      "reason": "The follow-up asked whether the answered view is written only after the invoke-time checks; it is not. Tracked as C-45.",
+      "finding": "C-45"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-001 (In completeSpec.apply the irreversible close (completeReviewGated) runs first, and the file that rec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w2:F-001 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-002 (The drift check (factsDigest against prepared.digest) is synchronous and runs before an awaited gate) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w2:F-002 is the same defect as canonical C-41 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-41: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-41"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-003 (Entries in the process-local `pending` Map are removed only by invoke or confirmationDeclined. A car) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w2:F-003 is the same defect as canonical C-42 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-42: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-42"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-001 (mirrorApprovalToTopic registers an operator-card log entry (operatorCards.ask at both the unmirrored) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w3:F-001 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-002 (raceApproval sets settled only in its finally, so between the dock resolving and the finally running) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w3:F-002 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-38"
+    },
+    {
+      "id": "review-highload-w3:F-003",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-003 (The catch around the approval POST (including response.json()) marks every failure as undelivered: t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w3:F-003 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-38"
+    },
+    {
+      "id": "review-highload-w3:F-004",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-004 (After a successful POST, a disconnect before the waiter is installed returns a deny with neither und) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w3:F-004 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-38"
+    },
+    {
+      "id": "review-highload-w4:F-001",
+      "source": "raw/review-highload-w4.txt",
+      "question": "Is review-highload finding F-001 (operatorCards.ask() runs before the await and operatorCards.answer() runs after it, outside a finall) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w4:F-001 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-highload-w4:F-002",
+      "source": "raw/review-highload-w4.txt",
+      "question": "Is review-highload finding F-002 (The undelivered branch only prints a system line. The log entry stays mirrored=true and answered=und) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w4:F-002 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-highload-w4:F-003",
+      "source": "raw/review-highload-w4.txt",
+      "question": "Is review-highload finding F-003 (Age and time-left are computed only when a view repaints (no ticker), so an open modal shows a froze) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-highload-w4:F-003 is the same defect as canonical C-15 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-15: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-15"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The 0.3.124 entry says a rejected remote answer 'changes nothing'. In src/commands/operator-confirm-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w1:F-001 is the same defect as canonical C-17 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-17: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-17"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (TM-04 6a says the press 'carries this question's token'. In code the one-time randomUUID token lives) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w1:F-002 is the same defect as canonical C-17 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-17: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-17"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (The hosts table in the review-orchestrator SKILL still gives the 'Operator decision' row the termina) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w1:F-003 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-21"
+    },
+    {
+      "id": "review-logic-w1:fu1",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Check that src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md, SKILL.detail.md and review-premise/SKILL.md are byte-identical in the changed passages to the .metaproject/skills/gdskills c",
+      "status": "refuted",
+      "evidence": "cmp of .metaproject/skills/gdskills/review/review-orchestrator/{SKILL.md,SKILL.detail.md} and review-premise/SKILL.md against src/gdskills/bundled/skills/review/ : all three byte-identical.",
+      "reason": "The copies are identical, so the changed passages cannot differ (the line-669 wording of C-05 is in both)."
+    },
+    {
+      "id": "review-logic-w1:fu2",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Check the TUI text claims in cli-reference.md and TM-04 (status tab, sidebar Remote row, /decisions show age, time left and pressedBy) against src/tui/* for AC6.",
+      "status": "finding",
+      "evidence": "TUI surfaces read by reviewers and the parent: waiting() ignores expiry and the 'token expired' text shows for tui-card; related C-06 (undelivered card stays waiting).",
+      "reason": "The TUI text claims in cli-reference and TM-04 do not fully match src/tui/operator-confirmations.ts; the mismatch is C-14 (and C-06).",
+      "finding": "C-14"
+    },
+    {
+      "id": "review-logic-w1:fu3",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Check the unattended-floor claim in docs/docs/guides/autonomous-review.md (every card tool refused by name) against the list in src/trigger/unattended.ts.",
+      "status": "finding",
+      "evidence": "docs/docs/guides/autonomous-review.md:35 says an autonomous run stops at the floor, while src/trigger/unattended.ts records the item as Not run.",
+      "reason": "The unattended-floor claim contradicts the code comment; tracked as C-16.",
+      "finding": "C-16"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (completionFacts builds the card's waiver list from manifest.readiness_waivers and the research.json ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w2:F-001 is the same defect as canonical C-10 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-10: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-10"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (In completeSpec.apply, completeReviewGated closes the manifest (and runs clearActiveReview, recordFi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w2:F-002 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-logic-w2:F-003",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-003 (Entries in the pending token map are removed on consumption, on a mismatched request and on confirma) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w2:F-003 is the same defect as canonical C-42 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-42: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-42"
+    },
+    {
+      "id": "review-logic-w2:fu1",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Checked and found sound, with no finding: (1) allowed-user check: binding.allowedUserIds() is read fresh from loadRemoteConfig() in shell.ts; an undefined list, an undefined pressedBy/pressedAt, or an",
+      "status": "out-of-scope",
+      "evidence": "Not a follow-up: the reviewer's own list of checks that came out clean (allowed-id, single use, expiry, press fields, completeReviewGated reuse, factsDigest, evidence-level parser).",
+      "reason": "A clean-bill statement with nothing left to do; carried to the Verified clean lane of the report, and the parent's own read found no bypass."
+    },
+    {
+      "id": "review-logic-w2:fu2",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Not verified from slice-02: Telegram-side delivery and hub-side identity checks (src/remote/hub.ts:1086), which belong to other slices; AC9 (owner live check) and AC10 (release) are not code defects.",
+      "status": "out-of-scope",
+      "evidence": "git diff 062aa9c3..HEAD -- src/remote/hub.ts is empty: the PR does not change hub.ts; AC9 is the owner live check and AC10 the release.",
+      "reason": "Telegram delivery and hub-side identity are not in this diff; AC9 and AC10 are not code defects. Listed under Questions as not verified."
+    },
+    {
+      "id": "review-logic-w2:fu3",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Merged-PR refusal for review_complete is inherited from completeManagedReview via prLookup; it was not re-derived in this slice beyond confirming prLookup is passed (seams.prLookup ?? trackerPrLookup)",
+      "status": "finding",
+      "evidence": "operator-confirm-review-tools.test.ts:37 builds the tool with prLookup: async () => null, so a moved or merged head is never driven through the card.",
+      "reason": "The merged-PR refusal is inherited and untested through review_complete; tracked as the test gap C-08.",
+      "finding": "C-08"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (AC5 says the card message says the Telegram mirror was not delivered. That holds only when the bridg) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-001 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-002 (The rule that pressedBy and pressedAt exist only with confirmedVia remote-card is not enforced in th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-002 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-11"
+    },
+    {
+      "id": "review-logic-w3:F-003",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-003 (The SKILL text disagrees with itself and with the new card. Line 47 lists review_complete among the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-003 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-21"
+    },
+    {
+      "id": "review-logic-w3:F-004",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-004 (False positive of the undelivered flag. The catch wraps both the POST and the response.json() read. ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-004 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-38"
+    },
+    {
+      "id": "review-logic-w3:F-005",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-005 (False negative of the undelivered flag. RemoteBridge.askApproval does not set undelivered when clien) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-005 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-38"
+    },
+    {
+      "id": "review-logic-w3:F-006",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-006 (In the new unmirrored branch operatorCards.ask is called first and operatorCards.answer only after i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w3:F-006 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (The log entry for a mirrored card is created with mirrored=true before the topic leg runs (operatorC) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-001 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-002 (Both the eviction and the display order use the order cards were ASKED, not the order they were ANSW) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-002 is the same defect as canonical C-15 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-15: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-15"
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-003 (ask() is followed by `await raceApproval(...)` (and, on the pre-check path, `await inner(...)`) with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-003 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-logic-w4:F-004",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-004 (The 1-hour state is computed only when a line is rendered, and nothing else reads it. waiting() igno) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-004 is the same defect as canonical C-14 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-14: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-14"
+    },
+    {
+      "id": "review-logic-w4:F-005",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-005 (The sidebar text budget is 30 columns (SIDEBAR_TEXT_WIDTH = 34-1-2-1). `fit` cuts from the right, so) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-005 is the same defect as canonical C-36 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-36: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-36"
+    },
+    {
+      "id": "review-logic-w4:F-006",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-006 (Cards raised during a Telegram-started turn take this topic-only path, which never calls operatorCar) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-006 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-37"
+    },
+    {
+      "id": "review-logic-w4:F-007",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-007 (Routed to review-style, not a logic defect: the new function and its doc comment were inserted betwe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w4:F-007 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (completionFacts reads manifest.json, report.md and research.json with readFileSync, and runs twice p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-performance-w2:F-001 is the same defect as canonical C-43 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-43: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-43"
+    },
+    {
+      "id": "review-performance-w2:F-002",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-002 (An entry in the per-tool `pending` Map is deleted only in invoke (any path) or confirmationDeclined.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-performance-w2:F-002 is the same defect as canonical C-42 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-42: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-42"
+    },
+    {
+      "id": "review-performance-w4:F-001",
+      "source": "raw/review-performance-w4.txt",
+      "question": "Is review-performance finding F-001 (operatorCards.ask(...) is followed by an await with no try/finally, so operatorCards.answer(...) run) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-performance-w4:F-001 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (The PR rewrites this sentence to list a bare `complete` among the steps that 'need a terminal'. The ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-001 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The new bullet says an autonomous run facing the five review cards 'stops at the floor'. The PR's ow) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-002 is the same defect as canonical C-16 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-16: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-16"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (The PR bumps package.json to 0.3.124 and adds a dated `## [0.3.124] - 2026-10-19` section, but inser) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-003 is the same defect as canonical C-20 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-20: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-20"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-004",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-004 (The PR body's Test plan lists three boxes, all unticked: 'CI green', '`bun test src/commands/operato) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-004 is the same defect as canonical C-34 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-34: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-34"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-001",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-001 (The diff changes the `/remote-control` slash-command description to say it \"Shows the review cards () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w2:PC-001 is the same defect as canonical C-31 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-31: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-31"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-002",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-002 (The tool's own description says \"A refused gate closes nothing\" and its catch reports \"review_comple) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w2:PC-002 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-001",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-001 (The PR rewrote the same skill's Operator decisions bullet to say that for `review_complete` \"In kery) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w3:PC-001 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-21"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-002",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-002 (The Test plan line `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w3:PC-002 is the same defect as canonical C-34 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-34: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-34"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-003",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-003 (The guide that describes what can be answered from the Telegram topic lists approvals, questions wit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w3:PC-003 is the same defect as canonical C-31 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-31: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-31"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-001",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-001 (docs/docs/commands-by-task.md:153 (a document this PR changed) says of the review cards: \"each pendi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w4:PC-001 is the same defect as canonical C-14 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-14: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-14"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-002",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-002 (The PR adds operator cards to the Remote sidebar row (\"N cards waiting\"), to the /remote-control sta) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w4:PC-002 is the same defect as canonical C-31 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-31: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-31"
+    },
+    {
+      "id": "review-regression-w2:RG2-001",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding RG2-001 (The change adds the review_complete card tool to buildReviewConfirmSpecs (src/commands/operator-conf) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w2:RG2-001 is the same defect as canonical C-02 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-02: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-02"
+    },
+    {
+      "id": "review-regression-w2:fu1",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Run `bun test src/commands/shell.test.ts src/tui/tui-shell.test.ts src/tui/decisions-surface.test.ts src/commands/agent-commands.test.ts src/acp/commands.test.ts src/standard/help-groups.test.ts src/s",
+      "status": "finding",
+      "evidence": "bun test of the eight named files on the head: 398 pass, 1 fail (shell.test.ts:849 lacks review_complete); saved at scratchpad regr-w2.txt and research-evidence/verify-C-02-1.txt.",
+      "reason": "The parent ran the listed tests; the only failure is the one the reviewer predicted (C-02).",
+      "finding": "C-02"
+    },
+    {
+      "id": "review-regression-w3:RG-W3-001",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding RG-W3-001 (The change adds `review_complete` to the operator card roster (registered in src/commands/operator-c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w3:RG-W3-001 is the same defect as canonical C-01 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-01: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-01"
+    },
+    {
+      "id": "review-regression-w4:RG-W4-001",
+      "source": "raw/review-regression-w4.txt",
+      "question": "Is review-regression finding RG-W4-001 (isCard is true for every alwaysAsk+card approval that is not user_prompt, so it also covers the sche) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w4:RG-W4-001 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-37"
+    },
+    {
+      "id": "review-regression-w4:RG-W4-002",
+      "source": "raw/review-regression-w4.txt",
+      "question": "Is review-regression finding RG-W4-002 (A card is logged as mirrored=true before the topic leg runs. If the bridge is active and connected a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-regression-w4:RG-W4-002 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (The readiness paragraph tells the agent it may run `keryx review complete` itself as an alternative ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-001 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-002 (Three small mismatches between TM-04 6a, the CHANGELOG and the code. (1) The CHANGELOG says a replay) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-002 is the same defect as canonical C-17 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-17: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-17"
+    },
+    {
+      "id": "review-security-code-w1:F-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-003 (The bot-token bullet does not name what a token holder can do to the card itself. The token is an ow) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-003 is the same defect as canonical C-18 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-18: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-18"
+    },
+    {
+      "id": "review-security-code-w2:F-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-001 (In review_complete.apply the review is closed by completeReviewGated first and the operator-act reco) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w2:F-001 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-security-code-w2:F-002",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-002 (pressedAt is the shell's clock at delivery of the SSE approval event, not the time the operator pres) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w2:F-002 is the same defect as canonical C-39 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-39: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-39"
+    },
+    {
+      "id": "review-security-code-w2:F-003",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-003 (The flow-confirm token stores pressedBy/pressedAt (mintConfirmationToken, StoredConfirmationToken) b) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w2:F-003 is the same defect as canonical C-40 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-40: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-40"
+    },
+    {
+      "id": "review-security-code-w2:F-004",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-004 (Pre-existing, not introduced by the diff: plain `keryx review complete` has no TTY or card gate (a T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w2:F-004 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-security-code-w2:fu1",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? Decide whether `keryx review complete` should require the same operator-act record as the card (F-004, pre-existing).",
+      "status": "finding",
+      "evidence": "review.ts runComplete 4539-4572: no isTerminal check on plain complete; verify-C-05-1.txt.",
+      "reason": "The decision whether plain complete needs the operator-act record is C-05; Wave D held it as an owner decision.",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-security-code-w3:F-001",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding F-001 (The review_complete card accepts a model-supplied `head` (7-40 hex). apply() passes it to completeRe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w3:F-001 is the same defect as canonical C-04 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-04: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-04"
+    },
+    {
+      "id": "review-security-code-w3:F-002",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding F-002 (cardPressFields copies pressedBy/pressedAt from any CardPress-shaped value into the written record w) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w3:F-002 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-11"
+    },
+    {
+      "id": "review-security-code-w3:F-003",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding F-003 (Confirmation of the known slice-02 item (not a new defect): the review_complete card's waiver list s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w3:F-003 is the same defect as canonical C-10 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-10: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-10"
+    },
+    {
+      "id": "review-security-code-w3:F-004",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding F-004 (Pre-existing and shared with the CLI: completeHeadGate treats a failed tracker lookup (throw, null, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w3:F-004 is the same defect as canonical C-41 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-41: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-41"
+    },
+    {
+      "id": "review-security-code-w3:fu1",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? Not verified (no command allowed): that src/commands/operator-confirm-rosters.test.ts keeps OPERATOR_CONFIRM_TOOL_NAMES in step with the tool registry; and where fromId originates in src/tui/tui-shell",
+      "status": "finding",
+      "evidence": "verify-C-01-1.txt: the roster test pins 18, the registry has 19.",
+      "reason": "The roster check the reviewer could not run fails, C-01. The origin of fromId in tui-shell.ts was read by the slice-04 reviewers and the parent with no bypass found.",
+      "finding": "C-01"
+    },
+    {
+      "id": "review-security-code-w4:F-001",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding F-001 (When the topic leg ends undelivered AFTER the card was logged as mirrored (client connected at ask t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w4:F-001 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-security-code-w4:F-002",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding F-002 (Both ask()/answer() pairs in mirrorApprovalToTopic are straight-line code with no try/finally. If in) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w4:F-002 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-security-code-w4:F-003",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding F-003 (The topic-only path for a Telegram-started turn (requestApprovalForTelegramTurn) is not wired to the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w4:F-003 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-37"
+    },
+    {
+      "id": "review-security-code-w4:F-004",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding F-004 (pressedAt is the time the shell built the response, not the time Telegram delivered the press; the t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w4:F-004 is the same defect as canonical C-39 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-39: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-39"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (A roughly 70-word parenthetical was inserted mid-sentence. The sentence says a Telegram or web card ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-001 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-30"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (In the review synopsis block the diff relabels three lines with two different forms: confirm-plan an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-002 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-30"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The edited line grew from about 90 to about 290 characters while the rest of the paragraph stays har) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-003 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-30"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (The same clause 'an allowed Telegram user only, for that card, once, within one hour; the record kee) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-004 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-30"
+    },
+    {
+      "id": "review-style-w1:F-005",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-005 (The guide is hard-wrapped at about 80 columns. The new text is written as single lines of 300 to 600) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-005 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-30"
+    },
+    {
+      "id": "review-style-w1:F-006",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-006 (Two small deviations from the surrounding entries. The neighbouring headings carry the flow and PR, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-006 is the same defect as canonical C-20 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-20: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-20"
+    },
+    {
+      "id": "review-style-w1:F-007",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-007 (description.md and plan.md (same phrase in both) still say 'draft for operator approval', while flow) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-007 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-30"
+    },
+    {
+      "id": "review-style-w2:F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-001 (The short-SHA length 12 is an unnamed literal repeated three times in completeSpec: the card title () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-001 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-26"
+    },
+    {
+      "id": "review-style-w2:F-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-002 (completeSpec repeats two small blocks. (a) The `head` input normalisation (`typeof input[\"head\"] ===) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-002 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-26"
+    },
+    {
+      "id": "review-style-w2:F-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-003 (invoke restructures the token handling so `entry !== undefined` implies `token !== undefined`, but T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-003 is the same defect as canonical C-27 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-27: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-27"
+    },
+    {
+      "id": "review-style-w2:F-004",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-004 (src/review/types.ts already exports `cardPressFields` and the review tools use it nine times in oper) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-004 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-style-w2:F-005",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-005 (The refusal text hard-codes \"1 hour\" while the limit is the exported constant REMOTE_CARD_TTL_MS dec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-005 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-26"
+    },
+    {
+      "id": "review-style-w2:F-006",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-006 (The context built for `tool.invoke` now has three near-identical conditional spreads that each re-te) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-006 is the same defect as canonical C-27 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-27: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-27"
+    },
+    {
+      "id": "review-style-w2:F-007",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-007 (The new imports are dropped into the middle of existing groups: `cardPressFields` from ../review/typ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-007 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-44"
+    },
+    {
+      "id": "review-style-w2:F-008",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-008 (The /decisions description is now close to 500 characters on one line, and the same five-tool list i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-008 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-35"
+    },
+    {
+      "id": "review-style-w2:F-009",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-009 (Small naming and declaration-style inconsistencies in the new code: the boolean `prBound` has no is/) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-009 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-44"
+    },
+    {
+      "id": "review-style-w2:F-010",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-010 (Two test-readability points in the new describe block. `premiseInput` carries `package: \"\"` as a pla) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-010 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-44"
+    },
+    {
+      "id": "review-style-w3:F-001",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-001 (One line of about 230 characters holds three levels of conditional spread. Every other writer in thi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:F-001 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-style-w3:F-002",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-002 (CardPress was introduced as the one shape for pressedBy/pressedAt, but other declarations still spel) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:F-002 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-style-w3:F-003",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-003 (`o` is already cast a few lines above to { decision?, approvalId?, fromId? }; this line casts it a s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:F-003 is the same defect as canonical C-28 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-28: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-28"
+    },
+    {
+      "id": "review-style-w3:F-004",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-004 (The /decisions summary grew to a single sentence of about 330 characters with a list of five interna) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:F-004 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-35"
+    },
+    {
+      "id": "review-style-w3:F-005",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-005 (This JSDoc is stacked on top of the ConfirmedVia comment and describes ReadinessWaiver, which is now) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w3:F-005 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-44"
+    },
+    {
+      "id": "review-style-w4:F-001",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-001 (The new `remoteApproval` helper and its one-line JSDoc were inserted between the long Flow 173 F-003) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:F-001 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-style-w4:F-002",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-002 (`clock` is a byte-identical copy of the module-private `clock` in remote-control-surface.ts (head li) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:F-002 is the same defect as canonical C-25 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-25: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-25"
+    },
+    {
+      "id": "review-style-w4:F-003",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-003 (The literal `80` (the clipped width of a question) appears five times: in `pendingConfirmationLine` ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:F-003 is the same defect as canonical C-25 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-25: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-25"
+    },
+    {
+      "id": "review-style-w4:F-004",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-004 (The expression `{ place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: x !== fals) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:F-004 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-style-w4:F-005",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-005 (`formatRemoteStatusLines` gained a third parameter `confirmations`, but its JSDoc still documents on) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:F-005 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-44"
+    },
+    {
+      "id": "review-style-w4:F-006",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-006 (tui-shell.ts is far past the 800-line threshold (the diff touches lines beyond 7300) and this PR add) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w4:F-006 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-24"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (AC2: the fail-closed branch for an unavailable allow-list (`allowed === undefined`) has no test. Eve) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-001 is the same defect as canonical C-07 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-07: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-07"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (AC4: 'a refused review_complete gate records nothing' is proven for exactly one gate, the evidence-l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-002 is the same defect as canonical C-08 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-08: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-08"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (AC1/AC2: the wiring that turns a Telegram callback into `confirmationVia: \"remote\"` plus `pressedBy`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-003 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-32"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (AC1/AC3: the remote-card path with pressedBy and pressedAt is asserted for chunks_answer, decide_pre) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-004 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (AC2: the 'tool-result text' case calls `invoke` without a token. That proves the missing-token branc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-005 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w1:F-006",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-006 (AC5: the inline branch that adds the 'mirror not delivered' note to a card opened with no reachable ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-006 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-32"
+    },
+    {
+      "id": "review-testing-practices-w1:F-007",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-007 (Fixed sleep in a new test (outside slice-02, noted for completeness). Two raceApproval tests wait 10) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-007 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w1:F-008",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-008 (AC2 'once': replay is tested sequentially (second invoke after the first is refused), but two concur) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:F-008 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (Press-field recording per recorder is untested at the record layer. cardPressFields is spread by han) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-001 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (AC5: the RemoteClient undelivered test proves one of the five places askApproval returns undelivered) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-002 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w2:F-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-003 (The raceApproval guard order is only half pinned. The tests cover an undelivered answer firing onUnd) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-003 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    },
+    {
+      "id": "review-testing-practices-w3:F-001",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-001 (AC8: every place the shell feeds the confirmation log is untested. The log tests construct OperatorC) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-001 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-32"
+    },
+    {
+      "id": "review-testing-practices-w3:F-002",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-002 (AC8: the /decisions modal and /remote-control status tests compose the helpers themselves and hand t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-002 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-32"
+    },
+    {
+      "id": "review-testing-practices-w3:F-003",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-003 (AC5 with AC8: the only test of the 'mirror not delivered' log state builds it by hand (`log.ask(...,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-003 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-testing-practices-w3:F-004",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-004 (The 1-hour display boundary is pinned on neither side. The waiting test uses 59 minutes left, the ex) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w3:F-004 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+      "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "C-33"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:c823ca1dd525",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:c823ca1dd525",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:2d2d08fe76dd",
+        "rawEvidence": "raw/review-clean-code-w1.txt#sha256:2d2d08fe76dd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:3f94d297aebf",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:3f94d297aebf",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:cfa28be49d43",
+        "rawEvidence": "raw/review-logic-w4.txt#sha256:cfa28be49d43",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:fd391d6c8220",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:fd391d6c8220",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:aefc7448d988",
+        "rawEvidence": "raw/review-pr-contract-w1.txt#sha256:aefc7448d988",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:cb2da7de7025",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:cb2da7de7025",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:0a589d4916ea",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:0a589d4916ea",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:892b77764a36",
+        "rawEvidence": "raw/review-style-w1.txt#sha256:892b77764a36",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:4333128cd1a7",
+        "rawEvidence": "raw/review-testing-practices-w3.txt#sha256:4333128cd1a7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 39,
+    "known": 0,
+    "unknown": 39,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

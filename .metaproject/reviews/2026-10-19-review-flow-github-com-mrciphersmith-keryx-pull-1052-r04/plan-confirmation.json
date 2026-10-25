@@ -1,0 +1,11 @@
+{
+  "planKey": "ffb81d2dbd20720e",
+  "dispatches": 45,
+  "minutes": [
+    24,
+    60
+  ],
+  "quote": "Run 45 reviewer dispatches (24-60 min) for /home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04?: y",
+  "confirmedVia": "terminal",
+  "at": "2026-10-19T04:20:05.907Z"
+}

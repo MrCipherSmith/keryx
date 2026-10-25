@@ -1,0 +1,2711 @@
+--- src/gdskills/conditional-reads.e2e.test.ts
+@@ 1,522 @@
++import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { skillsCommand } from "../commands/skills";
++import { readLastResolve, type ContextEntry, type ProjectContextResolution } from "./context-resolver";
++import { distinctWords } from "./reference-proof";
++import { extractSection } from "./references-section";
++
++// Flow 462, T13 (AC18): conditional mandatory reads, end to end.
++//
++// A fixture project carries a project rule that cites a STYLING-like and a
++// THEMING-like document of the real sizes (about 90 KB and 80 KB), and a
++// references.json that declares both. Three tasks are resolved and validated
++// through the entry points an operator uses: `skills resolve-context
++// --task-text`, `skills contracts validate --resolved` and `skills references
++// check`, all via the `skills` router. Nothing is mocked: files are real, the
++// output is what the command prints.
++//
++// What this proves: the resolver promotes the right documents, the validator
++// accepts a proof built from the section's own words and refuses a summary that
++// uses none of them. What it cannot prove: that a model read anything. The check
++// is a proxy; the live run (docs/requirements/keryx-conditional-reads/live-run.md)
++// is where a real agent meets it.
++
++const STYLING_PATH = "STYLING.md";
++const THEMING_PATH = "THEMING.md";
++const STYLING_ANCHOR = "Class conventions";
++const THEMING_ANCHOR = "Theme tokens";
++const STYLING_TARGET_BYTES = 90_000;
++const THEMING_TARGET_BYTES = 80_000;
++const RULE_PATH = ".metaproject/rules/project/styling.mdc";
++const CONFIG_PATH = ".metaproject/tasks.config.json";
++
++/** Words of five letters or more that none of the fixture sections use, so a summary made of them shares nothing with the text. */
++const FABRICATED_SUMMARY = "Looked over the whole thing, nothing unusual noticed, all requirements satisfied as expected.";
++const SHORT_SUMMARY = "Read the section.";
++
++// --- the fixture documents -------------------------------------------------
++
++const STYLING_CLASS_CONVENTIONS = `## ${STYLING_ANCHOR}
++
++Every stylesheet class is named after the component that owns it, in kebab-case, with a single block prefix. A selector never reaches into a child component: the child exposes a modifier class and the parent passes it down.
++
++### Utility classes
++
++Tailwind utilities may be combined on an element, but a run of more than eight utilities belongs in an extracted component class. Spacing always comes from the spacing scale; a literal pixel value in a className is a defect.
++
++### Specificity
++
++Selectors stay at one class deep. The cascade layer order is base, components, utilities, and a rule in an earlier layer never wins by specificity over a later one. Inline style is reserved for values computed at runtime, such as a measured width.
++`;
++
++const STYLING_CASCADE = `## Tailwind 4 cascade
++
++The cascade contract follows layer order, not source order. A component class that must beat a utility declares itself in the utilities layer on purpose and says why in a comment.
++`;
++
++const THEMING_THEME_TOKENS = `## ${THEMING_ANCHOR}
++
++A theme is a flat map of semantic tokens: surface, border, accent, danger and their foreground partners. Components read a token through a custom property and never a palette colour, so a palette swap changes no component.
++
++### Naming
++
++Token names describe a role, not a hue. Adding a role means adding it to every theme in the same change; a theme that lacks a role fails the token completeness check.
++
++### Contrast
++
++Each foreground and surface pair must keep a contrast ratio of at least 4.5 to 1 in every theme, including the high-contrast variant.
++`;
++
++const THEMING_DARK_MODE = `## Dark mode
++
++The dark theme is selected by the user setting first and by the system preference second. Switching a theme never remounts a component and never reads a stored colour directly.
++`;
++
++const FILLER_SUBJECTS = ["buttons", "forms", "tables", "dialogs", "tooltips", "menus", "tabs", "badges", "charts", "icons", "toasts", "inputs"];
++const FILLER_RULES = [
++  "keeps its internal layout in one wrapper and exposes only documented hooks to the outside",
++  "declares its states in a fixed order so that a reader can scan the list quickly",
++  "avoids hard coded measurements and asks the layout engine for the available room",
++  "documents each variant next to the component story and lists the supported combinations",
++  "leaves focus handling to the shared primitive and adds no custom outline of its own",
++  "limits animation to opacity and transform so that low powered devices stay responsive",
++];
++
++function fillerSection(label: string, index: number): string {
++  const subject = FILLER_SUBJECTS[index % FILLER_SUBJECTS.length]!;
++  const rule = FILLER_RULES[index % FILLER_RULES.length]!;
++  const other = FILLER_RULES[(index + 3) % FILLER_RULES.length]!;
++  const id = String(index).padStart(3, "0");
++  return [
++    `## ${label} guideline ${id}`,
++    "",
++    `The ${subject} family ${rule}. It also ${other}, and any exception is recorded in the review ledger together with the owner who approved it.`,
++    "",
++    "- Check the story for the default state before merging.",
++    `- Record the decision for ${subject} in the ledger entry ${id}.`,
++    "",
++    "```tsx",
++    `<${subject.slice(0, 1).toUpperCase()}${subject.slice(1)} data-testid="guideline-${id}" />`,
++    "```",
++    "",
++  ].join("\n");
++}
++
++/** Anchored sections first, then numbered guideline sections until the document reaches `targetBytes`. */
++function buildDocument(title: string, label: string, anchored: readonly string[], targetBytes: number): string {
++  const parts = [`# ${title}`, "", `The ${label} contract of the application. Sections below are numbered guidelines, read the one that matches your change.`, "", ...anchored];
++  let text = `${parts.join("\n")}\n`;
++  for (let index = 0; Buffer.byteLength(text) < targetBytes; index += 1) text += `${fillerSection(label, index)}\n`;
++  return text;
++}
++
++const RULE_TEXT = [
++  "---",
++  "description: Styling and theming rules of the application",
++  "alwaysApply: true",
++  "---",
++  "",
++  "# Styling",
++  "",
++  `Class naming and the cascade are described in \`${STYLING_PATH}\`. Colour roles and themes are described in \`${THEMING_PATH}\`.`,
++  "Follow them whenever a change touches how something looks.",
++  "",
++].join("\n");
++
++const REFERENCES = {
++  schema: 1,
++  references: [
++    {
++      path: STYLING_PATH,
++      when: { globs: ["src/**/*.css", "src/**/*.tsx"], keywords: ["styling", "tailwind"] },
++      anchor: STYLING_ANCHOR,
++      description: "Class naming, spacing and the Tailwind 4 cascade contract. Read before adding or changing a className, a stylesheet or inline style.",
++    },
++    {
++      path: THEMING_PATH,
++      when: { globs: ["src/theme/**"], keywords: ["theme", "dark mode"] },
++      anchor: THEMING_ANCHOR,
++      description: "Semantic theme tokens, contrast and dark mode. Read before adding a colour role, a theme or a dark mode switch.",
++    },
++  ],
++};
++
++// --- harness ---------------------------------------------------------------
++
++let root = "";
++let stylingText = "";
++let themingText = "";
++const startCwd = process.cwd();
++const startExitCode = process.exitCode;
++
++type Captured = { out: string; err: string; exitCode: number };
++
++/** Runs one `skills` command from the fixture root and returns what it printed and the exit code it set. */
++async function skills(...args: string[]): Promise<Captured> {
++  const out: string[] = [];
++  const err: string[] = [];
++  const originalLog = console.log;
++  const originalError = console.error;
++  console.log = (...parts: unknown[]) => void out.push(parts.map(String).join(" "));
++  console.error = (...parts: unknown[]) => void err.push(parts.map(String).join(" "));
++  process.exitCode = 0;
++  try {
++    await skillsCommand(args);
++  } finally {
++    console.log = originalLog;
++    console.error = originalError;
++  }
++  return { out: out.join("\n"), err: err.join("\n"), exitCode: Number(process.exitCode ?? 0) };
++}
++
++async function writeProjectFile(rel: string, text: string): Promise<void> {
++  await mkdir(path.dirname(path.join(root, rel)), { recursive: true });
++  await writeFile(path.join(root, rel), text, "utf8");
++}
++
++beforeAll(async () => {
++  root = await mkdtemp(path.join(tmpdir(), "keryx-conditional-reads-"));
++  stylingText = buildDocument("Styling", "styling", [STYLING_CLASS_CONVENTIONS, STYLING_CASCADE], STYLING_TARGET_BYTES);
++  themingText = buildDocument("Theming", "theming", [THEMING_THEME_TOKENS, THEMING_DARK_MODE], THEMING_TARGET_BYTES);
++  await writeProjectFile(".metaproject/metaproject.json", "{}\n");
++  await writeProjectFile(RULE_PATH, RULE_TEXT);
++  await writeProjectFile(".metaproject/rules/project/references.json", `${JSON.stringify(REFERENCES, null, 2)}\n`);
++  await writeProjectFile(STYLING_PATH, stylingText);
++  await writeProjectFile(THEMING_PATH, themingText);
++});
++
++beforeEach(() => {
++  process.chdir(root);
++});
++
++afterEach(() => {
++  process.chdir(startCwd);
++  process.exitCode = startExitCode;
++});
++
++afterAll(async () => {
++  await rm(root, { recursive: true, force: true });
++});
++
++// --- scenario plumbing -----------------------------------------------------
++
++type Scenario = { name: string; files: string[]; taskText: string };
++
++const STYLING_TOUCHED: Scenario = {
++  name: "styling-file",
++  files: ["src/components/Button.tsx"],
++  taskText: "Rename the Button prop and add a loading spinner",
++};
++const THEME_KEYWORD: Scenario = {
++  name: "theme-keyword",
++  files: ["src/pages/settings.ts"],
++  taskText: "Let the user pick a theme in the settings page",
++};
++const UNRELATED: Scenario = {
++  name: "unrelated",
++  files: ["src/services/session.ts"],
++  taskText: "Fix the token refresh race in the session service",
++};
++
++type Resolved = { printed: Captured; file: string; resolution: ProjectContextResolution };
++
++async function resolve(scenario: Scenario): Promise<Resolved> {
++  const file = `.metaproject/data/resolved/${scenario.name}.json`;
++  const printed = await skills(
++    "resolve-context",
++    "--files",
++    scenario.files.join(","),
++    "--for",
++    "implement",
++    "--task-type",
++    "ui_component",
++    "--task-text",
++    scenario.taskText,
++    "--out",
++    file,
++  );
++  const resolution = JSON.parse(await readFile(path.join(root, file), "utf8")) as ProjectContextResolution;
++  return { printed, file, resolution };
++}
++
++function entryFor(resolution: ProjectContextResolution, entryPath: string): ContextEntry {
++  const found = resolution.entries.find((entry) => entry.path === entryPath);
++  if (found === undefined) throw new Error(`no resolver entry for ${entryPath}; entries: ${resolution.entries.map((entry) => entry.path).join(", ")}`);
++  return found;
++}
++
++const documentText = (entryPath: string): string => (entryPath === STYLING_PATH ? stylingText : themingText);
++const isPromoted = (entry: ContextEntry): boolean => entry.tier === "must_read" && entry.reason.startsWith("condition:");
++
++/** What an honest worker writes: the opening sentences of the section it read, in its words, which are the section's words. */
++function honestSummary(entry: ContextEntry): string {
++  const section = extractSection(documentText(entry.path), entry.anchor ?? "");
++  if (!section.found) throw new Error(`anchor ${entry.anchor ?? ""} not found in ${entry.path}`);
++  const paragraph = section.text.split("\n").find((line) => line.trim() !== "" && !line.startsWith("#")) ?? "";
++  return paragraph.length > 200 ? paragraph.slice(0, paragraph.lastIndexOf(" ", 200)) : paragraph;
++}
++
++type Mode = "correct" | "fabricated" | "short" | "not-applicable" | "wrong-anchor";
++
++/** A task-implementer result that cites every must_read entry; a promoted one gets the proof `mode` describes. */
++function buildResult(resolution: ProjectContextResolution, mode: Mode): Record<string, unknown> {
++  const applied = resolution.entries
++    .filter((entry) => entry.tier === "must_read")
++    .map((entry) => {
++      const base = { path: entry.path, sha256: entry.sha256 };
++      if (!isPromoted(entry)) return { ...base, how: "read" };
++      switch (mode) {
++        case "correct":
++          return { ...base, how: "read", anchor: entry.anchor, summary: honestSummary(entry) };
++        case "fabricated":
++          return { ...base, how: "read", anchor: entry.anchor, summary: FABRICATED_SUMMARY };
++        case "short":
++          return { ...base, how: "read", anchor: entry.anchor, summary: SHORT_SUMMARY };
++        case "not-applicable":
++          return { ...base, how: "n/a" };
++        case "wrong-anchor":
++          return { ...base, how: "read", anchor: "Spacing", summary: honestSummary(entry) };
++      }
++    });
++  return { task_id: "task-1", task_name: "Change the component", task_type: "ui_component", status: "success", project_context_applied: applied };
++}
++
++async function validate(scenario: Scenario, resolved: Resolved, result: Record<string, unknown>, label: string): Promise<Captured> {
++  const resultFile = `.metaproject/data/results/${scenario.name}-${label}.json`;
++  await writeProjectFile(resultFile, `${JSON.stringify(result, null, 2)}\n`);
++  return skills("contracts", "validate", resultFile, "--schema", "task-implementer-output", "--resolved", resolved.file);
++}
++
++const CLEAN_VERDICT = "project context: every must_read entry cited, nothing drifted (enforcement warn)";
++
++// --- the fixture itself ----------------------------------------------------
++
++describe("fixture", () => {
++  test("the documents have the real sizes and the anchored sections are a small part of them", () => {
++    expect(Buffer.byteLength(stylingText)).toBeGreaterThanOrEqual(STYLING_TARGET_BYTES);
++    expect(Buffer.byteLength(stylingText)).toBeLessThan(STYLING_TARGET_BYTES + 2_000);
++    expect(Buffer.byteLength(themingText)).toBeGreaterThanOrEqual(THEMING_TARGET_BYTES);
++    expect(Buffer.byteLength(themingText)).toBeLessThan(THEMING_TARGET_BYTES + 2_000);
++    for (const [text, anchor] of [[stylingText, STYLING_ANCHOR], [themingText, THEMING_ANCHOR]] as const) {
++      const section = extractSection(text, anchor);
++      expect(section.found).toBe(true);
++      if (section.found) expect(section.bytes).toBeLessThan(Buffer.byteLength(text) / 20);
++    }
++  });
++
++  test("the fabricated summary shares no five-letter word with either anchored section", () => {
++    for (const [text, anchor] of [[stylingText, STYLING_ANCHOR], [themingText, THEMING_ANCHOR]] as const) {
++      const section = extractSection(text, anchor);
++      const words = distinctWords(section.found ? section.text : "");
++      expect([...distinctWords(FABRICATED_SUMMARY)].filter((word) => words.has(word))).toEqual([]);
++    }
++  });
++
++  test("`skills references check` finds the declarations sound and nothing undeclared", async () => {
++    const checked = await skills("references", "check");
++    expect(checked.exitCode).toBe(0);
++    expect(checked.out).toContain("2 declared");
++    expect(checked.out).toContain("0 errors, 0 warnings");
++    const suggested = await skills("references", "suggest");
++    expect(JSON.parse(suggested.out)).toEqual({ schema: 1, references: [] });
++  });
++});
++
++// --- scenario 1: a styling file is touched ---------------------------------
++
++describe("scenario 1: a styling file is touched", () => {
++  test("STYLING is promoted by the glob, THEMING stays on demand with its description", async () => {
++    const resolved = await resolve(STYLING_TOUCHED);
++    const styling = entryFor(resolved.resolution, STYLING_PATH);
++    const theming = entryFor(resolved.resolution, THEMING_PATH);
++
++    expect(styling).toMatchObject({ tier: "must_read", reason: "condition:glob:src/**/*.tsx", anchor: STYLING_ANCHOR, kind: "contract" });
++    expect(styling.bytes).toBeGreaterThanOrEqual(STYLING_TARGET_BYTES);
++    expect(styling.section_bytes).toBeGreaterThan(0);
++    expect(styling.section_bytes).toBeLessThan(styling.bytes / 20);
++    expect(styling.description).toBe(REFERENCES.references[0]!.description);
++    expect(styling.sha256).toMatch(/^[0-9a-f]{64}$/);
++    expect(theming).toMatchObject({ tier: "on_demand", reason: "declared", anchor: THEMING_ANCHOR, description: REFERENCES.references[1]!.description });
++    expect(theming.condition).toEqual({ globs: ["src/theme/**"], keywords: ["theme", "dark mode"] });
++
++    // The budget counts the section the worker must read, never the 90 KB file.
++    expect(resolved.resolution.budget.usedBytes).toBe(entryFor(resolved.resolution, RULE_PATH).bytes + (styling.section_bytes ?? 0));
++    expect(resolved.resolution.budget.exceeded).toBe(false);
++    expect(resolved.resolution.undeclared).toEqual([]);
++    expect(resolved.printed.err).toBe("");
++    expect(resolved.printed.exitCode).toBe(0);
++  });
++
++  test("the printed report lists the promoted section and the on-demand document", async () => {
++    const { printed, resolution } = await resolve(STYLING_TOUCHED);
++    const styling = entryFor(resolution, STYLING_PATH);
++    const theming = entryFor(resolution, THEMING_PATH);
++    const lines = printed.out.split("\n");
++    expect(lines).toContain("## must_read (2)");
++    expect(lines).toContain("## on_demand (1)");
++    expect(lines).toContain(
++      `- ${STYLING_PATH} — project contract, condition:glob:src/**/*.tsx, ${styling.bytes} bytes, sha256 ${styling.sha256.slice(0, 12)} (anchor "${STYLING_ANCHOR}", section ${styling.section_bytes} bytes)`,
++    );
++    expect(lines).toContain(`- ${THEMING_PATH} — project contract, declared, ${theming.bytes} bytes, sha256 ${theming.sha256.slice(0, 12)} (anchor "${THEMING_ANCHOR}", section ${theming.section_bytes} bytes)`);
++  });
++
++  test("a correct result passes; THEMING does not have to be cited", async () => {
++    const resolved = await resolve(STYLING_TOUCHED);
++    const verdict = await validate(STYLING_TOUCHED, resolved, buildResult(resolved.resolution, "correct"), "correct");
++    expect(verdict.out).toContain("schema: task-implementer-output");
++    expect(verdict.out).toContain(CLEAN_VERDICT);
++    expect(verdict.err).toBe("");
++    expect(verdict.exitCode).toBe(0);
++  });
++
++  test("a fabricated summary is a miss with its reason, a printed warning under warn and exit 1 under block", async () => {
++    const resolved = await resolve(STYLING_TOUCHED);
++    const result = buildResult(resolved.resolution, "fabricated");
++
++    const warned = await validate(STYLING_TOUCHED, resolved, result, "fabricated");
++    expect(warned.exitCode).toBe(0);
++    expect(warned.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
++    expect(warned.out).toContain(
++      `- project context miss: ${STYLING_PATH} (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "${STYLING_ANCHOR}"; 3 required. Write the summary in the wording of the text you read`,
++    );
++
++    await writeProjectFile(CONFIG_PATH, `${JSON.stringify({ gdskills: { projectContext: { enforcement: "block" } } })}\n`);
++    try {
++      const blocked = await validate(STYLING_TOUCHED, resolved, result, "fabricated");
++      expect(blocked.exitCode).toBe(1);
++      expect(blocked.err).toContain("project context: 1 miss(es), 0 drifted (enforcement block)");
++      expect(blocked.err).toContain(`- project context miss: ${STYLING_PATH} (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s)`);
++    } finally {
++      await rm(path.join(root, CONFIG_PATH), { force: true });
++    }
++  });
++
++  test("a summary that is too short, a wrong anchor and an n/a citation are each their own miss", async () => {
++    const resolved = await resolve(STYLING_TOUCHED);
++
++    const short = await validate(STYLING_TOUCHED, resolved, buildResult(resolved.resolution, "short"), "short");
++    expect(short.out).toContain("project context: 2 miss(es), 0 drifted (enforcement warn)");
++    expect(short.out).toContain(`${STYLING_PATH} (condition:glob:src/**/*.tsx) has a summary of ${SHORT_SUMMARY.length} characters; at least 40 are required`);
++    expect(short.out).toContain("has a summary that shares 0 distinct word(s)");
++
++    const wrongAnchor = await validate(STYLING_TOUCHED, resolved, buildResult(resolved.resolution, "wrong-anchor"), "wrong-anchor");
++    expect(wrongAnchor.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
++    expect(wrongAnchor.out).toContain(`${STYLING_PATH} (condition:glob:src/**/*.tsx) cites anchor "Spacing"; the declaration says "${STYLING_ANCHOR}"`);
++
++    const notApplicable = await validate(STYLING_TOUCHED, resolved, buildResult(resolved.resolution, "not-applicable"), "not-applicable");
++    expect(notApplicable.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
++    expect(notApplicable.out).toContain(`${STYLING_PATH} (condition:glob:src/**/*.tsx) is cited only with how "n/a"`);
++  });
++
++  test("editing the promoted document after the resolve is reported as drift", async () => {
++    const resolved = await resolve(STYLING_TOUCHED);
++    const result = buildResult(resolved.resolution, "correct");
++    await writeProjectFile(STYLING_PATH, `${stylingText}\n## Late addition\n\nChanged after the resolve.\n`);
++    try {
++      const verdict = await validate(STYLING_TOUCHED, resolved, result, "drift");
++      expect(verdict.out).toContain("project context: 0 miss(es), 1 drifted (enforcement warn)");
++      expect(verdict.out).toContain(`- project context drift: ${STYLING_PATH} (must_read) now hashes to`);
++    } finally {
++      await writeProjectFile(STYLING_PATH, stylingText);
++    }
++  });
++});
++
++// --- scenario 2: the task text names a theme -------------------------------
++
++describe("scenario 2: only the theme keyword matches", () => {
++  test("THEMING is promoted by the keyword, STYLING stays on demand", async () => {
++    const resolved = await resolve(THEME_KEYWORD);
++    const theming = entryFor(resolved.resolution, THEMING_PATH);
++    const styling = entryFor(resolved.resolution, STYLING_PATH);
++
++    expect(theming).toMatchObject({ tier: "must_read", reason: "condition:keyword:theme", anchor: THEMING_ANCHOR });
++    expect(theming.bytes).toBeGreaterThanOrEqual(THEMING_TARGET_BYTES);
++    expect(theming.section_bytes).toBeLessThan(theming.bytes / 20);
++    expect(styling).toMatchObject({ tier: "on_demand", reason: "declared" });
++    expect(resolved.resolution.budget.usedBytes).toBe(entryFor(resolved.resolution, RULE_PATH).bytes + (theming.section_bytes ?? 0));
++    expect(resolved.printed.out).toContain(`- ${THEMING_PATH} — project contract, condition:keyword:theme, ${theming.bytes} bytes`);
++    expect(resolved.printed.err).toBe("");
++  });
++
++  test("a correct result passes", async () => {
++    const resolved = await resolve(THEME_KEYWORD);
++    const verdict = await validate(THEME_KEYWORD, resolved, buildResult(resolved.resolution, "correct"), "correct");
++    expect(verdict.out).toContain(CLEAN_VERDICT);
++    expect(verdict.exitCode).toBe(0);
++  });
++
++  test("a fabricated summary is a miss with its reason", async () => {
++    const resolved = await resolve(THEME_KEYWORD);
++    const verdict = await validate(THEME_KEYWORD, resolved, buildResult(resolved.resolution, "fabricated"), "fabricated");
++    expect(verdict.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
++    expect(verdict.out).toContain(
++      `- project context miss: ${THEMING_PATH} (condition:keyword:theme) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "${THEMING_ANCHOR}"; 3 required.`,
++    );
++  });
++
++  test("a summary lifted from another document's section does not satisfy it", async () => {
++    const resolved = await resolve(THEME_KEYWORD);
++    const result = buildResult(resolved.resolution, "correct");
++    const applied = result["project_context_applied"] as Array<Record<string, unknown>>;
++    // A real worker could copy a paragraph of STYLING instead of reading THEMING.
++    const stylingCascade = extractSection(stylingText, "Tailwind 4 cascade");
++    const borrowed = (stylingCascade.found ? stylingCascade.text : "").split("\n").find((line) => line.startsWith("The cascade contract")) ?? "";
++    const themingSection = extractSection(themingText, THEMING_ANCHOR);
++    const themingWords = distinctWords(themingSection.found ? themingSection.text : "");
++    // Precondition, so the test says what it proves: the borrowed text overlaps by fewer than 3 words.
++    expect([...distinctWords(borrowed)].filter((word) => themingWords.has(word)).length).toBeLessThan(3);
++    const wrong = applied.map((item) => (item["path"] === THEMING_PATH ? { ...item, summary: borrowed } : item));
++    const verdict = await validate(THEME_KEYWORD, resolved, { ...result, project_context_applied: wrong }, "wrong-document");
++    expect(verdict.out).toContain(`${THEMING_PATH} (condition:keyword:theme) has a summary that shares`);
++    expect(verdict.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
++  });
++});
++
++// --- scenario 3: an unrelated task -----------------------------------------
++
++describe("scenario 3: an unrelated task", () => {
++  test("neither document is promoted; both are listed on demand with their conditions", async () => {
++    const resolved = await resolve(UNRELATED);
++    for (const documentPath of [STYLING_PATH, THEMING_PATH]) {
++      const entry = entryFor(resolved.resolution, documentPath);
++      expect(entry).toMatchObject({ tier: "on_demand", reason: "declared" });
++      expect(entry.description).toBeDefined();
++      expect(entry.anchor).toBeDefined();
++      expect(entry.condition).toBeDefined();
++    }
++    expect(resolved.resolution.entries.filter(isPromoted)).toEqual([]);
++    expect(resolved.resolution.entries.filter((entry) => entry.tier === "must_read").map((entry) => entry.path)).toEqual([RULE_PATH]);
++    expect(resolved.resolution.budget.usedBytes).toBe(entryFor(resolved.resolution, RULE_PATH).bytes);
++    expect(resolved.printed.out).toContain("## must_read (1)");
++    expect(resolved.printed.out).toContain("## on_demand (2)");
++  });
++
++  test("a result citing only the rule passes; a promoted-looking proof is not required", async () => {
++    const resolved = await resolve(UNRELATED);
++    const verdict = await validate(UNRELATED, resolved, buildResult(resolved.resolution, "correct"), "correct");
++    expect(verdict.out).toContain(CLEAN_VERDICT);
++    expect(verdict.exitCode).toBe(0);
++  });
++
++  test("a fabricated summary on a document nobody had to read is not an obligation and not a miss", async () => {
++    const resolved = await resolve(UNRELATED);
++    const result = buildResult(resolved.resolution, "fabricated");
++    const extra = [STYLING_PATH, THEMING_PATH].map((documentPath) => {
++      const entry = entryFor(resolved.resolution, documentPath);
++      return { path: documentPath, sha256: entry.sha256, how: "read", anchor: entry.anchor, summary: FABRICATED_SUMMARY };
++    });
++    const withExtras = { ...result, project_context_applied: [...(result["project_context_applied"] as unknown[]), ...extra] };
++    const verdict = await validate(UNRELATED, resolved, withExtras, "fabricated");
++    expect(verdict.out).toContain(CLEAN_VERDICT);
++    expect(verdict.exitCode).toBe(0);
++  });
++
++  test("the resolve is recorded with its task text for the TUI", async () => {
++    await resolve(UNRELATED);
++    const recorded = await readLastResolve(root);
++    expect(recorded?.taskText).toBe(UNRELATED.taskText);
++  });
++});
+
+--- src/gdskills/context-resolver.test.ts
+@@ 1,27 @@
+-import { afterEach, expect, test } from "bun:test";
++import { afterEach, expect, spyOn, test } from "bun:test";
+ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { importProjectRules } from "./import-rules";
+-import { type ContextEntry, readLastResolve, recordLastResolve, resolveProjectContext } from "./context-resolver";
++import { type ContextEntry, readLastResolve, recordLastResolve, resolveProjectContext, TASK_TEXT_MAX_CHARS } from "./context-resolver";
++import { runResolveContextCommand } from "./resolve-context-command";
+ import { sha256Hex } from "./project-rules";
+ 
+ const roots: string[] = [];
+ afterEach(async () => {
+   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+ });
+ 
+ type RuleSpec = { globs?: string; always?: boolean; description?: string; body?: string; size?: number; taskTypes?: string };
+ 
+ function ruleText(spec: RuleSpec): string {
+   const head = [
+     "---",
+     `description: ${spec.description ?? "a rule"}`,
+     ...(spec.globs !== undefined ? [`globs: ${spec.globs}`] : []),
+     `alwaysApply: ${spec.always === true ? "true" : "false"}`,
+     ...(spec.taskTypes !== undefined ? [`taskTypes: ${spec.taskTypes}`] : []),
+     "---",
+     "",
+   ].join("\n");
+   const body = spec.body ?? "Rule body.\n";
+
+--- src/gdskills/context-resolver.test.ts
+@@ 382,592 @@
+   await put(root, P("core/nested.mdc"), ruleText({ globs: "docs/**" }));
+   await put(root, P("overlay.mdc"), ruleText({ globs: "src/**", body: "See `core/flat.mdc` and `nested.mdc`, then `core/gone.mdc`.\n" }));
+   const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+   const contracts = result.entries.filter((entry) => entry.kind === "contract");
+   expect(contracts.map((entry) => entry.path)).toEqual([P("core/nested.mdc"), P("flat.mdc")]);
+   expect(contracts.every((entry) => entry.tier === "on_demand")).toBe(true);
+   expect(result.warnings).toHaveLength(1);
+   expect(result.warnings[0]).toContain("core/gone.mdc");
+   expect(result.warnings[0]).toContain("does not exist");
+ });
+ 
+ test("a core/ citation of a rule that is already selected adds no second entry", async () => {
+   const root = await project();
+   await put(root, P("styling.mdc"), ruleText({ globs: "src/**" }));
+   await put(root, P("overlay.mdc"), ruleText({ globs: "src/**", body: "See `core/styling.mdc`.\n" }));
+   const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+   expect(result.entries.filter((entry) => entry.path === P("styling.mdc"))).toHaveLength(1);
+   expect(result.entries.some((entry) => entry.kind === "contract")).toBe(false);
+   expect(result.warnings).toEqual([]);
+ });
++
++// --- flow 462: conditional mandatory reads ---------------------------------------------
++
++type RefSpec = { path: string; globs?: string[]; keywords?: string[]; anchor?: string; description?: string };
++
++async function declare(root: string, references: RefSpec[]): Promise<void> {
++  const body = references.map((ref) => ({
++    path: ref.path,
++    when: { ...(ref.globs !== undefined ? { globs: ref.globs } : {}), ...(ref.keywords !== undefined ? { keywords: ref.keywords } : {}) },
++    ...(ref.anchor !== undefined ? { anchor: ref.anchor } : {}),
++    description: ref.description ?? "What the document governs and when to read it.",
++  }));
++  await put(root, ".metaproject/rules/project/references.json", `${JSON.stringify({ schema: 1, references: body }, null, 2)}\n`);
++}
++
++const STYLING = ["# Styling", "", "Intro of the document.", "", "## Class conventions", "", "Use tokens, never raw colours.", "", "### Cascade", "", "Layers win over specificity.", "", "## Other topic", "", "Unrelated tail.", ""].join("\n");
++const SECTION = ["## Class conventions", "", "Use tokens, never raw colours.", "", "### Cascade", "", "Layers win over specificity.", "", ""].join("\n");
++
++test("task text is recorded with the last resolve, truncated to the stated limit, and left out when absent", async () => {
++  const root = await project();
++  await importRules(root, { "any.mdc": ruleText({ globs: "src/**" }) });
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++
++  await recordLastResolve(root, result, { taskText: "Fix the spacing of the card" });
++  expect(await readLastResolve(root)).toMatchObject({ taskText: "Fix the spacing of the card" });
++  expect((await readLastResolve(root))?.taskTextTruncated).toBeUndefined();
++
++  await recordLastResolve(root, result, { taskText: "x".repeat(TASK_TEXT_MAX_CHARS + 50) });
++  const long = await readLastResolve(root);
++  expect(long?.taskText).toHaveLength(TASK_TEXT_MAX_CHARS);
++  expect(long?.taskTextTruncated).toBe(true);
++
++  await recordLastResolve(root, result);
++  expect(Object.keys((await readLastResolve(root)) ?? {})).toEqual(["recordedAt", "result"]);
++});
++
++test("task text from --task-text reaches the last-resolve record, and the resolve result itself does not carry it", async () => {
++  const root = await project();
++  await importRules(root, { "any.mdc": ruleText({ globs: "src/**" }) });
++  const log = spyOn(console, "log").mockImplementation(() => undefined);
++  try {
++    const withText = await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement", "--task-text", "Adjust the theme tokens"], root);
++    expect((await readLastResolve(root))?.taskText).toBe("Adjust the theme tokens");
++    const without = await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement"], root);
++    expect(JSON.stringify(withText)).toBe(JSON.stringify(without));
++    expect((await readLastResolve(root))?.taskText).toBeUndefined();
++  } finally {
++    log.mockRestore();
++  }
++});
++
++test("a declared reference whose glob promotes it is must_read with the glob as reason, the anchor, the description, the section size and the hash of the whole file", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", STYLING);
++  await declare(root, [{ path: "STYLING.md", globs: ["src/**/*.css"], keywords: ["tailwind"], anchor: "Class conventions", description: "Class naming and the cascade." }]);
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/app.css"], for: "implement" });
++  expect(result.entries).toHaveLength(1);
++  expect(result.entries[0]).toMatchObject({
++    kind: "contract",
++    source: "project",
++    path: "STYLING.md",
++    tier: "must_read",
++    reason: "condition:glob:src/**/*.css",
++    anchor: "Class conventions",
++    description: "Class naming and the cascade.",
++    section_bytes: Buffer.byteLength(SECTION),
++    sha256: sha256Hex(STYLING),
++    bytes: Buffer.byteLength(STYLING),
++  });
++  expect(result.budget.usedBytes).toBe(Buffer.byteLength(SECTION));
++  expect(result.budget.exceeded).toBe(false);
++  expect(result.warnings).toEqual([]);
++});
++
++test("a declared reference whose keyword promotes it matches the task text case-insensitively on a word boundary; a task matching neither keeps description, anchor and condition on_demand", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", STYLING);
++  await declare(root, [{ path: "STYLING.md", globs: ["src/**/*.css"], keywords: ["tailwind", "z-index"], anchor: "Class conventions", description: "Class naming." }]);
++  const resolve = (taskText?: string) => resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", ...(taskText !== undefined ? { taskText } : {}) });
++
++  const hit = await resolve("Migrate the TAILWIND config.");
++  expect(hit.entries[0]).toMatchObject({ path: "STYLING.md", tier: "must_read", reason: "condition:keyword:tailwind", anchor: "Class conventions", section_bytes: Buffer.byteLength(SECTION) });
++  expect((await resolve("fix the z-index of the modal")).entries[0]).toMatchObject({ tier: "must_read", reason: "condition:keyword:z-index" });
++
++  for (const text of ["tailwinds are mentioned", "the pretailwind thing", undefined, ""]) {
++    const miss = await resolve(text);
++    expect(miss.entries).toHaveLength(1);
++    expect(miss.entries[0]).toMatchObject({
++      path: "STYLING.md",
++      tier: "on_demand",
++      description: "Class naming.",
++      anchor: "Class conventions",
++      condition: { globs: ["src/**/*.css"], keywords: ["tailwind", "z-index"] },
++    });
++    expect(miss.budget.usedBytes).toBe(0);
++  }
++});
++
++test("a reference whose anchor is missing falls back to the whole file and warns at resolve time", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", STYLING);
++  await declare(root, [{ path: "STYLING.md", globs: ["src/**"], anchor: "No such heading" }]);
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++  expect(result.entries[0]).toMatchObject({ tier: "must_read", section_bytes: Buffer.byteLength(STYLING), anchor: "No such heading" });
++  expect(result.budget.usedBytes).toBe(Buffer.byteLength(STYLING));
++  const warning = result.warnings.join("\n");
++  expect(warning).toContain("STYLING.md");
++  expect(warning).toContain("No such heading");
++  expect(warning).toContain("whole file");
++});
++
++test("cap keeps promoted references: an over-cap promoted reference stays must_read and the warning gives the sizes, while rules keep flow 461 behaviour", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", ruleText({ size: 10000 }));
++  await put(root, "THEMING.md", ruleText({ size: 6000 }));
++  await importRules(root, { "small.mdc": ruleText({ globs: "src/**", size: 2000 }) });
++  await declare(root, [
++    { path: "STYLING.md", globs: ["src/**"] },
++    { path: "THEMING.md", globs: ["docs/**"] },
++  ]);
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", maxBytes: 4096 });
++  expect(result.entries.map((entry) => [entry.path, entry.tier])).toEqual([
++    [P("small.mdc"), "must_read"],
++    ["STYLING.md", "must_read"],
++    ["THEMING.md", "on_demand"],
++  ]);
++  expect(result.budget).toEqual({ limitBytes: 4096, usedBytes: 12000, exceeded: true, limitSource: "flag" });
++  const warning = result.warnings.join("\n");
++  expect(warning).toContain("STYLING.md");
++  expect(warning).toContain("10000");
++  expect(warning).toContain("4096");
++  expect(warning).toContain("12000");
++});
++
++test("undeclared citations keep the flow 461 on_demand contract entry and are listed as undeclared; a declared one is not listed twice", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", STYLING);
++  await put(root, "THEMING.md", "# Theming\n");
++  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `STYLING.md` and `THEMING.md`.\n" }) });
++  await declare(root, [{ path: "STYLING.md", globs: ["docs/**"], description: "Class naming." }]);
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++  expect(result.entries.filter((entry) => entry.path === "STYLING.md")).toHaveLength(1);
++  expect(result.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand", description: "Class naming." });
++  expect(result.entries.find((entry) => entry.path === "THEMING.md")).toMatchObject({ kind: "contract", tier: "on_demand", reason: `referenced-by:${P("overlay.mdc")}` });
++  expect(result.undeclared).toEqual(["THEMING.md"]);
++});
++
++test("without a references file the result is byte-identical whatever the task text, and carries no undeclared list", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", STYLING);
++  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `STYLING.md`.\n" }) });
++  const plain = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++  const withText = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", taskText: "tailwind everywhere" });
++  expect(JSON.stringify(withText)).toBe(JSON.stringify(plain));
++  expect("undeclared" in plain).toBe(false);
++  expect(plain.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand", reason: `referenced-by:${P("overlay.mdc")}` });
++});
++
++test("a malformed references file warns with its own messages, and the resolve carries on as flow 461 would", async () => {
++  const root = await project();
++  await put(root, "STYLING.md", STYLING);
++  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `STYLING.md`.\n" }) });
++  await put(root, ".metaproject/rules/project/references.json", "{ not json");
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++  expect(result.warnings.join("\n")).toContain("references.json");
++  expect(result.warnings.join("\n")).toContain("not valid JSON");
++  expect(result.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand" });
++  expect("undeclared" in result).toBe(false);
++
++  await put(root, ".metaproject/rules/project/references.json", JSON.stringify({ schema: 1, references: [{ path: "STYLING.md", when: {}, description: "x" }] }));
++  const invalid = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++  expect(invalid.warnings.join("\n")).toContain('references[0] ("STYLING.md")');
++});
++
++test("a declared reference whose file is missing, outside the root or a directory is not listed and warns", async () => {
++  const root = await project();
++  await mkdir(path.join(root, "dir.md"), { recursive: true });
++  const outside = await mkdtemp(path.join(tmpdir(), "keryx-context-outside-"));
++  roots.push(outside);
++  await writeFile(path.join(outside, "secret.md"), "secret\n", "utf8");
++  await symlink(path.join(outside, "secret.md"), path.join(root, "escape.md"));
++  await declare(root, [
++    { path: "missing.md", globs: ["src/**"] },
++    { path: "dir.md", globs: ["src/**"] },
++    { path: "escape.md", globs: ["src/**"] },
++  ]);
++  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
++  expect(result.entries).toEqual([]);
++  const warnings = result.warnings.join("\n");
++  for (const name of ["missing.md", "dir.md", "escape.md"]) expect(warnings).toContain(name);
++});
+
+--- src/gdskills/output-schema.test.ts
+@@ 1,129 @@
++// Flow 462 AC9 — the `project_context_applied` item of the two worker output
++// contracts gains optional `anchor` and `summary` strings, so a worker can prove
++// it read the section a conditional reference promoted.
++//
++// What must NOT change is as much the subject as what does: the `how` enum, the
++// `additionalProperties: false` that refuses unknown keys, and the validity of
++// every result that was valid under flow 461.
++
++import { describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import path from "node:path";
++import { CONTRACTS, contractPath, validateJson } from "./contracts";
++
++const REPO_ROOT = path.join(import.meta.dir, "..", "..");
++const SHA = "a".repeat(64);
++const STYLING = ".metaproject/rules/project/styling.mdc";
++
++const PRODUCERS = ["task-implementer-output", "tests-creator-output"] as const;
++type Producer = (typeof PRODUCERS)[number];
++
++/** The bundled source of each contract, then every copy the project syncs from it. */
++const SCHEMA_SOURCES: Record<Producer, { source: string; copies: string[] }> = {
++  "task-implementer-output": {
++    source: "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
++    copies: [
++      ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
++      ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
++    ],
++  },
++  "tests-creator-output": {
++    source: "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
++    copies: [
++      ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
++      ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
++    ],
++  },
++};
++
++function loadSchema(name: Producer): Record<string, unknown> {
++  const contract = CONTRACTS.find((entry) => entry.name === name);
++  if (!contract) throw new Error(`not registered: ${name}`);
++  return JSON.parse(readFileSync(contractPath(contract), "utf8")) as Record<string, unknown>;
++}
++
++/** A minimal valid result for the producer, carrying `applied` when given. */
++function result(producer: Producer, applied?: unknown): Record<string, unknown> {
++  const applying = applied === undefined ? {} : { project_context_applied: applied };
++  if (producer === "task-implementer-output") {
++    return { task_id: "task-1", task_name: "Add a thing", task_type: "ui_component", status: "success", ...applying };
++  }
++  return {
++    test_case_specs: { framework: "bun:test", test_files: [], run_command: "bun test a", expected_result: "all failing (RED phase)" },
++    status_report: { status: "DONE", tests_written: 1, all_criteria_covered: true },
++    ...applying,
++  };
++}
++
++type ItemSchema = { properties: { how: { enum: string[] } }; additionalProperties: boolean; required: string[] };
++
++function itemSchema(producer: Producer): ItemSchema {
++  const root = loadSchema(producer) as { properties: { project_context_applied: { items: ItemSchema } } };
++  return root.properties.project_context_applied.items;
++}
++
++describe("AC9: anchor and summary on project_context_applied items", () => {
++  for (const producer of PRODUCERS) {
++    describe(producer, () => {
++      test("an item with an anchor and a summary validates", async () => {
++        const applied = [{ path: STYLING, sha256: SHA, how: "read", anchor: "## Spacing", summary: "Spacing uses the 4px grid and tokens, never raw values." }];
++        expect(await validateJson(result(producer, applied), loadSchema(producer))).toEqual([]);
++      });
++
++      test("either new field alone validates", async () => {
++        const schema = loadSchema(producer);
++        expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how: "read", anchor: "## Spacing" }]), schema)).toEqual([]);
++        expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how: "followed", summary: "A summary." }]), schema)).toEqual([]);
++      });
++
++      test("the new fields are strings and nothing else", async () => {
++        const schema = loadSchema(producer);
++        for (const bad of [{ anchor: 3 }, { summary: 3 }, { anchor: null }, { summary: ["a"] }]) {
++          expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how: "read", ...bad }]), schema)).not.toEqual([]);
++        }
++      });
++
++      test("the `how` enum is unchanged", async () => {
++        expect(itemSchema(producer).properties.how.enum).toEqual(["read", "followed", "n/a"]);
++        const schema = loadSchema(producer);
++        expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how: "skimmed", anchor: "## Spacing" }]), schema)).not.toEqual([]);
++      });
++
++      test("an unknown property is still rejected, with or without the new fields beside it", async () => {
++        const schema = loadSchema(producer);
++        expect(itemSchema(producer).additionalProperties).toBe(false);
++        expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how: "read", why: "because" }]), schema)).not.toEqual([]);
++        expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how: "read", anchor: "## Spacing", sumary: "typo" }]), schema)).not.toEqual([]);
++      });
++
++      test("path, sha256 and how stay required; the new fields are not", async () => {
++        const required = itemSchema(producer).required;
++        expect([...required].sort()).toEqual(["how", "path", "sha256"]);
++        const schema = loadSchema(producer);
++        expect(await validateJson(result(producer, [{ path: STYLING, how: "read", anchor: "## Spacing", summary: "s" }]), schema)).not.toEqual([]);
++      });
++
++      test("a flow 461 result (no anchor, no summary) still validates, and so does one with no citations at all", async () => {
++        const schema = loadSchema(producer);
++        for (const how of ["read", "followed", "n/a"]) {
++          expect(await validateJson(result(producer, [{ path: STYLING, sha256: SHA, how }]), schema)).toEqual([]);
++        }
++        expect(await validateJson(result(producer, []), schema)).toEqual([]);
++        expect(await validateJson(result(producer), schema)).toEqual([]);
++      });
++    });
++  }
++
++  test("the synced copies carry the same schema as the bundled source", () => {
++    const read = (file: string): string => readFileSync(path.join(REPO_ROOT, file), "utf8");
++    for (const producer of PRODUCERS) {
++      const { source, copies } = SCHEMA_SOURCES[producer];
++      for (const file of [source, ...copies]) {
++        expect(read(file)).toBe(read(source));
++        const parsed = JSON.parse(read(file)) as { properties: { project_context_applied: { items: { properties: Record<string, unknown> } } } };
++        const properties = parsed.properties.project_context_applied.items.properties;
++        expect(Object.keys(properties).sort()).toEqual(["anchor", "how", "path", "sha256", "summary"]);
++      }
++    }
++  });
++});
+
+--- src/gdskills/project-context-status.test.ts
+@@ 59,118 @@
+ });
+ 
+ test("a tasks.config.json that is not an object is reported", async () => {
+   const root = await project();
+   await put(root, ".metaproject/tasks.config.json", "[]");
+   expect((await loadProjectContextStatus(root)).configError).toContain("not a JSON object");
+ });
+ 
+ test("S5: last.json that is not JSON, has no result, or has an unknown schema is lastError, never a throw", async () => {
+   const root = await project();
+   const file = ".metaproject/data/skills/project-context/last.json";
+   await put(root, file, "{ nope");
+   expect((await loadProjectContextStatus(root)).lastError).toContain("not valid JSON");
+   await put(root, file, JSON.stringify({ hello: 1 }));
+   expect((await loadProjectContextStatus(root)).lastError).toContain("not a recorded resolve");
+   await put(root, file, JSON.stringify({ recordedAt: "x", result: { ...RESOLVE, schema: 2 } }));
+   const status = await loadProjectContextStatus(root);
+   expect(status.lastError).toContain("unknown schema");
+   expect(status.last).toBeUndefined();
+ });
++
++// flow 462 (AC16): the conditional references the TUI shows.
++const REFERENCES_FILE = ".metaproject/rules/project/references.json";
++const declaration = (extra: Record<string, unknown> = {}) => ({
++  path: "STYLING.md",
++  when: { globs: ["src/**/*.css"], keywords: ["className"] },
++  anchor: "Class conventions",
++  description: "Class naming and cascade rules for stylesheets.",
++  ...extra,
++});
++
++test("no references file leaves the status without a references field", async () => {
++  const status = await loadProjectContextStatus(await project());
++  expect("references" in status).toBe(false);
++});
++
++test("a references file is reported with its declarations and the findings of the check", async () => {
++  const root = await project();
++  await put(root, REFERENCES_FILE, JSON.stringify({ schema: 1, references: [declaration({ anchor: "Missing heading" })] }));
++  await put(root, "STYLING.md", "# Styling\n\n## Class conventions\n\nUse tokens.\n");
++  const status = await loadProjectContextStatus(root);
++  expect(status.references?.state).toBe("declared");
++  if (status.references?.state !== "declared") return;
++  expect(status.references.declarations.map((entry) => entry.path)).toEqual(["STYLING.md"]);
++  const codes = status.references.findings.map((finding) => finding.code);
++  expect(codes).toContain("anchor-not-found");
++  expect(codes).toContain("unused-declaration");
++});
++
++test("an invalid references file is reported with the validation messages, never thrown", async () => {
++  const root = await project();
++  await put(root, REFERENCES_FILE, JSON.stringify({ schema: 1, references: [{ path: "STYLING.md", when: {}, description: "x" }] }));
++  const status = await loadProjectContextStatus(root);
++  expect(status.references?.state).toBe("invalid");
++  if (status.references?.state !== "invalid") return;
++  expect(status.references.errors.join("\n")).toContain("references[0]");
++  await put(root, REFERENCES_FILE, "{ nope");
++  const broken = await loadProjectContextStatus(root);
++  expect(broken.references?.state).toBe("invalid");
++});
+
+--- src/gdskills/references-config.test.ts
+@@ 1,279 @@
++import { afterEach, describe, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { loadReferences, parseReferences, REFERENCES_PATH, REFERENCES_SCHEMA } from "./references-config";
++
++// AC1: `.metaproject/rules/project/references.json` (schema 1) is loaded; a
++// committed JSON schema validates it; a declaration with neither globs nor
++// keywords, an empty description or an absolute or escaping path is rejected with
++// a message naming the entry.
++
++const SCHEMA_FILE = path.join(import.meta.dir, "..", "..", "docs", "requirements", "keryx-conditional-reads", "schemas", "references.schema.json");
++
++const roots: string[] = [];
++afterEach(async () => {
++  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
++});
++
++async function project(references?: string): Promise<string> {
++  const root = await mkdtemp(path.join(tmpdir(), "keryx-references-config-"));
++  roots.push(root);
++  if (references !== undefined) {
++    await mkdir(path.dirname(path.join(root, REFERENCES_PATH)), { recursive: true });
++    await writeFile(path.join(root, REFERENCES_PATH), references, "utf8");
++  }
++  return root;
++}
++
++const GOOD_ENTRY = {
++  path: "STYLING.md",
++  when: { globs: ["src/**/*.css"], keywords: ["className", "tailwind"] },
++  anchor: "Class conventions",
++  description: "Class naming and the Tailwind 4 cascade contract.",
++};
++
++const doc = (...references: unknown[]): unknown => ({ schema: 1, references });
++
++describe("parseReferences", () => {
++  test("accepts a complete declaration and returns it typed", () => {
++    const result = parseReferences(doc(GOOD_ENTRY));
++    expect(result).toEqual({
++      ok: true,
++      references: [
++        {
++          path: "STYLING.md",
++          when: { globs: ["src/**/*.css"], keywords: ["className", "tailwind"] },
++          anchor: "Class conventions",
++          description: "Class naming and the Tailwind 4 cascade contract.",
++        },
++      ],
++    });
++  });
++
++  test("anchor is optional, and globs-only or keywords-only conditions are valid", () => {
++    const result = parseReferences(
++      doc(
++        { path: "A.md", when: { globs: ["src/**"] }, description: "Only globs." },
++        { path: "B.md", when: { keywords: ["theme"] }, description: "Only keywords." },
++      ),
++    );
++    expect(result.ok).toBe(true);
++    if (!result.ok) return;
++    expect(result.references[0]).toEqual({ path: "A.md", when: { globs: ["src/**"], keywords: [] }, description: "Only globs." });
++    expect(result.references[1]?.when).toEqual({ globs: [], keywords: ["theme"] });
++    expect(result.references[0]?.anchor).toBeUndefined();
++  });
++
++  test("normalises a path to posix and trims strings", () => {
++    const result = parseReferences(doc({ ...GOOD_ENTRY, path: "docs\\.\\STYLING.md", description: "  Padded description.  " }));
++    expect(result.ok).toBe(true);
++    if (result.ok) {
++      expect(result.references[0]?.path).toBe("docs/STYLING.md");
++      expect(result.references[0]?.description).toBe("Padded description.");
++    }
++  });
++
++  test("rejects a declaration with neither globs nor keywords, naming the entry", () => {
++    for (const when of [{}, { globs: [], keywords: [] }, undefined]) {
++      const result = parseReferences(doc({ ...GOOD_ENTRY, when }));
++      expect(result.ok).toBe(false);
++      if (result.ok) continue;
++      expect(result.errors).toHaveLength(1);
++      expect(result.errors[0]).toContain('references[0] ("STYLING.md")');
++      expect(result.errors[0]).toMatch(/globs|keywords/);
++    }
++  });
++
++  test("rejects an empty or blank description", () => {
++    for (const description of ["", "   ", undefined, 7]) {
++      const result = parseReferences(doc({ ...GOOD_ENTRY, description }));
++      expect(result.ok).toBe(false);
++      if (!result.ok) expect(result.errors[0]).toContain('references[0] ("STYLING.md"): description');
++    }
++  });
++
++  test("rejects absolute paths", () => {
++    for (const bad of ["/etc/passwd", "\\windows\\x.md", "C:/x.md", "c:\\x.md"]) {
++      const result = parseReferences(doc({ ...GOOD_ENTRY, path: bad }));
++      expect(result.ok).toBe(false);
++      if (!result.ok) {
++        expect(result.errors[0]).toContain(`("${bad}")`);
++        expect(result.errors[0]).toContain("absolute");
++      }
++    }
++  });
++
++  test("rejects paths that escape the project root", () => {
++    for (const bad of ["../x.md", "docs/../../x.md", "..", "a/b/../../../c.md"]) {
++      const result = parseReferences(doc({ ...GOOD_ENTRY, path: bad }));
++      expect(result.ok).toBe(false);
++      if (!result.ok) {
++        expect(result.errors[0]).toContain(`("${bad}")`);
++        expect(result.errors[0]).toContain("escapes");
++      }
++    }
++  });
++
++  test("allows .. that stays inside the root", () => {
++    const result = parseReferences(doc({ ...GOOD_ENTRY, path: "docs/../STYLING.md" }));
++    expect(result.ok).toBe(true);
++    if (result.ok) expect(result.references[0]?.path).toBe("STYLING.md");
++  });
++
++  test("rejects an empty path and names the entry by index", () => {
++    const result = parseReferences(doc(GOOD_ENTRY, { ...GOOD_ENTRY, path: "" }));
++    expect(result.ok).toBe(false);
++    if (!result.ok) expect(result.errors[0]).toContain("references[1]");
++  });
++
++  test("reports every bad entry, not only the first", () => {
++    const result = parseReferences(doc({ ...GOOD_ENTRY, path: "../a.md" }, GOOD_ENTRY, { ...GOOD_ENTRY, description: "" }));
++    expect(result.ok).toBe(false);
++    if (!result.ok) {
++      expect(result.errors).toHaveLength(2);
++      expect(result.errors[0]).toContain("references[0]");
++      expect(result.errors[1]).toContain("references[2]");
++    }
++  });
++
++  test("rejects unknown properties, a wrong schema number and malformed shapes", () => {
++    expect(parseReferences({ schema: 2, references: [] }).ok).toBe(false);
++    expect(parseReferences({ references: [] }).ok).toBe(false);
++    expect(parseReferences({ schema: 1 }).ok).toBe(false);
++    expect(parseReferences({ schema: 1, references: [], extra: 1 }).ok).toBe(false);
++    expect(parseReferences(doc({ ...GOOD_ENTRY, extra: true })).ok).toBe(false);
++    expect(parseReferences(doc({ ...GOOD_ENTRY, anchor: "" })).ok).toBe(false);
++    expect(parseReferences(doc({ ...GOOD_ENTRY, when: { globs: "src/**" } })).ok).toBe(false);
++    expect(parseReferences(doc({ ...GOOD_ENTRY, when: { globs: [""], keywords: ["x"] } })).ok).toBe(false);
++    expect(parseReferences(doc({ ...GOOD_ENTRY, when: { globs: ["a"], extra: 1 } })).ok).toBe(false);
++    expect(parseReferences(doc("not an object")).ok).toBe(false);
++    expect(parseReferences([]).ok).toBe(false);
++    expect(parseReferences(null).ok).toBe(false);
++  });
++
++  test("an empty list is valid", () => {
++    expect(parseReferences({ schema: 1, references: [] })).toEqual({ ok: true, references: [] });
++  });
++});
++
++describe("loadReferences", () => {
++  test("a missing file means no declarations, without an error", async () => {
++    const root = await project();
++    expect(await loadReferences(root)).toEqual({ ok: true, present: false, references: [] });
++  });
++
++  test("loads a present file", async () => {
++    const root = await project(JSON.stringify(doc(GOOD_ENTRY)));
++    const result = await loadReferences(root);
++    expect(result.ok).toBe(true);
++    if (!result.ok) return;
++    expect(result.present).toBe(true);
++    expect(result.references).toHaveLength(1);
++    expect(result.references[0]?.path).toBe("STYLING.md");
++  });
++
++  test("invalid JSON is an error naming the file, not a throw", async () => {
++    const root = await project("{ not json");
++    const result = await loadReferences(root);
++    expect(result.ok).toBe(false);
++    if (!result.ok) expect(result.errors[0]).toContain(REFERENCES_PATH);
++  });
++
++  test("a schema violation is an error naming the file and the entry", async () => {
++    const root = await project(JSON.stringify(doc({ ...GOOD_ENTRY, description: "" })));
++    const result = await loadReferences(root);
++    expect(result.ok).toBe(false);
++    if (!result.ok) {
++      expect(result.errors[0]).toContain(REFERENCES_PATH);
++      expect(result.errors[0]).toContain('references[0] ("STYLING.md")');
++    }
++  });
++
++  test("a directory in place of the file is an error, not a throw", async () => {
++    const root = await project();
++    await mkdir(path.join(root, REFERENCES_PATH), { recursive: true });
++    const result = await loadReferences(root);
++    expect(result.ok).toBe(false);
++  });
++});
++
++// A minimal evaluator for the JSON Schema keywords references.schema.json uses,
++// so the committed schema and the loader are shown to give one verdict.
++type Node = Record<string, unknown>;
++
++function validates(schema: Node, value: unknown): boolean {
++  if ("const" in schema && schema["const"] !== value) return false;
++  if (Array.isArray(schema["enum"]) && !schema["enum"].includes(value)) return false;
++  if (Array.isArray(schema["anyOf"]) && !(schema["anyOf"] as Node[]).some((branch) => validates(branch, value))) return false;
++  const type = schema["type"] ?? (Array.isArray(schema["required"]) ? "object" : undefined);
++  if (type === "object") {
++    if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
++    const record = value as Node;
++    for (const key of (schema["required"] as string[] | undefined) ?? []) if (!(key in record)) return false;
++    const properties = (schema["properties"] as Record<string, Node> | undefined) ?? {};
++    for (const [key, child] of Object.entries(record)) {
++      const rule = properties[key];
++      if (rule === undefined) {
++        if (schema["additionalProperties"] === false) return false;
++      } else if (!validates(rule, child)) return false;
++    }
++  } else if (type === "array") {
++    if (!Array.isArray(value)) return false;
++    if (typeof schema["minItems"] === "number" && value.length < schema["minItems"]) return false;
++    if (schema["items"] !== undefined && !value.every((item) => validates(schema["items"] as Node, item))) return false;
++  } else if (type === "string") {
++    if (typeof value !== "string") return false;
++    if (typeof schema["minLength"] === "number" && value.length < schema["minLength"]) return false;
++    if (typeof schema["pattern"] === "string" && !new RegExp(schema["pattern"], "u").test(value)) return false;
++  } else if (type === "integer") {
++    if (!Number.isInteger(value)) return false;
++  }
++  return true;
++}
++
++describe("references.schema.json", () => {
++  test("the inline schema is the committed schema", async () => {
++    const committed: unknown = JSON.parse(await readFile(SCHEMA_FILE, "utf8"));
++    expect(committed).toEqual(REFERENCES_SCHEMA);
++  });
++
++  const cases: Array<[string, unknown, boolean]> = [
++    ["full entry", doc(GOOD_ENTRY), true],
++    ["empty list", { schema: 1, references: [] }, true],
++    ["globs only", doc({ path: "A.md", when: { globs: ["a/**"] }, description: "x" }), true],
++    ["keywords only", doc({ path: "A.md", when: { keywords: ["theme"] }, description: "x" }), true],
++    ["neither globs nor keywords", doc({ ...GOOD_ENTRY, when: {} }), false],
++    ["empty globs and keywords", doc({ ...GOOD_ENTRY, when: { globs: [], keywords: [] } }), false],
++    ["missing when", doc({ path: "A.md", description: "x" }), false],
++    ["empty description", doc({ ...GOOD_ENTRY, description: "" }), false],
++    ["blank description", doc({ ...GOOD_ENTRY, description: "  " }), false],
++    ["missing description", doc({ path: "A.md", when: { globs: ["a"] } }), false],
++    ["absolute path", doc({ ...GOOD_ENTRY, path: "/etc/x.md" }), false],
++    ["drive path", doc({ ...GOOD_ENTRY, path: "C:/x.md" }), false],
++    ["empty path", doc({ ...GOOD_ENTRY, path: "" }), false],
++    ["empty anchor", doc({ ...GOOD_ENTRY, anchor: "" }), false],
++    ["unknown entry key", doc({ ...GOOD_ENTRY, extra: 1 }), false],
++    ["unknown when key", doc({ ...GOOD_ENTRY, when: { globs: ["a"], extra: 1 } }), false],
++    ["unknown root key", { schema: 1, references: [], extra: 1 }, false],
++    ["wrong schema number", { schema: 2, references: [] }, false],
++    ["missing schema", { references: [] }, false],
++    ["missing references", { schema: 1 }, false],
++    ["empty glob string", doc({ ...GOOD_ENTRY, when: { globs: [""] } }), false],
++    ["globs not an array", doc({ ...GOOD_ENTRY, when: { globs: "a" } }), false],
++  ];
++
++  for (const [name, input, expected] of cases) {
++    test(`schema and loader agree: ${name}`, () => {
++      expect(validates(REFERENCES_SCHEMA as Node, input)).toBe(expected);
++      expect(parseReferences(input).ok).toBe(expected);
++    });
++  }
++
++  test("a path that escapes the root passes the schema and is rejected by the loader", () => {
++    // JSON Schema cannot express normalisation; the loader owns this check.
++    const input = doc({ ...GOOD_ENTRY, path: "../x.md" });
++    expect(validates(REFERENCES_SCHEMA as Node, input)).toBe(true);
++    expect(parseReferences(input).ok).toBe(false);
++  });
++});
+
+--- src/gdskills/references-section.test.ts
+@@ 1,151 @@
++import { describe, expect, test } from "bun:test";
++import { extractSection, markdownHeadings, slugifyHeading } from "./references-section";
++
++// AC6: with an anchor the obligation and the budget are the section from the
++// heading to the next heading of equal or higher level; a missing anchor is a
++// distinct result (not a throw) so the resolver can fall back with a warning and
++// `check` can report an error.
++
++const DOC = [
++  "# Styling",
++  "",
++  "Intro text.",
++  "",
++  "## Class conventions",
++  "",
++  "Use tokens.",
++  "",
++  "### Tailwind 4 cascade",
++  "",
++  "Layers matter.",
++  "",
++  "## Theming",
++  "",
++  "Theme text.",
++  "",
++  "# Appendix",
++  "",
++  "Tail.",
++  "",
++].join("\n");
++
++describe("extractSection", () => {
++  test("returns the section from the heading to the next heading of equal level", () => {
++    const result = extractSection(DOC, "Theming");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.text).toBe("## Theming\n\nTheme text.\n\n");
++    expect(result.heading).toBe("Theming");
++    expect(result.level).toBe(2);
++  });
++
++  test("keeps deeper headings inside the section", () => {
++    const result = extractSection(DOC, "Class conventions");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.text).toContain("### Tailwind 4 cascade");
++    expect(result.text).toContain("Layers matter.");
++    expect(result.text).not.toContain("Theme text.");
++  });
++
++  test("stops at a heading of higher level", () => {
++    const result = extractSection(DOC, "Tailwind 4 cascade");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.text).toBe("### Tailwind 4 cascade\n\nLayers matter.\n\n");
++  });
++
++  test("a level-1 anchor runs to the next level-1 heading", () => {
++    const result = extractSection(DOC, "Styling");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.text.endsWith("Theme text.\n\n")).toBe(true);
++    expect(result.text).not.toContain("Appendix");
++  });
++
++  test("the last section runs to the end of the file", () => {
++    const result = extractSection(DOC, "Appendix");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.text).toBe("# Appendix\n\nTail.\n");
++  });
++
++  test("reports bytes in UTF-8, not characters", () => {
++    const result = extractSection("# Тема\n\nтекст\n", "Тема");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.bytes).toBe(Buffer.byteLength("# Тема\n\nтекст\n", "utf8"));
++    expect(result.bytes).toBeGreaterThan(result.text.length);
++  });
++
++  test("matches the heading text case-insensitively and trimmed", () => {
++    const result = extractSection(DOC, "  class CONVENTIONS ");
++    expect(result.found).toBe(true);
++  });
++
++  test("matches a slug, with or without the leading hash", () => {
++    for (const anchor of ["tailwind-4-cascade", "#tailwind-4-cascade"]) {
++      const result = extractSection(DOC, anchor);
++      expect(result.found).toBe(true);
++      if (result.found) expect(result.heading).toBe("Tailwind 4 cascade");
++    }
++  });
++
++  test("ignores headings inside fenced code blocks", () => {
++    const text = ["## Real", "", "```sh", "# not a heading", "## also not", "```", "", "after fence", "", "## Next", ""].join("\n");
++    const real = extractSection(text, "Real");
++    expect(real.found).toBe(true);
++    if (real.found) {
++      expect(real.text).toContain("after fence");
++      expect(real.text).not.toContain("## Next");
++    }
++    expect(extractSection(text, "not a heading").found).toBe(false);
++  });
++
++  test("ignores closing hashes and handles CRLF without altering bytes", () => {
++    const text = "## Alpha ##\r\n\r\nbody\r\n\r\n## Beta\r\n";
++    const result = extractSection(text, "Alpha");
++    expect(result.found).toBe(true);
++    if (!result.found) return;
++    expect(result.heading).toBe("Alpha");
++    expect(result.text).toBe("## Alpha ##\r\n\r\nbody\r\n\r\n");
++  });
++
++  test("a missing anchor is a distinct result, not a throw", () => {
++    const result = extractSection(DOC, "Does not exist");
++    expect(result.found).toBe(false);
++    if (result.found) return;
++    expect(result.anchor).toBe("Does not exist");
++    expect(result.reason).toContain("Does not exist");
++    expect(result.available).toContain("Theming");
++  });
++
++  test("an empty anchor is not found", () => {
++    expect(extractSection(DOC, "   ").found).toBe(false);
++    expect(extractSection(DOC, "#").found).toBe(false);
++  });
++
++  test("a heading needs a space after the hashes", () => {
++    expect(extractSection("#nospace\n\ntext\n", "nospace").found).toBe(false);
++  });
++
++  test("the first of two same-named headings wins", () => {
++    const result = extractSection("## Dup\n\none\n\n## Dup\n\ntwo\n", "Dup");
++    expect(result.found).toBe(true);
++    if (result.found) expect(result.text).toContain("one");
++  });
++});
++
++describe("markdownHeadings and slugifyHeading", () => {
++  test("lists headings outside fences with level and slug", () => {
++    expect(markdownHeadings("# A b\n```\n# x\n```\n### C\n")).toEqual([
++      { level: 1, text: "A b", slug: "a-b" },
++      { level: 3, text: "C", slug: "c" },
++    ]);
++  });
++
++  test("slugifies like GitHub for ASCII and keeps other scripts", () => {
++    expect(slugifyHeading("Tailwind 4: the cascade!")).toBe("tailwind-4-the-cascade");
++    expect(slugifyHeading("Тема оформления")).toBe("тема-оформления");
++  });
++});
+
+--- src/gdskills/resolved-context-check.test.ts
+@@ 1,26 @@
+ import { afterEach, expect, test } from "bun:test";
+ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import type { ProjectContextResolution } from "./context-resolver";
+-import { checkResolvedContext } from "./resolved-context-check";
++import { checkResolvedContext, formatResolvedHeadline, formatResolvedReport } from "./resolved-context-check";
+ import { sha256Hex } from "./project-rules";
+ 
+ const roots: string[] = [];
+ afterEach(async () => {
+   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+ });
+ 
+ const FLAT = ".metaproject/rules/project/styling.mdc";
+ const NESTED = ".metaproject/rules/project/core/styling.mdc";
+ 
+ async function fixture(): Promise<{ root: string; resolved: ProjectContextResolution; sha: string }> {
+   const root = await mkdtemp(path.join(tmpdir(), "keryx-resolved-check-"));
+   roots.push(root);
+   const text = "---\nglobs: src/**\n---\nstyling\n";
+   for (const rel of [FLAT, NESTED]) {
+     await mkdir(path.dirname(path.join(root, rel)), { recursive: true });
+     await writeFile(path.join(root, rel), text, "utf8");
+   }
+   const sha = sha256Hex(text);
+   const resolved: ProjectContextResolution = {
+
+--- src/gdskills/resolved-context-check.test.ts
+@@ 44,373 @@
+ });
+ 
+ test("an also_at citation with the wrong sha256 is still a miss and reports what was cited", async () => {
+   const { root, resolved, sha } = await fixture();
+   const report = await checkResolvedContext({ projectRoot: root, resolved, result: { project_context_applied: [{ path: NESTED, sha256: "0".repeat(64) }] } });
+   expect(report.misses).toEqual([{ path: FLAT, reason: "glob:src/**", expected: sha, cited: "0".repeat(64) }]);
+ });
+ 
+ test("no citation at all is a miss without a cited sha256", async () => {
+   const { root, resolved, sha } = await fixture();
+   const report = await checkResolvedContext({ projectRoot: root, resolved, result: { project_context_applied: [] } });
+   expect(report.misses).toEqual([{ path: FLAT, reason: "glob:src/**", expected: sha }]);
+ });
+ 
+ test("a changed also_at file is reported as drift", async () => {
+   const { root, resolved, sha } = await fixture();
+   await writeFile(path.join(root, NESTED), "changed\n", "utf8");
+   const report = await checkResolvedContext({ projectRoot: root, resolved, result: { project_context_applied: [{ path: FLAT, sha256: sha }] } });
+   expect(report.drifted.map((drift) => drift.path)).toEqual([NESTED]);
+ });
++
++// --- conditional reads (flow 462): proof for entries promoted by a condition ---
++
++const DOC = "docs/STYLING.md";
++const DOC_TEXT = [
++  "# Styling",
++  "",
++  "## Tokens",
++  "",
++  "Use design tokens instead of hex values. Spacing follows the spacing scale, and colours come from semantic tokens only.",
++  "",
++  "## Layout",
++  "",
++  "Grid containers carry the gutters.",
++  "",
++].join("\n");
++const GOOD_SUMMARY = "Use design tokens instead of hex values and follow the spacing scale";
++const GLOB_REASON = "condition:glob:src/**/*.css";
++
++type DocOptions = { text?: string; anchor?: string | null; reason?: string };
++
++async function docFixture(options: DocOptions = {}): Promise<{ root: string; resolved: ProjectContextResolution; sha: string }> {
++  const root = await mkdtemp(path.join(tmpdir(), "keryx-resolved-proof-"));
++  roots.push(root);
++  const text = options.text ?? DOC_TEXT;
++  await mkdir(path.dirname(path.join(root, DOC)), { recursive: true });
++  await writeFile(path.join(root, DOC), text, "utf8");
++  const sha = sha256Hex(text);
++  const anchor = options.anchor === undefined ? "Tokens" : options.anchor;
++  const resolved: ProjectContextResolution = {
++    schema: 1,
++    for: "implement",
++    files: ["src/a.css"],
++    entries: [
++      {
++        kind: "contract",
++        source: "project",
++        path: DOC,
++        sha256: sha,
++        bytes: text.length,
++        reason: options.reason ?? GLOB_REASON,
++        tier: "must_read",
++        description: "Tokens and spacing for every stylesheet.",
++        ...(anchor !== null ? { anchor } : {}),
++        condition: { globs: ["src/**/*.css"], keywords: [] },
++      },
++    ],
++    budget: { limitBytes: 1000, usedBytes: text.length, exceeded: false, limitSource: "default" },
++    warnings: [],
++  };
++  return { root, resolved, sha };
++}
++
++function cite(sha: string, extra: Record<string, unknown> = {}): { project_context_applied: unknown[] } {
++  return { project_context_applied: [{ path: DOC, sha256: sha, how: "read", anchor: "Tokens", summary: GOOD_SUMMARY, ...extra }] };
++}
++
++function demoted(resolved: ProjectContextResolution): ProjectContextResolution {
++  return { ...resolved, entries: resolved.entries.map((entry) => ({ ...entry, tier: "on_demand" as const, reason: "declared" })) };
++}
++
++test("summary: a promoted entry cited with its anchor and a summary in the section's own words passes", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha) });
++  expect(report.misses).toEqual([]);
++  expect(report.drifted).toEqual([]);
++});
++
++test("summary: a keyword-promoted entry is held to the same rules, and the anchor must equal the declared one exactly", async () => {
++  const { root, resolved, sha } = await docFixture({ reason: "condition:keyword:styling" });
++  expect((await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha) })).misses).toEqual([]);
++  const wrong = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { anchor: "tokens" }) });
++  expect(wrong.misses.map((miss) => miss.rule)).toEqual(["anchor"]);
++});
++
++test("summary: a missing or different anchor is its own miss that names the declared anchor", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const different = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { anchor: "Layout" }) });
++  expect(different.misses).toHaveLength(1);
++  expect(different.misses[0]).toMatchObject({ path: DOC, rule: "anchor" });
++  expect(different.misses[0]?.detail).toContain('"Layout"');
++  expect(different.misses[0]?.detail).toContain('"Tokens"');
++
++  const absent = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { anchor: undefined }) });
++  expect(absent.misses.map((miss) => miss.rule)).toEqual(["anchor"]);
++  expect(absent.misses[0]?.detail).toContain('"Tokens"');
++});
++
++test("summary: fewer than 40 characters is its own miss, counted after trimming, and says how many were given", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const short = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "design tokens, spacing scale" }) });
++  expect(short.misses.map((miss) => miss.rule)).toEqual(["summary-length"]);
++  expect(short.misses[0]?.detail).toContain("28");
++  expect(short.misses[0]?.detail).toContain("40");
++
++  const padded = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: `   design tokens, spacing scale${" ".repeat(30)}` }) });
++  expect(padded.misses.map((miss) => miss.rule)).toEqual(["summary-length"]);
++
++  const absent = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: undefined }) });
++  expect(absent.misses.map((miss) => miss.rule)).toEqual(["summary-length"]);
++  expect(absent.misses[0]?.detail).toContain("no summary");
++});
++
++test("summary: fewer than three distinct section words of five letters or more is a miss, and a repeated word counts once", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const none = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { summary: "I read the whole document carefully and it was all fine really" }),
++  });
++  expect(none.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++  expect(none.misses[0]?.detail).toContain('"Tokens"');
++
++  const one = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { summary: "Tokens tokens TOKENS matter a lot here, said the team to everybody" }),
++  });
++  expect(one.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++  expect(one.misses[0]?.detail).toContain("1 distinct");
++  expect(one.misses[0]?.detail).toContain("3 required");
++});
++
++test("summary: exactly two shared words is a miss, three pass", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const two = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { summary: "Design tokens matter a lot here, said the team to everybody" }),
++  });
++  expect(two.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++  expect(two.misses[0]?.detail).toContain("2 distinct");
++  expect(two.misses[0]?.detail).toContain("3 required");
++
++  const three = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { summary: "Design tokens and the scale matter a lot here, said the team" }),
++  });
++  expect(three.misses).toEqual([]);
++});
++
++test("summary: words are compared case-insensitively and a word shorter than five letters never counts", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const upper = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "DESIGN TOKENS REPLACE the COLOURS everywhere, SPACING too, ok" }) });
++  expect(upper.misses).toEqual([]);
++
++  const short = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "Use hex from the come only and then some more of it, and so on" }) });
++  expect(short.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++});
++
++test("summary: each failure is its own miss with its own reason line", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { anchor: "Layout", summary: "too short" }) });
++  expect(report.misses.map((miss) => miss.rule)).toEqual(["anchor", "summary-length", "summary-words"]);
++  const lines = formatResolvedReport(report);
++  expect(lines).toHaveLength(3);
++  for (const line of lines) expect(line).toContain(`project context miss: ${DOC} (${GLOB_REASON})`);
++  expect(new Set(lines).size).toBe(3);
++});
++
++test("summary: the words come from the anchored section only, not from the rest of the file", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const report = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { summary: "Grid containers carry the gutters, said the layout section here" }),
++  });
++  expect(report.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++});
++
++test("summary: a section with fewer than three qualifying words requires as many as it holds, and a section with none requires only the length", async () => {
++  const one = await docFixture({ text: "## Tiny\n\nTokens only.\n", anchor: "Tiny" });
++  const withWord = await checkResolvedContext({
++    projectRoot: one.root,
++    resolved: one.resolved,
++    result: cite(one.sha, { anchor: "Tiny", summary: "The tokens are the only thing that matters in it" }),
++  });
++  expect(withWord.misses).toEqual([]);
++  const without = await checkResolvedContext({
++    projectRoot: one.root,
++    resolved: one.resolved,
++    result: cite(one.sha, { anchor: "Tiny", summary: "Nothing about the single word that the text holds here" }),
++  });
++  expect(without.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++  expect(without.misses[0]?.detail).toContain("1 required");
++
++  const none = await docFixture({ text: "## Hex\n\nA b c.\n", anchor: "Hex" });
++  const lengthOnly = await checkResolvedContext({
++    projectRoot: none.root,
++    resolved: none.resolved,
++    result: cite(none.sha, { anchor: "Hex", summary: "Whatever the worker wrote that is long enough to pass" }),
++  });
++  expect(lengthOnly.misses).toEqual([]);
++});
++
++test("summary: letters of any script count, so a Russian section is checked on Russian words", async () => {
++  const text = "## Токены\n\nИспользуйте дизайн-токены вместо цветов. Отступы берутся из шкалы.\n";
++  const { root, resolved, sha } = await docFixture({ text, anchor: "Токены" });
++  const ok = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { anchor: "Токены", summary: "Используйте токены вместо цветов, отступы берутся из шкалы" }),
++  });
++  expect(ok.misses).toEqual([]);
++  const bad = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: cite(sha, { anchor: "Токены", summary: "Прочитал весь документ внимательно, всё понятно и логично" }),
++  });
++  expect(bad.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++});
++
++test("summary: a declaration without an anchor takes the words from the whole file and needs no cited anchor", async () => {
++  const { root, resolved, sha } = await docFixture({ anchor: null });
++  const report = await checkResolvedContext({
++    projectRoot: root,
++    resolved,
++    result: { project_context_applied: [{ path: DOC, sha256: sha, how: "followed", summary: "Grid containers carry the gutters and design tokens everywhere" }] },
++  });
++  expect(report.misses).toEqual([]);
++});
++
++test("summary: an anchored section that cannot be found in the file now is reported with the anchor, not skipped", async () => {
++  const { root, resolved, sha } = await docFixture();
++  await writeFile(path.join(root, DOC), "# Styling\n\nNo sections any more.\n", "utf8");
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha) });
++  expect(report.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
++  expect(report.misses[0]?.detail).toContain('"Tokens"');
++  expect(report.drifted.map((drift) => drift.path)).toEqual([DOC]);
++});
++
++test("summary: an on_demand declared entry and a rule are not held to the proof, whatever they cite", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const onDemand = demoted(resolved);
++  expect((await checkResolvedContext({ projectRoot: root, resolved: onDemand, result: { project_context_applied: [] } })).misses).toEqual([]);
++  expect((await checkResolvedContext({ projectRoot: root, resolved: onDemand, result: cite(sha, { summary: "x" }) })).misses).toEqual([]);
++
++  const rule = await fixture();
++  const withHow = await checkResolvedContext({
++    projectRoot: rule.root,
++    resolved: rule.resolved,
++    result: { project_context_applied: [{ path: FLAT, sha256: rule.sha, how: "n/a" }] },
++  });
++  expect(withHow.misses).toEqual([]);
++});
++
++test("hash and n/a: a promoted entry cited with a different sha256 is a miss that names both hashes, as in flow 461", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite("0".repeat(64)) });
++  expect(report.misses).toEqual([{ path: DOC, reason: GLOB_REASON, expected: sha, cited: "0".repeat(64) }]);
++  expect(formatResolvedReport(report).join("\n")).toContain(`cited with sha256 ${"0".repeat(64)}, the resolver pinned ${sha}`);
++});
++
++test("hash and n/a: a promoted entry that is not cited at all is the single flow 461 miss", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: { project_context_applied: [] } });
++  expect(report.misses).toEqual([{ path: DOC, reason: GLOB_REASON, expected: sha }]);
++});
++
++test("hash and n/a: a promoted entry cited only with how n/a is a miss, however good its summary", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { how: "n/a" }) });
++  expect(report.misses).toHaveLength(1);
++  expect(report.misses[0]).toMatchObject({ path: DOC, rule: "how" });
++  expect(report.misses[0]?.detail).toContain("n/a");
++  expect(report.misses[0]?.detail).toContain("read");
++  expect(formatResolvedReport(report)[0]).toContain(`project context miss: ${DOC} (${GLOB_REASON})`);
++});
++
++test("hash and n/a: citing the document twice, n/a and followed, is satisfied by the followed citation in either order", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const na = { path: DOC, sha256: sha, how: "n/a" };
++  const followed = { path: DOC, sha256: sha, how: "followed", anchor: "Tokens", summary: GOOD_SUMMARY };
++  for (const list of [[na, followed], [followed, na]]) {
++    expect((await checkResolvedContext({ projectRoot: root, resolved, result: { project_context_applied: list } })).misses).toEqual([]);
++  }
++});
++
++test("drift: editing a promoted document between resolve and validate is reported as drift", async () => {
++  const { root, resolved, sha } = await docFixture();
++  const edited = `${DOC_TEXT}\nA new rule.\n`;
++  await writeFile(path.join(root, DOC), edited, "utf8");
++  const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha) });
++  expect(report.drifted).toEqual([{ path: DOC, tier: "must_read", pinned: sha, current: sha256Hex(edited) }]);
++  expect(formatResolvedReport(report).join("\n")).toContain("project context drift");
++});
++
++test("drift: an on_demand declared document that was edited is drift as well, and a deleted one can no longer be read", async () => {
++  const { root, resolved } = await docFixture();
++  const onDemand = demoted(resolved);
++  await writeFile(path.join(root, DOC), "edited\n", "utf8");
++  const edited = await checkResolvedContext({ projectRoot: root, resolved: onDemand, result: {} });
++  expect(edited.drifted.map((drift) => [drift.path, drift.tier])).toEqual([[DOC, "on_demand"]]);
++  await rm(path.join(root, DOC));
++  const gone = await checkResolvedContext({ projectRoot: root, resolved: onDemand, result: {} });
++  expect(gone.drifted[0]?.current).toBeUndefined();
++});
++
++test("summary: warn blocks nothing and block does, for the new proof misses as for flow 461 ones", async () => {
++  for (const [enforcement, blocking] of [["warn", false], ["block", true]] as const) {
++    const { root, resolved, sha } = await docFixture();
++    await mkdir(path.join(root, ".metaproject"), { recursive: true });
++    await writeFile(path.join(root, ".metaproject", "tasks.config.json"), JSON.stringify({ gdskills: { projectContext: { enforcement } } }), "utf8");
++    const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "short" }) });
++    expect(report.misses.length).toBeGreaterThan(0);
++    expect(report.blocking).toBe(blocking);
++    expect(formatResolvedHeadline(report)).toContain(`${report.misses.length} miss(es)`);
++  }
++});
+
+--- src/gdskills/skill-sync.test.ts
+@@ 1,78 @@
++// Flow 462, AC17: the skills that dispatch or run workers pass the task text to
++// the resolver and state what a document promoted by a condition obliges the
++// worker to cite; the managed copies under .metaproject carry the same bytes.
++
++import { describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import path from "node:path";
++
++const root = path.resolve(import.meta.dir, "../..");
++const BUNDLED = "src/gdskills/bundled/skills";
++const MANAGED = ".metaproject/skills/gdskills";
++const CONTRACTS = ".metaproject/core/gdskills/contracts";
++
++/** Skill instructions that run or dispatch `keryx skills resolve-context`. */
++const instructionFiles = [
++  "orchestration/flow-orchestrator/SKILL.md",
++  "orchestration/task-implementer/SKILL.md",
++  "orchestration/job-orchestrator/SKILL.md",
++  "orchestration/job-orchestrator/orchestrator-prompt.md",
++  "quality/tests-creator/SKILL.md",
++] as const;
++
++const schemaFiles = [
++  "orchestration/task-implementer/input-contract.schema.json",
++  "orchestration/task-implementer/output-contract.schema.json",
++  "quality/tests-creator/input-contract.schema.json",
++  "quality/tests-creator/output-contract.schema.json",
++] as const;
++
++/** Bundled schema -> its copy under the shared contracts directory (only the ones that have one). */
++const contractCopies: ReadonlyArray<readonly [string, string]> = [
++  ["orchestration/task-implementer/input-contract.schema.json", "task-implementer-input-contract.schema.json"],
++  ["orchestration/task-implementer/output-contract.schema.json", "task-implementer-output-contract.schema.json"],
++  ["quality/tests-creator/output-contract.schema.json", "tests-creator-output-contract.schema.json"],
++];
++
++const read = (relative: string): string => readFileSync(path.join(root, relative), "utf8");
++const paragraphs = (text: string): string[] => text.split(/\n\s*\n/);
++
++describe("AC17: instructions pass the task text and name the proof items", () => {
++  for (const file of instructionFiles) {
++    const text = read(`${BUNDLED}/${file}`);
++
++    test(`${file} passes the task text to resolve-context`, () => {
++      expect(text).toMatch(/--task-text/);
++    });
++
++    test(`${file} says a promoted entry needs path, sha256, anchor and a summary`, () => {
++      const stated = paragraphs(text).some((block) => /condition:/.test(block) && ["path", "sha256", "anchor", "summary"].every((item) => new RegExp(`\\b${item}\\b`).test(block)));
++      expect(stated).toBe(true);
++    });
++  }
++
++  test("the task-implementer and tests-creator output examples carry anchor and summary", () => {
++    for (const file of ["orchestration/task-implementer/SKILL.md", "quality/tests-creator/SKILL.md"]) {
++      const line = read(`${BUNDLED}/${file}`)
++        .split("\n")
++        .find((candidate) => candidate.includes("project_context_applied") && candidate.includes("sha256") && candidate.includes("how"));
++      expect(line, file).toBeDefined();
++      expect(line, file).toMatch(/anchor/);
++      expect(line, file).toMatch(/summary/);
++    }
++  });
++});
++
++describe("AC17: managed copies are in sync with the bundled skills", () => {
++  for (const file of [...instructionFiles, ...schemaFiles]) {
++    test(`${MANAGED}/${file} is byte-identical to the bundled copy`, () => {
++      expect(read(`${MANAGED}/${file}`)).toBe(read(`${BUNDLED}/${file}`));
++    });
++  }
++
++  for (const [bundled, copy] of contractCopies) {
++    test(`${CONTRACTS}/${copy} is byte-identical to the bundled ${bundled}`, () => {
++      expect(read(`${CONTRACTS}/${copy}`)).toBe(read(`${BUNDLED}/${bundled}`));
++    });
++  }
++});
+
+--- src/harness/tool/metaproject-adapter.ts
+@@ 1361,1401 @@
+     // --- gdskills runtime discovery (docs/requirements/keryx-skills-runtime-tools) --
+ 
+     async skillsCatalog(): Promise<SkillsCatalogResult> {
+       // walkSkillCatalog is internally defensive (every fs op is try/catched;
+       // a missing root or unreadable directory yields fewer entries, never a
+       // throw) — no outer try/catch needed. Unlike most other MetaprojectPort
+       // results, skills-catalog-result.schema.json declares no `error` field
+       // (additionalProperties: false), so there is nowhere to put one anyway.
+       const skills = await walkSkillCatalog(cwd);
+       return { skills, generatedAt: deps.now() };
+     },
+ 
+     async skillsResolveContext(input): Promise<SkillsResolveContextResult> {
+       try {
+         return await resolveProjectContext({
+           projectRoot: cwd,
+           files: input.files,
+           for: input.for,
+           ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
+           ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
++          ...(input.taskText !== undefined ? { taskText: input.taskText } : {}),
+         });
+       } catch (cause) {
+         return {
+           schema: 1,
+           for: input.for,
+           files: [],
+           entries: [],
+           budget: { limitBytes: 0, usedBytes: 0, exceeded: false, limitSource: "default" },
+           warnings: [],
+           error: errorMessage(cause),
+         };
+       }
+     },
+ 
+     async loadSkill(input): Promise<SkillLoadResult> {
+       const catalog = await walkSkillCatalog(cwd);
+       const byName = catalog.find((entry) => entry.name === input.name);
+       if (byName !== undefined) {
+         try {
+           const content = (await readContainedFile(join(cwd, ".metaproject", "skills", "gdskills"), join(cwd, byName.path), {
+
+--- src/harness/tool/metaproject-operations.ts
+@@ 1386,1426 @@
+   type: "object",
+   properties: {
+     name: { type: "string" },
+     path: { type: "string" },
+     content: { type: "string" },
+     found: { type: "boolean" },
+   },
+   required: ["name", "path", "content", "found"],
+ };
+ 
+ // Mirrors docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json
+ const SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA: Record<string, unknown> = {
+   type: "object",
+   properties: {
+     schema: { type: "integer" },
+     for: { type: "string", enum: ["implement", "test", "review"] },
+     files: { type: "array" },
+     entries: { type: "array" },
+     budget: { type: "object" },
+     warnings: { type: "array" },
++    undeclared: { type: "array" },
+     error: { type: "string" },
+   },
+   required: ["schema", "for", "files", "entries", "budget", "warnings"],
+ };
+ 
+ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
+   {
+     name: "search_code",
+     risk: "read",
+     module: "gdctx",
+     description:
+       "Search the project's code/text with ripgrep. Input: { pattern: string, path?: string } (path relative " +
+       "to the project root). A completed search with no hits comes back as a SUCCESS whose output says so — " +
+       "an `isError` result means the search could not run (bad regex, ripgrep missing, path outside the " +
+       "project), never that there was nothing to find.",
+     inputSchema: {
+       type: "object",
+       properties: { pattern: { type: "string" }, path: { type: "string" } },
+       required: ["pattern"],
+       additionalProperties: false,
+
+--- src/harness/tool/metaproject-operations.ts
+@@ 1956,2035 @@
+     },
+     outputSchema: SKILL_LOAD_OUTPUT_SCHEMA,
+     invoke: async (port, input) => {
+       if (port.loadSkill === undefined) {
+         return { output: "skill_load is not available in this session.", isError: true };
+       }
+       const name = requireString(input, "name", "skill_load");
+       if ("error" in name) {
+         return name.error;
+       }
+       return formatSkillLoad(await port.loadSkill({ name: name.value }));
+     },
+   },
+   {
+     name: "skills_resolve_context",
+     risk: "read",
+     module: "gdskills",
+     description:
+       "Resolve which project rules and project skills must be read before writing, testing or reviewing code in " +
+       "the given files (`keryx skills resolve-context`). Input: { files: string[], for: \"implement\"|\"test\"|" +
+-      "\"review\", task_type?: string, max_bytes?: integer }. Returns must_read and on_demand entries, project " +
++      "\"review\", task_type?: string, task_text?: string, max_bytes?: integer }. Pass the task's title and " +
++      "description as task_text: a document declared in references.json whose keyword occurs in it becomes must_read. " +
++      "Returns must_read and on_demand entries, project " +
+       "first and bundled second, each with its path, sha256 and the reason it matched, plus the byte budget. " +
+       "Read every must_read entry in full and cite each in the result's `project_context_applied`.",
+     inputSchema: {
+       type: "object",
+       properties: {
+         files: { type: "array", items: { type: "string" }, minItems: 1 },
+         for: { type: "string", enum: ["implement", "test", "review"] },
+         task_type: { type: "string" },
++        task_text: { type: "string" },
+         max_bytes: { type: "integer", minimum: 1 },
+       },
+       required: ["files", "for"],
+       additionalProperties: false,
+     },
+     outputSchema: SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA,
+     invoke: async (port, input) => {
+       if (port.skillsResolveContext === undefined) {
+         return { output: "skills_resolve_context is not available in this session.", isError: true };
+       }
+       const files = Array.isArray(input.files) ? input.files.filter((file): file is string => typeof file === "string" && file.trim() !== "") : [];
+       if (files.length === 0) {
+         return { output: "skills_resolve_context requires a non-empty 'files' array of strings", isError: true };
+       }
+       const forWhat = input.for;
+       if (forWhat !== "implement" && forWhat !== "test" && forWhat !== "review") {
+         return { output: "skills_resolve_context requires 'for' to be implement, test or review", isError: true };
+       }
+       const taskType = typeof input.task_type === "string" && input.task_type !== "" ? input.task_type : undefined;
+       const maxBytes = typeof input.max_bytes === "number" && Number.isInteger(input.max_bytes) && input.max_bytes > 0 ? input.max_bytes : undefined;
++      const taskText = typeof input.task_text === "string" && input.task_text.trim() !== "" ? input.task_text : undefined;
+       return formatSkillsResolveContext(
+         await port.skillsResolveContext({
+           files,
+           for: forWhat,
+           ...(taskType !== undefined ? { taskType } : {}),
+           ...(maxBytes !== undefined ? { maxBytes } : {}),
++          ...(taskText !== undefined ? { taskText } : {}),
+         }),
+       );
+     },
+   },
+   // --- flow 242 (forgetting) lane C: additive OPTIONAL read operation --------
+   // Same OPTIONAL contract as every batch above: an absent method reports
+   // "not available", never a throw and never an invented clean result. Before
+   // this, `keryx wiki sections resolve` — the CLI's ONLY correct answer to
+   // "was this deleted or did it never exist" — had no agent or MCP
+   // equivalent at all: AC5 of flow 242 requires the same three answers
+   // (never existed / existed and was removed / cannot say) on the CLI, the
+   // agent tool boundary, and MCP, and this was the missing surface.
+   {
+     name: "wiki_resolve",
+     risk: "read",
+     module: "wiki",
+     description:
+       "Resolve a wiki page/section identity (`keryx:page/<id>` or `keryx:page/<id>#<sectionId>`, " +
+       "as printed by wiki_ask/wiki_evidence citations or `keryx wiki sections list`) to what it " +
+       "actually is right now — NOT what merely occupies its address. Input: { ref: string }. " +
+
+--- src/harness/tool/metaproject-port.ts
+@@ 843,881 @@
+   /** Task Manager flows and their status/progress, optionally filtered to one id (flow). */
+   flowStatus?(input: { id?: string }): Promise<FlowStatusResult>;
+ 
+   // --- additive OPTIONAL read operations: gdskills runtime discovery ---------
+   // Same OPTIONAL contract as the batches above: an absent method is an
+   // "unavailable" operation (a structured result), never a throw. Gives
+   // `.metaproject/skills/gdskills/` a structured discovery/load path instead
+   // of relying solely on CLAUDE.md/index.md prose routing (docs/requirements/
+   // keryx-skills-runtime-tools).
+ 
+   /** Every skill discovered under `.metaproject/skills/gdskills/` (gdskills). */
+   skillsCatalog?(input: Record<string, never>): Promise<SkillsCatalogResult>;
+   /** One skill's full SKILL.md body, by name or exact path (gdskills). */
+   loadSkill?(input: { name: string }): Promise<SkillLoadResult>;
+   /** The project rules and skills a code-writing or test-writing worker must read for these files (gdskills). */
+   skillsResolveContext?(input: {
+     files: string[];
+     for: "implement" | "test" | "review";
+     taskType?: string;
+     maxBytes?: number;
++    taskText?: string;
+   }): Promise<SkillsResolveContextResult>;
+ 
+   // --- additive OPTIONAL read operation: flow 242 (forgetting) lane C -------
+   // Same OPTIONAL contract as every batch above: an absent method is an
+   // "unavailable" operation (a structured result), never a throw. Before this
+   // the CLI's `keryx wiki sections resolve` had no agent or MCP equivalent at
+   // all — the one place this project could answer "never existed" vs
+   // "existed and was removed" vs "cannot tell" for a wiki identity existed on
+   // one surface only, and AC5 of flow 242 requires the same three answers on
+   // all three (CLI, agent tool boundary, MCP).
+ 
+   /**
+    * Resolve a wiki page/section identity to what it IS, not what merely
+    * occupies its address: live, tombstoned, pending a sync, reoccupied by a
+    * different document, or never registered at all (gdwiki).
+    */
+   wikiResolve?(input: { ref: string }): Promise<WikiResolveResult>;
+ }
+
+--- src/harness/tool/metaproject-operations.test.ts
+@@ 684,740 @@
+   const seen: unknown[] = [];
+   const port: MetaprojectPort = {
+     ...recordingPort().port,
+     skillsResolveContext: async (input) => {
+       seen.push(input);
+       return RESOLVED;
+     },
+   };
+   const result = await op("skills_resolve_context").invoke(port, {
+     files: ["src/a.ts", "", 3],
+     for: "implement",
+     task_type: "ui_component",
+     max_bytes: 4096,
+   });
+   expect(result.isError).toBe(false);
+   expect(seen).toEqual([{ files: ["src/a.ts"], for: "implement", taskType: "ui_component", maxBytes: 4096 }]);
+   expect(result.output).toContain("# skills resolve-context (implement)");
+   expect(result.output).toContain(".metaproject/rules/project/styling.mdc — project rule, glob:src/**, 100 bytes, sha256 abcdef012345");
+ });
+ 
++test("skills_resolve_context passes task_text to the port as taskText and drops a blank one", async () => {
++  const seen: unknown[] = [];
++  const port: MetaprojectPort = {
++    ...recordingPort().port,
++    skillsResolveContext: async (input) => {
++      seen.push(input);
++      return RESOLVED;
++    },
++  };
++  await op("skills_resolve_context").invoke(port, { files: ["src/a.ts"], for: "implement", task_text: "Adjust the theme tokens" });
++  await op("skills_resolve_context").invoke(port, { files: ["src/a.ts"], for: "implement", task_text: "   " });
++  expect(seen).toEqual([
++    { files: ["src/a.ts"], for: "implement", taskText: "Adjust the theme tokens" },
++    { files: ["src/a.ts"], for: "implement" },
++  ]);
++});
++
+ test("skills_resolve_context refuses a missing 'files' or a bad 'for' without calling the port", async () => {
+   let calls = 0;
+   const port: MetaprojectPort = {
+     ...recordingPort().port,
+     skillsResolveContext: async () => {
+       calls += 1;
+       return RESOLVED;
+     },
+   };
+   expect((await op("skills_resolve_context").invoke(port, { for: "implement" })).output).toContain("'files'");
+   expect((await op("skills_resolve_context").invoke(port, { files: [], for: "implement" })).isError).toBe(true);
+   expect((await op("skills_resolve_context").invoke(port, { files: ["a.ts"], for: "deploy" })).output).toContain("implement, test or review");
+   expect(calls).toBe(0);
+ });
+ 
+ test("skills_resolve_context surfaces a port error as an error result, and an absent method as 'not available'", async () => {
+   const failing: MetaprojectPort = {
+     ...recordingPort().port,
+     skillsResolveContext: async () => ({ ...RESOLVED, entries: [], error: "boom" }),
+   };
+
+--- src/harness/tool/metaproject-operations.test.ts
+@@ 767,831 @@
+         "..",
+         "docs",
+         "requirements",
+         "keryx-project-implementation-rules",
+         "schemas",
+         "skills-resolve-context-result.schema.json",
+       ),
+       "utf8",
+     ),
+   ) as { required: string[]; properties: Record<string, unknown> };
+   const validation = validateAgainstSchemaObject(mirrored as Record<string, unknown>, RESOLVED);
+   expect(validation.errors).toEqual([]);
+   expect(validation.valid).toBe(true);
+   expect(validateAgainstSchemaObject(mirrored as Record<string, unknown>, { ...RESOLVED, for: "deploy" }).valid).toBe(false);
+ 
+   const schema = op("skills_resolve_context").outputSchema as { required: string[]; properties: Record<string, unknown> };
+   expect([...schema.required].sort()).toEqual([...mirrored.required].sort());
+   expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(mirrored.properties).sort());
+ });
+ 
++test("a resolve result with a promoted declared reference and an undeclared list validates against the mirrored schema", () => {
++  const mirrored = JSON.parse(
++    readFileSync(
++      path.join(import.meta.dir, "..", "..", "..", "docs", "requirements", "keryx-project-implementation-rules", "schemas", "skills-resolve-context-result.schema.json"),
++      "utf8",
++    ),
++  ) as Record<string, unknown>;
++  const promoted = {
++    kind: "contract",
++    source: "project",
++    path: "docs/STYLING.md",
++    sha256: "a".repeat(64),
++    bytes: 900,
++    reason: "condition:glob:src/**/*.css",
++    tier: "must_read",
++    description: "Tokens and spacing for every stylesheet.",
++    anchor: "Tokens",
++    section_bytes: 300,
++    condition: { globs: ["src/**/*.css"], keywords: ["styling"] },
++  };
++  const result = { ...RESOLVED, entries: [...RESOLVED.entries, promoted], undeclared: ["docs/THEMING.md"] };
++  expect(validateAgainstSchemaObject(mirrored, result).errors).toEqual([]);
++  expect(validateAgainstSchemaObject(mirrored, { ...result, entries: [{ ...promoted, condition: { globs: [] } }] }).valid).toBe(false);
++});
++
+ // --- F-002 / F-007 (flow 234 review): the memory formatter's rendered text --
+ // is the thing a model actually reads. Before this, nothing anywhere
+ // asserted its output, so the boundary could (and did) silently drop every
+ // provenance field with no test noticing.
+ 
+ test("formatMemory renders version/provenance/author/confirmedBy/caveat for a fully sourced hit", () => {
+   const result = formatMemory({
+     query: "offline",
+     hits: [
+       {
+         path: "decisions/x.md",
+         title: "Offline determinism",
+         type: "decision",
+         status: "accepted",
+         score: 0.75,
+         excerpt: "Keep the harness core offline and deterministic.",
+         version: "v3",
+         provenance: { source: "docs/adr/017.md#L12-20", link: "https://example.com/adr/017" },
+         author: "alice",
+         confirmedBy: "council:2026-01-09",
+
+--- src/lib/group-subcommands.ts
+@@ 275,312 @@
+   ["session", ["list", "fork", "export", "path", "help"]],
+   // commands/serve.ts:159-167 (top level only — "token"/"config" have their own nested subcommands this file does not check)
+   ["serve", ["status", "token", "config"]],
+   // commands/bus.ts:72-116
+   ["bus", ["list", "log", "send", "pause", "resume", "prune", "help"]],
+   // commands/dashboard.ts:20-28
+   ["dashboard", ["build", "open"]],
+   // commands/skills.ts:110-205 (top-level dispatch only; "contracts validate" nests further)
+   [
+     "skills",
+     [
+       "catalog",
+       "install",
+       "doctor",
+       "uninstall",
+       "status",
+       "list",
+       "inspect",
+       "route",
+       "resolve-context",
++      "references",
+       "create",
+       "generate",
+       "import",
+       "update",
+       "remove",
+       "verify",
+       "learn",
+       "export",
+       "sync",
+       "contracts",
+       "scout",
+       "eval",
+       "judge-check",
+       "stocktake",
+     ],
+   ],
+ ]);
+
+--- src/mcp/metaproject-tools.ts
+@@ 108,154 @@
+       // interactive agent and the ToolRegistry projection, neither of which
+       // has this concept). `port.wikiAsk` is optional on `MetaprojectPort`;
+       // an adapter that omits it falls through to `op.invoke`, which itself
+       // reports "wiki_ask is not available in this session."
+       if (port.wikiAsk === undefined) {
+         return op.invoke(port, params);
+       }
+       const question = stringParam(params, "question") ?? "";
+       const k = typeof params.k === "number" ? params.k : undefined;
+       return port.wikiAsk({ question, ...(k !== undefined ? { k } : {}), harnessIdentity });
+     }
+     case "skills_resolve_context": {
+       // Structured, so an MCP caller gets the same record `keryx skills resolve-context --json` prints.
+       const files = Array.isArray(params.files) ? params.files.filter((f): f is string => typeof f === "string" && f.trim() !== "") : [];
+       const forWhat = params.for;
+       if (port.skillsResolveContext === undefined || files.length === 0 || (forWhat !== "implement" && forWhat !== "test" && forWhat !== "review")) {
+         return op.invoke(port, params);
+       }
+       const taskType = stringParam(params, "task_type");
+       const maxBytes = typeof params.max_bytes === "number" && Number.isInteger(params.max_bytes) && params.max_bytes > 0 ? params.max_bytes : undefined;
++      const taskText = stringParam(params, "task_text");
+       return port.skillsResolveContext({
+         files,
+         for: forWhat,
+         ...(taskType !== undefined && taskType !== "" ? { taskType } : {}),
+         ...(maxBytes !== undefined ? { maxBytes } : {}),
++        ...(taskText !== undefined && taskText.trim() !== "" ? { taskText } : {}),
+       });
+     }
+     default:
+       // Any operation without a bespoke structured case (flows 043/044: graph_path,
+       // test_related, health_status, graph_symbol, repomap) is invoked via
+       // the descriptor's own content `invoke`, so every registered unified tool is
+       // callable via MCP — never "unknown operation".
+       return op.invoke(port, params);
+   }
+ }
+ 
+ /**
+  * Project the single-source metaproject operations into MCP `ToolEntry[]`. Each
+  * entry carries the operation's name, description, and input schema verbatim, is
+  * read-only (`mutating: false`), and whose `invoke(cwd, params)` builds a
+  * `MetaprojectPort` for `cwd` (via `createMetaprojectAdapter`, or the injected
+  * `adapterFor` for tests) and returns the port method's STRUCTURED result.
+  *
+  * Pure and deterministic: no side effects, and the port is constructed lazily per
+  * invocation so listing tools never touches the filesystem.
+
+--- src/standard/help-groups.ts
+@@ 425,465 @@
+     name: "/guard",
+     group: "Managed work",
+     summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",
+   },
+   {
+     kind: "slash",
+     name: "/route",
+     group: "Managed work",
+     summary: "Opt-in routing classifier: each request runs on its routing category's model — /route [on|off].",
+   },
+   {
+     kind: "slash",
+     name: "/editguard",
+     group: "Managed work",
+     summary: "Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle.",
+   },
+   {
+     kind: "slash",
+     name: "/projectctx",
+     group: "Managed work",
+-    summary: "Project rules for implementation: the last resolve, the context cap and warn/block enforcement — /projectctx [warn|block].",
++    summary: "Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn|block|refs].",
+   },
+   {
+     kind: "slash",
+     name: "/jevprofile",
+     group: "Managed work",
+     summary: "Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile.",
+   },
+   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
+   {
+     kind: "slash",
+     name: "/goal",
+     group: "Managed work",
+     summary: "Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]].",
+   },
+ 
+   // ---- Automation ---------------------------------------------------------
+   {
+     kind: "cli",
+     name: "trigger",
+     group: "Automation",
+
+--- src/tui/project-context-inspector.test.ts
+@@ 1,34 @@
+ import { expect, test } from "bun:test";
+ import type { RecordedResolve } from "../gdskills/context-resolver";
+ import type { ProjectContextStatus } from "../gdskills/project-context-status";
+ import type { OpenModalInput } from "./modal-host";
++import type { ReferenceDeclaration } from "../gdskills/references-config";
++import type { ReferencesFinding } from "../gdskills/references-check";
+ import {
++  NO_REFERENCES_TEXT,
+   NO_RESOLVE_TEXT,
+   PROJECT_CONTEXT_CONFIG_REFUSAL,
++  createProjectContextFeed,
+   formatProjectContextLastLines,
+   formatProjectContextStatusLines,
++  formatProjectReferencesLines,
+   isProjectContextCommand,
+   parseProjectContextCommand,
+   presentProjectContext,
+   projectContextFooter,
+   renderProjectContextSidebarValue,
+   type EnforcementMode,
+   type ProjectContextModalOptions,
+ } from "./project-context-inspector";
+ import { applyThemeId, getThemeId } from "./theme";
+ 
+ // Matrix: docs/requirements/keryx-project-implementation-rules/TUI-states.md
+ 
+ const base: ProjectContextStatus = {
+   enforcement: "warn",
+   enforcementSource: "default",
+   maxBytes: 131072,
+   maxBytesSource: "default",
+   ruleCount: 0,
+   linkedCount: 0,
+ };
+
+--- src/tui/project-context-inspector.test.ts
+@@ 109,163 @@
+       ...overrides,
+     },
+   );
+   const flush = async () => {
+     for (let i = 0; i < 5; i++) await Promise.resolve();
+   };
+   return {
+     handle: handle as { close(): void },
+     text: () => nodes.map((n) => String(n.content)).join("\n"),
+     node: () => nodes[0],
+     tab: (id: string) => input?.renderTab(id, body, {} as never),
+     press: async (name: string) => {
+       keyHandler?.({ name, sequence: name });
+       await flush();
+     },
+     written,
+     errors,
+     seen,
+     keyOff: () => keyOff,
+     footer: () => input?.footer,
++    opened: () => input,
+   };
+ }
+ 
+ test("parse and recognise the command", () => {
+   expect(isProjectContextCommand("/projectctx")).toBe(true);
+   expect(isProjectContextCommand("  /projectctx block")).toBe(true);
+   expect(isProjectContextCommand("/projectctxx")).toBe(false);
+   expect(parseProjectContextCommand("/projectctx")).toEqual({ kind: "open" });
+   expect(parseProjectContextCommand("/projectctx warn")).toEqual({ kind: "set", mode: "warn" });
+   expect(parseProjectContextCommand("/projectctx block")).toEqual({ kind: "set", mode: "block" });
+   // E4
+   expect(parseProjectContextCommand("/projectctx x")).toEqual({
+     kind: "invalid",
+-    message: "Unknown /projectctx argument 'x'. Usage: /projectctx [warn|block]",
++    message: "Unknown /projectctx argument 'x'. Usage: /projectctx [warn|block|refs]",
+   });
+   expect(parseProjectContextCommand("/projectctx block now").kind).toBe("invalid");
+ });
+ 
+ test("sidebar: S0 hidden, S1..S5 follow the matrix", () => {
+   expect(renderProjectContextSidebarValue(S0)).toBeUndefined();
+   expect(renderProjectContextSidebarValue(S1)).toBe("warn · 3 rules");
+   expect(renderProjectContextSidebarValue(S2)).toBe("warn · 3 rules");
+   expect(renderProjectContextSidebarValue(S3)).toBe("warn · 3 rules · cap exceeded");
+   expect(renderProjectContextSidebarValue(S4)).toBe("warn · 3 rules · config unreadable");
+   expect(renderProjectContextSidebarValue(S5)).toBe("warn · 3 rules");
+   // A recorded resolve with no rules still shows the row; one rule is singular.
+   expect(renderProjectContextSidebarValue({ ...S0, last: recorded(false) })).toBe("warn · 0 rules");
+   expect(renderProjectContextSidebarValue({ ...S0, ruleCount: 1 })).toBe("warn · 1 rule");
+   expect(renderProjectContextSidebarValue({ ...S0, enforcement: "block" , ruleCount: 2 })).toBe("block · 2 rules");
+ });
+ 
+ test("E2 on the sidebar: S0 toggled to block appears as 'block · 0 rules' once a record or rule exists", () => {
+   expect(renderProjectContextSidebarValue({ ...S0, enforcement: "block", last: recorded(false) })).toBe("block · 0 rules");
+ });
+
+--- src/tui/project-context-inspector.test.ts
+@@ 244,532 @@
+   await h2.press("x");
+   expect(h2.written).toEqual([]);
+ });
+ 
+ test("E6 theme change repaints an open modal; E7 close removes the key listener and stops repainting", async () => {
+   const h = harness(S1);
+   const before = h.node();
+   applyThemeId(getThemeId());
+   expect(h.node()).not.toBe(before);
+   expect(h.text()).toContain("Enforcement: warn");
+   const afterOpen = h.node();
+   h.handle.close();
+   expect(h.keyOff()).toBe(1);
+   applyThemeId(getThemeId());
+   expect(h.node()).toBe(afterOpen);
+   // a key after close is ignored
+   await h.press("e");
+   expect(h.written).toEqual([]);
+ });
+ 
++// ---------------------------------------------------------------------------
++// flow 462 (AC16): conditional references. States:
++// docs/requirements/keryx-conditional-reads/TUI-states.md (R0..R7 below).
++// ---------------------------------------------------------------------------
++
++const STYLING: ReferenceDeclaration = {
++  path: "STYLING.md",
++  when: { globs: ["src/**/*.css"], keywords: ["className"] },
++  anchor: "Class conventions",
++  description: "Class naming and cascade rules for stylesheets.",
++};
++const THEMING: ReferenceDeclaration = {
++  path: "THEMING.md",
++  when: { globs: [], keywords: ["theme"] },
++  description: "Theme tokens and dark mode handling.",
++};
++
++const declared = (findings: ReferencesFinding[] = []): NonNullable<ProjectContextStatus["references"]> => ({
++  state: "declared",
++  declarations: [STYLING, THEMING],
++  findings,
++});
++
++type RefEntry = RecordedResolve["result"]["entries"][number];
++const refEntry = (declaration: ReferenceDeclaration, reason: string, extra: Partial<RefEntry> = {}): RefEntry => ({
++  kind: "contract",
++  source: "project",
++  path: declaration.path,
++  sha256: "z",
++  bytes: 900,
++  reason,
++  tier: reason === "declared" ? "on_demand" : "must_read",
++  description: declaration.description,
++  ...(declaration.anchor !== undefined ? { anchor: declaration.anchor } : {}),
++  condition: declaration.when,
++  ...extra,
++});
++
++const resolved = (entries: RefEntry[], exceeded = false): RecordedResolve => {
++  const base = recorded(exceeded);
++  return { ...base, result: { ...base.result, entries } };
++};
++
++const promotedStyling = refEntry(STYLING, "condition:glob:src/**/*.css", { section_bytes: 120 });
++const onDemandTheming = refEntry(THEMING, "declared");
++
++const finding = (code: ReferencesFinding["code"], where: string, severity: ReferencesFinding["severity"] = "warning"): ReferencesFinding => ({
++  severity,
++  code,
++  path: where,
++  message: `${code} message for ${where}`,
++});
++
++test("R0 no references file: no refs segment, the tab is one line naming the suggest command", () => {
++  expect(renderProjectContextSidebarValue(S1)).toBe("warn · 3 rules");
++  expect(renderProjectContextSidebarValue(S2)).toBe("warn · 3 rules");
++  expect(formatProjectReferencesLines(S1)).toEqual([NO_REFERENCES_TEXT]);
++  expect(NO_REFERENCES_TEXT).toContain("keryx skills references suggest");
++  const h = harness(S1);
++  h.tab("references");
++  expect(h.text()).toBe(NO_REFERENCES_TEXT);
++});
++
++test("R1 declared, no resolve yet: refs -/<n>; rows show condition and anchor and 'not resolved'", () => {
++  const status: ProjectContextStatus = { ...S1, references: declared() };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs -/2");
++  // The row is shown even with no rules and no recorded resolve.
++  expect(renderProjectContextSidebarValue({ ...S0, references: declared() })).toBe("warn · 0 rules · refs -/2");
++  const lines = formatProjectReferencesLines(status);
++  expect(lines[0]).toBe("References: 2 declared, no resolve yet");
++  const text = lines.join("\n");
++  expect(text).toContain("STYLING.md § Class conventions");
++  expect(text).toContain("glob src/**/*.css");
++  expect(text).toContain("keyword className");
++  expect(text).toContain("THEMING.md");
++  expect(text).toContain("keyword theme");
++  expect(text.match(/not resolved/g)).toHaveLength(2);
++  // An unreadable last.json is "no resolve" for the counters; the Last resolve tab says why.
++  expect(renderProjectContextSidebarValue({ ...status, lastError: "x" })).toBe("warn · 3 rules · refs -/2");
++});
++
++test("R2 resolved, some promoted: refs <p>/<n>; each row has status, reason and section bytes", () => {
++  const status: ProjectContextStatus = { ...S1, references: declared(), last: resolved([promotedStyling, onDemandTheming]) };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs 1/2");
++  const lines = formatProjectReferencesLines(status);
++  expect(lines[0]).toBe("References: 1 promoted of 2 declared");
++  const text = lines.join("\n");
++  expect(text).toContain("promoted · matched glob src/**/*.css · section 120 bytes");
++  expect(text).toContain("on demand · Theme tokens and dark mode handling.");
++  expect(text).not.toContain("not resolved");
++  expect(text).not.toContain("over the cap");
++  // A keyword reason reads as the keyword; a document without an anchor shows its whole size.
++  const byKeyword: ProjectContextStatus = { ...status, last: resolved([refEntry(STYLING, "condition:keyword:className"), refEntry(THEMING, "condition:keyword:theme")]) };
++  const keywordText = formatProjectReferencesLines(byKeyword).join("\n");
++  expect(keywordText).toContain("promoted · matched keyword className · 900 bytes");
++  expect(renderProjectContextSidebarValue(byKeyword)).toBe("warn · 3 rules · refs 2/2");
++});
++
++test("R2 only declared entries count: a cited contract has no condition and is not a reference", () => {
++  const cited: RefEntry = { kind: "contract", source: "project", path: "OTHER.md", sha256: "q", bytes: 5, reason: "cited by AGENTS.mdc", tier: "must_read" };
++  const status: ProjectContextStatus = { ...S1, references: declared(), last: resolved([cited, promotedStyling, onDemandTheming]) };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs 1/2");
++});
++
++test("R2 a declaration the last resolve did not list says so", () => {
++  const status: ProjectContextStatus = { ...S1, references: declared(), last: resolved([promotedStyling]) };
++  expect(formatProjectReferencesLines(status).join("\n")).toContain("not in the last resolve");
++});
++
++test("R3 resolved, none promoted: refs 0/<n>; rows are on demand with their description", () => {
++  const status: ProjectContextStatus = { ...S1, references: declared(), last: resolved([refEntry(STYLING, "declared"), onDemandTheming]) };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs 0/2");
++  const lines = formatProjectReferencesLines(status);
++  expect(lines[0]).toBe("References: 0 promoted of 2 declared");
++  const text = lines.join("\n");
++  expect(text).toContain("on demand · Class naming and cascade rules for stylesheets.");
++  expect(text).toContain("on demand · Theme tokens and dark mode handling.");
++  expect(text).not.toContain("promoted ·");
++});
++
++test("R4 promoted over the cap: the existing marker stays, the promoted row shows its bytes and the warning", () => {
++  const status: ProjectContextStatus = { ...S1, references: declared(), last: resolved([promotedStyling, onDemandTheming], true) };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs 1/2 · cap exceeded");
++  const text = formatProjectReferencesLines(status).join("\n");
++  expect(text).toContain("section 120 bytes");
++  expect(text.match(/over the cap/g)).toHaveLength(1);
++  expect(text).toContain("over the cap: 109 of 131072 bytes");
++});
++
++test("R5 problems from check: refs <p>/<n> !<k>; the tab lists them under the rows", () => {
++  const findings = [
++    finding("anchor-not-found", "STYLING.md", "error"),
++    finding("description-short", "THEMING.md"),
++    finding("undeclared-citation", "docs/OTHER.md"),
++  ];
++  const status: ProjectContextStatus = { ...S1, references: declared(findings), last: resolved([promotedStyling, onDemandTheming]) };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs 1/2 !3");
++  expect(renderProjectContextSidebarValue({ ...S1, references: declared(findings) })).toBe("warn · 3 rules · refs -/2 !3");
++  const lines = formatProjectReferencesLines(status);
++  const header = lines.indexOf("problems (3):");
++  expect(header).toBeGreaterThan(lines.findIndex((line) => line.startsWith("THEMING.md")));
++  const problems = lines.slice(header + 1).join("\n");
++  expect(problems).toContain("[error] anchor-not-found STYLING.md: anchor-not-found message for STYLING.md");
++  expect(problems).toContain("[warning] description-short THEMING.md");
++  expect(problems).toContain("[warning] undeclared-citation docs/OTHER.md");
++  // No problems, no section.
++  expect(formatProjectReferencesLines({ ...S1, references: declared() }).join("\n")).not.toContain("problems");
++});
++
++test("R6 invalid references file: refs ?; the tab shows the validation messages that name the entry", () => {
++  const errors = ['.metaproject/rules/project/references.json: references[1] ("THEMING.md"): when needs at least one of globs or keywords'];
++  const status: ProjectContextStatus = { ...S1, references: { state: "invalid", errors }, last: resolved([promotedStyling]) };
++  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs ?");
++  expect(renderProjectContextSidebarValue({ ...S0, references: { state: "invalid", errors } })).toBe("warn · 0 rules · refs ?");
++  const lines = formatProjectReferencesLines(status);
++  expect(lines[0]).toBe("References file is invalid:");
++  expect(lines.join("\n")).toContain('references[1] ("THEMING.md")');
++  expect(lines.join("\n")).not.toContain("promoted");
++});
++
++test("R7 a new resolve recorded updates the counters and the open tab in place", async () => {
++  const before: ProjectContextStatus = { ...S1, references: declared() };
++  const after: ProjectContextStatus = { ...S1, references: declared(), last: resolved([promotedStyling, onDemandTheming]) };
++  expect(renderProjectContextSidebarValue(before)).toBe("warn · 3 rules · refs -/2");
++  expect(renderProjectContextSidebarValue(after)).toBe("warn · 3 rules · refs 1/2");
++
++  let push: ((status: ProjectContextStatus) => void) | undefined;
++  let unsubscribed = 0;
++  const h = harness(before, {
++    subscribe: (listener) => {
++      push = listener;
++      return () => {
++        unsubscribed += 1;
++      };
++    },
++  });
++  h.tab("references");
++  expect(h.text()).toContain("no resolve yet");
++  const node = h.node();
++  push?.(after);
++  expect(h.text()).toContain("References: 1 promoted of 2 declared");
++  expect(h.text()).not.toContain("no resolve yet");
++  expect(h.node()).not.toBe(node);
++  // Another tab follows too, and the Status tab keeps its own text.
++  h.tab("status");
++  expect(h.text()).toContain("Enforcement: warn (default)");
++  h.handle.close();
++  expect(unsubscribed).toBe(1);
++  push?.(before);
++  expect(h.text()).toContain("Enforcement: warn (default)");
++});
++
++test("R7 the feed reloads on an interval and tells listeners only when the status changed", async () => {
++  let tick: (() => Promise<void>) | undefined;
++  let intervalMs = 0;
++  let stopped = 0;
++  let current: ProjectContextStatus = { ...S1, references: declared() };
++  let failure: Error | undefined;
++  const errors: string[] = [];
++  const feed = createProjectContextFeed({
++    load: async () => {
++      if (failure !== undefined) throw failure;
++      return structuredClone(current);
++    },
++    interval: (run, ms) => {
++      tick = run;
++      intervalMs = ms;
++      return () => {
++        stopped += 1;
++      };
++    },
++    onError: (message) => errors.push(message),
++  });
++  expect(intervalMs).toBe(5000);
++  expect(feed.current()).toBeUndefined();
++  const seen: ProjectContextStatus[] = [];
++  const off = feed.subscribe((status) => seen.push(status));
++
++  expect(await feed.reload()).toEqual(current);
++  expect(feed.current()).toEqual(current);
++  expect(seen).toHaveLength(1);
++  await feed.reload();
++  await tick?.();
++  expect(seen).toHaveLength(1);
++
++  current = { ...current, last: resolved([promotedStyling, onDemandTheming]) };
++  await tick?.();
++  expect(seen).toHaveLength(2);
++  expect(renderProjectContextSidebarValue(seen[1] as ProjectContextStatus)).toBe("warn · 3 rules · refs 1/2");
++
++  // A failing load is reported once, not on every tick, and recovery re-arms the report.
++  failure = new Error("disk gone");
++  await tick?.();
++  await tick?.();
++  expect(errors).toEqual(["disk gone"]);
++  failure = undefined;
++  await tick?.();
++  failure = new Error("again");
++  await tick?.();
++  expect(errors).toEqual(["disk gone", "again"]);
++  failure = undefined;
++
++  off();
++  current = { ...current, enforcement: "block" };
++  await tick?.();
++  expect(seen).toHaveLength(2);
++  feed.stop();
++  expect(stopped).toBe(1);
++});
++
++test("/projectctx refs opens the modal on the References tab", () => {
++  expect(parseProjectContextCommand("/projectctx refs")).toEqual({ kind: "open", tab: "references" });
++  expect(parseProjectContextCommand("/projectctx")).toEqual({ kind: "open" });
++  expect(parseProjectContextCommand("/projectctx refs now").kind).toBe("invalid");
++  const h = harness({ ...S1, references: declared() }, { initialTab: "references" });
++  expect(h.opened()?.initialTab).toBe("references");
++  expect(h.opened()?.tabs.map((tab) => tab.id)).toEqual(["status", "last", "references"]);
++  expect(harness(S1).opened()?.initialTab).toBe("status");
++});
++
+ test("a host that declines to mount returns undefined", () => {
+   const out = presentProjectContext((() => undefined) as never, {}, {}, {
+     initial: S0,
+     loadStatus: async () => S0,
+     setEnforcement: async () => {},
+     onKeypress: () => () => {},
+   });
+   expect(out).toBeUndefined();
+ });

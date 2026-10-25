@@ -1,0 +1,77 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-08 (second-look: project-context-inspector.ts, project-references-view.ts, the tui-shell.ts wiring) was read in full at head 5382b56abf17, together with reference-entries.ts, context-resolver.ts (budget and merge), project-context-status.ts, references-check.ts, card-safe.ts, modal-host.ts and the R0-R7 table. The head already carries the feed ordering guard (started/applied), the polling guard, cardSafe on every painted line and the stopProjectContextFeed teardown, so the r03 wave-5 race and teardown findings no longer reproduce against the code at head. Two minor defects remain that earlier rounds did not file: the References tab prints 'over the cap: used of limit' on every promoted row whenever the budget flag is set, including when the used total is below the limit; and reload() hands its caller its own result even when that result was discarded as stale, so the modal can open on or settle at an older status than the feed holds. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-references-view.ts",
+      "line": null,
+      "quote": "if (budget.exceeded) lines.push(`  over the cap: ${budget.usedBytes} of ${budget.limitBytes} bytes`);",
+      "problem": "A promoted reference row prints 'over the cap: <used> of <limit> bytes' whenever result.budget.exceeded is true. The resolver sets that flag in two ways: promoted bytes push the total over the limit (usedBytes > limitBytes, the sentence is true), or a plain rule or skill did not fit and fit() set exceeded = true without adding to used (context-resolver.ts: 'if (used + bytes > cap.limitBytes) { exceeded = true; return false; }'). In the second case usedBytes can be far below limitBytes. Repro: cap 131072, project rules of 100000 + 40000 bytes (the second goes on_demand, exceeded = true, used = 100000), a declared reference promoted by a glob with a 5000-byte section: budget = {usedBytes: 105000, limitBytes: 131072, exceeded: true}. Every promoted row then reads 'over the cap: 105000 of 131072 bytes', which is self-contradictory and blames the promotion for a cap overflow it did not cause. The R4 row of TUI-states.md says 'promoted rows show their bytes and over the cap: <used> of <limit> bytes' for the state 'Promoted and over the cap'; the implementation does not check that the promotion is what is over. (r02 review-testing-practices-w2:F-004 calls this fixture unreachable; the flag-without-overrun state is reachable, which is why the view needs the guard.)",
+      "impact": "Wrong, misleading status text in the References tab for a project that overflows the cap through its ordinary rules and also has a promoted reference. The sidebar 'cap exceeded' marker is correct in that state; only the per-row sentence is wrong. No data is affected.",
+      "suggested_fix": "Print the per-row sentence only when the total really is over the limit: `if (budget.usedBytes > budget.limitBytes) lines.push(...)`; when exceeded is true but usedBytes <= limitBytes, either omit it or say 'cap exceeded by other entries'. Add a render test with exceeded: true, usedBytes < limitBytes (the current R4 fixture, usedBytes 109 of 131072, would then assert the absence of the sentence, and a second fixture with usedBytes > limitBytes asserts it).",
+      "evidence": "src/tui/project-references-view.ts at head, rowLines(): the line quoted. src/gdskills/context-resolver.ts resolveProjectContext: 'const fit = (bytes: number): boolean => { if (used + bytes > cap.limitBytes) { exceeded = true; return false; } used += bytes; return true; }' and 'budget: { limitBytes: cap.limitBytes, usedBytes: total, exceeded: exceeded || overCap, ... }' where total = used + references.promotedBytes. So exceeded is independent of total > limit.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "references-view:over-cap-line-without-overrun"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "    applied = Math.max(applied, mine);\n    return next;",
+      "problem": "reload() drops a result that started before an already-applied load (`mine > applied` false), but it still returns that dropped `next` to its caller. The two callers that act on the return value therefore can take an older status than the feed holds: showProjectContext passes it as `initial` to the modal, and the modal's `e` toggle does `.then(() => options.loadStatus()).then((next) => { status = next; ... })`. Interleaving: the operator clicks the sidebar (reload R, mine = 5, starts), a 5 s poll (mine = 6) starts after it, a resolve is recorded between their reads, poll finishes first and is applied (current = newer, applied = 6), R then finishes with the older status: it is not applied but is returned. The modal opens on the older status; because the modal subscribed after the poll's notification and the feed repaints nothing while the status is unchanged, it stays on the older status until the next change. The sidebar shows the newer status at the same time.",
+      "impact": "Narrow window (one load wider than the other and a resolve recorded between them), but the outcome is a modal and sidebar that disagree and no later poll corrects it. In the toggle path the modal's `status.enforcement` can also be the pre-write value, so the next `e` press may write the wrong mode.",
+      "suggested_fix": "Return what the feed holds, not what this load read: in reload(), after the `if`, `return mine > applied ? next : (current ?? next);` computed before `applied` is updated (or store `const fresh = mine > applied;` and return `fresh ? next : current ?? next`).",
+      "evidence": "src/tui/project-context-inspector.ts createProjectContextFeed(), reload(): 'const mine = ++started; const next = await options.load(); if (mine > applied && !sameStatus(current, next)) { current = next; ... } applied = Math.max(applied, mine); return next;'. Callers: src/tui/tui-shell.ts showProjectContext ('.then((initial) => { openProjectContext(otui, chrome, { initial, ...') and the modal toggle in presentProjectContext ('.then(() => options.loadStatus()).then((next) => { status = next;'). The same function body with the stale-skip is covered by the tests only through the listener callbacks, not through the returned value.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "feed-reload-returns-stale-result"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-08",
+      "coverage": "slice-08.diff read in full; src/tui/project-context-inspector.ts and src/tui/project-references-view.ts read in full at head; tui-shell.ts read around the feed wiring (5266-5330) and for stopProjectContextFeed (3936, 4047, 5295); reference-entries.ts, context-resolver.ts (collectContracts, resolveProjectContext, recordLastResolve), project-context-status.ts, references-check.ts, card-safe.ts read at head; modal-host.ts checked for initialTab/renderTab handling; docs/requirements/keryx-conditional-reads/TUI-states.md checked row by row against the view (R0 to R7).",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 0
+  }
+}
+```
+
+## Logic Review (wave 6, r03, slice-08, second-look)
+
+Spec compliance gate: ran against TUI-states.md R0-R7 and AC16 of flow 462 (no issue URL). R0, R1, R2, R3, R5, R6 and R7 match the code. R4 matches in the case where the promotion pushes the total over the limit and does not when the flag was set by other entries (F-001).
+
+Checked and found correct:
+- Feed ordering. started/applied discards a load that began before an applied one, whatever order they finish in; the toggle-before-poll interleaving no longer overwrites a newer status (this closes the substance of r03 review-highload-w5:F-002 and review-performance-w5:F-002 against the code at head; the quotes in those findings are of the pre-fix code).
+- Poll overlap guard (`polling`) prevents piled-up scans; a failed poll is reported once, reset on success.
+- Initial notification: `current` is undefined on the first load, so sameStatus is false and the sidebar is painted; refreshProjectContextSidebar reads `current()` after it was set.
+- Teardown: stopProjectContextFeed is assigned at 5295 and called from the shell's destroy path at 4047 (closes r03 review-clean-code-w5:F-004 and review-architecture-w5:F-001).
+- Control bytes: paint() maps every line through cardSafe before stylePlanText (closes r03 review-security-code-w5:F-001); cardSafe keeps leading spaces, so the row indentation survives.
+- `/projectctx refs` parses to `{kind:"open", tab:"references"}` and reaches openModal as `initialTab`, which resolveInitialTab honours for a listed tab id.
+- entryFor distinguishes a declared entry from a cited contract by `condition`; reference-entries.ts always sets it and collectContracts skips declared paths, so a path cannot appear twice.
+- Modal unsubscribes on close and the listener checks `closed`.
+
+### Earlier findings that still apply unchanged (not re-filed)
+- r03 review-clean-code-w5:F-003: reload() runs listeners inside the load's own try, so a throwing subscriber skips later listeners (an open modal) and is reported as a load failure; `current` is already advanced, so the next poll sees no change. Still true at head (the listener loop is unprotected and `applied` is updated after it).
+- r03 review-logic-w5:F-003: contentRows and the footer are computed once at open; with polling they can go stale while the tab repaints (also the footer when configError appears or clears).
+- r03 review-style-w5:F-001/F-002/F-003 and review-clean-code-w5:F-001/F-002: tab-id typing, ternary chain, re-export, reason-string re-parsing.
+- r03 review-architecture-w3:F-007 / review-clean-code-w3:F-008 / review-highload-w3:F-002 / review-performance-w3:F-001 / review-highload-w5:F-001 / review-performance-w5:F-001: double load of references.json and the per-poll cost of checkReferences. A related observation not filed separately: readReferences takes `declarations` from one loadReferences and `findings` from a second one inside checkReferences, so a file edit between the two reads can show declarations of one version with findings of another until the next 5 s poll; it self-corrects.
+
+Stats: blocker 0 | major 0 | minor 2 | info 0
+
+routing audit: graph_used: no (not-relevant, bounded slice read of a UI module); wiki_used: no (not-relevant, the R0-R7 table in the PRD folder was the spec); ctx_used: yes (keryx ctx rg/read for every search and the file reads through it); raw_rg_used: no

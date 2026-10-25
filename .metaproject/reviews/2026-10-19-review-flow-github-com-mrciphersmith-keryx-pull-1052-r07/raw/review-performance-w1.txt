@@ -1,0 +1,41 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Performance review of slices 02 and 03 (r07 delta 77d2eff20..5444f96e4, head 5444f96e4). No blocker or major. One minor: the delta removed every list cap on operator cards (LISTED_FILES, BODY_PREVIEW_LINES, REPLY_PREVIEW, MAX_LISTED), so a card can now carry thousands of lines and the TUI dock adds one TextRenderable per line; this is once per human-gated card, so it is a follow-up. One info: hiddenInCard runs cardSafe, whose lazy OSC regex is quadratic on unterminated sequences, over the uncapped reason text; not introduced by this delta. Clean: no queries, no N+1, no pagination issue; shownBody is one linear pass bounded by the 65 536 character post limit; dispositions are capped at 20 entries, 200 and 300 characters; the apply paths cost the same as before; no leaks or import growth.",
+  "findings": [
+    {
+      "id": "P-701",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 5424,
+      "quote": "      for (const line of card) {",
+      "problem": "Operator cards are now unbounded in line count, and the dock adds one TextRenderable per card line to the transcript. The delta removed every list cap: operator-confirm-review.ts:93-95 listFiles maps all files, :208-220 shows the whole publish body, :509-516 every reply body, :563 every perRole row, and operator-confirm-other.ts externalApplySpec spreads all files and all flaggedPaths. confirmOperatorCard (tui-shell.ts:5421-5426) loops over every card line and calls transcript.add(new otui.TextRenderable(...)) for each, synchronously, and the renderables stay in the transcript afterwards.",
+      "impact": "Hot path: once per operator-confirm card, human-gated, so infrequent. Scale: a review body up to GitHub's 65 536 characters, or a coverage waiver listing the uncovered files of a large PR (hundreds to thousands of lines). The cost is a one-time burst of renderable creation plus retained transcript memory per large card. Not a blocker: operatorCardTooLongForTopic (shell-bridge.ts:280-287) keeps such cards off Telegram, and showing the content whole is the goal of the fix.",
+      "suggested_fix": "Leave the content whole, since the correctness fix is right. If a large card is observed to stall the shell, render card lines through one multi-line TextRenderable per card (or per N lines) instead of one per line. Track as a follow-up; no change needed for this PR.",
+      "evidence": "tui-shell.ts:5424-5426 loops over card and adds one TextRenderable per line; operator-confirm-review.ts:93-95, :208-220, :509-516, :563 and operator-confirm-other.ts externalApplySpec no longer slice their lists; shell-bridge.ts:280-287 refuses remote buttons for a card the topic would cut.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "P-702",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text);",
+      "problem": "hiddenInCard runs cardSafe over model-supplied text that reasonOf (:373-377) does not length-cap, while the disposition fields are capped (MAX_DISPOSITION_EVIDENCE_CHARS 300, finding 200, entries 20 at :663-665 and :695). The lazy OSC pattern in src/lib/card-safe.ts:12 (ESC followed by ] P ^ or _, then [\\s\\S]*? up to BEL or ESC backslash) scans to the end of the string for each opener that has no terminator, so k openers in n characters cost O(k*n).",
+      "impact": "Runs on the single-threaded shell once per tool call, not per render, and only for a model or injected text that emits a very large reason. Not introduced by this delta: the old code already ran cardSafe(reason) while building the card, and the new check runs it once and refuses, so total work is not higher.",
+      "suggested_fix": "Optional hardening in the style of the disposition caps: refuse a reason longer than a few hundred characters in reasonOf before calling hiddenInCard, since the card shows it whole.",
+      "evidence": "operator-confirm-review.ts:672 calls cardSafe(text); :373-377 reasonOf has no length cap; card-safe.ts:12 holds the lazy [\\s\\S]*? OSC pattern.",
+      "confidence": "low",
+      "reviewer": "review-performance"
+    }
+  ],
+  "questions": [],
+  "slices": ["slice-02", "slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```

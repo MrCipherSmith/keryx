@@ -1,0 +1,187 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-03 (resolver, reference entries, proof, config, check, section extraction, status, resolve-context command) is readable and well documented; types are explicit and expected failures come back as values. No blocker or major issue. Ten minor findings concern function size and parameter count in the resolver and reference loader, duplicated file-inspection logic whose two copies classify errors differently, and a few literals that duplicate a named constant or a string contract across files. Three info notes.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "export async function resolveProjectContext(input: ResolveContextInput): Promise<ProjectContextResolution> {",
+      "problem": "Clean Code B1/B3. The function body is about 110 lines after this diff and mixes rule/skill selection, citation scanning, task-text truncation with its warning, reference resolution, budget arithmetic and result assembly. The diff added roughly 40 lines (task truncation warning, resolveReferences call, promoted-budget block). Inside it `declarations ?? []` is written three times (`(declarations ?? []).some(`, `declarations: declarations ?? [],`, `(declarations ?? []).map(`) next to a separate `declarations !== undefined` test for `undeclared`.",
+      "impact": "Each new feature layered on this function raises the cost of reading and testing it; the budget/promotion block cannot be unit-tested without a full resolve. Maintenance cost only.",
+      "suggested_fix": "Bind `const declared = declarations ?? [];` once. Extract the new blocks as small functions: `taskTextWarning(task, declared)` and `promotedBudgetWarning(references, used, cap)`. Pre-existing size is not charged to the diff; only the growth is.",
+      "evidence": "Diff slice-03, hunks '@@ 326,377 @@', '@@ 396,436 @@' and '@@ 438,552 @@' of src/gdskills/context-resolver.ts.",
+      "confidence": 0.85,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "declared: ReadonlySet<string>,",
+      "problem": "Clean Code B2. `collectContracts` now takes five positional parameters (projectRoot, cited, taken, declared, warnings), the diff adding the fifth; `readDeclaredFile(projectRoot, rootReal, rel, maxFileBytes)` and `undeclaredCitations(projectRoot, rootReal, cited, declared)` take four. Two sets of the same type (`taken`, `declared`) sit side by side, so a swapped call compiles. `projectRoot` and `rootReal` always travel together and rootReal is derived from projectRoot. `warnings: string[]` is an output argument.",
+      "impact": "A transposed `taken`/`declared` argument type-checks and silently changes which citations are listed. Maintenance cost.",
+      "suggested_fix": "Pass one options object (`{ projectRoot, cited, taken, declared }`) and return warnings alongside entries, as `resolveReferences` already does with `ResolvedReferences`.",
+      "evidence": "collectContracts signature in the diff; readDeclaredFile in reference-entries.ts; undeclaredCitations in references-check.ts. The caller passes `new Set([...taken, ...declaredPaths])` and `new Set((declarations ?? []).map(...))` in the same two positions.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "export async function resolveReferences(input: ResolveReferencesInput): Promise<ResolvedReferences> {",
+      "problem": "Clean Code B1. The function is about 46 lines (exceeds the 40-line guide) and mixes levels: duplicate-listing guard, file read, anchor-to-section byte accounting with its dead-anchor fallback and warning text, promotion decision, and entry construction in one loop body.",
+      "impact": "The dead-anchor fallback (whole file becomes the obligation) is a policy decision buried in a loop; changing it means editing the loop that also builds entries.",
+      "suggested_fix": "Extract `obligationBytes(declaration, text, warnings): number` for the anchor block and `toEntry(declaration, read, reason, sectionBytes)` for the entry literal; keep the loop as guard, read, measure, promote, push.",
+      "evidence": "Diff slice-03, new file src/gdskills/reference-entries.ts, resolveReferences body.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "async function inspectDocument(projectRoot: string, rootReal: string, relative: string): Promise<Inspection> {",
+      "problem": "Clean Code E1. `inspectDocument` repeats the sequence of `readDeclaredFile` in reference-entries.ts (lstat, realpath, isPathInside against the real root, isFile, size cap, readFile) with a different result type. The copies already disagree on error classification: `inspectDocument` wraps the first lstat in a bare `catch` and returns `{ status: \"missing\" }` for any error, while `readDeclaredFile` returns \"does not exist\" only for ENOENT and `cannot be read (<message>)` otherwise.",
+      "impact": "For a declared document under a directory the process cannot traverse (EACCES, ENOTDIR), `keryx skills references check` reports `document-missing` (\"does not exist\"), while `keryx skills resolve-context` warns \"cannot be read (EACCES ...)\" for the same file. The two commands give contradictory diagnoses, and the check hides the real cause.",
+      "suggested_fix": "Put one `inspectProjectFile(projectRoot, rootReal, relative, maxBytes)` helper (returning a discriminated outcome with the error code) in a shared module; have `readDeclaredFile` and `inspectDocument` map its outcome to their own messages. Treat only ENOENT as missing.",
+      "evidence": "inspectDocument: `try { await lstat(absolute); } catch { return { status: \"missing\" }; }`. readDeclaredFile: `if (typeof error === \"object\" && error !== null && (error as { code?: unknown }).code === \"ENOENT\") return { ok: false, why: \"does not exist\" };` followed by a `cannot be read` branch.",
+      "confidence": 0.85,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "problem": "Clean Code E2. The word length is exported as `WORD_MIN_LETTERS = 5` and the doc comment says \"words of {@link WORD_MIN_LETTERS} letters or more\", but the regex hardcodes `{5,}`. The user-facing message in `wordsFailure` interpolates the constant.",
+      "impact": "Changing `WORD_MIN_LETTERS` to 4 leaves the matcher at 5 while the failure message tells the worker \"words of 4 or more letters\"; the message then misstates the rule the worker is held to.",
+      "suggested_fix": "Build the pattern from the constant: `new RegExp(`\\\\p{L}{${WORD_MIN_LETTERS},}`, \"gu\")`, created once at module level.",
+      "evidence": "Constants block of reference-proof.ts: `export const WORD_MIN_LETTERS = 5;`; wordsFailure detail: `of ${WORD_MIN_LETTERS} or more letters`.",
+      "confidence": 0.9,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+      "problem": "Clean Code E2. Whether an entry is a promoted reference is decided by parsing the `reason` string. The producer writes `condition:glob:${glob}` and `condition:keyword:${keyword}` in reference-entries.ts, the consumer matches the bare prefix `condition:` in reference-proof.ts, and nothing shares the prefix. Promotion state is encoded in free text on an entry type that already has `tier`, `anchor` and `condition` fields.",
+      "impact": "Renaming or re-wording the reason prefix in `promotionReason` makes `isPromoted` return false for every entry; the proof (anchor and summary) is then skipped and `--resolved` validation passes on a hash alone, with no error and no failing test unless one covers the prefix.",
+      "suggested_fix": "Export a `PROMOTED_REASON_PREFIX = \"condition:\"` constant used by both sides, or add an explicit `promoted: true` marker to the entry.",
+      "evidence": "reference-entries.ts: `return `condition:glob:${glob}`` and `` `condition:keyword:${keyword}` ``; reference-proof.ts isPromoted.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "const shown = headings.slice(0, 12).join(\", \");",
+      "problem": "Clean Code E2. The cap of 12 listed headings appears twice in one expression (`slice(0, 12)` and `headings.length > 12 ? \", ...\"`) with no name.",
+      "impact": "Changing one literal without the other drops or adds the trailing ellipsis incorrectly.",
+      "suggested_fix": "`const MAX_LISTED_HEADINGS = 12;` and use it in both places.",
+      "evidence": "declarationFindings, anchor-not-found message: `${headings.length > 12 ? \", ...\" : \"\"}`.",
+      "confidence": 0.9,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-008",
+      "severity": "minor",
+      "file": "src/gdskills/project-context-status.ts",
+      "line": null,
+      "quote": "const report = await checkReferences(projectRoot);",
+      "problem": "Clean Code B3/E1. `readReferences` calls `loadReferences(projectRoot)` and then `checkReferences(projectRoot)`, which calls `loadReferences` again. The file is read and parsed twice, and the two reads are not tied together.",
+      "impact": "If `references.json` is edited between the two reads (the TUI refreshes this snapshot while the user edits), `declarations` and `findings` come from different file versions, so the sidebar can show declarations that the findings do not describe. Also redundant I/O.",
+      "suggested_fix": "Let `checkReferences` accept the already-loaded declarations (or return them in its report) and call `loadReferences` once.",
+      "evidence": "readReferences: `const loaded = await loadReferences(projectRoot);` ... `const report = await checkReferences(projectRoot);` and checkReferences begins with `const loaded = await loadReferences(projectRoot);`.",
+      "confidence": 0.85,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-009",
+      "severity": "minor",
+      "file": "src/gdskills/resolve-context-command.ts",
+      "line": null,
+      "quote": "${entry.section_bytes !== undefined ? `, section ${entry.section_bytes} bytes` : \"\"}",
+      "problem": "Clean Code A1/B3. The `flags` array literal in `renderResolutionMarkdown` is now one line of several hundred characters, and the new element puts a template literal with a nested conditional template inside an array element that already holds three ternaries. The reader has to parse four conditional levels to see what is rendered.",
+      "impact": "Hard to review or extend; the next flag has to be appended into the same line.",
+      "suggested_fix": "Extract `entryFlags(entry): string[]` with one statement per flag, and `anchorFlag(entry)` for the anchor and section size.",
+      "evidence": "Diff hunk '@@ 1,62 @@' of resolve-context-command.ts, the `const flags = [...]` line.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-010",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "const lengthOf = (text: string): number => [...text.trim()].length;",
+      "problem": "Clean Code E1. Counting code points of trimmed text is written three ways in this diff: `lengthOf` here (spread), `charCount` in reference-proof.ts (`Array.from(text.trim()).length`) and `truncateTaskText` in context-resolver.ts (`Array.from(text)`). The two helpers have identical behaviour and different names.",
+      "impact": "Two names for one concept; a future fix to the counting rule (for example graphemes instead of code points) has to be applied in each place.",
+      "suggested_fix": "One exported `codePointLength(text)` in a small shared module, used by both helpers.",
+      "evidence": "reference-proof.ts: `return Array.from(text.trim()).length;` inside `charCount`.",
+      "confidence": 0.75,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-011",
+      "severity": "info",
+      "file": "src/gdskills/references-config.ts",
+      "line": null,
+      "quote": "if (posix.startsWith(\"/\") || /^[A-Za-z]:/.test(posix)) return undefined;",
+      "problem": "Clean Code E1. `normaliseRelativePath` and `normaliseCitedPath` share the absolute-path test, `path.posix.normalize` and the `..` escape test, differing only in trimming and in returning a reason versus `undefined`. The JSON-schema `pattern` repeats the absolute-path rule a third time (the file notes the loader must also check this).",
+      "impact": "Two copies of the escape rule; one can be tightened without the other (for example a drive-letter or UNC rule).",
+      "suggested_fix": "Have `normaliseRelativePath` call one shared `classifyRelative(posix)` returning `{ path } | { problem }`, with `normaliseCitedPath` mapping the problem to `undefined`.",
+      "evidence": "Both functions in references-config.ts contain `path.posix.normalize(posix)` and `normal === \"..\" || normal.startsWith(\"../\")`.",
+      "confidence": 0.7,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-012",
+      "severity": "info",
+      "file": "src/gdskills/resolved-context-check.ts",
+      "line": null,
+      "quote": "rule?: ProofRule;",
+      "problem": "SOLID/type design. `ResolvedMiss` makes `rule` and `detail` independently optional, but the comment on `detail` says it is \"Present with rule\". `formatResolvedReport` branches on `detail` only, so the pairing is a convention the type does not enforce.",
+      "impact": "A miss built with `rule` and no `detail` falls through to the hash-miss message and prints a wrong sentence. No current code path builds one.",
+      "suggested_fix": "Model it as a union: `ResolvedMiss = HashMiss | (HashMiss & { rule: ProofRule; detail: string })`, or group the pair as `proof?: { rule; detail }`.",
+      "evidence": "ResolvedMiss type in the diff; proofMisses is the only producer and sets both fields.",
+      "confidence": 0.6,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-013",
+      "severity": "info",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "function report(present: boolean, declared: number, findings: ReferencesFinding[]): ReferencesCheckReport {",
+      "problem": "Clean Code A3. In this module `declared` means a count here (`report`, `ReferencesCheckReport.declared`) and a `Set<string>` of declared paths elsewhere (`undeclaredCitations(..., declared: ReadonlySet<string>)`, `const declared = new Set(...)` in `checkReferences` and `suggestReferences`). The function `report` also shares its name with the local `const report` that `project-context-status.ts` binds to the same result.",
+      "impact": "Reader has to check the type each time; no functional effect.",
+      "suggested_fix": "Name the count `declaredCount` and the sets `declaredPaths`; rename `report` to `buildReport`.",
+      "evidence": "Both usages are in the diff of references-check.ts.",
+      "confidence": 0.6,
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 10, "info": 3 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Report. No blocker or major findings in slice-03. Three function-size and parameter-count items (F-001, F-002, F-003) exceed the Clean Code rubric thresholds (more than 40 lines, 4 or more positional parameters). I rated them minor because I could show no observable failure, only maintenance cost. The one finding with a visible outcome is F-004: the two copies of the declared-document inspection classify a non-ENOENT lstat error differently, so `references check` says "does not exist" where `resolve-context` says "cannot be read". F-005 and F-006 are literals that duplicate a named constant or a cross-file string contract. Not reported, as the operator listed them: the vocabulary-proxy summary check, the second citation scan in references-check.ts, and the already-fixed duplicate path, normalisation, truncation and BOM items. Pre-existing code (the empty `catch` blocks in `collectContracts` and `recordLastResolve`) is out of scope.

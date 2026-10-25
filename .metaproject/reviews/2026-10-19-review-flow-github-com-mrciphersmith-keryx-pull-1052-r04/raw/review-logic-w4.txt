@@ -1,0 +1,94 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review (wave 4, slice-04)
+
+### Review Scope
+- PR 1052, flow 464, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66, round r04
+- Slice: slice-04 only (press-field plumbing, undelivered flag, completeReviewGated)
+- Spec compliance gate: skipped, no issue or acceptance document in the payload beyond the already-filed items
+
+### Summary
+The completeReviewGated extraction is behaviour-equivalent to the old inline checks in runComplete (profile refusal, then narrowed routing refusal, then completeManagedReview). The press-field plumbing is consistent: cardPressFields copies only defined fields, the signature and coverage-waiver paths carry them through. One real defect: the press fields (and the already-existing confirmedVia) written into manifest.readiness_waivers are rejected by the manifest JSON schema (additionalProperties false) when completeManagedReview validates the closed manifest, so a card-recorded readiness waiver cannot be closed in a project whose cwd holds the schema file (this repository). Two minor validation gaps follow.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 2  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+- [F-001] major, see JSON.
+
+### Async & Concurrency
+None detected. The rollback in completeManagedReview restores the manifest and report.md on any failure before the closed manifest is written (managed.ts:1031-1038), so the waiver is taken back in the F-001 failure path; the failure is a refusal, not corruption.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+- [F-002] minor, see JSON.
+
+### Type Contract Violations
+- [F-003] minor, see JSON.
+
+### Edge Cases
+None detected.
+
+### Verification notes for F-001
+Ran the repository validator (src/contracts/validator.ts validateAgainstSchemaObject) against docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json with a manifest holding one readiness_waivers entry:
+- {item, operator_quote, time}: no readiness_waivers error
+- plus confirmedVia: "remote-card": "$.readiness_waivers[0].confirmedVia Additional property is not allowed"
+- plus pressedBy and pressedAt: three "Additional property is not allowed" errors
+confirmedVia on a waiver already existed at base (ReadinessWaiver type at base has confirmedVia), so the schema was already out of step; this slice adds pressedBy and pressedAt to the same object. Tests do not catch it because their cwd has no docs/requirements/... schema file (loadDocpackSchema returns null when the file is absent).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "completeReviewGated is behaviour-equivalent to the inlined checks it replaces and the press-field plumbing is consistent. One major: readiness_waivers entries carrying confirmedVia/pressedBy/pressedAt violate the manifest schema (additionalProperties false), so completeManagedReview throws Invalid managed review manifest after a card-recorded waiver wherever the schema file is present. Two minor validation gaps on stored press fields.",
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 0 },
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/review/readiness.ts",
+      "line": 577,
+      "quote": "const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }));",
+      "problem": "waiveReadiness writes confirmedVia and, with this slice, pressedBy and pressedAt into manifest.readiness_waivers items. The committed manifest schema docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json (lines 191-204) declares those items with additionalProperties false and only item, operator_quote and time. completeManagedReview validates the closed manifest against that schema (managed.ts:1026, via loadDocpackSchema at managed.ts:3011 which loads the file from cwd/docs/requirements/...) and throws Invalid managed review manifest. The slice does not touch the schema file.",
+      "impact": "In a project whose root holds the schema file (this repository), a readiness item waived through the review_waive_readiness card (tui-card or remote-card) leaves a manifest that completeManagedReview refuses at the very end, after the readiness verdict is READY: both review_complete and keryx review complete fail with $.readiness_waivers[0].confirmedVia / pressedBy / pressedAt 'Additional property is not allowed'. Only a CLI --waive (no confirmedVia) closes. The remote-card press fields make the already-present confirmedVia mismatch worse, and the unit tests miss it because their temp cwd has no schema file.",
+      "suggested_fix": "Add confirmedVia (enum tui-card, remote-card), pressedBy (integer) and pressedAt (string, minLength 1) to the readiness_waivers item properties in managed-review-package.schema.json, and add a test that runs waiveReadiness with confirmedVia and press fields then completeManagedReview in a cwd that contains the real schema file.",
+      "evidence": "Ran validateAgainstSchemaObject(schema, manifest): waiver with confirmedVia remote-card yields '$.readiness_waivers[0].confirmedVia Additional property is not allowed'; adding pressedBy and pressedAt yields two more such errors. validator.ts:259-260 enforces additionalProperties false. managed.ts:1026-1029 throws on !validation.valid. git diff of the PR changes no managed-review-package.schema.json.",
+      "confidence": 0.85
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/flow/confirm-token.ts",
+      "line": 157,
+      "quote": "parseStoredToken",
+      "problem": "The stored confirmation token is parsed without checking the types of the new pressedBy and pressedAt (nor the existing confirmedVia and confirmationQuote), and consumeConfirmationToken copies them into the signature as read. The coverage-waiver reader (coverage-complete.ts readCoverageWaiver) does validate pressedBy with Number.isSafeInteger and pressedAt as non-empty text, so the same field is checked in one reader and not in the other.",
+      "impact": "A hand-edited or corrupted token file with pressedBy as a string or object is accepted and written verbatim into the signature and the completion confirmation record, where a consumer reading it as a number gets a wrong value instead of a refusal. Not exploitable by the card path itself, so the effect is a silent wrong record on a malformed store.",
+      "suggested_fix": "In parseStoredToken drop (or refuse) a pressedBy that is not a safe integer and a pressedAt that is not a non-empty string, mirroring readCoverageWaiver.",
+      "evidence": "Slice-04 diff of confirm-token.ts: consumeConfirmationToken spreads binding.pressedBy/pressedAt (lines 140-141) and the token type declares them (76-77) while the parser has no type check for them.",
+      "confidence": 0.6
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/plan-confirmation.ts",
+      "line": 1,
+      "quote": "isPlanConfirmation",
+      "problem": "The plan and chunk-estimate confirmation validators, like the operator-decisions validators (operator-decisions.ts lines 78-230), accept the new press fields without checking their types and do not strip extra fields, and nothing requires that pressedBy/pressedAt appear only with confirmedVia remote-card.",
+      "impact": "A record with pressedBy but a terminal-token mechanism, or a non-numeric pressedBy, is read back as valid; the shared CardPress type promises number and string but the runtime read does not enforce it.",
+      "suggested_fix": "Validate pressedBy as a safe integer and pressedAt as a non-empty string in the shared readers, or route all of them through one parseCardPress helper next to cardPressFields in review/types.ts.",
+      "evidence": "types.ts:92-98 defines CardPress and cardPressFields (write side only); no matching read-side guard exists in the validators named above.",
+      "confidence": 0.5
+    }
+  ]
+}
+```

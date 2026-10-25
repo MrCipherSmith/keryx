@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "retry": {
+    "schemaVersion": 1,
+    "scopeFingerprint": "bab4ca0e06c9dd90bd52a5ae6938c1aa3abd92bc8e3350d84314ba9486b43e46",
+    "reviewers": {
+      "review-regression": {
+        "attempt": 0,
+        "status": "DONE",
+        "notRun": false,
+        "stalls": 0,
+        "covered": [
+          "chunk-001",
+          "chunk-002",
+          "chunk-003",
+          "chunk-004",
+          "chunk-005",
+          "chunk-006",
+          "chunk-007",
+          "chunk-008",
+          "chunk-009",
+          "chunk-010",
+          "chunk-011",
+          "chunk-012",
+          "chunk-013",
+          "chunk-014"
+        ]
+      }
+    }
+  },
+  "derived": [],
+  "outcomes": {
+    "chunk-001": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 1,
+      "findings": []
+    },
+    "chunk-002": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 2,
+      "findings": []
+    },
+    "chunk-003": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 3,
+      "findings": []
+    },
+    "chunk-004": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 4,
+      "findings": []
+    },
+    "chunk-005": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 5,
+      "findings": []
+    },
+    "chunk-006": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 6,
+      "findings": []
+    },
+    "chunk-007": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 7,
+      "findings": []
+    },
+    "chunk-008": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 8,
+      "findings": []
+    },
+    "chunk-009": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 9,
+      "findings": []
+    },
+    "chunk-010": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 10,
+      "findings": []
+    },
+    "chunk-011": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 11,
+      "findings": []
+    },
+    "chunk-012": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 12,
+      "findings": []
+    },
+    "chunk-013": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 13,
+      "findings": []
+    },
+    "chunk-014": {
+      "status": "DONE",
+      "decision": "accepted",
+      "attempts": 1,
+      "seq": 14,
+      "findings": []
+    }
+  }
+}

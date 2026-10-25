@@ -1,0 +1,41 @@
+# keryx review verify-run
+finding: C-02
+command: bun test src/commands/shell.test.ts 2>&1 | tail -40
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:19.510Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.2 (744846f84)
+keryx: starting…
+
+src/commands/shell.test.ts:
+keryx mcp: /home/altsay/.cursor/mcp.json is not valid JSON: JSON Parse error: Unexpected EOF
+844 |       toolNames = deps.tools.map((tool) => tool.definition.name);
+845 |       return true;
+846 |     },
+847 |   });
+848 | 
+849 |   expect(toolNames.sort()).toEqual([
+                                 ^
+error: expect(received).toEqual(expected)
+
+@@ -28,2 +28,3 @@
+    "review_comments_reply",
++   "review_complete",
+    "review_confirm_plan",
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/altsay/keryx/.worktrees/helyx-confirm/src/commands/shell.test.ts:849:28)
+(fail) shellCommand wires web_search into the agent TUI tool set [126.33ms]
+keryx: starting…
+keryx mcp: /home/altsay/.cursor/mcp.json is not valid JSON: JSON Parse error: Unexpected EOF
+
+ 66 pass
+ 1 fail
+ 170 expect() calls
+Ran 67 tests across 1 file. [423.00ms]
+--- stderr ---
+

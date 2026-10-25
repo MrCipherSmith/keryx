@@ -1,0 +1,91 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Fix slice slice-01 at head 6f47bf35f closes 12 of the 19 prior findings against source and leaves 7 not fully fixed (6 partial, 1 open); no new defect is introduced by the slice and no blocker or major remains. The residual agent-visible 'run `keryx review complete`' text in the waiver tools is carried by C-21 (partial) rather than filed as a second finding, to keep one finding per class.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    { "id": "C-01", "disposition": "closed" },
+    { "id": "C-03", "disposition": "closed" },
+    { "id": "C-05", "disposition": "closed" },
+    { "id": "C-06", "disposition": "closed" },
+    { "id": "C-13", "disposition": "closed" },
+    { "id": "C-16", "disposition": "open" },
+    { "id": "C-17", "disposition": "closed" },
+    { "id": "C-18", "disposition": "closed" },
+    { "id": "C-19", "disposition": "closed" },
+    { "id": "C-20", "disposition": "closed" },
+    { "id": "C-21", "disposition": "partial" },
+    { "id": "C-22", "disposition": "partial" },
+    { "id": "C-23", "disposition": "closed" },
+    { "id": "C-24", "disposition": "partial" },
+    { "id": "C-26", "disposition": "partial" },
+    { "id": "C-32", "disposition": "partial" },
+    { "id": "C-39", "disposition": "closed" },
+    { "id": "C-41", "disposition": "open" },
+    { "id": "C-45", "disposition": "partial" }
+  ]
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Round: r03 (fix round), slice `slice-01`
+- Head: `6f47bf35f31c2e8c882e573b61dd4c39fcc81264`; base `d2cb377f59f7f9c8553d9f377f99360bff3f6328`
+- Stack detected: fullstack (TypeScript CLI/TUI, no NestJS or React+MobX)
+- Round-1 operator decisions applied: C-05 uphold, C-10 uphold, C-25 dismiss.
+
+### Summary
+The slice makes the review_complete card close its own gap: apply is split into gate, close-check and record write, so a closed round with an unwritten confirmation record is now reported instead of silently passing (C-03). The Telegram leg now releases its log entry in a finally and marks an undelivered card (C-06, C-13). Five of the seven not-fully-fixed items are residual doc, test or duplication gaps; none is a new layer violation, and nothing in the slice regresses a fixed item.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0  (new findings)
+- prior dispositions: 12 closed, 6 partial, 1 open (19 total)
+
+### Prior dispositions (verified against source at head 6f47bf35f)
+
+- C-01 closed. `src/commands/operator-confirm-rosters.test.ts` asserts `toHaveLength(19)`; `src/trigger/unattended.ts` lists 19 names.
+- C-03 closed. `completeSpec.apply` in `src/commands/operator-confirm-review.ts` separates the gate, a close check (`done !== undefined` or manifest `status === "closed"`) and the record write. A failed record write after a close is pushed into `problems` ("the round is closed but the confirmation record could not be written") and a refused gate with an unclosed manifest returns "nothing was recorded". The close-before-bookkeeping order is owned by `completeReviewGated` and is not claimed to be atomic; the failure is now visible rather than swallowed.
+- C-05 closed. The sentence telling the agent it may run `keryx review complete` instead of the card is gone from both SKILL.detail.md copies; TM-04 section 8 now states plainly that plain `review complete` has no TTY check and the card is a rule for the agent, not a lock. cli-reference.md:4921 still lists `complete` among terminal commands, which is accurate for a human at a terminal and is not the contradiction C-05 cited.
+- C-06 closed. `onUndelivered` in `mirrorApprovalToTopic` (`src/tui/tui-shell.ts`, ~6127) calls `operatorCards.markUndelivered(cardId)`; the log's `waiting()` and the expired text ("Telegram token expired, answer in the shell") follow.
+- C-13 closed. Both branches of `mirrorApprovalToTopic` use try/finally, and an undefined outcome withdraws the card instead of leaving it unanswered.
+- C-16 open. `docs/docs/guides/autonomous-review.md:35` still says an autonomous run "stops at the floor" and the exit-code table (line 28) maps floor to exit 3, while the runner records the refused card as Not run and continues (the card denial text is not matched by `isFloorRefusal`). The stated reason (unattended children are excluded from the card gate) explains why the card is refused but does not make the "stops at the floor" claim true. Minor; one-line wording fix.
+- C-17 closed. CHANGELOG 0.3.124 now reads "a rejected remote answer burns the card, so nothing is applied and the card has to be asked again", which matches the token-consumption order in the code.
+- C-18 closed. TM-04 section 6a states what a press proves and what it does not, including that a bot-token holder can edit the mirrored card text.
+- C-19 closed. TM-04 states that card tokens and the answered-card list live in shell memory only and are lost on restart.
+- C-20 closed. `## [Unreleased]` is now empty and the dated `## [0.3.124]` section carries the entries; the heading format matches the neighbouring `## [0.3.123] - 2026-10-18`.
+- C-21 partial. SKILL.md "Done when" and the other cited sentences in both copies now call the card. Still telling the agent to run the terminal command: `src/commands/operator-confirm-review.ts:262` and `:312` (waive tool descriptions: "run `keryx review complete` afterwards to close the review"), `:296` and `:358` (waive tool outputs: "Run `keryx review complete`..."), and `src/commands/review.ts:4558`/`:4562` (the TTY refusals still end "then run `keryx review complete`"). These are the agent-visible strings that the same class covers; point them at the `review_complete` card.
+- C-22 partial. The card now uses the manifest head the package recorded and has no PR-bound input, which removes the drift the finding named. The preflight facts (`completionFacts`, `src/commands/operator-confirm-review.ts` 658-692) are still read by hand in the commands layer with ad-hoc JSON types rather than asked of the review library.
+- C-23 closed. `completionFacts` no longer reports "waivers: none" on an unreadable `research.json`; the error is carried into the card/refusal.
+- C-24 partial. The JSDoc now sits on `remoteApproval` (`src/tui/tui-shell.ts` 571-574) and the Flow 173 block above `isToolAvailableToSideWorker` is intact. The card-log lifecycle is still inlined in `mirrorApprovalToTopic` and `remoteApproval` is neither exported nor unit-tested.
+- C-26 partial. The duplicated head normalisation is removed; the 12-character SHA abbreviation is still repeated in `completeSpec`.
+- C-32 partial. New tests cover the undefined and unbound allowed-id provider (remote answer refused, token spent) and the TTL and markUndelivered log behaviour. The `remoteApproval`/pressedBy wiring itself is checked only through a source-text assertion on `tui-shell.ts`, not behaviourally.
+- C-39 closed. The `pressedAt` meaning (shell clock at delivery) is documented in the type comments and `flow-state.schema.json` (line 553) and `src/flow/schema.ts:332`; `confirm-token.ts` carries `pressedBy`/`pressedAt` through `consumeConfirmationToken`.
+- C-41 open. info only: the `factsDigest` drift check still runs before the awaited PR lookup inside `completeReviewGated`; the code is unchanged. Needs a second writer on the package to matter; no action required for this PR.
+- C-45 partial. The TTL and expired wording are fixed and `markUndelivered` exists, but the final `operatorCards.answer(cardId, { place: "telegram", yes: ..., pressedBy })` is still derived from the transport event before `operatorConfirmTool.invoke` re-checks allowed id and TTL, so the log can say "yes, pressed by Telegram user N" for an answer the gate then refuses. The log is documented as non-authoritative.
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected. See C-22 (partial) for the preflight facts read in the commands layer.
+
+### Design Pattern Misuse
+None new. See C-24 and C-45 (partial).
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A - not detected in stack.
+
+### Suggested Patches
+None.

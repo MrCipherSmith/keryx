@@ -87,6 +87,7 @@ import { registerBoardReader } from "./scheduler/digest-board";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
+import { PROBE_HELP } from "./commands/learn-probe";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { doctorCommand } from "./commands/doctor";
 import { setupCommand } from "./commands/setup";
@@ -638,7 +639,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   ["research", () => printResearchHelp()],
   ["hooks", () => printHooksHelp()],
   ["bundle", () => printBundleHelp()],
-  ["learn", () => printLearnHelp()],
+  ["learn", (rest) => rest[0] === "probe" ? console.log(PROBE_HELP) : printLearnHelp()],
   ["review", printReviewHelpFor],
   ["skills", printSkillsHelpFor],
 ]);

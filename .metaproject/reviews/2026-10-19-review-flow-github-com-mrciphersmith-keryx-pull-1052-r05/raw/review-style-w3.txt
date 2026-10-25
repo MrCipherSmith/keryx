@@ -1,0 +1,89 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slices 03 and 04 are style-clean at the level of the formatter-owned rules; the E-10 fix (closeStep) and the E-07 fix (cli-reference.md:4921) are correct and E-01's imperative sites (SKILL.md:782, SKILL.detail.md:386, and 134/136) now name the card. Five minor/info findings remain: the card/command wording is still repeated through four inline ternaries next to closeStep and the boolean carries two names, markUndelivered(id, 'ended') now contradicts its own name and doc comment, the operator-confirmations.ts header no longer describes the module, SKILL.md:136 states an unconditional rule that the readline fallback in the same PR contradicts, and the new test header cites a review-finding id.",
+  "findings": [
+    {
+      "id": "F-201",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 797,
+      "quote": "if (open.blockers.length === 0) return `- none listed; ${card ? \"call the `review_complete` card\" : \"run `keryx review complete`\"} to close the package`;",
+      "problem": "The card-or-command wording is now held by closeStep (line 755) for nextStep only. Four more inline ternaries restate it with slightly different words: describeBlockers (797), the stop report in decideReviewGate (814: `${card ? \"The review_complete card\" : \"`keryx review complete`\"} would still be refused on`), the continue message (822) and its last sentence (829). The boolean carrying the idea has two names (`card` in closeStep, nextStep, describeBlockers; `cardAvailable` in ReviewGateInput) and none of them reads as a predicate (is/has/can).",
+      "impact": "E-10 was the same clause pasted in three returns; the fix moved three copies into one helper and added four new ones. The next wording change (for example the D-03 overflow line at 800) has to touch five places, and the positional `card` flag is easy to pass the wrong way round.",
+      "suggested_fix": "Rename the flag to `hasCard` (or `cardAvailable` everywhere) and derive all phrases from one small record, for example `const WORDING = (hasCard) => ({ close: closeStep(hasCard), closer: hasCard ? 'the `review_complete` card' : '`keryx review complete`' })`, so describeBlockers, the stop report and the continue message interpolate it instead of branching.",
+      "evidence": "src/review/completion-gate.ts at 77d2eff20: closeStep 755-759; ternaries at 797, 814, 822, 829; parameter names `card` (755, 761, 796) and `cardAvailable` (778, 806).",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-202",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 77,
+      "quote": "markUndelivered(id: number, reason: \"undelivered\" | \"ended\" = \"undelivered\"): void {",
+      "problem": "E-04's fix reuses markUndelivered for a card that WAS delivered and whose topic leg later ended; the call in raceMirroredCard reads `options.log.markUndelivered(id, \"ended\")`, which contradicts itself. The doc comment above (line 76) was not updated: \"The topic leg did not deliver a card that was logged as mirrored\". The entry also now encodes three states in two flags (`mirrored: false` plus an optional `topicEnded: true as const`).",
+      "impact": "A reader of the call site or of the sidebar code is told the card was not delivered when the card says the opposite. A later reader who greps markUndelivered to find where 'not delivered' is decided lands on the ended path too.",
+      "suggested_fix": "Name the method for what it does, for example `leaveTopic(id, reason: \"undelivered\" | \"ended\")` or `markTopicClosed`, and rewrite its doc comment to cover both reasons; keep `markUndelivered` as a thin wrapper if other callers need it.",
+      "evidence": "src/tui/operator-confirmations.ts:76-83 and the caller `onTopicEnded: () => options.log.markUndelivered(id, \"ended\")` in raceMirroredCard (about line 205).",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-203",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 3,
+      "quote": "// Held in memory only: the stores keep the durable record (`confirmedVia`, `pressedBy`, `pressedAt`); this is the\n// live view the sidebar, the `/remote-control` status and the `/decisions` modal read.",
+      "problem": "The module header says this file is only the in-memory live view and that the stores own the durable record. E-08's fix added remoteApproval (line 170), which is the producer of `via`, `pressedBy` and `pressedAt` on the ApprovalResponse (the durable fields), plus two async orchestration functions, askUnmirroredCard and raceMirroredCard, that drive the dock/topic race. The file now has three jobs (log, text formatting, approval lifecycle) and imports raceApproval and a type from commands/agent.",
+      "impact": "The comment is now wrong for a third of the file, so a reader looking for where pressedBy/pressedAt are stamped will not look here; the approval lifecycle sits in a module whose name and header say 'confirmations view'.",
+      "suggested_fix": "Either extend the header to name the lifecycle helpers and remoteApproval, or move remoteApproval, askUnmirroredCard and raceMirroredCard to a sibling (for example src/tui/card-lifecycle.ts, matching the new card-lifecycle.test.ts) and leave this file as the log and its lines.",
+      "evidence": "src/tui/operator-confirmations.ts:1-4 versus 168-215; the test file src/tui/card-lifecycle.test.ts already names the topic 'card lifecycle'.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-204",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 136,
+      "quote": "(an agent never runs `keryx review complete`; that command is for a human in a terminal)",
+      "problem": "The skill states the rule without exception, but the same PR adds `cardAvailable` to the gate (completion-gate.ts:777-778, wired at agent.ts:3501) and the nudge in a session with no review_complete tool deliberately says \"run `keryx review complete`\" (completion-gate.ts:755-758). The skill, the bundled copy and cli-reference.md:4921 (\"never by running `keryx review complete`\") do not mention that fallback, so a model in a readline session gets two opposite instructions: the loaded skill says never, the gate says run it.",
+      "impact": "Contradictory wording is the drift this PR has already corrected several times (D-01, D-03, E-01). The model must choose between the skill and the host message with nothing saying which wins.",
+      "suggested_fix": "Add one clause at SKILL.md:136 and the bundled copy (and the cli-reference sentence): 'when the session has no `review_complete` tool, the host tells you to run the command; follow that message'. Keep the card rule as the default.",
+      "evidence": "SKILL.md:136 (both mirrors are byte-identical, diff -q empty); src/review/completion-gate.ts:754-759, 806, 822, 829.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-205",
+      "severity": "info",
+      "file": "src/tui/card-lifecycle.test.ts",
+      "line": 1,
+      "quote": "// Flow 464 (PR 1052 E-08): the hop between a topic press and the durable record.",
+      "problem": "The header cites a review finding id (E-08) that exists only in one review package's ledger; the test file itself has no way to resolve it. Separately, src/tui/approval-mirror.ts:55-56 evaluates isTopicPress(answer) twice in adjacent lines (`else if (!isTopicPress(answer) && !topicAbort.signal.aborted) ... if (!isTopicPress(answer)) return;`) where one early-return branch would read more directly.",
+      "impact": "Noise comment that will not mean anything after the PR merges; the double evaluation makes the three outcomes of the topic leg (undelivered, ended, press) harder to see.",
+      "suggested_fix": "Drop 'PR 1052 E-08' from the header and keep the behavioural description. In approval-mirror.ts compute `const pressed = isTopicPress(answer)` once and branch on it.",
+      "evidence": "src/tui/card-lifecycle.test.ts:1; src/tui/approval-mirror.ts:53-59.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-07", "disposition": "closed"},
+    {"id": "E-01", "disposition": "closed"},
+    {"id": "E-10", "disposition": "partial"}
+  ],
+  "slices": [
+    {"id": "slice-03", "coverage": "read in full: completion-gate.ts closeStep/nextStep/describeBlockers/decideReviewGate, approval-mirror.ts onTopicEnded, operator-confirmations.ts markUndelivered/remoteApproval/askUnmirroredCard/raceMirroredCard, tui-shell.ts import hunks, card-lifecycle.test.ts, operator-confirmations.test.ts; checked against the files at 77d2eff20", "status": "DONE"},
+    {"id": "slice-04", "coverage": "read in full: SKILL.md hunks (.metaproject and bundled, byte-identical), cli-reference.md:4921 (E-07 fix confirmed), review.ts import hunk, tui-shell.ts import removal and the mirrorApprovalToTopic call site (6090-6126); E-01 sites SKILL.md:782/134/136 and SKILL.detail.md:386/866 checked", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 1}
+}
+```

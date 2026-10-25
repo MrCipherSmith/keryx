@@ -1,0 +1,57 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-02 (wave 2): docs, PRD, the host-question path in src/commands/review-operator.ts, a one-line card change and the 41-test file. The product code is a one-shot CLI act run a handful of times per review; every added cost is O(one package file) or O(journal) per operator act, so there is no hot path and no blocker or major. One minor on the new test file: two tests run several synchronous CLI cold starts inside bun's default 5000 ms test timeout, which the sibling spawn tests avoid with explicit 60 s / 120 s timeouts.",
+  "findings": [
+    {
+      "id": "PERF-W2-001",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": 428,
+      "quote": "test(\"AC7 each flag alone is refused as unknown, and its own flags stay accepted\", () => {\n    for (const flag of [\"--answered-by\", \"--answer-text\", \"--question-text\"]) {\n      const result = complete(flag, \"x\");",
+      "problem": "The test body calls complete() five times (three flags, then --waive and --waive-coverage), and complete() is Bun.spawnSync([\"bun\", CLI, \"review\", \"complete\", ...]): a full cold start of src/cli.ts each time. The test has no third-argument timeout, so it runs under the suite's `bun test --timeout 5000` (ci.yml step 'AC8 full suite (5000 ms, preload)'; bunfig.toml sets none). The sibling tests that spawn the CLI set 60_000 or 120_000 explicitly (review-revision-operand.test.ts:79 and 145, review-blast-radius-base.test.ts:209). AC7 test 1 (line 419) and 'AC6 it is readable with keryx decisions report --json' (line 365) each add one more spawn with the default timeout.",
+      "impact": "Measured on this machine (16 cores, load average 17, bun 1.4.2): one `bun src/cli.ts review complete no-such-review --answered-by x` takes 1.47-1.58 s wall (1.37-1.43 s user); the five exact spawns of this test take 7.6 s in sequence. A bun probe in the scratchpad (`bun test --timeout 1000` over a test that blocks 2.5 s in Bun.spawnSync) reports `(fail) ... [1004ms] this test timed out after 1000ms`, so a synchronous overrun is a failure, not a pass. The same test therefore fails on a developer machine under ordinary parallel load at the 5000 ms limit. CI passed this head once, so the headroom there is real but unknown; a slower or busier runner turns the test into a flake that reads as a product regression in the AC8 job.",
+      "suggested_fix": "Give the spawning tests an explicit timeout like their siblings (`}, 60_000);` on the tests at lines 365, 419 and 428), or cut spawns: test 1 already proves the refusal with all three flags in one spawn, so the loop over three single flags can go or share one spawn, and the --waive/--waive-coverage check can share one spawn with `--waive x --waive-coverage x`.",
+      "evidence": "Diff lines 1366-1392 of slice-02.diff (the `complete` helper and both AC7 tests); replay of the five spawns in a shell: 7.594 s total; probe: bun reports a timeout failure for a sync-blocked test; sibling timeouts: src/commands/review-revision-operand.test.ts:79,87,93,145,151,157 (60_000) and review-blast-radius-base.test.ts:209 (120_000).",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  },
+  "slices": ["slice-02"]
+}
+```
+
+## Performance Review (slice-02, wave 2 of 4)
+
+### Scope
+- PR 1058, head 5974c976823e1a7134723edf3a9140b991246d45, base 33020cf1e32313e0597d2d0761560fad0b60dd7b.
+- Slice-02 diff read in full (1452 lines, 13 file sections): docs and PRD sections, `operator-confirm-review.ts` (one display line), `review-operator.ts` (help text, `recordHostQuestion` and helpers), `review-host-question.test.ts`.
+- Surrounding code read: `src/decisions/journal.ts`, `src/decisions/store.ts` (the journal lock, `readRecords`, `appendRecord`).
+
+### Findings
+- PERF-W2-001 (minor): the new CLI-spawning tests run under the 5000 ms default timeout; five cold starts take 7.6 s here. Details in the JSON.
+
+### Looked at and not a finding (Iron Laws 1 and 2: no named input that reaches a cost)
+- `recordHostQuestion` runs once per operator act, by hand or by an agent after a question. Per call it does: one `estimatePlan` (confirm-plan only, the same call the terminal path makes), one `findHeldFinding` or `operatorDecisionSubject`, one sync `readRunProfile`, one package-file rewrite (same as the terminal path), then `openDecision` and `answerDecision`. A review holds tens of findings at most; there is no loop over data and no N+1.
+- Journal cost: `openDecision` takes the journal lock and reads the whole journal once (`readRecords` in `openLocked`), `answerDecision` reads it once more. That is O(journal lines) twice per act, in one parse pass each. Even at thousands of lines this is milliseconds against a CLI that costs 1.4 s to start. The journal is append-only with no pruning, but the growth source is the existing decisions feature; this diff adds one open and one answer per operator act.
+- Journal lock timeout: a stale lock held by a live reused pid makes `openDecision` wait up to 15 s (`JOURNAL_LOCK_TIMEOUT_MS`) and then throw; the diff catches it and logs a warning after the review record is already written. It needs a lock younger than 60 s whose pid was reused by a live process; no reproducible path in this code, so not reported.
+- Unbounded verbatim text: `answerText` and `questionText` go into `operator-decisions.json` and `plan-confirmation.json` uncapped (the journal copy is capped by `storedOperatorText` at 2000 chars and `oneLine` at 300 chars). The only producer is one command-line argument, which the OS caps near 128 KB; reading and showing it costs microseconds. Observation only.
+- Regex and word scans (`questionText.match(/\d+/g)`, `wordsOf`, `refuseOtherChoice`) are linear in an argument of at most 128 KB; no backtracking pattern.
+- `operator-confirm-review.ts`: the added `hostQuestion` suffix is one string template inside an existing per-decision loop; no new I/O.
+- Docs, PRD and TM-04 sections: no code.
+
+### Clean areas
+N+1 queries, re-renders (no UI code in this slice), hot-path computation, missing indexes (no DB), memory leaks and unbounded in-process collections, bundle imports (`../decisions/service` and `../review/run-profile` are already in the CLI graph), synchronous blocking in async contexts (one small `readRunProfile` read before any write; the CLI is one-shot), pagination, redundant API calls, MobX.
+
+### Routing audit
+graph_used: no (the question is local to one function and the journal files); wiki_used: no (not relevant to a code-level cost review); ctx_used: yes (`keryx ctx rg` for searches); raw_rg_used: no. Raw shell was used only to time a refused CLI call and one bun timeout probe in the scratchpad; no repo file was written.

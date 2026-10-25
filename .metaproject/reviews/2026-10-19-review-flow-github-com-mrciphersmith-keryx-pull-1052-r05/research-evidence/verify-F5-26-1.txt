@@ -1,0 +1,15 @@
+# keryx review verify-run
+finding: F5-26
+command: bun test src/tui/card-lifecycle.test.ts src/tui/operator-confirmations.test.ts src/tui/approval-mirror.test.ts src/remote/mirror-undelivered.test.ts src/review/completion-gate.test.ts src/commands/operator-confirm-review-tools.test.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T06:21:04.686Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.2 (744846f84)
+--- stderr ---
+
+ 156 pass
+ 0 fail
+ 608 expect() calls
+Ran 156 tests across 6 files. [868.00ms]

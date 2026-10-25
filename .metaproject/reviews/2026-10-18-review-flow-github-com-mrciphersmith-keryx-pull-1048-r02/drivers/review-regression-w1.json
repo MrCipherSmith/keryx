@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-regression",
+  "wave": 1,
+  "waves": 5,
+  "slices": [
+    "slice-01"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/slices/slice-01.diff",
+      "bytes": 148955
+    }
+  ],
+  "result": "raw/review-regression-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+}

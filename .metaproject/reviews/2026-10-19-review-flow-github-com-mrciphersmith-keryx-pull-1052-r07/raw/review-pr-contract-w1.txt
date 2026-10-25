@@ -1,0 +1,49 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Two minor documentation-lag findings in slices 02 and 03; no Blocker or Major. PC-701: the review_publish tool description still promises only the start of the body while the card now shows it whole. PC-702: the new 300/200-character limits and plain-single-line refusals, and the removal of list/body clips, are described in no document. No checklist box in pr-context.md is contradicted by slices 02/03.",
+  "checklist_rows": [
+    {"box": "- [ ] CI green", "state": "unticked", "diff": "n/a (CI state; pr-context.md lists typecheck-and-tests and AC8 full suite as pending)", "expectation": "not a diff claim; unverified"},
+    {"box": "- [ ] `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/`", "state": "unticked", "diff": "slices 02/03 hold no test file; the test changes of this delta are in slice-01 (not my slice)", "expectation": "no contradiction in my slices"},
+    {"box": "- [ ] Owner live check from the Telegram topic", "state": "unticked", "diff": "n/a (AC9, owner action)", "expectation": "no contradiction"},
+    {"box": "Docs: TM-04 section, review guides, cli-reference, review skills", "state": "claimed", "diff": "src/commands/operator-confirm-review.ts:178 and :219 (see PC-701, PC-702)", "expectation": "docs describe the card content the delta changed"}
+  ],
+  "findings": [
+    {
+      "id": "PC-701",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 178,
+      "quote": "the operator sees the target, the verdict and the start of the body first.",
+      "problem": "The review_publish tool description (model-facing) still says the operator sees \"the start of the body\". The delta (slice-03, hunks @@ 188,207 / 215,218) removes BODY_PREVIEW_LINES/BODY_PREVIEW_CHARS and the 8-line preview; the card at :219 now reads `body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:` followed by every body line, and :61 says \"shown whole line by line\". The description was not moved with the behaviour.",
+      "impact": "A model, or any reader of the tool list, is told the operator sees only a preview, and the description contradicts the card. No runtime failure.",
+      "suggested_fix": "Change the description to say the operator sees the target, the verdict and the whole body, line by line.",
+      "evidence": "operator-confirm-review.ts:178 (description) against :219 (card line `shown whole:`) and :61 (comment `shown whole line by line`) at head 5444f96e4; slice-03 hunks @@ 188,207 and @@ 215,218 remove the preview constants and lines.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-702",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": 9,
+      "quote": "a `review_complete` card in keryx shell shows the reviewed head SHA, the evidence level and every waiver with its operator quote",
+      "problem": "PR body claim: \"Docs: TM-04 section, review guides, cli-reference, review skills.\" The delta adds model-visible behaviour described in no document: operator-confirm-review.ts:664-669 (MAX_DISPOSITION_FINDING_CHARS = 200, MAX_DISPOSITION_EVIDENCE_CHARS = 300, HIDDEN_IN_CARD) and :377 (`reason ${HIDDEN_IN_CARD}`), :708-713 (refusals `dispositions[i]: evidence is N characters; the card shows it whole, so the limit is 300`, `finding is longer than 200 characters`, and the control/escape/newline/bidi/zero-width refusal). The same hiddenInCard refusal now applies to the reason of review_waive_mutation, review_override_reviewers and review_decide_premise. Publish body, reply bodies and file/mutant/reviewer lists lose their clips (slice-03 removes LISTED_FILES, BODY_PREVIEW_*, REPLY_PREVIEW) and are shown whole.",
+      "impact": "A reader or an agent learns the 300/200-character limit and the plain-single-line rule only from a refusal. Nothing in the docs is contradicted; the limits are undocumented. Same class as the open F5-08 (docs lag the card's dispositions input).",
+      "suggested_fix": "Extend CHANGELOG.md:9, the cli-reference review-acts paragraph and TM-04 section 6a with one clause: the card shows the stored text whole, refuses disposition evidence over 300 characters, a finding id over 200, and text holding control, escape, newline, bidi or zero-width characters.",
+      "evidence": "keryx ctx rg for `dispositions` over CHANGELOG.md, docs/docs/cli-reference.md, TM-04 and review-orchestrator/SKILL.md finds no mention of the limits or refusals; CHANGELOG.md:9 and SKILL.md:284 say only that the operator sees each disposition on the card.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "questions": [],
+  "unverified": [
+    "CI state (typecheck-and-tests, AC8 full suite pending in pr-context.md) not settled from the diff.",
+    "Slice-01 test files were not in my slices; whether the delta's tests cover the new refusals is for review-testing-practices."
+  ]
+}
+```

@@ -1,0 +1,142 @@
+STATUS: DONE
+
+# Style Review Report (slice-01, docs)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Slice-01 is documentation, flow records, skills prose, CHANGELOG and the version bump. No major style problem. The wording is consistent on the main points (card names, `confirmedVia: remote-card`, `pressedBy`/`pressedAt`, "Telegram mirror not delivered", "never send the operator to a terminal"). The remaining issues are minor or info: one hard-to-read sentence in limitations.md, inconsistent annotations in the cli-reference command block, the same sentence repeated with drifting wording across five docs, and small CHANGELOG and flow-record inconsistencies.
+
+The repo has no em-dash or emoji rule for docs (`keryx ctx rg` over `.metaproject/rules` and `docs/docs` found none), so nothing is flagged on that.
+
+Checked and found fine:
+- TM-04 §6a is accurate against `operatorConfirmTool.invoke` (`src/commands/operator-confirm-tools.ts`): `pending.delete(token)` runs before the allowed-id and TTL checks, so "Each refusal leaves the token spent" is true.
+- "Telegram mirror not delivered" matches `MIRROR_NOT_DELIVERED` in `src/remote/shell-bridge.ts:290`.
+- `docs/docs/commands-by-task.md` is generated from `src/standard/help-groups.ts` (the page says so), so its wording was not reviewed here.
+- The machine-written gdgraph files in the slice (`.provenance.json`, `summary.md`) were not style-reviewed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Docs slice is consistent on the core terms. Five minor/info readability and consistency issues, no major. No em-dash or emoji convention exists in the repo docs, so none flagged.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/limitations.md",
+      "line": null,
+      "quote": "A Telegram or web card for these approvals (the review acts",
+      "problem": "A roughly 70-word parenthetical was inserted mid-sentence. The sentence says a Telegram or web card for these approvals 'is not built', and the parenthetical then says the review acts 'already have one'. The reader has to rebuild the sentence after the aside. The aside also sits just before a second, existing parenthetical that opens a few lines later. 'see decision TM-04' is plain text, while the other pages link their references.",
+      "impact": "The limitation reads as self-contradictory on a first pass. A reader who skims it takes away that review cards do not exist.",
+      "suggested_fix": "Keep the original sentence unchanged. Add a separate sentence or short paragraph after the existing parenthetical, with a link: 'The review acts review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage and review_complete already have a Telegram card in a shell driven from a topic. A press proves an allowed account pressed this card, not that no one else holds the bot token or can write the stores as the same OS user ([TM-04 section 6a](../decisions/keryx-harness/TM-04-operator-confirmation-cards.md)).'",
+      "evidence": "docs/docs/limitations.md, section 'Remote approvals apply only where tools are registered', the sentence beginning 'A Telegram or web card for these approvals'. The slice diff adds the parenthetical inside the original sentence.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "(terminal; card review_waive_mutation)",
+      "problem": "In the review synopsis block the diff relabels three lines with two different forms: confirm-plan and decide-premise become '(fallback outside keryx shell; card ...)', and complete becomes '(card review_complete)'. The waive-mutation and override-reviewers lines directly beside them keep the old '(terminal; card ...)'. The same block now has three annotation styles for the same relation (CLI command and its card).",
+      "impact": "The reader cannot tell whether waive-mutation and override-reviewers differ in kind from confirm-plan, when they do not. The prose line below this block says the agent never sends the operator to a terminal for any of these cards, so '(terminal; ...)' is stale for them.",
+      "suggested_fix": "Use one form across the block, for example '(fallback outside keryx shell; card <name>)', on the confirm-plan, waive-mutation, override-reviewers, decide-premise and complete lines (and on the other lines in this block that name a card, if any).",
+      "evidence": "docs/docs/cli-reference.md, the ```text synopsis block that holds the new '(fallback outside keryx shell; card review_confirm_plan)' and '(card review_complete)' lines. The two unchanged lines 'keryx review waive-mutation ...' and 'keryx review override-reviewers ...' still end in '(terminal; card review_...)'.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "line": null,
+      "quote": "(`uphold` or `dismiss`). You never",
+      "problem": "The edited line grew from about 90 to about 290 characters while the rest of the paragraph stays hard-wrapped. The insertion also separates '(`uphold` or `dismiss`)' from 'answers', so it now trails 'or `keryx review decide-premise` outside it' and reads as if it qualified the terminal command only.",
+      "impact": "Harder to read and to diff. The card path loses its `uphold` or `dismiss` pairing in the sentence.",
+      "suggested_fix": "Re-wrap the paragraph at the original width and keep the parenthetical next to the verb: 'operator, who answers `uphold` or `dismiss` with the `review_decide_premise` card in keryx shell (never send them to a terminal) or with `keryx review decide-premise` outside it. You never ...'.",
+      "evidence": "The diff hunk of review-premise/SKILL.md @@ 79,119 replaces one wrapped line with a single long line ending in '(`uphold` or `dismiss`). You never'.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": null,
+      "quote": "Only you can waive an item, with your own words recorded beside the time.",
+      "problem": "The same clause 'an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`' and the sentence 'If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell' are pasted into two places in this guide (the decide-premise section and the waive section). The same rule is a third paraphrase in cli-reference.md ('only from an allowed Telegram user id, for this card, once, within one hour') and a fourth in autonomous-review.md ('one allowed user, once, within an hour'). The wording drifts: 'allowed Telegram user', 'allowed Telegram user id', 'one allowed user'; 'one hour', 'within an hour', '1-hour token'.",
+      "impact": "Duplicated normative text drifts when the token rules change (TTL, id check). Five docs would need the same edit.",
+      "suggested_fix": "State the rule once, in one place (for example the waive section here, or TM-04 section 6a), with the exact terms 'allowed Telegram user id', 'once' and 'one hour'. In the other places write one short sentence and link to it.",
+      "evidence": "review-with-a-record.md: the hunks at @@ 583,633 (decide-premise) and @@ 714,754 (waive) carry the same parenthetical and the same fallback sentence. cli-reference.md @@ 4873 and autonomous-review.md @@ 15 restate the rule in different words.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": null,
+      "quote": "fail until you answer. You decide it with the `review_decide_premise` card.",
+      "problem": "The guide is hard-wrapped at about 80 columns. The new text is written as single lines of 300 to 600 characters: the decide-premise line above, the waive line ('Only you can waive an item, ...'), and the shorter edits around them.",
+      "impact": "Against the surrounding wrapped prose these lines are hard to read in a diff and an editor, and a one-word edit shows as a whole-line change.",
+      "suggested_fix": "Wrap the new sentences to the file's existing width. If F-004 is applied, most of the long lines go away.",
+      "evidence": "review-with-a-record.md hunks @@ 583,633 and @@ 714,754 against their unchanged neighbours.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "### Review confirmations answered in Telegram",
+      "problem": "Two small deviations from the surrounding entries. The neighbouring headings carry the flow and PR, for example '(flow 462, PR #1048)' and '(PR #1035)', and this one does not. The new '- **Docs:**' label is the only one of its kind in the file; the rest use Added, Changed and Fixed.",
+      "impact": "Minor loss of traceability from the changelog to the flow and PR. A fourth label is an unrecorded convention.",
+      "suggested_fix": "Heading: '### Review confirmations answered in Telegram (flow 464, PR #1052)'. Move the docs line under '**Changed:**', or keep Docs if it is intentional and say so in the changelog conventions.",
+      "evidence": "CHANGELOG.md: the new [0.3.124] section against [0.3.123]; `keryx ctx rg '^- \\*\\*Docs' CHANGELOG.md` finds exactly one match, the new line.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md",
+      "line": null,
+      "quote": "Status: draft for operator approval",
+      "problem": "description.md and plan.md (same phrase in both) still say 'draft for operator approval', while flow.json in the same PR records the flow as frozen ('frozen', '10 criteria; checksum recorded') and started, with status 'in-progress'.",
+      "impact": "The two records disagree about the flow's state. A reader of the markdown alone takes an approved and started flow for a draft.",
+      "suggested_fix": "Update the status line in description.md and plan.md to match flow.json (for example 'Status: approved and frozen 2026-10-18'), or drop the line.",
+      "evidence": "`keryx ctx rg -c 'draft for operator approval' .metaproject/flows/464-2026-10-18-helyx-operator-confirm` lists description.md and plan.md; flow.json history has 'frozen' and 'started'.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 3 }
+}
+```
+
+## Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Base: `062aa9c36484e7b7f6b8a1dd6140671330646e66`, head `d2cb377f59f7f9c8553d9f377f99360bff3f6328`
+- Scope mode: diff, slice-01 (docs, flow records, skills prose, CHANGELOG, package.json)
+
+## Stats
+- major: 0
+- minor: 4
+- info: 3
+
+## Positive Notes
+- Card names, the record fields and the fallback text are used the same way across TM-04, cli-reference, the guides, the skills and the CHANGELOG.
+- TM-04 §6a states the limits precisely and does not claim more than the code does.
+- The orchestrator SKILL rewrites keep one rule everywhere: in keryx shell call the card, outside it give the terminal command.

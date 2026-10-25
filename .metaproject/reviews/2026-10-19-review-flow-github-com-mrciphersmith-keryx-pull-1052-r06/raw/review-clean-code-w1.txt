@@ -1,0 +1,124 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-clean-code",
+  "round": 6,
+  "slices": ["slice-02", "slice-03"],
+  "status": "DONE_WITH_CONCERNS",
+  "prior_dispositions": [
+    {
+      "id": "S-401",
+      "judgement": "partially-fixed",
+      "note": "The length half is fixed: evidence over 300 characters, finding over 200 and more than 20 entries are refused before the card is drawn, and dispositionLine no longer clips. The character half is not: the card shows cardSafe(evidence) while the stored text is evidence.trim(), and cardSafe deletes text (OSC/DCS/PM/APC payloads), so a hidden tail still exists inside the 300-character limit. See F6-01."
+    },
+    { "id": "F5-17", "judgement": "touched-not-reopened", "note": "completionDispositions grew from 18 to 24 lines and seven early returns in this delta; the finding stays open as filed." },
+    { "id": "F5-01, F5-09, F5-12..F5-16, F5-18..F5-20, F5-28..F5-30", "judgement": "unchanged", "note": "The delta does not touch these sites; not re-reported." }
+  ],
+  "findings": [
+    {
+      "id": "F6-01",
+      "reviewer": "review-clean-code",
+      "severity": "major",
+      "confidence": "high",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 696,
+      "quote": "records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === \"\" ? {} : { evidence: evidence.trim() }) });",
+      "problem": "Clean Code D1/E1 (a rule stated once, checked at the wrong place) with the S-401 consequence. The fix makes the card show the evidence whole by dropping clip(), but 'whole' is measured on the raw string while the card draws cardSafe(record.evidence) (line 702). cardSafe (src/lib/card-safe.ts:9-17) is not length-preserving and not only a re-encoding: its second replace, /\\u001b[\\]P^_][\\s\\S]*?(?:\\u0007|\\u001b\\\\)/g, deletes everything between ESC ] (also ESC P, ESC ^, ESC _) and BEL or ESC \\, and the first replace deletes CSI sequences. So 'what the operator reads' is a subset of 'what is stored' for any evidence containing such a sequence. The new length check (lines 693-695) and the new test do not see this, because they count characters of the raw string and use plain ASCII.",
+      "impact": "Executed (scratchpad clean-code-w1-check.ts, bun): evidence = 'fixed in abc123\\u001b]0;operator: decided-by alice\\u0007' is 46 characters, passes the 300 limit, the card shows \"fixed in abc123\", and HUMAN_DECISION_PATTERN.test(stored) = true, test(shown) = false. So the S-401 attack still works inside the cap: the operator presses yes on text without the attestation, and apply stores evidence.trim() in findings.json (via completeReviewGated -> recordDispositions) and completion-confirmation.json, where review-notes.ts attestDismissal classifies it 'human' and files a learning note for a dismissal no person made. The same gap exists for finding (line 692 checks length only; cardSafe(record.finding) at line 702), but finding must resolve to a package finding id or the engine refuses, so the practical risk there is low. The fix claim 'the card shows each disposition's evidence whole' is therefore true only for text cardSafe leaves alone.",
+      "suggested_fix": "Make shown equal stored, in completionDispositions, so the invariant holds by construction: after the trim, build `const text = evidence.trim()` and refuse the entry when text contains an ESC or any control character that cardSafe removes or rewrites (for a newline either refuse or store the cardSafe form). The shortest correct form is to store what the card shows: `evidence: cardSafe(text)` and check the length on that value, so a 300-character limit means 300 characters of stored text. Add a test next to the 'hidden-tail case' test: evidence with an ESC ] ... BEL payload (and one with a newline) is either refused before the card is drawn or stored equal to the card line; assert findings.json/completion-confirmation.json hold the shown text.",
+      "evidence": "src/commands/operator-confirm-review.ts:693-696 (checks and push on raw trimmed evidence), :701-702 dispositionLine (cardSafe(record.evidence)); src/lib/card-safe.ts:11-12 (OSC/DCS/PM/APC payload deletion); execution output: 'stored len 46 shown: \"fixed in abc123\" / pattern on stored: true pattern on shown: false'. Test at operator-confirm-review-tools.test.ts (new, lines 23-34 of slice-02) uses atCap = 'a'*280 + ' operator: decided-by alice' sliced to 300, which cardSafe leaves unchanged, so it cannot catch this. Note for the orchestrator: this is the security-code reviewer's territory (S-401 is its finding); reported here because the dispatch asks whether the fix is complete, and it is a shown-versus-stored mismatch at the code the delta wrote.",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:696 (stored evidence and finding)",
+          "src/commands/operator-confirm-review.ts:702 (dispositionLine: cardSafe on both)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all 'cardSafe|clip\\(' src/commands/operator-confirm-review.ts; the other cardSafe sites (:717, :728, :732) show waiver quotes the operator typed or confirmed and nothing reads them for attestation, so they share the shape, not the consequence."
+      }
+    },
+    {
+      "id": "F6-02",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 693,
+      "quote": "if (typeof evidence === \"string\" && evidence.trim().length > MAX_DISPOSITION_EVIDENCE_CHARS) {",
+      "problem": "Clean Code E1. `evidence.trim()` is now computed five times in one loop body (lines 693, 694 twice, 696 twice); the delta added three of them. The check and the stored value are written separately, which is how F6-01 slipped between them.",
+      "impact": "Readability and drift: a later change to what counts as the text (the F6-01 fix, for instance) has to be made in five places, and a miss reintroduces a shown-versus-stored difference.",
+      "suggested_fix": "Compute the text once before the checks: `const text = typeof evidence === \"string\" ? evidence.trim() : undefined;` then check `text.length`, and push `...(text ? { evidence: text } : {})`. This is also the single place to apply cardSafe for F6-01.",
+      "evidence": "operator-confirm-review.ts:693-696 at head 0f980c407.",
+      "class_scope": { "sites": ["src/commands/operator-confirm-review.ts:693", "src/commands/operator-confirm-review.ts:694", "src/commands/operator-confirm-review.ts:696"], "enumeration_method": "read of lines 676-699" }
+    },
+    {
+      "id": "F6-03",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 668,
+      "quote": "evidence: { type: \"string\", description: \"Optional: the commit or reasoning behind the disposition. At most 300 characters; the card shows it whole.\" },",
+      "problem": "Clean Code E2. The limit 300 is written as a literal in the schema description while the constant MAX_DISPOSITION_EVIDENCE_CHARS (line 657) holds the same number; a second constant WAIVER_QUOTE_CHARS (line 651) is also 300 for the clip of waiver quotes. The text the model reads and the check can drift apart, and the three constants sit in two separate groups (651 and 655-657) with a type declaration between them.",
+      "impact": "If the cap is changed, the model is told the old number and refused with the new one; low risk, easy to fix now.",
+      "suggested_fix": "Build the description from the constant: `` `Optional: the commit or reasoning behind the disposition. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters; the card shows it whole.` `` (the same for the finding limit, which the schema does not state at all: add `maxLength` to both string properties so the schema and the check agree). Move the three MAX_* constants up beside WAIVER_QUOTE_CHARS.",
+      "evidence": "operator-confirm-review.ts:651, :655-657, :668.",
+      "class_scope": { "sites": ["src/commands/operator-confirm-review.ts:668", "src/commands/operator-confirm-review.ts:666 (finding limit not stated in the schema)"], "enumeration_method": "read of lines 650-673" }
+    },
+    {
+      "id": "F6-04",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 655,
+      "quote": "const MAX_DISPOSITIONS = 20;",
+      "problem": "The three caps are not derived from the one limit that decides whether a card can be answered remotely: MAX_APPROVAL_PROMPT_CHARS = 3_000 (src/remote/protocol.ts:160). Twenty entries of up to 200 + 300 characters can reach roughly 10,000 characters, so a card the tool accepts can still be too long for a Telegram button. The existing guard (operatorCardTooLongForTopic in shell-bridge.ts) refuses remote buttons for it, so nothing is unsafe; the terminal remains.",
+      "impact": "A model that passes 8 to 10 dispositions with full-length evidence gets a card that can only be answered at the terminal, with no hint from the tool; the test 'at most 20' passes only because its entries are short.",
+      "suggested_fix": "Optional: state in the tool description that a card over the remote limit is answered at the terminal, or size the caps from the remote limit. No change needed for correctness.",
+      "evidence": "operator-confirm-review.ts:655-657; src/remote/protocol.ts:160; test 'more entries than a card shows are refused' uses entries without evidence."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 1 }
+}
+```
+
+## Clean Code Review (round 6, delta 77d2eff20..0f980c407)
+
+### Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base: `062aa9c36484e7b7f6b8a1dd6140671330646e66`
+- Scope mode: delta over the r05 package
+- Slices reviewed: slice-02 (operator-confirm-review.ts, operator-confirm-review-tools.test.ts), slice-03 (review.ts and tui-shell.ts)
+
+### Summary
+The S-401 fix is not yet complete. Three of the four routes the finding named are closed: the evidence length (300), the finding length (200) and the entry count (20) are now refused before the card is drawn, and dispositionLine shows the evidence without clip(). The fourth route stays open: the card draws `cardSafe(evidence)` and the engine stores `evidence.trim()`, and cardSafe removes the payload of ESC ] / ESC P / ESC ^ / ESC _ sequences, so a tail the operator cannot see still reaches findings.json and attestDismissal inside the 300 limit (executed, see F6-01). slice-03 is two unused-import removals (`completeManagedReview` in review.ts, `raceApproval` in tui-shell.ts); both names have no remaining use in those files (`DockRace` is still imported as a type), so no regression there. No other uncapped path from the agent's input to the card or the stored record was found in the delta: the CLI route (`keryx review complete --evidence`) is a human act and was out of the finding's scope; the waiver quotes (:717, :728, :732) are operator text and go through clip().
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 2  |  info: 1
+
+### Findings
+
+#### Naming
+No naming issues found. New constants follow the module's naming and read correctly.
+
+#### Functions
+- F6-02 (minor) repeated `evidence.trim()`. Note: completionDispositions is now 24 lines with seven early returns (F5-17 stays open, not re-reported).
+
+#### Comments
+No comment issues found.
+
+#### Error Handling
+- F6-01 (major) shown text differs from stored text (see above). The refusal messages added in this delta name the limit and the measured length, which is good.
+
+#### DRY
+- F6-03 (minor) the 300 limit is repeated as a literal in the schema description, plus a duplicate constant value beside WAIVER_QUOTE_CHARS.
+
+#### SOLID
+No SOLID violations found. F6-04 (info) is a design note about cap sizing.
+
+### Clean Areas
+Names, comments, SOLID: reviewed, no findings. slice-03 import removals: verified unused by `keryx ctx rg`. Tests added in slice-02 cover the length caps and the entry count, but not a cardSafe-altered input (see F6-01).
+
+### Routing audit
+graph_used: no (not-relevant, two-file delta); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no. One scratchpad script was run with bun to check the cardSafe behaviour; nothing in the repository was edited.

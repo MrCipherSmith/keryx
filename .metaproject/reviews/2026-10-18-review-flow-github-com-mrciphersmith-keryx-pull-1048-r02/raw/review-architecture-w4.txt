@@ -1,0 +1,85 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice 04 is almost entirely tests (e2e, resolver, schema, proof, references-config/section, TUI inspector, skill-sync) plus a thin pass-through of `taskText` through the harness port, adapter, operation descriptor and MCP projection. The layering holds: the adapter only forwards to resolveProjectContext, the port gains one optional field, the MCP case and the operation descriptor each forward it, and the TUI test targets the feed/format functions through injected seams. No layer violation, dependency-direction problem or module-boundary breach is introduced. Three small maintenance-cost items: a test-local copy of an exported production predicate, two test files asserting the same bundled-to-managed copy invariant from separately maintained path tables, and task_text normalisation written out in two surfaces.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "line": null,
+      "quote": "const isPromoted = (entry: ContextEntry): boolean => entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+      "problem": "The e2e test re-declares the predicate that decides which entries are 'promoted by a condition'. The production module already exports an identical `isPromoted` from src/gdskills/reference-proof.ts, and the same test file already imports `distinctWords` from that module. The definition of 'promoted' (tier plus the `condition:` reason prefix) is therefore stated in two places.",
+      "impact": "If the resolver's reason format or the promotion rule changes, the production predicate and this local copy can diverge. The e2e fixture builder (`buildResult`) would then cite proofs for a different set of entries than the validator obliges, and scenario failures would point at the fixture rather than at the changed rule. Only a maintenance cost today: the two definitions agree at this head.",
+      "suggested_fix": "Import `isPromoted` from \"./reference-proof\" next to `distinctWords`. If the intent is an independent oracle, keep the local copy but say so in a comment above it.",
+      "evidence": "reference-proof.ts at head: `export function isPromoted(entry: ContextEntry): boolean { return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\"); }`. The e2e test imports `import { distinctWords } from \"./reference-proof\";` and defines its own `isPromoted` at the harness section.",
+      "confidence": 0.6,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/output-schema.test.ts",
+      "line": null,
+      "quote": "test(\"the synced copies carry the same schema as the bundled source\", () => {",
+      "problem": "Two new test files assert the same invariant, 'the managed copies of the two output-contract schemas are byte-identical to the bundled source', each from its own hand-written path table. output-schema.test.ts keeps `SCHEMA_SOURCES` (source plus two copies per producer). skill-sync.test.ts keeps `schemaFiles` and `contractCopies`, which name the same four paths for the task-implementer and tests-creator output schemas.",
+      "impact": "Adding a third producer, or moving a contract copy, needs edits in both tables. A table that is missed still passes while the other one covers the file, so the drift is silent. The sync rule for these schemas has no single owner.",
+      "suggested_fix": "Keep the byte-identity assertions in one file (skill-sync.test.ts already owns the bundled-to-managed mapping for instructions and schemas) and keep output-schema.test.ts to the schema-content checks. Alternatively export the path table from one file and import it in the other.",
+      "evidence": "output-schema.test.ts: `copies: [\".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json\", \".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json\"]`. skill-sync.test.ts: `\"orchestration/task-implementer/output-contract.schema.json\"` in `schemaFiles`, and `[\"orchestration/task-implementer/output-contract.schema.json\", \"task-implementer-output-contract.schema.json\"]` in `contractCopies`. Both resolve to the same managed files and assert `toBe(read(source))`.",
+      "confidence": 0.7,
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/mcp/metaproject-tools.ts",
+      "line": null,
+      "quote": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+      "problem": "The rule 'a blank task_text is dropped, a non-blank one is passed unchanged' is written out twice: in the operation descriptor's `invoke` (src/harness/tool/metaproject-operations.ts) and in the MCP structured case of `skills_resolve_context`. The change extends an existing pattern, since `task_type` and `max_bytes` are already normalised in both places.",
+      "impact": "Both surfaces agree today (the unit test covers the operations side only). A later change to the rule, such as trimming the text or a length cap, has to be made twice, and the MCP side has no test of its own for the blank case.",
+      "suggested_fix": "No change required for this PR. If the normalisation grows, move the input parsing for `skills_resolve_context` into one exported helper that both the descriptor and the MCP case call.",
+      "evidence": "operations.ts: `const taskText = typeof input.task_text === \"string\" && input.task_text.trim() !== \"\" ? input.task_text : undefined;`. metaproject-tools.ts: `const taskText = stringParam(params, \"task_text\");` followed by the `trim() !== \"\"` check. The test 'skills_resolve_context passes task_text to the port as taskText and drops a blank one' exercises only `op(...).invoke`.",
+      "confidence": 0.5,
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-04"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Architecture Review (slice-04)
+
+### Review Scope
+- Merge-base: 1658f77d374b2d20189a55eaf44b95d64768d6b6, head d6267d4a5099f39b74e86a71e5c8f61ca47aa63d
+- Stack detected: generic-ts (CLI, harness tool boundary, MCP, OpenTUI)
+
+### Summary
+The slice is test-heavy. Its production edits are the `taskText` pass-through (port, adapter, operation descriptor, MCP case), the `undeclared` field in the mirrored output schema, the `references` entry in the subcommand list, and the `/projectctx refs` help text. Dependency direction is intact and no new cross-layer import appears in the diff.
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+F-001, F-002 (test-side duplication), F-003 (info).
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A.
+
+### Note for the owners of the TUI wiring slice (not a finding of this slice)
+`createProjectContextFeed` starts a 5 s poll when it is created and exposes `stop()`. In src/tui/tui-shell.ts the feed is created at `const projectContextFeed = createProjectContextFeed({` and, by a search of `projectContextFeed` in that file, only `current`, `subscribe` and `reload` are used; no `stop()` call was found. The interval is unref'd, so it does not hold the process open, and the diff of this slice does not touch tui-shell.ts, so it is not reported as a finding here.

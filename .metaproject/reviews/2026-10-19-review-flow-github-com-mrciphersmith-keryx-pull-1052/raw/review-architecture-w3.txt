@@ -1,0 +1,128 @@
+STATUS: DONE_WITH_CONCERNS
+
+Review: review-architecture, wave 3 of 4, slice-03, PR 1052 (flow 464), head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66.
+Stack detected: generic TypeScript (Bun CLI/TUI), layered as lib -> review -> commands -> tui, with remote and harness beside them.
+Read-only: only Read and `keryx ctx rg` / `keryx ctx run` were used; no test was run, so the one claim about a test (F-002) rests on counting the registry, not on a run.
+Known slice-02 findings not re-reported: the card re-implements completion preconditions; the sidecar is written after the close.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Dependency direction in slice-03 is sound: the new review/complete-gated.ts is a single shared entry that both `keryx review complete` (commands/review.ts) and the review_complete card (commands/operator-confirm-review.ts) call, review/ never imports commands/, and unattended.ts keeps its list-not-import rule. The three bundled SKILL files are byte-identical to their .metaproject/skills/gdskills projections. cardPressFields is the single helper inside src/review/, but the same who-pressed shape is spelled by hand in five places outside it, and one of them (estimate.ts PlanConfirmation) duplicates a type that plan-confirmation.ts already builds from CardPress. One real defect follows from adding review_complete to OPERATOR_CONFIRM_TOOL_NAMES: the roster test still asserts 18 tools while the registry now holds 19.",
+  "slices": [
+    { "id": "slice-03", "coverage": "all hunks of src/review/*, src/remote/*, src/harness/*, src/learning/decisions.ts, src/trigger/unattended.ts, src/standard/help-groups.ts and the three bundled SKILL files read; callers in src/commands, the registry and the roster test read outside the hunks", "status": "DONE" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "repo": null,
+      "file": "src/review/estimate.ts",
+      "line": 199,
+      "quote": "pressedBy?: number | undefined;",
+      "problem": "The who-pressed shape (`pressedBy`, `pressedAt`) and its spread helper live in src/review/types.ts (`CardPress`, `cardPressFields`), but it is re-declared by hand outside that module in estimate.ts (PlanConfirmation), learning/decisions.ts (DecisionConfirmation), harness/external/write-land.ts (the `confirmation` input type and the decision-file spread), commands/operator-confirm-other.ts `record()`, and flow/service.ts. estimate.ts is the sharpest case: it is inside src/review/ where the helper is importable, and it hand-writes the two fields on `PlanConfirmation` while plan-confirmation.ts defines a second `PlanConfirmation` as `{...} & CardPress` and bridges the two with an `as PlanConfirmation` cast in `readPlanConfirmation`. Two type definitions of one stored record, extended in two different styles in the same PR.",
+      "impact": "The invariant 'recorded only for confirmedVia remote-card' is enforced in one place (operatorConfirmTool, commands/operator-confirm-tools.ts:222-228) and the record shape is then free to drift per writer: a rename or a third field (for example a chat id) must be made in six or more files, and the cast in plan-confirmation.ts hides a divergence the compiler would otherwise report. The reason outside-review sites do not use the helper is dependency direction: learning/ and harness/ should not import a review/types module, so the helper is in the wrong layer for its consumers.",
+      "suggested_fix": "Move `CardPress` and `cardPressFields` to a neutral module (for example src/lib/card-press.ts) and re-export them from src/review/types.ts so existing imports keep working. In estimate.ts declare `PlanConfirmation = {...} & CardPress` (or have plan-confirmation.ts re-export estimate.ts's type and drop its copy and the cast). In learning/decisions.ts and write-land.ts use the shared type and `cardPressFields` instead of the hand-written optional pairs.",
+      "evidence": "src/review/types.ts:92-100 defines CardPress and cardPressFields. `keryx ctx rg 'pressedBy|pressedAt' src` (non-test) shows hand-written pairs at src/review/estimate.ts:199-200, src/learning/decisions.ts:33-34, src/harness/external/write-land.ts:173 and :229, src/commands/operator-confirm-other.ts:113-114, src/flow/service.ts:1681-1682, src/flow/confirm-token.ts:76-77 and :140. src/review/plan-confirmation.ts:33 has `} & CardPress;` and :~58 `return estimateReadPlanConfirmation(packageDir) as PlanConfirmation | undefined;`.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "cardpress-shape-spelled-by-hand",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "repo": null,
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "line": 17,
+      "quote": "expect(NAMES).toHaveLength(18);",
+      "problem": "The diff adds `review_complete` to OPERATOR_CONFIRM_TOOL_NAMES (src/trigger/unattended.ts) and to the registry (buildReviewConfirmSpecs now returns 10 specs, otherConfirmSpecs 9, so operatorConfirmSpecs() has 19). The roster test that guards exactly this coupling still asserts 18 tools and was not touched by the PR (it is not in the PR's changed-file list). `operatorConfirmToolNames()` therefore has length 19 and the first test in the file fails; the second test (list equals registry) would pass, which is why the guard comment in unattended.ts reads as satisfied while the file is red.",
+      "impact": "A failing test at head in the file that is the only mechanical check keeping the unattended exclusion list in step with the operator-gate registry. If CI runs it the PR cannot merge; if the failure is waved through, the guard loses its authority. Not executed here, so the failure is inferred from the counts below.",
+      "suggested_fix": "Change the title and assertion in operator-confirm-rosters.test.ts to 19 (or, better, assert `NAMES.length === OPERATOR_CONFIRM_TOOL_NAMES.length` and drop the literal so the next gate does not need an edit here).",
+      "evidence": "src/commands/operator-confirm-rosters.test.ts:16-17 `test(\"there are 18 operator card tools ...\")` / `expect(NAMES).toHaveLength(18)`. Registry count: src/commands/operator-confirm-review.ts:781-793 lists chunksAnswer, publish, waiveCoverage, waiveReadiness, decisionSpec x2, reply, confirmPlan, decidePremise, complete = 10; src/commands/operator-confirm-other.ts:729-740 lists flow_confirm, external_apply, learn_accept, learn_promote, learn_graduate, schedule x4 = 9. src/trigger/unattended.ts OPERATOR_CONFIRM_TOOL_NAMES now has 19 entries (18 at base plus `review_complete`). `git diff --name-only base..HEAD -- src/commands src/trigger` does not list operator-confirm-rosters.test.ts.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "roster-test-count-stale",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-rosters.test.ts:16 (test title)",
+          "src/commands/operator-confirm-rosters.test.ts:17 (assertion)"
+        ],
+        "enumeration_method": "`keryx ctx rg -n --all '\\b18 (operator|card|gate|tools)|toHaveLength\\(1[89]\\)' src docs/docs docs/decisions` returned this one site for the registry count; the other hits for 'eighteen' are unrelated comments about index tools."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "repo": null,
+      "file": "src/review/complete-gated.ts",
+      "line": 17,
+      "quote": "return completeManagedReview(cwd, ref, options);",
+      "problem": "The extraction is the right shape (one function, two callers: commands/review.ts and the review_complete card), but the run-profile and narrowed-routing gates sit in the wrapper while `completeManagedReview` stays exported and ungated against them. The wrapper's own doc says 'both meet the same gates', which holds only for callers that go through it.",
+      "impact": "Today the wrapper is the only non-test caller, so nothing bypasses it. A future caller (a third card, an automatic-review path) that imports `completeManagedReview` directly would skip the two gates silently.",
+      "suggested_fix": "Either call the two refusal checks from inside `completeManagedReview` (so the exported function cannot be used ungated), or stop exporting `completeManagedReview` from managed.ts and export only `completeReviewGated`.",
+      "evidence": "src/review/complete-gated.ts:11-18; `keryx ctx rg -n --all 'completeManagedReview'` shows the definition at src/review/managed.ts:950 and one call, complete-gated.ts:17.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "complete-gates-in-wrapper-only",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "repo": null,
+      "file": "src/harness/tool/builtin/interactive-tools.ts",
+      "line": 67,
+      "quote": "confirmationPressedBy?: number;",
+      "problem": "The harness tool context gains two loose optionals, `confirmationPressedBy` and `confirmationPressedAt`, next to `confirmationVia`. The rule 'set only with confirmationVia: remote' is a comment, not a type, and a Telegram user id (a channel concept) now sits in the harness core context. The consumer (operatorConfirmTool) re-checks them at runtime and fails closed, so this is not a defect, only an unenforced coupling.",
+      "impact": "Low. A tool that reads one of the two fields without the other, or reads them on a local confirmation, gets undefined or a stale value without a compile error.",
+      "suggested_fix": "Carry them as one optional object (for example `confirmationPress?: { by: number; at: string }`) set together with `confirmationVia: \"remote\"`, or make `confirmationVia` a discriminated union that holds the press.",
+      "evidence": "src/harness/tool/builtin/interactive-tools.ts:61-69 (new fields and comment); consumer src/commands/operator-confirm-tools.ts:207-221 checks both for undefined and refuses.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "press-fields-loose-in-harness-context",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "repo": null,
+      "file": "src/standard/help-groups.ts",
+      "line": 600,
+      "quote": "Also takes the review cards (review_confirm_plan",
+      "problem": "The list of the five Telegram-answerable review cards is now written out by hand in four user-facing strings (help-groups.ts /decisions and /remote-control summaries, agent-commands.ts descriptions of the same two commands) and again in the comment and list in unattended.ts. Nothing ties the strings to the registry, unlike unattended.ts, which operator-confirm-rosters.test.ts keeps in step.",
+      "impact": "Low. Adding a sixth remote-answerable card means editing five places; a missed one leaves help text that names the wrong set.",
+      "suggested_fix": "Build the parenthesised list from one exported constant of the remote-answerable card names, or add a small test that every `review_*` name in those strings is in the registry.",
+      "evidence": "`keryx ctx rg -n --all 'review_confirm_plan, review_decide_premise' src` (non-test): src/standard/help-groups.ts:582 and :600, src/commands/agent-commands.ts:187 and :304.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "card-names-hand-copied-in-help",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 3 },
+  "follow_ups": [
+    "F-002 is inferred from counting the registry and reading the unchanged test; the parent can confirm it by running `bun test src/commands/operator-confirm-rosters.test.ts` (this reviewer runs no command)."
+  ]
+}
+```
+
+## Checked and clean (no finding)
+
+- Dependency direction. src/review/* imports only lib/ and sibling review modules; the one new module, complete-gated.ts, imports managed, run-profile, routing-check and lib/contained-path, and is imported only by commands/review.ts and commands/operator-confirm-review.ts (no cycle, no upward import). plan-confirmation.ts -> operator-decisions -> types and plan-confirmation.ts -> types introduce no cycle. types.ts already exported runtime constants (FINDING_DISPOSITION_STATES), so a runtime `cardPressFields` there is not a new kind of content.
+- unattended.ts keeps the 'listed, not imported' rule for the core owner; the new entry and its comment follow it (see F-002 for the count test).
+- Bundled vs projection skills. `diff` of src/gdskills/bundled/skills/review/{review-orchestrator/SKILL.md, review-orchestrator/SKILL.detail.md, review-premise/SKILL.md} against .metaproject/skills/gdskills/review/{...} reports identical files, and `git diff --stat` shows the same 8 lines changed in both trees. A search for the changed 'Operator decisions' paragraph finds only those two SKILL.md copies, so no third copy is stale.
+- cardPressFields as the single helper inside src/review: every review-library writer (chunks-estimate, coverage-complete, operator-decisions x3, plan-confirmation, premise-question, publish, readiness) and every card writer in commands/operator-confirm-review.ts uses it; readCoverageWaiver re-validates the stored values on read (integer id, non-empty time). The only gaps are the outside-review sites in F-001 and the unvalidated read in estimate.ts `isPlanConfirmation`, which does not check the new fields (recorded only, never used as a gate input, so not filed).
+- Remote layer. `undelivered` is added at the client (client.ts), mapped at the bridge (`mapApprovalAnswer` keeps it only on a deny) and consumed in tui; `mirrorUndeliveredNote` takes a structural `{active, connected}` argument, so remote/ does not depend on tui/. The new `RemoteBridge.connected` getter reads the existing `client.connected`. The test in src/remote/mirror-undelivered.test.ts imports ../tui/approval-mirror and ../tui/tui-shell (a test reaching up a layer; not filed).
+- Layer placement of the card gate: the review_complete card builds its facts in commands/ from the package files and then calls the review-library gate, as the other cards do; the content comes from the package, not from model input. Anything about re-derivation order and the sidecar is slice-02's and not repeated.

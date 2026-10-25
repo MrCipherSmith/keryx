@@ -1,0 +1,32 @@
+# keryx review verify-run
+finding: C-01
+command: bun test src/commands/operator-confirm-rosters.test.ts 2>&1 | tail -30
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:18.871Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.2 (744846f84)
+
+src/commands/operator-confirm-rosters.test.ts:
+12 | import { operatorConfirmToolNames } from "./operator-confirm-tools";
+13 | 
+14 | const NAMES = operatorConfirmToolNames();
+15 | 
+16 | test("there are 18 operator card tools to keep out of the other rosters", () => {
+17 |   expect(NAMES).toHaveLength(18);
+                     ^
+error: expect(received).toHaveLength(expected)
+
+Expected length: 18
+Received length: 19
+
+      at <anonymous> (/home/altsay/keryx/.worktrees/helyx-confirm/src/commands/operator-confirm-rosters.test.ts:17:17)
+(fail) there are 18 operator card tools to keep out of the other rosters [0.19ms]
+
+ 5 pass
+ 1 fail
+ 84 expect() calls
+Ran 6 tests across 1 file. [216.00ms]
+--- stderr ---
+

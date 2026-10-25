@@ -1,0 +1,109 @@
+STATUS: DONE
+
+Style review of slice-03 (agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts and five test files) at head b1c6da0e6992e4df473bae6b2fde78bc94d28776. Naming is consistent (camelCase, verb-led helpers, Flow 464 comments follow the file's habit), no unused imports were found in review.ts after the removal of completeManagedReview/runProfileRefusal/packageRoutingRefusal (resolveReviewPackagePath, resolveProjectRoot, readinessLine are all still used), and no console noise was added. Seven minor/info findings, none major. Verdict: APPROVE_WITH_SUGGESTIONS.
+
+Not re-filed: completion-gate.ts:791 wording, cli-reference.md:4921, limitations.md:187, TM-04 decision count, long lines in review-with-a-record.md, r03 D-02..D-14, autonomous-profile.ts wording.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "No major style issues in slice-03. operator-confirm-review.ts crosses the 800-line threshold with this PR (655 -> 819); remaining findings are small readability and DRY notes in the new review_complete spec, the remote-answer branch of operatorConfirmTool, and tests.",
+  "stats": { "major": 0, "minor": 2, "info": 5 },
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "S3-01",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 1,
+      "quote": "// Operator-confirmed gate tools (review gates) — flow 456. Each spec is registered through operatorConfirmSpecs().",
+      "problem": "The file grew from 655 lines at the merge base to 819 lines at head, past the 800-line threshold, almost entirely from the review_complete block (completionFacts, clip, factsDigest, completeSpec, about 150 lines). That block shares only packageRef/resolvePackage/label/failed helpers with the other nine specs.",
+      "impact": "A file of ten unrelated gate specs is harder to scan and more prone to merge conflicts with the other flows that add a spec here (457, 459 and 464 each did).",
+      "suggested_fix": "Move the review_complete spec and its three helpers into a sibling module (for example operator-confirm-review-complete.ts) that exports completeSpec, and import it in buildReviewConfirmSpecs; export the shared helpers it needs or pass them in.",
+      "evidence": "git show 062aa9c:src/commands/operator-confirm-review.ts | wc -l = 655; wc -l at head = 819; the added block is slice-03.diff lines 783-935.",
+      "confidence": "high"
+    },
+    {
+      "id": "S3-02",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": 206,
+      "quote": "pending.delete(token as string);",
+      "problem": "invoke narrows nothing for the compiler after the early return, so it reaches for assertions: `token as string` (line 206) and `pressedBy as number, pressedAt as string` (line 227), although the remote branch above already returned when either was undefined. `pressedBy`/`pressedAt` are declared `let` and assigned inside the if, which is what forces the casts.",
+      "impact": "Casts hide the invariant instead of encoding it; a later edit that drops the undefined check in the remote branch would still compile and hand `undefined` to the record.",
+      "suggested_fix": "Resolve the entry first (`if (token === undefined || entry === undefined || entry.input !== key(input))`) so token is a string afterwards, and build the press as a const inside the remote branch: `const press = { pressedBy, pressedAt }` after the undefined check, spread `...press` below, with no assertions.",
+      "evidence": "operator-confirm-tools.ts lines 199-227 at head.",
+      "confidence": "high"
+    },
+    {
+      "id": "S3-03",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": 219,
+      "quote": "return refuse(\"the card is older than 1 hour; ask again\");",
+      "problem": "The refusal text hard-codes \"1 hour\" while the limit is REMOTE_CARD_TTL_MS (60 * 60 * 1000), exported a few lines above. Changing the constant would leave the message wrong; the test also asserts the literal \"older than 1 hour\".",
+      "impact": "Two sources of truth for one number.",
+      "suggested_fix": "Derive the text from the constant (`${REMOTE_CARD_TTL_MS / 3_600_000} hour`) or name a REMOTE_CARD_TTL_LABEL next to it.",
+      "evidence": "operator-confirm-tools.ts line 219 vs the REMOTE_CARD_TTL_MS declaration added in this slice.",
+      "confidence": "medium"
+    },
+    {
+      "id": "S3-04",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/commands/agent-commands.ts",
+      "line": 187,
+      "quote": "Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
+      "problem": "The /remote-control description grew from about 85 to about 270 characters, and the same five-name list is pasted again into the /decisions description (line 304). The list is a hand-copied constant in two user-facing strings.",
+      "impact": "Two slash-command descriptions that print in /help and the command menu are now sentences of tool names; adding a sixth card tool means editing both and the strings drift.",
+      "suggested_fix": "Shorten both to \"Shows the review cards waiting for a press\" / \"also lists the Telegram review cards waiting or answered\", and keep the tool names in the docs, or build the list from one exported constant.",
+      "evidence": "agent-commands.ts lines 187 and 304 at head; diff slice-03.diff lines 23-24 and 68-69.",
+      "confidence": "medium"
+    },
+    {
+      "id": "S3-05",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 743,
+      "quote": "const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "The new review_complete block extracts an error message in three different inline forms (completionFacts' catch, apply's local `reason`, and the file's existing module-level `failed`), and `reason` shadows the outer `reason` meaning used by decisionSpec (lines 394, 597) in the same file.",
+      "impact": "Small DRY and naming noise; a reader of apply has to check whether `reason` is the operator's reason or an error text.",
+      "suggested_fix": "Add one module-level `errorText(error: unknown): string` helper next to `failed` and use it in all three places; rename the local to avoid the shadow.",
+      "evidence": "operator-confirm-review.ts lines 87, 394, 597, 743 and the catch in completionFacts at head.",
+      "confidence": "medium"
+    },
+    {
+      "id": "S3-06",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 3,
+      "quote": "// Four decisions only the operator may take, each asked as a yes/no card in the shell",
+      "problem": "The header still opens with \"Four decisions\" although the file registers ten specs and this PR adds a paragraph for the tenth directly below.",
+      "impact": "Misleading count at the top of the file; the later paragraphs (457, 459, 464) read as exceptions to a rule that no longer holds.",
+      "suggested_fix": "Reword to \"Decisions only the operator may take\" and let the lists below carry the count.",
+      "evidence": "operator-confirm-review.ts line 3 versus buildReviewConfirmSpecs returning ten specs.",
+      "confidence": "high"
+    },
+    {
+      "id": "S3-07",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 478,
+      "quote": "function overThresholdPackage(): void {\n    put(\"manifest.json\", {\n      schemaVersion: 1,\n      reviewId: \"pr7932-r1\",",
+      "problem": "The new overThresholdPackage helper repeats the nine-line draft manifest literal (reviewId pr7932-r1, mode review-flow, artifacts map) that already appears in the other package builders of this file; this PR adds the seventh copy.",
+      "impact": "Test-only duplication; a manifest schema change needs seven edits.",
+      "suggested_fix": "Extract `draftManifest(overrides = {})` at the top of the file and use it from each builder.",
+      "evidence": "grep of `schemaVersion: 1,` in the test file at head: lines 179, 260, 322, 390, 481, 626, 643.",
+      "confidence": "medium"
+    }
+  ]
+}
+```

@@ -1,0 +1,51 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice 04 is almost entirely tests plus the task_text wiring (port, adapter, operation, MCP structured branch). All 254 tests in the 10 files the slice touches pass at head. Spec gate run against AC1, AC3, AC6, AC9-AC13, AC16, AC17, AC18: each is exercised by a test that can fail, and the AC18 fixture runs the three scenarios with a correct and a fabricated result. No blocker or major found. Two minor findings: the MCP structured branch and the adapter forwarding of task_text have no test, and the Markdown report that the CLI default and the agent tool return omits the description and condition of on_demand references (the e2e test pins that shape).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/mcp/metaproject-tools.ts",
+      "line": null,
+      "quote": "const taskText = stringParam(params, \"task_text\");",
+      "problem": "The MCP structured branch for skills_resolve_context forwards task_text to the port on its own code path (it returns port.skillsResolveContext directly and never calls op.invoke). No test exercises task_text on that path: src/mcp/metaproject-tools.test.ts calls the tool only with { files, for }, and src/harness/tool/metaproject-operations.test.ts (new test 'passes task_text to the port as taskText') covers op.invoke, which this branch bypasses. The adapter line that forwards input.taskText to resolveProjectContext in metaproject-adapter.ts is also untested (no skillsResolveContext match in metaproject-adapter.test.ts).",
+      "impact": "AC3 names the MCP call as a carrier of the task text. Dropping the taskText spread in either place would silently disable keyword promotion for every MCP caller (all keyword-only declarations stay on_demand) and no test would fail.",
+      "suggested_fix": "Add one case to src/mcp/metaproject-tools.test.ts: write a references.json with a keyword declaration, invoke skills_resolve_context with task_text containing the keyword, and assert the entry is must_read with reason condition:keyword:<kw>; the same call without task_text stays on_demand.",
+      "evidence": "keryx ctx rg for skills_resolve_context in src/mcp tests shows only the files/for call at metaproject-tools.test.ts:56 and :111-:140; ripgrep for skillsResolveContext in metaproject-adapter.test.ts returns no match; the slice diff for metaproject-tools.ts adds the taskText lines only inside the bespoke case that returns port.skillsResolveContext(...) directly.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "line": null,
+      "quote": "expect(lines).toContain(`- ${THEMING_PATH} — project contract, declared, ${theming.bytes} bytes, sha256 ${theming.sha256.slice(0, 12)} (anchor \"${THEMING_ANCHOR}\", section ${theming.section_bytes} bytes)`);",
+      "problem": "The printed report an on_demand declared reference gets carries path, reason, bytes, sha and anchor, but not the declaration's description or condition, and the report has no undeclared list. renderResolutionMarkdown (unchanged apart from the anchor flag) is also what formatSkillsResolveContext returns to the interactive agent and what the CLI prints without --json. The description is the only text that tells a worker when to open an on_demand document (task-implementer SKILL.md: 'read on_demand ones only when the work touches them'), and the e2e test pins the line without it.",
+      "impact": "A worker that reads the Markdown form (the agent tool, or the CLI default) sees 'THEMING.md ... declared ... anchor \"Theme tokens\"' with nothing on what the document governs or when it applies, so the on-demand half of the feature (AC5: a task matching neither keeps description, anchor and condition) is only usable from the JSON form. AC5 itself is met in the entry record.",
+      "suggested_fix": "Append the description (and the condition, compactly) to the entry line for declared entries in renderResolutionMarkdown, add an 'undeclared' line when the list is non-empty, and update the e2e expectation; or state in the worker instructions that the JSON (--out) form is the one to read.",
+      "evidence": "e2e test at 'the printed report lists the promoted section and the on-demand document' asserts the exact line without description; resolve-context-command.ts renderResolutionMarkdown builds flags from index, linked, shadows, also_at and anchor only; formatSkillsResolveContext in metaproject-operations.ts returns renderResolutionMarkdown output plus warnings.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": ["slice-04"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Spec compliance gate: ran against the ACs this slice carries.
+- AC1 (references-config.test.ts), AC6 (references-section.test.ts), AC9 (output-schema.test.ts), AC10/AC11/AC13 (resolved-context-check.test.ts: the exact thresholds 2 vs 3 words, 40 characters after trim, anchor equality, n/a, drift), AC16 (R0-R7 render tests, feed, /projectctx refs), AC17 (skill-sync.test.ts), AC18 (conditional-reads.e2e.test.ts, three scenarios, correct and fabricated results): covered by tests that can fail; I checked the word counts of the fixtures by hand and they match the asserted outcomes.
+- AC3: CLI and operation path tested; MCP structured branch and adapter forwarding untested (F-001).
+- AC12 is carried by src/flow/task-project-context.test.ts, outside this slice.
+
+Ran: bun test on the ten test files this slice touches, 254 pass, 0 fail.
+
+Routing audit: graph_used no (not relevant, test-and-wiring slice); wiki_used no (not relevant); ctx_used yes; raw_rg_used no.

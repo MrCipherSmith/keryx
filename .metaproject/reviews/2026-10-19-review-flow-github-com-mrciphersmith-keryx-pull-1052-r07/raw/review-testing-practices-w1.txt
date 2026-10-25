@@ -1,0 +1,173 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round r07, slice-01 (fix slice), head 5444f96e4. The S-401 and S-402 tests are real gates: they pin the boundaries (finding 200/201, evidence 300/301, trim before the length check, 20/21 entries), the refusal table (OSC, CSI, bidi, ZWSP, ZWJ, BOM, NL, CR, U+2028, tab, C1, one named row each) and plain-text accepted equals shown; determinism is fine (tmpdir, no sleeps, no network). The same-class sweep is incomplete in the tests: the coverage and operator-decision waiver quotes (T-701) and the whole review_comments_reply card (T-702) have no test that can fail on the fix, three more lists lost their caps with no over-the-cap fixture (T-703), shownBody is a weaker predicate than hiddenInCard (T-704), invisible characters sit literally in the test source (T-705), a few branches have no row (T-706), and no cap test round-trips the stored value (T-707). Nothing was run (read-only, no run-tests): every test-gap claim means no fixture builds the input, not an observed mutant result. 34 mutant candidates are proposed for the orchestrator; the ones expected to survive on reading are m02, m04, m06, m10, m11, m12, m13, m17, m31, m32. Known minors D-*, E-*, F5-*, F6-* are not re-reported. graph_context: used (payload layers.affected only).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "T-701",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 747,
+      "quote": "if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: \"${quoteWhole(coverage.operatorQuote)}\"`);",
+      "problem": "The S-401 fix replaced clip() with quoteWhole() at three sites: readiness waivers (line 736), the coverage waiver (line 747) and the mutation/override decisions (line 751). The only new test, 'a waiver quote longer than any old cap is shown whole...' (operator-confirm-review-tools.test.ts:877), builds a 1000+ character quote and a control-character quote only in manifest.readiness_waivers. The existing coverage test (lines 659-664, quote 'Waive coverage of 2 files?: yes') and decision test (lines 668-679, short quotes) never reach the old 300-character cap and never feed a quote with a control character.",
+      "impact": "Restoring a 300-character clip, or dropping the 'stored quote holds characters this card hides or rewrites' flag, at line 747 or 751 leaves the suite green. Those are the gates added in answer to S-401, where the skill makes the mutation mandatory; a regression there reopens S-401 for coverage and mutation/override waivers unseen (mutants m31, m32).",
+      "suggested_fix": "Extend the long-quote test: add a research.json dispatch.coverageWaiver with a 1000+ character operatorQuote and a control character, and an operator-decisions.json mutation-waiver and reviewer-override with the same, and assert the card contains the quote whole for the clean one and the flag for the rewritten one at each site.",
+      "evidence": "operator-confirm-review.ts:736, 747, 751 call quoteWhole; the new test at operator-confirm-review-tools.test.ts:877-888 sets only manifest['readiness_waivers']; the coverage-waiver and decision tests at :650-681 use quotes under 40 characters. No mutant was run (read-only).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:736 (readiness waiver quote; pinned by the new test)",
+          "src/commands/operator-confirm-review.ts:747 (coverage waiver quote; unpinned)",
+          "src/commands/operator-confirm-review.ts:751 (mutation-waiver and reviewer-override decision quote; unpinned)"
+        ],
+        "enumeration_method": "keryx ctx rg for quoteWhole( in src/commands/operator-confirm-review.ts lists its three call sites; the test file was then searched for operator_quote, operatorQuote and operator-decisions fixtures to see which sites a long or control-character quote reaches."
+      }
+    },
+    {
+      "id": "T-702",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 510,
+      "quote": "const shown = shownBody((request.body as { body?: string }).body ?? \"\");",
+      "problem": "Lines 508-516 are new: a loop over every reply body, a refusal 'Reply N holds control, escape or bidi...', a 'reply N:' header and the whole body lines under 'each shown whole'. No test builds the review_comments_reply card. The name appears only in roster lists (operator-confirm-review-tools.test.ts:91, shell.test.ts:879) and in tty-refusal wording (harness-robustness.test.ts:396, 404); commentsReplyPass is never stubbed on the card path.",
+      "impact": "The previous behaviour (first 6 replies, 140 characters each) is removed with nothing asserting the replacement: not that every reply appears, not that a body past 140 characters shows whole, not that a hidden character in reply 2 refuses the card and names the reply. Mutants m11 and m12 are expected to survive. This is the S-402 class (posted body vs shown) on the posting card whose bodies the agent writes.",
+      "suggested_fix": "Add a review_comments_reply card test with a stubbed commentsReplyPass returning three requests: assert the card lists 'reply 1:', 'reply 2:', 'reply 3:' with every body line whole (one body over 140 characters, one over 8 lines), and a second case where reply 2 holds ESC or a bidi character and the card is refused with 'Reply 2 holds control, escape or bidi characters on line N' and nothing is asked.",
+      "evidence": "git grep of review_comments_reply across src/**/*.test.ts: operator-confirm-review-tools.test.ts:91 (roster name), shell.test.ts:879 (roster name), harness-robustness.test.ts:396 and :404 (tty refusal); none calls tool('review_comments_reply') or t.confirmation. No mutant was run (read-only).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:208 (review_publish body via shownBody; pinned by the new tests)",
+          "src/commands/operator-confirm-review.ts:510 (review_comments_reply bodies via shownBody; untested)"
+        ],
+        "enumeration_method": "keryx ctx rg for shownBody( in src/commands/operator-confirm-review.ts lists the two callers; keryx ctx rg for each spec name across src test files shows which card builders a test drives."
+      }
+    },
+    {
+      "id": "T-703",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 94,
+      "quote": "return files.map((file) => `  ${file}`);",
+      "problem": "Three more removed list caps have no over-the-cap fixture: review_waive_coverage listFiles (line 94, used at line 282), the review_override_reviewers 'not run' line (line 434) and review_confirm_plan estimate.perRole.map (line 563). The suites for these cards use 2 files (operator-confirm-review-tools.test.ts:308-327), no override card test at all (only the reason refusal at line 792) and a one-role plan (lines 521-551). Only the mutation waiver (30 mutants, line 796) and external_apply (40 files, 25 flagged; operator-confirm-other-tools.test.ts:338) got a fixture past the old cap.",
+      "impact": "The commit's claim that every list is shown whole is pinned for 2 of 5 changed lists; restoring the 15-item slice at lines 94, 434 or 563 stays green (m06, m10, m13).",
+      "suggested_fix": "One test per list with more entries than the old cap (16 uncovered files; 16 reviewers left out via a selected list; a plan with 16 roles) asserting every entry is on the card and no 'and N more' text.",
+      "evidence": "operator-confirm-review.ts:94, 282, 434, 563; fixtures at operator-confirm-review-tools.test.ts:293-327 (3 scope files), :521-551 (one-role plan), :792 (override refused before a card). No mutant was run (read-only).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "T-704",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "problem": "shownBody (lines 62-66) refuses a line only when cardSafe(line) !== line. hiddenInCard (line 672) additionally refuses \\p{Cf}, \\p{Zl} and \\p{Zp}, because the S-402 fix established that cardSafe does not remove U+200B, U+200D, U+FEFF or U+2028 although they draw nothing. The two predicates differ, and no test says why: the review_publish refusal test (operator-confirm-review-tools.test.ts:230) tries only ESC[2J, U+202E and BEL.",
+      "impact": "A report.md or reply body with a zero-width space or U+2028 inside a word is posted whole to GitHub while the card shows it with no visible trace, the stored-versus-shown gap S-402 closed for dispositions and reasons. Either the gap is intended and unpinned, or the check is missing.",
+      "suggested_fix": "Decide the intent: reuse hiddenInCard in shownBody (and add ZWSP and U+2028 rows to the publish refusal test), or document in the test why a body may carry Cf characters and pin that with an accepted row.",
+      "evidence": "operator-confirm-review.ts:64 versus :672; test rows at operator-confirm-review-tools.test.ts:230 (ESC, bidi, BEL only). No mutant was run (read-only).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "T-705",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 768,
+      "quote": "const hidden: Array<[string, string]> = [",
+      "problem": "Tests whose subject is an invisible character embed the literal invisible character in the source: U+202E at lines 230 and 769, U+200B at 770 and 793, U+200D at 771, U+FEFF at 772 and U+2028 at 775 (found with a codepoint search of the file). The neighbouring rows already use \\u001b, \\u0007 and \\u0085.",
+      "impact": "A row renders identical to plain text in review and in an editor, so a reader cannot tell which character it holds and the U+2028 row reads as a plain space; a formatter or copy-paste that strips format characters turns a must-refuse row into accepted plain text (that row then fails, but with no hint of the cause).",
+      "suggested_fix": "Write them as escapes: \\u202e, \\u200b, \\u200d, \\ufeff, \\u2028, in rows 230, 769-772, 775 and 793.",
+      "evidence": "operator-confirm-review-tools.test.ts lines 230, 769, 770, 771, 772, 775, 793 (codepoint search for U+200B-200F, U+2028-202E, U+2060-2069, U+FEFF). No mutant was run (read-only).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "T-706",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text);",
+      "problem": "Branches of the hidden-text path with no row: the S-402 table (operator-confirm-review-tools.test.ts:767-777) has rows for Cf (U+200B, U+200D, U+FEFF) and Zl (U+2028) but none for Zp (U+2029); the review_publish refusal test asserts stringContaining('holds control, escape or bidi characters on line') without the line number, so `${bad + 1}` at line 65 is unpinned; no row builds a lone \\r line or a body with trailing blank lines, so trimEnd at line 63 is unpinned.",
+      "impact": "Removing \\p{Zp} (m17), changing `bad + 1` to `bad` (m02) or dropping trimEnd (m04) leaves the suite green.",
+      "suggested_fix": "Add a U+2029 row to the S-402 table; assert 'on line 3' (or the real number) in the publish refusal; add a lone-CR line and a trailing-blank-lines body case.",
+      "evidence": "operator-confirm-review.ts:63, 65, 672; test rows at operator-confirm-review-tools.test.ts:230, 767-777. No mutant was run (read-only).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "T-707",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 741,
+      "quote": "const atCap = `${\"a\".repeat(280)} operator: decided-by alice`.slice(0, 300);",
+      "problem": "S-401 and S-402 are defined as stored differing from shown. The at-cap and plain-text rows (lines 741-743 and 785) assert the card line and stop at ask(): no yes() follows with a read of findings.json or completion-confirmation.json to equal the shown evidence, and the waiver-quote test (line 877) asserts the card only. The existing disposition test (line 711) covers the happy path with one short value, so a cap-length value is never round-tripped.",
+      "impact": "A change that stored a trimmed or re-encoded evidence value, or applied a different transform than the card, would not be seen by the new tests.",
+      "suggested_fix": "After the at-cap card, call yes() and assert the stored disposition evidence in findings.json equals atCap exactly, and that completion-confirmation.json carries the same text.",
+      "evidence": "operator-confirm-review-tools.test.ts:738-745, 780-786, 877-888 (card assertions only); :711 (single short happy-path value). No mutant was run (read-only).",
+      "confidence": "low",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "T-708",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 282,
+      "quote": "...listFiles(files.map(cardSafe)),",
+      "problem": "review_waive_coverage shows the cardSafe-rewritten path but prepared.files (line 286) and the stored waiver keep the raw names, with no flag, the case the quoteWhole flag (line 764) handles for quotes.",
+      "impact": "A tracked path holding ESC, a newline or a bidi override is shown rewritten and the operator is not told. Paths come from the PR, not the agent, so reachability is narrower than S-402, and no test builds such a path. Noted for the same-class sweep.",
+      "suggested_fix": "Either refuse the card when hiddenInCard(file) holds for any uncovered path, or flag it as quoteWhole does, and add one test with such a path.",
+      "evidence": "operator-confirm-review.ts:274, 282, 286; no test fixture with a control character in a scope path. No mutant was run (read-only).",
+      "confidence": "low",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 5, "info": 1 },
+  "questions": [
+    "Whole cards can be long (40 changed files, 30 mutants, whole report bodies, 20 x 300-character dispositions). Does the remote card transport (Telegram send) or the TUI card renderer cap or split the text? If it cuts, 'shown whole' is false at the transport even though buildCard returns every line; the tests stop at buildCard. Not visible in slice-01.",
+    "Is the tab-to-space rewrite in shownBody (operator-confirm-review.ts:63) intended for the posted body? The test at operator-confirm-review-tools.test.ts:239 pins that the card shows a space while the posted body keeps the tab, a stored-versus-shown difference the S-402 rule otherwise refuses."
+  ],
+  "mutant_candidates": [
+    {"id": "m01", "file": "src/commands/operator-confirm-review.ts", "line": 64, "anchor": "const bad = lines.findIndex((line) => cardSafe(line) !== line);", "replacement": "const bad = -1;", "kind": "behavior", "expected_failing_test": "a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked"},
+    {"id": "m02", "file": "src/commands/operator-confirm-review.ts", "line": 65, "anchor": "on line ${bad + 1} that", "replacement": "on line ${bad} that", "kind": "behavior", "expected_failing_test": "none known (T-706)"},
+    {"id": "m03", "file": "src/commands/operator-confirm-review.ts", "line": 63, "anchor": ".map((line) => line.replace(/\\t/g, \" \"))", "replacement": ".map((line) => line)", "kind": "behavior", "expected_failing_test": "a tab in the body is shown as plain spaces and is not a refusal"},
+    {"id": "m04", "file": "src/commands/operator-confirm-review.ts", "line": 63, "anchor": "text.trimEnd().split(/\\r?\\n/)", "replacement": "text.split(/\\r?\\n/)", "kind": "behavior", "expected_failing_test": "none known (T-706)"},
+    {"id": "m05", "file": "src/commands/operator-confirm-review.ts", "line": 66, "anchor": "return { lines: lines.map((line) => `  ${line}`) };", "replacement": "return { lines };", "kind": "behavior", "expected_failing_test": "the card shows the posted body whole: every line, none cut at a width, no 'first N' preview"},
+    {"id": "m06", "file": "src/commands/operator-confirm-review.ts", "line": 94, "anchor": "return files.map((file) => `  ${file}`);", "replacement": "return files.slice(0, 15).map((file) => `  ${file}`);", "kind": "behavior", "expected_failing_test": "none known (T-703)"},
+    {"id": "m07", "file": "src/commands/operator-confirm-review.ts", "line": 209, "anchor": "if (\"refusal\" in shownReview) return", "replacement": "if (false) return", "kind": "behavior", "expected_failing_test": "a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked"},
+    {"id": "m08", "file": "src/commands/operator-confirm-review.ts", "line": 220, "anchor": "...bodyLines,", "replacement": "...bodyLines.slice(0, 8),", "kind": "behavior", "expected_failing_test": "the card shows the posted body whole: every line, none cut at a width, no 'first N' preview"},
+    {"id": "m09", "file": "src/commands/operator-confirm-review.ts", "line": 415, "anchor": "${cardSafe(subject.items.join(\", \"))}`,", "replacement": "${cardSafe(subject.items.slice(0, 15).join(\", \"))}`,", "kind": "behavior", "expected_failing_test": "the mutation waiver card lists every unrun mutant, not the first few"},
+    {"id": "m10", "file": "src/commands/operator-confirm-review.ts", "line": 434, "anchor": "`not run: ${cardSafe(missing.join(\", \") || \"none\")}`", "replacement": "`not run: ${cardSafe(missing.slice(0, 15).join(\", \") || \"none\")}`", "kind": "behavior", "expected_failing_test": "none known (T-703)"},
+    {"id": "m11", "file": "src/commands/operator-confirm-review.ts", "line": 511, "anchor": "if (\"refusal\" in shown) return { refusal: `Reply ${index + 1} ${shown.refusal}` };", "replacement": "", "kind": "behavior", "expected_failing_test": "none known (T-702)"},
+    {"id": "m12", "file": "src/commands/operator-confirm-review.ts", "line": 512, "anchor": "bodies.push(`reply ${index + 1}:`, ...shown.lines);", "replacement": "bodies.push(`reply ${index + 1}:`, ...shown.lines.slice(0, 8));", "kind": "behavior", "expected_failing_test": "none known (T-702)"},
+    {"id": "m13", "file": "src/commands/operator-confirm-review.ts", "line": 563, "anchor": "...estimate.perRole.map(", "replacement": "...estimate.perRole.slice(0, 15).map(", "kind": "behavior", "expected_failing_test": "none known (T-703)"},
+    {"id": "m14", "file": "src/commands/operator-confirm-review.ts", "line": 672, "anchor": "cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text)", "replacement": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text)", "kind": "behavior", "expected_failing_test": "dispositions: text the card would hide or rewrite is refused, so the card shows exactly what is stored (S-402)"},
+    {"id": "m15", "file": "src/commands/operator-confirm-review.ts", "line": 672, "anchor": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u", "replacement": "/[\\p{Zl}\\p{Zp}]/u", "kind": "behavior", "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (zero-width space, joiner and byte order mark rows)"},
+    {"id": "m16", "file": "src/commands/operator-confirm-review.ts", "line": 672, "anchor": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u", "replacement": "/[\\p{Cf}\\p{Zp}]/u", "kind": "behavior", "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (line separator row)"},
+    {"id": "m17", "file": "src/commands/operator-confirm-review.ts", "line": 672, "anchor": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u", "replacement": "/[\\p{Cf}\\p{Zl}]/u", "kind": "behavior", "expected_failing_test": "none known (T-706)"},
+    {"id": "m18", "file": "src/commands/operator-confirm-review.ts", "line": 695, "anchor": "raw.length > MAX_DISPOSITIONS", "replacement": "raw.length >= MAX_DISPOSITIONS", "kind": "behavior", "expected_failing_test": "dispositions: more entries than a card shows are refused (the 20-entry accept); the caps hold at the boundary"},
+    {"id": "m19", "file": "src/commands/operator-confirm-review.ts", "line": 695, "anchor": "raw.length > MAX_DISPOSITIONS", "replacement": "raw.length > 100000", "kind": "behavior", "expected_failing_test": "dispositions: more entries than a card shows are refused"},
+    {"id": "m20", "file": "src/commands/operator-confirm-review.ts", "line": 708, "anchor": "finding.length > MAX_DISPOSITION_FINDING_CHARS", "replacement": "finding.length >= MAX_DISPOSITION_FINDING_CHARS", "kind": "behavior", "expected_failing_test": "dispositions: the caps hold at the boundary, and the trim happens before the length check (finding of 200)"},
+    {"id": "m21", "file": "src/commands/operator-confirm-review.ts", "line": 708, "anchor": "finding.length > MAX_DISPOSITION_FINDING_CHARS", "replacement": "finding.length > 100000", "kind": "behavior", "expected_failing_test": "dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)"},
+    {"id": "m22", "file": "src/commands/operator-confirm-review.ts", "line": 709, "anchor": "text.length > MAX_DISPOSITION_EVIDENCE_CHARS", "replacement": "text.length >= MAX_DISPOSITION_EVIDENCE_CHARS", "kind": "behavior", "expected_failing_test": "dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)"},
+    {"id": "m23", "file": "src/commands/operator-confirm-review.ts", "line": 709, "anchor": "text.length > MAX_DISPOSITION_EVIDENCE_CHARS", "replacement": "text.length > 100000", "kind": "behavior", "expected_failing_test": "dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)"},
+    {"id": "m24", "file": "src/commands/operator-confirm-review.ts", "line": 707, "anchor": "const text = evidence?.trim();", "replacement": "const text = evidence;", "kind": "behavior", "expected_failing_test": "dispositions: the caps hold at the boundary, and the trim happens before the length check"},
+    {"id": "m25", "file": "src/commands/operator-confirm-review.ts", "line": 712, "anchor": "[[\"finding\", finding], [\"evidence\", text ?? \"\"]]", "replacement": "[[\"evidence\", text ?? \"\"]]", "kind": "behavior", "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (the finding row holding ESC]0;x BEL)"},
+    {"id": "m26", "file": "src/commands/operator-confirm-review.ts", "line": 712, "anchor": "[[\"finding\", finding], [\"evidence\", text ?? \"\"]]", "replacement": "[[\"finding\", finding]]", "kind": "behavior", "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (OSC, CSI, bidi and newline rows)"},
+    {"id": "m27", "file": "src/commands/operator-confirm-review.ts", "line": 377, "anchor": "return hiddenInCard(text) ? { refusal: `reason ${HIDDEN_IN_CARD}` } : { reason: text };", "replacement": "return { reason: text };", "kind": "behavior", "expected_failing_test": "a reason the card would hide or rewrite is refused on the premise and decision cards"},
+    {"id": "m28", "file": "src/commands/operator-confirm-review.ts", "line": 764, "anchor": "return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;", "replacement": "return text;", "kind": "behavior", "expected_failing_test": "a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged"},
+    {"id": "m29", "file": "src/commands/operator-confirm-review.ts", "line": 764, "anchor": "return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;", "replacement": "return cardSafe(text);", "kind": "behavior", "expected_failing_test": "a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged"},
+    {"id": "m30", "file": "src/commands/operator-confirm-review.ts", "line": 736, "anchor": "\"${quoteWhole(waiver.operator_quote)}\"", "replacement": "\"${cardSafe(waiver.operator_quote).slice(0, 300)}\"", "kind": "behavior", "expected_failing_test": "a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged"},
+    {"id": "m31", "file": "src/commands/operator-confirm-review.ts", "line": 747, "anchor": "\"${quoteWhole(coverage.operatorQuote)}\"", "replacement": "\"${cardSafe(coverage.operatorQuote).slice(0, 300)}\"", "kind": "behavior", "expected_failing_test": "none known (T-701)"},
+    {"id": "m32", "file": "src/commands/operator-confirm-review.ts", "line": 751, "anchor": "\"${quoteWhole(decision.quote)}\"", "replacement": "\"${cardSafe(decision.quote).slice(0, 300)}\"", "kind": "behavior", "expected_failing_test": "none known (T-701)"},
+    {"id": "m33", "file": "src/commands/operator-confirm-other.ts", "line": 304, "anchor": "          ...files,", "replacement": "          ...files.slice(0, 12),", "kind": "behavior", "expected_failing_test": "the card lists every changed file and every flagged path, with no 'and N more' tail"},
+    {"id": "m34", "file": "src/commands/operator-confirm-other.ts", "line": 306, "anchor": "...run.flaggedPaths.map((p) => `  ! ${cardSafe(p)}`)]", "replacement": "...run.flaggedPaths.slice(0, 12).map((p) => `  ! ${cardSafe(p)}`)]", "kind": "behavior", "expected_failing_test": "the card lists every changed file and every flagged path, with no 'and N more' tail"}
+  ]
+}
+```

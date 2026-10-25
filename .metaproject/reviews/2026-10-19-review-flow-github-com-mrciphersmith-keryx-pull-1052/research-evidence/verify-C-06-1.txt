@@ -1,0 +1,26 @@
+# keryx review verify-run
+finding: C-06
+command: rg -n 'onUndelivered|mirrored|markUndelivered|undelivered' src/tui/tui-shell.ts src/tui/operator-confirmations.ts src/tui/approval-mirror.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:20.379Z
+exit: 0
+
+--- stdout ---
+src/tui/tui-shell.ts:3939:  // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
+src/tui/tui-shell.ts:6101:        const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
+src/tui/tui-shell.ts:6102:        if (unmirrored !== undefined && meta?.card !== undefined) {
+src/tui/tui-shell.ts:6103:          const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false);
+src/tui/tui-shell.ts:6104:          const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
+src/tui/tui-shell.ts:6105:          operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: verdict !== false });
+src/tui/tui-shell.ts:6119:          ...(isCard ? { onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n") } : {}),
+src/tui/approval-mirror.ts:36:  onUndelivered?: () => void;
+src/tui/approval-mirror.ts:52:          if (answer.undelivered === true) options.onUndelivered?.();
+src/tui/operator-confirmations.ts:1:// Flow 464 (AC6): the operator-confirmation cards this shell mirrored to the Telegram topic — each question still
+src/tui/operator-confirmations.ts:19:  readonly mirrored: boolean;
+src/tui/operator-confirmations.ts:37:  ask(question: string, mirrored: boolean): number {
+src/tui/operator-confirmations.ts:39:    this.items.push({ id, question, askedAt: this.now(), mirrored });
+src/tui/operator-confirmations.ts:60:  /** Cards waiting for a press in the topic: mirrored and not yet answered. */
+src/tui/operator-confirmations.ts:62:    return this.items.filter((item) => item.answered === undefined && item.mirrored);
+src/tui/operator-confirmations.ts:106:  const where = entry.mirrored ? "" : " · Telegram mirror not delivered, answer in the shell";
+--- stderr ---
+

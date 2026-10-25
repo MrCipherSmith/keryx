@@ -1,0 +1,2847 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "docs/docs/cli-reference.md",
+    "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+    "src/commands/agent.ts",
+    "src/commands/operator-confirm-review-tools.test.ts",
+    "src/commands/operator-confirm-review.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/remote/mirror-undelivered.test.ts",
+    "src/review/completion-gate.test.ts",
+    "src/review/completion-gate.ts",
+    "src/tui/approval-mirror.ts",
+    "src/tui/card-lifecycle.test.ts",
+    "src/tui/operator-confirmations.test.ts",
+    "src/tui/operator-confirmations.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "hop": 1,
+      "fanIn": 24,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/harness/tool/builtin/spawn-subagent-tool.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/trigger-dispatch.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger-agent-task.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/trigger-agent-task.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/commands/operator-confirm-review.ts",
+      "path": [
+        "src/commands/operator-confirm-tools.ts",
+        "src/commands/operator-confirm-review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/goal-command.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-containment.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-safety.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/server.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/acp/server.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/wiki/deep-enrich.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation-raw.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "fixtures/routing-shell-pty.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-long.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation-long.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/trigger.ts",
+        "src/commands/trigger-agent-task.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/wiki/enrich.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/wiki/enrich.ts",
+        "src/wiki/deep-enrich.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/server-harness.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/acp/server-harness.test-helpers.ts",
+        "src/acp/server.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/acp.ts",
+        "src/acp/server.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "scripts/benchmark/long-runner-turn.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/telegram-permission.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/operator-confirm-review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {buildReviewConfirmSpecs} of src/commands/operator-confirm-review.ts (hop 1, from src/commands/operator-confirm-review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 1, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/approval-mirror.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/approval-mirror.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {raceApproval} of src/tui/approval-mirror.ts (hop 1, from src/tui/approval-mirror.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createTuiAgentIo} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {attachBlockIo, attachUsageIo, createTuiAgentIo} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runGoalCommand} of src/commands/goal-command.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentRepl} of src/commands/shell.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ShellCommandRuntime, shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentRepl} of src/commands/shell.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {enrichPageDeep} of src/wiki/deep-enrich.ts (hop 2, from src/commands/agent.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-granted-json.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-hooks.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-agent-task.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/review/review-system.ts",
+      "hop": 1,
+      "fanIn": 18,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/agent.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps, AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/acp/permission.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/shell-approval.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-permission.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/approval-cause.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/settings-model.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REASONING_EFFORT_LEVELS, ReasoningEffortLevel, ReasoningEffortSource} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/tui/operator-confirmations.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {waitingCardsText} from src/tui/operator-confirmations.ts; changed: {ConfirmationEntry, OperatorConfirmationLog, answeredConfirmationLine, askUnmirroredCard, confirmationLines, pendingConfirmationLine, raceMirroredCard, remoteApproval}"
+    },
+    {
+      "file": "src/review/arbiter-floor.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/foreground-operation.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApprovalMeta, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/acp/models.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-client.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-run.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/acp/agent-io.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApprovalMeta, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {describeReasoningEffortSource} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, isApprovalFor} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/remote/telegram-permission.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {TuiSelection, estimateContextTokens, fmtTokens, modelPickerNotice, modelsForPicker, onKeypress, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/pr940.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-10.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-11.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/consolidated-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/dispositions.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/pr978.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-06.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/018-2026-07-13-keryx-harness-w14-real-provider/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/019-2026-07-13-keryx-harness-release1-boundary/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/019-2026-07-13-keryx-harness-release1-boundary/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/020-2026-07-13-keryx-harness-ollama-cli/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/020-2026-07-13-keryx-harness-ollama-cli/tasks.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/130-2026-08-01-close-round-4-findings-on-pr-216-bound-t/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/130-2026-08-01-close-round-4-findings-on-pr-216-bound-t/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/130-2026-08-01-close-round-4-findings-on-pr-216-bound-t/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/142-2026-08-10-keryx-version-update-checks-for-shell-an/change-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/142-2026-08-10-keryx-version-update-checks-for-shell-an/metrics/run-2026-08-10T21-23-46Z.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-ingest-273/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/163-2026-08-16-slate-phase-4-ephemeral-subagent-slate-a/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/170-2026-08-18-tui-queue-dock-move-queue-off-transcript/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/170-2026-08-18-tui-queue-dock-move-queue-off-transcript/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/171-2026-08-18-multi-agent-engine-phase-d-concurrent-sp/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/177-2026-08-19-tool-call-loop-continuity/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/219-2026-09-02-make-tui-foreground-operations-cancellab/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/219-2026-09-02-make-tui-foreground-operations-cancellab/change-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/mirror-undelivered.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/remote/mirror-undelivered.test.ts) is mentioned by 644 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/acp/permission.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta, isApprovalFor} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {filterConnectedDetectedProviders} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/review-arbiter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/startup-limits.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {agentContextWindow} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApproverProvenance} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/decisions/coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps, offerRoundLimitReset} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-client.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-interop.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {onKeypress} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/foreground-operation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApproverProvenance} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {modelPickerNotice, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {pickModelInTui, pickSessionInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {endpointMayBeAtFault, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/settings-model.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REASONING_EFFORT_LEVELS} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {freshSlateSessionRef, sessionPickerOptions, startupSessionChoices} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {searchProviderWizardInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell}"
+    },
+    {
+      "file": "src/intake/poll.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {agentTaskScratchParent, pruneReports, scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellFlagError} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/scheduler/digest-gh.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runGrantedCommand} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/schedule.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerHasUsableCredential, providerReportsUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/harness/run-external-factory.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SpawnSubagentToolDeps, StructuredSubagentResult, SubagentMode} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/scheduler/digest-limits.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {defaultArmTimeout} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/schedule-tools.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerHasUsableCredential, providerReportsUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/scheduler/digest-run.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentTaskDeps, AgentTaskResult, agentTaskScratchParent, pruneReports, refusal, scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/tui/external-bridge.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/schedule-command.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerHasUsableCredential, providerReportsUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/intake/assess.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createSpendMeter, defaultMakeProvider, guardUsage} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/scheduler/digest-summary.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scrubThenCap} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/trigger-review.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentTaskResult} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, readlineAgentHelpText, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellIO} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SignalShutdownParts, makeSignalShutdown} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {chooseShellSurface, parseShellCliFlags} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/verify-kind-creation-paths.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {autoProvisionFlow} from src/commands/goal-command.ts; changed: {runGoalCommand}"
+    },
+    {
+      "file": "src/gdskills/round-bound.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DEFAULT_AUTO_GOAL_ROUNDS} from src/commands/goal-command.ts; changed: {runGoalCommand}"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-backstop.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SUBAGENT_CHILD_RESERVATION_MS, SUBAGENT_HARD_CAP_GRACE_MS, invokeWithBackstop, resolveSubagentHardCapMs} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/scheduler/digest-delivery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {dispatchLockPath} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/scheduler/digest-report-locator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {scrubGrantedOutput} from src/commands/trigger-agent-task.ts; changed: {runAgentTaskDispatch}"
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {dispatchLockPath} from src/commands/trigger-dispatch.ts; changed: {runFlowNextDispatch}"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 17,
+    "changedFilesResolved": 11,
+    "changedFilesUnresolved": 6,
+    "candidates": 99,
+    "retained": 21,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 71,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 50,
+    "droppedTestConsumer": 78,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 15,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 16,
+      "2": 5
+    }
+  },
+  "graph": {
+    "nodes": 3267,
+    "edges": 11703
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/agent.ts",
+        "names": [
+          "runAgentTurn"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: runAgentTurn"
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "names": [
+          "buildReviewConfirmSpecs",
+          "reviewConfirmSpecs"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: buildReviewConfirmSpecs, reviewConfirmSpecs"
+      },
+      {
+        "file": "src/remote/mirror-undelivered.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/completion-gate.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "names": [
+          "ReviewGateInput",
+          "decideReviewGate",
+          "describeBlockers"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ReviewGateInput, decideReviewGate, describeBlockers"
+      },
+      {
+        "file": "src/tui/approval-mirror.ts",
+        "names": [
+          "raceApproval"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: raceApproval"
+      },
+      {
+        "file": "src/tui/card-lifecycle.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/operator-confirmations.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/operator-confirmations.ts",
+        "names": [
+          "ConfirmationEntry",
+          "OperatorConfirmationLog",
+          "answeredConfirmationLine",
+          "askUnmirroredCard",
+          "confirmationLines",
+          "pendingConfirmationLine",
+          "raceMirroredCard",
+          "remoteApproval"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ConfirmationEntry, OperatorConfirmationLog, answeredConfirmationLine, askUnmirroredCard, confirmationLines, pendingConfirmationLine, raceMirroredCard, remoteApproval"
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "names": [
+          "BlockIoChrome",
+          "TuiAgentIo",
+          "attachBlockIo",
+          "attachUsageIo",
+          "createTuiAgentIo",
+          "launchTuiAgentShell"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: BlockIoChrome, TuiAgentIo, attachBlockIo, attachUsageIo, createTuiAgentIo, launchTuiAgentShell"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 1,
+    "textHubs": [
+      {
+        "key": "abort",
+        "kind": "event",
+        "via": "src/remote/mirror-undelivered.test.ts",
+        "hits": 644
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "scripts/benchmark/long-runner-turn.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-granted-json.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-hooks.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runGoalCommand"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentRepl"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ShellCommandRuntime",
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentRepl"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BlockIoChrome",
+        "TuiAgentIo",
+        "attachBlockIo",
+        "attachUsageIo",
+        "createTuiAgentIo",
+        "launchTuiAgentShell"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/trigger-agent-task.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/remote/telegram-permission.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "buildReviewConfirmSpecs"
+      ],
+      "via": "src/commands/operator-confirm-review.ts"
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/tui/approval-mirror.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "raceApproval"
+      ],
+      "via": "src/tui/approval-mirror.ts"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createTuiAgentIo"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "attachBlockIo",
+        "attachUsageIo",
+        "createTuiAgentIo"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "enrichPageDeep"
+      ],
+      "via": "src/commands/agent.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

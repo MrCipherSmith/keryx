@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+Scope B (regression) over slice-01 (fix slice for D-01, D-03, D-08, D-12). Blast radius: not read from blast-radius.json (not needed; the dependents were walked by hand: the gate nudge consumer is src/commands/agent.ts holdReviewGate, the card tools are consumed by src/trigger/unattended.ts and the tests). This radius is a code graph: the skill text sites below are non-code files and the graph cannot see them, so they were found by a text search over src, docs and .metaproject/skills at head b1c6da0e6.
+
+Verified fixes:
+- D-01: the four strings (operator-confirm-review.ts 262, 296, 312, 358) and the line-24 comment now say "call review_complete"; the sibling CLI-equivalence mentions (8, 9, 18, 261, 705) are accurate and untouched. review.ts runComplete's two TTY-refusal errors were also reworded in the same delta. A test pins the readiness waiver result (no "keryx review complete", names review_complete). The coverage waiver result has no equivalent assertion. D-01's own sites are closed, but the class is not: see R-001.
+- D-08: closed. The guide now states the autonomous exception; the exit table (0 = closed by `keryx review complete`) agrees; holdReviewGate returns false for deps.unattended, so the unattended child never receives the "you never run keryx review complete yourself" nudge, and OPERATOR_CONFIRM_TOOL_NAMES is excluded from the unattended roster (unattended.ts:63-87). No contradiction remains on that path.
+- D-03: partial. Line 788 is fixed; line 791 still reads "(`keryx review complete` lists them all)" inside the same continue message that says the agent never runs that command. Minor, below the scope-B floor, not filed.
+- D-12: open. The delta touches no recorder and adds no press assertion. At head, pressedBy appears in operator-confirm-review-tools.test.ts only for review_chunks_answer, confirm_plan, decide_premise (uphold) and review_complete; review_publish, review_waive_coverage, review_waive_readiness and the mutation-waiver/override decisions still have no remote-yes assertion. Slice-01 contains no test for it. Minor test gap, not a regression, not filed.
+
+### [R-001] Orchestrator skill still tells the shell agent to run `keryx review complete` after a waiver card
+
+- **Severity**: major
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782
+- **Problem**: The PR sets the rule that an agent never runs `keryx review complete` and closes through the review_complete card (SKILL.md line 47 and line 136, completion-gate.ts nextStep, TM-04). Two instructions in the same skill, which the PR edits and which the agent reads while orchestrating, still say the opposite for the waiver paths: SKILL.md:782 "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`" and SKILL.detail.md:386 "in keryx shell call `review_waive_readiness` (the operator answers a card, never a terminal), then run `keryx review complete <package>`". Both lines predate the base (git blame: commit 0f70964c, an ancestor of 062aa9c3), and were correct before this PR; the change to the close path (review_complete card, nextStep wording, the "agent never runs it" rule in SKILL.md:136) is what makes them wrong. The bundled mirrors under src/gdskills/bundled/skills/review/review-orchestrator/ carry the same two lines.
+- **Why it matters**: After a coverage or readiness waiver (and the memory-outside-stage repair path), the agent follows the skill and runs plain `keryx review complete <package>` through shell_exec. Plain complete has no TTY check and no command-risk floor (only --waive and --waive-coverage do; TM-04 section 8), so the round can reach `closed` with no review_complete card, no operator press, no confirmedVia and no pressedBy. The head, evidence, routing and readiness gates still apply; what is bypassed is the operator's final yes and its press record. This is the skill-text half of D-01: the tool strings are fixed, the instruction file the agent reads first is not, and the D-01 enumeration that said the skills "already say call the review_complete card" missed these two lines.
+- **Fix**: In SKILL.md:782 and SKILL.detail.md:386 (and both bundled mirrors) replace ", then run `keryx review complete`" / ", then run `keryx review complete <package>`" with ", then call the `review_complete` card". Keep the "elsewhere the operator runs ..." part as is.
+- **Confidence**: high
+- **class_scope.sites**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782; .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:386; src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:782; src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:386
+- **class_scope.enumeration_method**: git grep -n 'run `keryx review complete' at b1c6da0e6 over src, docs, .metaproject/skills, .metaproject/rules (non-test): 4 instruction sites above; the other matches (completion-gate.ts 756/759/761) are the "you never run it" clause. Separately grepped "then run .keryx review complete" and "to close the review": no further agent-facing instruction.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-01 fixes D-01's tool strings and D-08's doc wording and the unattended path is unaffected, but the same 'run keryx review complete after a waiver card' instruction survives in the orchestrator skill (SKILL.md:782, SKILL.detail.md:386 and the bundled mirrors), D-03 is half fixed (line 791) and D-12 is untouched. The blast radius is a code graph: the skill sites were found by text search, not by the graph.",
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "R-001",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`",
+      "problem": "The PR rule is that an agent never runs `keryx review complete` and closes through the review_complete card (SKILL.md line 47 and 136, completion-gate.ts nextStep, TM-04). SKILL.md:782 still says 'in keryx shell call review_waive_coverage (a card, never a terminal), then run keryx review complete', and SKILL.detail.md:386 says the same for review_waive_readiness (memory-outside-stage repair): 'then run keryx review complete <package>'. Both lines predate the base and were correct before flow 464; the new close path (review_complete card, completion-gate nextStep wording, the 'agent never runs it' rule) makes them wrong. The bundled mirrors under src/gdskills/bundled/skills/review/review-orchestrator/ carry the same two lines.",
+      "impact": "After a coverage or readiness waiver the agent follows the skill and runs plain `keryx review complete <package>` through shell_exec. Plain complete has no TTY check and no command-risk floor (TM-04 section 8), so the round can reach closed with no review_complete card, no operator press, no confirmedVia and no pressedBy. The head, evidence, routing and readiness gates still apply; the operator's final yes and its press record are bypassed. This is the skill-text half of D-01 (the tool strings are fixed, the instruction file is not).",
+      "suggested_fix": "In SKILL.md:782 and SKILL.detail.md:386, and in both bundled mirrors, replace ', then run `keryx review complete`' / ', then run `keryx review complete <package>`' with ', then call the `review_complete` card'; keep the 'elsewhere the operator runs ...' clause.",
+      "evidence": "git grep -n 'run `keryx review complete' at b1c6da0e6 over src docs .metaproject/skills .metaproject/rules lists the four sites; git blame shows both lines come from commit 0f70964c, an ancestor of the base 062aa9c3, so the contradiction is introduced by this PR's new rule (SKILL.md:47, :136; completion-gate.ts:756-761), not by the lines. The D-01 enumeration claimed the skills 'already say call the review_complete card'; these two lines do not.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:386",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:782",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:386"
+        ],
+        "enumeration_method": "git grep -n 'run `keryx review complete' at b1c6da0e6 over src, docs, .metaproject/skills, .metaproject/rules (non-test files): the four skill sites above plus completion-gate.ts:756/759/761, which carry the 'you never run it' clause and are correct; also grepped 'then run .keryx review complete' and 'to close the review' across src docs .metaproject/skills for further agent-facing instructions and found none."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "partial" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-12", "disposition": "open" }
+  ]
+}
+```

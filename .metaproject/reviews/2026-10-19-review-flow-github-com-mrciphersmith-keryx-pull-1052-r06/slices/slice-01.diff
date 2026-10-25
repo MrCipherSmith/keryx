@@ -1,0 +1,14 @@
+--- src/commands/operator-confirm-review.ts
+@@ 687,698 @@
+     if (finding === "") return { refusal: `dispositions[${index}]: finding is required` };
+     if (typeof state !== "string" || !(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)) {
+       return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
+     }
+     if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
++    if (finding.length > MAX_DISPOSITION_FINDING_CHARS) return { refusal: `dispositions[${index}]: finding is longer than ${MAX_DISPOSITION_FINDING_CHARS} characters` };
++    if (typeof evidence === "string" && evidence.trim().length > MAX_DISPOSITION_EVIDENCE_CHARS) {
++      return { refusal: `dispositions[${index}]: evidence is ${evidence.trim().length} characters; the card shows it whole, so the limit is ${MAX_DISPOSITION_EVIDENCE_CHARS}` };
++    }
+     records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === "" ? {} : { evidence: evidence.trim() }) });
+   }
+   return records;

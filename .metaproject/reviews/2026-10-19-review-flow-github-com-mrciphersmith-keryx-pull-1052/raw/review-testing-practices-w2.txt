@@ -1,0 +1,79 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Lens: does each slice-03 test fail if the guarded behaviour breaks (AC5 mirror-undelivered, press-field recording per recorder). The tests that exist in src/remote/mirror-undelivered.test.ts do bite: the mirrorUndeliveredNote branches (no bridge, remote off, channel down, live channel), the subject-last ordering of the note, the bridge-without-client deny, mapApprovalAnswer keeping the flag on a deny and dropping it on a press, and raceApproval firing onUndelivered for an undelivered topic leg are each asserted on observable output, and the RemoteClient test mocks fetch with a rejection so nothing reaches the network. The gaps are on the other side of the slice: no test anywhere in src/review (or src/harness/external, src/learning) asserts that a recorder writes pressedBy/pressedAt, and none asserts that the library refuses to write them for a tui-card, so the whole AC1 audit trail at the record layer rests on callers; and the client-level undelivered test reaches only one of the five places askApproval returns undelivered. No blockers or majors. Not re-reported (slice-02, w1): the undefined allow-list branch, only the evidence gate tested in review_complete, the fixed setTimeout(10) sleeps in mirror-undelivered.test.ts, and complete-gated.ts having no test file.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/types.ts",
+      "line": null,
+      "quote": "...(source?.pressedBy === undefined ? {} : { pressedBy: source.pressedBy }),",
+      "problem": "Press-field recording per recorder is untested at the record layer. cardPressFields is spread by hand into nine recorders (chunks-estimate.ts, coverage-complete.ts record and parse, readiness.ts waiveReadiness, operator-decisions.ts for gate and premise records, plan-confirmation.ts, premise-question.ts, publish.ts), and write-land.ts and learning/decisions.ts carry the fields through their own spreads. A search of the test tree for pressedBy finds only operator-confirmations.test.ts, operator-confirm-tools.test.ts, operator-confirm-review-tools.test.ts and bundle/archive.test.ts. No src/review, src/harness/external or src/learning test asserts that a recorder writes the fields, that readCoverageWaiver parses them back (including the Number.isSafeInteger and non-empty-string guards), or that a recorder given a tui-card confirmation with stray press fields still writes them: cardPressFields copies whatever it is handed regardless of confirmedVia, so the rule that only remote-card records carry a press rests on every caller.",
+      "impact": "A recorder that forgets the spread, spreads the wrong object, or a parser that drops pressedBy on read-back loses the audit trail with every test green. Because the library does not enforce the tui-card exclusion, a caller bug that passes press fields on the TUI path writes them to the record and no test goes red below the card layer. The card-layer tests in slice-02 cover only the four tools they drive on the remote path (the slice-02 per-spec gap is already reported there), so the record-layer recorders reached by publish, waive_coverage, waive_readiness, mutation waiver and reviewer override have no remote-press assertion at either layer.",
+      "suggested_fix": "Add one table-driven test in src/review (for example src/review/card-press.test.ts) that calls each recorder with a remote-card confirmation carrying pressedBy and pressedAt and reads the written file back (including readCoverageWaiver for the coverage waiver, and the published.json, operator-decisions.json, plan-confirmation.json, chunk-estimate.json and research.json records), expecting both fields; and with a tui-card confirmation and no press fields, expecting neither key present. If the exclusion is meant to be held by the library, add the case 'tui-card plus stray press fields writes none' and change cardPressFields (or the recorders) to take confirmedVia. Add a write-land and a learning/decisions case for the same two outcomes.",
+      "evidence": "keryx ctx rg for cardPressFields over src lists 26 matches in nine files, none a test file; keryx ctx rg -l pressedBy over src with a *.test.ts glob returns four files, none in src/review, src/harness/external or src/learning. src/review/types.ts:95-100 shows cardPressFields copying pressedBy and pressedAt without looking at confirmedVia. src/review/coverage-complete.ts:98-100 holds the new parse guard.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:record-layer-press-fields",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "line": null,
+      "quote": "fetchImpl: ((_input: RequestInfo | URL) => Promise.reject(new Error(\"no network\"))) as typeof fetch,",
+      "problem": "AC5: the RemoteClient undelivered test proves one of the five places askApproval returns undelivered. The client has a start state with no stream, and the test hands it a rejecting fetch, so the call returns at the not-connected guard before fetch is ever reached; the mocked rejection is never exercised. The branches after the guard (a non-ok response, a response with no id, a thrown fetch error) each return deny with undelivered true, and the one after the post (`!this.connected`) returns deny without it. None of them has a test, and the last one is the only branch that must not carry the flag.",
+      "impact": "Removing `undelivered: true` from the non-ok, no-id or catch return keeps the suite green, and the TUI card then shows no 'mirror not delivered' note when the bot API is down or rejects the card: the exact case AC5 promises to cover. The deliberate absence of the flag on the post-connect drop is also unpinned, so someone could add it there and tell the operator the card never arrived when it did.",
+      "suggested_fix": "Parametrize the RemoteClient test over an open stream with a fetchImpl that (a) resolves a 500, (b) resolves ok with a body that has no id, (c) rejects, and assert undelivered true for each; add one case that opens the stream, lets the post succeed, closes the stream before the answer and asserts deny without undelivered. Keep fetchImpl injected so nothing leaves the process.",
+      "evidence": "src/remote/mirror-undelivered.test.ts:47-65 builds a RemoteClient with no stream and the rejecting fetchImpl; src/remote/client.ts askApproval returns undelivered true at the not-connected guard, the non-ok branch, the missing-id branch and the catch, and a plain deny after the post when the stream closed.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac5-client-branches",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/approval-mirror.ts",
+      "line": null,
+      "quote": "if (answer.undelivered === true) options.onUndelivered?.();",
+      "problem": "The raceApproval guard order is only half pinned. The tests cover an undelivered answer firing onUndelivered and a plain timeout not firing it; no test covers an undelivered answer that arrives after the dock already settled (the `if (settled) return;` line above it), which must stay silent. src/tui/approval-mirror.test.ts does not mention undelivered at all.",
+      "impact": "Moving the undelivered check above the settled guard would print the 'Telegram mirror not delivered' system line after the operator has already answered at the dock, and no test notices. Cosmetic, hence info.",
+      "suggested_fix": "In the raceApproval describe block, resolve the dock first, then resolve the topic leg with undelivered true, and assert onUndelivered was not called.",
+      "evidence": "src/tui/approval-mirror.ts:50-53 holds the guard order; src/remote/mirror-undelivered.test.ts:97-130 has the fires and the does-not-fire cases only.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac5-undelivered-after-settled",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-03"]
+}
+```
+
+## Summary
+
+Verdict from the testing lens for slice-03: the AC5 tests that exist fail when the guarded helper behaviour breaks and use no real network (fetch is injected). The two real gaps are at the record layer and at the client layer.
+
+- F-001 (minor): no test below the card layer asserts that any recorder writes pressedBy/pressedAt, that the coverage waiver parser reads them back, or that a tui-card record stays free of them. cardPressFields does not look at confirmedVia, so the tui-card exclusion is held only by callers.
+- F-002 (minor): the RemoteClient undelivered test exits at the not-connected guard; the non-ok, missing-id and thrown-error returns, and the deliberate no-flag return after the post, are unpinned.
+- F-003 (info): an undelivered answer arriving after the dock settled is not tested.
+
+Already covered in w1 and not repeated: undefined allow-list branch, only the evidence gate tested in review_complete (including complete-gated.ts having no test file), fixed setTimeout(10) sleeps in mirror-undelivered.test.ts.
+
+Not read: the SKILL.md changes at the head of slice-03.diff (agent instructions, no test surface), the hunks for interactive-tools.ts, help-groups.ts and trigger/unattended.ts beyond the file list, and src/tui/approval-mirror.test.ts beyond a search for undelivered. The estimate.ts, evidence-level.ts and chunks-estimate.ts hunks were read for recorder shape only. No commands were run.
+
+graph_context: unavailable (graphify-out/graph.json was not consulted; verification was by direct reads and keryx ctx rg).
+
+Routing audit: graph_used: no (not-relevant, test-only review by direct reads); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

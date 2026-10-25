@@ -1,0 +1,91 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer: review-testing-practices, wave 1, slice-01 (fix slice for D-01, D-03, D-08, D-12). Read-only run: the payload's allowed_tools is read-only, so the mutation pass was NOT run (no suite was executed, no mutation applied). The mutants below are candidates only; none is reported as a result.
+
+Scope read: slice-01.diff, the fix commit b1c6da0e6 (git show), and the test files that pin the changed strings (operator-confirm-review-tools.test.ts, review-tty-refusal.test.ts, completion-gate.test.ts), by keryx ctx rg over the worktree at head.
+
+What the fix did to the tests: the commit adds two assertions, both in the review_waive_readiness card test (operator-confirm-review-tools.test.ts:346-347): the result contains "Call review_complete to close the review." and does not contain "keryx review complete". That pins 1 of the 6 agent-facing strings the fix rewrote. No test was added for D-12.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-01 rewrites six agent-facing strings (four in operator-confirm-review.ts, two in review.ts, one in completion-gate.ts) to point at the review_complete card, and adds assertions for one of them (the review_waive_readiness result). The review_waive_coverage result, both waiver tool descriptions, the two review.ts terminal-refusal messages and the describeBlockers empty-list line have no assertion on the new wording, so reverting any of them keeps the suite green by reading. D-12 (press fields unpinned at four recorders) is not touched by the fix. The mutation pass was not run: this payload is read-only.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "problem": "The fix that points agents at the review_complete card pins only one of the strings it changed. operator-confirm-review-tools.test.ts:346-347 asserts the review_waive_readiness RESULT says 'Call review_complete to close the review.' and omits 'keryx review complete'. Nothing asserts the review_waive_coverage result (operator-confirm-review.ts:296; the coverage test at lines 271-290 never reads result.output, and 'coverage waived' appears nowhere in the test file), the two tool descriptions (lines 262 and 312; no test reads .description), the two terminal-refusal messages in review.ts:4558 and 4562 (review-tty-refusal.test.ts:43-52 asserts only the tool name and 'Outside keryx shell, run this command in a terminal', not 'call the review_complete card'), or describeBlockers' empty-list line (completion-gate.ts:788; completion-gate.test.ts has no describeBlockers or review_complete assertion, the D-14 gap). D-01's own suggested_fix asked for a test that neither waiver result nor description contains 'Run `keryx review complete`' and that both name review_complete; only the readiness result half was written.",
+      "impact": "The point of D-01 is that the text the agent reads right after a waiver must not send it to run `keryx review complete` itself, which has no TTY check and would close the round without an operator press. Putting the old sentence back at any of the five unpinned sites reintroduces that instruction with no red test. This is the same text, in the same file, that already regressed once between rounds.",
+      "suggested_fix": "In operator-confirm-review-tools.test.ts add to the review_waive_coverage test `expect(result.output).toContain('Call review_complete to close the review.'); expect(result.output).not.toContain('keryx review complete');`, and one test over both waiver specs reading the tool description (`tool('review_waive_coverage').description`, `tool('review_waive_readiness').description`) that expects it to contain 'call review_complete' and not 'run `keryx review complete`'. In review-tty-refusal.test.ts add `expect(message).toContain('review_complete card')` to the --waive-coverage and --waive cases. In completion-gate.test.ts assert describeBlockers({ blockers: [] }) contains 'review_complete'. A single table over the strings is enough.",
+      "evidence": "git show b1c6da0e6 lists the six changed strings and the two added test lines (operator-confirm-review-tools.test.ts @@ -343,6). keryx ctx rg --all over operator-confirm-review-tools.test.ts for 'coverage waived|not reviewed|review_complete|.description|keryx review complete' returns assertions at 346 and 347 only for the changed wording; the only 'not reviewed' hits are the card title (276) and operatorQuote (284), not result.output. keryx ctx rg --all over review-tty-refusal.test.ts returns 11 matches, none containing 'review_complete card'. keryx ctx rg --all over completion-gate.test.ts for describeBlockers|none listed|review_complete returns no hit. This is static reading, not a mutation run (the payload is read-only). Candidate mutants M-A to M-E in mutant_candidates.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "file": "src/commands/operator-confirm-review.ts",
+      "quote": "file(s) not reviewed. Call review_complete to close the review.",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:262 (review_waive_coverage description, unpinned)",
+          "src/commands/operator-confirm-review.ts:296 (review_waive_coverage result, unpinned)",
+          "src/commands/operator-confirm-review.ts:312 (review_waive_readiness description, unpinned)",
+          "src/commands/operator-confirm-review.ts:358 (review_waive_readiness result, pinned by test line 346-347)",
+          "src/commands/review.ts:4558 (--waive-coverage refusal, unpinned)",
+          "src/commands/review.ts:4562 (--waive refusal, unpinned)",
+          "src/review/completion-gate.ts:788 (describeBlockers empty list, unpinned)"
+        ],
+        "enumeration_method": "Strings changed by commit b1c6da0e6 (git show), each looked up in the three nearest test files with keryx ctx rg --all; the review_waive_readiness result is the only one with an assertion."
+      }
+    }
+  ],
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    {"id": "D-01", "disposition": "partial"},
+    {"id": "D-02", "disposition": "open"},
+    {"id": "D-03", "disposition": "partial"},
+    {"id": "D-04", "disposition": "open"},
+    {"id": "D-05", "disposition": "open"},
+    {"id": "D-06", "disposition": "open"},
+    {"id": "D-07", "disposition": "open"},
+    {"id": "D-08", "disposition": "closed"},
+    {"id": "D-09", "disposition": "open"},
+    {"id": "D-10", "disposition": "partial"},
+    {"id": "D-11", "disposition": "open"},
+    {"id": "D-12", "disposition": "open"},
+    {"id": "D-13", "disposition": "open"},
+    {"id": "D-14", "disposition": "open"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0},
+  "mutation_pass": {
+    "run": false,
+    "reason": "payload allowed_tools is read-only; no suite was executed and no mutation applied",
+    "gates_mutated": 0,
+    "gates_not_reached": 12
+  },
+  "mutant_candidates": [
+    {"id": "M-A", "file": "src/commands/operator-confirm-review.ts", "anchor": "file(s) not reviewed. Call review_complete to close the review.", "replacement": "file(s) not reviewed. Run `keryx review complete` to close the review.", "kind": "behavior"},
+    {"id": "M-B", "file": "src/commands/operator-confirm-review.ts", "anchor": "call review_complete afterwards to close the review.\",\n      inputSchema: { type: \"object\", properties: { package: packageSchema }, required", "replacement": "run `keryx review complete` afterwards to close the review.", "kind": "behavior"},
+    {"id": "M-C", "file": "src/commands/operator-confirm-review.ts", "anchor": "in the manifest and the report header; call review_complete afterwards to close the review.", "replacement": "in the manifest and the report header; run `keryx review complete` afterwards to close the review.", "kind": "behavior"},
+    {"id": "M-D", "file": "src/commands/review.ts", "anchor": "call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card.", "replacement": "call the review_waive_coverage tool: the operator answers it as a card, then run `keryx review complete`.", "kind": "behavior"},
+    {"id": "M-E", "file": "src/commands/review.ts", "anchor": "call the review_waive_readiness tool: the operator answers it as a card, then call the review_complete card.", "replacement": "call the review_waive_readiness tool: the operator answers it as a card, then run `keryx review complete`.", "kind": "behavior"},
+    {"id": "M-F", "file": "src/review/completion-gate.ts", "anchor": "- none listed; call the `review_complete` card to close the package", "replacement": "- none listed; run `keryx review complete` to close the package", "kind": "behavior"},
+    {"id": "M-G", "file": "src/commands/operator-confirm-review.ts", "anchor": "Call review_complete to close the review.` };\n    },\n  };\n}\n\n// ----", "replacement": "Run `keryx review complete` to close the review.` };", "kind": "behavior"},
+    {"id": "M-H", "file": "src/commands/operator-confirm-review.ts", "anchor": "...cardPressFields(confirmation),", "replacement": "", "kind": "behavior"},
+    {"id": "M-I", "file": "src/commands/operator-confirm-review.ts", "anchor": "recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation))", "replacement": "recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia)", "kind": "behavior"},
+    {"id": "M-J", "file": "src/commands/operator-confirm-review.ts", "anchor": "confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation)", "replacement": "confirmedVia: confirmation.confirmedVia", "kind": "behavior"},
+    {"id": "M-K", "file": "src/review/completion-gate.ts", "anchor": "(\\`keryx review complete\\` lists them all)", "replacement": "(\\`keryx review status\\` lists them all)", "kind": "presentation"},
+    {"id": "M-L", "file": "docs/docs/guides/autonomous-review.md", "anchor": "closes the package through the CLI path as before (`keryx review complete`)", "replacement": "closes the package through the review_complete card", "kind": "presentation"}
+  ],
+  "follow_ups": []
+}
+```
+
+Notes on prior dispositions (checked against code at head b1c6da0e6; the tests are the lens of this reviewer):
+- D-01 partial: the four strings and the header comment now say review_complete (operator-confirm-review.ts 24, 262, 296, 312, 358); the code half is closed. The test half asked for in D-01 is one quarter written (F-001).
+- D-03 partial: line 788 now says "call the `review_complete` card"; line 791 still reads "(`keryx review complete` lists them all)" and no test reads either.
+- D-08 closed: autonomous-review.md now states the unattended exception and the shell-agent rule in one paragraph. No test pins the documented exclusion of the card tools from the unattended roster in this slice (src/trigger/unattended.test.ts has 3 relevant hits, not read here).
+- D-10 partial: cfd839061 replaced the tui-shell source grep with a behavioural unit test of OperatorConfirmationLog.settle, which removes the source-text assertion; mirrorApprovalToTopic itself is still not driven, so mutants T1 and T6 from r03 are still unpinned by reading.
+- D-12 open: slice-01 and the delta add no test for the press fields at operator-confirm-review.ts:236 (review_publish), 294 (waive_coverage), 357 (waive_readiness), 444 (mutation waiver and reviewer override). keryx ctx rg for pressedBy in operator-confirm-review-tools.test.ts shows assertions only at 132-133, 428, 505, 534 and 593 (chunks estimate, premise decisions, plan, complete). The fix is claimed "fixed" with no test change behind it.
+- D-02, D-04..D-07, D-09, D-11, D-13, D-14: no change in this slice; left open as the operator allowed.
+
+Cap statement: 0 mutants run (read-only payload), 12 candidates listed, 12 not reached. No predicted mutation result is claimed as observed.

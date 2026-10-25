@@ -1,0 +1,70 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "slices": ["slice-01"],
+  "summary": "Scope B regression check of delta d2cb377f5..672e37687 (head 672e37687b7c27184e88c5d6571f8c509a2c671e), slice-01 read in full. The graph-visible dependents hold: the confirm-token consumers, the flow schema and SignatureConfirmation readers (pressedBy/pressedAt are optional, additionalProperties stays true), the OperatorConfirmationLog readers (waiting() now respects the 1 hour TTL; markUndelivered is additive), the shell tool rosters (19 tools, equal to OPERATOR_CONFIRM_TOOL_NAMES; operator-confirm-rosters.test.ts 6 pass) and the review_complete consumers. I ran operator-confirm-review-tools, confirm-token, operator-confirmations and operator-confirm-tools: 116 pass, 0 fail. Two major regressions sit where the radius cannot see them, in prose and in a documented guard: (F-001) the changed review-orchestrator SKILL says an agent never runs `keryx review complete`, but the autonomous prompt, the completion gate and the unattended exclusion all still assume the agent runs it; (F-002) the TM-04 fix for upheld C-05 claims `review complete` is terminal-only by a TTY check that runComplete does not perform. RADIUS LIMITS: the blast radius kept 40 files and DROPPED 8 by the file cap, so the set is not complete; 8 of the changed files are non-code (skills, docs, schema md) and are recorded as not-a-graph-node, so the radius could not answer for them; prompt strings and runtime hand-offs are not graph edges. F-001 and F-002 were found by reading consumers by hand, not from the radius. Below major, not filed: the stale `keryx review complete <package> [--head]` comment at src/commands/operator-confirm-review.ts:18, and docs/docs/cli-reference.md:4916 still listing `--head <sha>` with '(card review_complete)'. Nothing here re-reports round 1 (C-05, C-10 fixed; C-25 dismissed).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/autonomous-profile.ts",
+      "line": 153,
+      "quote": "The run is finished only when keryx review complete has closed the package.",
+      "problem": "The delta changes the review-orchestrator SKILL (src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md ~line 136, and .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md plus both SKILL.detail.md copies) to say an agent never runs `keryx review complete`; the close goes through the review_complete operator card in keryx shell, and the delta removed the model-supplied head. buildAutonomousPrompt (`keryx review run --autonomous`) was not changed and still tells the child at line 144 to 'finish it yourself: keryx review start, the reviewer waves, keryx review ingest, then keryx review complete', and at line 153 that 'the run is finished only when keryx review complete has closed the package'; lines 157 and 162 tell it to pass `--head`. Line 151 points the same child at review-orchestrator/SKILL.md, which now forbids that command. The card is not an option for this child: src/trigger/unattended.ts:73 keeps review_complete in OPERATOR_CONFIRM_TOOL_NAMES, so unattended and autonomous runs are never offered it. autonomous-run.ts:408-410 reports 'complete' only when the package is `closed`, and completion-gate.ts:812-819 tells the agent the review is finished when `keryx review complete` accepts it. So the one automated path that closed a package now has contradictory instructions and no sanctioned way to close.",
+      "impact": "Trigger: `keryx review run --autonomous` (or any unattended review trigger) on a PR or range. The child reads the skill, obeys 'never run keryx review complete', and stops with an open package; the run is then not reported complete. Or it follows the prompt, runs the command through the shell, and does exactly what the skill and TM-04 now declare forbidden, with no operator yes. Either the autonomous review feature stops closing its work, or the new rule is bypassed by the project's own prompt. Which one depends on the model, which is the reason it needs one rule.",
+      "suggested_fix": "Decide the autonomous case explicitly and make all four texts agree. Either (a) state in the SKILL that `keryx review run --autonomous` is the one sanctioned caller of `keryx review complete`, and gate it by an environment marker the runner sets, or (b) change buildAutonomousPrompt, the completion-gate continue message (completion-gate.ts:812-819) and autonomous-run.ts to end at 'ready to complete' and let the runner or the operator close it. Add a test that buildAutonomousPrompt does not instruct a command the bundled SKILL forbids.",
+      "evidence": "keryx ctx rg at the reviewed head: src/review/autonomous-profile.ts:144,153,157,162 name `keryx review complete`; src/trigger/unattended.ts:73 lists review_complete in OPERATOR_CONFIRM_TOOL_NAMES; the bundled SKILL.md 'Done when' line (136) and the changed docs say an agent never runs it; src/review/autonomous-run.ts:408-410 requires a closed package for status complete. The CLI itself still works (runComplete has no TTY check on a plain complete), so this is a conflict of instructions, not a thrown error.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "dedupe_key": "regression:autonomous-prompt-vs-skill-no-complete",
+      "location_class": "dependent",
+      "class_scope": {
+        "sites": [
+          "src/review/autonomous-profile.ts:144",
+          "src/review/autonomous-profile.ts:153",
+          "src/review/autonomous-profile.ts:157",
+          "src/review/autonomous-profile.ts:162",
+          "src/review/completion-gate.ts:812",
+          "src/review/autonomous-run.ts:408",
+          "src/trigger/unattended.ts:73"
+        ],
+        "enumeration_method": "keryx ctx rg for `keryx review complete` over src/review, src/trigger and src/commands at 672e37687, then each hit read for who it addresses: 4 hits in autonomous-profile.ts and the continue message at completion-gate.ts:812-819 address a child agent; the unattended.ts:73 exclusion and autonomous-run.ts:408 are the two facts that leave that agent no card. The other completion-gate.ts and review.ts hits are operator or CLI output, not instructions to an agent, and are not sites. Not enumerated: prompts assembled outside src (a user's own trigger prompt)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/commands/review.ts",
+      "line": 4556,
+      "quote": "const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);",
+      "problem": "The delta's TM-04 change (docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md section 8, line 127, plus the SKILL text) answers upheld C-05 by declaring that `review confirm-plan`, `review decide-premise` and `review complete` are terminal-only by a TTY check. runComplete does not do that for a plain complete. The TTY check at review.ts:4556-4563 applies only when `--waive-coverage` (4557) or `--waive` (4561) is present. A plain `keryx review complete <pkg>` runs completeReviewGated at line 4572 with no terminal test. The command-risk floor does not catch it either: src/lib/command-risk.ts touchesCoverageWaiver (~709-748) matches only the coverage-waiver flag and opaque arguments. So the model-callable path that C-05 was upheld for (closing a round through shell_exec without the operator's yes) is closed in the documentation and in the skill, but not in the code.",
+      "impact": "Trigger: in keryx shell, the model calls shell_exec `keryx review complete <package>` instead of the review_complete card, which the SKILL now only asks it not to do. Outcome: the round is closed with the manifest's recorded head, with no operator confirmation and no confirmedVia record, when every machine gate is green. The card's own recorded fact ('the operator pressed yes') is then not what closes the review. The doc states a guard that does not exist, which is worse than no statement because the next reviewer will take it as the control.",
+      "suggested_fix": "Make the claim true or remove it. Either add the same isTerminal() refusal to plain `review complete` (with the existing `seams.isTerminal` seam and an exception for the runner that F-001 needs), and a command-risk floor for `keryx review complete` as a shell command; or edit TM-04 section 8 and the SKILL to say that plain `review complete` is NOT terminal-only and is guarded only by instruction. Add a runComplete test for a non-TTY plain complete.",
+      "evidence": "src/commands/review.ts:4556-4563 read at the reviewed head: both throws are conditioned on `waiver !== undefined` and on the `--waive` tokens; line 4572 calls completeReviewGated unconditionally after them. TM-04 line 127 reads 'review confirm-plan, review decide-premise and review complete are terminal-only by a TTY check'. runOperatorCommand (review.ts:941) holds the TTY check for confirm-plan and decide-premise. command-risk.ts touchesCoverageWaiver has no `review complete` branch.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "dedupe_key": "regression:review-complete-no-tty-check",
+      "location_class": "dependent",
+      "class_scope": {
+        "sites": [
+          "src/commands/review.ts:4556",
+          "src/commands/review.ts:4572",
+          "src/lib/command-risk.ts:731",
+          "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:127"
+        ],
+        "enumeration_method": "Read runComplete (review.ts:4539-4572) for every branch that tests a terminal, then keryx ctx rg for isTerminal/isTTY in src/commands/review.ts: the check is reached only by the two waiver flags. Compared with runOperatorCommand (review.ts:941), which guards confirm-plan and decide-premise, so those two documented claims hold and only `review complete` is the false one. command-risk.ts read for any rule on a plain `keryx review complete` shell command: none."
+      }
+    }
+  ],
+  "follow_ups": [],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "prior_dispositions": [],
+  "stats": { "blocker": 0, "major": 2, "minor": 0, "info": 0 },
+  "tokens": {}
+}
+```

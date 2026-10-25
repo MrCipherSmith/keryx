@@ -1,0 +1,81 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable vulnerability found in the conditional-reads path handling or proof checks. Declared paths are normalised and realpath-contained at resolve time, keyword matching escapes its input, and the summary/anchor/sha256 proof cannot be satisfied by a copied hash alone. Two minor hardening items (a quadratic regex on a crafted heading line; task text persisted to a non-ignored runtime file) and one info note on the validator's trust in the resolved file.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/references-section.ts",
+      "line": null,
+      "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+      "problem": "HEADING is run on every ATX heading line of a declared document. The lazy `(.*?)` followed by `[ \\t]*$` is quadratic when the heading line holds a long run of spaces or tabs in the middle followed by a non-space character: at each lazy expansion position inside the run, `[ \\t]*` consumes the rest of the run, `$` fails, and it backtracks one step at a time. `stripClosingHashes` (`/[ \\t]+#+$/`) has the same shape on the matched text. Nothing caps the line length: the resolver accepts a file up to CONTRACT_MAX_BYTES (262144), `inspectDocument` in references-check.ts the same, and the validator's `currentSection` in reference-proof.ts reads the file with no size limit.",
+      "impact": "A declared document carrying one crafted heading line such as `# a` + about 200,000 spaces + `b` makes extractSection spin for minutes of synchronous CPU (order n squared). The same scan runs in `skills resolve-context`, in `contracts validate --resolved`, in `skills references check`, and in `loadProjectContextStatus`, which the TUI polls every 5 seconds (PROJECT_CONTEXT_POLL_MS) when the declaration has an anchor, so the TUI event loop freezes. Entry point: a contributor edits a document that references.json declares (or adds a declaration for a file they control). Needs a repo write, so a denial of service on developer tooling, not data exposure.",
+      "suggested_fix": "Make the heading match linear: capture with `^ {0,3}(#{1,6})[ \\t]+(\\S.*)$` (or `(.*)`) and trim the result in code instead of letting the regex backtrack on trailing whitespace; do the closing-hash strip with a manual scan from the end of the string. Optionally skip heading detection for lines over a few thousand characters.",
+      "evidence": "src/gdskills/references-section.ts:37 (HEADING), :49-51 (stripClosingHashes), :54-79 (scanHeadings runs HEADING on every line outside a fence). Callers: reference-entries.ts resolveReferences, references-check.ts declarationFindings, reference-proof.ts currentSection, project-context-status.ts readReferences via checkReferences (polled by createProjectContextFeed). Derived by reading the regex, not executed (read-only run).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "references-section-heading-regex-quadratic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "recordLastResolve now stores the task text (up to TASK_TEXT_MAX_CHARS = 4000 characters) in the last-resolve record. That file is `.metaproject/data/skills/project-context/last.json`, which `git check-ignore` reports as not ignored (neither the root .gitignore nor its managed keryx block lists it). Before this change the record held paths, hashes and warnings only. The flow-orchestrator and job-orchestrator skills are now told to pass the task title and description on every dispatch, and the CLI `--task-text` accepts free text.",
+      "impact": "An operator or agent that runs `git add .metaproject` / `git add -A` after a resolve (the repo's own .gitignore comments describe this exact hazard for other runtime files) commits up to 4000 characters of task prose, which can hold a pasted token, customer data or a private issue body, into history that may be public. Flow task text is already versioned in plan.md, so the new exposure is chiefly ad hoc `--task-text` values and MCP `task_text` from conversations. The TUI does not read taskText (no reader found under src/tui), so the persisted copy is needed only for AC3.",
+      "suggested_fix": "Add `.metaproject/data/skills/project-context/` (or `last.json`) to the .gitignore outside the managed block and to renderMetaprojectGitignoreBlock() in src/lib/metaproject-gitignore.ts, or write the record with mode 0o600 as the other per-machine runtime files do. If the text is only needed to show what a resolve was for, store a hash plus the first 200 characters.",
+      "evidence": "src/gdskills/context-resolver.ts: RecordedResolve gains taskText/taskTextTruncated; recordLastResolve writes it; LAST_RESOLVE_PATH = \".metaproject/data/skills/project-context/last.json\". `git check-ignore -v` on that path exits 1 (not ignored); `git ls-files .metaproject/data/skills` lists nothing, so the file is untracked-but-not-ignored.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "last-resolve-task-text-not-ignored"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "const file = path.isAbsolute(entry.path) ? entry.path : path.join(projectRoot, entry.path);",
+      "problem": "The summary-words check re-reads the declared document from `entry.path` as stored in the `--resolved` JSON, with no containment (no realpath inside the project root, no regular-file check, no size cap), unlike the resolver's readDeclaredFile. The anchor and tier it checks are likewise taken from the resolved file, not re-derived from references.json. This matches the existing currentSha behaviour from flow 461 (same absolute-path read), so it is the existing trust model extended, not a new boundary.",
+      "impact": "Only if the resolved file is hand-edited or a declared document is replaced by a symlink between resolve and validate: the validator reads that file, and the reported count of shared words (or the read error text) becomes a weak oracle for its contents. Nothing is written or returned verbatim. No attack path was found where an untrusted party controls the resolved file; stated so the trust assumption is explicit.",
+      "suggested_fix": "Reuse the resolver's containment (realpath inside project root, regular file, size <= CONTRACT_MAX_BYTES) in currentSection, and, if worker-writable resolved files are in the threat model, re-load references.json at validate time and compare anchor and tier to the declaration.",
+      "evidence": "src/gdskills/reference-proof.ts currentSection; src/gdskills/resolved-context-check.ts currentSha uses the same unguarded join (flow 461). Resolver side for comparison: src/gdskills/reference-entries.ts readDeclaredFile (lstat, realpath, isPathInside, isFile, size cap).",
+      "confidence": "low",
+      "reviewer": "review-security-code",
+      "dedupe_key": "proof-reads-resolved-path-uncontained"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Security Review
+
+### Scope
+- Branch: feat/conditional-reads; merge-base 1658f77d374b2d20189a55eaf44b95d64768d6b6; head d6267d4a5099f39b74e86a71e5c8f61ca47aa63d
+- Scope mode: diff (slice-01, 25 files)
+- Read: the source files of the slice at head in full (references-config.ts, references-section.ts, reference-entries.ts, reference-proof.ts, references-check.ts, skills-references.ts, resolved-context-check.ts, project-references-view.ts, lib/glob.ts) and the diffs of context-resolver.ts, resolve-context-command.ts, project-context-status.ts, import-rules.ts, skills.ts, the MCP/harness task_text plumbing, project-context-inspector.ts and tui-shell.ts. The first 718 lines of the slice diff were read directly (output-contract schemas, flow 462 criteria and description, orchestrator SKILL text, README start). Lines 719-1827 (rest of README, docs site pages, tests) were not paged; docs and tests carry no executable change, and the source they describe was read at head. Not executed (read-only run), so F-001 rests on analysis of the regex.
+
+### Summary
+- Blockers: 0, Major: 0, Minor: 2, Info: 1
+
+### Clean Areas
+- Path traversal / symlink escape of declared paths: normaliseRelativePath rejects absolute, drive-letter and `..` paths and `.`; resolveReferences does lstat + realpath + isPathInside(rootReal) + regular-file + size cap before reading; a symlink out of the root is refused with a named warning. A declared path such as `.git/config` is allowed but only its hash, size and the declarer's own description are emitted, never content.
+- Cited-path handling in the resolver: normaliseCitedPath keeps the existing absolute/`..` refusal in collectContracts; unnormalisable spellings stay raw so they are refused by name.
+- Regex built from declared strings: keywordOccurs escapes every metacharacter (escapeRegExp) and wraps it in fixed lookarounds, so no ReDoS or regex injection from keywords. Globs go through the existing globToRegExp (unchanged file); repeated `**` and `{a,b}` expansion are polynomial/exponential only for a pathological glob written by the project author in references.json, so not reported as a finding.
+- sha256 / anchor / summary proof: the hash must equal the resolver pin on the last citation of the path; the anchor must equal the declared string; `how: n/a` is a miss; summary length and shared-vocabulary checks run against the section as it is now, and drift catches an edit between resolve and validate for any tier. No path was found where a copied hash alone satisfies a promoted entry. Citing a path twice does not defeat the hash check (last citation counts). The vocabulary check being a proxy is a settled limit.
+- Promotion not dropped by the cap: the over-cap branch only warns; it cannot be used to demote an entry.
+- Malformed references.json: loadReferences never throws; invalid content warns and turns promotion off (fail-open on promotion is the documented design, check reports it as an error).
+- Secrets / injection / CSRF / open redirect / crypto / auth: not touched by this change. task_text is not evaluated or interpolated into a shell or template; it is only matched and stored.
+- TUI: task text is not rendered; rendered strings come from the project's own declarations and findings.
+
+### Notes
+- Not re-raised (settled): vocabulary-proxy summary check, suggest output not pasteable, references-check's own citation scan, ci-triage-source environment failures, mkdocs not run, and the head-fixed items (duplicate path rejection, shared normalisation, truncation warning, BOM).

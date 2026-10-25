@@ -1,0 +1,142 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "slices": ["slice-01"],
+  "summary": "Round r02 delta d2cb377f5..672e37687 of PR #1052 (head 672e37687b7c27184e88c5d6571f8c509a2c671e), authorization and token handling lens. No blockers or majors. Remote answer validation is fail-closed, the token is one-time and burned on every rejection, pressedBy/pressedAt come from the driver and token and not from the model, and the review_complete card can no longer complete a head other than the recorded one. Round 1 fixes C-04, C-05, C-06, C-07, C-08, C-10, C-17 and C-40 are real and opened no hole. One minor (the card prints the recorded head unsanitised) and two info findings; three pre-existing items are listed separately and never block.",
+  "findings": [
+    {
+      "id": "S-01",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 729,
+      "quote": "`reviewed head: ${facts.head}`",
+      "problem": "buildCard of the review_complete card interpolates the recorded head raw at lines 723, 725, 729 and 734, while every other model-or-disk-supplied field on this card goes through cardSafe (reviewId at 725, subject.head at 408 and 424). facts.head comes from manifest.target.head (line 665), which is only checked to be a non-empty string; roundRecordTampered covers round.json and prior_findings.json, not manifest.json. cardSafe is src/lib/card-safe.ts:7 and no central sanitiser exists in operator-confirm-tools.ts, operator-confirmations.ts, agent.ts or tui-shell.ts.",
+      "impact": "Attack vector: a prompt-injected agent that can write files in the review package edits manifest.json target.head to a string holding a newline and ANSI or bidi sequences. The card then draws forged lines (for example a fake 'waivers: none' or a fake evidence line) in the shell dock and in the Telegram topic message. The real waiver and evidence lines still follow and the factsDigest covers the forged value, so the gates are unaffected: the operator is misled in appearance only.",
+      "suggested_fix": "In completionFacts (line 665) accept only /^[0-9a-f]{7,64}$/i as the recorded head and treat anything else as undefined, and wrap the head in cardSafe at lines 723, 729 and 734.",
+      "evidence": "src/commands/operator-confirm-review.ts:723,725,729,734 (raw facts.head), :665 (only a non-empty string check), :408 and :424 (cardSafe applied to subject.head elsewhere), src/lib/card-safe.ts:7 (cardSafe definition), src/review/round-record.ts:276 (roundRecordTampered scope).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "security-code:review-complete-card-head-unsanitised:operator-confirm-review.ts",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "S-02",
+      "severity": "info",
+      "file": "src/lib/command-risk.ts",
+      "line": 726,
+      "quote": "return completeLike && opaqueArgs(rest);",
+      "problem": "parsedCoverageWaiver (src/lib/command-risk.ts:715-728) and touchesCoverageWaiver (743-748) gate only the coverage waiver flag and `review complete` calls with opaque arguments. A plain `keryx review complete <package>` through shell_exec is not gated, so the review_complete card's operator act is enforced only by prose: the review-orchestrator SKILL.md and SKILL.detail.md now tell the agent to complete a review only through the card. The operator accepted this in round 1 (C-05, upheld and fixed in 672e37687 as a prose rule), so it is recorded for tracking and not raised as a defect.",
+      "impact": "Attack vector: an agent that ignores the skill text runs `keryx review complete <package>` via shell_exec and skips the human act. The head, evidence-level, research and readiness gates still run in completeManagedReview, so only the operator act is skipped, not the gates.",
+      "suggested_fix": "Optional hardening: have the shell_exec classifier require the confirmation record (completion-confirmation.json) for `review complete` when run from an agent session.",
+      "evidence": "src/lib/command-risk.ts:715-748; .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md and src/gdskills/bundled/skills/review/review-orchestrator (prose rule, not enforced).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "security-code:plain-review-complete-ungated-shell-exec:command-risk.ts",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "S-03",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 732,
+      "quote": "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
+      "problem": "completeHeadGate (src/review/complete-head-gate.ts) lets a merged or moved PR through when the report's first line names the reviewed SHA and says the PR moved (lines 31-32, 52-60), and an unreachable tracker only warns (line 32). The card lines at 726-733 do not show whether completion rests on a moved-PR acknowledgement or an unreachable tracker, so the operator cannot see which gate outcome they are accepting.",
+      "impact": "No exploit path demonstrated in the diff. Informational gap in what the operator sees.",
+      "suggested_fix": "Optionally add a card line stating the head-gate outcome (clean, moved and acknowledged, tracker unreachable).",
+      "evidence": "src/commands/operator-confirm-review.ts:726-733; src/review/complete-head-gate.ts:31-32,52-60.",
+      "confidence": "low",
+      "reviewer": "review-security-code",
+      "dedupe_key": "security-code:card-hides-head-gate-outcome:operator-confirm-review.ts",
+      "location_class": "in-diff"
+    }
+  ],
+  "pre_existing": [
+    {
+      "id": "P-01",
+      "severity": "info",
+      "file": "src/flow/confirm-token.ts",
+      "line": 235,
+      "quote": "...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),",
+      "problem": "confirm-token.json stores pressedBy, pressedAt and confirmedVia as plain fields (lines 73-77, 138-141) next to the sha256 token hash; they are not signed. The delta only carries them into the SignatureConfirmation (235-236); it does not make them less trustworthy than before.",
+      "impact": "Anyone with write access to the flow directory can edit who pressed and when, and the signature then records the edited values.",
+      "suggested_fix": "Track separately: bind the provenance fields into the stored token hash, or sign the record.",
+      "evidence": "src/flow/confirm-token.ts:73-77,138-141,228,235-236.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "security-code:confirm-token-provenance-unsigned:confirm-token.ts",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "P-02",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": 192,
+      "quote": "pending.set(token, { input: key(input), card, shown, prepared: built.prepared, issuedAt: now().getTime() });",
+      "problem": "The in-process pending Map (declared at line 157) has no sweep for cards that are never answered (known as C-42). Expired entries are refused on use through the 1h TTL check but are not evicted.",
+      "impact": "Slow memory growth in a long-lived shell session; not an authorization weakness, because an expired entry cannot be used.",
+      "suggested_fix": "Track separately: evict entries older than REMOTE_CARD_TTL_MS when a new card is minted.",
+      "evidence": "src/commands/operator-confirm-tools.ts:157,192.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "security-code:pending-card-map-no-sweep:operator-confirm-tools.ts",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "P-03",
+      "severity": "info",
+      "file": "src/review/round-record.ts",
+      "line": 276,
+      "quote": "export function roundRecordTampered(packageDir: string): string | undefined {",
+      "problem": "roundRecordTampered covers round.json and prior_findings.json only; manifest.json, the source of the recorded head, is outside it. S-01 is the concrete consequence in changed code.",
+      "impact": "A tampered manifest.json target.head is not detected before the card shows it.",
+      "suggested_fix": "Track separately: extend the tamper check to manifest.json, or validate target.head at read time (see S-01).",
+      "evidence": "src/review/round-record.ts:276 and following; src/commands/operator-confirm-review.ts:665.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "security-code:round-record-tamper-misses-manifest:round-record.ts",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+## Security Review (round r02, delta d2cb377f5..672e37687)
+
+### Scope
+- PR: MrCipherSmith/keryx #1052 (flow 464, helyx operator confirmations)
+- Reviewed head: 672e37687b7c27184e88c5d6571f8c509a2c671e
+- Scope mode: explicit-hash-range, delta 24 files (mostly noise), slice-01
+- Lens: authorization and token handling
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1 (S-01)
+- Info: 2 (S-02, S-03)
+- Pre-existing, non-blocking: 3 (P-01..P-03)
+
+### Authorization and token handling: results
+
+1. Allowed user id is fail-closed. src/commands/operator-confirm-tools.ts remote branch refuses when pressedBy or pressedAt is missing, and when `allowed === undefined || !allowed.includes(pressedBy)`. An empty or absent list refuses. The provider (src/commands/shell.ts:4224) reads `loadRemoteConfig()` fresh, and src/remote/config.ts requires a non-empty allowedUserIds. The hub sender allowlist (src/remote/hub.ts:1086) is a second layer, and `mapApprovalAnswer` (src/remote/shell-bridge.ts) sanitises `fromId` as a safe integer.
+2. The token is one-time and burned on rejection. `pending.delete(token)` runs before any remote check, so wrong-user, wrong-question (the key(input) mismatch drops the token), expired and missing-provenance answers all spend it. A replay finds nothing. The dock/topic race is settled in `raceApproval` (src/tui/approval-mirror.ts): the first answer wins and the other leg is aborted. `isTopicPress` accepts only an allow or a deny that names who pressed, so a timeout or abort never counts as a press.
+3. The TTL is 1h (`REMOTE_CARD_TTL_MS`) and is measured on the shell clock, not on a value in the payload.
+4. Provenance is taken from the driver, not the model. src/commands/agent.ts:6120-6124 sets confirmationVia, confirmationPressedBy and confirmationPressedAt from the response only when a card exists and `response.via === "remote"`, and 6187-6192 pass them in the `tool.invoke` ctx. The model input has no field for them. `consumeConfirmationToken` (src/flow/confirm-token.ts) carries stored.pressedBy and pressedAt into the SignatureConfirmation, and types.ts and schema.ts add them with type checks.
+5. The review_complete card can no longer complete a different head. The model-supplied `head` input is gone from the schema, buildCard and apply. The head is the recorded manifest.target.head. apply re-reads the facts, checks the factsDigest, then calls `completeReviewGated`, which runs completeHeadGate with prLookup. A failure after the manifest closed is treated as closed. completion-confirmation.json carries cardPressFields, and an unwritable record returns isError. Waivers and reviewer overrides appear on the card via `readOperatorDecisions`, which accepts only gate-relaxing kinds that pass `validGateDecision`.
+6. The display layer (OperatorConfirmationLog, `waiting()`, `markUndelivered`, the try/finally settle in tui-shell.ts) carries no authorization decision.
+
+### Clean Areas
+- Remote answer validation, token burn, TTL, replay and race: sound.
+- Provenance from token and driver: sound.
+- Head binding and operator act on review_complete: sound, apart from S-01 (display only).
+- Injection (SQL, command, SSTI, eval): nothing in the delta.
+- Secrets and logging: no secret in the delta; the token plaintext is held only in the in-process map and the sha256 hash is stored.
+- Crypto: sha256 plus UUID token, no weak primitives.
+- Path traversal, CSRF, open redirect, React patterns: not touched by the delta.
+- C-25 not raised, per the operator's dismissal.
+
+Routing audit: graph_used no (not-relevant, diff-bound review), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no.

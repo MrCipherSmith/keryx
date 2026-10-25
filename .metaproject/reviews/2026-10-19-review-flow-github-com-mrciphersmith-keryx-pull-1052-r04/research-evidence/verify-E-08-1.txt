@@ -1,0 +1,21 @@
+# keryx review verify-run
+finding: E-08
+command: sh -c keryx ctx rg --all -l 'remoteApproval' -g '*.test.ts' src; test $(keryx ctx rg --all -l 'remoteApproval' -g '*.test.ts' src | grep -c '^- ') -gt 0
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:23.839Z
+exit: 0
+
+--- stdout ---
+# gdctx rg (file list)
+
+Command: `rg --with-filename --no-heading -l -g *.test.ts -- remoteApproval src`
+Exit code: `1`
+Files: `0`
+Scope: `ripgrep defaults` — NOT searched: hidden paths not named on the command line (any dot-directory, `.metaproject/` included); `.gitignore`d files; binary files (anything holding a NUL byte, which ripgrep always skips silently). There, a nil result means "not looked at", not "not present". Widen with `--hidden` / `--no-ignore`.
+Completeness: `complete` — every one of the 0 files ripgrep emitted is listed below.
+
+## Files
+
+- none
+--- stderr ---
+

@@ -1,0 +1,84 @@
+STATUS: DONE
+
+Checklist form (pr-context.md against slice-03). The PR body has three Test plan boxes and no Documentation, Tests updated, Breaking change or Screenshots box, so those four rows are "no box to contradict"; the body's prose claims are worked as rows instead.
+
+| Box or claim (quoted) | State | What the diff / documents show | Result |
+|---|---|---|---|
+| `[ ] CI green` | unticked | CI section of pr-context.md: typecheck-and-tests, AC8 full suite, darwin-x64 and client matrix (terminal) are pending | consistent, nothing filed |
+| `[ ] bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` | unticked | slice-03 adds src/remote/mirror-undelivered.test.ts (the other named test files are in the PR file list, outside this slice) | consistent; the command omits the AC5 and AC7 verify commands (PC-002) |
+| `[ ] Owner live check from the Telegram topic` | unticked | AC9 is the owner's live check, not code | consistent |
+| "Docs: TM-04 section, review guides, cli-reference, review skills" | claim | slice-03 carries the review-orchestrator SKILL.md / SKILL.detail.md and review-premise SKILL.md edits (bundled copies); the other named docs are in the PR file list outside this slice | holds for the slice; one stale site in the orchestrator skill (PC-001) |
+| "`flow ac confirm` is unchanged (operator decision)" | claim | src/trigger/unattended.ts hunk adds `review_complete` to OPERATOR_CONFIRM_TOOL_NAMES and a comment; the `FORBIDDEN_FLOW_VERBS` line `/\bflow\s+ac\s+(?:update\|reseal\|confirm)\b/` is untouched | holds |
+| "accepted only from an allowed user id, once, for one question, within 1 hour; records pressedBy and pressedAt" | claim | slice-03 only threads `pressedBy`/`pressedAt` through record types (`CardPress`, `cardPressFields`); the writer's remote-only gate is `...(remote ? { pressedBy, pressedAt } : {})` at src/commands/operator-confirm-tools.ts:227, outside this slice | the allowed-id / once / 1-hour enforcement is not in slice-03; left to the other lenses |
+| "The card says when the Telegram mirror was not delivered" | claim | src/remote/shell-bridge.ts adds `MIRROR_NOT_DELIVERED` and `mirrorUndeliveredNote`; src/remote/client.ts sets `undelivered: true` on every no-stream and failed-post deny; src/remote/mirror-undelivered.test.ts covers both | holds |
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-03 holds the PR's claims about itself: the Test plan boxes are unticked and match pending CI, the docs it lists are in the PR file list, `flow ac confirm` is untouched, and the mirror-not-delivered claim is implemented and tested. One minor disagreement between the changed orchestrator skill and a line the PR left alone, and two info items (a test plan that omits two criteria's verify commands; a Telegram guide that does not mention the new cards).",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`",
+      "problem": "The PR rewrote the same skill's Operator decisions bullet to say that for `review_complete` \"In keryx shell call the card and never send the operator to a terminal for these acts\" (SKILL.md hunk at line 69 of the slice). The coverage-waiver paragraph, untouched by the diff, still tells the agent to waive coverage with the card and then run the CLI `keryx review complete` itself. The added SKILL.detail.md sentence does the same: \"then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic) or run `keryx review complete`\". Acceptance criterion AC7 asks the skill to tell the agent to call the card for these acts.",
+      "impact": "An agent that follows the coverage paragraph (or the 'or run' alternative) closes the round through the CLI and never opens the `review_complete` card. That bypasses the card content the PR describes (SHA, evidence line, waivers with operator quote) and the Telegram answer path. The skill gives two instructions for one act.",
+      "suggested_fix": "In both copies of review-orchestrator/SKILL.md (line 782) say 'then call the `review_complete` card', and drop 'or run `keryx review complete`' from the added SKILL.detail.md sentence unless running the CLI from the shell is meant to stay allowed, in which case say so in all three places and in docs/docs/cli-reference.md (which says the agent calls `review_complete` instead of the CLI, then also says 'keryx review complete then closes the review').",
+      "evidence": "Read src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md line 782 (outside every hunk of the slice) and the added line 69 of the same file. `keryx ctx rg` for 'review_waive_coverage' over .metaproject/skills and src/gdskills/bundled finds the same line 782 in .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md. Whether the shell guard stops an agent-run `keryx review complete` was not settled (command-risk search returned an ripgrep error), so the harm is stated as a path the text allows, not one proven.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:orchestrator-skill-complete-via-cli",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:782",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:669"
+        ],
+        "enumeration_method": "keryx ctx rg for 'decide-premise|confirm-plan|waive-coverage|complete --waive' over .metaproject/skills and src/gdskills/bundled (*.md), then read each orchestrator hit; the other hits (review-premise:99 and :168, SKILL.detail.md:666 and :860, SKILL.md:47, :56 and :1129, flow-orchestrator:440) already name the card or defer to Wave D"
+      }
+    },
+    {
+      "id": "PC-002",
+      "severity": "info",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "The Test plan line `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` does not run the verify commands that AC5 and AC7 name: `src/commands/review-tty-refusal.test.ts` (AC5, terminal commands unchanged) and `bun test src/trigger/ src/gdskills/` (AC7, the unattended.ts roster and the bundled skills). This slice changes both: it adds `review_complete` to OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts and edits three bundled SKILL files.",
+      "impact": "A reader who runs only the listed command does not exercise the roster check or the skill sync that guard this slice's files. CI may still cover them; the Test plan does not say so.",
+      "suggested_fix": "Add the two commands to the Test plan, or state that CI's typecheck-and-tests job covers them.",
+      "evidence": "pr-context.md Test plan versus .metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md AC5 and AC7 verify clauses. Unverified: whether the CI job named 'AC8 full suite' already runs those paths (it is pending).",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:test-plan-omits-ac5-ac7",
+      "location_class": "pr-process",
+      "publication": "question"
+    },
+    {
+      "id": "PC-003",
+      "severity": "info",
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "line": null,
+      "quote": "- Approvals (Allow, Deny, Always, `/mode`, grants) have no such path: typing \"yes\" or",
+      "problem": "The guide that describes what can be answered from the Telegram topic lists approvals, questions with options, own answers and pickers, and says nothing about the review cards this PR makes answerable there (confirm-plan, decide-premise, waive, complete), the allowed-user / once / 1-hour rule, or the 'Telegram mirror not delivered' line. The PR body lists the docs it updated and this guide is not among them; cli-reference, limitations and autonomous-review do describe the cards.",
+      "impact": "A user who reads only the Telegram guide does not learn that a review card can be answered from the topic, or that a late press after an hour resolves nothing. Nothing in the guide is made wrong by the diff, so this is an omission, not a contradiction.",
+      "suggested_fix": "Add a short paragraph next to 'Questions from the agent' naming the five cards, the 1-hour token and the allowed-user rule, or link to docs/docs/cli-reference.md and TM-04.",
+      "evidence": "keryx ctx rg for 'review|operator card|mirror' over docs/docs/guides/drive-keryx-remotely.md and answer-remote-approvals.md returns four unrelated hits (lines 131, 143, 527, 616) and none about review cards. The guide was not in the PR's file list.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:telegram-guide-omits-review-cards",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+
+Summary: slice-03 read in full (1973 diff lines). Boxes and claims are checked above; one minor stale-instruction finding in the orchestrator skill (both copies), two info items. Security-relevant enforcement (allowed id, token binding, expiry) is outside slice-03 and not judged here. No command run other than Read and `keryx ctx rg`.

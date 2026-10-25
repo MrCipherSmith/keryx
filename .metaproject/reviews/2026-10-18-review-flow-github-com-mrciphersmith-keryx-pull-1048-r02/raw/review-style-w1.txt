@@ -1,0 +1,135 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 01 (skill/contract instruction text, schema copies, README, docs site, PRD folder, package.json script) read in full, all 1827 diff lines. The skill and schema edits are consistent with each other and with the code (three shared words, 40 characters, anchor, summary). The problems are in the prose around them: the operator runbook still states the pre-poll-213 threshold of two words and uses finding names the CLI does not emit, the PRD cites the wrong criterion for the live run, and the status lines of the PRD, description.md and the criteria file still say draft/not frozen although the flow is frozen. No major findings; four minor, two info.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "line": null,
+      "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+      "problem": "The runbook states the summary threshold as two shared words (and later calls 'порог в два слова' too strict in the failure list). The threshold is three: SUMMARY_MIN_SHARED_WORDS = 3 in src/gdskills/reference-proof.ts, AC10 as updated, and flow.json history (ac-updated 09:57:51, 'Operator decision, poll 213: raise the summary vocabulary threshold from two to three'). The same file's own expected output two sections later says '3 required', so it contradicts itself.",
+      "impact": "The operator runs the live run (AC20) from this file and is told to judge 'is the proxy enough' against a threshold that no longer exists; a note recorded in the flow journal would name the wrong number. Maintenance cost: the number is restated in prose in several places and this one was missed when it changed.",
+      "suggested_fix": "Change both mentions in live-run.md to three distinct words (and 'as many as the section holds when fewer than three'), matching README 5.3, the guide and the CLI reference.",
+      "evidence": "live-run.md lines 'пересказ должен делить минимум два различных слова из пяти и более букв с разделом' and '… сигнал, что порог в два слова слишком строг для вашего раздела'; same file step 4 expected output '…with the section \"<ваш якорь>\"; 3 required'; src/gdskills/reference-proof.ts line 15 SUMMARY_MIN_SHARED_WORDS = 3; flow.json history entry ac-updated for AC10.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "live-run-threshold-two-words",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "line": null,
+      "quote": "Ожидаем итоговую строку `0 errors, 0 warnings`. Ошибки (`missing`,",
+      "problem": "The runbook names the check errors `missing`, `anchor not found`, `oversized`. The finding codes the command emits (ReferencesFindingCode in src/gdskills/references-check.ts, and the table in the guide and CLI reference) are `document-missing`, `anchor-not-found`, `document-too-large`. The same file refers to 'PRD (риск 6)', but the PRD risk table (README section 6) has five unnumbered rows, so there is no risk 6; the summary-fabrication row is the fourth.",
+      "impact": "An operator comparing the output of `references check` with the runbook cannot match the names; a reader looking up the 'risk 6' reference finds nothing. Naming drift between the runbook and the shipped vocabulary.",
+      "suggested_fix": "Use the shipped codes (`document-missing`, `anchor-not-found`, `document-too-large`) and replace 'риск 6' with 'раздел 6 PRD, строка про выдуманный пересказ' (or number the risk rows).",
+      "evidence": "src/gdskills/references-check.ts ReferencesFindingCode union lines 30-42; docs/docs/guides/apply-project-rules.md finding table; PRD README section 6 table has 5 rows.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "live-run-finding-names",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "line": null,
+      "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+      "problem": "The PRD points at AC18 for the live run. In the criteria file AC18 is the end-to-end fixture test (conditional-reads.e2e.test.ts) and the live run is AC20; live-run.md itself is titled AC20.",
+      "impact": "A reader following the PRD to the criteria lands on the wrong criterion; the two documents of one flow disagree on a criterion id.",
+      "suggested_fix": "Replace (AC18) with (AC20).",
+      "evidence": "acceptance-criteria.md: '- AC18: A fixture project … conditional-reads.e2e.test.ts' and '- AC20: The operator runbook for a live run on vantage-frontend'; live-run.md first line '(AC20)'.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "prd-ac18-vs-ac20",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "line": null,
+      "quote": "Flow: 462 (`.metaproject/flows/462-2026-10-18-conditional-reads/`). Status: DRAFT for the operator; criteria are not frozen.",
+      "problem": "The status lines describe the flow as a draft with unfrozen criteria, and the next line says the branch must be rebased once #1047 is merged and that nothing compiles without the 461 resolver. At head the flow is frozen (flow.json history: 'frozen: 22 criteria; checksum recorded' at 08:46, status in-progress, AC10 changed later through ac update with an operator decision), and the branch already carries the resolver work. The same stale wording is in description.md ('Status: draft (PRD and criteria wait for the operator; not frozen)') and in acceptance-criteria.md ('DRAFT: not frozen. Waits for the operator. Test file names are proposals.'). The criteria file's test names are no longer proposals either: the T5-T13 tests exist.",
+      "impact": "Three entry documents of the flow tell a reviewer or the operator that criteria can still move, while the file is checksum-protected and a changed criterion has already gone through ac update. Misleading status comments; they will be copied into the PR description.",
+      "suggested_fix": "Update README.md and description.md to state the real status (frozen, in progress) and drop the rebase and does-not-compile sentence once #1047 is in main. The DRAFT line in acceptance-criteria.md sits in a checksum-protected file: change it only through `keryx flow ac update`, or leave it and say so in the PR.",
+      "evidence": "flow.json: history event 'frozen' and acChecksum set; README.md line 3 and line 5; description.md line 3; acceptance-criteria.md line 14.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "stale-draft-status",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "line": null,
+      "quote": "A promoted entry (reason condition:glob:<g> or condition:keyword:<k>) needs path, sha256, the declared anchor, a summary",
+      "problem": "The statement of what a promoted entry owes (path, whole-file sha256, declared anchor, summary of 40+ characters in own words, three shared words of 5+ letters, how read|followed never n/a) is restated, in different wording and at different levels of detail, in flow-orchestrator SKILL.md, job-orchestrator SKILL.md, this orchestrator-prompt.md, task-implementer SKILL.md (2.0c) and tests-creator SKILL.md (1.2b), plus the schema descriptions. Some copies omit the word rule and some state it.",
+      "impact": "Maintenance cost: the threshold already changed once during this flow (two to three) and one copy (F-001) was missed. Each future change has to find six places.",
+      "suggested_fix": "Keep the full statement in task-implementer 2.0c (the worker's source of truth) and have the orchestrator copies say 'a promoted entry needs the proof described in task-implementer 2.0c', or add a sync test that fails when the numbers (40, three, five) differ between the copies. Optional; the skill files are tightly worded and may be left as they are.",
+      "evidence": "slice-01.diff hunks for flow-orchestrator/SKILL.md, job-orchestrator/SKILL.md, orchestrator-prompt.md, task-implementer/SKILL.md, tests-creator/SKILL.md.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "proof-rule-restated",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "line": null,
+      "quote": "k() { bun /home/altsay/keryx/.worktrees/conditional-reads/src/cli.ts \"$@\"; }",
+      "problem": "The committed runbook hard-codes one person's home directory (/home/altsay/keryx/.worktrees/..., /home/altsay/work/vantage-frontend) and is written in Russian, while the other files of the same PRD folder (README.md, TUI-states.md, schemas) are English.",
+      "impact": "The runbook only works on one machine and the folder mixes two languages. Low cost, since it is a one-operator document; the bundled-skill verifier forbids personal home paths in shipped files, which this folder is not.",
+      "suggested_fix": "Use placeholders (<keryx-worktree>, <vantage-frontend>) or a shell variable set once in section 0. Keep Russian only if the operator wants it; otherwise translate for consistency.",
+      "evidence": "live-run.md section 0 code block; README.md and TUI-states.md in the same folder are English.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "live-run-personal-paths-language",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 2 }
+}
+```
+
+# Style Review Report (slice-01)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+The instruction text in the skills, the four schema copies, the README paragraph, the CLI reference and the guide agree with each other and with the code (anchor, summary of 40 characters, three shared words of five letters, finding codes). Style debt is in the PRD folder: the operator runbook is stale after the poll-213 threshold change and uses names the CLI does not print, the PRD cites the wrong criterion (AC18 for AC20), and three entry documents still say draft / not frozen. Nothing here can cause a functional regression.
+
+## Review Scope
+- Branch: feat/conditional-reads
+- Merge-base: 1658f77d374b2d20189a55eaf44b95d64768d6b6
+- Head: d6267d4a5099f39b74e86a71e5c8f61ca47aa63d
+- Scope mode: diff, slice-01 only (1827 diff lines read in three pages; all hunks covered). Source files read at head for judgement: references-check.ts, resolved-context-check.ts, reference-proof.ts, flow.json, acceptance-criteria.md (head).
+- Not covered: the code outside this slice; the exact wording of the `contracts validate` success line quoted in live-run.md ('every must_read entry cited, nothing drifted') was not checked against the command source (the search tools were not available to this reviewer).
+
+## Stats
+- major: 0
+- minor: 4
+- info: 2
+
+## Minor & Info
+F-001 (live-run states two words), F-002 (live-run finding names and 'риск 6'), F-003 (PRD cites AC18 for AC20), F-004 (stale draft status lines), F-005 (proof rule restated in six places), F-006 (personal paths and language in live-run.md). Details and quotes are in the JSON block above.
+
+## Positive Notes
+The new schema fields carry the same description in all four contract copies; the guide, the CLI reference and the README state the proxy limits openly; TUI-states.md gives every state an id that the tests can key on.

@@ -1,0 +1,1009 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The fix for the linked-rules finding re-implements the resolver's link reading inside scanCitations ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w1:F-001",
+      "evidence": "raw/review-architecture-w1.txt#sha256:2a86fda9dd7e",
+      "reason": "reported by review-architecture as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w1:F-001"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The dead-anchor policy ('an anchor that is not found makes the whole file the obligation') now lives) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w1:F-002",
+      "evidence": "raw/review-architecture-w1.txt#sha256:2a86fda9dd7e",
+      "reason": "reported by review-architecture as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w1:F-002"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (scanCitations now reads a linked rule from its origin, claiming to do so 'as the resolver does', but) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w2:F-001",
+      "evidence": "raw/review-architecture-w2.txt#sha256:932ba1f6ea9c",
+      "reason": "reported by review-architecture as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w2:F-001"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (The guide states that the citation scan skips rules imported with `--link`. This slice changes scanC) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w2:F-002",
+      "evidence": "raw/review-architecture-w2.txt#sha256:932ba1f6ea9c",
+      "reason": "reported by review-architecture as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w2:F-002"
+    },
+    {
+      "id": "review-architecture-w3:F-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-001 (This slice moves the model-composed `skills resolve-context` command from double to single quotes so) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w3:F-001",
+      "evidence": "raw/review-architecture-w3.txt#sha256:8ad3dbf5c2cb",
+      "reason": "reported by review-architecture as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w3:F-001"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (The new comment says a linked rule is read 'as the resolver does', but the resolver does more than r) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-001",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-001"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The fix for the dead-anchor proof makes currentSection return the whole file in a second case: when ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-002",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-002"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (The task-text shell-quoting fix was applied by swapping double quotes for single quotes at every sit) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-001",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-003; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-001"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-004 (The word-character class `[\\p{L}\\p{N}_]` is now spelled three times in six lines: the WORD_CHAR rege) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-004",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-004; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-004"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-005 (The ordering guard added for the overlapping-load race records the load as applied only after the li) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-005",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-005; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-005"
+    },
+    {
+      "id": "review-clean-code-w1:F-006",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-006 (`started` and `applied` are sequence counters, but their names read as booleans next to `failing` an) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-006",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-006; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-006"
+    },
+    {
+      "id": "review-clean-code-w1:F-007",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-007 (recordLastResolve tests `options.taskText !== undefined && options.taskText.trim() !== \"\"` on line 5) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-007",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:15f78156a616",
+      "reason": "reported by review-clean-code as F-007; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w1:F-007"
+    },
+    {
+      "id": "review-clean-code-w2:F-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-001 (Stale documentation (Clean Code C1, a comment that no longer matches the code). This slice changes s) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-001",
+      "evidence": "raw/review-clean-code-w2.txt#sha256:b997abddb0a4",
+      "reason": "reported by review-clean-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-001"
+    },
+    {
+      "id": "review-clean-code-w2:F-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-002 (The test that proves the shell stops the feed asserts on the text of tui-shell.ts instead of on beha) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-002",
+      "evidence": "raw/review-clean-code-w2.txt#sha256:b997abddb0a4",
+      "reason": "reported by review-clean-code as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-002"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-003 (Inconsistent vocabulary and guidance for one concept (Clean Code A3). This slice moves every instruc) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-003",
+      "evidence": "raw/review-clean-code-w2.txt#sha256:b997abddb0a4",
+      "reason": "reported by review-clean-code as F-003; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-003"
+    },
+    {
+      "id": "review-clean-code-w3:F-001",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-001 (recordLastResolve now needs the full (uncut) code-point length of the task text, but truncateTaskTex) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w3:F-001",
+      "evidence": "raw/review-clean-code-w3.txt#sha256:311fce49bffb",
+      "reason": "reported by review-clean-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w3:F-001"
+    },
+    {
+      "id": "review-clean-code-w3:F-002",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-002 (The edit wrapped the argument in a template literal whose only content is one interpolation, which i) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w3:F-002",
+      "evidence": "raw/review-clean-code-w3.txt#sha256:311fce49bffb",
+      "reason": "reported by review-clean-code as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w3:F-002"
+    },
+    {
+      "id": "review-clean-code-w3:fu1",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is the parent follow-up from review-clean-code done or ruled out, and where is that recorded? none.",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-w3.txt line 90 reads 'Parent follow-up: none.' The reply states there is no follow-up; the ledger parsed the prose line as an open follow-up. The structured reply carries no follow_ups entry.",
+      "reason": "Not a follow-up: the reviewer declared that it has none."
+    },
+    {
+      "id": "review-highload-w1:review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding review-highload-w1:F-001 (The fix for the double-quoted --task-text template swapped the quotes to single quotes in task-imple) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-001",
+      "evidence": "raw/review-highload-w1.txt#sha256:5a67b9245489",
+      "reason": "reported by review-highload as review-highload-w1:F-001; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-001"
+    },
+    {
+      "id": "review-highload-w1:review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding review-highload-w1:F-002 (The guide still states the old limit of the citation scan: a rule imported with --link is not scanne) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-001",
+      "evidence": "raw/review-highload-w1.txt#sha256:5a67b9245489",
+      "reason": "reported by review-highload as review-highload-w1:F-002; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-001"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-001 (reload() drops an older load from the feed but still returns that older `next` to its caller, and `a) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-highload-w3:F-001",
+      "evidence": "raw/review-highload-w3.txt#sha256:9bd700577080",
+      "reason": "reported by review-highload as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-highload-w3:F-001"
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-002 (Partial close of r02 highload-w2:F-001. flow-orchestrator line 323 now says to write the text single) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-highload-w3:F-002",
+      "evidence": "raw/review-highload-w3.txt#sha256:9bd700577080",
+      "reason": "reported by review-highload as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-highload-w3:F-002"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (In createProjectContextFeed.reload the `applied` watermark is advanced after the listener loop. If a) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w1:F-001",
+      "evidence": "raw/review-logic-w1.txt#sha256:e3b533231e84",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w1:F-001"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (scanCitations now reads a linked rule at its origin, but it does not apply the resolver's two checks) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w1:F-002",
+      "evidence": "raw/review-logic-w1.txt#sha256:e3b533231e84",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w1:F-002"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (The instruction says every entry promoted by a condition carries an anchor and section_bytes and tha) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w2:F-001",
+      "evidence": "raw/review-logic-w2.txt#sha256:8743293c5d79",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w2:F-001"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (The anchor in the proof item is compared with the declared anchor by raw string equality, while the ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w2:F-002",
+      "evidence": "raw/review-logic-w2.txt#sha256:8743293c5d79",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w2:F-002"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (The guide says the citation scan skips a rule imported with --link, and docs/docs/cli-reference.md () real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-001",
+      "evidence": "raw/review-logic-w3.txt#sha256:2341bbb77ec1",
+      "reason": "reported by review-logic as F-001; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-001"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-002 (The statement is wrong for the printed count. In reference-entries.ts the entry's bytes is Buffer.by) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w3:F-002",
+      "evidence": "raw/review-logic-w3.txt#sha256:2341bbb77ec1",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w3:F-002"
+    },
+    {
+      "id": "review-logic-w3:F-003",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-003 (Only --json is read, from anywhere in args. A mistyped flag (check --jsn) or an unsupported one (sug) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w3:F-003",
+      "evidence": "raw/review-logic-w3.txt#sha256:2341bbb77ec1",
+      "reason": "reported by review-logic as F-003; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w3:F-003"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (parseWhen/stringList keep each declared glob as the author typed it (trim only) and promotionReason ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w4:F-001",
+      "evidence": "raw/review-logic-w4.txt#sha256:adca57c41862",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w4:F-001"
+    },
+    {
+      "id": "review-logic-w6:F-001",
+      "source": "raw/review-logic-w6.txt",
+      "question": "Is review-logic finding F-001 (A promoted reference row prints 'over the cap: <used> of <limit> bytes' whenever result.budget.excee) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w6:F-001",
+      "evidence": "raw/review-logic-w6.txt#sha256:ebca881abd96",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w6:F-001"
+    },
+    {
+      "id": "review-logic-w6:F-002",
+      "source": "raw/review-logic-w6.txt",
+      "question": "Is review-logic finding F-002 (reload() drops a result that started before an already-applied load (`mine > applied` false), but it) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w6:F-002",
+      "evidence": "raw/review-logic-w6.txt#sha256:ebca881abd96",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w6:F-002"
+    },
+    {
+      "id": "review-logic-w8:F-001",
+      "source": "raw/review-logic-w8.txt",
+      "question": "Is review-logic finding F-001 (The r02 shell-injection fix moves --task-text to single quotes, but only flow-orchestrator states th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-001",
+      "evidence": "raw/review-logic-w8.txt#sha256:94661d4a2ccf",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-001"
+    },
+    {
+      "id": "review-logic-w8:F-002",
+      "source": "raw/review-logic-w8.txt",
+      "question": "Is review-logic finding F-002 (In reload, applied is advanced after the subscriber loop. If a subscriber throws, applied is not adv) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-002",
+      "evidence": "raw/review-logic-w8.txt#sha256:94661d4a2ccf",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-002"
+    },
+    {
+      "id": "review-logic-w8:F-003",
+      "source": "raw/review-logic-w8.txt",
+      "question": "Is review-logic finding F-003 (The sidebar value is built only from a closed enforcement value, numbers and fixed phrases; no file ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-003",
+      "evidence": "raw/review-logic-w8.txt#sha256:94661d4a2ccf",
+      "reason": "reported by review-logic as F-003; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-003"
+    },
+    {
+      "id": "review-logic-w8:F-004",
+      "source": "raw/review-logic-w8.txt",
+      "question": "Is review-logic finding F-004 (The polling latch clears only in finally. A load that never settles would stop all later polling for) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-004",
+      "evidence": "raw/review-logic-w8.txt#sha256:94661d4a2ccf",
+      "reason": "reported by review-logic as F-004; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-004"
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (recordLastResolve converts the whole task text to a code-point array to count it, after truncateTask) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w3:F-001",
+      "evidence": "raw/review-performance-w2.txt#sha256:c8291a75481d",
+      "reason": "reported by review-performance as F-001; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w3:F-001"
+    },
+    {
+      "id": "review-security-code-w1:review-security-code-w1:F-101",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding review-security-code-w1:F-101 (The r02 shell-injection finding (w4:F-002) is fixed in quote style at all seven bundled sites and th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w1:F-101",
+      "evidence": "raw/review-security-code-w1.txt#sha256:4486724f44d5",
+      "reason": "reported by review-security-code as review-security-code-w1:F-101; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w1:F-101"
+    },
+    {
+      "id": "review-security-code-w1:review-security-code-w1:F-102",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding review-security-code-w1:F-102 (The linked-rule fix reads each `--link` rule at its origin but does not compare the file with the re) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w1:F-102",
+      "evidence": "raw/review-security-code-w1.txt#sha256:4486724f44d5",
+      "reason": "reported by review-security-code as review-security-code-w1:F-102; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w1:F-102"
+    },
+    {
+      "id": "review-security-code-w3:F-001",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding F-001 (The guide and docs/docs/cli-reference.md (`a linked rule is not scanned`) tell the operator that `sk) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w3:F-001",
+      "evidence": "raw/review-security-code-w3.txt#sha256:c22c6a5a927e",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w3:F-001"
+    },
+    {
+      "id": "review-security-code-w4:F-001",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding F-001 (The new `when.globs` of .metaproject/rules/project/references.json are matched in promotionReason (r) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w4:F-001",
+      "evidence": "raw/review-security-code-w4.txt#sha256:ea3e8ce06225",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w4:F-001"
+    },
+    {
+      "id": "review-security-code-w4:F-002",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding F-002 (Whether an entry owes the proof is read from the resolved JSON itself (`tier === \"must_read\"` and `r) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w4:F-002",
+      "evidence": "raw/review-security-code-w4.txt#sha256:ea3e8ce06225",
+      "reason": "reported by review-security-code as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w4:F-002"
+    },
+    {
+      "id": "review-security-code-w5:F-001",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is review-security-code finding F-001 (Commit 4838b1b40 changed the --task-text examples from double to single quotes and wrote the rule th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-001",
+      "evidence": "raw/review-security-code-w5.txt#sha256:7200631a028e",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-001"
+    },
+    {
+      "id": "review-security-code-w5:F-002",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is review-security-code finding F-002 (Globs from references.json are validated only as non-empty strings, then passed to matchesAnyGlobWit) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-002",
+      "evidence": "raw/review-security-code-w5.txt#sha256:7200631a028e",
+      "reason": "reported by review-security-code as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-002"
+    },
+    {
+      "id": "review-security-code-w6:F-001",
+      "source": "raw/review-security-code-w6.txt",
+      "question": "Is review-security-code finding F-001 (scanCitations reads the origin of every link-mode project rule with a bare readFile: no lstat/stat, ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w6:F-001",
+      "evidence": "raw/review-security-code-w6.txt#sha256:2e42502f2f91",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w6:F-001"
+    },
+    {
+      "id": "review-security-code-w6:F-002",
+      "source": "raw/review-security-code-w6.txt",
+      "question": "Is review-security-code finding F-002 (The r02 fix for the References tab escaping routes every line through cardSafe (src/lib/card-safe.ts) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w6:F-002",
+      "evidence": "raw/review-security-code-w6.txt#sha256:2e42502f2f91",
+      "reason": "reported by review-security-code as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w6:F-002"
+    },
+    {
+      "id": "review-security-code-w7:F-001",
+      "source": "raw/review-security-code-w7.txt",
+      "question": "Is review-security-code finding F-001 (r02 review-security-code-w4:F-002 reported that the skills tell the executing agent to put the task ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w7:F-001",
+      "evidence": "raw/review-security-code-w7.txt#sha256:f0eb4b882241",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w7:F-001"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The fix makes scanCitations read rules registered with --link at their origin (references-check.ts h) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w1:F-001",
+      "evidence": "raw/review-style-w1.txt#sha256:6339634a62ea",
+      "reason": "reported by review-style as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w1:F-001"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The fix switches every --task-text template from double to single quotes, but the instruction that t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w3:F-001",
+      "evidence": "raw/review-style-w1.txt#sha256:6339634a62ea",
+      "reason": "reported by review-style as F-002; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-architecture-w3:F-001"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (A non-null assertion on options.taskText inside a branch already guarded by `task !== undefined`; th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w1:F-003",
+      "evidence": "raw/review-style-w1.txt#sha256:6339634a62ea",
+      "reason": "reported by review-style as F-003; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w1:F-003"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (The fix for the linked-rules finding re-implements, in a 190-character chained one-liner, part of wh) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w1:F-004",
+      "evidence": "raw/review-style-w1.txt#sha256:6339634a62ea",
+      "reason": "reported by review-style as F-004; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w1:F-004"
+    },
+    {
+      "id": "review-style-w2:F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-001 (The r03 delta makes `references check`/`suggest` scan a rule imported with `--link` at its origin (r) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-001",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-001"
+    },
+    {
+      "id": "review-style-w2:F-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-002 (The new import sits between two sibling (`./`) imports. Every other import in the block is ordered t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-002",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-002"
+    },
+    {
+      "id": "review-style-w2:F-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-003 (One dense line holds a ternary, a nested conditional spread and a non-null assertion (`options.taskT) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-003",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-003; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-003"
+    },
+    {
+      "id": "review-style-w2:F-004",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-004 (A template literal that only interpolates one expression: `${\"x\".repeat(...)}` wraps a plain string.) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-004",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-004; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-004"
+    },
+    {
+      "id": "review-style-w2:F-005",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-005 (In the new --link test the second rule's text is written out twice as the same multi-line literal: o) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-005",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-005; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-005"
+    },
+    {
+      "id": "review-style-w2:F-006",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-006 (Magic number in the new test; the production cap for a cited document is already a named export.) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-006",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-006; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-006"
+    },
+    {
+      "id": "review-style-w2:F-007",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-007 (The r03 change moved every `--task-text` placeholder to single quotes, but only flow-orchestrator/SK) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-007",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-007; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-007"
+    },
+    {
+      "id": "review-style-w2:F-008",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-008 (A source-text test with a magic 2500-character window and the same `indexOf` computed twice.) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-002",
+      "evidence": "raw/review-style-w2.txt#sha256:a614939b30b7",
+      "reason": "reported by review-style as F-008; review ingest merged it as a duplicate into canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-clean-code-w2:F-002"
+    },
+    {
+      "id": "review-style-w3:F-001",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-001 (The argument is a template literal whose only content is one interpolation, so it is the string `\"x\") real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w3:F-001",
+      "evidence": "raw/review-style-w3.txt#sha256:c8ee8933203a",
+      "reason": "reported by review-style as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w3:F-001"
+    },
+    {
+      "id": "review-style-w3:F-002",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-002 (The new `../lib/card-safe` import sits after `./modal-host`, inside the sibling (`./`) imports. The ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w3:F-002",
+      "evidence": "raw/review-style-w3.txt#sha256:c8ee8933203a",
+      "reason": "reported by review-style as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w3:F-002"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The fix for review-logic-w3:F-002 (conditional lookarounds in keywordOccurs) is covered by tests tha) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w1:F-001",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:9ea168ed6a1a",
+      "reason": "reported by review-testing-practices as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w1:F-001"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (Vacuous assertion (testing rule: tests must be able to fail). The test is named 'control characters ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-001",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:5a4d7c883d6e",
+      "reason": "reported by review-testing-practices as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-001"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (The closing assertion of the new --link test folds a guard into the value under test. If suggestion.) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-002",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:5a4d7c883d6e",
+      "reason": "reported by review-testing-practices as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-002"
+    },
+    {
+      "id": "review-testing-practices-w2:F-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-003 (The new --link test only covers the happy path where the registry entry's sha256 and originSha256 ma) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-003",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:5a4d7c883d6e",
+      "reason": "reported by review-testing-practices as F-003; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-003"
+    },
+    {
+      "id": "review-testing-practices-w2:F-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-004 (A wall-clock bound is used to prove the heading parser is linear. The inputs are 120k-blank lines an) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-004",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:5a4d7c883d6e",
+      "reason": "reported by review-testing-practices as F-004; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w2:F-004"
+    },
+    {
+      "id": "review-testing-practices-w3:F-001",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-001 (The sidebar half of 'control characters from a reference never reach the terminal' cannot fail. rend) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w3:F-001",
+      "evidence": "raw/review-testing-practices-w3.txt#sha256:f784c5fca903",
+      "reason": "reported by review-testing-practices as F-001; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w3:F-001"
+    },
+    {
+      "id": "review-testing-practices-w3:F-002",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-002 (The recorded length counts code points with Array.from, the same way truncateTaskText cuts. Every te) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w3:F-002",
+      "evidence": "raw/review-testing-practices-w3.txt#sha256:f784c5fca903",
+      "reason": "reported by review-testing-practices as F-002; the same finding is canonical 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w3:F-002"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "review-architecture-w1:F-001": "open",
+      "review-architecture-w1:F-002": "open",
+      "review-architecture-w1:F-003": "open",
+      "review-architecture-w1:F-004": "open",
+      "review-architecture-w2:F-001": "open",
+      "review-architecture-w2:F-002": "open",
+      "review-architecture-w3:F-002": "closed",
+      "review-architecture-w3:F-003": "open",
+      "review-architecture-w3:F-004": "open",
+      "review-architecture-w3:F-005": "open",
+      "review-architecture-w3:F-006": "open",
+      "review-architecture-w3:F-007": "open",
+      "review-architecture-w3:F-008": "open",
+      "review-architecture-w3:F-009": "open",
+      "review-architecture-w3:F-010": "open",
+      "review-architecture-w4:F-001": "open",
+      "review-architecture-w4:F-002": "open",
+      "review-architecture-w4:F-003": "open",
+      "review-architecture-w5:F-001": "open",
+      "review-architecture-w5:F-002": "open",
+      "review-clean-code-w1:F-001": "open",
+      "review-clean-code-w1:F-002": "open",
+      "review-clean-code-w1:F-003": "open",
+      "review-clean-code-w1:F-004": "open",
+      "review-clean-code-w2:F-001": "open",
+      "review-clean-code-w2:F-002": "open",
+      "review-clean-code-w2:F-004": "closed",
+      "review-clean-code-w3:F-001": "open",
+      "review-clean-code-w3:F-002": "open",
+      "review-clean-code-w3:F-003": "open",
+      "review-clean-code-w3:F-004": "open",
+      "review-clean-code-w3:F-005": "open",
+      "review-clean-code-w3:F-007": "open",
+      "review-clean-code-w3:F-008": "open",
+      "review-clean-code-w3:F-009": "open",
+      "review-clean-code-w3:F-010": "open",
+      "review-clean-code-w3:F-011": "open",
+      "review-clean-code-w3:F-012": "open",
+      "review-clean-code-w3:F-013": "open",
+      "review-clean-code-w4:F-001": "open",
+      "review-clean-code-w4:F-002": "open",
+      "review-clean-code-w4:F-004": "open",
+      "review-clean-code-w5:F-001": "open",
+      "review-clean-code-w5:F-002": "open",
+      "review-clean-code-w5:F-003": "open",
+      "review-clean-code-w5:F-004": "open",
+      "review-core-boundaries-w1:F-002": "open",
+      "review-core-boundaries-w1:F-004": "open",
+      "review-core-boundaries-w1:F-005": "open",
+      "review-highload-w1:F-002": "open",
+      "review-highload-w2:F-001": "partial",
+      "review-highload-w2:F-002": "closed",
+      "review-highload-w3:F-001": "closed",
+      "review-highload-w3:F-002": "open",
+      "review-highload-w3:F-003": "open",
+      "review-highload-w4:F-001": "open",
+      "review-highload-w5:F-001": "open",
+      "review-highload-w5:F-002": "closed",
+      "review-logic-w1:F-001": "open",
+      "review-logic-w1:F-004": "open",
+      "review-logic-w2:F-001": "closed",
+      "review-logic-w2:F-002": "open",
+      "review-logic-w2:F-003": "open",
+      "review-logic-w3:F-001": "closed",
+      "review-logic-w3:F-002": "closed",
+      "review-logic-w3:F-003": "open",
+      "review-logic-w3:F-005": "open",
+      "review-logic-w4:F-001": "open",
+      "review-logic-w4:F-002": "open",
+      "review-logic-w5:F-003": "open",
+      "review-performance-w3:F-001": "open",
+      "review-performance-w5:F-001": "open",
+      "review-performance-w5:F-002": "closed",
+      "review-security-code-w1:F-001": "closed",
+      "review-security-code-w1:F-002": "closed",
+      "review-security-code-w1:F-003": "open",
+      "review-security-code-w3:F-001": "closed",
+      "review-security-code-w3:F-002": "open",
+      "review-security-code-w3:F-003": "open",
+      "review-security-code-w4:F-001": "closed",
+      "review-security-code-w4:F-002": "partial",
+      "review-security-code-w4:F-003": "open",
+      "review-security-code-w5:F-001": "open",
+      "review-style-w1:F-001": "open",
+      "review-style-w1:F-002": "open",
+      "review-style-w1:F-004": "open",
+      "review-style-w1:F-005": "open",
+      "review-style-w1:F-006": "open",
+      "review-style-w2:F-001": "open",
+      "review-style-w2:F-002": "open",
+      "review-style-w2:F-003": "open",
+      "review-style-w2:F-004": "open",
+      "review-style-w2:F-005": "open",
+      "review-style-w2:F-006": "open",
+      "review-style-w3:F-001": "open",
+      "review-style-w3:F-002": "open",
+      "review-style-w3:F-003": "open",
+      "review-style-w3:F-004": "open",
+      "review-style-w3:F-005": "open",
+      "review-style-w3:F-006": "open",
+      "review-style-w3:F-007": "open",
+      "review-style-w3:F-008": "open",
+      "review-style-w3:F-009": "open",
+      "review-style-w3:F-010": "open",
+      "review-style-w4:F-001": "open",
+      "review-style-w4:F-002": "open",
+      "review-style-w4:F-003": "open",
+      "review-style-w4:F-004": "open",
+      "review-style-w5:F-001": "open",
+      "review-style-w5:F-002": "open",
+      "review-style-w5:F-003": "open",
+      "review-testing-practices-w1:F-001": "open",
+      "review-testing-practices-w1:F-002": "open",
+      "review-testing-practices-w1:F-003": "open",
+      "review-testing-practices-w1:F-004": "open",
+      "review-testing-practices-w1:F-005": "open",
+      "review-testing-practices-w2:F-001": "open",
+      "review-testing-practices-w2:F-002": "open",
+      "review-testing-practices-w2:F-003": "open",
+      "review-testing-practices-w2:F-004": "open",
+      "review-testing-practices-w2:F-005": "open",
+      "review-testing-practices-w2:F-006": "open",
+      "review-testing-practices-w2:F-007": "open",
+      "review-testing-practices-w2:F-008": "closed",
+      "review-testing-practices-w2:F-009": "open",
+      "review-testing-practices-w2:F-010": "open",
+      "review-testing-practices-w2:F-011": "open",
+      "review-testing-practices-w2:F-012": "open",
+      "review-testing-practices-w2:F-013": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:8ad3dbf5c2cb",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:8ad3dbf5c2cb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:311fce49bffb",
+        "rawEvidence": "raw/review-clean-code-w3.txt#sha256:311fce49bffb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:9bd700577080",
+        "rawEvidence": "raw/review-highload-w3.txt#sha256:9bd700577080",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:94661d4a2ccf",
+        "rawEvidence": "raw/review-logic-w8.txt#sha256:94661d4a2ccf",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:054aad9c0592",
+        "rawEvidence": "raw/review-performance-w3.txt#sha256:054aad9c0592",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:b8e5983847b1",
+        "rawEvidence": "raw/review-regression-w3.txt#sha256:b8e5983847b1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:fdd182f83f08",
+        "rawEvidence": "raw/review-security-code-w8.txt#sha256:fdd182f83f08",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:c8ee8933203a",
+        "rawEvidence": "raw/review-style-w3.txt#sha256:c8ee8933203a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:f784c5fca903",
+        "rawEvidence": "raw/review-testing-practices-w3.txt#sha256:f784c5fca903",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 37,
+    "known": 0,
+    "unknown": 37,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise-w1.txt",
+    "raw/review-verifier-w1.txt"
+  ]
+}

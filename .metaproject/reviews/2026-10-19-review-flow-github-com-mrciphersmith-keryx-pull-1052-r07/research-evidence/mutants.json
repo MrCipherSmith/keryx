@@ -1,0 +1,310 @@
+{
+ "mutants": [
+  {
+   "id": "m01",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 64,
+   "anchor": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+   "replacement": "const bad = -1;",
+   "kind": "behavior",
+   "expected_failing_test": "a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked"
+  },
+  {
+   "id": "m02",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 65,
+   "anchor": "on line ${bad + 1} that",
+   "replacement": "on line ${bad} that",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-706)"
+  },
+  {
+   "id": "m03",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 63,
+   "anchor": ".map((line) => line.replace(/\\t/g, \" \"))",
+   "replacement": ".map((line) => line)",
+   "kind": "behavior",
+   "expected_failing_test": "a tab in the body is shown as plain spaces and is not a refusal"
+  },
+  {
+   "id": "m04",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 63,
+   "anchor": "text.trimEnd().split(/\\r?\\n/)",
+   "replacement": "text.split(/\\r?\\n/)",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-706)"
+  },
+  {
+   "id": "m05",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 66,
+   "anchor": "return { lines: lines.map((line) => `  ${line}`) };",
+   "replacement": "return { lines };",
+   "kind": "behavior",
+   "expected_failing_test": "the card shows the posted body whole: every line, none cut at a width, no 'first N' preview"
+  },
+  {
+   "id": "m06",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 94,
+   "anchor": "return files.map((file) => `  ${file}`);",
+   "replacement": "return files.slice(0, 15).map((file) => `  ${file}`);",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-703)"
+  },
+  {
+   "id": "m07",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 209,
+   "anchor": "if (\"refusal\" in shownReview) return",
+   "replacement": "if (false) return",
+   "kind": "behavior",
+   "expected_failing_test": "a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked"
+  },
+  {
+   "id": "m08",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 220,
+   "anchor": "...bodyLines,",
+   "replacement": "...bodyLines.slice(0, 8),",
+   "kind": "behavior",
+   "expected_failing_test": "the card shows the posted body whole: every line, none cut at a width, no 'first N' preview"
+  },
+  {
+   "id": "m09",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 415,
+   "anchor": "${cardSafe(subject.items.join(\", \"))}`,",
+   "replacement": "${cardSafe(subject.items.slice(0, 15).join(\", \"))}`,",
+   "kind": "behavior",
+   "expected_failing_test": "the mutation waiver card lists every unrun mutant, not the first few"
+  },
+  {
+   "id": "m10",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 434,
+   "anchor": "`not run: ${cardSafe(missing.join(\", \") || \"none\")}`",
+   "replacement": "`not run: ${cardSafe(missing.slice(0, 15).join(\", \") || \"none\")}`",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-703)"
+  },
+  {
+   "id": "m11",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 511,
+   "anchor": "if (\"refusal\" in shown) return { refusal: `Reply ${index + 1} ${shown.refusal}` };",
+   "replacement": "",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-702)"
+  },
+  {
+   "id": "m12",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 512,
+   "anchor": "bodies.push(`reply ${index + 1}:`, ...shown.lines);",
+   "replacement": "bodies.push(`reply ${index + 1}:`, ...shown.lines.slice(0, 8));",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-702)"
+  },
+  {
+   "id": "m13",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 563,
+   "anchor": "...estimate.perRole.map(",
+   "replacement": "...estimate.perRole.slice(0, 15).map(",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-703)"
+  },
+  {
+   "id": "m14",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 672,
+   "anchor": "cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text)",
+   "replacement": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text)",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: text the card would hide or rewrite is refused, so the card shows exactly what is stored (S-402)"
+  },
+  {
+   "id": "m15",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 672,
+   "anchor": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u",
+   "replacement": "/[\\p{Zl}\\p{Zp}]/u",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (zero-width space, joiner and byte order mark rows)"
+  },
+  {
+   "id": "m16",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 672,
+   "anchor": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u",
+   "replacement": "/[\\p{Cf}\\p{Zp}]/u",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (line separator row)"
+  },
+  {
+   "id": "m17",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 672,
+   "anchor": "/[\\p{Cf}\\p{Zl}\\p{Zp}]/u",
+   "replacement": "/[\\p{Cf}\\p{Zl}]/u",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-706)"
+  },
+  {
+   "id": "m18",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 695,
+   "anchor": "raw.length > MAX_DISPOSITIONS",
+   "replacement": "raw.length >= MAX_DISPOSITIONS",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: more entries than a card shows are refused (the 20-entry accept); the caps hold at the boundary"
+  },
+  {
+   "id": "m19",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 695,
+   "anchor": "raw.length > MAX_DISPOSITIONS",
+   "replacement": "raw.length > 100000",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: more entries than a card shows are refused"
+  },
+  {
+   "id": "m20",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 708,
+   "anchor": "finding.length > MAX_DISPOSITION_FINDING_CHARS",
+   "replacement": "finding.length >= MAX_DISPOSITION_FINDING_CHARS",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: the caps hold at the boundary, and the trim happens before the length check (finding of 200)"
+  },
+  {
+   "id": "m21",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 708,
+   "anchor": "finding.length > MAX_DISPOSITION_FINDING_CHARS",
+   "replacement": "finding.length > 100000",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)"
+  },
+  {
+   "id": "m22",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 709,
+   "anchor": "text.length > MAX_DISPOSITION_EVIDENCE_CHARS",
+   "replacement": "text.length >= MAX_DISPOSITION_EVIDENCE_CHARS",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)"
+  },
+  {
+   "id": "m23",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 709,
+   "anchor": "text.length > MAX_DISPOSITION_EVIDENCE_CHARS",
+   "replacement": "text.length > 100000",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)"
+  },
+  {
+   "id": "m24",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 707,
+   "anchor": "const text = evidence?.trim();",
+   "replacement": "const text = evidence;",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: the caps hold at the boundary, and the trim happens before the length check"
+  },
+  {
+   "id": "m25",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 712,
+   "anchor": "[[\"finding\", finding], [\"evidence\", text ?? \"\"]]",
+   "replacement": "[[\"evidence\", text ?? \"\"]]",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (the finding row holding ESC]0;x BEL)"
+  },
+  {
+   "id": "m26",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 712,
+   "anchor": "[[\"finding\", finding], [\"evidence\", text ?? \"\"]]",
+   "replacement": "[[\"finding\", finding]]",
+   "kind": "behavior",
+   "expected_failing_test": "dispositions: text the card would hide or rewrite is refused (OSC, CSI, bidi and newline rows)"
+  },
+  {
+   "id": "m27",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 377,
+   "anchor": "return hiddenInCard(text) ? { refusal: `reason ${HIDDEN_IN_CARD}` } : { reason: text };",
+   "replacement": "return { reason: text };",
+   "kind": "behavior",
+   "expected_failing_test": "a reason the card would hide or rewrite is refused on the premise and decision cards"
+  },
+  {
+   "id": "m28",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 764,
+   "anchor": "return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;",
+   "replacement": "return text;",
+   "kind": "behavior",
+   "expected_failing_test": "a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged"
+  },
+  {
+   "id": "m29",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 764,
+   "anchor": "return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;",
+   "replacement": "return cardSafe(text);",
+   "kind": "behavior",
+   "expected_failing_test": "a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged"
+  },
+  {
+   "id": "m30",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 736,
+   "anchor": "\"${quoteWhole(waiver.operator_quote)}\"",
+   "replacement": "\"${cardSafe(waiver.operator_quote).slice(0, 300)}\"",
+   "kind": "behavior",
+   "expected_failing_test": "a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged"
+  },
+  {
+   "id": "m31",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 747,
+   "anchor": "\"${quoteWhole(coverage.operatorQuote)}\"",
+   "replacement": "\"${cardSafe(coverage.operatorQuote).slice(0, 300)}\"",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-701)"
+  },
+  {
+   "id": "m32",
+   "file": "src/commands/operator-confirm-review.ts",
+   "line": 751,
+   "anchor": "\"${quoteWhole(decision.quote)}\"",
+   "replacement": "\"${cardSafe(decision.quote).slice(0, 300)}\"",
+   "kind": "behavior",
+   "expected_failing_test": "none known (T-701)"
+  },
+  {
+   "id": "m33",
+   "file": "src/commands/operator-confirm-other.ts",
+   "line": 304,
+   "anchor": "          ...files,",
+   "replacement": "          ...files.slice(0, 12),",
+   "kind": "behavior",
+   "expected_failing_test": "the card lists every changed file and every flagged path, with no 'and N more' tail"
+  },
+  {
+   "id": "m34",
+   "file": "src/commands/operator-confirm-other.ts",
+   "line": 306,
+   "anchor": "...run.flaggedPaths.map((p) => `  ! ${cardSafe(p)}`)]",
+   "replacement": "...run.flaggedPaths.slice(0, 12).map((p) => `  ! ${cardSafe(p)}`)]",
+   "kind": "behavior",
+   "expected_failing_test": "the card lists every changed file and every flagged path, with no 'and N more' tail"
+  }
+ ]
+}

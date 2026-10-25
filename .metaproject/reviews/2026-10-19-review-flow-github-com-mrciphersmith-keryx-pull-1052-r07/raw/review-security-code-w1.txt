@@ -1,0 +1,100 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "r07 wave 1, slice-01 (fix slice), head 5444f96e4, static reading only, nothing run. Prior-finding verdicts: S-401 (waiver quote and disposition evidence shown clipped at 300, stored whole) FIXED: dispositions are capped at 20 entries, finding at 200, evidence at 300 on the trimmed text, dispositionLine shows the evidence unclipped, clip() is gone, waiver quotes go through quoteWhole. S-402 (stored text differs from card text) FIXED for the dispositions path and the reason paths: hiddenInCard (cardSafe(text) !== text, or any of Cf, Zl, Zp) is applied to finding, evidence and reason before the card is drawn; the same class stays open on post and reply bodies (F-701). F5-24 (tests for card-injection of disposition text) FIXED in substance; two small untested bits remain (no-evidence card line, whitespace-only evidence), not re-reported. F5-04 (evidence optional on the card, engine refuses after the press) NOT FIXED despite the claimed fix: evidence is still optional and the finding id is not resolved at card time (F-702). New: F-701 major (shownBody uses the weaker cardSafe-only test, so zero-width, tag-block, BOM and U+2028/2029 text passes the 'shown whole' guarantee on review_publish and review_comments_reply bodies), F-702 minor, F-703 minor, F-704 info, F-705 info, F-706 info. Clean: no clip, 'first N' or 'and N more' truncation remains in the review cards or external_apply; the TUI prints every card line verbatim (tui-shell.ts:5421-5428); a card too long for Telegram loses its buttons (shell-bridge.ts:280-287); apply-time bindings hold for publish (body and target), reply (request JSON) and complete (facts digest). Known minors D-*, E-*, F5-*, F6-* stay follow-ups.",
+  "findings": [
+    {
+      "id": "F-701",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "title": "Post and reply bodies are checked with a weaker test than dispositions: zero-width, tag, BOM, U+2028/2029 text passes the 'shown whole' guarantee",
+      "problem": "shownBody (:62-67) refuses a line only when cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:10-16) strips ESC sequences, C0/C1 controls and the bidi marks 200e/200f/202a-202e/2066-2069, but leaves U+200B-200D, U+2060, U+FEFF, U+061C, U+00AD, the tag block U+E0000-E007F, U+2028 and U+2029 untouched. The same commit added hiddenInCard (:672), which adds \\p{Cf}, \\p{Zl}, \\p{Zp} precisely because those draw nothing or act as a line break, and applies it to dispositions and reasons (:377, :713) and quoteWhole (:764), but not to shownBody. The publish body (:208-210) and the reply bodies (:509-513) go through shownBody.",
+      "impact": "Attack vector: the review body (publishReview from the package's report.md, card at :208-210) or a reply body (outcomes file, card at :509-513) is written by the agent. It can carry an instruction or a link label hidden as tag characters or zero-width runs, or a U+2028 followed by text that some terminals draw as a card line. The card prints the line as 'shown whole', the operator presses yes, and the exact stored body (apply compares prepared.body, :243-246) is posted to the PR under the operator's name with content the operator never saw. Hidden tag-character text is the known way to smuggle instructions to AI readers of a PR. This is the S-402 class (shown text differs from stored text) on the two largest model-reachable surfaces.",
+      "suggested_fix": "In shownBody replace `cardSafe(line) !== line` with the predicate used for dispositions: refuse when hiddenInCard(line) (hoist hiddenInCard above shownBody, keep the tab-to-space rewrite before the test). Add zero-width, U+E0041 tag character, BOM and U+2028 cases to the 'hidden characters' test for both review_publish and review_comments_reply (the slice tests at lines 95-104 probe only ESC, bidi and BEL, so they stay green).",
+      "evidence": "Static reading of operator-confirm-review.ts:62-67 against card-safe.ts:10-16 and operator-confirm-review.ts:672-673; the character classes cardSafe does not strip are named above. Not executed.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-702",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 683,
+      "quote": "evidence: { type: \"string\", description: `Optional: the commit or reasoning behind the disposition. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.` },",
+      "title": "F5-04 claimed fixed but not changed: evidence still optional on the card, finding id not resolved before the press",
+      "problem": "dispositionsSchema (:683) still describes evidence as 'Optional'; completionDispositions (:706-716) pushes a record with no evidence for any state and never looks the finding up in the package; the added test 'more entries than a card shows are refused' (slice lines 225-230) sends 20 entries without evidence and asserts the card is drawn.",
+      "impact": "The r05 finding said the engine refuses both after the yes (managed.ts recordDispositionsLocked), so the operator answers a card that cannot be applied. Consequence is a wasted press and a 'nothing was recorded' result, not a security bypass, hence minor.",
+      "suggested_fix": "Either do what the finding asked (require evidence unless disposition is unknown; resolve each finding id against findings.json at card time) or record the finding as deferred instead of fixed.",
+      "evidence": "operator-confirm-review.ts:683 and :706-716 at head; slice test lines 225-230 feed 20 entries without evidence and expect no error.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-703",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 512,
+      "quote": "bodies.push(`reply ${index + 1}:`, ...shown.lines);",
+      "title": "Reply card shows each reply body but not the comment it answers",
+      "problem": "Each planned request is { method: 'POST', path: reply.endpoint, body: { body } } (src/review/pr-comments.ts:1879). The card prints 'reply N:' plus the body (:509-513); the digest bound at apply covers the whole request, so the endpoint is what gets posted but is never shown.",
+      "impact": "An agent controlling the outcomes file can attach a harmless-sounding body to a different review comment thread than the operator would expect. No hidden text; the stored value (endpoint) is simply not on the card, which breaks the same 'card must show what is stored' rule.",
+      "suggested_fix": "Add the target to each 'reply N:' line, for example the endpoint's comment id or the thread URL the planned reply carries (reply.comment.url).",
+      "evidence": "operator-confirm-review.ts:509-513 prints only the index and the body; pr-comments.ts:1879 builds the request with path reply.endpoint.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-704",
+      "severity": "info",
+      "file": "src/trigger/schedules.ts",
+      "line": 375,
+      "quote": ": `prompt: ${request.prompt}`,",
+      "title": "Outside the delta: schedule_create card shows the stored prompt through cardSafe, stored raw",
+      "problem": "The schedule card renders `prompt: ${request.prompt}` and maps every line through cardSafe (:375, :402); only trim and non-empty are checked (:265-271). An OSC or tag-character span in the prompt is removed from the card but stored and run unattended.",
+      "impact": "Same class as S-402 with a larger consequence, but pre-existing from flow 295 and not in this PR's hunks, so it is tracked as a follow-up rather than a finding against this round.",
+      "suggested_fix": "Refuse a prompt for which hiddenInCard is true at draft time (move hiddenInCard next to cardSafe in src/lib/card-safe.ts so both call sites share it).",
+      "evidence": "schedules.ts:265-271, :375, :402 at head; not in the r07 delta.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-705",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-other.ts",
+      "line": 292,
+      "quote": "const files = run.files.map((file) => `  ${file.status.padEnd(12)} ${cardSafe(file.path)}`);",
+      "title": "Package- or run-sourced text is still rewritten silently on cards (changed-file paths, premise finding text, readiness evidence, mutant and reviewer names)",
+      "problem": "Only text the model passes as a tool argument is now refused when the card would change it. Text read from the package or the stored run (external_apply file paths :292 and :306, premise finding problem/question :625-626, readiness evidence :343-345, mutant and reviewer names :415 and :434) goes through cardSafe and is stored raw. The waiver and completion records store the card form (facts.evidence, facts.waivers), which is consistent; the sources are not.",
+      "impact": "An external agent can name a file with an ESC or newline in its path and the card shows a different name. The patch hash on the card still binds the content, so no attack vector beyond a misleading label is shown.",
+      "suggested_fix": "For file paths and ids, flag or refuse any value for which hiddenInCard is true instead of rewriting it.",
+      "evidence": "operator-confirm-other.ts:292 and :306 and the other cited lines at head.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-706",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text);",
+      "title": "hiddenInCard leaves blank-rendering non-Cf characters and refuses legitimate Cf text",
+      "problem": "\\p{Cf}, \\p{Zl} and \\p{Zp} do not include U+3164 HANGUL FILLER, U+115F, U+1160, U+FFA0, U+2800, U+034F or variation selectors (Lo, So, Mn). They draw blanks or nothing. The opposite effect: ZWNJ (Persian) and ZWJ (emoji sequences) in evidence or a reason are refused.",
+      "impact": "These characters cannot spell attestation text and the evidence cap bounds padding, so there is no attack vector in the current paths. Note for the follow-up list.",
+      "suggested_fix": "Optionally add U+3164, U+115F, U+1160, U+FFA0 and U+2800 to the refused set; accept that ZWJ/ZWNJ text is refused and say so in the error.",
+      "evidence": "operator-confirm-review.ts:669-672 at head; character categories read from the Unicode general-category classes named.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "slices": ["slice-01"],
+  "questions": [
+    "F-701: is a report body with zero-width characters ever legitimate (for example emoji ZWJ sequences in a reviewer's text)? If so, the post path may need to allow ZWJ and refuse the rest, but then the card has to say 'holds N zero-width characters'."
+  ]
+}
+```

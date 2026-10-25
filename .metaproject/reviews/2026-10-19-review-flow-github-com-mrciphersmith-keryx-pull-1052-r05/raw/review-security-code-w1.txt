@@ -1,0 +1,42 @@
+STATUS: DONE
+
+## Security Review (round r05, dispatch review-security-code-w1)
+
+### Scope
+- Slice covered: slice-05 (kind: second-look, unchanged since r03). Files: flow 464 acceptance-criteria/context/description/journal/plan/tasks/flow.json, review-orchestrator SKILL.md and SKILL.detail.md, review-premise SKILL.md, CHANGELOG.md, TM-04, cli-reference.md, commands-by-task.md, autonomous-review.md, review-with-a-record.md, limitations.md, flow-state.schema.json, package.json.
+- The slice holds documentation, skill text, flow state and a schema property addition. It has no executable code path: no injection, auth, crypto, path or redirect surface.
+- The slice has no fix hunks, so none of the 65 prior findings is answered here. Fix completeness for E-01..E-08 belongs to the fix slices (slice-01, slice-02, slice-04) and the other dispatches.
+
+### Checked
+- No credential, token or bot secret appears in the slice. TM-04 section 6a says the bot token stays in the environment or in `BOT_TOKEN_FILE` and names the same-OS-user limit, so it makes no unsafe claim.
+- The trust claims in TM-04 section 6a, CHANGELOG, `review-with-a-record.md` and `limitations.md` agree with each other: allowed user id only, one question, single use, one hour, `pressedBy` and `pressedAt` only for `remote-card`, and no claim of protection against an agent running as the same OS user. No doc overstates what a press proves.
+- TM-04 section 8 says plain `review complete` has no TTY check. That is a documented limit, not a hidden one.
+- `flow-state.schema.json` adds `pressedBy` (integer) and `pressedAt` (string) to a parent that already has `additionalProperties: true`. This loosens nothing.
+- The skill edits tell the agent to call the cards and not to send the operator to a terminal. That does not widen an agent's authority; the card gate and the approval floor are code and are out of this slice.
+- `autonomous-review.md` wording on unattended runs is deliberate (per the dispatch) and not re-raised.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas
+Secrets in docs, trust-claim accuracy, schema loosening, agent-authority wording, and the unattended-run carve-out were checked.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-05 (second-look, docs, skill text, flow state, one schema property) read once for security defects. No exploitable code path, no secrets, and the trust claims in TM-04 section 6a match the other docs. No findings.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-05", "coverage": "read in full, second-look", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

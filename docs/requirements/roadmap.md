@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.20
+Version: 0.29.21
 
 ## Status
 
@@ -17,6 +17,8 @@ carrying the measurement that found it and the reason it was not done then.
 > merge. Only some were ever PUBLISHED: releases fire on a `v*` tag
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
+>
+> - **0.29.21**: [Keryx Learn Probe](keryx-learn-probe/README.md) — **spec ready, runtime not implemented**. A falsification step for the W3 self-learning loop: `keryx learn probe <id>` runs one task in two isolated worktrees (base vs base+pattern), scores paired rates with the interval rule the W3 evidence model can consume, and can lower confidence as well as raise it. No automatic acceptance, no judge, no scheduling; every verdict carries an explicit `unmeasurable`.
 >
 > - **0.29.20**: [Keryx Evidence Retrieval](keryx-evidence-retrieval/README.md) — **spec ready, runtime not implemented**. Separate untrusted raw-evidence lane, independent hybrid discovery, exact final-request visibility and incremental atomic indexes; implementation phases P0–P5.
 >
@@ -709,6 +711,7 @@ carrying the measurement that found it and the reason it was not done then.
 
 | Package | Status | Summary |
 |---|---|---|
+| [Keryx Learn Probe](keryx-learn-probe/README.md) | implemented — merged in PR #1072 | Falsification step for the W3 self-learning loop: `keryx learn probe <id>` runs one task in two isolated worktrees (base vs base+pattern, read-only tools), scores the paired delta with a Newcombe interval, and appends one `sourceType: "probe"` evidence item only on `improved`/`regressed`. Every other outcome is either `indistinguishable` (no evidence) or one of six named `unmeasurable` reasons. No automatic acceptance, no judge, no scheduling; a real run needs a TTY and `--max-usd`. |
 | [Keryx Agent-first Core](keryx-agent-first-core/README.md) | spec ready — proposed contracts; runtime not implemented | Независимое от модели ядро и отдельный optional Shell; 49 решений, содержательная wiki по секциям, source provenance, atomic expectedVersion, lifecycle/graph/ctx trust, SDK/batch и независимая методика измерений. Короткий gate уже частично реализован; остальные target guarantees не заявлены выполненными. |
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
 | [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |

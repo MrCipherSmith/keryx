@@ -1,0 +1,20 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-08 (second look, src/tui: approval-mirror, operator-confirmations, remote-control-surface, decisions-surface, tui-shell hunks) read once at head 77d2eff20 for logic defects. No new logic finding. The prior E-04 fix (onTopicEnded in raceApproval, markUndelivered(id, 'ended') in raceMirroredCard) is complete: every non-press end of the topic leg while the race is unsettled and the topic signal is not aborted now clears mirrored, so waiting() and the sidebar stop counting it; a press, a shell answer and an aborted turn are untouched because of the settled and aborted guards. Checked and found sound: the settle() mapping of dock result false to a 'no', topic allow to yes with pressedBy, aborted turn to withdrawn, a thrown race to withdrawn via the finally; card[0] is the card title (renderOperatorCard puts title first), so the logged question is right; the unmirrored branch cannot double-log with the raced branch (it returns first); the one-hour TTL boundary and the topic wait (MAX_APPROVAL_TIMEOUT_MS) end together, so the time-dependent waiting() does not leave a stale sidebar count.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-04", "disposition": "closed"}
+  ],
+  "slices": [
+    {"id": "slice-08", "coverage": "src/tui/approval-mirror.ts (whole file), src/tui/operator-confirmations.ts (whole file), tui-shell.ts mirrorApprovalToTopic / requestApprovalForTelegramTurn / requestApprovalLocally / confirmOperatorCard / operatorCards wiring / remoteModalListeners subscribe, remote-control-surface.ts and decisions-surface.ts hunks, operator-confirmations.test.ts read for expectations; confirmed against HEAD 77d2eff20 sources, not only the diff text", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

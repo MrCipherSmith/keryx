@@ -1,0 +1,2012 @@
+{
+  "v": 1,
+  "round": 2,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "1 round(s): 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02; chosen 2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02 (d6267d4a5099 is an ancestor of 5382b56abf17)"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02",
+    "reviewedHead": "d6267d4a5099f39b74e86a71e5c8f61ca47aa63d",
+    "packagePath": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02"
+  },
+  "mode": "delta",
+  "range": {
+    "base": "d6267d4a5099f39b74e86a71e5c8f61ca47aa63d",
+    "head": "5382b56abf17d23db61108554f3c6c68c8e3c036"
+  },
+  "fixHunks": [
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "startLine": 182,
+      "endLine": 182,
+      "findingIds": [
+        "review-clean-code-w1:F-003"
+      ]
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "startLine": 143,
+      "endLine": 143,
+      "findingIds": [
+        "review-clean-code-w2:F-004"
+      ]
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 323,
+      "endLine": 323,
+      "findingIds": [
+        "review-highload-w2:F-001",
+        "review-security-code-w4:F-002"
+      ]
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 535,
+      "endLine": 535,
+      "findingIds": [
+        "review-highload-w2:F-002",
+        "review-security-code-w1:F-002",
+        "review-security-code-w4:F-001"
+      ]
+    },
+    {
+      "file": "src/gdskills/reference-entries.ts",
+      "startLine": 41,
+      "endLine": 47,
+      "findingIds": [
+        "review-logic-w3:F-002"
+      ]
+    },
+    {
+      "file": "src/gdskills/reference-entries.ts",
+      "startLine": 50,
+      "endLine": 53,
+      "findingIds": [
+        "review-testing-practices-w2:F-008"
+      ]
+    },
+    {
+      "file": "src/gdskills/reference-proof.ts",
+      "startLine": 62,
+      "endLine": 63,
+      "findingIds": [
+        "review-logic-w3:F-001"
+      ]
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 16,
+      "endLine": 16,
+      "findingIds": [
+        "review-architecture-w3:F-002"
+      ]
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 97,
+      "endLine": 100,
+      "findingIds": [
+        "review-logic-w2:F-001"
+      ]
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 36,
+      "endLine": 36,
+      "findingIds": [
+        "review-highload-w3:F-001",
+        "review-logic-w3:F-003",
+        "review-security-code-w1:F-001",
+        "review-security-code-w3:F-001"
+      ]
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 173,
+      "endLine": 173,
+      "findingIds": [
+        "review-clean-code-w5:F-003",
+        "review-highload-w5:F-002",
+        "review-performance-w5:F-002"
+      ]
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 175,
+      "endLine": 176,
+      "findingIds": [
+        "review-clean-code-w5:F-003",
+        "review-highload-w5:F-002",
+        "review-performance-w5:F-002"
+      ]
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 180,
+      "endLine": 180,
+      "findingIds": [
+        "review-clean-code-w5:F-003"
+      ]
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 238,
+      "endLine": 239,
+      "findingIds": [
+        "review-clean-code-w5:F-001",
+        "review-style-w5:F-002"
+      ]
+    }
+  ],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+      "startLine": 20,
+      "endLine": 20
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 467,
+      "endLine": 471
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 323,
+      "endLine": 323
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 749,
+      "endLine": 749
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1307,
+      "endLine": 1307
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "startLine": 188,
+      "endLine": 188
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+      "startLine": 93,
+      "endLine": 93
+    },
+    {
+      "file": "README.md",
+      "startLine": 270,
+      "endLine": 270
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3490,
+      "endLine": 3490
+    },
+    {
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "startLine": 163,
+      "endLine": 168
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "startLine": 7,
+      "endLine": 9
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "startLine": 332,
+      "endLine": 363
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 2026,
+      "endLine": 2026
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 749,
+      "endLine": 749
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1307,
+      "endLine": 1307
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "startLine": 188,
+      "endLine": 188
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "startLine": 182,
+      "endLine": 182
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+      "startLine": 93,
+      "endLine": 93
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "startLine": 517,
+      "endLine": 517
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "startLine": 520,
+      "endLine": 521
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 420,
+      "endLine": 420
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 424,
+      "endLine": 424
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 426,
+      "endLine": 428
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 430,
+      "endLine": 430
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 432,
+      "endLine": 432
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 434,
+      "endLine": 434
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 436,
+      "endLine": 436
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 442,
+      "endLine": 442
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 448,
+      "endLine": 449
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 452,
+      "endLine": 452
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 70,
+      "endLine": 70
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 522,
+      "endLine": 524
+    },
+    {
+      "file": "src/gdskills/reference-entries.test.ts",
+      "startLine": 1,
+      "endLine": 53
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 22,
+      "endLine": 23
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 102,
+      "endLine": 102
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 105,
+      "endLine": 105
+    },
+    {
+      "file": "src/gdskills/references-section.test.ts",
+      "startLine": 152,
+      "endLine": 178
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 48,
+      "endLine": 68
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 70,
+      "endLine": 79
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 101,
+      "endLine": 103
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 105,
+      "endLine": 105
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "startLine": 296,
+      "endLine": 308
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-task-text.test.ts",
+      "startLine": 1,
+      "endLine": 30
+    },
+    {
+      "file": "src/mcp/metaproject-tools.test.ts",
+      "startLine": 146,
+      "endLine": 174
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 515,
+      "endLine": 566
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 586,
+      "endLine": 631
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 105,
+      "endLine": 105
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 168,
+      "endLine": 171
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 185,
+      "endLine": 187
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 194,
+      "endLine": 195
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 3935,
+      "endLine": 3936
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4047,
+      "endLine": 4047
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5295,
+      "endLine": 5295
+    }
+  ],
+  "carried": [
+    {
+      "findingId": "review-architecture-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-008",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-009",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-010",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w4:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w4:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w4:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w5:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-008",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-009",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-010",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-011",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-012",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:F-013",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w4:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w4:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w4:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w4:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w5:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w5:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-core-boundaries-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-core-boundaries-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-core-boundaries-w1:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w3:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w4:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w2:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w3:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w4:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w4:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w5:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-performance-w3:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-performance-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w3:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w4:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-008",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-009",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-010",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w4:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w4:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w4:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w5:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-009",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-010",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-011",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-012",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:F-013",
+      "disposition": "open"
+    }
+  ],
+  "mergeBase": "1658f77d374b2d20189a55eaf44b95d64768d6b6",
+  "modeReason": "d6267d4a5099 is an ancestor of 5382b56abf17",
+  "secondLookHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+      "startLine": 110,
+      "endLine": 112
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+      "startLine": 98,
+      "endLine": 100
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 19
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+      "startLine": 21,
+      "endLine": 39
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/description.md",
+      "startLine": 1,
+      "endLine": 27
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 1,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 15,
+      "endLine": 18
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 20,
+      "endLine": 466
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+      "startLine": 472,
+      "endLine": 562
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+      "startLine": 1,
+      "endLine": 37
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/plan.md",
+      "startLine": 1,
+      "endLine": 24
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.implement.json",
+      "startLine": 1,
+      "endLine": 70
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.result.json",
+      "startLine": 1,
+      "endLine": 67
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.implement.json",
+      "startLine": 1,
+      "endLine": 97
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.result.json",
+      "startLine": 1,
+      "endLine": 69
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.implement.json",
+      "startLine": 1,
+      "endLine": 97
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.result.json",
+      "startLine": 1,
+      "endLine": 60
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.implement.json",
+      "startLine": 1,
+      "endLine": 70
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.result.json",
+      "startLine": 1,
+      "endLine": 43
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.implement.json",
+      "startLine": 1,
+      "endLine": 44
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.result.json",
+      "startLine": 1,
+      "endLine": 6
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.implement.json",
+      "startLine": 1,
+      "endLine": 70
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.result.json",
+      "startLine": 1,
+      "endLine": 28
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.implement.json",
+      "startLine": 1,
+      "endLine": 43
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.result.json",
+      "startLine": 1,
+      "endLine": 7
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.implement.json",
+      "startLine": 1,
+      "endLine": 70
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.result.json",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.implement.json",
+      "startLine": 1,
+      "endLine": 70
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.result.json",
+      "startLine": 1,
+      "endLine": 84
+    },
+    {
+      "file": ".metaproject/flows/462-2026-10-18-conditional-reads/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 346,
+      "endLine": 346
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 762,
+      "endLine": 762
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "startLine": 139,
+      "endLine": 140
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "startLine": 184,
+      "endLine": 184
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "startLine": 428,
+      "endLine": 428
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+      "startLine": 110,
+      "endLine": 112
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+      "startLine": 268,
+      "endLine": 268
+    },
+    {
+      "file": ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+      "startLine": 98,
+      "endLine": 100
+    },
+    {
+      "file": "README.md",
+      "startLine": 264,
+      "endLine": 269
+    },
+    {
+      "file": "README.md",
+      "startLine": 271,
+      "endLine": 275
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3452,
+      "endLine": 3454
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3491,
+      "endLine": 3492
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3512,
+      "endLine": 3512
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3541,
+      "endLine": 3551
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3571,
+      "endLine": 3577
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 3583,
+      "endLine": 3592
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "startLine": 100,
+      "endLine": 162
+    },
+    {
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "startLine": 169,
+      "endLine": 306
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "startLine": 1,
+      "endLine": 98
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/TUI-states.md",
+      "startLine": 1,
+      "endLine": 32
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "startLine": 1,
+      "endLine": 293
+    },
+    {
+      "file": "docs/requirements/keryx-conditional-reads/schemas/references.schema.json",
+      "startLine": 1,
+      "endLine": 59
+    },
+    {
+      "file": "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+      "startLine": 26,
+      "endLine": 30
+    },
+    {
+      "file": "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+      "startLine": 44,
+      "endLine": 47
+    },
+    {
+      "file": "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+      "startLine": 53,
+      "endLine": 65
+    },
+    {
+      "file": "package.json",
+      "startLine": 57,
+      "endLine": 57
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 430,
+      "endLine": 430
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "startLine": 1,
+      "endLine": 6
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "startLine": 10,
+      "endLine": 142
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "startLine": 144,
+      "endLine": 331
+    },
+    {
+      "file": "src/commands/skills-references.ts",
+      "startLine": 1,
+      "endLine": 67
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 70,
+      "endLine": 70
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 72,
+      "endLine": 72
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 180,
+      "endLine": 184
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 1848,
+      "endLine": 1848
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 1880,
+      "endLine": 1881
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 1916,
+      "endLine": 1916
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 2018,
+      "endLine": 2018
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "startLine": 2024,
+      "endLine": 2025
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "startLine": 119,
+      "endLine": 227
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 346,
+      "endLine": 346
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 762,
+      "endLine": 762
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "startLine": 139,
+      "endLine": 140
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "startLine": 184,
+      "endLine": 184
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "startLine": 428,
+      "endLine": 428
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+      "startLine": 110,
+      "endLine": 112
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+      "startLine": 268,
+      "endLine": 268
+    },
+    {
+      "file": "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+      "startLine": 98,
+      "endLine": 100
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "startLine": 1,
+      "endLine": 516
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "startLine": 518,
+      "endLine": 519
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "startLine": 522,
+      "endLine": 523
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 402,
+      "endLine": 419
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 421,
+      "endLine": 423
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 425,
+      "endLine": 425
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 429,
+      "endLine": 429
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 431,
+      "endLine": 431
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 433,
+      "endLine": 433
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 435,
+      "endLine": 435
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 437,
+      "endLine": 441
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 443,
+      "endLine": 447
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 450,
+      "endLine": 451
+    },
+    {
+      "file": "src/gdskills/context-resolver.test.ts",
+      "startLine": 453,
+      "endLine": 635
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 12,
+      "endLine": 13
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 38,
+      "endLine": 43
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 55,
+      "endLine": 56
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 66,
+      "endLine": 67
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 71,
+      "endLine": 78
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 346,
+      "endLine": 352
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 357,
+      "endLine": 357
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 416,
+      "endLine": 416
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 458,
+      "endLine": 459
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 464,
+      "endLine": 480
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 488,
+      "endLine": 497
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 502,
+      "endLine": 503
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 505,
+      "endLine": 505
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 509,
+      "endLine": 521
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 525,
+      "endLine": 526
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 529,
+      "endLine": 529
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 531,
+      "endLine": 534
+    },
+    {
+      "file": "src/gdskills/context-resolver.ts",
+      "startLine": 536,
+      "endLine": 536
+    },
+    {
+      "file": "src/gdskills/import-rules.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/gdskills/import-rules.ts",
+      "startLine": 270,
+      "endLine": 277
+    },
+    {
+      "file": "src/gdskills/output-schema.test.ts",
+      "startLine": 1,
+      "endLine": 129
+    },
+    {
+      "file": "src/gdskills/project-context-status.test.ts",
+      "startLine": 79,
+      "endLine": 118
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "startLine": 16,
+      "endLine": 26
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "startLine": 41,
+      "endLine": 42
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "startLine": 74,
+      "endLine": 81
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "startLine": 83,
+      "endLine": 83
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "startLine": 89,
+      "endLine": 89
+    },
+    {
+      "file": "src/gdskills/project-context-status.ts",
+      "startLine": 102,
+      "endLine": 102
+    },
+    {
+      "file": "src/gdskills/reference-entries.ts",
+      "startLine": 1,
+      "endLine": 40
+    },
+    {
+      "file": "src/gdskills/reference-entries.ts",
+      "startLine": 48,
+      "endLine": 49
+    },
+    {
+      "file": "src/gdskills/reference-entries.ts",
+      "startLine": 54,
+      "endLine": 134
+    },
+    {
+      "file": "src/gdskills/reference-proof.ts",
+      "startLine": 1,
+      "endLine": 61
+    },
+    {
+      "file": "src/gdskills/reference-proof.ts",
+      "startLine": 64,
+      "endLine": 110
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 17,
+      "endLine": 21
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 24,
+      "endLine": 96
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 101,
+      "endLine": 101
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 103,
+      "endLine": 104
+    },
+    {
+      "file": "src/gdskills/references-check.ts",
+      "startLine": 106,
+      "endLine": 272
+    },
+    {
+      "file": "src/gdskills/references-config.test.ts",
+      "startLine": 1,
+      "endLine": 307
+    },
+    {
+      "file": "src/gdskills/references-config.ts",
+      "startLine": 1,
+      "endLine": 280
+    },
+    {
+      "file": "src/gdskills/references-section.test.ts",
+      "startLine": 1,
+      "endLine": 151
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 1,
+      "endLine": 35
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 37,
+      "endLine": 47
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 69,
+      "endLine": 69
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 80,
+      "endLine": 100
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 104,
+      "endLine": 104
+    },
+    {
+      "file": "src/gdskills/references-section.ts",
+      "startLine": 106,
+      "endLine": 137
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.ts",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.ts",
+      "startLine": 48,
+      "endLine": 48
+    },
+    {
+      "file": "src/gdskills/resolve-context-command.ts",
+      "startLine": 50,
+      "endLine": 50
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "startLine": 64,
+      "endLine": 295
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "startLine": 309,
+      "endLine": 386
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 4,
+      "endLine": 6
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 22,
+      "endLine": 25
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 61,
+      "endLine": 62
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 66,
+      "endLine": 74
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 87,
+      "endLine": 94
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 105,
+      "endLine": 105
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 107,
+      "endLine": 111
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 113,
+      "endLine": 113
+    },
+    {
+      "file": "src/gdskills/resolved-context-check.ts",
+      "startLine": 136,
+      "endLine": 139
+    },
+    {
+      "file": "src/gdskills/skill-sync.test.ts",
+      "startLine": 1,
+      "endLine": 78
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "startLine": 1381,
+      "endLine": 1381
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.test.ts",
+      "startLine": 704,
+      "endLine": 720
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.test.ts",
+      "startLine": 787,
+      "endLine": 811
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "startLine": 1406,
+      "endLine": 1406
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "startLine": 1976,
+      "endLine": 1978
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "startLine": 1987,
+      "endLine": 1987
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "startLine": 2008,
+      "endLine": 2008
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "startLine": 2015,
+      "endLine": 2015
+    },
+    {
+      "file": "src/harness/tool/metaproject-port.ts",
+      "startLine": 863,
+      "endLine": 863
+    },
+    {
+      "file": "src/lib/group-subcommands.ts",
+      "startLine": 295,
+      "endLine": 295
+    },
+    {
+      "file": "src/mcp/metaproject-tools.ts",
+      "startLine": 128,
+      "endLine": 128
+    },
+    {
+      "file": "src/mcp/metaproject-tools.ts",
+      "startLine": 134,
+      "endLine": 134
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 445,
+      "endLine": 445
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 6,
+      "endLine": 7
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 130,
+      "endLine": 130
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 144,
+      "endLine": 144
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 265,
+      "endLine": 514
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "startLine": 567,
+      "endLine": 576
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 5,
+      "endLine": 6
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 16,
+      "endLine": 17
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 22,
+      "endLine": 23
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 25,
+      "endLine": 25
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 38,
+      "endLine": 39
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 97,
+      "endLine": 97
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 101,
+      "endLine": 102
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 123,
+      "endLine": 167
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 172,
+      "endLine": 172
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 174,
+      "endLine": 174
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 177,
+      "endLine": 179
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 181,
+      "endLine": 184
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 188,
+      "endLine": 193
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 196,
+      "endLine": 208
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 218,
+      "endLine": 218
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 224,
+      "endLine": 224
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 232,
+      "endLine": 237
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 247,
+      "endLine": 247
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 249,
+      "endLine": 249
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 251,
+      "endLine": 256
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 266,
+      "endLine": 266
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "startLine": 271,
+      "endLine": 277
+    },
+    {
+      "file": "src/tui/project-references-view.ts",
+      "startLine": 1,
+      "endLine": 71
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 222,
+      "endLine": 222
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5272,
+      "endLine": 5277
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5280,
+      "endLine": 5281
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5294,
+      "endLine": 5294
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5296,
+      "endLine": 5296
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5298,
+      "endLine": 5298
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5303,
+      "endLine": 5303
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5305,
+      "endLine": 5305
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 9361,
+      "endLine": 9361
+    }
+  ]
+}

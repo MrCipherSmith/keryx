@@ -1,0 +1,45 @@
+[
+  {
+    "id": "review-regression-w2:fu1",
+    "status": "refuted",
+    "evidence": "chunk-pass.json: 5/5 chunks done, 0 failed, 0 files uncovered, 0 findings (review-regression, middle tier, chunk-001..chunk-005 covering the 17 files dropped by the blast-radius cap)",
+    "reason": "The open follow-up asked for the 17 dropped files to be covered; the chunk passes ran and found no regression, so the gap is closed."
+  },
+  {
+    "id": "review-regression-w2:fu2",
+    "status": "narrowed",
+    "evidence": "blast-radius.json lists 50 changed files (bundled skills, schemas, docs) absent from the code graph; chunks plan covers only dropped graph files, so no chunk pass reads them",
+    "reason": "These files were reviewed in scope A by the 43 dispatched reviewers, but no regression pass can compute their radius from a code graph.",
+    "remains": "Runtime and prose consumers of the 50 off-graph files (skills, schemas, docs) have no regression pass; the radius is unresolved, not clean."
+  },
+  {
+    "id": "review-testing-practices-w1:fu1",
+    "status": "refuted",
+    "evidence": "research-evidence/mutation-1.json and mutation-1.md: keryx review mutate ran 35 mutants (w1-m1..m15, w2-M-01..M-20): 15 killed, 20 survived, 0 timeout, 0 invalid",
+    "reason": "The follow-up was that the mutation pass had not run; it has now run, and the survivors are cited as mutant:<id> evidence on the testing findings."
+  },
+  {
+    "id": "review-style-w4:F-005",
+    "status": "out-of-scope",
+    "evidence": "ingest output: findings cap limit=10/reviewer truncated=4 (review-style-w4:F-005, F-006, F-007, review-style-w5:F-004); raw finding severity is info (alias named Node shadows the DOM global in references-config.test.ts)",
+    "reason": "Info-severity naming nit dropped by the per-reviewer findings cap; it blocks nothing."
+  },
+  {
+    "id": "review-style-w4:F-006",
+    "status": "out-of-scope",
+    "evidence": "ingest output: findings cap limit=10/reviewer truncated=4; raw finding severity is info (mixed root / UPPER_SNAKE constants in skill-sync.test.ts)",
+    "reason": "Info-severity naming nit dropped by the per-reviewer findings cap; it blocks nothing."
+  },
+  {
+    "id": "review-style-w4:F-007",
+    "status": "out-of-scope",
+    "evidence": "ingest output: findings cap limit=10/reviewer truncated=4; raw finding severity is info (test titles over 150 characters joining two behaviours in context-resolver.test.ts)",
+    "reason": "Info-severity readability nit dropped by the per-reviewer findings cap; it blocks nothing."
+  },
+  {
+    "id": "review-style-w5:F-004",
+    "status": "out-of-scope",
+    "evidence": "ingest output: findings cap limit=10/reviewer truncated=4; raw finding severity is info (src/tui/tui-shell.ts never calls projectContextFeed.stop())",
+    "reason": "Info-severity lifecycle note dropped by the per-reviewer findings cap; reported as an observation in the final report, not a blocking finding."
+  }
+]

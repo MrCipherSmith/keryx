@@ -1,0 +1,11 @@
+# keryx review verify-run
+finding: E-06
+command: sh -c n=$(awk 'NR>=741 && NR<=797' src/commands/operator-confirm-review.ts | wc -l); echo apply lines: $n; test $n -le 30
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:22.882Z
+exit: 1
+
+--- stdout ---
+apply lines: 57
+--- stderr ---
+

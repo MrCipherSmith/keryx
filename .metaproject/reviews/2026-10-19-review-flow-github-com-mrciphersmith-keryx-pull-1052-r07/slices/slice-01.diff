@@ -1,0 +1,862 @@
+--- src/commands/operator-confirm-other-tools.test.ts
+@@ 318,369 @@
+ 
+   const landDeps = (): WriteLandDeps => ({ dataDir, worktreesDir });
+   const tool = (): InteractiveTool => toolOf("external_apply", { projectRoot: repo, seams: { landDeps: landDeps() } });
+   const branches = (): string => git(repo, "for-each-ref", "--format=%(refname)", "refs/heads");
+ 
+   test("the card shows the run id, the branch, the FULL patch hash and the changed files", async () => {
+     const run = seed(makePatch());
+     const card = await asked(tool(), { run_id: run.runId });
+     expect(card.title).toBe(`Land external run ${run.runId} as branch external/${run.runId}?`);
+     const text = card.card.join("\n");
+     expect(text).toContain(`run: ${run.runId}`);
+     expect(text).toContain(`branch: external/${run.runId}`);
+     expect(text).toContain(`patch hash (sha256): ${run.hash}`);
+     expect(run.hash).toHaveLength(64);
+     expect(text).toContain("changed files: 2");
+     expect(text).toContain("modified     a.txt");
+     expect(text).toContain("added        new.txt");
+     expect(card.card.at(-1)).toBe(`subject: external/${run.runId} @ sha256:${run.hash}`);
+   });
+ 
++  test("the card lists every changed file and every flagged path, with no 'and N more' tail", async () => {
++    const files = Array.from({ length: 40 }, (_, index) => ({ path: `src/file-${String(index).padStart(2, "0")}.ts`, status: "modified" as const }));
++    const flaggedPaths = Array.from({ length: 25 }, (_, index) => `.github/workflows/w-${String(index).padStart(2, "0")}.yml`);
++    const run = seed(makePatch(), { files, flaggedPaths });
++    const card = await asked(tool(), { run_id: run.runId, allow_flagged: true });
++    const text = card.card.join("\n");
++    expect(text).toContain("changed files: 40");
++    for (const file of files) expect(text).toContain(file.path);
++    for (const flagged of flaggedPaths) expect(text).toContain(`! ${flagged}`);
++    expect(text).not.toMatch(/\.\.\. and \d+ more/);
++  });
++
+   test("yes lands the branch as the CLI does and records the confirmation; the checkout is untouched", async () => {
+     const run = seed(makePatch());
+     writeFileSync(path.join(repo, "a.txt"), "local edit\n");
+     const headBefore = git(repo, "rev-parse", "HEAD").trim();
+     const { card, result } = await yes(tool(), { run_id: run.runId });
+     expect(result.isError).toBe(false);
+     expect(result.output).toContain(`landed: branch external/${run.runId}`);
+     expect(result.output).toContain("nothing was applied to your current branch or working tree");
+     expect(branches()).toContain(`refs/heads/external/${run.runId}`);
+     expect(git(repo, "rev-parse", "HEAD").trim()).toBe(headBefore);
+     expect(readFileSync(path.join(repo, "a.txt"), "utf8")).toBe("local edit\n");
+     const decision = JSON.parse(readFileSync(path.join(run.dir, EXTERNAL_WRITE_DECISION_FILE), "utf8")) as Record<string, unknown>;
+     expect(decision["decision"]).toBe("landed");
+     expect(decision["confirmedVia"]).toBe("tui-card");
+     expect(decision["quote"]).toBe(`${card.title}: yes`);
+   });
+ 
+   test("no lands nothing and leaves the run pending", async () => {
+     const run = seed(makePatch());
+     await no(tool(), { run_id: run.runId });
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 191,266 @@
+   }
+ 
+   test("the card shows the target PR, the verdict, partial and the body size; yes posts exactly the shown body and records confirmedVia", async () => {
+     makePackage();
+     const t = tool("review_publish");
+     const result = await yes(t, { package: pkg, event: "REQUEST_CHANGES", partial: true });
+     const text = result.card.join("\n");
+     expect(result.card[0]).toBe(`Post this REQUEST_CHANGES review (PARTIAL) to ${PR}?`);
+     expect(text).toContain(`target: ${PR}`);
+     expect(text).toContain("verdict: REQUEST_CHANGES");
+     expect(text).toContain("partial: yes — readiness is failing: verifier");
+     expect(text).toMatch(/body: \d+ characters, \d+ lines/);
+     expect(text).toContain("**Partial review.**");
+     expect(result.isError).toBe(false);
+     expect(posts).toHaveLength(1);
+     expect(posts[0]).toMatchObject({ ref: PR, event: "REQUEST_CHANGES" });
+     expect(posts[0]!.body.startsWith("**Partial review.**")).toBe(true);
+     expect(readJson("published.json")).toMatchObject({ pr: PR, event: "REQUEST_CHANGES", partial: true, failing: ["verifier"], time: NOW.toISOString(), confirmedVia: "tui-card" });
+   });
+ 
++  test("the card shows the posted body whole: every line, none cut at a width, no 'first N' preview", async () => {
++    makePackage();
++    const long = `long-line-${"x".repeat(400)}-end`;
++    const tail = "last line of the report";
++    put("report.md", `# Review\n\n${Array.from({ length: 30 }, (_, index) => `line ${index}`).join("\n")}\n${long}\n${tail}\n`);
++    const result = await yes(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true });
++    expect(result.isError).toBe(false);
++    expect(result.card).toContain(`  ${long}`);
++    expect(result.card).toContain(`  ${tail}`);
++    expect(result.card).toContain("  line 29");
++    const text = result.card.join("\n");
++    expect(text).toContain("shown whole");
++    expect(text).not.toContain("the first");
++    expect(text).not.toContain("…");
++    expect(posts[0]!.body).toContain(long);
++  });
++
++  test("a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked", async () => {
++    makePackage();
++    for (const hidden of ["\u001b[2Jclean", "ok‮gnp.exe", "bell\u0007"]) {
++      put("report.md", `# Review\n\nvisible ${hidden}\n`);
++      expect(await ask(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true })).toEqual({
++        error: expect.stringContaining("holds control, escape or bidi characters on line"),
++      });
++    }
++    expect(posts).toEqual([]);
++  });
++
++  test("a tab in the body is shown as plain spaces and is not a refusal", async () => {
++    makePackage();
++    put("report.md", "# Review\n\ncol\tone\n");
++    const result = await yes(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true });
++    expect(result.isError).toBe(false);
++    expect(result.card.some((line) => line.includes("col one"))).toBe(true);
++  });
++
+   test("a no posts nothing and writes nothing", async () => {
+     makePackage();
+     const t = tool("review_publish");
+     const card = asked(await ask(t, { package: pkg, partial: true }));
+     t.confirmationDeclined!(card.token);
+     expect(posts).toEqual([]);
+     expect(existsSync(path.join(pkg, "published.json"))).toBe(false);
+   });
+ 
+   test("a failing checklist without partial is refused, naming the failing item; nothing is asked", async () => {
+     makePackage();
+     const refused = await ask(tool("review_publish"), { package: pkg });
+     expect(refused).toEqual({ error: expect.stringMatching(/cannot publish[\s\S]*verifier/i) });
+     expect(posts).toEqual([]);
+   });
+ 
+   test("the manifest target changing between the card and the yes posts nothing", async () => {
+     makePackage();
+     const t = tool("review_publish");
+     const input = { package: pkg, partial: true };
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 718,832 @@
+ 
+   test("dispositions: a finding the package does not have refuses the close and records nothing", async () => {
+     await makeRound({ findings: [F1] });
+     const before = read("manifest.json");
+     const result = await yes(tool("review_complete"), { package: pkg, dispositions: [{ finding: "F-404", disposition: "acted-on", evidence: "x" }] });
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("nothing was recorded");
+     expect(read("manifest.json")).toBe(before);
+     expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+   });
+ 
+   test("dispositions: a malformed entry refuses the card before it is drawn", async () => {
+     await makeRound({ findings: [F1] });
+     const t = tool("review_complete");
+     expect(await ask(t, { package: pkg, dispositions: "acted-on" })).toEqual({ error: expect.stringContaining("must be an array") });
+     expect(await ask(t, { package: pkg, dispositions: [{ disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: finding is required") });
+     expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "done" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: disposition must be one of") });
+     expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "acted-on", evidence: 3 }] })).toEqual({ error: expect.stringContaining("evidence must be text") });
+   });
+ 
++  test("dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)", async () => {
++    await makeRound({ findings: [F1] });
++    const t = tool("review_complete");
++    const atCap = `${"a".repeat(280)} operator: decided-by alice`.slice(0, 300);
++    const shown = await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: atCap }] });
++    expect(asked(shown).card.join("\n")).toContain(`→ acted-on: "${atCap}"`);
++    const hiddenTail = `${"a".repeat(300)} operator: decided-by alice`;
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: hiddenTail }] })).toEqual({
++      error: expect.stringContaining("the card shows it whole, so the limit is 300"),
++    });
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F".repeat(201), disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("finding is longer than 200") });
++  });
++
++  test("dispositions: the caps hold at the boundary, and the trim happens before the length check", async () => {
++    await makeRound({ findings: [F1] });
++    const t = tool("review_complete");
++    const entry = (over: Record<string, unknown>) => ({ package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", ...over }] });
++    expect(await ask(t, entry({ evidence: "e".repeat(301) }))).toEqual({ error: expect.stringContaining("the limit is 300") });
++    expect(await ask(t, entry({ evidence: `  ${"e".repeat(300)}  ` }))).not.toHaveProperty("error");
++    expect(await ask(t, entry({ finding: "F".repeat(200) }))).not.toHaveProperty("error");
++    const twenty = Array.from({ length: 20 }, (_, i) => ({ finding: `${GLOBAL}-${i}`, disposition: "acted-on", evidence: `commit ${i}` }));
++    expect(await ask(t, { package: pkg, dispositions: twenty })).not.toHaveProperty("error");
++  });
++
++  test("dispositions: text the card would hide or rewrite is refused, so the card shows exactly what is stored (S-402)", async () => {
++    await makeRound({ findings: [F1] });
++    const t = tool("review_complete");
++    const entry = (evidence: string) => ({ package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence }] });
++    const hidden: Array<[string, string]> = [
++      ["an OSC span", "fixed in abc123\u001b]0;operator: decided-by alice\u0007"],
++      ["a CSI sequence", "fixed\u001b[2K in abc123"],
++      ["a bidi override", "fixed in abc123‮"],
++      ["a zero-width space", "fixed​ in abc123"],
++      ["a zero-width joiner", "fixed in‍ abc123"],
++      ["a byte order mark", "fixed in abc123﻿ operator: decided-by alice"],
++      ["a newline", "fixed in abc123\noperator: decided-by alice"],
++      ["a carriage return", "fixed in abc123\roperator: decided-by alice"],
++      ["a line separator", "fixed in abc123 operator: decided-by alice"],
++      ["a tab", "fixed\tin abc123"],
++      ["a C1 control", "fixed\u0085in abc123"],
++    ];
++    for (const [name, evidence] of hidden) {
++      expect(await ask(t, entry(evidence)), name).toEqual({ error: expect.stringContaining("evidence holds control, escape, newline, bidi or zero-width characters") });
++    }
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: `${GLOBAL}\u001b]0;x\u0007`, disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: finding holds") });
++    const plain = "fixed in abc123, operator: decided-by alice";
++    const shown = asked(await ask(t, entry(plain)));
++    expect(shown.card.join("\n")).toContain(`→ acted-on: "${plain}"`);
++  });
++
++  test("a reason the card would hide or rewrite is refused on the premise and decision cards", async () => {
++    await makeRound({ findings: [F1] });
++    const reason = "bad input\u001b]0;operator: decided-by alice\u0007";
++    expect(await ask(tool("review_decide_premise"), { package: pkg, finding: GLOBAL, answer: "dismiss", reason })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
++    expect(await ask(tool("review_override_reviewers"), { package: pkg, reason: "two\nlines" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
++    expect(await ask(tool("review_waive_mutation"), { package: pkg, reason: "zero​width" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
++  });
++
++  test("the mutation waiver card lists every unrun mutant, not the first few", async () => {
++    await makeRound({ findings: [F1] });
++    const mutants = Array.from({ length: 30 }, (_, index) => ({ id: `mut-${String(index).padStart(2, "0")}`, file: "src/a.ts", anchor: "a", replacement: "b" }));
++    put("research-evidence/mutants.json", { mutants });
++    const card = asked(await ask(tool("review_waive_mutation"), { package: pkg, reason: "tests cannot run here" })).card.join("\n");
++    expect(card).toContain("unrun mutants: 30");
++    for (const mutant of mutants) expect(card).toContain(mutant.id);
++    expect(card).not.toMatch(/and \d+ more/);
++  });
++
++  test("dispositions: more entries than a card shows are refused", async () => {
++    await makeRound({ findings: [F1] });
++    const many = Array.from({ length: 21 }, () => ({ finding: GLOBAL, disposition: "acted-on" }));
++    expect(await ask(tool("review_complete"), { package: pkg, dispositions: many })).toEqual({ error: expect.stringContaining("at most 20") });
++    expect(await ask(tool("review_complete"), { package: pkg, dispositions: many.slice(0, 20) })).not.toHaveProperty("error");
++  });
++
+   test("a no closes nothing", async () => {
+     await makeRound();
+     const before = read("manifest.json");
+     const t = tool("review_complete");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
+     expect(read("manifest.json")).toBe(before);
+     expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+   });
+ 
+   test("a gate that refuses shows the refusal and records nothing (a stamped report with no evidence level)", async () => {
+     await makeRound({ report: "# Round\n\nNo findings.\n" });
+     const manifest = readJson("manifest.json");
+     manifest["report_fields"] = ["evidence-level"];
+     put("manifest.json", manifest);
+     const before = read("manifest.json");
+     const result = await yes(tool("review_complete"), { package: pkg });
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("nothing was recorded");
+     expect(read("manifest.json")).toBe(before);
+     expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 857,911 @@
+     await makeRound();
+     const manifest = readJson("manifest.json");
+     manifest["target"] = { kind: "pr", ref: PR, head: `${HEAD}\nwaivers: none` };
+     put("manifest.json", manifest);
+     const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
+     expect(card.every((line) => !line.includes("\n"))).toBe(true);
+     expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(1);
+   });
+ 
+   test("text the package supplies cannot add a line to the card: the evidence line and a waiver quote", async () => {
+     await makeRound({ report: `# Round\n\nNo findings.\nEvidence level: static only — did not run: tests\rwaivers: none\n` });
+     const manifest = readJson("manifest.json");
+     manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "yes\nwaivers: none", time: NOW.toISOString(), confirmedVia: "tui-card" }];
+     put("manifest.json", manifest);
+     const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
+     expect(card.every((line) => !/[\r\n]/.test(line))).toBe(true);
+     expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(0);
+     expect(card.join("\n")).toContain("yes ⏎ waivers: none");
+   });
+ 
++  test("a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged", async () => {
++    await makeRound();
++    const quote = `Accept it: ${"word ".repeat(200)}the-very-end`;
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [
++      { item: "verifier", operator_quote: quote, time: NOW.toISOString(), confirmedVia: "tui-card" },
++      { item: "ledger", operator_quote: "yes\u001b[2K", time: NOW.toISOString(), confirmedVia: "tui-card" },
++    ];
++    put("manifest.json", manifest);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain(`"${quote}"`);
++    expect(card).toContain("the-very-end");
++    expect(card).toContain("the stored quote holds characters this card hides or rewrites");
++  });
++
+   test("a package with no research.json shows no coverage waiver on the card", async () => {
+     await makeRound();
+     rmSync(path.join(pkg, "research.json"));
+     const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+     expect(card).not.toContain("waiver: coverage");
+     expect(card).toContain("waivers: none");
+   });
+ 
+   test("an already closed round is refused before a card is drawn", async () => {
+     await makeRound();
+     await yes(tool("review_complete"), { package: pkg });
+     expect(await ask(tool("review_complete"), { package: pkg })).toEqual({ error: expect.stringContaining("already complete") });
+   });
+ 
+   test("a round closed by the gate whose confirmation record cannot be written is reported as closed, not as 'nothing recorded'", async () => {
+     await makeRound();
+     mkdirSync(path.join(pkg, "completion-confirmation.json"));
+     const result = await yes(tool("review_complete"), { package: pkg });
+     expect(status()).toBe("closed");
+     expect(result.isError).toBe(true);
+
+--- src/commands/operator-confirm-other.ts
+@@ 56,121 @@
+ import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmation, OperatorConfirmContext, OperatorConfirmSpec } from "./operator-confirm-tools";
+ 
+ /** Seams for tests. Production passes none. */
+ export interface OtherConfirmSeams {
+   /** Default: a flow service built from the same deps `keryx flow` uses. */
+   readonly flowService?: () => Promise<FlowService>;
+   /** The session store and worktree location for external write runs. */
+   readonly landDeps?: WriteLandDeps;
+   /** The user-global learning store's home directory. */
+   readonly homeDir?: string;
+   /** The OS scheduler seam `keryx schedule` takes. */
+   readonly host?: ScheduleHost;
+   /** `keryx trigger run <name>` for `schedule_run`. Default: `runTriggerOnce` with `scheduleOnly`. */
+   readonly runSchedule?: (projectRoot: string, name: string) => Promise<void>;
+ }
+ 
+ // ---------------------------------------------------------------------------------------------
+ // shared helpers
+ // ---------------------------------------------------------------------------------------------
+ 
+-const MAX_LISTED = 12;
+-
+ function text(value: unknown): string | undefined {
+   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+ }
+ 
+ function errorText(error: unknown): string {
+   return error instanceof Error ? error.message : String(error);
+ }
+ 
+ /** `message [reason]`, the way `keryx learn` reports a library refusal. */
+ function learnErrorText(error: unknown): string {
+   const reason =
+     error instanceof LearningAcceptError || error instanceof LearningPromoteError || error instanceof LearningGraduateError
+       ? ` [${error.reason}]`
+       : "";
+   return `${errorText(error)}${reason}`;
+ }
+ 
+ function sha256(value: string): string {
+   return createHash("sha256").update(value, "utf8").digest("hex");
+ }
+ 
+ /** Stable digest of a value as it was SHOWN on a card, so `apply` can refuse content that changed after the yes was asked for. */
+ function contentDigest(value: unknown): string {
+   return sha256(JSON.stringify(value ?? null));
+ }
+ 
+-function limited(lines: readonly string[]): string[] {
+-  if (lines.length <= MAX_LISTED) return [...lines];
+-  return [...lines.slice(0, MAX_LISTED), `  ... and ${lines.length - MAX_LISTED} more`];
+-}
+-
+ function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string; pressedBy?: number; pressedAt?: string } {
+   return {
+     confirmedVia: confirmation.confirmedVia,
+     quote: confirmation.quote,
+     ...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy }),
+     ...(confirmation.pressedAt === undefined ? {} : { pressedAt: confirmation.pressedAt }),
+   };
+ }
+ 
+ /** Run `fn` with console output captured, and `process.exitCode` put back. The CLI verbs print; a tool returns text. */
+ async function captureConsole(fn: () => Promise<void>): Promise<{ output: string; failed: boolean; error?: unknown }> {
+   const lines: string[] = [];
+   const saved = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+   const before = process.exitCode;
+   const grab =
+     () =>
+     (...args: unknown[]): void => {
+       lines.push(args.map((a) => (typeof a === "string" ? a : String(a))).join(" "));
+     };
+   console.log = grab();
+
+--- src/commands/operator-confirm-other.ts
+@@ 284,326 @@
+       if (run.flaggedPaths.length > 0 && !allowFlagged) {
+         return {
+           refusal:
+             `the run changes flagged paths (${run.flaggedPaths.map(cardSafe).join(", ")}); ` +
+             "call again with allow_flagged: true so the operator is asked about them explicitly",
+         };
+       }
+       const branch = `external/${run.runId}`;
+       const files = run.files.map((file) => `  ${file.status.padEnd(12)} ${cardSafe(file.path)}`);
+       return {
+         title:
+           run.flaggedPaths.length > 0
+             ? `Land external run ${run.runId} as branch ${branch}, including ${run.flaggedPaths.length} flagged path(s)?`
+             : `Land external run ${run.runId} as branch ${branch}?`,
+         lines: [
+           `run: ${run.runId}`,
+           `agent: ${cardSafe(run.agentId)}`,
+           `branch: ${branch} (new, local; cut from base commit ${cardSafe(run.baseCommit)})`,
+           `patch hash (sha256): ${hash}`,
+           `changed files: ${run.files.length}`,
+-          ...limited(files),
++          ...files,
+           ...(run.flaggedPaths.length > 0
+-            ? [`FLAGGED PATHS (${run.flaggedPaths.length}) - repo plumbing, CI, hooks or agent config:`, ...limited(run.flaggedPaths.map((p) => `  ! ${cardSafe(p)}`))]
++            ? [`FLAGGED PATHS (${run.flaggedPaths.length}) - repo plumbing, CI, hooks or agent config:`, ...run.flaggedPaths.map((p) => `  ! ${cardSafe(p)}`)]
+             : []),
+           "effect: your current branch, HEAD, index and working tree are never touched",
+         ],
+         subject: `${branch} @ sha256:${hash}`,
+         prepared: { runId: run.runId, patchHash: hash, allowFlagged },
+       };
+     },
+     apply: async (_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> => {
+       if (prepared === undefined) return { output: "external_apply: nothing prepared - nothing was landed", isError: true };
+       const result = await landWriteRun(
+         {
+           cwd: ctx.projectRoot,
+           runId: prepared.runId,
+           confirmedPatchHash: prepared.patchHash,
+           ...(prepared.allowFlagged ? { allowFlagged: true } : {}),
+           confirmation: record(confirmation),
+         },
+         landDeps,
+       );
+       if (result.kind === "refused") {
+
+--- src/commands/operator-confirm-review.ts
+@@ 41,114 @@
+ import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
+ import { evidenceLevelLine } from "../review/evidence-level";
+ import { writeFileAtomic } from "../lib/fs";
+ import { resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
+ import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+ import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+ import type { PrLookup } from "../review/complete-head-gate";
+ import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
+ import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
+ import { readOperatorDecisions, recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+ import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
+ import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
+ 
+ /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
+ export interface ReviewConfirmSeams {
+   prLookup?: PrLookup;
+   prFiles?: (ref: string) => Promise<string[] | null>;
+   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+ }
+ 
+-const LISTED_FILES = 15;
+-const BODY_PREVIEW_LINES = 8;
+-const BODY_PREVIEW_CHARS = 140;
++/** A body that is posted as written, shown whole line by line. A line holding characters the card would hide or rewrite (a tab shows as a space and is fine) is refused. */
++function shownBody(text: string): { lines: string[] } | { refusal: string } {
++  const lines = text.trimEnd().split(/\r?\n/).map((line) => line.replace(/\t/g, " "));
++  const bad = lines.findIndex((line) => cardSafe(line) !== line);
++  if (bad !== -1) return { refusal: `holds control, escape or bidi characters on line ${bad + 1} that the card would hide; it is not shown, so it is not asked` };
++  return { lines: lines.map((line) => `  ${line}`) };
++}
+ 
+ async function trackerPrLookup(ref: string): Promise<Awaited<ReturnType<PrLookup>>> {
+   if (!(await githubAdapter.detect())) return null;
+   return githubAdapter.prStatus(ref);
+ }
+ 
+ const packageSchema = { type: "string", description: "The review package: its directory or its review id." } as const;
+ 
+ function packageRef(input: Record<string, unknown>): string | undefined {
+   const value = input["package"];
+   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+ }
+ 
+ /** The package directory, confined to the project like the CLI's `--package`; a bare review id is looked up. */
+ async function resolvePackage(ref: string, projectRoot: string): Promise<string> {
+   const placed = placeReviewPath("chunks", "--package", ref, { projectRoot, cwd: projectRoot });
+   if (placed.ok && placed.path !== "-" && existsSync(placed.path) && statSync(placed.path).isDirectory()) return placed.path;
+   if (/[\\/]/.test(ref)) throw new Error(placed.ok ? `${ref} is not a directory.` : placed.message);
+   return resolveReviewPackagePath(projectRoot, ref);
+ }
+ 
+ const label = (dir: string, projectRoot: string): string => path.relative(projectRoot, dir) || ".";
+ 
+ const failed = (error: unknown): { refusal: string } => ({ refusal: error instanceof Error ? error.message : String(error) });
+ 
+ function listFiles(files: readonly string[]): string[] {
+-  const shown = files.slice(0, LISTED_FILES).map((file) => `  ${file}`);
+-  return files.length > LISTED_FILES ? [...shown, `  … and ${files.length - LISTED_FILES} more`] : shown;
++  return files.map((file) => `  ${file}`);
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 1. review_chunks_answer
+ 
+ type ChunksPrepared = { dir: string; planKey: string; answer: "yes" | "no" };
+ 
+ function chunksAnswerSpec(): OperatorConfirmSpec<ChunksPrepared> {
+   return {
+     name: "review_chunks_answer",
+     description:
+       "Record the operator's answer to the chunk-run question: a blast-radius chunk run needs more review passes than the ceiling allows. " +
+       "Pass the review package and the answer you are asking for (yes lifts the ceiling for this plan, no stops the run). Same effect as `keryx review chunks estimate --answer`.",
+     inputSchema: {
+       type: "object",
+       properties: { package: packageSchema, answer: { type: "string", enum: ["yes", "no"], description: "The answer to record if the operator confirms." } },
+       required: ["package", "answer"],
+       additionalProperties: false,
+     },
+     async buildCard(input, ctx): Promise<OperatorCardResult<ChunksPrepared>> {
+
+--- src/commands/operator-confirm-review.ts
+@@ 188,240 @@
+     },
+     async buildCard(input, ctx): Promise<OperatorCardResult<PublishPrepared>> {
+       const ref = packageRef(input);
+       if (ref === undefined) return { refusal: "package is required" };
+       try {
+         const event = reviewEvent(typeof input["event"] === "string" ? input["event"] : undefined);
+         const partialAsked = input["partial"] === true;
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+         let target = "";
+         // A dry run of the real function: it checks readiness, builds the body and asks `confirm`, which declines.
+         const result = await publishReview(dir, {
+           event,
+           partial: partialAsked,
+           readiness: readiness(),
+           post: async () => ({ ok: false, detail: "dry run" }),
+           confirm: async (_body, targetRef) => {
+             target = targetRef;
+             return false;
+           },
+         });
+-        const bodyLines = result.body.trimEnd().split(/\r?\n/);
+-        const preview = bodyLines.slice(0, BODY_PREVIEW_LINES).map((line) => `  ${cardSafe(line.length > BODY_PREVIEW_CHARS ? `${line.slice(0, BODY_PREVIEW_CHARS)}…` : line)}`);
++        const shownReview = shownBody(result.body);
++        if ("refusal" in shownReview) return { refusal: `The review body ${shownReview.refusal}` };
++        const bodyLines = shownReview.lines;
+         const failing = result.readiness.items.filter((item) => item.status === "fail").map((item) => item.id);
+         const name = label(dir, ctx.projectRoot);
+         return {
+           title: `Post this ${result.event} review${result.partial ? " (PARTIAL)" : ""} to ${cardSafe(target)}?`,
+           lines: [
+             `target: ${cardSafe(target)}`,
+             `verdict: ${result.event}`,
+             result.partial ? `partial: yes — readiness is failing: ${cardSafe(failing.join(", "))}` : "partial: no — the readiness checklist passes",
+-            `body: ${result.body.length} characters, ${bodyLines.length} lines; the first ${Math.min(BODY_PREVIEW_LINES, bodyLines.length)}:`,
+-            ...preview,
++            `body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:`,
++            ...bodyLines,
+             "yes: the review is posted to GitHub and cannot be taken back from here",
+           ],
+           subject: `${cardSafe(target)} (package ${name})`,
+           prepared: { dir, body: result.body, ref: target, event: result.event, partial: result.partial },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_publish: nothing prepared for this card", isError: true };
+       let changed = false;
+       const result = await publishReview(prepared.dir, {
+         event: prepared.event,
+         partial: prepared.partial,
+         readiness: readiness(),
+         post: post(),
+         now: () => new Date(confirmation.at),
+         confirmedVia: confirmation.confirmedVia,
+         ...cardPressFields(confirmation),
+
+--- src/commands/operator-confirm-review.ts
+@@ 410,482 @@
+           const pending = subject.items.length;
+           if (pending === 0) return { refusal: "No proposed mutant is unrun: there is no mutation pass to waive." };
+           return {
+             title: `Waive the mutation pass for ${name}: ${pending} proposed mutant(s) stay unrun?`,
+             lines: [
+-              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.slice(0, LISTED_FILES).join(", "))}${pending > LISTED_FILES ? ` … and ${pending - LISTED_FILES} more` : ""}`,
++              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.join(", "))}`,
+               `head: ${cardSafe(subject.head ?? "not recorded")}`,
+               `reason: ${cardSafe(reason)}`,
+               "yes: the review records `Not run: mutation pass` with your words for these mutants at this head; a new head or a new mutant asks again",
+             ],
+             subject: `package ${name}`,
+             prepared: { dir, reason, detail: `${pending} mutant(s)`, subject },
+           };
+         }
+         const selected = Array.isArray(input["selected"]) ? (input["selected"] as unknown[]).filter((v): v is string => typeof v === "string") : undefined;
+         const { required } = await reviewersLeftOut(dir, selected);
+         const subject = await operatorDecisionSubject(dir, kind, selected);
+         const missing = subject.items;
+         return {
+           title: `Run a smaller reviewer set than required for ${name}?`,
+           lines: [
+             `required (mode all): ${required.length} reviewer(s)`,
+             `head: ${cardSafe(subject.head ?? "not recorded")}`,
+             selected === undefined ? "selected: not named" : `selected: ${cardSafe(selected.join(", "))}`,
+-            `not run: ${cardSafe(missing.slice(0, LISTED_FILES).join(", ") || "none")}${missing.length > LISTED_FILES ? ` … and ${missing.length - LISTED_FILES} more` : ""}`,
++            `not run: ${cardSafe(missing.join(", ") || "none")}`,
+             `reason: ${cardSafe(reason)}`,
+             "yes: the gate accepts leaving out exactly these reviewers at this head; dropping another one or a new head asks again",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, reason, detail: missing.join(","), subject },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: `${mutation ? "review_waive_mutation" : "review_override_reviewers"}: nothing prepared for this card`, isError: true };
+       const selected = Array.isArray(input["selected"]) ? (input["selected"] as unknown[]).filter((v): v is string => typeof v === "string") : undefined;
+       const again = await operatorDecisionSubject(prepared.dir, kind, mutation ? undefined : selected);
+       if (JSON.stringify(again) !== JSON.stringify(prepared.subject)) {
+         return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+       await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at, subject: prepared.subject });
+       return { output: `${mutation ? "mutation pass waived" : "reviewer-set override recorded"} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 7. review_comments_reply (flow 457)
+ 
+ type ReplyPrepared = { argv: string[]; requests: string };
+ 
+-const REPLY_PREVIEW = 6;
+-
+ function replyArgv(input: Record<string, unknown>): string[] | { refusal: string } {
+   const repo = input["repo"];
+   const pr = input["pr"];
+   const sha = input["sha"];
+   if (typeof repo !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return { refusal: "repo must be <owner>/<repo>" };
+   if (typeof pr !== "number" || !Number.isInteger(pr) || pr <= 0) return { refusal: "pr must be the pull request number" };
+   if (typeof sha !== "string" || !/^[0-9a-f]{7,40}$/i.test(sha)) return { refusal: "sha must be the pull request head commit" };
+   const argv = ["--repo", repo, "--pr", String(pr), "--sha", sha, "--final"];
+   for (const [key, flag] of [["outcomes", "--outcomes"], ["review", "--review"], ["result", "--result"], ["flow_link", "--flow-link"]] as const) {
+     const value = input[key];
+     if (typeof value === "string" && value.trim() !== "") argv.push(flag, value.trim());
+   }
+   if (typeof input["round"] === "number") argv.push("--round", String(input["round"]));
+   return argv;
+ }
+ 
+ function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
+   return {
+     name: "review_comments_reply",
+     description:
+
+--- src/commands/operator-confirm-review.ts
+@@ 488,536 @@
+         repo: { type: "string", description: "owner/repo" },
+         pr: { type: "integer", description: "The pull request number." },
+         sha: { type: "string", description: "The pull request head commit." },
+         outcomes: { type: "string", description: "The outcomes file (--outcomes)." },
+         review: { type: "string", description: "The managed review package (--review)." },
+         result: { type: "string", description: "The review result file (--result)." },
+         round: { type: "integer", description: "The review round (--round)." },
+         flow_link: { type: "string", description: "A flow link to add to replies (--flow-link)." },
+       },
+       required: ["repo", "pr", "sha"],
+       additionalProperties: false,
+     },
+     async buildCard(input): Promise<OperatorCardResult<ReplyPrepared>> {
+       const argv = replyArgv(input);
+       if (!Array.isArray(argv)) return argv;
+       try {
+         const { commentsReplyPass } = await import("./review");
+         const dry = await commentsReplyPass([...argv], true);
+         const requests = dry.result.requests;
+         if (requests.length === 0) return { refusal: "The reply pass has nothing to post." };
+-        const bodies = requests.slice(0, REPLY_PREVIEW).map((request) => `  ${cardSafe(((request.body as { body?: string }).body ?? "").slice(0, BODY_PREVIEW_CHARS))}`);
++        const bodies: string[] = [];
++        for (const [index, request] of requests.entries()) {
++          const shown = shownBody((request.body as { body?: string }).body ?? "");
++          if ("refusal" in shown) return { refusal: `Reply ${index + 1} ${shown.refusal}` };
++          bodies.push(`reply ${index + 1}:`, ...shown.lines);
++        }
+         return {
+           title: `Post ${requests.length} reply(ies) on ${cardSafe(dry.repo)}#${dry.number}?`,
+-          lines: [`replies: ${requests.length}; the first ${Math.min(REPLY_PREVIEW, requests.length)}:`, ...bodies, "yes: the replies are posted on the pull request and cannot be taken back from here"],
++          lines: [`replies: ${requests.length}, each shown whole:`, ...bodies,"yes: the replies are posted on the pull request and cannot be taken back from here"],
+           subject: `${cardSafe(dry.repo)}#${dry.number}`,
+           prepared: { argv, requests: JSON.stringify(requests) },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_comments_reply: nothing prepared for this card", isError: true };
+       const { commentsReplyPass } = await import("./review");
+       const again = await commentsReplyPass([...prepared.argv], true);
+       if (JSON.stringify(again.result.requests) !== prepared.requests) return { output: "The replies changed after the card was shown; nothing was posted. Ask again.", isError: true };
+       const posted = await commentsReplyPass([...prepared.argv], false);
+       return { output: `posted ${posted.result.posted.length} reply(ies) (${confirmation.confirmedVia}, ${confirmation.at}); skipped ${posted.result.skipped.length}` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 8. review_confirm_plan (flow 457, AC6)
+
+--- src/commands/operator-confirm-review.ts
+@@ 543,583 @@
+     description:
+       "Confirm a review plan over the threshold: the operator sees the dispatches and minutes `keryx review estimate` computes and says yes before any wave runs. Pass the review package. " +
+       "Same effect as `keryx review confirm-plan` at a terminal; records plan-confirmation.json for exactly this plan.",
+     inputSchema: { type: "object", properties: { package: packageSchema }, required: ["package"], additionalProperties: false },
+     async buildCard(input, ctx): Promise<OperatorCardResult<PlanPrepared>> {
+       const ref = packageRef(input);
+       if (ref === undefined) return { refusal: "package is required" };
+       try {
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+         const estimate = await estimatePlan(dir);
+         if (!planOverThreshold(estimate)) {
+           return { refusal: `The plan needs ${estimate.dispatches} dispatch(es), ${estimate.minutes.min}-${estimate.minutes.max} min: within the threshold (${estimate.thresholds.maxDispatches} dispatches, ${estimate.thresholds.maxMinutes} min), so it runs without a confirmation.` };
+         }
+         const name = label(dir, ctx.projectRoot);
+         return {
+           title: `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for ${name}?`,
+           lines: [
+             `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
+             `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
+             `threshold: ${estimate.thresholds.maxDispatches} dispatches or ${estimate.thresholds.maxMinutes} min (${estimate.overReasons.join("; ")})`,
+-            ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
++            ...estimate.perRole.map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
+             "yes: this plan may run; a re-cut plan asks again",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, planKey: planKeyOf(estimate) },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_confirm_plan: nothing prepared for this card", isError: true };
+       const estimate = await estimatePlan(prepared.dir);
+       if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at });
+       return { output: `plan confirmed by the operator (${record.confirmedVia}, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+
+--- src/commands/operator-confirm-review.ts
+@@ 643,667 @@
+       // compared as one digest: a change to any of them after the card was drawn needs the operator again.
+       const again = await findHeldFinding(prepared.dir, prepared.finding);
+       if (!again.ok || again.finding.digest !== prepared.digest) {
+         return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+       const warnings: string[] = [];
+       await answerPremiseQuestion(
+         prepared.dir,
+         { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) },
+         { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
+       );
+       return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 10. review_complete (flow 464)
+ 
+ const COMPLETION_FILE = "completion-confirmation.json";
+-const WAIVER_QUOTE_CHARS = 300;
++const MAX_DISPOSITIONS = 20;
++const MAX_DISPOSITION_FINDING_CHARS = 200;
++const MAX_DISPOSITION_EVIDENCE_CHARS = 300;
+ 
+ type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
+
+--- src/commands/operator-confirm-review.ts
+@@ 690,701 @@
+ /** The `dispositions` input, checked entry by entry; the first bad entry refuses the card. */
+ function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {
+   const raw = input["dispositions"];
+   if (raw === undefined) return [];
+   if (!Array.isArray(raw)) return { refusal: "dispositions must be an array of { finding, disposition, evidence? }" };
++  if (raw.length > MAX_DISPOSITIONS) return { refusal: `dispositions holds ${raw.length} entries; a card shows at most ${MAX_DISPOSITIONS}` };
+   const records: FindingDispositionRecord[] = [];
+   for (const [index, entry] of raw.entries()) {
+     const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+     const finding = typeof item["finding"] === "string" ? item["finding"].trim() : "";
+     const state = item["disposition"];
+     const evidence = item["evidence"];
+
+--- src/commands/operator-confirm-review.ts
+@@ 729,784 @@
+     status?: string;
+     target?: { kind?: string; head?: unknown };
+     readiness_waivers?: Array<{ item: string; operator_quote: string }>;
+   };
+   const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
+   const report = readFileSync(path.join(dir, "report.md"), "utf8");
+   const evidenceLine = evidenceLevelLine(report);
+-  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${cardSafe(clip(waiver.operator_quote))}"`);
++  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${quoteWhole(waiver.operator_quote)}"`);
+   let coverage: ReturnType<typeof readCoverageWaiver>;
+   try {
+     coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
+   } catch (error) {
+     // A package with no research.json carries no coverage waiver; one that cannot be read is not "none".
+     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+       waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);
+     }
+     coverage = undefined;
+   }
+-  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${cardSafe(clip(coverage.operatorQuote))}"`);
++  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${quoteWhole(coverage.operatorQuote)}"`);
+   for (const decision of await readOperatorDecisions(dir)) {
+     const items = decision.subject?.items ?? [];
+     const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
+-    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${cardSafe(clip(decision.quote))}" (${decision.confirmedVia})`);
++    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia})`);
+   }
+   return {
+     reviewId: manifest.reviewId ?? path.basename(dir),
+     head: recorded === undefined ? undefined : cardSafe(recorded),
+     evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
+     waivers,
+     status: manifest.status ?? "",
+   };
+ }
+ 
+-function clip(text: string): string {
+-  return text.length > WAIVER_QUOTE_CHARS ? `${text.slice(0, WAIVER_QUOTE_CHARS)}…` : text;
++/** A stored waiver quote shown whole; when the card has to rewrite or hide something in it, the card says so. */
++function quoteWhole(text: string): string {
++  return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;
+ }
+ 
+ const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+ 
+ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePrepared> {
+   return {
+     name: "review_complete",
+     description:
+       "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries (readiness, coverage, mutation, reviewer override), and says yes before the round is closed. " +
+       "Pass the review package; the round closes against the head the package recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
+       "record the waivers first with review_waive_readiness or review_waive_coverage. A fix round passes `dispositions` (finding, disposition, evidence) for the earlier findings; the card lists each one. A refused gate closes nothing.",
+     inputSchema: {
+       type: "object",
+       properties: {
+         package: packageSchema,
+         dispositions: dispositionsSchema,
+       },
+       required: ["package"],
+       additionalProperties: false,
+     },

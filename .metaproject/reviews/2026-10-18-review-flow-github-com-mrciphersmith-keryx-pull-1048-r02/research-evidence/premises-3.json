@@ -1,0 +1,135 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-clean-code-w3:F-010",
+      "verdict": "upheld",
+      "reasoning": "Two helpers with identical behaviour and different names, both added by this branch; no signal of intent or practice against it."
+    },
+    {
+      "finding_id": "review-logic-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "The BOM is already stripped for references.json (loadReferences), so the document read paths are inconsistent with a handling the code chose elsewhere; no signal for leaving it unstripped."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-011",
+      "verdict": "upheld",
+      "reasoning": "A test gap on fence-closing rules; nothing in the code or history says it was left out on purpose."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-009",
+      "verdict": "upheld",
+      "reasoning": "The nested conditional template is added by this branch; no signal that the density is a house style."
+    },
+    {
+      "finding_id": "review-style-w3:F-004",
+      "verdict": "upheld",
+      "reasoning": "Same line as review-clean-code-w3:F-009 reported from the style side; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "docFixture sets a bytes field from text.length while sibling tests in the slice use Buffer.byteLength; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w4:F-003",
+      "verdict": "upheld",
+      "reasoning": "Call plumbing repeated in new tests; no signal that the repetition is deliberate."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-004",
+      "verdict": "upheld",
+      "reasoning": "The flow 461 comment explains why the hash check takes the last citation, but it does not cover the proof taking a different one. Flow 462 made appliedOf keep every citation, which opened the divergence."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "A per-file assertion that one of two sites could satisfy; no signal of intent."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "A pass-through line with no adapter test; no signal of intent."
+    },
+    {
+      "finding_id": "review-security-code-w4:F-003",
+      "verdict": "upheld",
+      "reasoning": "A review-security-code finding is held or upheld, never downgraded. optionValue's refusal of a '--' next token (src/lib/args.ts:22-24) is deliberate, but its stated reason is not eating a following flag. It does not justify silently dropping free text and skipping keyword promotion without a warning, and the suggested fix (fail loudly or take the value verbatim) is sound."
+    },
+    {
+      "finding_id": "review-logic-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "A test gap on the MCP branch that bypasses op.invoke; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "Import order differs from the rest of the file, and no lint rule enforces it; no signal of a deliberate choice."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-004",
+      "verdict": "upheld",
+      "reasoning": "The fixture states usedBytes 109 against limitBytes 131072 together with exceeded true, which the resolver cannot produce, so the test pins a false sentence."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-006",
+      "verdict": "upheld",
+      "reasoning": "The assertion cannot tell a repaint after close from none; no signal of intent."
+    },
+    {
+      "finding_id": "review-clean-code-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "The tab-to-formatter mapping is spelled out in several places and 'let tab: string' ignores the new ProjectContextTab type; no signal that this is intentional."
+    },
+    {
+      "finding_id": "review-clean-code-w5:F-003",
+      "verdict": "upheld",
+      "reasoning": "A listener throw is caught by the poll catch and reported as a load failure; no signal that the shared catch is deliberate."
+    },
+    {
+      "finding_id": "review-highload-w4:F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/tui/approvals-sidebar.ts:100",
+          "says": "defaultInterval is the same unref'd setInterval(() => { void tick(); }, ms) with no in-flight flag"
+        },
+        {
+          "ref": "src/tui/external-diff-sidebar.ts:81",
+          "says": "identical defaultInterval, no in-flight guard"
+        },
+        {
+          "ref": "src/tui/intake-surface.ts:504",
+          "says": "identical defaultInterval; the only 'busy' guard there (line 428) wraps user actions, not the poll"
+        }
+      ],
+      "reasoning": "The unguarded unref'd interval poll is the house pattern of the TUI sidebar feeds, copied verbatim in at least three sibling modules. The new feed follows it. Adding a guard to this one feed alone would make it differ from its siblings. Reviewer confidence is low and the trigger needs a load over 5 s on a local file scan.",
+      "question": "The project-context feed polls every 5 s without an in-flight guard, exactly like the approvals, external-diff and intake sidebars. Keep the house pattern, or add a guard and sequence check to this feed (and then to the siblings)?",
+      "options": [
+        "dismiss - keep the house polling pattern, as the sibling sidebars do",
+        "uphold - add an in-flight guard and drop stale results in this feed"
+      ]
+    },
+    {
+      "finding_id": "review-style-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "The tab ids are spelled in several places and the compiler does not tie them together; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w5:F-003",
+      "verdict": "upheld",
+      "reasoning": "The re-export is added by this branch; the only other 'export { } from ./' barrels in src/tui are games/*/index.ts, which are real barrels. No sibling pattern for a view-helper re-export."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-005",
+      "verdict": "upheld",
+      "reasoning": "The test fixture's cited path is not a declared path, so the condition clause is never decisive; no signal of intent."
+    },
+    {
+      "finding_id": "review-architecture-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "tui-shell.ts has no projectContextFeed.stop() (5 matches, none is stop), while the sibling live panels are disposed in onDestroy (for example liveIntake?.dispose() at line 4041 and liveDecisions?.dispose() at line 4042). The inconsistency supports the finding."
+    }
+  ]
+}

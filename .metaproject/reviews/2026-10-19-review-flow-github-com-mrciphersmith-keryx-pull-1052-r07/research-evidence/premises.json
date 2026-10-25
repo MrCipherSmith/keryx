@@ -1,0 +1,141 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "S-701",
+      "verdict": "upheld",
+      "reasoning": "The fact is in the code: shownBody (operator-confirm-review.ts:62-67) tests only cardSafe(line) !== line, and cardSafe (src/lib/card-safe.ts:15) strips no U+200B-200D, U+2060, U+FEFF, U+00AD, tag characters or U+2028/2029. hiddenInCard (:672) covers those and guards dispositions and reasons but not the posting bodies. No earlier deliberate choice to keep the weaker rule for bodies was found; the only statement of intent is commit 5444f96e4, on this branch, which cannot ratify itself and contradicts its own rule. Security finding: upheld, never downgraded."
+    },
+    {
+      "finding_id": "F-R07-001",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "src/remote/shell-bridge.ts:275-287",
+          "says": "doc comment on operatorCardTooLongForTopic: a cut card must never get remote Yes/No buttons, because the operator would answer a decision they could not read in full; it exists at the merge base (99dad525b), so it is a prior deliberate rule"
+        },
+        {
+          "ref": "src/tui/tui-shell.ts:6104-6106",
+          "says": "an over-long card is answered in the dock only, with noticeCardTooLong sent to the topic, so it degrades safely by design"
+        }
+      ],
+      "reasoning": "The fact is true: cards that now show their text whole can pass 3000 characters (MAX_APPROVAL_PROMPT_CHARS), and the older topic-length guard then withdraws the buttons. Two deliberate rules, 'show whole' (this branch) and 'a cut card gets no remote buttons' (base), collide. The reviewer's own fix lists a choice the code cannot settle: shorten the report, add a topic-side way to read the rest, or accept shell-only for long cards. Nothing is posted wrongly and the topic gets a notice. How much remote-approval availability to trade for whole display is a product call (flow 464 AC2/AC5 against S-401/S-402), so the operator decides.",
+      "question": "Cards shown whole now exceed the 3000-character topic limit, so review_publish, review_comments_reply and review_complete cards with a normal-size body are answered in the shell only, and the topic gets a notice. Accept that, or keep topic buttons for long cards some other way?",
+      "options": [
+        "uphold - keep topic buttons for long cards (overflow notice plus a topic-side way to read the rest, or a refusal telling the agent to shorten the body)",
+        "dismiss - accept shell-only for long cards, state the limit in the tool descriptions, and record it"
+      ]
+    },
+    {
+      "finding_id": "F-R07-003",
+      "verdict": "upheld",
+      "reasoning": "The fact is true. completionDispositions refuses more than MAX_DISPOSITIONS (20) entries (operator-confirm-review.ts:695), while review-orchestrator SKILL.md:284 still says to pass dispositions 'one per finding' with no limit, and dispositionsSchema carries no maxItems. A second call is refused once the round is closed (:793). The cap exists only because of this branch's S-401 change (commit ada19a2bd), so it is no prior intent, and no platform practice justifies a cap with no route for the surplus."
+    },
+    {
+      "finding_id": "T-701",
+      "verdict": "upheld",
+      "reasoning": "The test gap is as stated. quoteWhole is used at :736, :747 and :751. The only new long-quote test (operator-confirm-review-tools.test.ts:877) exercises manifest.readiness_waivers; the coverage test at :659 uses a short quote and never reaches an old 300-character cap or a control character. No signal of intent or practice lowers it."
+    },
+    {
+      "finding_id": "T-702",
+      "verdict": "upheld",
+      "reasoning": "The test gap is as stated. The review_comments_reply card path (:500-519) is new, with its own refusal and per-reply listing. The name appears in the test file only in the roster list (operator-confirm-review-tools.test.ts:91), and commentsReplyPass is never stubbed on the card path. No signal of intent or practice shrinks it."
+    },
+    {
+      "finding_id": "CC-702",
+      "verdict": "upheld",
+      "reasoning": "The only signal for the tab tolerance is the comment at operator-confirm-review.ts:61, which this delta wrote, so it cannot ratify itself. cardSafe has mapped a tab to a space since flow 295 (src/lib/card-safe.ts:16). Stating one policy next to hiddenInCard is sound; the finding stands: three outcomes for one character on three sites."
+    },
+    {
+      "finding_id": "CC-703",
+      "verdict": "upheld",
+      "reasoning": "completionDispositions (691-718) is 28 lines mixing batch checks with per-entry parsing in one loop body plus a nested tuple loop. The review-clean-code skill (B1) flags that as minor. No exemption at the site; extracting a per-entry function is sound."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "reasoning": "The branch's rule is that the card shows what is stored. Lists still go through cardSafe while the raw values are recorded (prepared.files at :286, the subject at :421 and :439). A shared shown-list helper is consistent with the refuse and mark policy at :377 and :763. The reviewer concedes it needs a hostile file name; that affects severity only."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "reasoning": "The review_publish description at :178 says the operator sees 'the start of the body'; the card now spreads every body line (:219-220). The sibling review_comments_reply description already says 'sees every reply'. The description is model-facing, there is no signal of intent, and rewording is sound."
+    },
+    {
+      "finding_id": "PC-702",
+      "verdict": "upheld",
+      "reasoning": "The 200 and 300 character limits and the plain single-line rule are user-visible refusals added by this delta. CHANGELOG.md:9-12 and the docs it names do not state the finding-id limit or the hidden-character refusal. The project's docs-stay-current practice applies; the fix is one clause per document."
+    },
+    {
+      "finding_id": "L8-001",
+      "verdict": "upheld",
+      "reasoning": "The orchestrator SKILL 'Done when' makes a managed round done only after the review_complete card is answered and forbids an agent to run `keryx review complete`; the non-shell route it gives lists only the --waive form, never the plain close. The prohibition is deliberate; the finding contests only the missing hand-off sentence, which is sound."
+    },
+    {
+      "finding_id": "L11-001",
+      "verdict": "upheld",
+      "reasoning": "The undelivered flag was added by this branch (e378eb531), so no earlier choice supports it. A thrown error or an unreadable body after serve may have accepted the question still sets it; the outcome stays fail-closed, so the harm is a wrong status line. Flagging only when known not sent is sound."
+    },
+    {
+      "finding_id": "L7-004",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "062aa9c36:src/remote/shell-bridge.ts:211",
+          "says": "composeApprovalPrompt already ran redactSensitiveText on every Telegram prompt before this branch"
+        },
+        {
+          "ref": "src/security/redact.ts:16",
+          "says": "masks are visible typed tokens ([REDACTED:secret|email|entropy]), so the remote operator can see something was hidden"
+        }
+      ],
+      "reasoning": "Masking what goes to Telegram is a deliberate, earlier security choice. This branch's rule is that the operator approves what is stored. The two conflict only when redaction changes a whole-body card. The code cannot settle which wins; the suggested fix is sound but removes the remote answer for those cards, which is a product choice.",
+      "question": "When Telegram masks a secret or personal datum in a review card, the stored text is still posted raw. Should that card get no remote buttons and be answered in the shell, or stay answerable in Telegram with the visible mask?",
+      "options": [
+        "uphold - no remote buttons when redaction changes the card; answer it in the shell",
+        "dismiss - keep the masked card answerable in Telegram; the mask is visible and masking is the earlier choice"
+      ]
+    },
+    {
+      "finding_id": "F-703",
+      "verdict": "upheld",
+      "reasoning": "The request is { POST, reply.endpoint, body } (pr-comments.ts:1879) and apply binds the whole request JSON (operator-confirm-review.ts:518, 528). The card prints only the body under 'reply N:' (:509-513), so the endpoint, which names the thread the reply lands on, is never shown. No recorded decision leaves it out; the commit text is branch-introduced and cannot ratify itself. A review-security-code finding is upheld, never downgraded."
+    },
+    {
+      "finding_id": "HL-702",
+      "verdict": "upheld",
+      "reasoning": "apply re-runs the dry pass and compares it with prepared.requests (:527-528), then runs commentsReplyPass(argv, false) at :529, which rebuilds the requests a second time, leaving a window in which the posted set can differ. Nothing at the site says the second recompute was chosen on purpose; posting the already-compared requests is a sound fix."
+    },
+    {
+      "finding_id": "P-701",
+      "verdict": "upheld",
+      "reasoning": "The per-line TextRenderable loop at tui-shell.ts:5424-5426 comes from the base and has no cap; this delta only raises the line count. The reviewer itself says the content must stay whole and the fix is needed only if a stall is observed, so it goes on as a follow-up. No signal of intent or practice holds it."
+    },
+    {
+      "finding_id": "S-12-01",
+      "verdict": "upheld",
+      "reasoning": "label() (operator-confirm-review.ts:89, in the base) returns the raw relative directory path and feeds card titles and subjects, while the other agent-influenced values in the same cards pass cardSafe, whose header states the rule that model-supplied text must not draw a fake card line. isReviewPackageDir's comment records that an agent can write directories under the review roots. Wrapping label in cardSafe is a one-line fix consistent with every sibling. Security finding: upheld, never downgraded."
+    },
+    {
+      "finding_id": "T-703",
+      "verdict": "upheld",
+      "reasoning": "The suites pin only the mutation waiver (30 mutants) and external_apply (40 files); the coverage-waiver, reviewer-override and per-role lists have no over-the-old-cap fixture. No intent signal or practice source argues against adding them."
+    },
+    {
+      "finding_id": "T-705",
+      "verdict": "upheld",
+      "reasoning": "A codepoint search of the test file finds invisible literal characters at lines 230, 769, 770, 771 and two more, while the neighbouring rows use \\u001b, \\u0007 and \\u0085 escapes. A literal bidi override in source is the Trojan Source pattern (CVE-2021-42574); escaping is the accepted guard."
+    },
+    {
+      "finding_id": "T-706",
+      "verdict": "upheld",
+      "reasoning": "hiddenInCard tests \\p{Zp}, and shownBody uses trimEnd and `bad + 1`; the S-402 table has Cf rows and a Zl row but no U+2029 row, and nothing asserts the line number or the trimEnd branch. Nothing marks them as deliberately untested."
+    },
+    {
+      "finding_id": "T-707",
+      "verdict": "upheld",
+      "reasoning": "The at-cap and plain-text rows assert only the card line after ask(); no yes() follows to compare findings.json or completion-confirmation.json with the shown evidence, although S-401/S-402 are defined as stored equals shown. No intent signal or practice source argues against the round-trip assertion."
+    }
+  ]
+}

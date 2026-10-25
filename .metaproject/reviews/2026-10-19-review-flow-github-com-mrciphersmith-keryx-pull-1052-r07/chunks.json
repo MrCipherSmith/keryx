@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 112,
+  "droppedKey": "68e1b990ecbe7a39",
+  "fileBytes": {
+    "fixtures/routing-shell-pty.ts": 4860,
+    "scripts/benchmark/long-runner-shared.ts": 16742,
+    "scripts/benchmark/run-ablation-long.ts": 17715,
+    "scripts/benchmark/run-ablation-mutating.ts": 16269,
+    "scripts/benchmark/run-ablation-raw.ts": 7892,
+    "scripts/benchmark/run-ablation.ts": 12764,
+    "scripts/benchmark/run-containment.ts": 29628,
+    "scripts/benchmark/run-safety.ts": 24632,
+    "scripts/generate-commands-by-task.ts": 785,
+    "scripts/stress/keryx-shell-stress.ts": 38974,
+    "src/acp/agent-io.ts": 15154,
+    "src/acp/capability-tools.ts": 5331,
+    "src/acp/commands.ts": 8741,
+    "src/acp/roster.ts": 4165,
+    "src/acp/server-harness.test-helpers.ts": 3541,
+    "src/acp/server.ts": 77812,
+    "src/acp/session-mcp.ts": 18762,
+    "src/bus/agent-tools.ts": 15442,
+    "src/bus/client.ts": 33885,
+    "src/cli.ts": 10584,
+    "src/commands/acp.ts": 24208,
+    "src/commands/agents-external.ts": 42111,
+    "src/commands/agents.ts": 9240,
+    "src/commands/bundle.ts": 29896,
+    "src/commands/doctor.ts": 30870,
+    "src/commands/goal-command.ts": 51105,
+    "src/commands/help.ts": 2179,
+    "src/commands/hooks.ts": 56248,
+    "src/commands/learn.ts": 32967,
+    "src/commands/project-tools.ts": 3390,
+    "src/commands/review-jev-contract.ts": 16286,
+    "src/commands/review-notify.ts": 4408,
+    "src/commands/review-operator.ts": 11180,
+    "src/commands/review-plan.ts": 14157,
+    "src/commands/review-run.ts": 10809,
+    "src/commands/review-slice.ts": 35502,
+    "src/commands/schedule-tools.ts": 13224,
+    "src/commands/schedule.ts": 22622,
+    "src/commands/serve-digest.ts": 3042,
+    "src/commands/trigger-review.ts": 5088,
+    "src/commands/version.ts": 1534,
+    "src/commands/workspace.ts": 33010,
+    "src/decisions/context.ts": 4496,
+    "src/governance/accountability.ts": 3815,
+    "src/governance/aggregate.ts": 6216,
+    "src/governance/flow-narrative.ts": 4770,
+    "src/governance/report.ts": 14537,
+    "src/governance/spend.ts": 10871,
+    "src/governance/types.ts": 12646,
+    "src/harness/external/acp-client.ts": 33592,
+    "src/harness/external/acp-run.ts": 15537,
+    "src/harness/external/runtime.ts": 37135,
+    "src/harness/external/supervise-mcp.ts": 23985,
+    "src/harness/flow/managed-flow-port.ts": 4012,
+    "src/harness/tool/builtin/apply-patch-tool.ts": 7509,
+    "src/harness/tool/builtin/execution-plan-tool.ts": 3729,
+    "src/harness/tool/builtin/slate-tool.ts": 11409,
+    "src/harness/tool/builtin/spill-search.ts": 3729,
+    "src/harness/tool/builtin/web-fetch-tool.ts": 3062,
+    "src/harness/tool/builtin/web-search-tool.ts": 4435,
+    "src/harness/tool/builtin/workspace-context-tool.ts": 4842,
+    "src/harness/tool/builtin/workspace-lifecycle-tool.ts": 16516,
+    "src/integrations/install-state.ts": 16709,
+    "src/learning/accept.ts": 12658,
+    "src/learning/graduate.ts": 49404,
+    "src/learning/promote.ts": 9899,
+    "src/lib/routing-entrypoint.ts": 8035,
+    "src/mcp/dispatch.ts": 6673,
+    "src/mcp/metaproject-tools.ts": 8716,
+    "src/remote/channels.test-helpers.ts": 2788,
+    "src/review/autonomous-run.ts": 18993,
+    "src/review/blast-radius.ts": 63930,
+    "src/review/bot/metrics.ts": 8276,
+    "src/review/bot/packages.ts": 3692,
+    "src/review/bot/post.ts": 15301,
+    "src/review/bot/run.ts": 18090,
+    "src/review/complete-head-gate.ts": 3860,
+    "src/review/dedupe.ts": 18655,
+    "src/review/loop.ts": 26417,
+    "src/review/pr-comments.ts": 91476,
+    "src/review/prior-round.ts": 54135,
+    "src/review/publish-guard.ts": 7471,
+    "src/review/rebuttal-citation.ts": 2016,
+    "src/review/repair.ts": 5956,
+    "src/review/review-notes.ts": 12722,
+    "src/review/verification.ts": 25394,
+    "src/scheduler/digest-run.ts": 20942,
+    "src/scheduler/digest.test-helpers.ts": 12500,
+    "src/session/slate-course.ts": 3954,
+    "src/tui/approvals-sidebar.ts": 7821,
+    "src/tui/autoreview-surface.ts": 22580,
+    "src/tui/chat-shell.ts": 26927,
+    "src/tui/external-diff-modal.ts": 20330,
+    "src/tui/external-diff-sidebar.ts": 6125,
+    "src/tui/flow-hygiene.ts": 2583,
+    "src/tui/flow-origin-command.ts": 5995,
+    "src/tui/foreground-operation.ts": 11881,
+    "src/tui/governance-flow-actions.ts": 2363,
+    "src/tui/governance-flows.ts": 8846,
+    "src/tui/governance-inspector.ts": 22024,
+    "src/tui/governance-panel.ts": 11429,
+    "src/tui/help-modal.ts": 13054,
+    "src/tui/ops-sidebar.ts": 12322,
+    "src/tui/remote-queue-wiring.ts": 7497,
+    "src/tui/review-layers-actions.ts": 4982,
+    "src/tui/review-panel.ts": 13175,
+    "src/tui/reviews-inspector.ts": 18287,
+    "src/tui/schedules-sidebar.ts": 8638,
+    "src/tui/turn-loop.ts": 5395,
+    "src/tui/working-memory-command.ts": 4798,
+    "src/wiki/deep-enrich.ts": 20340,
+    "src/wiki/enrich.ts": 72632
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/governance/types.ts",
+        "src/harness/tool/builtin/apply-patch-tool.ts",
+        "src/review/autonomous-run.ts",
+        "src/review/complete-head-gate.ts",
+        "src/tui/ops-sidebar.ts",
+        "src/tui/review-panel.ts",
+        "src/commands/agents-external.ts",
+        "src/commands/review-slice.ts",
+        "src/tui/flow-hygiene.ts"
+      ],
+      "bytes": 148701
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "scripts/benchmark/long-runner-shared.ts",
+        "src/commands/doctor.ts",
+        "src/commands/goal-command.ts",
+        "src/commands/review-operator.ts",
+        "src/harness/tool/builtin/slate-tool.ts",
+        "src/harness/tool/builtin/workspace-lifecycle-tool.ts"
+      ],
+      "bytes": 137822
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/learning/accept.ts",
+        "src/review/loop.ts",
+        "src/tui/foreground-operation.ts",
+        "src/bus/agent-tools.ts",
+        "src/commands/review-notify.ts",
+        "src/commands/review-plan.ts",
+        "src/commands/schedule-tools.ts",
+        "src/governance/flow-narrative.ts",
+        "src/governance/spend.ts",
+        "src/harness/external/acp-client.ts"
+      ],
+      "bytes": 147420
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "src/harness/external/acp-run.ts",
+        "src/harness/flow/managed-flow-port.ts",
+        "src/tui/external-diff-modal.ts",
+        "src/acp/agent-io.ts",
+        "src/acp/commands.ts",
+        "src/acp/roster.ts",
+        "src/commands/learn.ts"
+      ],
+      "bytes": 100906
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "src/learning/graduate.ts",
+        "src/learning/promote.ts",
+        "src/review/bot/packages.ts",
+        "src/tui/flow-origin-command.ts",
+        "src/tui/governance-flows.ts",
+        "src/tui/governance-inspector.ts",
+        "src/tui/review-layers-actions.ts",
+        "src/tui/schedules-sidebar.ts",
+        "scripts/benchmark/run-containment.ts"
+      ],
+      "bytes": 143108
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        "scripts/benchmark/run-safety.ts",
+        "src/acp/capability-tools.ts",
+        "src/acp/server.ts",
+        "src/acp/session-mcp.ts"
+      ],
+      "bytes": 126537
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        "src/commands/acp.ts",
+        "src/commands/bundle.ts",
+        "src/commands/help.ts",
+        "src/commands/hooks.ts",
+        "src/commands/project-tools.ts",
+        "src/commands/version.ts",
+        "src/governance/accountability.ts",
+        "src/harness/external/supervise-mcp.ts",
+        "src/harness/tool/builtin/spill-search.ts"
+      ],
+      "bytes": 148984
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        "src/harness/tool/builtin/web-fetch-tool.ts",
+        "src/harness/tool/builtin/web-search-tool.ts",
+        "src/harness/tool/builtin/workspace-context-tool.ts",
+        "src/review/publish-guard.ts",
+        "src/tui/approvals-sidebar.ts",
+        "src/tui/autoreview-surface.ts",
+        "src/tui/chat-shell.ts",
+        "src/tui/external-diff-sidebar.ts",
+        "src/tui/governance-flow-actions.ts",
+        "src/tui/help-modal.ts",
+        "src/tui/remote-queue-wiring.ts",
+        "src/wiki/deep-enrich.ts",
+        "scripts/benchmark/run-ablation-mutating.ts"
+      ],
+      "bytes": 142786
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        "scripts/benchmark/run-ablation-raw.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "src/harness/tool/builtin/execution-plan-tool.ts",
+        "fixtures/routing-shell-pty.ts",
+        "scripts/benchmark/run-ablation-long.ts",
+        "scripts/generate-commands-by-task.ts",
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/bus/client.ts"
+      ],
+      "bytes": 120604
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        "src/review/pr-comments.ts",
+        "src/cli.ts",
+        "src/harness/external/runtime.ts"
+      ],
+      "bytes": 139195
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        "src/review/blast-radius.ts",
+        "src/integrations/install-state.ts",
+        "src/mcp/dispatch.ts",
+        "src/review/verification.ts",
+        "src/scheduler/digest.test-helpers.ts",
+        "src/session/slate-course.ts"
+      ],
+      "bytes": 129160
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        "src/wiki/enrich.ts",
+        "src/remote/channels.test-helpers.ts",
+        "src/tui/reviews-inspector.ts",
+        "src/commands/schedule.ts",
+        "src/mcp/metaproject-tools.ts",
+        "src/review/bot/run.ts"
+      ],
+      "bytes": 143135
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        "src/governance/report.ts",
+        "src/review/bot/metrics.ts",
+        "src/review/prior-round.ts",
+        "src/review/review-notes.ts",
+        "src/acp/server-harness.test-helpers.ts",
+        "src/commands/review-jev-contract.ts",
+        "src/commands/serve-digest.ts",
+        "src/lib/routing-entrypoint.ts",
+        "src/scheduler/digest-run.ts"
+      ],
+      "bytes": 141516
+    },
+    {
+      "id": "chunk-014",
+      "files": [
+        "src/tui/governance-panel.ts",
+        "src/review/repair.ts",
+        "src/tui/working-memory-command.ts",
+        "src/commands/agents.ts",
+        "src/commands/review-run.ts",
+        "src/decisions/context.ts",
+        "src/review/bot/post.ts",
+        "src/review/dedupe.ts",
+        "src/review/rebuttal-citation.ts",
+        "src/tui/turn-loop.ts",
+        "src/commands/trigger-review.ts",
+        "src/commands/workspace.ts",
+        "src/governance/aggregate.ts"
+      ],
+      "bytes": 132409
+    }
+  ]
+}

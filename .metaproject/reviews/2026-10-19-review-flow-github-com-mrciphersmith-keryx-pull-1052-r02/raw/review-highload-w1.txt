@@ -1,0 +1,128 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Delta d2cb377f5..672e37687 (head 672e37687b7c27184e88c5d6571f8c509a2c671e). The token burn is atomic (synchronous get+delete in invoke), the dock/topic race has a single winner, the card log is idempotent, and the answer record and decisions store are written atomically (tmp+rename, withFileLock). No blocker or major. Two minor findings: the 1h TTL is measured at invoke time, not at press time, with an awaited /rewind snapshot in between; and the card log records a Telegram yes before invoke has validated the press. Three info items (TTL boundary mismatch in the sidebar line, a close-then-record-failure that cannot be repaired, a closed-check that now depends on readOperatorDecisions). Two pre-existing leaks/gaps are listed separately. Load profile not provided: operator-scale (one human, one card at a time), so severities assume low concurrency and correctness-only races. slice-01 was not read in full (test and skill/docs ranges skipped); the code paths were verified from the source files at HEAD.",
+  "findings": [
+    {
+      "id": "HL-01",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "quote": "if (now().getTime() - entry.issuedAt > REMOTE_CARD_TTL_MS) {",
+      "problem": "The 1-hour remote-card TTL is judged against the time invoke runs, not against the time of the Telegram press (pressedAt). Between the press and invoke the driver awaits beforeMutation() (the /rewind snapshot, agent.ts around 6176-6179), whose duration is unbounded for a large worktree. A press that lands just under the hour can be refused and the token burned (a rejection burns the token).",
+      "impact": "Failure mode: a press at 59m59s on a repo with a slow snapshot is refused with 'older than 1 hour' and the one-time token is gone, so the operator's answer is lost and the card has to be asked again; the Telegram leg already showed 'answered'. Window is small and self-recovering (re-ask), hence minor.",
+      "suggested_fix": "Compare Date.parse(pressedAt) - entry.issuedAt against the TTL for remote presses, with a NaN guard that falls back to now(). Keep now() for the tui-card path (no TTL there). Add a test with a fake clock where the press is at TTL-1s and invoke is at TTL+1s.",
+      "evidence": "src/commands/operator-confirm-tools.ts:218 (check against now()); src/commands/agent.ts:6176-6179 (await beforeMutation() between approval and tool.invoke at 6187-6194); pressedAt is stamped in tui-shell remoteApproval (new Date().toISOString()).",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "dedupe_key": "highload:ttl-at-invoke-not-press"
+    },
+    {
+      "id": "HL-02",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "quote": "operatorCards.answer(cardId, { place: \"telegram\", yes: outcome.answer.decision === \"allow\"",
+      "problem": "The card log is settled as 'yes, pressed by Telegram user N' in the finally block of the raced branch, before invoke has validated the press (allowed user id, pressedBy/pressedAt present, TTL). A later refusal in invoke leaves the log, and so the sidebar and /decisions, showing an answered yes for a card that applied nothing and whose token was burned.",
+      "impact": "Failure mode: under a disallowed-user press or a TTL refusal the operator reads 'yes, pressed by Telegram user 9' in /decisions while the state on disk is unchanged. The durable store is correct (nothing recorded); only the in-memory view is misleading, so the harm is an audit-view discrepancy, not data loss.",
+      "suggested_fix": "Keep the log entry open until the tool result is known (settle it from the driver after invoke, using the isError flag), or record the press as 'pressed, awaiting check' and flip it to refused when invoke returns an error. Minimum: mark the line as 'press received' rather than 'yes'.",
+      "evidence": "src/tui/tui-shell.ts:6141 (answer logged in finally, before invoke); src/commands/operator-confirm-tools.ts:218 and the allowedUserIds check (refusals happen later, after the log is settled).",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "dedupe_key": "highload:card-log-settles-before-invoke"
+    },
+    {
+      "id": "HL-03",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "quote": "const token = left > 0 ? `${age(left)} left of the 1-hour token` : \"Telegram token expired, answer in the shell\";",
+      "problem": "The sidebar line treats the token as expired at exactly 1h (left <= 0), while waiting() (<=) and invoke (> TTL refuses) still accept a press at exactly 1h. At elapsed == TTL the line says expired while the card is still counted as waiting and a press is still accepted.",
+      "impact": "Failure mode: a one-millisecond inconsistency between two views of the same token; no load or data consequence.",
+      "suggested_fix": "Use left >= 0 (or < 0 for expired) so all three sites agree on the inclusive boundary, or decide TM-04's 'under one hour old' is exclusive and change waiting() and invoke to match.",
+      "evidence": "src/tui/operator-confirmations.ts:72 (<= TTL) vs :115 (left > 0); src/commands/operator-confirm-tools.ts:218 (> TTL refuses).",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "HL-04",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "review_complete closes the round first and writes completion-confirmation.json second. If the write fails (or the process dies between the two), the round is closed with no confirmation record, and a re-ask is impossible because buildCard refuses with '<id> is already complete'. The code does report the failure as a problem with isError: true, but there is no repair path for the missing record.",
+      "impact": "Failure mode: a crash or disk error in a ~ms window leaves a permanently closed round without its operator-confirmation record; the audit trail needs a manual file.",
+      "suggested_fix": "Either write the record before the close and roll it back on close failure, or let buildCard accept a closed round whose record file is missing and re-issue the card in 'record only' mode.",
+      "evidence": "src/commands/operator-confirm-review.ts:721 (refusal when facts.status === 'closed'), :764 (closed check) and the writeFileAtomic after the close in completeSpec.apply.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "HL-05",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "quote": "const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === \"closed\";",
+      "problem": "completionFacts is now async and calls readOperatorDecisions (to include mutation-waiver and reviewer-override decisions). decisionsStorePath throws on a look-alike file name. The post-close 'closed' check goes through the same function with .catch(() => undefined), so a throw there makes a genuinely closed round look not closed, and the tool answers 'review_complete refused ... nothing was recorded' with isError: true.",
+      "impact": "Failure mode: after a successful close, a decisions-store read error turns the result into a false 'nothing was recorded' refusal. The operator may retry and hit the 'already complete' refusal. Rare (needs a malformed decisions file).",
+      "suggested_fix": "Decide 'closed' from the manifest status alone (no decisions read) in the post-close check, and keep the decisions read only for the card facts.",
+      "evidence": "src/commands/operator-confirm-review.ts:764; completionFacts and readOperatorDecisions (src/review/operator-decisions.ts, decisionsStorePath).",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    }
+  ],
+  "pre_existing": [
+    {
+      "id": "HL-P1",
+      "severity": "minor",
+      "file": "src/commands/agent.ts",
+      "quote": "await beforeMutation()",
+      "problem": "The driver mints a confirmation token (agent.ts around 6048-6054) and calls confirmationDeclined only at 6065 and 6114. Other exits between mint and invoke leave the pending entry in the in-process Map: a throw from requestApproval, and the early return when !reserveInvocation() (6172). The tui-card path has no TTL sweep, so such an entry lives until process exit.",
+      "impact": "Failure mode: a bounded leak, one small Map entry per abandoned card, in a long-lived shell. No growth at human-card rates; a UUID that is never answered cannot be replayed by anyone else.",
+      "suggested_fix": "Wrap mint..invoke in try/finally that calls confirmationDeclined(token) when invoke was not reached, or sweep entries older than the TTL on each mint.",
+      "evidence": "src/commands/agent.ts:6048-6054, 6065, 6114, 6172, 6176-6194.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "HL-P2",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "problem": "Telegram-started turns use requestApprovalForTelegramTurn (around 6028-6089), which does not log cards into operatorCards and passes no per-card abort signal. Cards asked there never show in the sidebar, /remote-control or /decisions views.",
+      "impact": "Failure mode: an observability gap only; not a concurrency issue.",
+      "suggested_fix": "Route the Telegram-turn path through the same ask/answer logging if AC6 is meant to cover it.",
+      "evidence": "src/tui/tui-shell.ts around 6028-6089.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 3 }
+}
+```
+
+## High-Load Review (r02 delta, concurrency and idempotency of the remote card answer)
+
+### Review Scope
+- Worktree: /home/altsay/keryx/.worktrees/helyx-confirm, head 672e37687b7c27184e88c5d6571f8c509a2c671e, delta d2cb377f5..672e37687
+- Load profile: not provided (single operator, one card at a time; assumed correctness-only concurrency)
+- Slice coverage: slice-01 not read in full (test-diff and skill/docs ranges skipped), so `slices` is omitted. The focus code files were read at HEAD.
+
+### Answers to the lens questions
+- Two answers racing for one token: invoke does pending.get(token) and pending.delete(token) synchronously, so exactly one caller wins; the second finds no entry and is refused. A rejection also burns the token (delete precedes the checks).
+- TTL at exactly 1h: refused only when now - issuedAt > TTL, so exactly 1h is accepted, matching the tests (TTL accepted, TTL+1 refused). See HL-01 for the invoke-time vs press-time issue and HL-03 for the sidebar boundary.
+- Double settle of a mirrored card: operatorCards.answer is idempotent (first answer wins); raceApproval sets settled in finally, so a late topic press is ignored.
+- Card answered in both TUI and Telegram: the first answer wins; the topic leg is aborted with "shell"/"cancelled", the dock with "topic". A topic press that lands after the dock resolved is dropped.
+- Atomicity of the answer record: writeFileAtomic (tmp with pid+timestamp+uuid, then rename) and appendDecision under withFileLock. Clean. See HL-04 for the close/record ordering.
+- Timers and listeners on exit paths: every ask path ends in an answer through try/finally (withdrawn on abort); subscribe returns an unsubscribe. Leaked pending-token entries are listed as pre-existing HL-P1.
+
+### Clean Areas
+Atomic token burn; single-winner race; idempotent card log; tool calls processed sequentially (no two cards in flight within a turn); digest check refuses a double completion; confirm-token.ts pressedBy/pressedAt pass-through and schema; writeFileAtomic and withFileLock.
+
+### Routing audit
+graph_used: no (not-relevant, direct source reads of named files); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

@@ -1,0 +1,12 @@
+# keryx review verify-run
+finding: F-R07-001
+command: bun /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/r07-probe-topic.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T07:36:06.241Z
+exit: 1
+
+--- stdout ---
+{"cardLines":54,"cardChars":4650,"limit":3000,"operatorCardTooLongForTopic":true}
+DEFECT REPRODUCED: an ordinary 40-line report makes review_publish exceed the topic limit, so the Telegram Yes/No is withdrawn
+--- stderr ---
+

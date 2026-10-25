@@ -1,0 +1,13 @@
+# keryx review verify-run
+finding: E-07
+command: sh -c sed -n '4554,4563p' src/commands/review.ts | grep -n 'isTerminal()'; n=$(sed -n '4540,4600p' src/commands/review.ts | grep 'isTerminal()' | grep -v -E 'waiver|readinessWaivers' | wc -l); echo unconditioned guards: $n; test $n -gt 0
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:23.118Z
+exit: 1
+
+--- stdout ---
+4:  if (waiver !== undefined && !isTerminal()) {
+8:  if (readinessWaivers.length > 0 && !isTerminal()) {
+unconditioned guards: 0
+--- stderr ---
+

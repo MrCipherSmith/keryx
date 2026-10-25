@@ -1,0 +1,48 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-02 (new in r03): no blocker or major architectural violation. Two minor findings: the citation checker now scans linked rules at their origin but without the resolver's sha256 pin check, and the guide and CLI reference still say linked rules are not scanned.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": "// `skills import --link` leaves no copy: the rule is read where it lives, as the resolver does.",
+      "problem": "scanCitations now reads a linked rule from its origin, claiming to do so 'as the resolver does', but it applies none of the resolver's admission rule. collectProjectRules in context-resolver.ts reads a link-mode origin only while sha256(text) equals the sha256 pinned in the registry, otherwise it excludes the rule with a warning. The checker has no such pin check, so it keeps its own second copy of 'which rule files exist' that has drifted from the engine's. This narrows review-architecture-w3:F-002 (checker did not see linked rules at all) without closing the underlying duplication.",
+      "impact": "For a linked rule whose origin changed after registration, the resolver drops the rule (nothing is promoted or cited from it) while `skills references check` and the project-context status (readReferences calls checkReferences) still report its citations as resolved or unresolved. The check then validates a rule set the engine does not use, and the sidebar/References tab can show citation results for a rule that is not in the resolved context. The window is small (drifted links only), hence minor.",
+      "suggested_fix": "Take the set of readable project rules from one function shared by the resolver and the checker (the resolver's collectProjectRules, or a small helper both call) that returns the rule text after the sha256 pin check. Have scanCitations consume that result instead of re-implementing the copy/link read, and surface a drifted link as a warning, as the resolver does.",
+      "evidence": "references-check.ts scanCitations builds `links` from readProjectRuleRegistry (mode === 'link', no copy) and reads `resolveOriginPath(origin, projectRoot)` directly. context-resolver.ts lines ~205-230 read the origin only when `sha256Hex(text) === entry.sha256`. project-context-status.ts readReferences calls loadReferences and then checkReferences, so the checker's view feeds the TUI. Prior finding for the same boundary: review-architecture-w3:F-002.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "references-check:linked-rule-sha-pin-missing"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "line": null,
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "problem": "The guide states that the citation scan skips rules imported with `--link`. This slice changes scanCitations to scan linked rules at their origin, so the sentence now contradicts the code. The `references check` row in docs/docs/cli-reference.md (line ~3491) carries the same claim ('a linked rule is not scanned') and is equally stale.",
+      "impact": "A user relying on the documented limit will not expect `skills references check` to report unresolved citations from a linked rule, and may conclude a clean check covers less than it does, or that a linked-rule citation error is a bug. The doc is the contract for the command's scope.",
+      "suggested_fix": "Reword both places: the scan covers project rules, copied or linked (a linked rule is read at its origin); bundled rules are still not scanned. If F-001 is fixed, add that a link whose origin no longer matches its recorded sha256 is skipped with a warning.",
+      "evidence": "apply-project-rules.md line 261 and cli-reference.md line ~3491 versus references-check.ts line 98 and the `links` map in scanCitations. A search of docs/ and README.md for 'not scanned' / 'linked rule' found no other statement of this limit.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "docs:linked-rule-not-scanned-stale"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [{ "id": "slice-02", "status": "DONE", "coverage": "diff read in full; references-check.ts and the linked-rule boundary verified at head; project-context-inspector.ts feed (createProjectContextFeed) read at head" }],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Summary: slice-02 introduces no layer violation, dependency inversion, or module-boundary break. The feed in project-context-inspector.ts now has overlap and staleness guards (started/applied counters, a `polling` flag) and is stopped in the shell teardown, so review-architecture-w5:F-001 (feed never stopped) looks fixed. The heading parser replacement and the last.json change to `taskTextLength` / `taskTextTruncated` are self-contained. Still open and not re-filed: review-architecture-w5:F-002 (feed and polling logic sit in the presentation module), review-architecture-w2:F-001 and review-architecture-w1:F-004 (unchanged by this slice). The two new minor findings concern the linked-rule scan: the checker lacks the resolver's sha256 pin check (follow-up to review-architecture-w3:F-002, which this slice fixes only partly), and the guide and CLI reference still say linked rules are not scanned.
+
+STATUS: DONE

@@ -1,0 +1,138 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "review-style-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "docs/docs/guides/apply-project-rules.md:261 still says a rule imported with --link is not scanned, while references-check.ts:16 and :98-105 scan it at its origin. The guide was edited in 5382b56ab without touching this sentence, so there is no sign the wording was kept on purpose; the docs contradict the shipped behaviour and AC19 requires the docs to describe it."
+    },
+    {
+      "finding_id": "review-logic-w8:F-001",
+      "verdict": "upheld",
+      "reasoning": "Commit 4838b1b40 moved --task-text to single quotes at every site but only flow-orchestrator states the quote-escaping rule; task-implementer:182, job-orchestrator SKILL.md:749/:1307, orchestrator-prompt.md:132/:188 and tests-creator:93 give only the placeholder. Nothing at those sites marks the omission as deliberate, and the suggested fix makes the sites consistent with flow-orchestrator."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "The keywordOccurs symbol-edge assertions in reference-entries.test.ts only put a space or a string edge next to the symbol, so the pre-fix regex passes them too. Nothing marks this as an intended limit of the test, and the suggested cases match the docstring of keywordOccurs (reference-entries.ts:43-47)."
+    },
+    {
+      "finding_id": "review-security-code-w6:F-001",
+      "verdict": "upheld",
+      "reasoning": "scanCitations (references-check.ts:105) reads a link origin with a bare readFile, while inspectDocument one function below (:121-143) applies lstat, realpath, isPathInside, isFile and the CONTRACT_MAX_BYTES cap. The read and its comment were added on this branch, so there is no earlier choice to defer to. A security finding is not downgraded."
+    },
+    {
+      "finding_id": "review-logic-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The guide (apply-project-rules.md:192) says a promoted document's byte count is its section size, but reference-entries.ts:104/:124 records bytes as the whole file and only section_bytes and promotedBytes (:118) use the section, as the guide's own example at :177 shows (438 bytes, section 349). The text is new on this branch and no signal marks the wording as intended."
+    },
+    {
+      "finding_id": "review-style-w2:F-005",
+      "verdict": "upheld",
+      "reasoning": "The first linked rule in the same test goes through a single RULE constant (entry(\"styling.mdc\", linkedRule, RULE)), and the second repeats its literal. The suggested fix brings the second rule in line with the first. No intent signal."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-002",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/remote/telegram-permissions.test.ts:36", "says": "expect(parsed.ok && parsed.value.permissionMode).toBe(\"trust\") - the same guard-in-expect idiom" },
+        { "ref": "src/lib/serve-approvals-durability.test.ts:77", "says": "expect(view.ok && view.value.state).toBe(\"pending\") - same idiom" },
+        { "ref": "src/commands/approvals.test.ts:124", "says": "expect(record.ok && record.value.state).toBe(\"allowed\") - same idiom" }
+      ],
+      "reasoning": "The fact is true, but `expect(x.ok && x.value...)` is an established assertion idiom in this repository: keryx ctx rg -c over src finds it in 29 test files outside this one. The suggested fix would make this one test differ from that sibling practice, and the test still fails on a regression, which the finding itself concedes.",
+      "question": "The ok-guard inside expect() is the repository's common test idiom (29 files). Keep it here, or split the precondition out in this test anyway?",
+      "options": ["dismiss - keep the repository idiom", "uphold - assert ok first in this test"]
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-003",
+      "verdict": "upheld",
+      "reasoning": "The scan's header (references-check.ts:10-16) lists the ways it deliberately differs from the resolver (whole project, .md only) and leaves out the sha256 pin. The inline comment at :98 claims the scan reads 'as the resolver does'. Both comments were added on this branch, so neither ratifies the divergence. The intended behaviour for a drifted link is untested."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The template-literal wrapper around a single interpolation at context-resolver.test.ts:432 was introduced in this delta and adds nothing. No intent signal; the suggested fix restores the earlier plain form."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "The second Array.from and the non-null assertion came with the AC3 amendment in 5382b56ab. The amendment requires the length to be recorded but says nothing about how it is computed, so the duplication is not a stated choice. The fix is local to the file's two callers."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "reference-entries.ts:41, :51 and :52 spell the word-character class three times, and correctness depends on the three staying equal. No comment or rule marks the repetition as intentional. Defining the class once is the usual remedy and changes no behaviour."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "The JSDoc of currentSection names only the no-anchor fallback, while the dead-anchor fallback added in 4838b1b40 is documented only inline. The fix extends the doc comment to match code that is deliberate. No intent signal against it."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "The comment at references-check.ts:98 claims parity with the resolver, yet the scan skips the sha256 pin check the resolver applies to link origins. The header's list of intended differences (:10-16) does not include it, and all of these lines are new on this branch, so they cannot count as a prior decision. Sharing one admission function moves toward consistency."
+    },
+    {
+      "finding_id": "review-logic-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "references-config.ts normalises the path field and leaves when.globs untouched, so './src/**' and the like fail without any message. Nothing in the loader marks raw globs as intended. One of the two suggested fixes (a references check finding) leaves the shared matcher alone, so the fix is sound."
+    },
+    {
+      "finding_id": "review-security-code-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "references.json is a new repo-controlled input to expandBraces and globToRegExp, and parseReferences sets no bound on it. There is no intent signal, and a security finding is not downgraded. Whether the trust level makes this acceptable is for the operator, not for intent evidence."
+    },
+    {
+      "finding_id": "review-clean-code-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "Source-text audits of tui-shell.ts are an accepted practice here (src/tui/mcp-trust-shell-wiring.test.ts:16-27, turn-guard-shell-wiring.test.ts:17-18), so asserting on source is not the defect. What remains holds: unlike those siblings, which check that indexOf found its marker and bound the block by its closing text, this test takes an unchecked indexOf and a fixed 2500-character window (project-context-inspector.test.ts:598). The finding's second suggested fix matches the sibling pattern."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "The sidebar assertion at project-context-inspector.test.ts:630 checks a string built only from counts and symbols, so it cannot fail on the fixture's hostile description. The test name claims the sidebar is cleaned. Nothing marks the line as a deliberate smoke check."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-005",
+      "verdict": "upheld",
+      "reasoning": "In reload() (project-context-inspector.ts:172-182), `applied` advances only after the listener loop, so a throwing listener leaves it behind and an older load can then overwrite `current`. The comment at :175 states the opposite intent ('older news, whatever order they finished in'), so the code falls short of its own stated choice."
+    },
+    {
+      "finding_id": "review-highload-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "reload() returns its own `next` even when it is older than the status already applied, and presentProjectContext assigns that value to the modal. This works against the intent stated at :175. The applied-after-listeners issue is the same one as in the previous finding. No intent signal supports returning the stale value."
+    },
+    {
+      "finding_id": "review-security-code-w6:F-002",
+      "verdict": "upheld",
+      "reasoning": "The sink at project-context-inspector.ts:239 shows committed file text through cardSafe, while src/lib/terminal-safe.ts is the repository helper for attacker-controlled text and covers invisible code points that cardSafe keeps. The comment at :238 is new on this branch and names only control bytes, so it is not a prior choice. A security finding is not downgraded."
+    },
+    {
+      "finding_id": "review-style-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "At base d6267d4a5 the block put the parent import (../gdskills) first, then siblings (./...). The new ../lib/card-safe line at :10 breaks that grouping. The siblings were not strictly alphabetical even before this change (./modal-host precedes ./execution-plan-inspector) and no lint rule enforces import order, but the grouping point stands, and moving one line is a sound, consistent fix."
+    },
+    {
+      "finding_id": "review-logic-w6:F-001",
+      "verdict": "upheld",
+      "reasoning": "budget.exceeded is set when a plain rule does not fit (fit() in context-resolver.ts) even when usedBytes stays under limitBytes. The per-row 'over the cap: <used> of <limit>' sentence can therefore contradict itself. The TUI-states R4 row that describes the sentence was written on this branch, so it is not a prior decision, and it describes the state 'promoted and over the cap', not 'flag set by another entry'."
+    }
+  ]
+}
+```
+
+## Summary
+
+- upheld: 21
+- challenged: 1
+- downgraded: 0
+- owner-decision: 0
+
+Held:
+
+- review-testing-practices-w2:F-002 (challenged). Question: the ok-guard inside expect() is the repository's common test idiom (29 files). Keep it here, or split the precondition out in this test anyway? Signals: src/remote/telegram-permissions.test.ts:36, src/lib/serve-approvals-durability.test.ts:77, src/commands/approvals.test.ts:124 use the same `expect(x.ok && x.value...)` form.

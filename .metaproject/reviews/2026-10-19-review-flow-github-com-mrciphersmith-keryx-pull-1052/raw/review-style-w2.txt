@@ -1,0 +1,182 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "slices": [{ "id": "slice-02", "status": "DONE", "coverage": "whole slice-02.diff read (src/commands/*, src/flow/*), plus src/review/types.ts cardPressFields and review.ts import usage in the worktree" }],
+  "summary": "Style lane only. slice-02 is readable and consistent with its neighbours: new constants are named (REMOTE_CARD_TTL_MS, WAIVER_QUOTE_CHARS), no console output, no commented-out code, no unused imports left behind in review.ts after the completeManagedReview/runProfileRefusal/packageRoutingRefusal removal (resolveProjectRoot is still used at six sites). Findings are small: a repeated magic number (12), duplicated head parsing and error text in completeSpec, `as` casts that stand in for narrowing in the token store invoke path, a helper (cardPressFields) that exists but is hand-rolled again in four places, and a few info-level naming and ordering notes. No logic, security or architecture claim is made.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "const at = facts.head === undefined ? \"\" : ` at ${facts.head.slice(0, 12)}`;",
+      "problem": "The short-SHA length 12 is an unnamed literal repeated three times in completeSpec: the card title (`at`), the card `subject`, and the apply output (`prepared.head.slice(0, 12)`).",
+      "impact": "Three places must change together if the abbreviation length changes; the tests also hard-code `0123456789ab` / `HEAD.slice(0, 12)`, so a drift between card and output would read as a copy error.",
+      "suggested_fix": "Add `const SHORT_SHA_CHARS = 12;` next to COMPLETION_FILE and WAIVER_QUOTE_CHARS, or a one-line `shortSha(head)` helper, and use it in all three sites.",
+      "evidence": "slice-02.diff, completeSpec buildCard (`const at = ...slice(0, 12)`, `subject: ... head.slice(0, 12)`) and apply (`at ${prepared.head.slice(0, 12)}`).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "facts = completionFacts(prepared.dir, headInput);",
+      "problem": "completeSpec repeats two small blocks. (a) The `head` input normalisation (`typeof input[\"head\"] === \"string\" && input[\"head\"].trim() !== \"\" ? input[\"head\"].trim().toLowerCase() : undefined`) is written in buildCard and again in apply. (b) The refusal text `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded` is built twice in apply (after completionFacts and after completeReviewGated).",
+      "impact": "Keeping the card-time and answer-time reads identical is the point of the digest check, so the two parses of `head` have to stay in step; a future edit to one copy (for example accepting an uppercase SHA) would make apply compare a different value than the card showed. The duplicated message is a smaller version of the same drift risk.",
+      "suggested_fix": "Extract `const headOf = (input: Record<string, unknown>): string | undefined => ...` and `const refused = (error: unknown): OperatorApplyResult => ({ output: `review_complete refused: ... — nothing was recorded`, isError: true })` and call each from both places.",
+      "evidence": "slice-02.diff lines for completeSpec: buildCard `const headInput = typeof input[\"head\"] === \"string\" ...` and apply `const headInput = typeof input[\"head\"] === \"string\" ...` are identical; the two `return { output: `review_complete refused: ...` lines are identical.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "pending.delete(token as string);",
+      "problem": "invoke restructures the token handling so `entry !== undefined` implies `token !== undefined`, but TypeScript cannot see that, so the code uses `token as string`, `pressedBy as number` and `pressedAt as string` casts.",
+      "impact": "Casts hide the narrowing from the compiler. If the guard above is later edited (for instance the `entry === undefined || entry.input !== key(input)` condition), the casts keep compiling and a wrong value reaches `pending.delete` or the confirmation record. Readability: the reader has to re-derive why each cast is safe.",
+      "suggested_fix": "Narrow explicitly: `if (token === undefined || entry === undefined || entry.input !== key(input)) { if (token !== undefined) pending.delete(token); return refuse(...); }` removes the first cast. For the press fields, return early inside `if (remote)` after the undefined check and build the press object there (`const press = { pressedBy, pressedAt }` with both typed), so the later spread needs no `as`.",
+      "evidence": "slice-02.diff, operator-confirm-tools.ts invoke: `pending.delete(token as string);` and `...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-other.ts",
+      "line": null,
+      "quote": "...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy }),",
+      "problem": "src/review/types.ts already exports `cardPressFields` and the review tools use it nine times in operator-confirm-review.ts, but the same conditional-spread for pressedBy/pressedAt is hand-written again in other places in the slice: `record()` in operator-confirm-other.ts (the quoted line), `mintConfirmationToken` in src/flow/confirm-token.ts, `confirmMint` in src/flow/service.ts, and the widened inline types in `recordScheduleDecision` and `confirmMint`.",
+      "impact": "Two different spellings of one rule (\"press fields exist only on a remote card\") in the same PR. A later change to the rule (for example dropping `pressedAt` when empty) has to be found in the helper and in four hand-written copies.",
+      "suggested_fix": "In operator-confirm-other.ts use `...cardPressFields(confirmation)` in `record()`. For src/flow/*, either import the helper if the layer rule allows flow -> review types, or move `cardPressFields`/`CardPress` to a neutral module (for example src/lib) and import it from both. If the layering forbids it, leave the flow copies and say so in a comment.",
+      "evidence": "src/commands/operator-confirm-other.ts:113 `...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy }),`; src/flow/confirm-token.ts:140 `...(binding.pressedBy !== undefined ? { pressedBy: binding.pressedBy } : {}),`; src/flow/service.ts:1681 `...(confirmation.pressedBy !== undefined ? { pressedBy: confirmation.pressedBy } : {}),`; helper in src/review/types.ts (used in src/review/*.ts and operator-confirm-review.ts).",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "return refuse(\"the card is older than 1 hour; ask again\");",
+      "problem": "The refusal text hard-codes \"1 hour\" while the limit is the exported constant REMOTE_CARD_TTL_MS declared a few lines above.",
+      "impact": "If the TTL constant is changed the message silently lies. The tests assert on the text \"older than 1 hour\", so they would also need an edit.",
+      "suggested_fix": "Derive the wording from the constant (`${REMOTE_CARD_TTL_MS / 60_000} minutes`) or keep \"1 hour\" and add a one-line comment on REMOTE_CARD_TTL_MS saying the message and docs quote it.",
+      "evidence": "slice-02.diff: `export const REMOTE_CARD_TTL_MS = 60 * 60 * 1000;` and `return refuse(\"the card is older than 1 hour; ask again\");`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/commands/agent.ts",
+      "line": null,
+      "quote": "...(confirmationToken !== undefined && confirmationVia === \"remote\" && confirmationPressedBy !== undefined ? { confirmationPressedBy } : {}),",
+      "problem": "The context built for `tool.invoke` now has three near-identical conditional spreads that each re-test `confirmationToken !== undefined` and `confirmationVia`, plus the new pair of module-level `let`s (confirmationPressedBy, confirmationPressedAt) next to confirmationVia.",
+      "impact": "Four conditions on one theme in a row are hard to read, and the `confirmationVia === \"remote\"` guard is spelled out twice for the two press fields. Adding a fifth field would copy the pattern again.",
+      "suggested_fix": "Build one `confirmationContext` object in the branch that sets the variables (token, via, and the press fields only for a remote answer) and spread it once: `...confirmationContext`.",
+      "evidence": "slice-02.diff, agent.ts runTool: the three consecutive `...(confirmationToken !== undefined && ...)` lines before `...(untrustedContentSeen ? ...)`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "import { writeFileAtomic } from \"../lib/fs\";",
+      "problem": "The new imports are dropped into the middle of existing groups: `cardPressFields` from ../review/types sits between ../lib/card-safe and ../flow/service, `writeFileAtomic` from ../lib/fs sits between review/* imports, and `readinessLine` is appended to an already very long import line.",
+      "impact": "Cosmetic. The block was already unsorted before this PR, so this is not a regression, but each flow adds to it and the file now has a ten-line header comment plus about 30 import lines.",
+      "suggested_fix": "Place the two new imports with their group (../lib/* together, ../review/* together) the next time this block is touched; no change required for this PR.",
+      "evidence": "slice-02.diff, operator-confirm-review.ts import block.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "also lists the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete)",
+      "problem": "The /decisions description is now close to 500 characters on one line, and the same five-tool list is repeated in the /remote-control description.",
+      "impact": "Slash-command descriptions are shown in help and completion; long lines hurt the readability of that surface, and the two lists must be kept equal by hand when a card tool is added or renamed.",
+      "suggested_fix": "Shorten the descriptions (\"also lists the Telegram review cards waiting or answered\") and keep the tool names in the docs, or build the list once from a shared constant.",
+      "evidence": "slice-02.diff, agent-commands.ts hunks for /remote-control and /decisions.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-009",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "type CompletionFacts = { reviewId: string; prBound: boolean; head: string | undefined; evidence: string; waivers: string[]; status: string };",
+      "problem": "Small naming and declaration-style inconsistencies in the new code: the boolean `prBound` has no is/has prefix (convention: `isPrBound`); `factsDigest` is an arrow `const` while its sibling helpers `completionFacts` and `clip` are function declarations; `clip` is defined after its first use (works by hoisting) and below the function that calls it.",
+      "impact": "Minor consistency only.",
+      "suggested_fix": "Rename `prBound` to `isPrBound` (also in tests if referenced), declare `factsDigest` with `function`, and put `clip` above `completionFacts`.",
+      "evidence": "slice-02.diff, operator-confirm-review.ts section `10. review_complete (flow 464)`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-010",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "const premiseInput = { package: \"\", finding: \"LY-003\", answer: \"dismiss\", reason: \"platforms do not mirror\" };",
+      "problem": "Two test-readability points in the new describe block. `premiseInput` carries `package: \"\"` as a placeholder that every use overwrites (`{ ...premiseInput, package: pkg }`), and the decide_premise tests call `overThresholdPackage()`, a name that describes the plan-confirmation fixture, to set up a premise fixture.",
+      "impact": "A reader has to find out that the empty string is never used and that the premise tests only need the findings.json part of the helper.",
+      "suggested_fix": "Make `premiseInput` a function of the package (`const premiseInput = (package_: string) => ({...})`) or drop the placeholder key; rename the helper to `plannedPackageWithHeldFinding` or split the findings.json write out.",
+      "evidence": "slice-02.diff, `describe(\"review_confirm_plan and review_decide_premise through the remote card\")`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 6 }
+}
+```
+
+# Style Review Report (slice-02: src/commands/*, src/flow/*)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+The slice reads cleanly and follows the surrounding code: named constants for the TTL and quote clip length, no console output, no commented-out code, and the import list of review.ts was trimmed correctly (resolveProjectRoot is still used at six other sites). The points worth a second look are the repeated `12` and the duplicated head parsing and error text in the new `completeSpec`, the `as` casts in the token store's `invoke`, and the pressedBy/pressedAt spread that exists as `cardPressFields` but is written out by hand in four more places. None of these is a defect on its own, and none touches the logic or security checks, which belong to the other lenses.
+
+## Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Head: d2cb377f59f7f9c8553d9f377f99360bff3f6328
+- Merge-base (base): 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Scope mode: explicit-hash-range (diff slice)
+- Slices covered: slice-02
+
+## Stats
+- major: 0
+- minor: 4 (F-001, F-002, F-003, F-004)
+- info: 6 (F-005 to F-010)
+
+## What was checked and found fine
+- Naming: tool names, `ConfirmedVia`, `REMOTE_CARD_TTL_MS`, `COMPLETION_FILE`, `WAIVER_QUOTE_CHARS` follow the repo conventions.
+- Dead code: no unused imports remain in review.ts or operator-confirm-review.ts; no commented-out code added.
+- Console: none added to production code.
+- Comments: new comments carry flow numbers and say why (second check at the record, read fresh so a config edit applies); no stale comment found in the added lines.
+- File length: not assessed as a finding; operator-confirm-review.ts grew by about 130 lines but is a spec registry by design.
+
+Routing audit: graph_used no (not-relevant: style-only diff review), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg for import and helper usage), raw_rg_used no.

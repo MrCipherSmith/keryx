@@ -1,0 +1,45 @@
+STATUS: DONE_WITH_CONCERNS
+
+Logic review, wave 3, slice-03 of PR 1052 (flow 464, round r04). Head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66.
+
+Summary
+The slice adds the review_complete operator-confirmed card, wires the remote (Telegram) press into the confirmation context, binds allowedUserIds in shell.ts, and routes `keryx review complete` through completeReviewGated. The control flow is sound: the token is spent before apply, the digest is re-checked in apply, the remote press fields, allowlist and one-hour TTL are enforced in invoke, and the gated-completion refactor in review.ts is behaviour-preserving. One defect: the review_complete card cannot carry fix-round dispositions, so an agent that may no longer run `keryx review complete` has no way to record them.
+
+Verified, no defect found
+- operatorConfirmTool.invoke: token spent first; remote answers refused when allowedUserIds is unbound, when pressedBy is not listed, or when the press is older than REMOTE_CARD_TTL_MS. Only one binding site exists (shell.ts:4221); interactive-agent-tools.ts:146 and :261 only forward it.
+- agent.ts: pressedBy/pressedAt come from the remote ApprovalResponse and are passed only when via is remote.
+- completionFacts/factsDigest: digest covers head, evidence, waivers and status; apply re-reads and compares before closing. Premise-question decisions are not mislabelled as reviewer overrides (readOperatorDecisions filters to gate decisions).
+- Close-after-throw is detected by re-reading status, so a package closed before a bookkeeping throw is reported as closed.
+- runComplete in review.ts: completeReviewGated is equivalent to the removed inline profile and routing checks.
+- Known items (r03 D-02..D-14, autonomous-profile wording, stale "then run keryx review complete" wording, completion-gate.ts:791, D-12 remote-press tests) were not re-filed.
+
+Finding
+F-001 (major): review_complete cannot record dispositions.
+completeSpec (operator-confirm-review.ts:700) takes only `package` (inputSchema at :707), and apply calls completeReviewGated (:756) without `dispositions`. recordDispositions is reachable only through completeManagedReview options, whose only caller is runComplete, which reads --finding/--disposition/--evidence. The review-orchestrator skill (SKILL.md:247, 284-297) still tells the operator flow to pass those flags, says an agent never runs `keryx review complete` (:136), and says closing a fix round without dispositions leaves every finding `unknown`. Through the card, a fix round therefore always closes with every prior finding `unknown`.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Remote-card plumbing, token/digest/TTL/allowlist handling and the gated-completion refactor are sound. The review_complete card cannot carry fix-round dispositions, which agents can no longer record any other way.",
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 756,
+      "quote": "done = await completeReviewGated(ctx.projectRoot, prepared.dir, {",
+      "problem": "The review_complete card has only a `package` input and apply passes no `dispositions` to completeReviewGated, so --finding/--disposition/--evidence cannot be recorded through the card. recordDispositions runs only from completeManagedReview options, whose sole caller is runComplete (CLI flags).",
+      "impact": "Agents are told never to run `keryx review complete`; closing a fix round through the card leaves every prior finding `unknown`, which the review-orchestrator skill says makes precision unreadable. A capability previously available through the CLI is silently lost on the confirmed path.",
+      "suggested_fix": "Add an optional validated `dispositions` array (finding, disposition, evidence) to the review_complete input schema, show it on the card, include it in factsDigest so apply re-checks it, and pass it to completeReviewGated. Otherwise state in SKILL.md:247 and :284-297 and in AC4 that dispositions need a human terminal.",
+      "class_scope": "completeSpec inputSchema and apply in operator-confirm-review.ts plus the SKILL.md instructions at :247 and :284-297. Enumeration: recordDispositions (managed.ts:1913, called at :1019) is reachable only via completeManagedReview options, whose only caller is runComplete; no other site passes dispositions.",
+      "evidence": "operator-confirm-review.ts:707 inputSchema has only package; :756 call has no dispositions; review-orchestrator SKILL.md:136, :247, :284-297; flow 464 acceptance-criteria.md AC4 does not mention dispositions.",
+      "confidence": "medium"
+    }
+  ]
+}
+```

@@ -1,0 +1,67 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-02 (first pass, kind new) is clean at the function and class level. The new heading parser, the feed overlap guard, the origin scan for linked rules and the length-only last.json record are small and single-purpose, and they close several r02 items. Two minor findings and one info: two docs pages still say a linked rule is not scanned (the code now scans it), and one test greps the source text of tui-shell.ts with a fixed 2500-character window. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "line": null,
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "problem": "Stale documentation (Clean Code C1, a comment that no longer matches the code). This slice changes scanCitations in src/gdskills/references-check.ts so that a rule imported with --link is read at its origin (readProjectRuleRegistry, resolveOriginPath), and adds a test for it. The header comment in that file was updated ('A linked rule (registered in place, not copied) is scanned at its origin.'). Two doc sentences were left behind and now state the opposite: the guide quoted here and the `references check` row of docs/docs/cli-reference.md ('Citations are backticked `X.md` names in `.metaproject/rules/project/`; a linked rule is not scanned.').",
+      "impact": "A reader who imports rules with --link believes a document cited only by a linked rule will be reported as unused-declaration or never checked, and may add or drop declarations to work around behaviour that no longer exists. The docs also disagree with the in-code comment and the new test.",
+      "suggested_fix": "Change both sentences to say a linked rule is scanned at its origin and a bundled rule is not. In the guide: 'only: a rule imported with `--link` is scanned at its origin, and bundled rules are not.' In cli-reference.md drop '; a linked rule is not scanned' or replace it with 'a linked rule is scanned at its origin'.",
+      "evidence": "src/gdskills/references-check.ts:16 reads 'A linked rule (registered in place, not copied) is scanned at its origin.'; docs/docs/guides/apply-project-rules.md:261 and docs/docs/cli-reference.md:3491 (the `references check` row) still say 'not scanned'. keryx ctx rg for 'not scanned' and 'linked rule' over these files lists exactly these two doc sites. Slice-02 diff hunk for references-check.ts shows the origin read; the new test in src/commands/skills-references.test.ts ('a rule imported with --link is scanned at its origin') asserts it.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "docs-linked-rule-not-scanned-stale",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": null,
+      "quote": "const onDestroy = source.slice(source.indexOf(\"onDestroy: () => {\"), source.indexOf(\"onDestroy: () => {\") + 2500);",
+      "problem": "The test that proves the shell stops the feed asserts on the text of tui-shell.ts instead of on behaviour. It cuts a fixed 2500-character window after the first 'onDestroy: () => {' and checks that the window contains 'stopProjectContextFeed?.()'. It also repeats the literal 'onDestroy: () => {' and its indexOf call twice, and it breaks silently if indexOf returns -1 (slice(-1, 2499) then reads from the file tail).",
+      "impact": "The test fails when someone renames the variable, reformats the call, or grows the onDestroy body past 2500 characters while the stop call is still wired, and it passes if the first 'onDestroy: () => {' in the file belongs to another handler that happens to contain the call. A test that fails for reasons unrelated to the behaviour it names trains reviewers to loosen it.",
+      "suggested_fix": "Extract the wiring into a small function exported from tui-shell.ts (or the inspector module) that takes the feed and returns the teardown, and test that it calls feed.stop(). If a source check must stay, locate the block with a named constant and assert indexOf >= 0 first, and take the block up to its closing brace instead of a fixed window.",
+      "evidence": "src/tui/project-context-inspector.test.ts:598-600 (the slice, the contain check, and a second check on the assignment string). src/tui/tui-shell.ts:3936 declares stopProjectContextFeed, :4032 opens onDestroy, :4047 calls it, :5295 assigns it. Distance between :4032 and :4047 is 15 lines, so the 2500-character window is wide enough today and by an unstated margin.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "source-text-test-tui-shell-window",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "line": null,
+      "quote": "--task-text \"Add a loading spinner to the Button\"",
+      "problem": "Inconsistent vocabulary and guidance for one concept (Clean Code A3). This slice moves every instruction that passes --task-text to single quotes, and flow-orchestrator/SKILL.md explains why ('a `'` inside it becomes `'\\''`: double quotes let the shell run any backtick or `$(...)` a task description contains'). The worked example in the guide is the one remaining place that shows --task-text in double quotes, and the other skills and the README that switched to single quotes do not carry the escape rule.",
+      "impact": "A reader who copies the guide example into a script and substitutes a task description containing a backtick or $(...) gets shell expansion, which is the hazard the rest of the slice fixes. The example text itself is harmless, so this is guidance drift, not a defect.",
+      "suggested_fix": "Change the example to --task-text 'Add a loading spinner to the Button' and add one sentence beside it pointing at the single-quote rule and the '\\'' escape. The ellipsis in Step B of the skills is already tracked in review-clean-code-w2:F-002 of r02 and still applies unchanged; it is not re-filed.",
+      "evidence": "keryx ctx rg for 'task-text \"' over README.md, docs/docs, .metaproject/skills and src/gdskills/bundled returns one match, docs/docs/guides/apply-project-rules.md:172. The diff of README.md, job-orchestrator, task-implementer and tests-creator SKILL.md shows the double-to-single quote change in each.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "task-text-double-quote-example",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read the full diff (29 files) and the head versions of context-resolver.ts recordLastResolve, references-check.ts header, project-context-inspector.ts feed, tui-shell.ts wiring, and the docs rows quoted above. Checked names, function size and arguments, comments, error handling, DRY, SOLID. The HEADING regex constant was removed with the rewrite (no remaining reference). r02 items closed by this slice and not re-filed: feed stop wiring (review-architecture-w5:F-001, review-clean-code-w5:F-004), quadratic heading regex (review-highload-w3:F-001), feed overlap guard (review-highload-w4:F-001, review-highload-w5:F-001), linked-rule scan (review-architecture-w3:F-002).",
+      "status": "DONE"
+    }
+  ]
+}
+```
+
+Summary: Slice-02 is a first-pass review of the changes since r02 and it is in good shape for Clean Code and SOLID. The new parseHeadingLine and stripClosingHashes are short and single-purpose, createProjectContextFeed keeps three counters whose roles are clear from their names, recordLastResolve now stores a length and a flag instead of the task text, and the linked-rule scan is a two-line change at the right place. Nothing reaches major. I filed two minor findings (docs that still say a linked rule is not scanned after the code started scanning it; a test that greps tui-shell.ts source with a fixed 2500-character window) and one info (the guide example still uses double quotes around --task-text). The ellipsis in Step B of the skills is already r02 review-clean-code-w2:F-002 and still applies, so it is cited here and not re-filed.

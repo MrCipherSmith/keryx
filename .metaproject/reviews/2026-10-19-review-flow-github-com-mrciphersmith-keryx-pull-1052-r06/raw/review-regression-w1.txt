@@ -1,0 +1,44 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "reviewer": "review-regression",
+  "slices": ["slice-01"],
+  "slice_kind": "fix",
+  "status": "DONE",
+  "findings": [],
+  "prior_dispositions": [],
+  "clean_areas": [
+    "CLI `keryx review complete --finding/--disposition/--evidence` does not pass through the new caps: src/commands/review.ts parseDispositions (4545, 4615-4670) feeds completeReviewGated directly. completionDispositions (operator-confirm-review.ts:676) has exactly one caller, buildCard (:768) of the review_complete card. The terminal path, docs/docs/guides/review-with-a-record.md examples (all under 100 characters) and job-orchestrator's `--evidence` loop are unaffected.",
+    "Stored records: completion-confirmation.json is write-only (one match for the name in src and docs, the COMPLETION_FILE constant); findings.json dispositions are written by recordDispositionsLocked, which the delta did not touch. Nothing reads back an evidence length, so records written before the caps stay valid.",
+    "Card length against the Telegram limit is not worse than before: dispositionLine used clip(evidence), at most 301 characters; it now shows evidence.trim(), at most 300 (the cap tests the trimmed length that is stored), and the finding is newly capped at 200. A card past MAX_APPROVAL_PROMPT_CHARS (3000, protocol.ts:160) still gets no remote buttons and falls to the dock (tui-shell.ts:6029, 6104, operatorCardTooLongForTopic), as it did before.",
+    "dispositionsSchema and the three MAX_DISPOSITION* constants are local to operator-confirm-review.ts (10 matches, one file); no other module, snapshot or test pins the old evidence description. Other tests in the blast-radius set (operator-confirm-rosters.test.ts, harness-robustness.test.ts, card-lifecycle.test.ts) do not pass dispositions to review_complete; only operator-confirm-review-tools.test.ts does, and its pre-existing cases use evidence under 20 characters.",
+    "clip() remains in use for the three waiver quotes (:717, :728, :732); the delta stopped using it for dispositions only. Those quotes are unchanged behaviour and were already scoped out in S-401's class_scope."
+  ]
+}
+
+## Regression Review (slice-01, scope B)
+
+### Scope
+- Delta 77d2eff20..0f980c407, commit 0f980c407: operator-confirm-review.ts (+13 -2) and operator-confirm-review-tools.test.ts (+20).
+- Question: does the new 20-entry / 200-character finding / 300-character evidence refusal, or the card showing evidence whole, break an existing caller?
+- Blast-radius record: graph depth 2 around src/commands/operator-confirm-review.ts, 10 dependents (operator-confirm-tools.ts, operator-confirm-other.ts, operator-confirmations.ts, six test files, interactive-agent-tools.ts). The record shows `truncated: []` and `unavailable: []`, so no file was dropped by the cap. The graph carries no runtime edges (skill text read by an agent, string-keyed tool registry), so skills and docs were read directly.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0 (none would survive the scope B screen anyway)
+- Info: 0
+
+### Findings
+None at major or above. The caps apply only to the review_complete card input. No existing caller sends text above them in the repository, in the docs, or in the skills I read, and a caller that does is refused before any card opens with a message naming the limit. Nothing is half-recorded or token-spent by that refusal.
+
+### Observations (not findings, recorded so they are not read as silence)
+1. The review-orchestrator skill (SKILL.md:247 and :284) and the CLI reference tell an agent to pass `dispositions` to the card without stating the 20 / 200 / 300 limits. An agent that writes a long dismissal rationale gets a one-shot refusal and retries shorter. This is documentation lag on a path this PR introduced, not a break of earlier behaviour. It is the same class as the open F5-08 (docs lag the card's dispositions input); the delta does not close it.
+2. The "a card shows at most 20" wording is not a Telegram guarantee. Twenty maximal entries would be about 10,000 characters, over the 3,000 limit, so a card with roughly six or more long entries is answered in the dock rather than in Telegram. This is existing behaviour (the line was 301 characters before), now stated by the refusal text as if all 20 fit. No path breaks.
+3. cardSafe still rewrites a newline to " ⏎ " and strips control characters in what is shown, while the stored evidence keeps the raw characters. The hidden-tail gap of S-401 (text past character 300) is closed; this residue is different (shown form differs from stored form for control characters). It is outside the regression question and sits with the logic and security reviewers' judgement of S-401's completeness.
+
+### Checked and not affected
+See clean_areas. I did not run the tests; the findings above come from reading source at head 0f980c407.
+
+Routing audit: graph_used yes (the payload's layers block, depth-2 dependents), wiki_used no (not-relevant: a bounded delta on one file), ctx_used yes (keryx ctx rg), raw_rg_used no.

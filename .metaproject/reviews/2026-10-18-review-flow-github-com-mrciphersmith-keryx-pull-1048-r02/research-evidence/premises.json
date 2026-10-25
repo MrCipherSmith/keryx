@@ -1,0 +1,366 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-security-code-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "A double-quoted placeholder for free text still lets the shell expand $(...) and backticks. Every site is introduced by this branch, so no earlier choice exists. The CLI has no file or stdin route, and the MCP route does not apply here. No signal or practice source argues against it, and a security finding is held or upheld only."
+    },
+    {
+      "finding_id": "review-security-code-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "AC3 (.metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md:20) requires the truncated task text in the last-resolve record, so persisting it is by design. But the finding's defect is the exposure: an untracked, non-ignored, 0664 file. AC3 does not settle that, and the finding's alternative fix (ignore the directory, mode 0600, shorter prefix) keeps AC3 intact. A criterion this branch introduced is not a prior choice, and a security finding is never downgraded."
+    },
+    {
+      "finding_id": "review-logic-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "AC5 says 'on a word boundary'. Keywords whose edge is a non-word character ('.css', '@apply') fail against 'styles.css' under the unconditional lookarounds at src/gdskills/reference-entries.ts:44. A conventional \\b would match 'styles.css'. The comment at :41 defines word characters for Unicode letters and digits, not for punctuation edges, so there is no sign this was chosen. The guide (apply-project-rules.md:144) says 'whole word', which a punctuation-edged keyword does not contradict."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "The resolver falls back to the whole file on a dead anchor and keeps the entry must_read (reference-entries.ts:100-106, AC6). The proof then fails the same entry with no way for the worker to clear it (reference-proof.ts:62, 72). The fail-closed message and the test at resolved-context-check.test.ts:287 cover an anchor that disappears after resolve (drift). The finding's case is a declaration that is already stale at resolve time, which no test pins. Both fixes the finding offers are sound."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The exclusion of linked rules is stated in the references-check.ts:16 header and in apply-project-rules.md:258-260. But the branch introduces both statements, and neither gives a reason, so this is a documented limit and not a ratified choice. The resolver reads linked rules, so check and resolver disagree about the same project. AC15 also promises the hint after 'import --rules', and --link is a primary import mode."
+    },
+    {
+      "finding_id": "review-security-code-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "HEADING (references-section.ts:37) and stripClosingHashes (:50) backtrack quadratically on a long run of spaces. The input is a committed document, so a contributor controls it, and the size cap is 256 KiB. Nothing in the code or docs shows a deliberate trade-off, and a linear match is the accepted practice (CWE-1333 class). The suggested fix is sound, and a security finding is never downgraded."
+    },
+    {
+      "finding_id": "review-security-code-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "The repo's own rule for attacker-controlled committed-file strings is terminalSafe / terminalSafeBlock (src/lib/terminal-safe.ts header; used by external-diff-modal.ts, research-sync-panel.ts, tui-shell.ts). project-context-inspector.ts paint() does not use it, and the pre-existing Last resolve tab skipping it is an omission, not a choice. The reviewer admits the final terminal byte stream was not captured; that is the verifier's matter. The fix is one sink and consistent with the siblings."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "The thresholds sit in code (reference-proof.ts:14-16) while the prose restates them in eight places, and drift has already happened once at one site. Each bundled skill is read on its own, so some repetition is expected, but that is a reason to weigh the fix and not a source against the premise. No intent signal or practice source argues against it."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-003",
+      "verdict": "upheld",
+      "reasoning": "A general rule follows an inserted special case in the same bullet, which is a readability cost. There is no intent signal and no source against it."
+    },
+    {
+      "finding_id": "review-core-boundaries-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "docs/docs/cli-reference.md:3545 lists `anchor` after 'optionally' and leaves out that description is required. The loader requires description (AC1), so the doc misleads."
+    },
+    {
+      "finding_id": "review-architecture-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "live-run.md:39 and :261 say two words. The shipped threshold and AC10 say three, and the runbook's own expected output says '3 required'. The runbook contradicts itself."
+    },
+    {
+      "finding_id": "review-style-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "live-run.md uses 'missing', 'anchor not found' and 'oversized' where the check emits document-missing, anchor-not-found and document-too-large. 'Риск 6' does not exist, since the PRD risk table has five rows (README.md:94 is one of them)."
+    },
+    {
+      "finding_id": "review-architecture-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "README.md:98 calls the live run AC18, but AC18 is the end-to-end test and the live run is AC20 (acceptance-criteria.md:35, :37). The other identifier mismatches in the finding repeat the F-002 naming drift."
+    },
+    {
+      "finding_id": "review-style-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "README.md:3 and description.md:3 say DRAFT / not frozen, but the criteria were frozen in 36ecf5a45. The finding already notes that the acceptance-criteria.md line must change only through `flow ac update`."
+    },
+    {
+      "finding_id": "review-clean-code-w2:F-004",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/gdskills/context-resolver.test.ts:302-303",
+          "says": "the sibling size-limit test spells the same boundary as literals, \"x\".repeat(262145) and \"x\".repeat(262144); blame 8d73346bd predates the base 1658f77d3, so it is an existing convention"
+        }
+      ],
+      "reasoning": "The finding itself notes the habit predates the PR. Importing CONTRACT_MAX_BYTES in only one test would make that test differ from the sibling testing the same limit, which is evidence against the premise (consistency question). A literal boundary in a test also fails loudly when the constant moves.",
+      "question": "The size-limit test hard-codes 262145 like the existing sibling test at context-resolver.test.ts:302-303. Keep the literal, or import CONTRACT_MAX_BYTES here (and then in the sibling)?",
+      "options": [
+        "dismiss - keep the literals, as the sibling test does",
+        "uphold - use CONTRACT_MAX_BYTES + 1"
+      ]
+    },
+    {
+      "finding_id": "review-style-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "A ternary inside a ternary inside a spread in a fixture used by every test in the file is a plain readability cost. No intent signal or source argues against it."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "A test gap stays as reported unless intent or practice shrinks it. The fixture's insertion order equals the sorted order, so removing .sort leaves the test green, and no signal argues against the finding."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "The thresholds (20, 4, 262144) are pinned only far from the boundary, and AC14 states them as numbers. No signal argues against it."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-003",
+      "verdict": "upheld",
+      "reasoning": "The reviewer's claim, flagged as low confidence, is that the test name overstates its coverage because ../outside.md does not exist and is excluded as 'missing'. Nothing I read contradicts this, and a minor is upheld or challenged only."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "The sibling help in skills.ts interpolates TASK_TEXT_MAX_CHARS, so interpolating the exported constants matches the existing convention in the same slice. No signal argues against it."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "src/commands/skills.ts:1879 (printSkillsHelp) still omits --task-text, while the resolve-context USAGE and cli-reference.md:3452 carry it. The group help is the one left behind, with no sign it was deliberately abbreviated."
+    },
+    {
+      "finding_id": "review-highload-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "The same double-quoted --task-text template as review-security-code-w4:F-002, so the same reasoning applies and no signal argues against it. A minor is not downgraded. The two findings cover one class of defect."
+    },
+    {
+      "finding_id": "review-clean-code-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "Step A at job-orchestrator/SKILL.md:749 spells out --task-text, while Step B at :760 and orchestrator-prompt.md:138 keep an unexplained ellipsis. The note at :762 describes the proof, not the flags. No intent signal or practice source against it."
+    },
+    {
+      "finding_id": "review-architecture-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "conditional-reads.e2e.test.ts:251 redeclares isPromoted with no comment saying it is an independent oracle, although reference-proof.ts:35 exports the same predicate. The file is new on this branch (A in the diff), so nothing in it counts as prior intent."
+    },
+    {
+      "finding_id": "review-clean-code-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "The unnamed /20 and +2_000 literals are in a file added by this branch. The file names other sizes but not these, so there is no signal of a deliberate choice."
+    },
+    {
+      "finding_id": "review-logic-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "renderResolutionMarkdown (resolve-context-command.ts:10-26) builds flags from index, linked, shadows, also_at and anchor and prints no description or condition. Workers are fed the --out JSON (job-orchestrator SKILL.md:760), which weakens the impact, but nothing marks the omission as deliberate and the agent tool and CLI default still return the Markdown."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-003",
+      "verdict": "upheld",
+      "reasoning": "A test-coverage gap in a test the branch changed. No intent signal and no practice source against it."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "The finding charges only the growth of resolveProjectContext, not its pre-existing size. The `declarations ?? []` repetition is new, and there is no signal of intent."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "collectContracts gained a fifth positional parameter, and two Set<string> arguments sit side by side so a swap still compiles. No exemption or comment explains the choice."
+    },
+    {
+      "finding_id": "review-style-w3:F-005",
+      "verdict": "upheld",
+      "reasoning": "Same cause as review-clean-code-w3:F-001: the diff grows the function and repeats the null-coalescing. No signal against it."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "import-rules.ts:274-277 computes the hint for every text-mode run, with no check of dryRun (set at :265). The comment at :272 says the hint is about rules 'the imported rules cite', which a dry run does not import. The code and comment are branch-introduced, so no earlier intent applies."
+    },
+    {
+      "finding_id": "review-architecture-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "Both test files are new on this branch and keep separate path tables for the same copies. The finding itself offers the alternative of one shared table. No signal that the duplication is deliberate."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-007",
+      "verdict": "upheld",
+      "reasoning": "project-context-status.ts:75 and :78 load references.json twice (loadReferences, then checkReferences). The type comment at :26 shows findings in the status are intended, but that ratifies including findings, not reading the file twice. The comment is also branch-introduced."
+    },
+    {
+      "finding_id": "review-highload-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The cost is the full checkReferences on a 5000 ms TUI poll. The file's header comment calls it a 'read-only snapshot' and says every read is fail-soft, and neither speaks to polling cost. The reviewer already calls the cost small for typical projects, and the severity stays minor. No signal of intent or practice source against it."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-006",
+      "verdict": "upheld",
+      "reasoning": "reference-entries.ts, references-check.ts and the contract loop repeat the lstat, realpath, containment and size sequence. All files are new on this branch, so there is no earlier decision, and the finding says no divergence was shown."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "resolveReferences is a new function of about 46 lines that mixes several levels. No exemption or comment gives a reason."
+    },
+    {
+      "finding_id": "review-highload-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "The anchor-not-found warning lists every heading uncapped, while references-check.ts caps the same list at 12 (references-check.ts:349). A sibling that caps argues for consistency, not against the finding."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-008",
+      "verdict": "upheld",
+      "reasoning": "A test gap for keywordOccurs boundary and escape cases. The code at reference-entries.ts has the lookarounds and escapeRegExp, so the finding is about missing assertions. No signal against it."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-009",
+      "verdict": "upheld",
+      "reasoning": "A test gap for several resolveReferences branches (taken collision, maxFileBytes boundary, glob-before-keyword precedence, missing-anchor headings). No signal against it."
+    },
+    {
+      "finding_id": "review-architecture-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "The thresholds live in reference-proof.ts:14-16 and are repeated in prose in about ten files. The module header (reference-proof.ts:1-7) says the check is a proxy, which is the accepted vocabulary-proxy point and not this one. Nothing marks the drift risk of the copied numbers as accepted."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-005",
+      "verdict": "upheld",
+      "reasoning": "reference-proof.ts:36 decides promotion from the free-text prefix `condition:`, with no shared constant with the producer in reference-entries.ts. The module is new on this branch, so there is no earlier intent. The fix options are sound."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-009",
+      "verdict": "upheld",
+      "reasoning": "reference-proof.ts:16 exports WORD_MIN_LETTERS = 5, but :41 hard-codes /\\p{L}{5,}/gu. The doc comment at :39 says 'WORD_MIN_LETTERS letters or more', so the constant was meant to govern the rule. Only the message uses it."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-010",
+      "verdict": "upheld",
+      "reasoning": "A test gap for code-point counting, NFC normalisation and the letter threshold. charCount at reference-proof.ts:66-68 uses Array.from(text.trim()).length and distinctWords uses normalize(\"NFC\"). No signal against it."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-007",
+      "verdict": "upheld",
+      "reasoning": "A magic number 12 appears twice in one expression in a new file. No signal of intent."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-010",
+      "verdict": "upheld",
+      "reasoning": "Two helpers with identical behaviour and different names, both added by this branch; no signal of intent or practice against it."
+    },
+    {
+      "finding_id": "review-logic-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "The BOM is already stripped for references.json (loadReferences), so the document read paths are inconsistent with a handling the code chose elsewhere; no signal for leaving it unstripped."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-011",
+      "verdict": "upheld",
+      "reasoning": "A test gap on fence-closing rules; nothing in the code or history says it was left out on purpose."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-009",
+      "verdict": "upheld",
+      "reasoning": "The nested conditional template is added by this branch; no signal that the density is a house style."
+    },
+    {
+      "finding_id": "review-style-w3:F-004",
+      "verdict": "upheld",
+      "reasoning": "Same line as review-clean-code-w3:F-009 reported from the style side; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "docFixture sets a bytes field from text.length while sibling tests in the slice use Buffer.byteLength; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w4:F-003",
+      "verdict": "upheld",
+      "reasoning": "Call plumbing repeated in new tests; no signal that the repetition is deliberate."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-004",
+      "verdict": "upheld",
+      "reasoning": "The flow 461 comment explains why the hash check takes the last citation, but it does not cover the proof taking a different one. Flow 462 made appliedOf keep every citation, which opened the divergence."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "A per-file assertion that one of two sites could satisfy; no signal of intent."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "A pass-through line with no adapter test; no signal of intent."
+    },
+    {
+      "finding_id": "review-security-code-w4:F-003",
+      "verdict": "upheld",
+      "reasoning": "A review-security-code finding is held or upheld, never downgraded. optionValue's refusal of a '--' next token (src/lib/args.ts:22-24) is deliberate, but its stated reason is not eating a following flag. It does not justify silently dropping free text and skipping keyword promotion without a warning, and the suggested fix (fail loudly or take the value verbatim) is sound."
+    },
+    {
+      "finding_id": "review-logic-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "A test gap on the MCP branch that bypasses op.invoke; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "Import order differs from the rest of the file, and no lint rule enforces it; no signal of a deliberate choice."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-004",
+      "verdict": "upheld",
+      "reasoning": "The fixture states usedBytes 109 against limitBytes 131072 together with exceeded true, which the resolver cannot produce, so the test pins a false sentence."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-006",
+      "verdict": "upheld",
+      "reasoning": "The assertion cannot tell a repaint after close from none; no signal of intent."
+    },
+    {
+      "finding_id": "review-clean-code-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "The tab-to-formatter mapping is spelled out in several places and 'let tab: string' ignores the new ProjectContextTab type; no signal that this is intentional."
+    },
+    {
+      "finding_id": "review-clean-code-w5:F-003",
+      "verdict": "upheld",
+      "reasoning": "A listener throw is caught by the poll catch and reported as a load failure; no signal that the shared catch is deliberate."
+    },
+    {
+      "finding_id": "review-highload-w4:F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/tui/approvals-sidebar.ts:100",
+          "says": "defaultInterval is the same unref'd setInterval(() => { void tick(); }, ms) with no in-flight flag"
+        },
+        {
+          "ref": "src/tui/external-diff-sidebar.ts:81",
+          "says": "identical defaultInterval, no in-flight guard"
+        },
+        {
+          "ref": "src/tui/intake-surface.ts:504",
+          "says": "identical defaultInterval; the only 'busy' guard there (line 428) wraps user actions, not the poll"
+        }
+      ],
+      "reasoning": "The unguarded unref'd interval poll is the house pattern of the TUI sidebar feeds, copied verbatim in at least three sibling modules. The new feed follows it. Adding a guard to this one feed alone would make it differ from its siblings. Reviewer confidence is low and the trigger needs a load over 5 s on a local file scan.",
+      "question": "The project-context feed polls every 5 s without an in-flight guard, exactly like the approvals, external-diff and intake sidebars. Keep the house pattern, or add a guard and sequence check to this feed (and then to the siblings)?",
+      "options": [
+        "dismiss - keep the house polling pattern, as the sibling sidebars do",
+        "uphold - add an in-flight guard and drop stale results in this feed"
+      ]
+    },
+    {
+      "finding_id": "review-style-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "The tab ids are spelled in several places and the compiler does not tie them together; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w5:F-003",
+      "verdict": "upheld",
+      "reasoning": "The re-export is added by this branch; the only other 'export { } from ./' barrels in src/tui are games/*/index.ts, which are real barrels. No sibling pattern for a view-helper re-export."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-005",
+      "verdict": "upheld",
+      "reasoning": "The test fixture's cited path is not a declared path, so the condition clause is never decisive; no signal of intent."
+    },
+    {
+      "finding_id": "review-architecture-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "tui-shell.ts has no projectContextFeed.stop() (5 matches, none is stop), while the sibling live panels are disposed in onDestroy (for example liveIntake?.dispose() at line 4041 and liveDecisions?.dispose() at line 4042). The inconsistency supports the finding."
+    }
+  ]
+}

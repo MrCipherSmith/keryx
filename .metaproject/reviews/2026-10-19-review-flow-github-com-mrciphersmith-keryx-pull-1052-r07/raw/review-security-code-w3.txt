@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second-look read of slice-05 against head 5444f96e4 sources found no new exploitable defect. Remote-press authentication is fail-closed (pressedBy and pressedAt must be present, pressedBy must be in a freshly loaded allowedUserIds, and the press must be inside REMOTE_CARD_TTL_MS; a missing fromId leaves pressedBy undefined and invoke refuses). The review_complete card shows what is stored: cardSafe/hiddenInCard reject text the card would alter, caps bound entry sizes, and factsDigest is re-checked in apply. Package paths are confined to the project through placeReviewPath. The completeReviewGated refactor keeps the run-profile and narrowed-routing refusals before completeManagedReview. The 'waivers: none' card line cannot hide an agent-written waiver, because on a stamped package the mutation-waiver and reviewer-override gates accept only decisions-store records and runProfileRefusal blocks a stamped package whose run profile was removed. Remaining agent-writable stores fall under the documented TM-04 same-OS-user limit.",
+  "findings": [],
+  "slices": ["slice-05"],
+  "questions": []
+}
+```

@@ -1,0 +1,76 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 5, slice-05: the TUI part)
+
+### Scope
+- PR 1052, flow 464, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-05 (src/standard/help-groups.ts, src/trigger/unattended.ts, src/tui/approval-mirror.ts, src/tui/decisions-surface.ts, src/tui/operator-confirmations.ts, src/tui/remote-control-surface.ts, src/tui/tui-shell.ts, operator-confirmations.test.ts). Opened at head for context: src/remote/shell-bridge.ts, src/remote/client.ts, src/commands/agent.ts, src/commands/operator-confirm-tools.ts, src/commands/operator-confirm-review.ts, src/lib/card-safe.ts, src/commands/operator-confirm-rosters.test.ts.
+- Known and not re-filed: SEC-W4-001 (isPlanConfirmation does not validate pressedBy/pressedAt), SEC-W4-002 (deny path after a successful POST lacks the undelivered flag), operatorCards not wired into requestApprovalForTelegramTurn.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### What was attacked, and the result
+
+1. Who can supply pressedBy / pressedAt in the TUI hop. Only `remoteApproval()` (tui-shell.ts:572) builds a response with `via: "remote"`, and it has exactly two call sites: the Telegram-turn answer path and the mirror-race topic win. `pressedBy` is `answer.fromId`, which `mapApprovalAnswer` (shell-bridge.ts:202) restricts to `Number.isSafeInteger` before it can exist; `pressedAt` is the shell's own `new Date()`, never a value carried from Telegram or the model. The dock path (`confirmOperatorCard`) returns a plain boolean, so a shell answer can never carry `via`, `pressedBy` or `pressedAt`. agent.ts:6121-6124 reads them only from a response object with `via === "remote"`, and operator-confirm-tools.ts:211-217 refuses a remote answer without both fields, with an id off `allowedUserIds`, or older than 1 hour. A missing `fromId` fails closed ("did not say who pressed it"). No forging path in the TUI hop.
+
+2. Telegram-leg text rendered unsanitised. The only data from the Telegram leg that reaches the sidebar, the status tab, the /decisions modal or the transcript is `fromId`, a safe integer interpolated into `Telegram user ${id}`. Every other string is local: the mirror notes are constants, and the question text is `meta.card[0]`, the title built by the gate's own `buildCard`. No Telegram-supplied free text is rendered, so no markup or control-character injection comes from the topic. See F-001 for the local-title residue.
+
+3. An undelivered card read as an answer. `askApproval` marks `undelivered` only on a deny (shell-bridge.ts:208, client.ts:441-461). In `raceApproval` the undelivered branch calls `onUndelivered` and then falls through to `isTopicPress`, which needs an `allow` or a `fromId`, so an undelivered answer never sets `topicAnswer` and never aborts the dock. `OperatorConfirmationLog.settle` runs only after the race ends and labels a card "telegram" only for `outcome.from === "topic"`, so an undelivered card cannot appear as answered in Telegram. A card with `bridge` absent, inactive or not connected takes the `mirrorUndeliveredNote` branch: it is logged `mirrored=false` (excluded from `waiting()`), shown with the note in the dock, and answered by the shell only. Fail closed and correct. (The related case of a topic leg that dies after a successful POST, for example a dropped stream through `failApprovals`, client.ts:1119-1124, keeps the card in the "waiting" view until it is answered in the shell. That is the deny-path gap already filed as SEC-W4-002, so it is not repeated.)
+
+4. unattended.ts roster. `review_complete` is added to `OPERATOR_CONFIRM_TOOL_NAMES`. The list now holds 19 names and equals the 19 registered gates: the 8 `review_*` specs by grep plus `review_waive_mutation` and `review_override_reviewers`, the 5 `flow_confirm`/`external_apply`/`learn_*` gates, and the 4 `schedule_*` gates. operator-confirm-rosters.test.ts asserts equality in both directions. Enforcement stays in `isUnattendedExcludedTool` (trigger-agent-task.ts:547, trigger-dispatch.ts:142), which refuses every operator-confirmed gate. The new comment text is documentation only. No gap.
+
+5. Other checks. `ask(..., mirrored)` and `answer()` ignore a second answer for the same id. The answered list is capped at 5 and unanswered entries are removed in `finally`, so there is no unbounded growth. `raceApproval` changes are additive: the new `onUndelivered` hook does not alter which answer wins. `confirmationLines` and `getConfirmationLines` are read-only providers. help-groups.ts is text only.
+
+### Findings
+
+### [SEC-W5-001] Card question text is rendered in three TUI surfaces without control-character sanitising
+- **Severity**: info
+- **File**: src/tui/operator-confirmations.ts:471
+- **Attack vector**: Not demonstrated as exploitable. A card title that reaches the TUI with terminal control characters (ESC or C1 sequences, bidi overrides) would be painted by the sidebar-adjacent status tab, the /decisions modal and the /remote-control modal through `clip()`, which only collapses `\s`. The route is a model-influenced path name: `label(dir, projectRoot)` (operator-confirm-review.ts:85) is interpolated without `cardSafe` into the titles at lines 132, 275, 337, 405, 421, 547 and 725, and `flow.id` and `item.id` are interpolated unsanitised too. Reaching it needs a directory with control characters in its name that also passes the gate's package checks.
+- **Problem**: `clip()` in the new module trusts the producer. `cardSafe` (src/lib/card-safe.ts) exists because "the card shows text the MODEL supplied", and the titles apply it to some interpolations (`cardSafe(target)`, `cardSafe(found.key)`) but not to `name`. The new TUI views are a second render path for that title and add no sanitising of their own.
+- **Why it matters**: Defence in depth only. The dock already prints these lines verbatim, so the new views do not widen the exposure. A forged line or a bidi-reordered title in the "waiting" view is the worst realistic effect.
+- **Fix**: Apply `cardSafe` inside `clip()` before the whitespace collapse (`const flat = cardSafe(text).replace(/\s+/g, " ").trim();`), which also covers every future card title. Optionally wrap `label()` in `cardSafe` at its source.
+- **Patch**:
+```diff
+-  const flat = text.replace(/\s+/g, " ").trim();
++  const flat = cardSafe(text).replace(/\s+/g, " ").trim();
+```
+
+### Clean Areas
+- Forging of pressedBy / pressedAt / via through the TUI hop: checked, no path.
+- Telegram-originated free text in the sidebar, status tab, /decisions modal and transcript: none reaches them (only a validated integer id).
+- Undelivered card read as an answer or as a press: not possible.
+- unattended.ts roster: complete, test-pinned both ways.
+- Injection, authz, IDOR, secrets, crypto, CSRF, path traversal, open redirect in the slice: nothing found. This slice only touches TUI presentation, the race wiring and a constant list.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "summary": "Slice-05 (TUI part) has no exploitable security defect. pressedBy comes only from a safe-integer fromId and pressedAt from the shell clock, set solely by remoteApproval on a topic press; no Telegram free text reaches the sidebar, status tab, /decisions or transcript; an undelivered card cannot be read as an answer; the unattended roster matches the 19 registered gates. One info hardening note on control characters in rendered card titles.",
+  "stats": { "blockers": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "SEC-W5-001",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 471,
+      "quote": "const flat = text.replace(/\\s+/g, \" \").trim();",
+      "problem": "clip() collapses whitespace but strips no ESC/C1/bidi characters; card titles it renders include unsanitised interpolations such as label(dir) (operator-confirm-review.ts:85) and flow.id/item.id, while other interpolations use cardSafe.",
+      "impact": "Defence in depth only: a control-character-bearing package path name could paint a forged or reordered line in the pending/answered card view (sidebar-adjacent status tab, /decisions, /remote-control). The dock already prints the same lines verbatim, so exposure is not widened.",
+      "suggested_fix": "Call cardSafe (src/lib/card-safe.ts) inside clip() before collapsing whitespace: const flat = cardSafe(text).replace(/\\s+/g, \" \").trim();",
+      "evidence": "operator-confirmations.ts:470-473 (clip); operator-confirm-review.ts:85 (label without cardSafe) and titles at 132, 275, 337, 405, 547; src/lib/card-safe.ts:1-6 states the card shows model-supplied text.",
+      "confidence": 0.3
+    }
+  ]
+}
+```
+
+Routing audit: graph_used no (not-relevant, diff-bounded slice); wiki_used no (not-relevant); ctx_used yes (keryx ctx read and keryx ctx rg); raw_rg_used no. Raw grep and sed-style reads of the slice diff carried keryx:raw markers because it is a review artifact, not project code.

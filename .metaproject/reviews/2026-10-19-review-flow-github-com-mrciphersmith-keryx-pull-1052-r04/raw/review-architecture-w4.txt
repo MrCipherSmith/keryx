@@ -1,0 +1,118 @@
+STATUS: DONE
+
+## Architecture Review (wave 4, slice-05)
+
+### Review Scope
+- PR 1052 (flow 464), head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-05 (src/standard/help-groups.ts, src/trigger/unattended.ts, src/tui/approval-mirror.ts, src/tui/decisions-surface.ts, src/tui/operator-confirmations.ts(+test), src/tui/remote-control-surface.ts, src/tui/tui-shell.ts)
+- Stack: generic TS, TUI (opentui) view layer over a command/remote layer. No NestJS, no MobX.
+
+### Summary
+The slice adds an in-memory view model (OperatorConfirmationLog) and feeds it to three TUI surfaces (Remote sidebar row, /remote-control status tab, /decisions modal). Dependency direction is sound: the view model sits in tui/, imports one constant from commands/, and no cycle exists (operator-confirm-*.ts import nothing from tui/). unattended.ts keeps its list-not-import rule and is covered by the roster test. The one real structural gap is that the log is wired into only one of the two approval pipelines in tui-shell.ts, so the "pending/who pressed" view is incomplete for cards answered in a Telegram-started turn. Two smaller observations are info-level.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 2
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. (src/tui/operator-confirmations.ts:6 imports REMOTE_CARD_TTL_MS from ../commands/operator-confirm-tools; tui -> commands is the existing direction, tui-shell.ts already imports that module, and neither it nor operator-confirm-review/-other imports tui/. See F-003 for the info-level note.)
+
+### Module Boundary Violations
+- F-001 (minor): see below.
+
+### Design Pattern Misuse
+- F-002 (info): see below.
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A. Not NestJS or MobX. Observer wiring (OperatorConfirmationLog.subscribe -> liveRemotePanel.refresh + remoteModalListeners) is consistent with the existing remoteModalListeners idiom.
+
+### Findings
+
+[F-001] The operator-card view log is wired into only one of the two approval pipelines
+- Severity: minor
+- File: src/tui/tui-shell.ts:6028 (requestApprovalForTelegramTurn) vs :6095-6138 (mirrorApprovalToTopic)
+- Problem: operatorCards.ask / settle / markUndelivered are called only inside mirrorApprovalToTopic (the dock-plus-topic race for turns typed in the shell). requestApprovalForTelegramTurn, the topic-only pipeline for turns that started in Telegram, is a second, separate implementation of the same approval step. It builds the same remote approval (remoteApproval(meta.fingerprint, answer.fromId) at the end of that function) and records pressedBy in the durable store, but it never touches operatorCards. A review_complete / review_confirm_plan / waiver card raised during a Telegram-started turn is therefore absent from the Remote sidebar "N cards waiting" count, the /remote-control status tab and the /decisions modal, and its "pressed by Telegram user N" line never appears there. That is the case where Telegram is the only place the operator answers.
+- Why it matters: AC6 says the TUI shows each pending remote confirmation and shows pressedBy on an answered one. The view is built per call site instead of at the one place both pipelines share, so the surfaces silently under-report in a mode the feature exists for. The next change to either pipeline can drift further.
+- Fix: move the ask/settle bookkeeping to a small helper used by both pipelines (for example `trackOperatorCard(meta, tool, mirrored): { settle(...) }`), and call it from requestApprovalForTelegramTurn around `bridge.askApproval(...)` with place "telegram" and pressedBy = answer.fromId. For the operatorCardTooLongForTopic early return in both pipelines, either log the card as mirrored:false or state in a comment that it is intentionally absent from the view.
+- Evidence: `keryx ctx rg "operatorCards\."` over src/tui/tui-shell.ts lists only ask (:6103, :6120), settle (:6138), the getWaitingCards/entries readers and subscribe; no hit inside requestApprovalForTelegramTurn (:6028-:6167). The diff hunk for that function changes only the final return (remoteApproval(...)).
+- Confidence: medium (the code path is clear; whether review cards are in practice raised during Telegram-started turns depends on usage, but the pipeline accepts any alwaysAsk+card).
+
+[F-002] The unmirrored branch re-implements the log's settle rules inline
+- Severity: info
+- File: src/tui/tui-shell.ts:6100-6112
+- Problem: for a card whose mirror was not delivered, the branch computes the answered place itself (`foregroundOperation.signal.aborted || verdict === undefined ? "withdrawn" : "shell"`, `yes: verdict !== undefined && verdict !== false`). OperatorConfirmationLog.settle(id, { from: "dock", result }, aborted) already owns exactly this mapping for the mirrored branch (src/tui/operator-confirmations.ts, settle). Two copies of the rule can diverge (for example if a dock result gains a new shape).
+- Fix: call `operatorCards.settle(unmirroredId, verdict === undefined ? undefined : { from: "dock", result: verdict }, foregroundOperation.signal.aborted)` in the finally block.
+- Evidence: tui-shell.ts diff lines 1219 and 1254; operator-confirmations.ts settle (diff lines 417-422).
+- Confidence: high that the logic is duplicated; info because behavior is currently equivalent.
+
+[F-003] TTL policy constant is imported from the command registry into a pure view-model module
+- Severity: info
+- File: src/tui/operator-confirmations.ts:6
+- Problem: REMOTE_CARD_TTL_MS lives in src/commands/operator-confirm-tools.ts, the registry module that statically imports operator-confirm-review.ts and operator-confirm-other.ts. operator-confirmations.ts (and through it remote-control-surface.ts, which now imports waitingCardsText from it) takes a value import on that whole graph for one number. No cycle and no runtime cost in the shell (tui-shell.ts already loads the module), but the surface modules lose their standalone, light import graph, and the TTL policy (enforced in the registry) is mirrored by the view through an import rather than a small shared constants module.
+- Fix: optional. Move REMOTE_CARD_TTL_MS to a leaf module (for example src/remote/protocol.ts or a new src/commands/operator-confirm-limits.ts) that both operator-confirm-tools.ts and the TUI import.
+- Evidence: `keryx ctx rg REMOTE_CARD_TTL_MS src` (definition at operator-confirm-tools.ts:117, enforcement at :218, view use at operator-confirmations.ts:6/:83/:125); operator-confirm-tools.ts imports at lines 30-33.
+- Confidence: high on the facts, info on the severity.
+
+### Checked and not flagged
+- src/trigger/unattended.ts: review_complete added to OPERATOR_CONFIRM_TOOL_NAMES; list-not-import rule retained, roster test guards drift. The autonomous-profile wording is deliberate per the brief.
+- src/tui/approval-mirror.ts: onUndelivered is optional and only passed for cards; an undelivered answer is a deny without fromId, so isTopicPress stays false and the dock keeps the question. No layering concern.
+- decisions-surface.ts: cards are appended as a text snapshot at open time; the /remote-control modal repaints on subscribeChange but the /decisions modal does not, so age/time-left freeze while it is open. Behavioral, not structural; left to the logic reviewer.
+- Duplicate age()/clock() helpers in operator-confirmations.ts vs formatAge()/clock() in remote-control-surface.ts are a style matter for review-style.
+- Already filed in earlier waves and not re-filed: stale `keryx review complete` wording, review_complete card dispositions input, completionFacts head rule, pressedBy/pressedAt shape re-declared across modules.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "summary": "slice-05 adds an in-memory operator-card view model and three TUI surfaces. Dependency direction and the unattended roster are sound. One minor gap: the view log is wired into only the dock-and-topic approval pipeline, not the Telegram-started-turn pipeline. Two info notes.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6028,
+      "quote": "const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo[\"requestApproval\"]> = async (tool, inputJson, meta) => {",
+      "problem": "operatorCards.ask/settle/markUndelivered are called only inside mirrorApprovalToTopic. requestApprovalForTelegramTurn, the topic-only pipeline for turns started in Telegram, produces the same remote approval (remoteApproval(meta.fingerprint, answer.fromId)) and the durable pressedBy, but never records the card in the view log.",
+      "impact": "Cards raised during a Telegram-started turn are missing from the Remote sidebar waiting count, the /remote-control status tab and the /decisions modal, and their 'pressed by Telegram user N' line is never shown, although AC6 requires pending and pressedBy to be visible. Two parallel approval pipelines with one instrumented will drift further.",
+      "suggested_fix": "Extract the ask/settle bookkeeping into one helper used by both pipelines; in requestApprovalForTelegramTurn call it around bridge.askApproval with place 'telegram' and pressedBy = answer.fromId. For the operatorCardTooLongForTopic early returns, log the card as mirrored:false or document the intentional omission.",
+      "evidence": "keryx ctx rg 'operatorCards\\.' src/tui/tui-shell.ts shows ask at :6103/:6120, settle at :6138, readers at :3941/:4584, subscribe; no call inside requestApprovalForTelegramTurn (:6028-:6167). Diff hunk @@ 6068,6167 changes only the final return of that function.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6112,
+      "quote": "operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted || verdict === undefined ? \"withdrawn\" : \"shell\", yes: verdict !== undefined && verdict !== false });",
+      "problem": "The unmirrored branch re-implements the place/yes mapping that OperatorConfirmationLog.settle already owns for the mirrored branch.",
+      "impact": "Two copies of the settle rule can diverge when a dock result shape changes; currently behavior is equivalent.",
+      "suggested_fix": "Use operatorCards.settle(unmirroredId, verdict === undefined ? undefined : { from: 'dock', result: verdict }, foregroundOperation.signal.aborted) in the finally block.",
+      "evidence": "tui-shell.ts diff line 1219 vs operator-confirmations.ts settle (diff lines 417-422).",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 6,
+      "quote": "import { REMOTE_CARD_TTL_MS } from \"../commands/operator-confirm-tools\";",
+      "problem": "A pure TUI view-model module value-imports the command registry (which statically imports operator-confirm-review.ts and operator-confirm-other.ts) for one TTL constant; remote-control-surface.ts now inherits that graph through waitingCardsText.",
+      "impact": "Surface modules lose a light standalone import graph; no cycle and no shell runtime cost since tui-shell.ts already loads the registry.",
+      "suggested_fix": "Optional: move REMOTE_CARD_TTL_MS to a leaf constants module imported by both operator-confirm-tools.ts and the TUI.",
+      "evidence": "REMOTE_CARD_TTL_MS defined at src/commands/operator-confirm-tools.ts:117, enforced at :218, used at operator-confirmations.ts:6/:83/:125; operator-confirm-tools.ts imports at lines 30-33; no import of tui/ from operator-confirm-*.ts.",
+      "confidence": "high"
+    }
+  ]
+}
+```

@@ -1,0 +1,91 @@
+{
+  "judge": "review-premise",
+  "source": "round",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "base_sha": "062aa9c36484e7b7f6b8a1dd6140671330646e66",
+  "head": "5444f96e4ce2f5b00cb0dea390a818e5ca182c23",
+  "findings": [
+    {
+      "id": "S-701",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "problem": "S-402 is fixed for dispositions and reasons, and the same class is still open for the two largest model-reachable surfaces. shownBody (operator-confirm-review.ts:62-67) refuses a body line only when cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:10-16) strips ESC sequences, C0/C1 controls and some bidi marks but leaves U+200B-200D, U+2060, U+FEFF, U+00AD, the tag block U+E0000-E007F, U+2028 and U+2029 untouched. The same commit added hiddenInCard (:672: cardSafe changes the text, or it holds a \\p{Cf}, \\p{Zl} or \\p{Zp} character) and applied it to dispositions, reasons and quoteWhole, but not to shownBody, which feeds the review_publish card (:208-220) and every reply body of the review_comments_reply card (:509-513). Two predicates, declared in different sections, enforce one rule ('the card shows what is stored'), and the weaker one guards the posting path.",
+      "impact": "The review body (report.md) or a reply body (outcomes file) is written by the agent. It can carry an instruction or link label hidden as tag characters or zero-width runs, or a U+2028 or U+2029 followed by text some terminals draw as a card line. The card prints the body as 'shown whole', the operator presses yes, and the exact stored body (apply compares prepared.body) is posted to the pull request under the operator's name with content the operator never saw. Hidden tag-character text is the known way to smuggle instructions to AI readers of a PR. This is S-402's consequence (the operator answered a text other than the one recorded) on the posting path.",
+      "suggested_fix": "Hoist HIDDEN_IN_CARD and hiddenInCard next to cardSafe (src/lib/card-safe.ts) or above shownBody, and have shownBody test each line with hiddenInCard after the tab handling, so one predicate and one refusal wording decide for bodies, replies, reasons, dispositions and quotes. Add zero-width, tag-character, BOM, U+2028 and U+2029 rows to the publish and reply refusal tests.",
+      "also_reported_as": [
+        "review-clean-code-w1:CC-701",
+        "review-logic-w1:L7-001",
+        "review-logic-w7:L13-001",
+        "review-security-code-w7:S-1301",
+        "review-architecture-w1:F-001",
+        "review-clean-code-w2:CC-8-1",
+        "review-clean-code-w2:CC-8-2",
+        "review-highload-w1:HL-701",
+        "review-testing-practices-w1:T-704",
+        "review-style-w1:ST-701",
+        "review-regression-w1:F-R07-002"
+      ]
+    },
+    {
+      "id": "F-R07-001",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "source": "round",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6104,
+      "quote": "        if (operatorCardTooLongForTopic(tool, inputJson, meta)) {\n          void bridge.noticeCardTooLong(tool);\n          return inner(tool, inputJson, meta);",
+      "problem": "Showing every card whole pushes review_publish, review_comments_reply, review_complete and other cards past the 3000-character topic limit, so the Telegram Yes/No is withdrawn for them. Changed: shownBody (operator-confirm-review.ts:62, used at :208/:220 and :510), quoteWhole, listFiles, the removed LISTED_FILES / BODY_PREVIEW_LINES / REPLY_PREVIEW / limited() caps, and the new uncapped lists in operator-confirm-other.ts. Before 5444f96e4 each of these cards was bounded (8 body lines of 140 characters, 6 replies of 140, 12-15 list rows, quotes clipped at 300), so it stayed under MAX_APPROVAL_PROMPT_CHARS (src/remote/protocol.ts:160 = 3000) and could be answered from the topic. Now operatorCardTooLongForTopic (src/remote/shell-bridge.ts:285-286) joins the whole card, redacts it and compares with 3000. Over the limit, mirrorApprovalToTopic (tui-shell.ts:6104-6106) posts only 'too long, answer it in the shell' (shell-bridge.ts:1002-1010) and asks the dock alone, and requestApprovalForTelegramTurn (tui-shell.ts:6029-6031) does the same for a turn that started in Telegram.",
+      "impact": "Trigger: review_publish with any report.md body over about 3000 characters (a normal review report), review_comments_reply with a few replies, review_complete with a few waivers plus up to 20 dispositions (each up to 200+300 characters, so 8000+), external_apply with a long file list. Outcome: the operator who is away from the machine and answers through the topic (flow 464 AC2/AC5; SKILL.detail.md:669 tells the agent 'the operator answers it in the shell or in the Telegram topic') cannot approve; a Telegram-started turn blocks on the local dock until someone is at the shell or the run timer ends it. It degrades safely (no buttons, a notice), so nothing is posted wrongly, but a path that worked is gone.",
+      "suggested_fix": "Do not cut the shown text (S-401/S-402 forbid it). Either send the topic an overflow notice plus a topic-side way to read the rest, or state the limit in the tool description and in a refusal that tells the agent to shorten the report, or accept and record that these cards are shell-only. Add a test that builds a real publish card from a normal-size report and checks it against operatorCardTooLongForTopic; src/remote/operator-card-length.test.ts uses a synthetic card only.",
+      "also_reported_as": [
+        "review-highload-w1:HL-703",
+        "review-logic-w1:L7-006"
+      ]
+    },
+    {
+      "id": "F-R07-003",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 695,
+      "quote": "  if (raw.length > MAX_DISPOSITIONS) return { refusal: `dispositions holds ${raw.length} entries; a card shows at most ${MAX_DISPOSITIONS}` };",
+      "problem": "completionDispositions (operator-confirm-review.ts:691) now refuses any dispositions list longer than MAX_DISPOSITIONS (20), any evidence longer than MAX_DISPOSITION_EVIDENCE_CHARS (300), any finding id longer than 200 characters, and any evidence or finding holding a newline, control or Cf character. Before this delta review_complete accepted any number of entries (evidence was only clipped on display). The caller contract did not move with it: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284 still tells the agent to pass `dispositions` 'one per finding' with no count or length limit, SKILL.md:297 says closing a fix round without them leaves every finding reading `unknown`, and the inputSchema (dispositionsSchema, :674-688) carries no maxItems, only a 300-character note on `evidence`. A fix round with more than 20 prior findings, which the delta-round rule in SKILL.detail.md (every attached prior finding leaves the round with a disposition) makes normal, now cannot record them through the card.",
+      "impact": "Trigger: the agent calls review_complete with dispositions for a fix round that has more than 20 earlier findings; this PR's own r07 round has 35 prior findings (prior_findings.json). Outcome: buildCard returns a refusal, so no card is asked. Splitting across two calls does not work, because the first successful call closes the round and a second call is refused as already complete (operator-confirm-review.ts:793). The agent is left with two choices: close the round with a truncated list, so the remaining findings read `unknown` (the state SKILL.md:297 names as making the precision figure unreadable), or hand the close to the operator's terminal `keryx review complete --finding ...`, which the skill says agents do not use. A previously working call on a large fix round stops working, and the refusal text does not say how to proceed. A multi-line evidence string (a commit message pasted as evidence) is refused the same way and is recoverable by rewording.",
+      "suggested_fix": "Either remove the count cap and let the card show every entry (the S-401/S-402 rule is that the card shows what is stored, which a 35-line list does), accepting that F-R07-001 then governs the topic buttons; or keep a cap but state it where the agent reads it: put maxItems and maxLength in dispositionsSchema, name the limits in the review_complete description, update SKILL.md:284 and its bundled mirror, and make the refusal say that the remaining dispositions must be recorded with `keryx review complete --finding ...` at a terminal or that findings should be grouped. Add a test that a 21-entry list is either accepted or refused with that guidance.",
+      "also_reported_as": []
+    },
+    {
+      "id": "T-701",
+      "reviewer": "review-testing-practices",
+      "severity": "major",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 747,
+      "quote": "if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: \"${quoteWhole(coverage.operatorQuote)}\"`);",
+      "problem": "The S-401 fix replaced clip() with quoteWhole() at three sites: readiness waivers (line 736), the coverage waiver (line 747) and the mutation/override decisions (line 751). The only new test, 'a waiver quote longer than any old cap is shown whole...' (operator-confirm-review-tools.test.ts:877), builds a 1000+ character quote and a control-character quote only in manifest.readiness_waivers. The existing coverage test (lines 659-664, quote 'Waive coverage of 2 files?: yes') and decision test (lines 668-679, short quotes) never reach the old 300-character cap and never feed a quote with a control character.",
+      "impact": "Restoring a 300-character clip, or dropping the 'stored quote holds characters this card hides or rewrites' flag, at line 747 or 751 leaves the suite green. Those are the gates added in answer to S-401, where the skill makes the mutation mandatory; a regression there reopens S-401 for coverage and mutation/override waivers unseen (mutants m31, m32).",
+      "suggested_fix": "Extend the long-quote test: add a research.json dispatch.coverageWaiver with a 1000+ character operatorQuote and a control character, and an operator-decisions.json mutation-waiver and reviewer-override with the same, and assert the card contains the quote whole for the clean one and the flag for the rewritten one at each site.",
+      "also_reported_as": []
+    },
+    {
+      "id": "T-702",
+      "reviewer": "review-testing-practices",
+      "severity": "major",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 510,
+      "quote": "const shown = shownBody((request.body as { body?: string }).body ?? \"\");",
+      "problem": "Lines 508-516 are new: a loop over every reply body, a refusal 'Reply N holds control, escape or bidi...', a 'reply N:' header and the whole body lines under 'each shown whole'. No test builds the review_comments_reply card. The name appears only in roster lists (operator-confirm-review-tools.test.ts:91, shell.test.ts:879) and in tty-refusal wording (harness-robustness.test.ts:396, 404); commentsReplyPass is never stubbed on the card path.",
+      "impact": "The previous behaviour (first 6 replies, 140 characters each) is removed with nothing asserting the replacement: not that every reply appears, not that a body past 140 characters shows whole, not that a hidden character in reply 2 refuses the card and names the reply. Mutants m11 and m12 are expected to survive. This is the S-402 class (posted body vs shown) on the posting card whose bodies the agent writes.",
+      "suggested_fix": "Add a review_comments_reply card test with a stubbed commentsReplyPass returning three requests: assert the card lists 'reply 1:', 'reply 2:', 'reply 3:' with every body line whole (one body over 140 characters, one over 8 lines), and a second case where reply 2 holds ESC or a bidi character and the card is refused with 'Reply 2 holds control, escape or bidi characters on line N' and nothing is asked.",
+      "also_reported_as": [
+        "review-logic-w1:L7-003"
+      ]
+    }
+  ]
+}

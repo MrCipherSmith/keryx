@@ -1,0 +1,31 @@
+{
+  "requested": "auto",
+  "depth": "full",
+  "reason": "auto: 22 files exceeds 5",
+  "head": "672e37687b7c27184e88c5d6571f8c509a2c671e",
+  "files": [
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "CHANGELOG.md",
+    "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/autonomous-review.md",
+    "src/commands/agent.ts",
+    "src/commands/operator-confirm-review-tools.test.ts",
+    "src/commands/operator-confirm-review.ts",
+    "src/commands/operator-confirm-rosters.test.ts",
+    "src/commands/operator-confirm-tools.test.ts",
+    "src/commands/shell.test.ts",
+    "src/flow/confirm-token.test.ts",
+    "src/flow/confirm-token.ts",
+    "src/flow/schema.ts",
+    "src/flow/types.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/review/types.ts",
+    "src/tui/operator-confirmations.test.ts",
+    "src/tui/operator-confirmations.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "changedLines": 404
+}

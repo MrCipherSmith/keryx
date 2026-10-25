@@ -1,0 +1,77 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-05 (docs, docs:check script, skills references command, router, /projectctx refs) is logically sound: thresholds, exit codes and the budget arithmetic in the docs match the code. Two documentation statements contradict the code at head, both minor. No blockers or majors.",
+  "slices": [
+    "slice-05"
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "problem": "The guide says the citation scan skips a rule imported with --link, and docs/docs/cli-reference.md (references check row) says the same: 'a linked rule is not scanned'. At head the scan does read linked rules: scanCitations in src/gdskills/references-check.ts builds a map of registry entries with mode 'link' and reads them at their origin (comment: 'A linked rule (registered in place, not copied) is scanned at its origin.'). This is the r02 finding review-logic-w2:F-001, fixed in code, but the two doc sentences written for the old behaviour were not updated.",
+      "impact": "A user who links a rules folder is told its citations are ignored, so undeclared-citation warnings raised for linked rules look like a bug, and the user may wrongly conclude a declaration cited only by a linked rule will be reported as unused.",
+      "suggested_fix": "Replace the sentence with 'a rule imported with --link is scanned at its origin; bundled rules are not scanned', and drop 'a linked rule is not scanned' from the references check row of cli-reference.md.",
+      "evidence": "src/gdskills/references-check.ts:16 and :98-105 versus docs/docs/guides/apply-project-rules.md:260-262 and docs/docs/cli-reference.md:3491.",
+      "confidence": 0.9,
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "quote": "The byte count of a promoted document is the size of its section, or of the",
+      "problem": "The statement is wrong for the printed count. In reference-entries.ts the entry's bytes is Buffer.byteLength of the whole file; only section_bytes and promotedBytes (the budget term) use the section. The example 20 lines above shows it: 'STYLING.md ... 438 bytes ... (anchor \"Class conventions\", section 349 bytes)', and Budget 462 = 113 + 349.",
+      "impact": "A reader comparing the printed 'N bytes' with the section size, or summing the listed bytes against the Budget line, finds the numbers do not agree with the stated rule.",
+      "suggested_fix": "Say 'The budget counts a promoted document by the size of its section (section N bytes in the entry), or the whole file when there is no anchor; the bytes printed first is always the file size.'",
+      "evidence": "src/gdskills/reference-entries.ts:118 and :124 (bytes) versus :129 (section_bytes).",
+      "confidence": 0.85,
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/skills-references.ts",
+      "quote": "console.log(args.includes(\"--json\") ? JSON.stringify(report, null, 2) : renderReferencesReport(report));",
+      "problem": "Only --json is read, from anywhere in args. A mistyped flag (check --jsn) or an unsupported one (suggest --json) is silently ignored and text or JSON of the default shape is printed.",
+      "impact": "A script that passes --json to suggest, or misspells it on check, gets output of a different shape than it asked for, with exit 0.",
+      "suggested_fix": "Reject arguments after the action other than --json for check, and none for suggest, with the USAGE message and exit 1.",
+      "evidence": "src/commands/skills-references.ts:47-63.",
+      "confidence": 0.6,
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 1
+  }
+}
+```
+
+## Logic Review (wave 3, r03, slice-05, second-look)
+
+Spec compliance gate: skipped, no issue or task supplied beyond the package.
+
+Summary: the delta is documentation, the docs:check script (all three test files and both check scripts exist), the new `skills references check|suggest` command, the router and help entries, and the `/projectctx` refs argument. The documented thresholds (20/4 characters, 40-character summary, three shared words), exit codes and the budget arithmetic agree with the code. Two doc statements contradict the code (F-001, F-002); one input-handling note (F-003).
+
+Stats: blocker 0 | major 0 | minor 2 | info 1
+
+### r02 findings that still apply unchanged (not re-filed)
+- review-architecture-w2:F-001, review-clean-code-w2:F-001 (usage block lacks --task-text)
+- review-architecture-w2:F-002, review-style-w2:F-001 (help hard-codes thresholds)
+- review-core-boundaries-w1:F-002 (description reads as optional in cli-reference)
+- review-core-boundaries-w1:F-004 (docs:check does not run docs:build)
+- review-logic-w1:F-001 (live-run.md states two shared words)
+- review-logic-w1:F-004 (words of any script; CJK)
+- review-logic-w3:F-001, F-002, F-003, F-005 (proof on dead anchor, keyword lookarounds, BOM, citation normalisation)
+- review-logic-w2:F-001 is fixed in code but its docs counterpart remains wrong: see F-001 here.
+
+routing audit: graph_used: no (not-relevant, doc/code cross-check); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no

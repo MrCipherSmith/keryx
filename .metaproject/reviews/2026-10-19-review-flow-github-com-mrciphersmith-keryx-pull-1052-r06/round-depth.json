@@ -1,0 +1,11 @@
+{
+  "requested": "auto",
+  "depth": "light",
+  "reason": "auto: 2 file(s), 33 changed line(s), no risk-class path gate",
+  "head": "0f980c4078eb937fcb0806fe5a25e7235bf34465",
+  "files": [
+    "src/commands/operator-confirm-review-tools.test.ts",
+    "src/commands/operator-confirm-review.ts"
+  ],
+  "changedLines": 33
+}

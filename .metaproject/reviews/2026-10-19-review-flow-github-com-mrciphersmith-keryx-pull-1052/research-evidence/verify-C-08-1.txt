@@ -1,0 +1,23 @@
+# keryx review verify-run
+finding: C-08
+command: rg -n 'nothing was recorded|review_complete' src/commands/operator-confirm-review-tools.test.ts | head -50
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:20.794Z
+exit: 0
+
+--- stdout ---
+93:    "review_complete",
+553:// Flow 464 (AC4): review_complete, the one card that closes a round.
+554:describe("review_complete", () => {
+581:    const result = await yes(tool("review_complete"), { package: pkg }, "remote");
+596:    await yes(tool("review_complete"), { package: pkg });
+614:    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+624:    const t = tool("review_complete");
+636:    const result = await yes(tool("review_complete"), { package: pkg });
+638:    expect(result.output).toContain("nothing was recorded");
+645:    const t = tool("review_complete");
+658:    await yes(tool("review_complete"), { package: pkg });
+659:    expect(await ask(tool("review_complete"), { package: pkg })).toEqual({ error: expect.stringContaining("already complete") });
+661:    expect(await ask(tool("review_complete"), { package: pkg, head: HEAD.slice(0, 10) })).toEqual({ error: expect.stringContaining("pull request package") });
+--- stderr ---
+

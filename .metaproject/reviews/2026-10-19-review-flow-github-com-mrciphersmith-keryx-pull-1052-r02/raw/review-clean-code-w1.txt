@@ -1,0 +1,190 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Delta d2cb377f5..672e37687 (r02), Clean Code + SOLID on the changed lines only. The delta fixes real defects (head no longer model-supplied, unreadable research.json no longer shown as 'no waiver', a closed round no longer reported as 'nothing recorded', the card log now settles on every exit). Two concerns follow from those fixes: review_complete's apply() grew to about 79 lines with four concerns in one body, and the delta adds three inline copies of the error-to-message expression although a `failed()` helper already sits in the same file. Four minor findings (duplicated expiry predicate that disagrees at the boundary, long mirror closure, a swallowed read error that can mislabel a closed round, hand-rolled pressedBy/pressedAt spreads next to an existing helper) and two info items. No naming, comment or SOLID-class violations beyond these.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 753,
+      "quote": "let gateError: unknown;",
+      "problem": "Clean Code B1 (function size, single responsibility, one level of abstraction): `completeSpec().apply` (declared at line 741) now runs about 79 lines (it was about 35 before the delta). One body does four jobs: re-reads the facts and compares the digest, runs the gate and captures its throw in `gateError`, decides whether the round closed (`done !== undefined || re-read status === 'closed'`), writes the confirmation record into `recordError`, and assembles a multi-part output with a local `reason` lambda defined halfway down. Two mutable `unknown` slots (`gateError`, `recordError`) carry state between the phases, which is what makes the control flow hard to follow.",
+      "impact": "This is the code that decides whether the operator is told 'closed', 'refused, nothing recorded' or 'closed but bookkeeping stopped'. The three outcomes depend on the order of the phases and on two nullable error slots. The next change (a new post-close step, a new failure mode) will be wedged into a block that cannot be unit-tested piece by piece. It is already tested only through the full tool path.",
+      "suggested_fix": "Split along the phases the code already has: (1) `closeRound(ctx, dir, seams, at)` returning `{ done, gateError, closed }`, with the 're-read the manifest to see whether it closed' step inside it; (2) `writeCompletionRecord(dir, record)` returning an error or undefined; (3) `renderCompletionOutcome({ facts, head, confirmation, done, gateError, recordError })` building the output lines. apply() then reads: verify digest, close, record, render.",
+      "evidence": "Diff lines 671-749 of slices/slice-01.diff; at the reviewed head apply starts at src/commands/operator-confirm-review.ts:741 and ends near 819. completionFacts (line 658, about 38 lines) is the second function in the same area that now mixes manifest, report, coverage and operator-decisions reads.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:review_complete.apply:size",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:741 completeSpec.apply (about 79 lines)",
+          "src/commands/operator-confirm-review.ts:658 completionFacts (about 38 lines, four read sources)",
+          "src/tui/tui-shell.ts:6095 mirrorApprovalToTopic inner closure (about 70 lines, see F-004)"
+        ],
+        "enumeration_method": "Read every function the delta touched in the six listed code files and counted body lines from the diff hunks and the head file; only these three exceed 35 lines."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 783,
+      "quote": "const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "Clean Code E1 (DRY, 3+ copies): the expression `error instanceof Error ? error.message : String(error)` is written out three times in the delta (line 675 inside the coverage waiver text, line 783 as a new local `reason` lambda, and line 747 in the pre-existing refusal that the delta left in place beside the new `gateError instanceof Error ? ...` at about line 766). The file already has the helper that does exactly this at line 87 (`const failed = (error: unknown) => ({ refusal: error instanceof Error ? error.message : String(error) })`), so it is a fourth and fifth copy of something that already has a name.",
+      "impact": "Three call sites in one function plus a helper in the same module decide how an error becomes text. A change (include `cause`, strip a path, bound the length for the card) has to be made in each copy, and the delta's own local `reason` is defined after its first use position in the function, so a reader meets the same logic inline before they meet the name for it.",
+      "suggested_fix": "Add one module-level `const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));`, define `failed` in terms of it, and replace the inline copies (lines 675, 747, 766-768 and the local `reason` at 783) with it.",
+      "evidence": "keryx ctx rg -n 'instanceof Error \\? error.message' src/commands/operator-confirm-review.ts --all lists lines 87, 675, 747 and 783; the diff adds the copies at 675 and 783 and the `gateError instanceof Error` variant.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:error-message-expression",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:87 failed()",
+          "src/commands/operator-confirm-review.ts:675 completionFacts coverage catch (delta)",
+          "src/commands/operator-confirm-review.ts:747 apply facts catch",
+          "src/commands/operator-confirm-review.ts:766 apply gateError refusal (delta)",
+          "src/commands/operator-confirm-review.ts:783 local reason lambda (delta)"
+        ],
+        "enumeration_method": "keryx ctx rg for the literal expression and for 'instanceof Error' in src/commands/operator-confirm-review.ts, complete listing (--all)."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 72,
+      "quote": "now - item.askedAt <= REMOTE_CARD_TTL_MS",
+      "problem": "Clean Code E1 (one rule written twice, with different boundaries): 'is this card still inside the 1-hour token' is now expressed in `waiting()` as `now - askedAt <= REMOTE_CARD_TTL_MS` (line 72) and in `pendingConfirmationLine` as `left = REMOTE_CARD_TTL_MS - elapsed; left > 0` (line 114). At exactly the TTL, `waiting()` counts the card as waiting while its line prints 'Telegram token expired, answer in the shell'. The new test pins `<=` for waiting() but nothing pins the line at the boundary.",
+      "impact": "The sidebar count and the status tab can disagree for the one tick at the boundary. More to the point, the next person to touch the TTL rule has two places to change.",
+      "suggested_fix": "Add `const tokenLeftMs = (entry: ConfirmationEntry, now: number): number => REMOTE_CARD_TTL_MS - (now - entry.askedAt);` and use `tokenLeftMs(item, now) >= 0` (or `> 0`, pick one) in both places.",
+      "evidence": "src/tui/operator-confirmations.ts:72 and :114; tests 'a card past the token no longer counts as waiting' (waiting at T0 + TTL) versus pendingConfirmationLine test at T0 + TTL + 1000.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:card-ttl-predicate"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6139,
+      "quote": "if (outcome === undefined) operatorCards.answer(cardId, { place: \"withdrawn\", yes: false });",
+      "problem": "Clean Code B1/B3: the closure returned by `mirrorApprovalToTopic` (from line 6095, about 70 lines after the delta) now holds the unmirrored branch, the too-long-card branch, the race, a three-way if/else chain in `finally` that translates a race outcome into a log entry (lines 6139-6141), and then the topic-answer handling. The expression `foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\"` appears twice (lines 6109 and 6140) with a slightly different shape each time (`|| verdict === undefined` in one).",
+      "impact": "Settling the card log is a rule of its own (withdrawn if aborted or no outcome, shell for a dock answer, telegram with pressedBy for a topic answer). Written inline in two places inside a closure inside a 6000-line module, it can drift: the two copies already differ.",
+      "suggested_fix": "Extract a small named function next to the closure, for example `settleCard(cardId, outcome | undefined)` returning the `{ place, yes, pressedBy? }` for `operatorCards.answer`, and call it from both `finally` blocks. Keep the source-pinned test in operator-confirmations.test.ts pointing at it.",
+      "evidence": "Diff lines 1837-1908 (delta hunk); head lines 6095-6165.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:mirror-closure-settle"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 764,
+      "quote": "(await completionFacts(prepared.dir).catch(() => undefined))?.status === \"closed\"",
+      "problem": "Clean Code D1 (swallowed error, decides control flow): when the gate threw, the code re-reads the package to learn whether the round closed, and `.catch(() => undefined)` turns an unreadable manifest into 'not closed'. The next lines then tell the operator 'review_complete refused: <gate error> — nothing was recorded'. If the engine closed the manifest and the package then became unreadable (or `report.md` / `manifest.json` is mid-write), that sentence is false. The comment two lines above says exactly this case exists: 'a throw is not proof that nothing closed'.",
+      "impact": "The operator can be told nothing was recorded for a round that is closed, which is the failure this delta set out to remove (the test 'a round closed by the gate whose confirmation record cannot be written' covers the write case but not the re-read case).",
+      "suggested_fix": "Keep the status as three-valued: `closed | open | unknown`. On `unknown`, say 'could not confirm whether the round closed (<read error>); check `review status` before asking again' instead of 'nothing was recorded'.",
+      "evidence": "Diff lines 707-711; head line 764 and the following refusal line.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:closed-reread-swallow"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/flow/confirm-token.ts",
+      "line": 235,
+      "quote": "...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),",
+      "problem": "Clean Code E1: `CardPress` and `cardPressFields()` already exist (src/review/types.ts:92 and the function below it) for exactly 'the press fields that are set, ready to spread'. The delta adds a hand-rolled conditional spread of the same two fields in `consumeConfirmationToken` (lines 235-236), and re-declares the same two optional fields and a near-identical doc sentence in `SignatureConfirmation` (src/flow/types.ts:187-189), while the same sentence was reworded in `StoredConfirmationToken` (confirm-token.ts:75-76), `CardPress` (review/types.ts:91) and `ApprovalResponse` (agent.ts:302). One wording change in the delta had to be made in four places by hand.",
+      "impact": "A fifth carrier of the pair (and a fifth wording of 'the shell's clock, not Telegram's') will be added the same way. The flow module cannot import from review/ without a layer smell, which is probably why the helper was not reused, but that argues for moving the type, not for copying it.",
+      "suggested_fix": "Move `CardPress` and `cardPressFields` to a neutral module (for example src/lib/card-press.ts), re-export from review/types.ts, make `StoredConfirmationToken` and `SignatureConfirmation` intersect with `CardPress`, and spread `cardPressFields(stored)` in `consumeConfirmationToken` and in `remoteApproval`. Keep one doc sentence on `CardPress`. schema.ts stays separate (it is the JSON schema).",
+      "evidence": "keryx ctx rg 'pressedBy' on the changed files: confirm-token.ts:76,120,140,235; flow/types.ts:188,785; review/types.ts:92,97; operator-confirmations.ts:25,45,51; agent.ts; tui-shell.ts remoteApproval (572) and 6141.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:card-press-shape"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 65,
+      "quote": "this.items[at] = { ...entry, mirrored: false };",
+      "problem": "Clean Code A1 (a name that changes meaning): `ConfirmationEntry.mirrored` is set by `ask(question, mirrored)` as 'the shell intends to mirror this card' and is later flipped by `markUndelivered` to mean 'the topic did not take it'. A reader of `waiting()` ('mirrored and not yet answered') cannot tell intent from delivery.",
+      "impact": "No defect today; the doc comment on markUndelivered explains it. It matters only if a third state (sent, awaiting ack) is ever added.",
+      "suggested_fix": "Rename the field to `inTopic` (or use a `mirror: 'none' | 'sent' | 'undelivered'` union) so the flip does not look like a contradiction.",
+      "evidence": "Diff lines 1636-1642; ask() at line 37 of the same file.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:mirrored-flag-name",
+      "publication": "omit"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": null,
+      "quote": "const mirror = source.slice(source.indexOf(\"const mirrorApprovalToTopic =\"), source.indexOf(\"io.requestApproval = trackApproval(mirrorApprovalToTopic\"));",
+      "problem": "The new wiring test pins source text: it slices tui-shell.ts between two string anchors, counts `} finally {` occurrences (exactly 2) and greps for call fragments. If either anchor moves or a third finally is added, it fails with a message that does not say why. The test says the repo already does this (remote-queue-wiring.test.ts), so this is convention, not a violation.",
+      "impact": "Brittle against a harmless refactor such as F-004's extraction. It would pass if the code were commented out inside the sliced range.",
+      "suggested_fix": "If F-004's `settleCard` is extracted, unit-test that function on the three outcomes and drop the finally-count assertion.",
+      "evidence": "Diff lines 1603-1610.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:source-pinned-test",
+      "publication": "omit"
+    }
+  ],
+  "pre_existing": [
+    {
+      "file": "src/review/types.ts",
+      "line": 87,
+      "note": "Not changed by the delta (context line). The JSDoc `/** A readiness item the operator waived ... */` sits above `ConfirmedVia` (line 89), not above `ReadinessWaiver`, so two doc comments are stacked on the wrong type (Clean Code C1, misleading comment). The delta rewrote the neighbouring CardPress comment and left this one."
+    }
+  ],
+  "slices": [{"id": "slice-01", "coverage": "read in full"}],
+  "stats": { "blocker": 0, "major": 2, "minor": 4, "info": 2 }
+}
+```
+
+## Clean Code Review (r02, delta d2cb377f5..672e37687)
+
+### Review Scope
+- Reviewed head: 672e37687b7c27184e88c5d6571f8c509a2c671e
+- Scope mode: explicit delta slice (slice-01, 1923 diff lines, read in full)
+- Code read at the head: src/commands/operator-confirm-review.ts, src/flow/confirm-token.ts, src/flow/schema.ts, src/flow/types.ts, src/tui/operator-confirmations.ts, src/tui/tui-shell.ts (changed ranges and their enclosing functions); tests, docs and bundled skill text read in the diff only.
+
+### Stats
+- blocker: 0  |  major: 2  |  minor: 4  |  info: 2
+
+### Findings
+
+#### Naming
+- [F-007] (info) `mirrored` changes meaning from intent to delivery.
+
+#### Functions
+- [F-001] (major) `review_complete` apply() is about 79 lines, four concerns.
+- [F-004] (minor) mirrorApprovalToTopic closure is about 70 lines; the card-settling rule is written twice.
+
+#### Comments
+- No comment issues found in the delta. (The delta also fixed a JSDoc that had been split from `isToolAvailableToSideWorker` by moving `remoteApproval`.) One pre-existing misplaced JSDoc is listed under pre_existing.
+
+#### Error Handling
+- [F-005] (minor) `.catch(() => undefined)` turns an unreadable package into 'not closed'.
+- The `catch (error)` in completionFacts now separates ENOENT from other read errors and shows the latter on the card: no finding.
+
+#### DRY
+- [F-002] (major) error-to-message expression copied three times in the delta beside an existing helper.
+- [F-003] (minor) TTL predicate written twice, with different boundaries.
+- [F-006] (minor) pressedBy/pressedAt shape and spread repeated next to the existing `CardPress` helper.
+
+#### SOLID
+- No SOLID violations found. Constructors do no I/O; no `new` of concrete collaborators; seams are injected (`ReviewConfirmSeams`).
+
+### Clean Areas
+Magic numbers (TTL and quote clip are named constants), function arguments (head parameter and its flag-like branch were removed, which is an improvement), LSP/ISP/OCP, naming of the new helpers.

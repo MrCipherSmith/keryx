@@ -1,0 +1,342 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 28011,
+      "contentHash": "d1e9429e097fc559e63632f80662bc53d83a946e01ca003417625e1c4a9f0225",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "docs/docs/cli-reference.md",
+        "src/commands/operator-confirm-review.ts",
+        "src/review/completion-gate.ts",
+        "src/tui/approval-mirror.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": ".metaproject [docs], docs [docs], src/commands +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-logic",
+        "review-regression",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "source code: src/commands/operator-confirm-review.ts, src/review/completion-gate.ts, src/tui/approval-mirror.ts (+2)",
+          "fix slice: answers 12 prior finding(s) E-01, E-04, E-06, E-07, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "E-01",
+        "E-04",
+        "E-06",
+        "E-07",
+        "E-10",
+        "E-25",
+        "E-35",
+        "E-44",
+        "E-45",
+        "E-52",
+        "E-53",
+        "E-58"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 144984,
+      "contentHash": "7d3c2dc19c0d302e0166a2ef9efb3b7bd476f809c100842f4c98dd4e3e4cbecb",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/remote/mirror-undelivered.test.ts",
+        "src/review/completion-gate.test.ts"
+      ],
+      "domain": ".metaproject [docs], docs [docs], src/commands +4 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (+1)",
+          "schema: docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+          "source code: src/commands/agent.ts, src/commands/operator-confirm-review.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 33689,
+      "contentHash": "67929b9590e3b109a4f7819bb3b99b34331f1888778bf69e600caa5f04de0c93",
+      "files": [
+        "src/review/completion-gate.ts",
+        "src/tui/approval-mirror.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts",
+        "src/tui/card-lifecycle.test.ts",
+        "src/tui/operator-confirmations.test.ts"
+      ],
+      "domain": "src/review, src/tui, src/tui [test]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/completion-gate.ts, src/tui/approval-mirror.ts, src/tui/operator-confirmations.ts (+1)"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 31136,
+      "contentHash": "2113b65f3878dfb91f7ad7cfc035758c37a36087711676150dc73619bf593f60",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "docs/docs/cli-reference.md",
+        "src/commands/review.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": ".metaproject [docs], docs [docs], src/commands +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "source code: src/commands/review.ts, src/tui/tui-shell.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 109816,
+      "contentHash": "da514627657337fadc733d594c2f3e7afd8bbe4f5a94ea8b9fffa31e0d20ee2c",
+      "files": [
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/context.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/description.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/journal.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/plan.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        ".metaproject/flows/464-2026-10-18-helyx-operator-confirm/flow.json",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/commands-by-task.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/docs/limitations.md",
+        "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+        "package.json"
+      ],
+      "domain": ".metaproject [docs], .metaproject, . [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, .metaproject/skills/gdskills/review/review-premise/SKILL.md",
+          "schema: docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+          "second look: unchanged since round 3, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 134900,
+      "contentHash": "30df0517f789d7cf8041dd2d27ae0a7245eaeed7f1481d7be984151fd5762ebd",
+      "files": [
+        "src/commands/agent-commands.ts",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-other.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-tools.ts",
+        "src/commands/review.ts",
+        "src/commands/shell.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/flow/confirm-token.test.ts"
+      ],
+      "domain": "src/commands, src/commands [test], src/flow [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/agent-commands.ts, src/commands/agent.ts, src/commands/operator-confirm-other.ts (+4)",
+          "second look: unchanged since round 3, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 135222,
+      "contentHash": "bab998e129c704a46f4266024c560ea0639fe3f5932b717454bdd4c3b27e2579",
+      "files": [
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/service.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/harness/external/write-land.ts",
+        "src/harness/tool/builtin/interactive-tools.ts",
+        "src/learning/decisions.ts",
+        "src/remote/client.ts",
+        "src/remote/shell-bridge.ts",
+        "src/remote/mirror-undelivered.test.ts",
+        "src/review/chunks-estimate.ts",
+        "src/review/complete-gated.ts",
+        "src/review/coverage-complete.ts",
+        "src/review/estimate.ts",
+        "src/review/evidence-level.ts",
+        "src/review/operator-decisions.ts",
+        "src/review/plan-confirmation.ts",
+        "src/review/premise-question.ts",
+        "src/review/publish.ts",
+        "src/review/readiness.ts",
+        "src/review/types.ts",
+        "src/standard/help-groups.ts",
+        "src/trigger/unattended.ts"
+      ],
+      "domain": "src/flow, src/gdskills [docs], src/harness +6 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/flow/schema.ts",
+          "source code: src/flow/confirm-token.ts, src/flow/schema.ts, src/flow/service.ts (+17)",
+          "schema: src/flow/types.ts, src/review/types.ts",
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+          "second look: unchanged since round 3, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 60519,
+      "contentHash": "e09e7e02fa69a87e9f13dd47f9e9405af154261b6f3f7ef323f4ff6aa9ded2e4",
+      "files": [
+        "src/tui/approval-mirror.ts",
+        "src/tui/decisions-surface.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/remote-control-surface.ts",
+        "src/tui/tui-shell.ts",
+        "src/tui/operator-confirmations.test.ts"
+      ],
+      "domain": "src/tui, src/tui [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/tui/approval-mirror.ts, src/tui/decisions-surface.ts, src/tui/operator-confirmations.ts (+2)",
+          "second look: unchanged since round 3, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 8,
+    "bytes": 678277,
+    "files": 67,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

@@ -1,0 +1,1063 @@
+[
+ {
+  "id": "review-architecture-w3:F-002",
+  "status": "finding",
+  "finding": "C-01",
+  "evidence": "Raw finding review-architecture-w3:F-002 is the same defect as canonical C-01 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-01: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-regression-w3:RG-W3-001",
+  "status": "finding",
+  "finding": "C-01",
+  "evidence": "Raw finding review-regression-w3:RG-W3-001 is the same defect as canonical C-01 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-01: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-regression-w2:RG2-001",
+  "status": "finding",
+  "finding": "C-02",
+  "evidence": "Raw finding review-regression-w2:RG2-001 is the same defect as canonical C-02 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-02: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w2:F-002",
+  "status": "finding",
+  "finding": "C-03",
+  "evidence": "Raw finding review-logic-w2:F-002 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-001",
+  "status": "finding",
+  "finding": "C-03",
+  "evidence": "Raw finding review-clean-code-w2:F-001 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w2:F-001",
+  "status": "finding",
+  "finding": "C-03",
+  "evidence": "Raw finding review-highload-w2:F-001 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w2:F-001",
+  "status": "finding",
+  "finding": "C-03",
+  "evidence": "Raw finding review-security-code-w2:F-001 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-002",
+  "status": "finding",
+  "finding": "C-03",
+  "evidence": "Raw finding review-pr-contract-w2:PC-002 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w2:F-002",
+  "status": "finding",
+  "finding": "C-03",
+  "evidence": "Raw finding review-architecture-w2:F-002 is the same defect as canonical C-03 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-03: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w3:F-001",
+  "status": "finding",
+  "finding": "C-04",
+  "evidence": "Raw finding review-security-code-w3:F-001 is the same defect as canonical C-04 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-04: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w1:F-001",
+  "status": "finding",
+  "finding": "C-05",
+  "evidence": "Raw finding review-security-code-w1:F-001 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w1:F-001",
+  "status": "finding",
+  "finding": "C-05",
+  "evidence": "Raw finding review-clean-code-w1:F-001 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-001",
+  "status": "finding",
+  "finding": "C-05",
+  "evidence": "Raw finding review-pr-contract-w1:PC-001 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w2:F-004",
+  "status": "finding",
+  "finding": "C-05",
+  "evidence": "Raw finding review-security-code-w2:F-004 is the same defect as canonical C-05 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-05: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-001",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-logic-w4:F-001 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w4:F-002",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-architecture-w4:F-002 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w4:F-002",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-highload-w4:F-002 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w3:F-001",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-logic-w3:F-001 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w4:F-001",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-security-code-w4:F-001 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-regression-w4:RG-W4-002",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-regression-w4:RG-W4-002 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w3:F-003",
+  "status": "finding",
+  "finding": "C-06",
+  "evidence": "Raw finding review-testing-practices-w3:F-003 is the same defect as canonical C-06 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-06: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "finding": "C-07",
+  "evidence": "Raw finding review-testing-practices-w1:F-001 is the same defect as canonical C-07 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-07: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-002",
+  "status": "finding",
+  "finding": "C-08",
+  "evidence": "Raw finding review-testing-practices-w1:F-002 is the same defect as canonical C-08 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-08: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w3:F-001",
+  "status": "finding",
+  "finding": "C-09",
+  "evidence": "Raw finding review-clean-code-w3:F-001 is the same defect as canonical C-09 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-09: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w2:F-001",
+  "status": "finding",
+  "finding": "C-10",
+  "evidence": "Raw finding review-logic-w2:F-001 is the same defect as canonical C-10 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-10: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w3:F-003",
+  "status": "finding",
+  "finding": "C-10",
+  "evidence": "Raw finding review-security-code-w3:F-003 is the same defect as canonical C-10 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-10: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "status": "finding",
+  "finding": "C-11",
+  "evidence": "Raw finding review-logic-w3:F-002 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w3:F-002",
+  "status": "finding",
+  "finding": "C-11",
+  "evidence": "Raw finding review-security-code-w3:F-002 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w2:F-003",
+  "status": "finding",
+  "finding": "C-11",
+  "evidence": "Raw finding review-architecture-w2:F-003 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w3:F-004",
+  "status": "finding",
+  "finding": "C-11",
+  "evidence": "Raw finding review-architecture-w3:F-004 is the same defect as canonical C-11 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-11: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w3:F-001",
+  "status": "finding",
+  "finding": "C-12",
+  "evidence": "Raw finding review-architecture-w3:F-001 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-003",
+  "status": "finding",
+  "finding": "C-12",
+  "evidence": "Raw finding review-clean-code-w2:F-003 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-004",
+  "status": "finding",
+  "finding": "C-12",
+  "evidence": "Raw finding review-style-w2:F-004 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w3:F-001",
+  "status": "finding",
+  "finding": "C-12",
+  "evidence": "Raw finding review-style-w3:F-001 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w3:F-002",
+  "status": "finding",
+  "finding": "C-12",
+  "evidence": "Raw finding review-style-w3:F-002 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w3:F-002",
+  "status": "finding",
+  "finding": "C-12",
+  "evidence": "Raw finding review-clean-code-w3:F-002 is the same defect as canonical C-12 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-12: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w3:F-001",
+  "status": "finding",
+  "finding": "C-13",
+  "evidence": "Raw finding review-highload-w3:F-001 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w4:F-001",
+  "status": "finding",
+  "finding": "C-13",
+  "evidence": "Raw finding review-highload-w4:F-001 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-003",
+  "status": "finding",
+  "finding": "C-13",
+  "evidence": "Raw finding review-logic-w4:F-003 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w4:F-002",
+  "status": "finding",
+  "finding": "C-13",
+  "evidence": "Raw finding review-security-code-w4:F-002 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w3:F-006",
+  "status": "finding",
+  "finding": "C-13",
+  "evidence": "Raw finding review-logic-w3:F-006 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-performance-w4:F-001",
+  "status": "finding",
+  "finding": "C-13",
+  "evidence": "Raw finding review-performance-w4:F-001 is the same defect as canonical C-13 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-13: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-004",
+  "status": "finding",
+  "finding": "C-14",
+  "evidence": "Raw finding review-logic-w4:F-004 is the same defect as canonical C-14 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-14: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w1:F-003",
+  "status": "finding",
+  "finding": "C-14",
+  "evidence": "Raw finding review-highload-w1:F-003 is the same defect as canonical C-14 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-14: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w4:PC-001",
+  "status": "finding",
+  "finding": "C-14",
+  "evidence": "Raw finding review-pr-contract-w4:PC-001 is the same defect as canonical C-14 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-14: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-002",
+  "status": "finding",
+  "finding": "C-15",
+  "evidence": "Raw finding review-logic-w4:F-002 is the same defect as canonical C-15 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-15: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w4:F-003",
+  "status": "finding",
+  "finding": "C-15",
+  "evidence": "Raw finding review-highload-w4:F-003 is the same defect as canonical C-15 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-15: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w1:F-002",
+  "status": "finding",
+  "finding": "C-16",
+  "evidence": "Raw finding review-clean-code-w1:F-002 is the same defect as canonical C-16 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-16: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w1:F-001",
+  "status": "finding",
+  "finding": "C-16",
+  "evidence": "Raw finding review-highload-w1:F-001 is the same defect as canonical C-16 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-16: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-002",
+  "status": "finding",
+  "finding": "C-16",
+  "evidence": "Raw finding review-pr-contract-w1:PC-002 is the same defect as canonical C-16 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-16: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w1:F-001",
+  "status": "finding",
+  "finding": "C-17",
+  "evidence": "Raw finding review-logic-w1:F-001 is the same defect as canonical C-17 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-17: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w1:F-002",
+  "status": "finding",
+  "finding": "C-17",
+  "evidence": "Raw finding review-security-code-w1:F-002 is the same defect as canonical C-17 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-17: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w1:F-002",
+  "status": "finding",
+  "finding": "C-17",
+  "evidence": "Raw finding review-logic-w1:F-002 is the same defect as canonical C-17 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-17: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w1:F-003",
+  "status": "finding",
+  "finding": "C-18",
+  "evidence": "Raw finding review-security-code-w1:F-003 is the same defect as canonical C-18 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-18: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w1:F-002",
+  "status": "finding",
+  "finding": "C-19",
+  "evidence": "Raw finding review-highload-w1:F-002 is the same defect as canonical C-19 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-19: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-003",
+  "status": "finding",
+  "finding": "C-20",
+  "evidence": "Raw finding review-pr-contract-w1:PC-003 is the same defect as canonical C-20 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-20: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-006",
+  "status": "finding",
+  "finding": "C-20",
+  "evidence": "Raw finding review-style-w1:F-006 is the same defect as canonical C-20 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-20: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w3:F-003",
+  "status": "finding",
+  "finding": "C-21",
+  "evidence": "Raw finding review-logic-w3:F-003 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-001",
+  "status": "finding",
+  "finding": "C-21",
+  "evidence": "Raw finding review-pr-contract-w3:PC-001 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w1:F-003",
+  "status": "finding",
+  "finding": "C-21",
+  "evidence": "Raw finding review-logic-w1:F-003 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "status": "finding",
+  "finding": "C-21",
+  "evidence": "Raw finding review-clean-code-w2:F-006 is the same defect as canonical C-21 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-21: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w2:F-001",
+  "status": "finding",
+  "finding": "C-22",
+  "evidence": "Raw finding review-architecture-w2:F-001 is the same defect as canonical C-22 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-22: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w3:F-003",
+  "status": "finding",
+  "finding": "C-22",
+  "evidence": "Raw finding review-architecture-w3:F-003 is the same defect as canonical C-22 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-22: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-005",
+  "status": "finding",
+  "finding": "C-23",
+  "evidence": "Raw finding review-clean-code-w2:F-005 is the same defect as canonical C-23 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-23: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w4:F-005",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-architecture-w4:F-005 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w4:F-001",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-clean-code-w4:F-001 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w4:F-001",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-style-w4:F-001 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-007",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-logic-w4:F-007 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w4:F-004",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-architecture-w4:F-004 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w4:F-002",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-clean-code-w4:F-002 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w4:F-004",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-style-w4:F-004 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w4:F-006",
+  "status": "finding",
+  "finding": "C-24",
+  "evidence": "Raw finding review-style-w4:F-006 is the same defect as canonical C-24 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-24: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w4:F-003",
+  "status": "finding",
+  "finding": "C-25",
+  "evidence": "Raw finding review-clean-code-w4:F-003 is the same defect as canonical C-25 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-25: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w4:F-002",
+  "status": "finding",
+  "finding": "C-25",
+  "evidence": "Raw finding review-style-w4:F-002 is the same defect as canonical C-25 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-25: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w4:F-003",
+  "status": "finding",
+  "finding": "C-25",
+  "evidence": "Raw finding review-style-w4:F-003 is the same defect as canonical C-25 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-25: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-004",
+  "status": "finding",
+  "finding": "C-26",
+  "evidence": "Raw finding review-clean-code-w2:F-004 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-007",
+  "status": "finding",
+  "finding": "C-26",
+  "evidence": "Raw finding review-clean-code-w2:F-007 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-001",
+  "status": "finding",
+  "finding": "C-26",
+  "evidence": "Raw finding review-style-w2:F-001 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-002",
+  "status": "finding",
+  "finding": "C-26",
+  "evidence": "Raw finding review-style-w2:F-002 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-005",
+  "status": "finding",
+  "finding": "C-26",
+  "evidence": "Raw finding review-style-w2:F-005 is the same defect as canonical C-26 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-26: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-002",
+  "status": "finding",
+  "finding": "C-27",
+  "evidence": "Raw finding review-clean-code-w2:F-002 is the same defect as canonical C-27 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-27: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-003",
+  "status": "finding",
+  "finding": "C-27",
+  "evidence": "Raw finding review-style-w2:F-003 is the same defect as canonical C-27 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-27: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-006",
+  "status": "finding",
+  "finding": "C-27",
+  "evidence": "Raw finding review-style-w2:F-006 is the same defect as canonical C-27 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-27: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w3:F-003",
+  "status": "finding",
+  "finding": "C-28",
+  "evidence": "Raw finding review-clean-code-w3:F-003 is the same defect as canonical C-28 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-28: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w3:F-003",
+  "status": "finding",
+  "finding": "C-28",
+  "evidence": "Raw finding review-style-w3:F-003 is the same defect as canonical C-28 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-28: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w1:F-001",
+  "status": "finding",
+  "finding": "C-29",
+  "evidence": "Raw finding review-architecture-w1:F-001 is the same defect as canonical C-29 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-29: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w1:F-002",
+  "status": "finding",
+  "finding": "C-29",
+  "evidence": "Raw finding review-architecture-w1:F-002 is the same defect as canonical C-29 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-29: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-001",
+  "status": "finding",
+  "finding": "C-30",
+  "evidence": "Raw finding review-style-w1:F-001 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-002",
+  "status": "finding",
+  "finding": "C-30",
+  "evidence": "Raw finding review-style-w1:F-002 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-003",
+  "status": "finding",
+  "finding": "C-30",
+  "evidence": "Raw finding review-style-w1:F-003 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-004",
+  "status": "finding",
+  "finding": "C-30",
+  "evidence": "Raw finding review-style-w1:F-004 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-005",
+  "status": "finding",
+  "finding": "C-30",
+  "evidence": "Raw finding review-style-w1:F-005 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w1:F-007",
+  "status": "finding",
+  "finding": "C-30",
+  "evidence": "Raw finding review-style-w1:F-007 is the same defect as canonical C-30 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-30: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-003",
+  "status": "finding",
+  "finding": "C-31",
+  "evidence": "Raw finding review-pr-contract-w3:PC-003 is the same defect as canonical C-31 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-31: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w4:PC-002",
+  "status": "finding",
+  "finding": "C-31",
+  "evidence": "Raw finding review-pr-contract-w4:PC-002 is the same defect as canonical C-31 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-31: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-001",
+  "status": "finding",
+  "finding": "C-31",
+  "evidence": "Raw finding review-pr-contract-w2:PC-001 is the same defect as canonical C-31 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-31: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "status": "finding",
+  "finding": "C-32",
+  "evidence": "Raw finding review-testing-practices-w1:F-003 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-006",
+  "status": "finding",
+  "finding": "C-32",
+  "evidence": "Raw finding review-testing-practices-w1:F-006 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w3:F-001",
+  "status": "finding",
+  "finding": "C-32",
+  "evidence": "Raw finding review-testing-practices-w3:F-001 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w3:F-002",
+  "status": "finding",
+  "finding": "C-32",
+  "evidence": "Raw finding review-testing-practices-w3:F-002 is the same defect as canonical C-32 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-32: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-004",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w1:F-004 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-005",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w1:F-005 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-007",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w1:F-007 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w1:F-008",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w1:F-008 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w2:F-001",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w2:F-001 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w2:F-002",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w2:F-002 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w2:F-003",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w2:F-003 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-testing-practices-w3:F-004",
+  "status": "finding",
+  "finding": "C-33",
+  "evidence": "Raw finding review-testing-practices-w3:F-004 is the same defect as canonical C-33 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-33: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-004",
+  "status": "finding",
+  "finding": "C-34",
+  "evidence": "Raw finding review-pr-contract-w1:PC-004 is the same defect as canonical C-34 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-34: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-002",
+  "status": "finding",
+  "finding": "C-34",
+  "evidence": "Raw finding review-pr-contract-w3:PC-002 is the same defect as canonical C-34 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-34: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w3:F-005",
+  "status": "finding",
+  "finding": "C-35",
+  "evidence": "Raw finding review-architecture-w3:F-005 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w2:F-008",
+  "status": "finding",
+  "finding": "C-35",
+  "evidence": "Raw finding review-clean-code-w2:F-008 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-008",
+  "status": "finding",
+  "finding": "C-35",
+  "evidence": "Raw finding review-style-w2:F-008 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w3:F-004",
+  "status": "finding",
+  "finding": "C-35",
+  "evidence": "Raw finding review-style-w3:F-004 is the same defect as canonical C-35 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-35: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w4:F-006",
+  "status": "finding",
+  "finding": "C-36",
+  "evidence": "Raw finding review-architecture-w4:F-006 is the same defect as canonical C-36 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-36: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-005",
+  "status": "finding",
+  "finding": "C-36",
+  "evidence": "Raw finding review-logic-w4:F-005 is the same defect as canonical C-36 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-36: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w4:F-003",
+  "status": "finding",
+  "finding": "C-37",
+  "evidence": "Raw finding review-architecture-w4:F-003 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w4:F-006",
+  "status": "finding",
+  "finding": "C-37",
+  "evidence": "Raw finding review-logic-w4:F-006 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w4:F-003",
+  "status": "finding",
+  "finding": "C-37",
+  "evidence": "Raw finding review-security-code-w4:F-003 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-regression-w4:RG-W4-001",
+  "status": "finding",
+  "finding": "C-37",
+  "evidence": "Raw finding review-regression-w4:RG-W4-001 is the same defect as canonical C-37 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-37: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w3:F-003",
+  "status": "finding",
+  "finding": "C-38",
+  "evidence": "Raw finding review-highload-w3:F-003 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w3:F-004",
+  "status": "finding",
+  "finding": "C-38",
+  "evidence": "Raw finding review-highload-w3:F-004 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w3:F-002",
+  "status": "finding",
+  "finding": "C-38",
+  "evidence": "Raw finding review-highload-w3:F-002 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w3:F-004",
+  "status": "finding",
+  "finding": "C-38",
+  "evidence": "Raw finding review-logic-w3:F-004 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w3:F-005",
+  "status": "finding",
+  "finding": "C-38",
+  "evidence": "Raw finding review-logic-w3:F-005 is the same defect as canonical C-38 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-38: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w2:F-002",
+  "status": "finding",
+  "finding": "C-39",
+  "evidence": "Raw finding review-security-code-w2:F-002 is the same defect as canonical C-39 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-39: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w4:F-004",
+  "status": "finding",
+  "finding": "C-39",
+  "evidence": "Raw finding review-security-code-w4:F-004 is the same defect as canonical C-39 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-39: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w2:F-003",
+  "status": "finding",
+  "finding": "C-40",
+  "evidence": "Raw finding review-security-code-w2:F-003 is the same defect as canonical C-40 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-40: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w2:F-002",
+  "status": "finding",
+  "finding": "C-41",
+  "evidence": "Raw finding review-highload-w2:F-002 is the same defect as canonical C-41 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-41: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-security-code-w3:F-004",
+  "status": "finding",
+  "finding": "C-41",
+  "evidence": "Raw finding review-security-code-w3:F-004 is the same defect as canonical C-41 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-41: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "status": "finding",
+  "finding": "C-42",
+  "evidence": "Raw finding review-highload-w2:F-003 is the same defect as canonical C-42 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-42: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-logic-w2:F-003",
+  "status": "finding",
+  "finding": "C-42",
+  "evidence": "Raw finding review-logic-w2:F-003 is the same defect as canonical C-42 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-42: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-performance-w2:F-002",
+  "status": "finding",
+  "finding": "C-42",
+  "evidence": "Raw finding review-performance-w2:F-002 is the same defect as canonical C-42 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-42: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-performance-w2:F-001",
+  "status": "finding",
+  "finding": "C-43",
+  "evidence": "Raw finding review-performance-w2:F-001 is the same defect as canonical C-43 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-43: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-007",
+  "status": "finding",
+  "finding": "C-44",
+  "evidence": "Raw finding review-style-w2:F-007 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-009",
+  "status": "finding",
+  "finding": "C-44",
+  "evidence": "Raw finding review-style-w2:F-009 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w2:F-010",
+  "status": "finding",
+  "finding": "C-44",
+  "evidence": "Raw finding review-style-w2:F-010 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w4:F-005",
+  "status": "finding",
+  "finding": "C-44",
+  "evidence": "Raw finding review-style-w4:F-005 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-clean-code-w3:F-004",
+  "status": "finding",
+  "finding": "C-44",
+  "evidence": "Raw finding review-clean-code-w3:F-004 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-style-w3:F-005",
+  "status": "finding",
+  "finding": "C-44",
+  "evidence": "Raw finding review-style-w3:F-005 is the same defect as canonical C-44 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-44: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w4:F-001",
+  "status": "finding",
+  "finding": "C-45",
+  "evidence": "Raw finding review-architecture-w4:F-001 is the same defect as canonical C-45 (same site and mechanism); merged by the orchestrator after reading both raw results.",
+  "reason": "Duplicate or sub-aspect of C-45: reported by more than one reviewer or slice; the canonical finding carries the consolidated text."
+ },
+ {
+  "id": "review-architecture-w3:fu1",
+  "status": "finding",
+  "evidence": "research-evidence/verify-C-01-1.txt: bun test operator-confirm-rosters.test.ts fails, Expected length 18, Received 19.",
+  "reason": "Parent ran the suggested command; the inference was right.",
+  "finding": "C-01"
+ },
+ {
+  "id": "review-highload-w1:fu1",
+  "status": "finding",
+  "evidence": "operator-confirm-tools.ts invoke and the TUI log: the 'pressed by' view is written before the gate re-checks (site-read by the parent).",
+  "reason": "The follow-up asked whether the answered view is written only after the invoke-time checks; it is not. Tracked as C-45.",
+  "finding": "C-45"
+ },
+ {
+  "id": "review-logic-w1:fu1",
+  "status": "refuted",
+  "evidence": "cmp of .metaproject/skills/gdskills/review/review-orchestrator/{SKILL.md,SKILL.detail.md} and review-premise/SKILL.md against src/gdskills/bundled/skills/review/ : all three byte-identical.",
+  "reason": "The copies are identical, so the changed passages cannot differ (the line-669 wording of C-05 is in both)."
+ },
+ {
+  "id": "review-logic-w1:fu2",
+  "status": "finding",
+  "evidence": "TUI surfaces read by reviewers and the parent: waiting() ignores expiry and the 'token expired' text shows for tui-card; related C-06 (undelivered card stays waiting).",
+  "reason": "The TUI text claims in cli-reference and TM-04 do not fully match src/tui/operator-confirmations.ts; the mismatch is C-14 (and C-06).",
+  "finding": "C-14"
+ },
+ {
+  "id": "review-logic-w1:fu3",
+  "status": "finding",
+  "evidence": "docs/docs/guides/autonomous-review.md:35 says an autonomous run stops at the floor, while src/trigger/unattended.ts records the item as Not run.",
+  "reason": "The unattended-floor claim contradicts the code comment; tracked as C-16.",
+  "finding": "C-16"
+ },
+ {
+  "id": "review-logic-w2:fu1",
+  "status": "out-of-scope",
+  "evidence": "Not a follow-up: the reviewer's own list of checks that came out clean (allowed-id, single use, expiry, press fields, completeReviewGated reuse, factsDigest, evidence-level parser).",
+  "reason": "A clean-bill statement with nothing left to do; carried to the Verified clean lane of the report, and the parent's own read found no bypass."
+ },
+ {
+  "id": "review-logic-w2:fu2",
+  "status": "out-of-scope",
+  "evidence": "git diff 062aa9c3..HEAD -- src/remote/hub.ts is empty: the PR does not change hub.ts; AC9 is the owner live check and AC10 the release.",
+  "reason": "Telegram delivery and hub-side identity are not in this diff; AC9 and AC10 are not code defects. Listed under Questions as not verified."
+ },
+ {
+  "id": "review-logic-w2:fu3",
+  "status": "finding",
+  "evidence": "operator-confirm-review-tools.test.ts:37 builds the tool with prLookup: async () => null, so a moved or merged head is never driven through the card.",
+  "reason": "The merged-PR refusal is inherited and untested through review_complete; tracked as the test gap C-08.",
+  "finding": "C-08"
+ },
+ {
+  "id": "review-regression-w2:fu1",
+  "status": "finding",
+  "evidence": "bun test of the eight named files on the head: 398 pass, 1 fail (shell.test.ts:849 lacks review_complete); saved at scratchpad regr-w2.txt and research-evidence/verify-C-02-1.txt.",
+  "reason": "The parent ran the listed tests; the only failure is the one the reviewer predicted (C-02).",
+  "finding": "C-02"
+ },
+ {
+  "id": "review-security-code-w2:fu1",
+  "status": "finding",
+  "evidence": "review.ts runComplete 4539-4572: no isTerminal check on plain complete; verify-C-05-1.txt.",
+  "reason": "The decision whether plain complete needs the operator-act record is C-05; Wave D held it as an owner decision.",
+  "finding": "C-05"
+ },
+ {
+  "id": "review-security-code-w3:fu1",
+  "status": "finding",
+  "evidence": "verify-C-01-1.txt: the roster test pins 18, the registry has 19.",
+  "reason": "The roster check the reviewer could not run fails, C-01. The origin of fromId in tui-shell.ts was read by the slice-04 reviewers and the parent with no bypass found.",
+  "finding": "C-01"
+ }
+]

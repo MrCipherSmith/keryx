@@ -1,0 +1,109 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 04 is almost entirely tests plus small plumbing for task_text (adapter, operations, MCP, port, help text). Naming, comments and structure are consistent and readable; no major style findings. Seven minor/info items: a fixture that mislabels characters as bytes, import insertion order, repeated call boilerplate, a self-comparing assertion, and a few naming/readability nits.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "line": null,
+      "quote": "bytes: text.length,",
+      "problem": "docFixture fills the ContextEntry `bytes` field (and budget `usedBytes`) with `text.length`, a character count. The same slice's context-resolver tests use Buffer.byteLength for the same field, and the Russian-section test in this file passes Cyrillic text through docFixture, so the fixture's `bytes` is not a byte count there.",
+      "impact": "The field name says bytes and the project cares about the bytes/characters difference (references-section.test.ts asserts it). A reader copying this fixture gets a wrong value for non-ASCII text; a future check on `bytes` would pass or fail for the wrong reason.",
+      "suggested_fix": "Use Buffer.byteLength(text, \"utf8\") for `bytes` and `usedBytes` in docFixture.",
+      "evidence": "In the diff of src/gdskills/resolved-context-check.test.ts, docFixture sets `bytes: text.length` and `usedBytes: text.length`; the test 'summary: letters of any script count...' calls docFixture({ text: \"## Токены...\" }).",
+      "confidence": 0.85,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": null,
+      "quote": "import type { ReferenceDeclaration } from \"../gdskills/references-config\";",
+      "problem": "The two new type imports from ../gdskills/ are inserted after the `./modal-host` import, inside the sibling-import group, and `references-config` precedes `references-check`. The file's existing order is ../gdskills/* first, then ./* siblings.",
+      "impact": "Breaks the group-then-alphabetical ordering the rest of the file follows, so the next import added has no obvious place. ESLint config does not enforce import order, so nothing else will catch it.",
+      "suggested_fix": "Move both imports up beside the other ../gdskills/ type imports, ordered references-check before references-config.",
+      "evidence": "Diff hunk at the top of src/tui/project-context-inspector.test.ts: after `import type { OpenModalInput } from \"./modal-host\";` come the two `../gdskills/references-*` imports.",
+      "confidence": 0.8,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/resolved-context-check.test.ts",
+      "line": null,
+      "quote": "const report = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha) });",
+      "problem": "The new block repeats `await checkResolvedContext({ projectRoot: root, resolved, result: ... })` more than twenty times, many of them wrapped over five lines, only to read `.misses` or `.drifted`. docFixture already returns `{ root, resolved, sha }`, so a local `check(fixture, extra)` helper fits.",
+      "impact": "The meaning of each test (what is cited, which rule is expected) is buried in call plumbing, and a change to the checker's input shape touches every test.",
+      "suggested_fix": "Add a small helper, for example `const rulesOf = async (f, extra) => (await checkResolvedContext({ projectRoot: f.root, resolved: f.resolved, result: cite(f.sha, extra) })).misses.map((m) => m.rule)`, and assert on its result.",
+      "evidence": "The hunks 'summary: a missing or different anchor...', 'summary: fewer than 40 characters...', 'summary: exactly two shared words...' and 'summary: letters of any script count...' all repeat the same call shape.",
+      "confidence": 0.7,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/gdskills/output-schema.test.ts",
+      "line": null,
+      "quote": "expect(read(file)).toBe(read(source));",
+      "problem": "The loop runs over `[source, ...copies]`, so for the first iteration `file` is `source` and the assertion compares the file with itself. It cannot fail.",
+      "impact": "Reads as if the source were being checked against something; a reader has to work out that one iteration is a no-op.",
+      "suggested_fix": "Compare only `copies` against `source` with `toBe`, and run the property-key check over `[source, ...copies]` separately.",
+      "evidence": "In 'the synced copies carry the same schema as the bundled source': `for (const file of [source, ...copies]) { expect(read(file)).toBe(read(source)); ...`.",
+      "confidence": 0.9,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/gdskills/references-config.test.ts",
+      "line": null,
+      "quote": "type Node = Record<string, unknown>;",
+      "problem": "The local alias is named `Node`, the name of the DOM global type. It shadows it in this module.",
+      "impact": "A reader seeing `Node` in a test file will first think of the DOM; no functional effect.",
+      "suggested_fix": "Rename to `SchemaNode` or `JsonObject`.",
+      "evidence": "Declared above the `validates(schema: Node, value: unknown)` helper.",
+      "confidence": 0.6,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/gdskills/skill-sync.test.ts",
+      "line": null,
+      "quote": "const root = path.resolve(import.meta.dir, \"../..\");",
+      "problem": "Module-level path constants are mixed: `root` is lowerCamel while its siblings `BUNDLED`, `MANAGED` and `CONTRACTS` are UPPER_SNAKE. `CONTRACTS` also names a directory here, while `CONTRACTS` in ./contracts (imported by output-schema.test.ts in the same slice) is the registry of contract definitions.",
+      "impact": "Inconsistent naming within one block, and one identifier with two meanings across neighbouring test files.",
+      "suggested_fix": "Name it `ROOT` (or `REPO_ROOT`, as output-schema.test.ts does) and rename the directory constant to `CONTRACTS_DIR`.",
+      "evidence": "Constants block at the top of skill-sync.test.ts; REPO_ROOT is used for the same purpose in output-schema.test.ts.",
+      "confidence": 0.6,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.test.ts",
+      "line": null,
+      "quote": "a declared reference whose keyword promotes it matches the task text case-insensitively on a word boundary; a task matching neither keeps description, anchor and condition on_demand",
+      "problem": "Several new test titles run past 150 characters and join two behaviours with a semicolon, and each test then asserts both. The titles of 'cap keeps promoted references...' and 'a rule that cites a declared document as ./STYLING.md...' are of the same kind.",
+      "impact": "A failure report shows a sentence that does not say which half failed; titles are hard to scan in a test list.",
+      "suggested_fix": "Split into two tests (promotion by keyword; on_demand when nothing matches) or shorten the title and put the second behaviour in its own test.",
+      "evidence": "New tests appended after the '--- flow 462: conditional mandatory reads ---' comment in context-resolver.test.ts.",
+      "confidence": 0.6,
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 4 },
+  "slices": ["slice-04"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Style review of slice-04 (scope A, the diff itself). The slice is mostly tests, plus the `task_text` plumbing in `src/harness/tool/metaproject-adapter.ts`, `src/harness/tool/metaproject-operations.ts`, `src/harness/tool/metaproject-port.ts` and `src/mcp/metaproject-tools.ts`, and the `references` entries in `src/lib/group-subcommands.ts` and `src/standard/help-groups.ts`. Naming follows the surrounding code. Comments say why, and the one file they point to (docs/requirements/keryx-conditional-reads/live-run.md) exists. I found no dead code, console noise outside the e2e output-capture harness, or circular imports. There is no import-order lint in eslint.config.mjs, so F-002 is only a consistency note. Verdict: APPROVE_WITH_SUGGESTIONS.

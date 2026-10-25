@@ -1,0 +1,95 @@
+STATUS: DONE_WITH_CONCERNS
+
+Scope B (regression), wave 2, slice-02 only (flow 464 folder, the two review-orchestrator skill files and review-premise skill, CHANGELOG, TM-04, cli-reference, commands-by-task, review-with-a-record, limitations, flow-state.schema.json, package.json) at head b1c6da0e6.
+
+Limits of the radius. Slice-02 is almost entirely prose, skill text and one JSON schema. The blast radius is a code graph and has no edges for skill text or docs, so it could not answer the question for most of this slice; I walked the dependents by hand with `keryx ctx rg` and read the card spec and the close path they now point at (src/commands/operator-confirm-review.ts completeSpec, src/review/complete-gated.ts, src/review/managed.ts completeManagedReview, src/commands/review.ts runComplete). I did not read blast-radius.json entry by entry and did not check whether files were dropped by the cap.
+
+Checked and clean (no finding):
+- flow-state.schema.json: pressedBy/pressedAt are added inside `confirmation.properties` (additionalProperties already true), so no existing flow.json stops validating. src/flow/schema.ts carries the same two properties (lines 331-332) and src/flow/types.ts the same fields; the docpack parity test (schema.test.ts DOCPACK_SCHEMA) has nothing to diverge on.
+- Bundled skill mirrors under src/gdskills/bundled/skills/review/ are byte-identical to .metaproject/skills/gdskills/review/ for review-orchestrator SKILL.md, SKILL.detail.md and review-premise SKILL.md (diff -q empty). SKILL.md line count is unchanged at 1572 (ceiling in skill-length-ceilings.ts: 1572), so the length ceiling still holds.
+- package.json 0.3.124: no other file pins 0.3.123 outside CHANGELOG.
+- The autonomous exception (cli-reference "closes the package through `keryx review complete` as before") agrees with unattended.ts and the deliberate autonomous-profile.ts wording; not reported.
+
+Findings: R-001 (major, the stale "run keryx review complete" class, still present in this slice's files) and R-002 (major, the same rule now removes the only way for a shell agent to record finding dispositions at close).
+
+### [R-001] Orchestrator skill still tells the shell agent to run `keryx review complete` after a waiver card
+
+- Severity: major
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782 (the sibling SKILL.detail.md:386 and both bundled mirrors carry the same text)
+- Problem: the PR changes the close path for an agent in keryx shell: SKILL.md:136 ("Done when", edited by this PR) now says an agent never runs `keryx review complete` and calls the `review_complete` card, and SKILL.detail.md:669 says the same. Two imperative lines in the same files were not updated. SKILL.md:782: "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`". SKILL.detail.md:386 (memory-outside-stage repair): "in keryx shell call `review_waive_readiness` (the operator answers a card, never a terminal), then run `keryx review complete <package>`". Weaker, descriptive sites of the same wording: SKILL.md:124 ("A refused `review complete` ... fix that with a command and run it again"), SKILL.md:134 and SKILL.detail.md:866 ("the tail ... `keryx review complete`. Every managed round finishes them"), SKILL.md:59 (Round plan step 9, "`readiness`, `complete`").
+- Why it matters: after a coverage waiver or a memory-outside-stage repair, an agent following those lines runs plain `keryx review complete <package>` through shell_exec. Plain complete has no TTY check and no command-risk floor (TM-04 section 8), so the round reaches `closed` with no `review_complete` card, no operator press, no `confirmedVia`, no `pressedBy`. The head, evidence, routing and readiness gates still run; the operator's final yes and its press record are what is bypassed. The CHANGELOG entry for 0.3.124 states that "both review-orchestrator skill copies ... tell the agent to call the card"; these lines make that false. Same finding as wave-1 R-001; re-found here because both files are in slice-02.
+- Fix: in SKILL.md:782 and SKILL.detail.md:386, and in both bundled copies, replace ", then run `keryx review complete`" / ", then run `keryx review complete <package>`" with ", then call the `review_complete` card". Reword SKILL.md:124 to "run the failing command again, or call the `review_complete` card again", and make SKILL.md:134, SKILL.detail.md:866 and step 9 say "the `review_complete` card (outside keryx shell, `keryx review complete`)".
+- Confidence: high
+
+### [R-002] The agent can no longer record finding dispositions at close: the rule forbids the CLI and the card takes none
+
+- Severity: major
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284
+- Problem: SKILL.md:284 still instructs "`review complete --finding <id> --disposition <state> --evidence <ref>` records what became of a finding when the fix round closes". Before this PR the shell agent ran exactly that and the package closed with the dispositions. This PR's "Done when" bullet (SKILL.md:136) and SKILL.detail.md:669 now say an agent never runs `keryx review complete` and closes only through the `review_complete` card. The card cannot carry dispositions: completeSpec's inputSchema has only `package` (operator-confirm-review.ts:707-714) and apply calls `completeReviewGated(ctx.projectRoot, prepared.dir, { prLookup, prFiles, now })` (line 756) with no `dispositions`; `completeManagedReview` records dispositions only from `options.dispositions` (managed.ts:1017-1019) and writes the dismissed-incorrect review notes from them. The only writer of dispositions is the CLI `--finding/--disposition/--evidence` path (review.ts COMPLETE_FLAGS, runComplete).
+- Why it matters: a shell agent that follows the new rule closes the fix round through the card and every finding stays `unknown`: no `acted-on` or `dismissed-*` is recorded and no review-note is written for `dismissed-incorrect`. That outcome record is the signal managed.ts:937-940 says the close exists to capture (83 findings once went unrecorded) and it feeds the precision measurement and the learning loop named in SKILL.md:281-290. If the agent instead follows SKILL.md:284 it breaks the rule at SKILL.md:136. The job-orchestrator loop also gates on this: its table row "every finding has a terminal disposition | `keryx review complete --finding ...`" (job-orchestrator SKILL.md:1002, orchestrator-prompt.md:27 and :193) has no card route either. A package already closed by the card can still be re-closed from the CLI (completeManagedReview has no already-closed guard), but only a human at a terminal may do that under the new rule.
+- Fix: choose one and state it in SKILL.md:284 and SKILL.md:136: (a) let `review_complete` take an optional `dispositions` array (finding, disposition, evidence) shown on the card and passed to `completeReviewGated`; or (b) say that dispositions are recorded by the operator with `keryx review complete <package> --finding ... --disposition ... --evidence ...` in a terminal, before or after the card, and have the report list the findings still `unknown`. Update job-orchestrator SKILL.md:1002 and orchestrator-prompt.md to match.
+- Confidence: medium (the card path and the missing argument are read in code; whether an agent in a real session follows line 136 or line 284 is not something I ran)
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-02 is skill text, docs and one schema; the blast radius is a code graph and cannot see them, so dependents were walked by hand. The flow-state schema addition, the bundled-mirror parity, the skill length ceiling and the version bump are clean. Two majors: the stale 'run keryx review complete' instruction class survives in the orchestrator skill (SKILL.md:782, SKILL.detail.md:386 and the bundled copies, same as wave-1 R-001), and the new 'agent never runs keryx review complete' rule leaves SKILL.md:284 telling the agent to record dispositions through a command it may no longer run while the review_complete card passes no dispositions to completeReviewGated.",
+  "stats": { "blocker": 0, "major": 2, "minor": 0, "info": 0 },
+  "slices": [{ "id": "slice-02", "coverage": "read in full" }],
+  "findings": [
+    {
+      "id": "R-001",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 782,
+      "quote": "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`",
+      "problem": "The PR rule (SKILL.md:136 Done when, SKILL.detail.md:669, completion-gate.ts nextStep) is that an agent never runs `keryx review complete` and calls the review_complete card. SKILL.md:782 and SKILL.detail.md:386 still say 'then run `keryx review complete`' after review_waive_coverage / review_waive_readiness. Weaker descriptive sites repeat the wording: SKILL.md:124, :134, :59 and SKILL.detail.md:866. Bundled mirrors are byte-identical and carry all of them.",
+      "impact": "After a coverage waiver or a memory-outside-stage repair the agent runs plain `keryx review complete <package>` through shell_exec. Plain complete has no TTY check or command-risk floor (TM-04 section 8), so the round closes with no review_complete card, no operator press, no confirmedVia and no pressedBy; the head, evidence, routing and readiness gates still apply. The 0.3.124 CHANGELOG claim that both skill copies tell the agent to call the card is false for these lines.",
+      "suggested_fix": "Replace ', then run `keryx review complete`' / ', then run `keryx review complete <package>`' with ', then call the `review_complete` card' in SKILL.md:782 and SKILL.detail.md:386 and both bundled copies; reword SKILL.md:124, :134, :59 and SKILL.detail.md:866 to name the card (CLI only outside keryx shell).",
+      "evidence": "grep -o 'keryx review complete' over .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md and SKILL.detail.md at b1c6da0e6 lists 47, 134, 136, 246, 782 and 386, 669, 778, 823, 866; 47 and 136 and 669 are the fixed 'card' wording, 246/778/823 describe what the command refuses, 782/386 instruct running it. diff -q against src/gdskills/bundled/skills/review/review-orchestrator/ is empty for both files.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:386",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:782",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:386",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:124",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:134",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:59",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:866"
+        ],
+        "enumeration_method": "grep -n -o 'keryx review complete' and '`complete`' over the two review-orchestrator skill files and their bundled copies at b1c6da0e6, each hit read in context; 782 and 386 are imperative (mirrors included), 124, 134, 59 and 866 are descriptive of the tail and carry the same ambiguity; 47, 136, 669 are the corrected wording and 246, 778, 823 only describe what the command refuses."
+      }
+    },
+    {
+      "id": "R-002",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 284,
+      "quote": "`review complete --finding <id> --disposition <state> --evidence <ref>` records",
+      "problem": "SKILL.md:284 tells the agent to record what became of each finding by running `review complete --finding ... --disposition ... --evidence ...` when the fix round closes. The edited SKILL.md:136 and SKILL.detail.md:669 now say an agent never runs `keryx review complete` and closes through the review_complete card. The card has no way to carry dispositions: completeSpec's inputSchema is only `package` (operator-confirm-review.ts:707-714) and apply calls completeReviewGated(ctx.projectRoot, prepared.dir, { prLookup, prFiles, now }) at line 756 with no dispositions. completeManagedReview records dispositions and writes dismissed-incorrect review notes only from options.dispositions (managed.ts:1017-1019, 1056-1063); the only producer is the CLI --finding/--disposition/--evidence path (review.ts COMPLETE_FLAGS, runComplete).",
+      "impact": "A shell agent that follows the new rule closes a fix round through the card with every finding still `unknown`: no acted-on or dismissed-* record and no review-note for dismissed-incorrect, which are the outcome record the close exists to capture (managed.ts:937-940) and the input of the precision measurement and learning loop (SKILL.md:281-290). If it follows line 284 instead it breaks line 136. job-orchestrator's gate 'every finding has a terminal disposition | keryx review complete --finding ...' (SKILL.md:1002; orchestrator-prompt.md:27, :193) has no card route either.",
+      "suggested_fix": "Either extend review_complete with an optional dispositions array (finding, disposition, evidence), shown on the card and passed to completeReviewGated, or state in SKILL.md:284 and :136 that dispositions are recorded by the operator with the CLI in a terminal and have the report list findings left `unknown`; align job-orchestrator SKILL.md:1002 and orchestrator-prompt.md.",
+      "evidence": "operator-confirm-review.ts:707-714 (inputSchema package only) and :756-760 (completeReviewGated options: prLookup, prFiles, now); managed.ts:1017-1019 (dispositions = options.dispositions ?? []); git show 062aa9c3:.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md 'Done when' said 'then run `keryx review complete`', so before the PR the agent could pass the triple in the same call.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:247",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:284",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1002",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:27",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:193"
+        ],
+        "enumeration_method": "grep -n -e '--finding' -e '--disposition' over .metaproject/skills and src/gdskills/bundled for 'review complete --finding' used as an agent instruction; docs/docs/guides/review-with-a-record.md:833 and :1012 are a human at a terminal and do not break; the two job-orchestrator files are unchanged by the PR and outside the changed set, listed as sites that break because they depend on the CLI path the new rule forbids."
+      }
+    }
+  ],
+  "prior_dispositions": []
+}
+```
