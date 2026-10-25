@@ -9,17 +9,62 @@
   "id": "473",
   "slug": "mutation-cost-p0",
   "title": "Cheaper mutation pass: early exit on red, run provenance, timing in the record",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-24T05:16:37.889Z",
-  "updatedAt": "2026-10-25T07:41:34.214Z",
+  "updatedAt": "2026-10-25T07:42:25.495Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-25T07:42:19.655Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC2": {
+      "at": "2026-10-25T07:42:20.274Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC3": {
+      "at": "2026-10-25T07:42:20.908Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC4": {
+      "at": "2026-10-25T07:42:21.431Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC5": {
+      "at": "2026-10-25T07:42:22.048Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC6": {
+      "at": "2026-10-25T07:42:22.685Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC7": {
+      "at": "2026-10-25T07:42:23.319Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC8": {
+      "at": "2026-10-25T07:42:23.856Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC10": {
+      "at": "2026-10-25T07:42:24.372Z",
+      "note": "AC10 command passes: copies identical, --no-bail in skill, cli-reference, CHANGELOG"
+    },
+    "AC11": {
+      "at": "2026-10-25T07:42:24.916Z",
+      "note": "typecheck + 342 tests in 9 files, 0 fail"
+    },
+    "AC12": {
+      "at": "2026-10-25T07:42:25.494Z",
+      "note": "draft PR #1081, no AI authorship line, checks not run are stated"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1081"
   },
   "baseBranch": "main",
   "owner": {
@@ -187,6 +232,66 @@
       "at": "2026-10-25T07:41:34.214Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-25T07:42:19.069Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1081"
+    },
+    {
+      "at": "2026-10-25T07:42:19.655Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:20.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:20.909Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:21.432Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:22.048Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:22.685Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:23.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:23.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:24.372Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: AC10 command passes: copies identical, --no-bail in skill, cli-reference, CHANGELOG (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:24.916Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: typecheck + 342 tests in 9 files, 0 fail (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:25.495Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: draft PR #1081, no AI authorship line, checks not run are stated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -236,5 +341,128 @@
     "AC12": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-25T07:42:19.655Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:20.274Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:20.908Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:21.431Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:22.048Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:22.685Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:23.319Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:23.856Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:24.372Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:24.916Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:25.494Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    }
+  ]
 }
