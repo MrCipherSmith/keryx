@@ -713,7 +713,9 @@ describe("treeHash inputs", () => {
     await git(tree, "add", "-f", REVIEW_PACKAGES_DIR);
     await git(tree, "commit", "-q", "-m", "package");
     const committed = await hashOf();
-    await writeFile(path.join(pkg, "report.md"), "edited");
+    await writeFile(path.join(pkg, "report.md"), "new file");
+    expect(await hashOf()).toBe(committed);
+    await writeFile(path.join(pkg, "research-evidence", "mutation-1.md"), "a tracked file of the package, edited");
     expect(await hashOf()).toBe(committed);
   }, 60_000);
 });
