@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Changed
-- **`keryx review mutate` stops each mutant at the first red test.** When `--test` is a plain `bun test <paths>` command (optionally behind `env` or `NAME=value`), mutants run with `--bail`; the baseline still runs in full, and any other command shape runs as given. `--no-bail` turns it off. The `mutation-<n>.json` record now says whether it was applied (`bail`) and carries `startedAt`, `head`, `treeHash`, `loadavg`, `copyMs` and `mutantsMs`; older records still read. Flow 473.
+- **`keryx review mutate` stops each mutant at the first red test.** When `--test` is a plain `bun test <paths>` command (optionally behind `env` or `NAME=value`), mutants run with `--bail`; the baseline still runs in full, and any other command shape runs as given. `--no-bail` turns it off. The `mutation-<n>.json` record now says whether it was applied (`bail`) and carries `startedAt`, `loadavg` (sampled at the start), `provenanceMs`, `copyMs`, `mutantsMs` and, in a git checkout, `head` and `treeHash` (tracked changes plus untracked files; review packages are left out, so two passes over the same code agree); older records still read. Flow 473.
 
 ## [0.3.131] - 2026-10-24
 

@@ -10,7 +10,9 @@ Mutants were taken from the 73 recorded passes of this repository (`.metaproject
 |---|---|---|
 | 1 | `bun test src/review/replay.test.ts` | 14 |
 | 2 | `bun test src/review/ledger.test.ts src/commands/review-slice.test.ts src/commands/review-ledger.test.ts src/flow/verify-exec-files.test.ts` | 14 |
-| 5 | `bun test src/review/complete-head-gate.test.ts src/review/evidence-level.test.ts src/review/rebuttal-citation.test.ts src/review/ledger-narr...` (10 files) | 10 |
+| 5 | `bun test src/review/complete-head-gate.test.ts src/review/evidence-level.test.ts src/review/rebuttal-citation.test.ts src/review/ledger-narrowed.test.ts src/review/ingest-locator-sha.test.ts src/review/research.test.ts src/review/ledger.test.ts src/review/managed.test.ts src/commands/review.test.ts` (9 files) | 10 |
+
+Every mutant, with its status and time in both runs, is in `replay-bail-mutants.md` next to this file.
 
 ## Result
 
@@ -23,6 +25,8 @@ Mutants were taken from the 73 recorded passes of this repository (`.metaproject
 | 1 | 11 | 22.5 s | 19.2 s | 15% |
 | 2 | 13 | 37.3 s | 27.9 s | 25% |
 | 5 | 6 | 84.3 s | 46.0 s | 45% |
+
+**Noise.** Each group ran once per mode, so a single run is one sample: a loaded machine (load average 3-5, and other jobs on the box) moves a pass by seconds. The one control available is the survivors, which cost the same in both modes, and they differ by 47.4 s against 50.6 s (about 7%). Read the 15% of group 1 and the 25% of group 2 as being at or near that noise; only the 45% of group 5 is clearly above it. The 35% overall is an estimate from one repetition, not a measured mean.
 
 The saving grows with the width of the suite: a run of 2-3 s is mostly `bun` start-up and file loading, which bail cannot shorten. Survivors cost the same with or without bail (a green run does not stop early), as expected: 47.4 s without, 50.6 s with, noise only.
 

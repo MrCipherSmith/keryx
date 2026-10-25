@@ -5,7 +5,8 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { BaselineError, doneMutantIds, EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, unjudgedMutants, withBail, worktreeProvenance, writeMutationEvidence } from "./mutate";
+import { BaselineError, doneMutantIds, EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
+import { DEFAULT_PROVENANCE_LIMITS, REVIEW_PACKAGES_DIR, worktreeProvenance } from "./worktree-provenance";
 
 let base: string;
 let tree: string;
@@ -287,6 +288,7 @@ describe("renderMutationTable", () => {
     const text = renderMutationTable({
       ...record([mutant({})]),
       bail: true,
+      provenanceMs: 12,
       copyMs: 1234,
       mutantsMs: 56789,
       loadavg: [3.14, 2.8, 2.5],
@@ -296,7 +298,7 @@ describe("renderMutationTable", () => {
     });
     const lines = text.split("\n");
     expect(lines).toContain("Bail: applied (mutants ran with --bail; baseline in full).");
-    expect(lines).toContain("Cost: copy 1234 ms, mutants 56789 ms, load 3.1/2.8/2.5.");
+    expect(lines).toContain("Cost: provenance 12 ms, copy 1234 ms, mutants 56789 ms, load 3.1/2.8/2.5.");
     expect(lines).toContain("started 2026-10-24T05:00:00.000Z, head 0123456789ab, treeHash fedcba987654.");
     expect(text).not.toContain("undefined");
   });
@@ -414,11 +416,11 @@ describe("bun fixture", () => {
 
   describe("bail status parity", () => {
     test("killed, survived, timeout and invalid keep their status with and without --bail on a project with several test files", async () => {
-      const bailed = await run();
+      const bailedRecord = await run();
       const full = await run({ bail: false });
-      expect(statuses(bailed)).toEqual([["kill", "killed"], ["both", "killed"], ["live", "survived"], ["hang", "timeout"], ["bad", "invalid"]]);
-      expect(statuses(full)).toEqual(statuses(bailed));
-      expect(bailed.totals).toEqual({ killed: 2, survived: 1, invalid: 1, timeout: 1 });
+      expect(statuses(bailedRecord)).toEqual([["kill", "killed"], ["both", "killed"], ["live", "survived"], ["hang", "timeout"], ["bad", "invalid"]]);
+      expect(statuses(full)).toEqual(statuses(bailedRecord));
+      expect(bailedRecord.totals).toEqual({ killed: 2, survived: 1, invalid: 1, timeout: 1 });
     }, 90_000);
   });
 
@@ -430,12 +432,12 @@ describe("bun fixture", () => {
         { id: "live", file: "calc.ts", anchor: "n > 0", replacement: "n >= 0" },
         { id: "bad", file: "calc.ts", anchor: "no such text", replacement: "x" },
       ]);
-      const bailed = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 8000, mutants: only });
+      const bailedRecord = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 8000, mutants: only });
       const full = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 8000, mutants: only, bail: false });
-      expect(bailed.bail).toBe(true);
-      for (const m of bailed.mutants) expect(m.command).toBe("bun test --bail a.test.ts b.test.ts");
-      expect(statuses(bailed)).toEqual([["kill", "killed"], ["live", "survived"], ["bad", "invalid"]]);
-      expect(statuses(full)).toEqual(statuses(bailed));
+      expect(bailedRecord.bail).toBe(true);
+      for (const m of bailedRecord.mutants) expect(m.command).toBe("bun test --bail a.test.ts b.test.ts");
+      expect(statuses(bailedRecord)).toEqual([["kill", "killed"], ["live", "survived"], ["bad", "invalid"]]);
+      expect(statuses(full)).toEqual(statuses(bailedRecord));
     }, 90_000);
 
     test("bail status parity: early failure plus later hang is killed", async () => {
@@ -444,10 +446,33 @@ describe("bun fixture", () => {
       await writeFile(path.join(proj, "z.test.ts"), 'import { test } from "bun:test";\nimport { add } from "./calc";\ntest("hang", () => {\n  if (add(2, 3) !== 5) while (true) {}\n});\n');
       const command = "bun test a.test.ts z.test.ts";
       const one = parseMutantSpec([{ id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" }]);
-      const bailed = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 5000, mutants: one });
+      const bailedRecord = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 5000, mutants: one });
       const full = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 5000, mutants: one, bail: false });
       expect(statuses(full)).toEqual([["kill", "timeout"]]);
-      expect(statuses(bailed)).toEqual([["kill", "killed"]]);
+      expect(statuses(bailedRecord)).toEqual([["kill", "killed"]]);
+    }, 90_000);
+  });
+
+  describe("red baseline", () => {
+    test("the baseline runs the command as given, so its record lists every failing file, and it carries the provenance and cost fields", async () => {
+      await writeFile(path.join(proj, "calc.ts"), 'export const add = (a: number, b: number) => a - b;\nexport const label = (n: number) => (n > 0 ? "pos" : "neg");\nexport const spin = (n: number) => n;\n');
+      await gitCommit(proj);
+      const error = await run().then(
+        () => undefined,
+        (caught: unknown) => caught,
+      );
+      expect(error).toBeInstanceOf(BaselineError);
+      const record = (error as BaselineError).record;
+      expect(record.baseline.exitCode).not.toBe(0);
+      expect(record.baseline.tail).toContain("a.test.ts");
+      expect(record.baseline.tail).toContain("b.test.ts");
+      expect(record.head).toBe(await git(proj, "rev-parse", "HEAD"));
+      expect(record.treeHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(new Date(record.startedAt!).toISOString()).toBe(record.startedAt!);
+      expect(record.loadavg).toHaveLength(3);
+      expect(record.provenanceMs).toBeGreaterThanOrEqual(0);
+      expect(record.copyMs).toBeGreaterThanOrEqual(0);
+      expect("bail" in record).toBe(false);
     }, 90_000);
   });
 
@@ -493,6 +518,28 @@ describe("bun fixture", () => {
       }
       expect(errors.join("\n")).toContain("Unknown option for `keryx review mutate`: --no-bial");
     }, 90_000);
+
+    test("--no-bail with a value is refused instead of leaving the bail on", async () => {
+      const pkg = path.join(base, "pkg-value");
+      await mkdir(path.join(pkg, EVIDENCE_DIR), { recursive: true });
+      await writeFile(path.join(pkg, EVIDENCE_DIR, MUTANTS_SPEC), JSON.stringify({ mutants: [{ id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" }] }));
+      const flags = ["--test", TEST_CMD, "--package", pkg, "--worktree", proj, "--json"];
+      for (const bad of [["--no-bail=true"], ["--no-bail=1"], ["--no-bail", "false"]]) {
+        const logError = console.error;
+        const errors: string[] = [];
+        console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+        try {
+          process.exitCode = 0;
+          await reviewCommand(["mutate", ...flags, ...bad]);
+          expect([bad, process.exitCode]).toEqual([bad, 1]);
+        } finally {
+          console.error = logError;
+          process.exitCode = 0;
+        }
+        expect(errors.join("\n")).toContain("--no-bail takes no value");
+      }
+      expect(existsSync(path.join(pkg, EVIDENCE_DIR, "mutation-1.json"))).toBe(false);
+    }, 90_000);
   });
 });
 
@@ -514,11 +561,18 @@ describe("provenance", () => {
 
   test("a record from a git checkout carries the time, load, copy and mutant time, the commit and the tree hash", async () => {
     await gitCommit(tree);
+    const before = Date.now();
     const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: specs() });
+    const after = Date.now();
     expect(new Date(record.startedAt!).toISOString()).toBe(record.startedAt!);
+    expect(Date.parse(record.startedAt!)).toBeGreaterThanOrEqual(before);
+    expect(Date.parse(record.startedAt!)).toBeLessThanOrEqual(after);
     expect(record.loadavg).toHaveLength(3);
     for (const n of record.loadavg!) expect(typeof n).toBe("number");
-    expect(record.copyMs).toBeGreaterThanOrEqual(0);
+    for (const ms of [record.copyMs!, record.provenanceMs!]) {
+      expect(ms).toBeGreaterThanOrEqual(0);
+      expect(ms).toBeLessThanOrEqual(after - before);
+    }
     expect(record.mutantsMs).toBe(record.mutants.reduce((sum, m) => sum + m.ms, 0));
     expect(record.head).toBe(await git(tree, "rev-parse", "HEAD"));
     expect(record.treeHash).toMatch(/^[0-9a-f]{64}$/);
@@ -601,6 +655,116 @@ describe("treeHash", () => {
     const clean = await hashOf();
     await writeFile(path.join(tree, "ignored.txt"), "noise");
     expect(await hashOf()).toBe(clean);
+  });
+});
+
+describe("treeHash inputs", () => {
+  beforeEach(async () => {
+    await gitCommit(tree);
+  });
+
+  const hashOf = async () => (await worktreeProvenance(tree)).treeHash;
+  const spec = () => parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]);
+
+  test("a staged edit counts, with or without a later unstaged one", async () => {
+    const clean = await hashOf();
+    await writeFile(path.join(tree, "calc.js"), `${CALC}// edit\n`);
+    await git(tree, "add", "calc.js");
+    const staged = await hashOf();
+    expect(staged).not.toBe(clean);
+    await writeFile(path.join(tree, "calc.js"), `${CALC}// edit\n// more\n`);
+    expect(await hashOf()).not.toBe(staged);
+  });
+
+  test("a change to a tracked binary file counts", async () => {
+    await writeFile(path.join(tree, "bin.dat"), Buffer.from([0, 1, 2, 3]));
+    await git(tree, "add", "bin.dat");
+    await git(tree, "commit", "-q", "-m", "bin");
+    await writeFile(path.join(tree, "bin.dat"), Buffer.from([0, 1, 2, 4]));
+    const first = await hashOf();
+    await writeFile(path.join(tree, "bin.dat"), Buffer.from([0, 1, 2, 5]));
+    expect(await hashOf()).not.toBe(first);
+  });
+
+  test("the name of an untracked file counts, and so does where a link points", async () => {
+    await writeFile(path.join(tree, "one.txt"), "same");
+    const one = await hashOf();
+    await rm(path.join(tree, "one.txt"));
+    await writeFile(path.join(tree, "two.txt"), "same");
+    const two = await hashOf();
+    expect(two).not.toBe(one);
+    await rm(path.join(tree, "two.txt"));
+    await symlink("target-a", path.join(tree, "link"));
+    const linkA = await hashOf();
+    await rm(path.join(tree, "link"));
+    await symlink("target-b", path.join(tree, "link"));
+    expect(await hashOf()).not.toBe(linkA);
+  });
+
+  test("a review package under the reviews directory does not move the hash, also after a real pass wrote its evidence there", async () => {
+    const clean = await hashOf();
+    const pkg = path.join(tree, REVIEW_PACKAGES_DIR, "r1");
+    const first = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
+    await writeMutationEvidence(pkg, first);
+    expect(await hashOf()).toBe(clean);
+    const second = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
+    await writeMutationEvidence(pkg, second);
+    expect([first.treeHash, second.treeHash]).toEqual([clean, clean]);
+    await git(tree, "add", "-f", REVIEW_PACKAGES_DIR);
+    await git(tree, "commit", "-q", "-m", "package");
+    const committed = await hashOf();
+    await writeFile(path.join(pkg, "report.md"), "edited");
+    expect(await hashOf()).toBe(committed);
+  }, 60_000);
+});
+
+describe("provenance limits", () => {
+  beforeEach(async () => {
+    await gitCommit(tree);
+  });
+
+  const files = async (count: number, content = "x") => {
+    for (let i = 0; i < count; i += 1) await writeFile(path.join(tree, `u${i}.txt`), content);
+  };
+
+  test("the default cap lets a tree with a few untracked files through", async () => {
+    await files(5);
+    expect((await worktreeProvenance(tree)).treeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(DEFAULT_PROVENANCE_LIMITS.maxUntrackedFiles).toBeGreaterThanOrEqual(1000);
+  });
+
+  test("more untracked files than the cap leave the treeHash out and keep the head", async () => {
+    await files(3);
+    const over = await worktreeProvenance(tree, { maxUntrackedFiles: 2 });
+    expect(over.head).toMatch(/^[0-9a-f]{40}$/);
+    expect("treeHash" in over).toBe(false);
+    expect((await worktreeProvenance(tree, { maxUntrackedFiles: 3 })).treeHash).toBeDefined();
+  });
+
+  test("a file over the size cap counts by size only, one at the cap by content", async () => {
+    await writeFile(path.join(tree, "big.txt"), "123456");
+    const first = (await worktreeProvenance(tree, { maxHashedFileBytes: 5 })).treeHash;
+    await writeFile(path.join(tree, "big.txt"), "abcdef");
+    expect((await worktreeProvenance(tree, { maxHashedFileBytes: 5 })).treeHash).toBe(first!);
+    expect((await worktreeProvenance(tree)).treeHash).not.toBe((await worktreeProvenance(tree, { maxHashedFileBytes: 5 })).treeHash);
+    await writeFile(path.join(tree, "big.txt"), "abcde");
+    expect((await worktreeProvenance(tree, { maxHashedFileBytes: 5 })).treeHash).not.toBe(first!);
+  });
+
+  test("a tracked diff over the git output cap, a total over the byte budget and an exhausted deadline each leave the treeHash out", async () => {
+    await writeFile(path.join(tree, "calc.js"), `${CALC}${"// line\n".repeat(50)}`);
+    const diffOver = await worktreeProvenance(tree, { maxGitOutputBytes: 100 });
+    expect(diffOver.head).toBeDefined();
+    expect("treeHash" in diffOver).toBe(false);
+    await git(tree, "checkout", "--", "calc.js");
+    await files(2, "0123456789");
+    const bytesOver = await worktreeProvenance(tree, { maxTotalBytes: 20 });
+    expect(bytesOver.head).toBeDefined();
+    expect("treeHash" in bytesOver).toBe(false);
+    expect((await worktreeProvenance(tree, { maxTotalBytes: 1000 })).treeHash).toBeDefined();
+    const late = await worktreeProvenance(tree, { maxMs: -1 });
+    expect(late.head).toBeDefined();
+    expect("treeHash" in late).toBe(false);
   });
 });
 

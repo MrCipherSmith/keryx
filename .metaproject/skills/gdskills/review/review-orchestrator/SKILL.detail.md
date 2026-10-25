@@ -779,11 +779,15 @@ When `--test` is a plain `[env] [NAME=value] bun test <paths>` command, each mut
 `--bail` inserted right after `bun test`: the first red test ends that run, so a killed mutant
 costs the time to its first failure, not the whole suite. The baseline always runs in full, and
 a green run is the same with or without the flag, so a survivor stays a survivor. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. Any other command shape
-(`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off. The `.json` record
-then carries `bail: true` when it was applied, and, for the next measurement, `startedAt`, `head`
-and `treeHash` (the commit and a hash of the uncommitted state judged; absent outside git),
-`loadavg` (at the end of the pass), `copyMs` and `mutantsMs`. Records written before these fields
-exist stay valid.
+(`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off and takes no value.
+The `.json` record carries `bail: true` when it was applied; always `startedAt`, `loadavg` (sampled
+at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; and `head` and `treeHash` only
+when the worktree is the root of a git checkout and the size and time limits of that step held.
+`treeHash` hashes the tracked changes against HEAD (staged or not) and the untracked, non-ignored
+files, so two passes over the same code agree. It leaves out the review packages under
+`.metaproject/reviews`, ignored files (the scratch copy still includes them), the inside of an
+untracked nested repository, and the content of an untracked file over 10 MiB (counted by size).
+Records written before these fields exist stay valid.
 
 `keryx review complete` refuses while proposed mutants are unrun on an attended round, unless the
 operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or their answer to

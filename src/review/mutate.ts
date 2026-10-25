@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { loadavg, tmpdir } from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+import { worktreeProvenance } from "./worktree-provenance";
 
 /**
  * What a mutant changes. `behavior` alters what the code does; `presentation` alters only how it
@@ -60,10 +61,12 @@ export type MutationRecord = {
   startedAt?: string | undefined;
   /** Commit of the reviewed worktree; absent outside a git checkout. */
   head?: string | undefined;
-  /** sha256 of the uncommitted state (tracked diff plus untracked, non-ignored files); absent outside git or on a very large untracked set. */
+  /** sha256 of the uncommitted state (tracked diff plus untracked, non-ignored files, review packages excluded); see `worktreeProvenance` for what it does not cover. Absent outside the root of a git checkout, when git fails, or when a size or time limit is hit. */
   treeHash?: string | undefined;
-  /** os.loadavg() at the end of the pass: 1, 5 and 15 minutes. */
+  /** os.loadavg() at the start of the pass, before the provenance step and the copy: 1, 5 and 15 minutes. */
   loadavg?: [number, number, number] | undefined;
+  /** Time spent reading the git state of the worktree (head and treeHash). */
+  provenanceMs?: number | undefined;
   /** Time spent copying the worktree to scratch. */
   copyMs?: number | undefined;
   /** Sum of the mutant rows' `ms`. */
@@ -140,70 +143,6 @@ export function withBail(command: string): string | undefined {
   return [...tokens.slice(0, at + 2), "--bail", ...rest].join(" ");
 }
 
-const MAX_UNTRACKED_FILES = 20_000;
-const MAX_HASHED_FILE_BYTES = 10 * 1024 * 1024;
-const GIT_TIMEOUT_MS = 60_000;
-
-function gitOutput(args: string[], cwd: string): Promise<Buffer | undefined> {
-  return new Promise((resolve) => {
-    const env: NodeJS.ProcessEnv = { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
-    for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY"]) delete env[name];
-    const child = spawn("git", args, { cwd, env, stdio: ["ignore", "pipe", "ignore"] });
-    const chunks: Buffer[] = [];
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      resolve(undefined);
-    }, GIT_TIMEOUT_MS);
-    child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
-    child.on("error", () => {
-      clearTimeout(timer);
-      resolve(undefined);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(code === 0 ? Buffer.concat(chunks) : undefined);
-    });
-  });
-}
-
-/** What one untracked entry contributes to the hash; a link or special file is never followed or opened. */
-async function untrackedDigest(full: string): Promise<Buffer> {
-  try {
-    const info = await lstat(full);
-    if (info.isSymbolicLink()) return Buffer.from(`link:${await readlink(full)}`);
-    if (!info.isFile()) return Buffer.from("other:");
-    return info.size <= MAX_HASHED_FILE_BYTES ? Buffer.concat([Buffer.from("file:"), await readFile(full)]) : Buffer.from(`big:${info.size}`);
-  } catch {
-    return Buffer.from("unreadable:");
-  }
-}
-
-/**
- * Which state of the worktree a pass judged: its commit and a hash of everything uncommitted.
- * Both are left out when the worktree is not the root of a git checkout or git fails; `treeHash` also
- * when the untracked set is too large to read. Runs on the worktree, never on the scratch copy.
- */
-export async function worktreeProvenance(worktree: string): Promise<{ head?: string; treeHash?: string }> {
-  const top = await gitOutput(["rev-parse", "--show-toplevel"], worktree);
-  if (top === undefined) return {};
-  const [topReal, worktreeReal] = await Promise.all([realpath(top.toString("utf8").trim()).catch(() => undefined), realpath(worktree).catch(() => undefined)]);
-  if (topReal === undefined || topReal !== worktreeReal) return {};
-  const headOut = await gitOutput(["rev-parse", "HEAD"], worktree);
-  if (headOut === undefined) return {};
-  const head = headOut.toString("utf8").trim();
-  const diff = await gitOutput(["diff", "HEAD", "--binary", "--no-ext-diff", "--no-textconv", "--no-color"], worktree);
-  const listed = await gitOutput(["ls-files", "--others", "--exclude-standard", "-z"], worktree);
-  if (diff === undefined || listed === undefined) return { head };
-  const untracked = listed.toString("utf8").split("\0").filter((name) => name !== "").sort();
-  if (untracked.length > MAX_UNTRACKED_FILES) return { head };
-  const hash = createHash("sha256").update(diff);
-  for (const name of untracked) {
-    const digest = await untrackedDigest(path.join(worktree, name));
-    hash.update(`\0${name}\0${digest.length}\0`).update(digest);
-  }
-  return { head, treeHash: hash.digest("hex") };
-}
-
 /** Process groups of the test commands running now; a signal kills them before the scratch copy goes. */
 const liveGroups = new Set<number>();
 
@@ -220,9 +159,7 @@ function killLiveGroups(): void {
 
 /** The environment a test run gets: git cannot be pointed at another repository, so the ceiling holds. */
 function runEnv(scratchBase: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
-  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY"]) delete env[name];
-  return env;
+  return { ...withoutGitDiscoveryOverrides(process.env), GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
 }
 
 function runCommand(command: string, cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<{ exitCode: number; timedOut: boolean; ms: number; output: string }> {
@@ -328,8 +265,13 @@ export async function runMutation(options: {
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
   const startedAt = new Date().toISOString();
+  // Sampled before the pass's own test runs, so it shows the load that was there already.
+  const load = loadavg() as [number, number, number];
   // Before the scratch directory exists, so the hash describes the tree the caller handed in.
+  const provenanceStarted = Date.now();
   const provenance = await worktreeProvenance(worktree);
+  const provenanceMs = Date.now() - provenanceStarted;
+  const passFields = { startedAt, ...provenance, loadavg: load, provenanceMs };
   const timeoutMs = options.timeoutMs ?? 300_000;
   const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
   await mkdir(scratchBase, { recursive: true });
@@ -360,11 +302,13 @@ export async function runMutation(options: {
         baseline: { exitCode: baseline.exitCode, ms: baseline.ms, timedOut: baseline.timedOut, cwd: copy, tail },
         mutants: [],
         totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+        ...passFields,
+        copyMs,
       });
     }
 
-    const bailed = options.bail === false ? undefined : withBail(options.command);
-    const mutantCommand = bailed ?? options.command;
+    const bailCommand = options.bail === false ? undefined : withBail(options.command);
+    const mutantCommand = bailCommand ?? options.command;
     const results: MutantResult[] = [];
     const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
     // The cap bounds the mutants that actually run. An invalid candidate costs nothing and stays pending
@@ -407,10 +351,8 @@ export async function runMutation(options: {
       mutants: results,
       totals,
       ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - ran }),
-      ...(bailed === undefined ? {} : { bail: true as const }),
-      startedAt,
-      ...provenance,
-      loadavg: loadavg() as [number, number, number],
+      ...(bailCommand === undefined ? {} : { bail: true as const }),
+      ...passFields,
       copyMs,
       mutantsMs: results.reduce((sum, r) => sum + r.ms, 0),
     };
@@ -422,6 +364,7 @@ export async function runMutation(options: {
 
 function costLine(record: MutationRecord): string[] {
   const parts: string[] = [];
+  if (record.provenanceMs !== undefined) parts.push(`provenance ${record.provenanceMs} ms`);
   if (record.copyMs !== undefined) parts.push(`copy ${record.copyMs} ms`);
   if (record.mutantsMs !== undefined) parts.push(`mutants ${record.mutantsMs} ms`);
   if (record.loadavg !== undefined) parts.push(`load ${record.loadavg.map((n) => n.toFixed(1)).join("/")}`);

@@ -3442,12 +3442,14 @@ async function runMutate(args: string[]): Promise<void> {
   const scratchArg = optionValue(args, "--scratch");
   if (scratchArg !== undefined && !SCRATCH_MODES.includes(scratchArg as ScratchMode)) throw new Error(`--scratch must be one of ${SCRATCH_MODES.join(", ")}`);
   const scratch = scratchArg as ScratchMode | undefined;
+  const noBail = flagTokens(args).find((token) => token.name === "--no-bail");
+  if (noBail?.value !== undefined) throw new Error(`--no-bail takes no value (got "${noBail.value}"); pass it alone to run the mutants without --bail`);
   const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
   // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
   const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
   let record;
   try {
-    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch, bail: !args.includes("--no-bail") });
+    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch, bail: noBail === undefined });
   } catch (error) {
     // A red baseline still leaves evidence: the command, its cwd and the output tail say why no mutant ran.
     if (error instanceof BaselineError) {
