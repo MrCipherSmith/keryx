@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { loadavg, tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -136,43 +136,70 @@ export function withBail(command: string): string | undefined {
   while (at < tokens.length && ENV_ASSIGNMENT.test(tokens[at]!)) at += 1;
   if (tokens[at] !== "bun" || tokens[at + 1] !== "test") return undefined;
   const rest = tokens.slice(at + 2);
-  if (rest.some((token) => token === "--bail" || token.startsWith("--bail="))) return undefined;
+  if (rest.some((token) => token === "--bail" || token.startsWith("--bail=") || token === "--watch" || token === "--hot")) return undefined;
   return [...tokens.slice(0, at + 2), "--bail", ...rest].join(" ");
 }
 
 const MAX_UNTRACKED_FILES = 20_000;
+const MAX_HASHED_FILE_BYTES = 10 * 1024 * 1024;
+const GIT_TIMEOUT_MS = 60_000;
 
 function gitOutput(args: string[], cwd: string): Promise<Buffer | undefined> {
   return new Promise((resolve) => {
-    const env = { ...process.env };
+    const env: NodeJS.ProcessEnv = { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
     for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY"]) delete env[name];
     const child = spawn("git", args, { cwd, env, stdio: ["ignore", "pipe", "ignore"] });
     const chunks: Buffer[] = [];
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(undefined);
+    }, GIT_TIMEOUT_MS);
     child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
-    child.on("error", () => resolve(undefined));
-    child.on("close", (code) => resolve(code === 0 ? Buffer.concat(chunks) : undefined));
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(code === 0 ? Buffer.concat(chunks) : undefined);
+    });
   });
+}
+
+/** What one untracked entry contributes to the hash; a link or special file is never followed or opened. */
+async function untrackedDigest(full: string): Promise<Buffer> {
+  try {
+    const info = await lstat(full);
+    if (info.isSymbolicLink()) return Buffer.from(`link:${await readlink(full)}`);
+    if (!info.isFile()) return Buffer.from("other:");
+    return info.size <= MAX_HASHED_FILE_BYTES ? Buffer.concat([Buffer.from("file:"), await readFile(full)]) : Buffer.from(`big:${info.size}`);
+  } catch {
+    return Buffer.from("unreadable:");
+  }
 }
 
 /**
  * Which state of the worktree a pass judged: its commit and a hash of everything uncommitted.
- * Both are left out when the worktree is not a git checkout or git fails; `treeHash` also when the
- * untracked set is too large to read. Runs on the worktree, never on the scratch copy.
+ * Both are left out when the worktree is not the root of a git checkout or git fails; `treeHash` also
+ * when the untracked set is too large to read. Runs on the worktree, never on the scratch copy.
  */
 export async function worktreeProvenance(worktree: string): Promise<{ head?: string; treeHash?: string }> {
+  const top = await gitOutput(["rev-parse", "--show-toplevel"], worktree);
+  if (top === undefined) return {};
+  const [topReal, worktreeReal] = await Promise.all([realpath(top.toString("utf8").trim()).catch(() => undefined), realpath(worktree).catch(() => undefined)]);
+  if (topReal === undefined || topReal !== worktreeReal) return {};
   const headOut = await gitOutput(["rev-parse", "HEAD"], worktree);
   if (headOut === undefined) return {};
   const head = headOut.toString("utf8").trim();
-  const diff = await gitOutput(["diff", "HEAD", "--binary"], worktree);
+  const diff = await gitOutput(["diff", "HEAD", "--binary", "--no-ext-diff", "--no-textconv", "--no-color"], worktree);
   const listed = await gitOutput(["ls-files", "--others", "--exclude-standard", "-z"], worktree);
   if (diff === undefined || listed === undefined) return { head };
   const untracked = listed.toString("utf8").split("\0").filter((name) => name !== "").sort();
   if (untracked.length > MAX_UNTRACKED_FILES) return { head };
   const hash = createHash("sha256").update(diff);
   for (const name of untracked) {
-    // A directory (a nested checkout) or a broken link has no readable content; its path still counts.
-    const content = await readFile(path.join(worktree, name)).catch(() => Buffer.alloc(0));
-    hash.update(`\0${name}\0${content.length}\0`).update(content);
+    const digest = await untrackedDigest(path.join(worktree, name));
+    hash.update(`\0${name}\0${digest.length}\0`).update(digest);
   }
   return { head, treeHash: hash.digest("hex") };
 }

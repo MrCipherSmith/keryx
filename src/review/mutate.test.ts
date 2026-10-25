@@ -317,6 +317,7 @@ describe("withBail", () => {
     expect(withBail("FOO=1 BAR=a/b:c,d bun test src/a.test.ts")).toBe("FOO=1 BAR=a/b:c,d bun test --bail src/a.test.ts");
     expect(withBail("env CI=true bun test src/a.test.ts")).toBe("env CI=true bun test --bail src/a.test.ts");
     expect(withBail("env bun test x")).toBe("env bun test --bail x");
+    expect(withBail("bun test --rerun-each 2 src/a.test.ts")).toBe("bun test --bail --rerun-each 2 src/a.test.ts");
   });
 
   test("returns undefined for any other tool, for a command with a shell metacharacter, and when --bail is already there", () => {
@@ -335,6 +336,8 @@ describe("withBail", () => {
       "bun test --bail a.test.ts",
       "bun test a.test.ts --bail",
       "bun test --bail=2 a.test.ts",
+      "bun test --watch a.test.ts",
+      "bun test a.test.ts --hot",
       'bun test "a b.test.ts"',
       "bun test 'a.test.ts'",
       "bun test $FILE",
@@ -416,6 +419,35 @@ describe("bun fixture", () => {
       expect(statuses(bailed)).toEqual([["kill", "killed"], ["both", "killed"], ["live", "survived"], ["hang", "timeout"], ["bad", "invalid"]]);
       expect(statuses(full)).toEqual(statuses(bailed));
       expect(bailed.totals).toEqual({ killed: 2, survived: 1, invalid: 1, timeout: 1 });
+    }, 90_000);
+  });
+
+  describe("bail status parity with file arguments", () => {
+    test("bail status parity: bun accepts --bail before explicit test files and statuses match", async () => {
+      const command = "bun test a.test.ts b.test.ts";
+      const only = parseMutantSpec([
+        { id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" },
+        { id: "live", file: "calc.ts", anchor: "n > 0", replacement: "n >= 0" },
+        { id: "bad", file: "calc.ts", anchor: "no such text", replacement: "x" },
+      ]);
+      const bailed = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 8000, mutants: only });
+      const full = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 8000, mutants: only, bail: false });
+      expect(bailed.bail).toBe(true);
+      for (const m of bailed.mutants) expect(m.command).toBe("bun test --bail a.test.ts b.test.ts");
+      expect(statuses(bailed)).toEqual([["kill", "killed"], ["live", "survived"], ["bad", "invalid"]]);
+      expect(statuses(full)).toEqual(statuses(bailed));
+    }, 90_000);
+
+    test("bail status parity: early failure plus later hang is killed", async () => {
+      await rm(path.join(proj, "b.test.ts"));
+      await rm(path.join(proj, "c.test.ts"));
+      await writeFile(path.join(proj, "z.test.ts"), 'import { test } from "bun:test";\nimport { add } from "./calc";\ntest("hang", () => {\n  if (add(2, 3) !== 5) while (true) {}\n});\n');
+      const command = "bun test a.test.ts z.test.ts";
+      const one = parseMutantSpec([{ id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" }]);
+      const bailed = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 5000, mutants: one });
+      const full = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 5000, mutants: one, bail: false });
+      expect(statuses(full)).toEqual([["kill", "timeout"]]);
+      expect(statuses(bailed)).toEqual([["kill", "killed"]]);
     }, 90_000);
   });
 
@@ -502,6 +534,31 @@ describe("provenance", () => {
     expect(record.copyMs).toBeDefined();
     expect(await worktreeProvenance(tree)).toEqual({});
   });
+
+  test("a worktree that is a subdirectory of another repository gets no head and no treeHash", async () => {
+    await gitCommit(tree);
+    await mkdir(path.join(tree, "sub"), { recursive: true });
+    await writeFile(path.join(tree, "sub", "x.txt"), "x");
+    expect(await worktreeProvenance(path.join(tree, "sub"))).toEqual({});
+    expect((await worktreeProvenance(tree)).head).toBeDefined();
+  });
+
+  test("an untracked link to a FIFO or to a file outside the worktree does not hang and its target never enters the treeHash", async () => {
+    await gitCommit(tree);
+    const outside = path.join(base, "outside.txt");
+    const fifo = path.join(base, "pipe");
+    await writeFile(outside, "one");
+    const made = Bun.spawn(["mkfifo", fifo], { stdout: "ignore", stderr: "ignore" });
+    expect(await made.exited).toBe(0);
+    await symlink(outside, path.join(tree, "out-link"));
+    await symlink(fifo, path.join(tree, "fifo-link"));
+    const direct = Bun.spawn(["mkfifo", path.join(tree, "direct-fifo")], { stdout: "ignore", stderr: "ignore" });
+    expect(await direct.exited).toBe(0);
+    const first = (await worktreeProvenance(tree)).treeHash;
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+    await writeFile(outside, "two, and longer");
+    expect((await worktreeProvenance(tree)).treeHash).toBe(first!);
+  }, 30_000);
 
   test("a repository with no commit has no head and no treeHash", async () => {
     await git(tree, "init", "-q");

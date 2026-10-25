@@ -778,7 +778,7 @@ A survivor is evidence for the finding that names it.
 When `--test` is a plain `[env] [NAME=value] bun test <paths>` command, each mutant runs with
 `--bail` inserted right after `bun test`: the first red test ends that run, so a killed mutant
 costs the time to its first failure, not the whole suite. The baseline always runs in full, and
-a green run is the same with or without the flag, so no status changes. Any other command shape
+a green run is the same with or without the flag, so a survivor stays a survivor. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. Any other command shape
 (`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off. The `.json` record
 then carries `bail: true` when it was applied, and, for the next measurement, `startedAt`, `head`
 and `treeHash` (the commit and a hash of the uncommitted state judged; absent outside git),
