@@ -1,0 +1,78 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776
+- Scope mode: explicit slice, slice-02 only (docs, skills, flow-464 files, schema, version)
+- Spec compliance gate: skipped (no issue attached; PR acceptance criteria live in flow 464, checked only as far as the slice touches them)
+
+### Summary
+slice-02 is documentation, skill text, flow-464 bookkeeping, one JSON schema addition and a version bump. Every behavioural claim in it that I could check against code at head holds. One wording inconsistency remains in the review-orchestrator skill (same class as the already-closed D-08, at a different site).
+
+### Verified against code at head
+- TM-04 section 6a and section 8: operator-confirm-tools.ts invoke() burns the token first (pending.delete), then refuses a remote answer with no pressedBy/pressedAt, a user id not in allowedUserIds, or a card older than REMOTE_CARD_TTL_MS (1 hour); pressedBy/pressedAt are written only when the answer is remote. The text matches.
+- CLI reference, commands-by-task, review-with-a-record guide, limitations and CHANGELOG 0.3.124: consistent with runComplete delegating to completeReviewGated and with the card tool names that exist.
+- flow-state.schema.json: pressedBy (integer) and pressedAt (string) sit inside confirmation.properties, matching src/flow/schema.ts:331-332, src/flow/types.ts:188-189 and src/flow/service.ts:1681-1682.
+- Flow-464 frozen acceptance-criteria checksum matches the acChecksum recipe (CRLF to LF, per-line trim, sha256).
+- Both copies of the review-orchestrator and review-premise skills (.metaproject/skills/gdskills and src/gdskills/bundled/skills) are identical.
+- Not re-filed: r03 minors D-02..D-14, and the autonomous-profile.ts wording.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+F-001 (minor), skill text: the "Done when" rule has no carve-out for the autonomous runner. See the JSON below.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-02 (docs, skills, flow-464 files, schema, version) matches the code at head on every behavioural claim checked. One minor wording contradiction: the review-orchestrator SKILL.md Done-when bullet says an agent never runs `keryx review complete`, with no autonomous-runner exception, while the autonomous profile requires exactly that and the card tools are excluded for unattended runs.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": [
+    {
+      "id": "slice-02",
+      "status": "DONE",
+      "coverage": "whole slice-02.diff read; claims checked against operator-confirm-tools.ts, commands/review.ts, review/complete-gated.ts, trigger/unattended.ts, agent.ts press handling, flow/store.ts acChecksum, flow schema/types/service, flow-state.schema.json, and both skill copies at head b1c6da0e6"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 136,
+      "quote": "the `review_complete` card has been answered (an agent never runs `keryx review complete`; that command is for a human in a terminal)",
+      "problem": "The Done-when bullet states an absolute rule that an agent never runs `keryx review complete`. For an unattended or autonomous run this is the opposite of what the run is told: src/review/autonomous-profile.ts:144 and :153 say the run is finished only when `keryx review complete` has closed the package, and src/trigger/unattended.ts lists review_complete in OPERATOR_CONFIRM_TOOL_NAMES, so an unattended run has no card to call. The same text exists in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md (identical copy). docs/docs/guides/autonomous-review.md already states the autonomous exception (D-08, closed); this skill bullet does not.",
+      "impact": "An orchestrator agent that loads this skill inside an autonomous run reads two incompatible instructions for closing the package. It may stop at 'record Not run' or wait for a card that is never offered, rather than run the CLI as the profile instructs. Wording only; the gates still apply to whichever path runs.",
+      "suggested_fix": "Add the exception to the bullet in both copies, e.g. `(an interactive agent never runs `keryx review complete`; that command is for a human in a terminal. An unattended or autonomous run has no card tools and closes the package with the CLI, as its run profile says)`.",
+      "evidence": "Read of SKILL.md line 136 at head; grep of src/review/autonomous-profile.ts lines 144 and 153 ('keryx review complete'); src/trigger/unattended.ts OPERATOR_CONFIRM_TOOL_NAMES includes review_complete; holdReviewGate in src/commands/agent.ts returns false when deps.unattended is true.",
+      "confidence": "medium",
+      "dedupe_key": "D-08-skill-done-when"
+    }
+  ]
+}
+```

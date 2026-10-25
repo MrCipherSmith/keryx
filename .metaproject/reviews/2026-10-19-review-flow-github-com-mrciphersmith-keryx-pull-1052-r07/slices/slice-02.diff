@@ -1,0 +1,175 @@
+--- src/commands/operator-confirm-review.ts
+@@ 352,409 @@
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_waive_readiness: nothing prepared for this card", isError: true };
+       const current = (await computeReadiness(prepared.dir, readiness())).items.find((entry) => entry.id === prepared.item);
+       if (current === undefined || current.status !== "fail" || current.evidence !== prepared.evidence) {
+         return { output: "The readiness item changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+       const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) });
+       return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Call review_complete to close the review.` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 5-6. review_waive_mutation, review_override_reviewers (flow 457)
+ 
+ type DecisionPrepared = { dir: string; reason: string; detail: string; subject: OperatorDecisionSubject };
+ 
+-const reasonOf = (input: Record<string, unknown>): string | undefined => {
++/** The reason is stored as the evidence of the decision, so it is refused when the card would show it differently. */
++const reasonOf = (input: Record<string, unknown>): { reason: string } | { refusal: string } => {
+   const value = input["reason"];
+-  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
++  const text = typeof value === "string" ? value.trim() : "";
++  if (text === "") return { refusal: "reason is required" };
++  return hiddenInCard(text) ? { refusal: `reason ${HIDDEN_IN_CARD}` } : { reason: text };
+ };
+ 
+ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionPrepared> {
+   const mutation = kind === "mutation-waiver";
+   return {
+     name: mutation ? "review_waive_mutation" : "review_override_reviewers",
+     description: mutation
+       ? "Record the operator's waiver of the mutation pass: the proposed mutants stay unrun and the review records `Not run: mutation pass`. Pass the review package and the reason. " +
+         "Same effect as `keryx review waive-mutation` at a terminal. A mutationWaiver quote you write into the dispatch is not accepted on its own."
+       : "Record the operator's decision to run a smaller reviewer set than `keryx review required` names (an override, or mode diff). Pass the review package, the reason and, optionally, the reviewers that will run. " +
+         "Same effect as `keryx review override-reviewers` at a terminal. An override quote you write into the dispatch is not accepted on its own.",
+     inputSchema: {
+       type: "object",
+       properties: {
+         package: packageSchema,
+         reason: { type: "string", description: "Why, in a sentence the operator will read." },
+         ...(mutation ? {} : { selected: { type: "array", items: { type: "string" }, description: "The reviewers that will run." } }),
+       },
+       required: ["package", "reason"],
+       additionalProperties: false,
+     },
+     async buildCard(input, ctx): Promise<OperatorCardResult<DecisionPrepared>> {
+       const ref = packageRef(input);
+-      const reason = reasonOf(input);
++      const given = reasonOf(input);
+       if (ref === undefined) return { refusal: "package is required" };
+-      if (reason === undefined) return { refusal: "reason is required" };
++      if ("refusal" in given) return given;
++      const { reason } = given;
+       try {
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+         const name = label(dir, ctx.projectRoot);
+         if (mutation) {
+           const subject = await operatorDecisionSubject(dir, kind);
+
+--- src/commands/operator-confirm-review.ts
+@@ 588,635 @@
+ 
+ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
+   return {
+     name: "review_decide_premise",
+     description:
+       "Record the operator's answer to a finding the premise judge held (verdict challenged or owner-decision): uphold keeps it at its original severity, dismiss records it dismissed-incorrect with the reason as evidence. " +
+       "Pass the review package, the finding (its global_id or id), the answer you are asking for and the reason. Same effect as `keryx review decide-premise` at a terminal. A held finding never goes to a fixer before this is answered.",
+     inputSchema: {
+       type: "object",
+       properties: {
+         package: packageSchema,
+         finding: { type: "string", description: "The held finding: its global_id or id." },
+         answer: { type: "string", enum: ["uphold", "dismiss"], description: "The answer to record if the operator confirms." },
+         reason: { type: "string", description: "Why, in a sentence the operator will read." },
+       },
+       required: ["package", "finding", "answer", "reason"],
+       additionalProperties: false,
+     },
+     async buildCard(input, ctx): Promise<OperatorCardResult<PremisePrepared>> {
+       const ref = packageRef(input);
+-      const reason = reasonOf(input);
++      const given = reasonOf(input);
+       const finding = typeof input["finding"] === "string" ? input["finding"].trim() : "";
+       const answer = input["answer"];
+       if (ref === undefined) return { refusal: "package is required" };
+       if (finding === "") return { refusal: "finding is required" };
+       if (answer !== "uphold" && answer !== "dismiss") return { refusal: 'answer must be "uphold" or "dismiss"' };
+-      if (reason === undefined) return { refusal: "reason is required" };
++      if ("refusal" in given) return given;
++      const { reason } = given;
+       try {
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+         const held = await findHeldFinding(dir, finding);
+         if (!held.ok) return { refusal: held.refusal };
+         const found = held.finding;
+         const name = label(dir, ctx.projectRoot);
+         return {
+           title: answer === "uphold" ? `Uphold finding ${cardSafe(found.key)} in ${name} at ${cardSafe(found.severity)}?` : `Dismiss finding ${cardSafe(found.key)} in ${name} as incorrect?`,
+           lines: [
+             `finding: ${cardSafe(found.key)} (${cardSafe(found.severity)}): ${cardSafe(found.problem)}`,
+             `premise judge: ${cardSafe(found.verdict)}: ${cardSafe(found.question)}`,
+             ...(found.answered === undefined ? [] : [`already answered: ${found.answered}; this answer replaces it`]),
+             `reason: ${cardSafe(reason)}`,
+             answer === "uphold"
+               ? `yes: the finding is kept at ${cardSafe(found.severity)} and goes to the fixer again`
+               : "yes: the finding is recorded dismissed-incorrect with your reason as the evidence",
+           ],
+           subject: `package ${name}, finding ${cardSafe(found.key)}`,
+           prepared: { dir, finding: found.key, answer, reason, digest: found.digest },
+         };
+
+--- src/commands/operator-confirm-review.ts
+@@ 668,689 @@
+ 
++const HIDDEN_IN_CARD = "holds control, escape, newline, bidi or zero-width characters the card would hide or rewrite; send plain single-line text";
++
++/** Text the model supplies is stored as given, so the card must show it as given: anything `cardSafe` would remove or rewrite, or that draws nothing, is refused. */
++const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\p{Cf}\p{Zl}\p{Zp}]/u.test(text);
++
+ const dispositionsSchema = {
+   type: "array",
+   description:
+     "Optional. How each earlier finding was handled in this fix round, recorded when the round closes (the same as `review complete --finding … --disposition … --evidence …`). The operator sees every entry on the card.",
+   items: {
+     type: "object",
+     properties: {
+       finding: { type: "string", description: "The finding's global id or display id." },
+       disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
+-      evidence: { type: "string", description: "Optional: the commit or reasoning behind the disposition." },
++      evidence: { type: "string", description: `Optional: the commit or reasoning behind the disposition. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.` },
+     },
+     required: ["finding", "disposition"],
+     additionalProperties: false,
+   },
+ } as const;
+ 
+
+--- src/commands/operator-confirm-review.ts
+@@ 702,728 @@
+     if (finding === "") return { refusal: `dispositions[${index}]: finding is required` };
+     if (typeof state !== "string" || !(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)) {
+       return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
+     }
+     if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
+-    records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === "" ? {} : { evidence: evidence.trim() }) });
++    const text = evidence?.trim();
++    if (finding.length > MAX_DISPOSITION_FINDING_CHARS) return { refusal: `dispositions[${index}]: finding is longer than ${MAX_DISPOSITION_FINDING_CHARS} characters` };
++    if (text !== undefined && text.length > MAX_DISPOSITION_EVIDENCE_CHARS) {
++      return { refusal: `dispositions[${index}]: evidence is ${text.length} characters; the card shows it whole, so the limit is ${MAX_DISPOSITION_EVIDENCE_CHARS}` };
++    }
++    for (const [field, value] of [["finding", finding], ["evidence", text ?? ""]] as const) {
++      if (hiddenInCard(value)) return { refusal: `dispositions[${index}]: ${field} ${HIDDEN_IN_CARD}` };
++    }
++    records.push({ finding, state: state as FindingDispositionState, ...(text === undefined || text === "" ? {} : { evidence: text }) });
+   }
+   return records;
+ }
+ 
+ const dispositionLine = (record: FindingDispositionRecord): string =>
+-  `disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? "" : `: "${cardSafe(clip(record.evidence))}"`}`;
++  `disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? "" : `: "${cardSafe(record.evidence)}"`}`;
+ 
+ type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
+ 
+ /** What the card shows, read from the package. The same read is repeated in `apply` to see that nothing moved. */
+ async function completionFacts(dir: string): Promise<CompletionFacts> {
+   const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as {
+     reviewId?: string;

@@ -1,0 +1,161 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "stats": {"findings": 4, "blocker": 0, "major": 0, "minor": 4, "info": 0},
+  "wave": 2,
+  "round": 3,
+  "head_reviewed": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+  "slices": ["slice-02"],
+  "graph_context": "unavailable: no graphify-out/graph.json used; keryx ctx rg and the read-only scratch mutation copy were the navigation. The scratch copy is `git archive HEAD` (cfd839061, one test-only TUI commit past the reviewed head); src/tui/operator-confirmations.ts, its test and tui-shell.ts were then overwritten with the 6f47bf35f versions and the four TUI mutants re-run, so every verdict below holds at 6f47bf35f. src/commands, src/review and src/flow are identical between the two commits.",
+  "prior_dispositions": [
+    {
+      "id": "C-07",
+      "disposition": "closed",
+      "evidence": "src/commands/operator-confirm-tools.test.ts:317-420 (AC2 block) now has 'with no allowed-id list to check (the provider returns undefined) a remote answer is refused and the token is spent' and 'with no allowed-id provider bound at all a remote answer is refused'. Mutation at HEAD of the gate at operator-confirm-tools.ts:215: M01 (`allowed !== undefined && !allowed.includes(pressedBy)`) red, 2 fail; M02 (`allowed?.includes(pressedBy) === false`) red, 2 fail. Both inversions named in C-07 are now caught."
+    },
+    {
+      "id": "C-08",
+      "disposition": "closed",
+      "evidence": "src/commands/operator-confirm-review-tools.test.ts, describe 'the card meets the same gates as the terminal command' drives merged PR, moved head, held premise, operatorGate with no run-profile.json and narrowed routing through the card, asserting the refusal text and that nothing is recorded. Mutation: replacing the card's prLookup default at operator-confirm-review.ts:757 with a null lookup is red (2 fail: 'a merged pull request is refused', 'a head that moved is refused'), so the head gate is no longer inert in these tests. The run-profile and routing refusals were not individually mutated (they are covered by tests that name the gate text); I judge them closed on the presence of the gate-specific assertions."
+    },
+    {
+      "id": "C-33",
+      "disposition": "partial",
+      "evidence": "Closed parts: TTL boundary (operator-confirm-tools.test.ts 'exactly at the hour is accepted' and '+1 refused'; M03 and M04 red), 'tool-result text' now with a token, remote-yes recording for chunks_answer, confirm_plan, decide_premise and review_complete (M06, M07 at line 157, site 566, site 639, site 772 red). Still open: the press-field recording is unpinned for review_publish (operator-confirm-review.ts:236), review_waive_coverage (:294), review_waive_readiness (:357) and the mutation-waiver/reviewer-override decision specs (:444); deleting `cardPressFields(confirmation)` at each of the four sites leaves 175 pass 0 fail (see F-001). The fixed-sleep and concurrent-same-token items: the only sleeps in the touched suites are two 15 ms/5 ms setTimeouts in src/tui/approval-mirror.test.ts:82 and :97, which are not in the d2cb377f5..6f47bf35f delta (git diff --stat empty), so I do not re-file them; no test invokes the same token concurrently."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 294,
+      "quote": "const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));",
+      "problem": "A remote yes is asserted to record remote-card, pressedBy and pressedAt for five of the nine recording specs, but not for review_publish, review_waive_coverage, review_waive_readiness or the mutation-waiver and reviewer-override decisions. Deleting cardPressFields(confirmation) at lines 236, 294, 357 and 444 leaves every operator-confirm test, the confirm-token tests, the TUI tests and completion-gate tests green (175 pass, 0 fail each).",
+      "impact": "These are the recorders whose audit trail AC1 exists for. A refactor that drops the spread loses who pressed the card and when on a waiver or a publish, and nothing goes red. This is the unfinished half of C-33.",
+      "suggested_fix": "Add one table-driven test in operator-confirm-review-tools.test.ts over the four remaining specs: press a remote yes (yes(t, input, 'remote', pressedBy) with PRESSED_AT), read the record each spec writes (the publish record, research.json coverage waiver, manifest readiness_waivers entry, operator-decisions.json entry) and expect confirmedVia remote-card, pressedBy and pressedAt; press a tui yes and expect neither field.",
+      "evidence": "Mutation runs in a scratch copy of HEAD: site-236 (publish), site-294 (waive_coverage), site-357 (waive_readiness), site-444 (decisions) each survive; site-157, site-566, site-639 and site-772 are killed by the existing remote-yes assertions. The record-layer press sites (publish.ts:175, coverage-complete.ts:100/:228, readiness.ts:577, operator-decisions.ts:233/:278) have no pressedBy assertion in src/review/*.test.ts and were not mutated (not reached).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:236 (review_publish)",
+          "src/commands/operator-confirm-review.ts:294 (review_waive_coverage)",
+          "src/commands/operator-confirm-review.ts:357 (review_waive_readiness)",
+          "src/commands/operator-confirm-review.ts:444 (mutation waiver and reviewer override decisions)"
+        ],
+        "enumeration_method": "keryx ctx rg -n cardPressFields src/commands/operator-confirm-review.ts lists nine matches (one import, eight spreads); each spread was deleted in turn in a scratch copy and the five operator-confirm and gate test files run"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 688,
+      "quote": "cardSafe(evidenceLine)",
+      "problem": "The card text for the report evidence line and for a recorded waiver quote goes through cardSafe, but the tests pin that sanitising only for the recorded head ('a recorded head with a line break cannot add a line to the card'). Removing cardSafe from the evidence line (M27) and from the waiver operator_quote (M28, line 668) survives.",
+      "impact": "These two strings come from the report file and from manifest waivers, both writable by an agent. The card the operator reads is the authority for the yes; a line break in either could add a forged line to it, and the test that guards the same property for the head does not cover them.",
+      "suggested_fix": "Extend the head test into a table over the three card fields: a report whose Evidence level line carries a line break, and a readiness waiver whose operator_quote carries one; expect the card text to contain no extra line for either.",
+      "evidence": "Mutation M27 (`: evidenceLine`) and M28 (`${clip(waiver.operator_quote)}` without cardSafe) both leave 175 pass, 0 fail; M12 (head without cardSafe) is red.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 787,
+      "quote": "if (gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${reason(gateError)}`);",
+      "problem": "No test makes completeReviewGated close the round and then fail in its bookkeeping, and none makes the closed-by-status fallback at line 765 decide between 'closed' and 'not closed'. Deleting the gateError problem line (M18) and reducing the closed test to `done !== undefined` (M19) both survive.",
+      "impact": "These two branches decide whether the operator is told the round is closed with a stopped follow-up, or told 'nothing was recorded' on a round that did close. The existing record-error test (line 716) covers only the confirmation-record write failing.",
+      "suggested_fix": "Add a seam that makes the gate throw after the manifest flips to closed (as the record-error test does for the confirmation write) and assert the output names 'bookkeeping stopped' and isError is true; for line 765, make the gate throw and the status already closed and assert the card reports closed.",
+      "evidence": "Mutation M18 and M19 each leave 175 pass, 0 fail across the operator-confirm, confirm-token, TUI and completion-gate suites; the nearest test is operator-confirm-review-tools.test.ts:716 which kills M17 only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 804,
+      "quote": "The review_complete card would still be refused on:",
+      "problem": "The attended-completion nudge was rewritten to name the review_complete card instead of the CLI (lines 761, 804, 819), but src/review/completion-gate.test.ts asserts none of that wording. Reverting each of the three strings to the CLI form (M29, M30, M31) survives.",
+      "impact": "The point of the commit is that an attended agent is told to ask for the card and never to run keryx review complete itself. A revert reintroduces the instruction the operator-confirmation design forbids, with no red test.",
+      "suggested_fix": "In completion-gate.test.ts assert that the attended nudge and the stop text contain 'review_complete' and do not contain 'keryx review complete' as an instruction to run.",
+      "evidence": "Mutations M29, M30, M31 each leave 175 pass, 0 fail.",
+      "confidence": "medium"
+    }
+  ],
+  "mutation_table": [
+    {"id": "M01", "site": "operator-confirm-tools.ts:215 allowed===undefined inverted", "result": "killed", "detail": "2 fail"},
+    {"id": "M02", "site": "operator-confirm-tools.ts:215 allowed?.includes === false", "result": "killed", "detail": "2 fail"},
+    {"id": "M03", "site": "operator-confirm-tools.ts:218 TTL check dropped", "result": "killed", "detail": "1 fail"},
+    {"id": "M04", "site": "operator-confirm-tools.ts:218 > to >=", "result": "killed", "detail": "1 fail"},
+    {"id": "M05", "site": "operator-confirm-tools.ts no-pressedBy refusal removed", "result": "killed", "detail": "1 fail"},
+    {"id": "M06", "site": "operator-confirm-tools.ts pressedBy/pressedAt spread into confirmation", "result": "killed", "detail": "6 fail"},
+    {"id": "M09", "site": "review_complete confirmation record spread (line 772)", "result": "killed", "detail": "1 fail"},
+    {"id": "M10", "site": "factsDigest comparison in completeSpec.apply", "result": "killed", "detail": "2 fail"},
+    {"id": "M11", "site": "already-closed refusal at line 721", "result": "killed", "detail": "1 fail"},
+    {"id": "M12", "site": "cardSafe on recorded head", "result": "killed", "detail": "1 fail"},
+    {"id": "M14", "site": "operator decisions listed on the card", "result": "killed", "detail": "2 fail"},
+    {"id": "M15", "site": "research.json read error shown", "result": "killed", "detail": "1 fail"},
+    {"id": "M16", "site": "research.json ENOENT inverted", "result": "killed", "detail": "1 fail"},
+    {"id": "M17", "site": "isError on a record failure", "result": "killed", "detail": "1 fail"},
+    {"id": "M18", "site": "line 787 gateError problem", "result": "SURVIVED", "detail": "175 pass 0 fail (F-003)"},
+    {"id": "M19", "site": "line 765 closed-by-status fallback", "result": "SURVIVED", "detail": "175 pass 0 fail (F-003)"},
+    {"id": "M20", "site": "confirm-token.ts pressedBy in signature", "result": "killed", "detail": "1 fail"},
+    {"id": "M21", "site": "confirm-token.ts pressedAt in signature", "result": "killed", "detail": "1 fail"},
+    {"id": "M22", "site": "operator-confirmations.ts waiting() TTL filter", "result": "killed", "detail": "1 fail, also at 6f47bf35f"},
+    {"id": "M23", "site": "markUndelivered guard", "result": "killed", "detail": "1 fail, also at 6f47bf35f"},
+    {"id": "M24", "site": "markUndelivered changed()", "result": "killed", "detail": "1 fail, also at 6f47bf35f"},
+    {"id": "M25", "site": "expired card text", "result": "killed", "detail": "1 fail, also at 6f47bf35f"},
+    {"id": "M26", "site": "head input added to review_complete schema", "result": "killed", "detail": "1 fail"},
+    {"id": "M27", "site": "line 688 cardSafe(evidenceLine)", "result": "SURVIVED", "detail": "175 pass 0 fail (F-002)"},
+    {"id": "M28", "site": "line 668 cardSafe on waiver quote", "result": "SURVIVED", "detail": "175 pass 0 fail (F-002)"},
+    {"id": "M29", "site": "completion-gate.ts:804 nudge text", "result": "SURVIVED", "detail": "175 pass 0 fail (F-004)"},
+    {"id": "M30", "site": "completion-gate.ts:819 stop text", "result": "SURVIVED", "detail": "175 pass 0 fail (F-004)"},
+    {"id": "M31", "site": "completion-gate.ts:761 next-step text", "result": "SURVIVED", "detail": "175 pass 0 fail (F-004)"},
+    {"id": "S157", "site": "cardPressFields at review_chunks_answer", "result": "killed", "detail": "1 fail"},
+    {"id": "S236", "site": "cardPressFields at review_publish", "result": "SURVIVED", "detail": "175 pass 0 fail (F-001)"},
+    {"id": "S294", "site": "cardPressFields at review_waive_coverage", "result": "SURVIVED", "detail": "175 pass 0 fail (F-001)"},
+    {"id": "S357", "site": "cardPressFields at review_waive_readiness", "result": "SURVIVED", "detail": "175 pass 0 fail (F-001)"},
+    {"id": "S444", "site": "cardPressFields at decision specs", "result": "SURVIVED", "detail": "175 pass 0 fail (F-001)"},
+    {"id": "S566", "site": "cardPressFields at review_confirm_plan", "result": "killed", "detail": "1 fail"},
+    {"id": "S639", "site": "cardPressFields at review_decide_premise", "result": "killed", "detail": "2 fail"},
+    {"id": "S772", "site": "cardPressFields at review_complete", "result": "killed", "detail": "1 fail"},
+    {"id": "P757", "site": "prLookup default in completeSpec.apply", "result": "killed", "detail": "2 fail"},
+    {"id": "P169", "site": "prLookup default in publish readiness()", "result": "SURVIVED", "detail": "pre-existing seam default, not a changed branch; not filed"},
+    {"id": "P307", "site": "prLookup default in waive readiness()", "result": "SURVIVED", "detail": "pre-existing seam default, not a changed branch; not filed"}
+  ],
+  "mutation_cap": "39 mutants run, 0 cut by a cap, 11 candidates not reached: the nine record-layer cardPressFields sites in src/review (publish.ts:175, coverage-complete.ts:100 and :228, readiness.ts:577, operator-decisions.ts:233 and :278, chunks-estimate.ts:165, plan-confirmation.ts:76, premise-question.ts:160) and the two tui-shell.ts call sites of markUndelivered. 26 killed, 13 survived (4 finding-bearing classes plus the 2 non-filed prLookup defaults). Baseline before mutation: 90 pass 0 fail on the three operator-confirm files; 175 pass with the confirm-token, TUI and completion-gate suites added. Mutants M07, M08, M13 had ambiguous anchors in the first pass and were re-run as the per-site mutants S157, S294 and P757.",
+  "mutant_candidates": [
+    "operator-confirm-review.ts:236 drop cardPressFields (publish): SURVIVED",
+    "operator-confirm-review.ts:294 drop cardPressFields (waive_coverage): SURVIVED",
+    "operator-confirm-review.ts:357 drop cardPressFields (waive_readiness): SURVIVED",
+    "operator-confirm-review.ts:444 drop cardPressFields (decisions): SURVIVED",
+    "operator-confirm-review.ts:688 drop cardSafe(evidenceLine): SURVIVED",
+    "operator-confirm-review.ts:668 drop cardSafe on waiver quote: SURVIVED",
+    "operator-confirm-review.ts:787 drop gateError problem: SURVIVED",
+    "operator-confirm-review.ts:765 drop closed-by-status fallback: SURVIVED",
+    "completion-gate.ts:761/:804/:819 revert nudge wording: SURVIVED",
+    "operator-confirm-tools.ts:215 invert allowlist, :218 drop TTL, :218 boundary: killed",
+    "operator-confirm-review.ts:757 null prLookup, factsDigest compare, already-closed refusal, cardSafe(head), head schema field: killed",
+    "operator-confirmations.ts waiting TTL filter, markUndelivered guard and changed(), expired text: killed"
+  ]
+}
+```
+
+## Summary
+
+Prior findings: C-07 closed (both allow-list inversions now go red), C-08 closed (the merged-PR and moved-head gates are driven through the card; nulling the card's prLookup is red), C-33 partial.
+
+New findings, all minor and all surviving mutants, no major or blocker:
+- F-001: the remote press fields (remote-card, pressedBy, pressedAt) are unpinned for review_publish, review_waive_coverage, review_waive_readiness and the decision specs. Dropping the spread at each of the four sites stays green.
+- F-002: cardSafe on the evidence line and on the waiver quote is unpinned; only the head is tested.
+- F-003: the gate-closed-but-bookkeeping-stopped path and the closed-by-status fallback are unpinned.
+- F-004: the rewritten attended nudge wording (names the review_complete card, not the CLI) is unpinned.
+
+No real-network leak, fixed sleep or flaky construct in the delta. The only sleeps in the touched suites (approval-mirror.test.ts:82 and :97) are outside the delta and not filed. N-01, N-02 and N-03 are not re-filed.
+
+Mutation pass: 39 mutants run, 26 killed, 13 survived (11 filed, 2 pre-existing prLookup defaults not filed), 11 candidates not reached (record-layer press sites, tui-shell call sites). Scratch copy of HEAD cfd839061, TUI files reset to 6f47bf35f for the TUI mutants; the worktree was not touched.

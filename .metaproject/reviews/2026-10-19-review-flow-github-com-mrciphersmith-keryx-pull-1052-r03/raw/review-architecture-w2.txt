@@ -1,0 +1,89 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 (docs, schema, skill text, review_complete apply/buildCard, confirmation-log tests and the confirm-token pressedBy/pressedAt plumbing) introduces no layer violation or dependency-direction break. One minor structural finding: the review_complete confirmation record is a write-only sidecar written after the round is closed, outside the engine and unlike every other card. Of the five prior architecture findings, C-29 is closed, C-12 and C-35 are partial, C-36 and C-37 are open against source at head 6f47bf35f.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 780,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE)",
+      "problem": "review_complete is the one card whose operator record (quote, confirmedVia, pressedBy/pressedAt, head, evidence, waivers) is not handed to the domain library that closes the round. Every sibling card passes `confirmation.confirmedVia` and `cardPressFields(confirmation)` into the library call that mutates the artifact (recordCoverageWaiver, waiveReadiness, answerChunkEstimate, recordPlanConfirmation, answerPremiseQuestion, recordOperatorDecision). Here the command layer calls completeReviewGated first, and only afterwards writes a separate `completion-confirmation.json` into the package.",
+      "impact": "The close and its proof are two non-atomic writes owned by different layers: the delta itself had to add a branch for 'the round is closed but the confirmation record could not be written'. The sidecar is registered nowhere: `keryx ctx rg 'completion-confirmation|COMPLETION_FILE' src docs` (non-test) finds only these two lines, so no reader, no readiness/status item, no ledger entry, no manifest field and no TM-04 sentence refers to it. The 'who pressed' fact for the review close therefore lives only in the in-memory card log (lost on restart) and in an unindexed file, while TM-04 6a says 'the record keeps pressedBy'.",
+      "suggested_fix": "Pass the confirmation (quote, confirmedVia, press fields, at) into completeReviewGated / completeManagedReview via an option so the engine writes it into the manifest or a registered artifact in the same step that sets status closed, as the sibling libraries do. If the sidecar is kept, record it before the gate (remove it when the gate refuses), read it back in `review status`/readiness, and name the file in TM-04 section 6a.",
+      "evidence": "src/commands/operator-confirm-review.ts:753-796 (gate, close check, then writeFileAtomic of COMPLETION_FILE, then the 'closed but record could not be written' branch); contrast :157, :236, :294, :444, :566, :639 where the press fields travel into the library call. rg over src and docs for the file name returns only :650 and :780.",
+      "confidence": "medium",
+      "class_scope": "Operator-card records written by the command layer outside the artifact owner (review_complete only); other cards already route through the domain library."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-02"],
+  "prior_dispositions": [
+    {
+      "id": "C-12",
+      "disposition": "partial",
+      "evidence": "Review-internal sites now use the helper: coverage-complete.ts:32/100/228, chunks-estimate.ts:114/165, readiness.ts:577, publish.ts:33, premise-question.ts:132/160, operator-decisions.ts:60/87/233/278 and plan-confirmation.ts:33/76 all take `& CardPress` / `cardPressFields`. Still open at head: CardPress and cardPressFields stay in src/review/types.ts:92-98 (not a neutral module); estimate.ts:199-200 re-declares the pair and plan-confirmation.ts:56 keeps the `as PlanConfirmation | undefined` cast; hand-written pairs remain in learning/decisions.ts:33-34, harness/external/write-land.ts:173/229, commands/operator-confirm-other.ts:113-114/625, flow/service.ts:1681-1682, flow/confirm-token.ts:76-77/120/140-141. The delta adds more of the same: flow/types.ts:188-189 (SignatureConfirmation), confirm-token.ts:235-236 (conditional spread in consumeConfirmationToken), flow/schema.ts:331-332. flow/ and learning/ cannot import review/types by dependency direction, so the neutral-module move is what is still missing."
+    },
+    {
+      "id": "C-29",
+      "disposition": "closed",
+      "evidence": "TM-04 section 2 table now has rows for review_confirm_plan, review_decide_premise and review_complete (lines 81-83 of the diffed file); section 1 count is updated; section 8 states that confirm-plan, decide-premise and complete --waive/--waive-coverage check for a terminal, that a plain `review complete` has no TTY check and the card is a rule for the agent, not a lock. Residual, not worth reopening: the header still reads `Task: flow 456` and the table still omits the older review_waive_mutation, review_override_reviewers and review_comments_reply tools, which this finding did not name."
+    },
+    {
+      "id": "C-35",
+      "disposition": "partial",
+      "evidence": "The card-name list is still hand-written in src/standard/help-groups.ts (the /remote-control and /decisions summaries) and src/commands/agent-commands.ts:187 and :304; no shared constant. The delta's test in src/tui/operator-confirmations.test.ts ('the help modal and the command list name the card tools') now fails if one of five names is missing from those strings, which catches an omission, but its CARD_TOOLS list is also hand-written (line 12), not read from the registry, so a sixth remote-answerable card is not detected."
+    },
+    {
+      "id": "C-36",
+      "disposition": "open",
+      "evidence": "src/tui/remote-control-surface.ts:392-395 is unchanged: `if (cards !== undefined) return {...}` still returns before `if (unconfirmed > 0)`, so a row with a waiting card drops the 'N unconfirmed' note, and the comment at :391 says only that a card is attention 'like an unconfirmed decision', not that it takes precedence. No test combines the two. Info-level, display only; the status tab still prints the unconfirmed count."
+    },
+    {
+      "id": "C-37",
+      "disposition": "open",
+      "evidence": "requestApprovalForTelegramTurn (src/tui/tui-shell.ts:6028-6089) still contains no operatorCards.ask/answer/settle; the bookkeeping exists only in mirrorApprovalToTopic (:6095-6148, ask at :6103/:6120, markUndelivered at :6128, settle at :6138). The delta hardened that one wrapper (settle, markUndelivered, finally) and its tests, so a review_complete or confirm-plan card raised in a Telegram-started turn, which is where a remote press with pressedBy is normally recorded, is still absent from the sidebar count, status tab and /decisions list. No comment or doc states this as intentional."
+    }
+  ]
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Round: r03, wave 2, slice `slice-02` (delta d2cb377f5..6f47bf35f outside the fix slice); source judged at head `6f47bf35f31c2e8c882e573b61dd4c39fcc81264`
+- Stack detected: generic TypeScript CLI/TUI (no NestJS, no React+MobX)
+- Note on the slice text: the tui-shell.ts and operator-confirmations.test.ts hunks in the slice show an earlier inline form of the card-log bookkeeping; at head it was replaced by `OperatorConfirmationLog.settle` and behavioural tests (operator-confirmations.test.ts:177-189), so the source-text pin in the slice is no longer present.
+
+### Summary
+Dependency direction is intact: tui imports commands (REMOTE_CARD_TTL_MS), commands import review, flow stays free of review; the new `pressedBy/pressedAt` fields are added consistently to the token, the signature type, the JSON schema (flow/schema.ts and the docs copy) and consumeConfirmationToken. The `head` parameter removal from review_complete is a sound narrowing: the model can no longer supply the reviewed commit. One structural gap remains in how the review_complete record is persisted (F-001). Docs and skill text are consistent with the code: both skill copies and TM-04 section 8 now say the agent completes a review only through the card and that plain `review complete` is not TTY-locked.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+- prior dispositions: 1 closed, 2 partial, 2 open (5 total)
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. The press-field duplication outside src/review is a consequence of the helper living in a review module (carried by C-12).
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+[F-001] review_complete record written by the command layer after the close, outside the artifact owner (minor, see JSON).
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A, not detected in stack.
+
+### Suggested Patches
+Omitted: F-001 needs a signature change in completeReviewGated that the author should shape.

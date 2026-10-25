@@ -1,0 +1,222 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices, slice-02 (PR 1058, head 5974c97)
+
+Mutation pass: NOT RUN. This reviewer was dispatched read-only and may not execute the suite, so no mutant was applied and no red/green result is reported. Every mutation below is a candidate for the main session to run (`mutant_candidates`): 0 of 24 executed, 24 not reached. Findings that rest on a predicted survival are `info`; the ones above `info` rest on code I read and an input I can name.
+
+Read: the whole slice diff (docs, `review-operator.ts`, the new `review-host-question.test.ts`), plus `src/decisions/journal.ts`, `src/review/estimate.ts`, `src/review/plan-confirmation.ts`, `src/commands/review.ts:596-627` and the frozen AC file. The PR adds one test file; no other test file changed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "The suite is broad and well built for AC1-AC8 (every refusal asserts a byte-identical package and an empty journal; env is injected through a seam). Concerns: (1) for confirm-plan, waive-mutation and override-reviewers the only test on the answer text is a leading-word decline list, and the code accepts a negative or non-yes answer such as \"don't waive it\" as a waiver, against the AC scope line and TM-04 6b; (2) the AC7 'complete keeps its own flags' assertion cannot fail because it greps for a phrase the real error does not contain; (3) the journal-failure fallback, the review_complete card suffix and the reader-side hostQuestion validators have no test; (4) one test reads ambient process.env. Mutation pass not run (read-only); 24 candidates proposed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "On confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is refuseDecline: it refuses only when the FIRST word is in LEAD_DECLINE (n, no, nope, nah, not, never, cancel, stop, decline, declined, reject, нет, не, отмена). Nothing requires a confirming word, and there is no negation check (decide-premise has one in refuseOtherChoice; these three do not). Reachable inputs that are recorded as a waiver, override or plan confirmation with confirmedVia host-question: `waive-mutation ... --answer-text \"don't waive it\"` (wordsOf gives [don, t, waive, it]; \"don\" is not in LEAD_DECLINE), `--answer-text \"I do not want to waive it\"`, `--answer-text \"maybe later\"`, `--answer-text \"what does that mean?\"`. The frozen AC scope line says 'A free-text answer is never a decision', PRD Q2 says the answer must be one of the verb's options, and TM-04 6b / cli-reference / limitations.md say 'an answer that is not one of the verb's options (free text is not a decision)' records nothing; for these three verbs that is true only of a leading decline word.",
+      "impact": "An honest agent that relays an operator's negative or non-committal reply verbatim gets a mutation waiver, reviewer override or plan confirmation recorded, with the operator's own words as the quote. The record then reads as the operator's consent while the quote says the opposite, which is the one thing the stored question and answer exist to prevent.",
+      "suggested_fix": "Require an affirmative token for the three verbs, as decide-premise requires its choice word: accept only when the words contain a confirming word of the verb (yes, y, ok, да, waive, override, ...) and no negation directly or one word before it, and reuse the NEGATIONS check; refuse everything else with the 'ask again' message. Then add tests for \"don't waive it\", \"I do not want to waive it\", \"maybe later\" and a question-shaped reply on each of the three verbs (F-002).",
+      "evidence": "src/commands/review-operator.ts refuseDecline() reads `const words = wordsOf(answerText); if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) { throw ... }` and is the only answer-text check on the confirm-plan call site (`refuseDecline(answerText, command);` after the stale-plan check) and on the waive/override call site (`refuseDecline(answerText, command);` after operatorDecisionSubject). refuseOtherChoice (negation + choice word) is called on the decide-premise path only. Tests: review-host-question.test.ts AC3 decline loop uses only [\"n\",\"N\",\"no\",\"No.\",\" no \",\"nope\",\"нет\",\"no, not now\"], all leading-decline; every accepting fixture contains \"yes\" (\"yes, run it\", \"yes, waive it\", \"yes, only logic\"). Docs: docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md 6b 'an answer that is not one of the verb's options (`uphold` or `dismiss` for `decide-premise`; for the others a yes)'.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-answer-text-not-validated-three-verbs",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts: recordHostQuestion, confirm-plan branch (refuseDecline after the stale-plan check)",
+          "src/commands/review-operator.ts: recordHostQuestion, waive-mutation / override-reviewers branch (refuseDecline after operatorDecisionSubject)",
+          "src/commands/review-operator.ts: recordHostQuestion, decide-premise branch (also has refuseOtherChoice; covered by tests for choice word, negation only one word back, see F-011)"
+        ],
+        "enumeration_method": "keryx ctx rg for `refuseDecline(` and `refuseOtherChoice(` in src/commands/review-operator.ts: 4 matches (definition plus 3 call sites in recordHostQuestion, one per branch); refuseOtherChoice has a single call site, on decide-premise"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": null,
+      "quote": "for (const declined of [\"n\", \"N\", \"no\", \"No.\", \" no \", \"nope\", \"нет\", \"no, not now\"]) {",
+      "problem": "Coverage gap behind F-001: no test gives confirm-plan, waive-mutation or override-reviewers an answer text that is neither a decline-leading word nor an affirmative (\"maybe\", \"don't waive it\", \"I do not want that\", a question). Every accepted fixture contains \"yes\" and every refused one starts with a decline word, so no fixture builds the input that separates 'declined' from 'not a yes'. AC3 names 'an --answer-text that is a decline (empty, n, no)', so the suite matches the letter of AC3 and misses the scope line 'a free-text answer is never a decision'.",
+      "impact": "The tightened check recommended in F-001 would have nothing protecting it, and the present behaviour is unpinned in both directions.",
+      "suggested_fix": "Add to 'AC3 an --answer-text that is a decline' a second list of non-yes, non-decline texts per verb that must be refused with nothing recorded (use expectRefused), and an accepting list (\"yes\", \"да\", \"ok, waive it\") so the rule is two-sided.",
+      "evidence": "review-host-question.test.ts: the decline loop `for (const verb of FOUR) { for (const declined of [...]) await expectRefused(verb, pkgDir(), { \"--answer-text\": declined }, /decline/i); }`; accepted texts in argsFor(): \"yes, run it\", \"yes, waive it\", \"yes, only logic\".",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-answer-text-test-gap"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": null,
+      "quote": "expect(complete(...own).output.toLowerCase()).not.toContain(\"unknown flag\");",
+      "problem": "This assertion cannot fail. The flag check that rejects a flag prints `Unknown option(s) for \\`keryx review complete\\`: ...` (src/commands/review.ts:622, rejectUnknownFlags), never the phrase \"unknown flag\". If `review complete` started rejecting --waive or --waive-coverage, its output would contain 'unknown option', and `.not.toContain(\"unknown flag\")` would still pass. The positive tests in the same describe check for \"unknown\" only, so the two halves of the test use different wording. There is also no positive artifact that the run got past the flag check (e.g. output naming the missing review 'no-such-review').",
+      "impact": "The half of AC7 that says complete's own --waive and --waive-coverage flags are unchanged is unpinned; a regression there goes green.",
+      "suggested_fix": "Assert on the same token the refusal prints: `expect(output.toLowerCase()).not.toContain(\"unknown option\")`, and add a positive assertion that the run reached the review lookup (the 'no-such-review' not-found message or whatever the unknown-package path prints).",
+      "evidence": "review.ts:622 `Unknown option${unknown.length > 1 ? \"s\" : \"\"} for \\`keryx review ${usage}\\`: ...`; test: `for (const own of [[\"--waive\", \"x\"], [\"--waive-coverage\", \"x\"]]) { expect(complete(...own).output.toLowerCase()).not.toContain(\"unknown flag\"); }`.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "ac7-vacuous-negative-assertion"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);",
+      "problem": "The try/catch that keeps the review record when the decisions journal cannot be written has no test. No test makes openDecision or answerDecision throw (no unwritable journal, no seam), and `seams()` passes a log that discards its lines, so the warning text is never read either. Deleting the try/catch, or replacing the catch body with `throw error`, leaves the suite green. The comment gives a reason ('not a reason to leave the operator's answer unrecorded or to record it twice on a retry'): a retry would write the review record a second time and a second journal entry.",
+      "impact": "The next edit to that block (for example awaiting the journal before the review write) is unprotected, and the retry-duplication rule it exists for is untested.",
+      "suggested_fix": "Make the journal unwritable in one test (create `.metaproject/data/decisions` as a file, or an unreadable path) and assert: exit 0, the verb's own record present, and a log line starting `warning: the answer is recorded`.",
+      "evidence": "review-operator.ts:420-436 try { openDecision(...); answerDecision(...) } catch (error) { log(`warning: ...`) }. review-host-question.test.ts has no test whose title or body mentions a journal failure; grep of the file for 'not updated' / 'warning' finds none.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-journal-failure-untested"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "if (![estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every((value) => shown.has(String(value)))) {",
+      "problem": "The stale-plan gate requires all three numbers to appear in --question-text, but both stale fixtures share no number with the estimate: `Run 987 reviewer dispatches (654-655 min) for the plan?` and `Run the plan?` (no digits). No fixture shows the right dispatch count with a wrong minute range, or the right range with a wrong count, so `every` to `some`, or dropping minutes.max from the array, would leave the two stale tests refused for the same reason. Predicted, not executed (mutants M5, M6), hence info.",
+      "impact": "A question that shows only part of the current plan would be accepted if the gate loosened; the docs and --help promise 'the plan's current dispatch count and minute range'.",
+      "suggested_fix": "Add two stale cases built from the live estimate: right dispatches with minutes+1, and right minutes with dispatches+1; both must be refused. Run mutants M5 and M6 to settle it.",
+      "evidence": "Tests 'AC3 a stale plan' pass `Run 987 reviewer dispatches (654-655 min)...` and `Run the plan?`; gate at review-operator.ts:379.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-stale-plan-partial-match",
+      "publication": "question"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": null,
+      "quote": "expect(decision?.subject).toBeDefined();",
+      "problem": "Two AC2 tests promise more than they assert. 'waive-mutation records the waiver as the terminal path does, bound to head and unrun mutants' and 'override-reviewers records the override, with --selected bound into the subject' both end in `expect(decision?.subject).toBeDefined()`, but operatorDecisionSubject always returns an object, so the assertion holds whether or not `selected` was passed through or the head and items were read. Replacing the `selected` argument with `undefined` (mutant M10) cannot be told apart by these tests.",
+      "impact": "The security-review M4 binding (the record names the head, mutant ids or reviewers left out) is unpinned on the host-question path, and the test title reads as coverage of it.",
+      "suggested_fix": "Assert the contents: for override with `--selected review-logic`, `decision.subject.items` equals the expected left-out reviewer ids and `subject.head` equals the recorded head; for waive-mutation, `subject.items` equals the unrun mutant ids of the fixture (seed one). Compare against the terminal path's subject for the same package.",
+      "evidence": "Test lines: `expect(decision?.subject).toBeDefined();` in both the waive-mutation and override-reviewers AC2 tests; review-operator.ts `const subject = await operatorDecisionSubject(packageDir, kind, kind === \"mutation-waiver\" ? undefined : selected);` is the same text on the terminal path and the host path.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-subject-binding-unpinned"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": null,
+      "quote": "const seam = { isTerminal: () => true, ask: async (question: string) => (asked.push(question), \"yes\"), cwd: repo, log: () => undefined };",
+      "problem": "This one test passes no `env` seam, so `recordHostQuestion` reads `seams.env ?? process.env`. Under an ambient KERYX_TOOL_CALL=1 (set for every shell_exec child; src/harness/process/shell-env.test.ts:60-64 pins that) or the autonomous-answers variable, the call is refused and the test throws, although the code is correct. Every other flagged test injects `env` through `seams()`; the sibling operator-confirm tests inject it too (operator-confirm-tools.test.ts:425).",
+      "impact": "The test is red or green depending on where the suite is launched, for example when run from inside keryx shell by an agent.",
+      "suggested_fix": "Add `env: {}` to this seam object.",
+      "evidence": "review-operator.ts `return recordHostQuestion(command, own, packageDir, { cwd, log, env: seams.env ?? process.env });` and the seam literal above, which has `isTerminal`, `ask`, `cwd`, `log` only.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-test-ambient-env"
+    },
+    {
+      "id": "F-008",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "const LEAD_DECLINE = new Set([\"n\", \"no\", \"nope\", \"nah\", \"not\", \"never\", \"cancel\", \"stop\", \"decline\", \"declined\", \"reject\", \"нет\", \"не\", \"отмена\"]);",
+      "problem": "Most members of the word sets are unpinned. LEAD_DECLINE: only n, no, nope, нет are exercised as the first word ('no, not now' leads with 'no'); nah, not, never, cancel, stop, decline, declined, reject, не, отмена are not. The `words.length === 0` arm of refuseDecline is unreachable by the tests: a blank text is already refused by requireText, and no test passes punctuation-only text (\"...\", \"?\"). NEGATIONS: only \"not\" is exercised ('do not dismiss it'); dont, don, t, nt, не, нет are not. CHOICE_WORDS: only upheld/uphold/dismiss/dismissed/оставляем/снять are exercised. Deleting any unexercised member leaves the suite green (candidates M1, M3, M4, M23-M24).",
+      "impact": "These sets are the whole of the free-text policy in AC3; a trimmed set is an unprotected regression.",
+      "suggested_fix": "Table-drive one test per set over every member (decline words, negation words with each choice word, choice words per answer), and add a punctuation-only answer text.",
+      "evidence": "Test lists at AC3 decline test and 'AC3 decide-premise: ...' tests; code at review-operator.ts:274 and the NEGATIONS / CHOICE_WORDS constants above refuseDecline.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-word-sets-unpinned"
+    },
+    {
+      "id": "F-009",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "(${decision.confirmedVia}${decision.hostQuestion === undefined ? \"\" : ` ${cardSafe(decision.hostQuestion.source)}:${cardSafe(decision.hostQuestion.ref)}`})`);",
+      "problem": "The changed branch that adds the host-question source and ref to the waiver line on the review_complete card has no test: the PR changes no test in operator-confirm-review-tools.test.ts, and the new test file never builds the card. Deleting the suffix (M16) or leaving the ref un-cardSafe'd leaves the suite green. This is the line the operator reads before pressing yes on completion, so it is where a host-question waiver has to be visibly the weaker kind.",
+      "impact": "A host-question waiver can lose its label on the completion card with no test failing; the AC8 tests cover the report, readiness and /decisions text only.",
+      "suggested_fix": "In operator-confirm-review-tools.test.ts, seed operator-decisions.json with a host-question mutation waiver carrying a ref with control characters and assert the card's waivers list contains `(host-question claude-code:ask-17)` with the ref sanitised.",
+      "evidence": "git diff base..HEAD --stat on test files: only src/commands/review-host-question.test.ts changed; keryx ctx rg -l host-question src lists no operator-confirm test file.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-complete-card-suffix-untested"
+    },
+    {
+      "id": "F-010",
+      "severity": "info",
+      "file": "src/review/estimate.ts",
+      "line": null,
+      "quote": "&& (v.confirmedVia !== \"host-question\" || isHostQuestion(v.hostQuestion))",
+      "problem": "Reader-side validation of a stored hostQuestion (outside this slice's diff, read for context): isPlanConfirmation refuses a host-question record whose hostQuestion lacks a known source or a non-blank ref, questionText, answerText or time. All tests in the new file read back what the writer just wrote, so no test hands the reader a record with `confirmedVia: \"host-question\"` and a missing or blank hostQuestion. Deleting that conjunct, or the filled() checks, is predicted to leave the suite green (M17, M18). The same shape is likely in the operator-decisions and premise-question readers (other slices); not read here. Also no test checks that planConfirmed() accepts the host-question record, i.e. that dispatch-check and the ledger gate honour it.",
+      "impact": "A hand-written confirmation claiming host-question with no question attached would be accepted by the gate; this is the reader-side half of 'a record says which kind it is'.",
+      "suggested_fix": "Add one reader test per record type: host-question with hostQuestion absent, with blank answerText, with an unknown source, each must read as no confirmation; and one that calls planConfirmed(dir, estimate) after the verb and expects true.",
+      "evidence": "src/review/estimate.ts isPlanConfirmation lines 213-223; no test in the PR calls readPlanConfirmation with a malformed record.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-reader-validation-untested",
+      "publication": "question"
+    },
+    {
+      "id": "F-011",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "const negated = words.some((word, index) => (chosen.has(word) || CHOICE_WORDS[other].has(word)) && NEGATIONS.has(words[index - 1] ?? \"\"));",
+      "problem": "Two heuristic edges of the decide-premise consistency guard, neither pinned. (a) Negation is checked only on the word immediately before the choice word, so `--answer dismiss --answer-text \"I would not simply dismiss it\"` (previous word 'simply') passes. (b) A leading decline word refuses a legitimate answer: to 'Uphold it or dismiss it?' the reply 'No, dismiss it' leads with 'no' and is refused as a decline. (b) fails closed and is only an annoyance; (a) records the opposite of the words. The agent also supplies --answer itself, so this guard is only a corroboration of what the agent already claims; I report it as an observation, not a defect, per the decided security trade.",
+      "impact": "(a) a negated answer can be recorded as the choice it negates; (b) a plain 'no, X' reply is refused and the operator is asked again.",
+      "suggested_fix": "Either pin the current behaviour with tests that say it is a known limit, or check negation anywhere before the choice word within the clause and let 'no,' followed by a choice word through for decide-premise.",
+      "evidence": "refuseOtherChoice and refuseDecline in review-operator.ts; test 'do not dismiss it' is the only negation case; test list includes 'no, not now' as a decline.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "host-question-premise-text-heuristic-edges",
+      "publication": "question"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read in full: docs (TM-04 6b, cli-reference, limitations, review-with-a-record, autonomous-review, PRD v3), review-operator.ts changes, review-host-question.test.ts (500 lines), operator-confirm-review.ts card line. Mutation pass not run (read-only).",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 7, "info": 3 },
+  "mutant_candidates": [
+    { "id": "M1", "file": "src/commands/review-operator.ts", "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {", "replacement": "if (LEAD_DECLINE.has(words[0] as string)) {", "kind": "behavior" },
+    { "id": "M2", "file": "src/commands/review-operator.ts", "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {", "replacement": "if (words.length === 0) {", "kind": "behavior" },
+    { "id": "M3", "file": "src/commands/review-operator.ts", "anchor": "\"never\", \"cancel\", \"stop\"", "replacement": "\"never\", \"stop\"", "kind": "behavior" },
+    { "id": "M4", "file": "src/commands/review-operator.ts", "anchor": "\"nah\", \"not\", \"never\"", "replacement": "\"nah\", \"never\"", "kind": "behavior" },
+    { "id": "M5", "file": "src/commands/review-operator.ts", "anchor": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every(", "replacement": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].some(", "kind": "behavior" },
+    { "id": "M6", "file": "src/commands/review-operator.ts", "anchor": "[estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every(", "replacement": "[estimate.dispatches, estimate.minutes.min].every(", "kind": "behavior" },
+    { "id": "M7", "file": "src/commands/review-operator.ts", "anchor": "const named = words.some((word) => chosen.has(word));", "replacement": "const named = true;", "kind": "behavior" },
+    { "id": "M8", "file": "src/commands/review-operator.ts", "anchor": "if (!named || namesOther || negated) {", "replacement": "if (!named || namesOther) {", "kind": "behavior" },
+    { "id": "M9", "file": "src/commands/review-operator.ts", "anchor": "if (!named || namesOther || negated) {", "replacement": "if (!named || negated) {", "kind": "behavior" },
+    { "id": "M10", "file": "src/commands/review-operator.ts", "anchor": "const subject = await operatorDecisionSubject(packageDir, kind, kind === \"mutation-waiver\" ? undefined : selected);\n    refuseDecline(answerText, command);", "replacement": "const subject = await operatorDecisionSubject(packageDir, kind, undefined);\n    refuseDecline(answerText, command);", "kind": "behavior" },
+    { "id": "M11", "file": "src/commands/review-operator.ts", "anchor": "log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);", "replacement": "throw error;", "kind": "behavior" },
+    { "id": "M12", "file": "src/commands/review-operator.ts", "anchor": "channel: by.source,", "replacement": "channel: \"tui\",", "kind": "behavior" },
+    { "id": "M13", "file": "src/commands/review-operator.ts", "anchor": "stage: `review ${command}`,", "replacement": "stage: \"x\",", "kind": "behavior" },
+    { "id": "M14", "file": "src/commands/review-operator.ts", "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {", "replacement": "if (isAutonomousEnv(env)) {", "kind": "behavior" },
+    { "id": "M15", "file": "src/commands/review-operator.ts", "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {", "replacement": "if (readRunProfile(packageDir)?.mode === \"unattended\") {", "kind": "behavior" },
+    { "id": "M16", "file": "src/commands/operator-confirm-review.ts", "anchor": "${decision.hostQuestion === undefined ? \"\" : ` ${cardSafe(decision.hostQuestion.source)}:${cardSafe(decision.hostQuestion.ref)}`}", "replacement": "", "kind": "behavior" },
+    { "id": "M17", "file": "src/review/estimate.ts", "anchor": "&& (v.confirmedVia !== \"host-question\" || isHostQuestion(v.hostQuestion))", "replacement": "&& true", "kind": "behavior" },
+    { "id": "M18", "file": "src/review/estimate.ts", "anchor": "&& filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);", "replacement": "&& filled(hq.ref);", "kind": "behavior" },
+    { "id": "M19", "file": "src/commands/review-operator.ts", "anchor": "own.some((arg) => arg === \"--answered-by\" || arg.startsWith(\"--answered-by=\"))", "replacement": "own.includes(\"--answered-by\")", "kind": "behavior" },
+    { "id": "M20", "file": "src/commands/review-operator.ts", "anchor": "const ref = colon <= 0 ? \"\" : raw.slice(colon + 1).trim();", "replacement": "const ref = colon <= 0 ? \"\" : raw.slice(colon + 1);", "kind": "behavior" },
+    { "id": "M21", "file": "src/commands/review-operator.ts", "anchor": "NEGATIONS.has(words[index - 1] ?? \"\")", "replacement": "false", "kind": "behavior" },
+    { "id": "M22", "file": "src/commands/review-operator.ts", "anchor": "const NEGATIONS = new Set([\"not\", \"never\", \"no\", \"dont\", \"don\", \"t\", \"nt\", \"не\", \"нет\"]);", "replacement": "const NEGATIONS = new Set([\"not\", \"never\", \"no\", \"не\", \"нет\"]);", "kind": "behavior" },
+    { "id": "M23", "file": "src/commands/review-operator.ts", "anchor": "if (command !== \"confirm-plan\" && (reason === undefined || reason.trim() === \"\")) throw", "replacement": "if (false) throw", "kind": "behavior" },
+    { "id": "M24", "file": "src/commands/review-operator.ts", "anchor": "await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });", "replacement": "await answerDecision({ cwd, id: opened.id, choice: choices.confirm });", "kind": "behavior" }
+  ],
+  "follow_ups": [
+    "Run mutants M1-M24 (0 executed by this reviewer): the ones most likely to survive are M1, M3, M4, M5, M6, M10, M11, M12, M13, M16, M17, M18, M22; M2, M7, M14, M15, M19, M20, M21, M23 and M24 are expected to be killed and act as controls."
+  ]
+}
+```
+
+Summary: the suite is strong on AC1-AC8 refusals and the unattended / KERYX_TOOL_CALL floors (each refusal compares a byte snapshot and checks the journal is absent). One major defect: on confirm-plan, waive-mutation and override-reviewers a negative or non-yes answer text such as "don't waive it" is recorded, against the AC scope line, PRD Q2 and the TM-04 6b text; the tests only cover leading decline words (F-001, F-002). Also: a vacuous AC7 negative assertion (F-003), untested journal-failure fallback (F-004), toBeDefined on the subject binding (F-006), one test depending on ambient env (F-007), untested decline/negation word sets (F-008) and an untested review_complete card suffix (F-009). Mutation pass not run; 24 candidates for the main session.

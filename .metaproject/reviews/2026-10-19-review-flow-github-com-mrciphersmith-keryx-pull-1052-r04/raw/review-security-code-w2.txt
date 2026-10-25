@@ -1,0 +1,66 @@
+STATUS: DONE
+
+## Security Review (round r04, slice-02, wave 2)
+
+Scope: PR 1052, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66. Slice read: slice-02 (flow 464 documents, review-orchestrator SKILL.md and SKILL.detail.md, review-premise SKILL.md, CHANGELOG.md, TM-04, cli-reference.md, commands-by-task.md, review-with-a-record.md, limitations.md, flow-state.schema.json, package.json). The slice is documentation, agent instructions, a schema and a version bump. I read the diff of each file and checked every security claim the text makes against the head code in src/commands/operator-confirm-tools.ts, src/commands/review.ts, src/commands/agent.ts, src/tui/tui-shell.ts, src/commands/operator-confirm-review.ts, src/remote/shell-bridge.ts and src/flow/confirm-token.ts.
+
+Claims verified against code (all match, no finding):
+- Remote answer accepted only from an allowed Telegram id, and a binding with none refuses every remote answer: operator-confirm-tools.ts:213-217 (allowed undefined or id not included gives a refusal).
+- One hour limit: REMOTE_CARD_TTL_MS = 60 min at :117, checked at :218.
+- Once, and each refusal leaves the token spent: pending.delete(token) at :206 runs before the remote checks.
+- pressedAt is the shell's clock: tui-shell.ts:573 sets new Date().toISOString() locally, agent.ts:6124/6192 pass it through.
+- review_complete closes against the head the package recorded, not one the model supplies: operator-confirm-review.ts:665 reads manifest.target.head, :735 prepares it, :751 re-checks the facts digest after the card.
+- Plain `keryx review complete` has no TTY check, while --waive and --waive-coverage do: review.ts:4556-4562. TM-04 section 8 states this honestly.
+- "Telegram mirror not delivered" and the undelivered path: shell-bridge.ts mirrorUndeliveredNote and client.ts undelivered flag.
+- Schema additions (pressedBy integer, pressedAt string) match the StoredConfirmationToken type in confirm-token.ts.
+- TM-04 section 6a is candid about what a press does not prove (same-OS-user agent writing the stores, bot token reachable by the agent, card text editable by the bot-token holder, restart drops cards). I found no overclaim there.
+- No secrets, tokens, chat ids or credentials in the flow files, CHANGELOG or docs of the slice (pattern scan clean).
+- The SKILL.md and SKILL.detail.md edits tell the agent to call cards in keryx shell and never run `keryx review complete`; they keep "never write an operator quote yourself" and "unattended, the item is Not run". They do not widen what the agent may do. The unattended-run exception is deliberate and not filed.
+- Version 0.3.123 to 0.3.124 only.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [F-001] cli-reference says plain `review complete` needs a terminal; the code and TM-04 say it does not
+- Severity: info
+- File: docs/docs/cli-reference.md:4921
+- Attack vector: no new vector in code. A reader (operator or agent) who trusts the sentence believes a plain `keryx review complete <package>` cannot run from shell_exec without a terminal, so the review_complete card is a hard lock. In fact review.ts runComplete checks isTerminal only for --waive and --waive-coverage (lines 4556-4562); an agent that runs `keryx review complete` through shell_exec closes a ready package with no card and no pressedBy. TM-04 section 8 already states this limit; the cli-reference text contradicts it.
+- Problem: the sentence lists `complete` among the "operator-only steps here ... need a terminal". For plain `complete` that is false; only the waiver forms need a terminal. The line 4916 listing also tags it "(card review_complete)" without that distinction.
+- Why it matters: documentation overstating a control on the operator-confirmation boundary. Info only, because the real limit is stated in TM-04 and in the new autonomous-review text, and the code path is unchanged by this slice.
+- Fix: split the list: say `complete --waive` and `complete --waive-coverage` need a terminal, and that a plain `complete` runs the same gates without one, so the card is a rule the skills and gate messages give the agent (as TM-04 section 8 says).
+- Confidence: high
+- Quote: "The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal."
+
+### Clean Areas
+Injection, command execution, path handling, authn/authz wording, IDOR, input validation, secrets and logging, cryptography, CSRF, redirects: nothing executable in this slice; the code behind the documented claims is in other slices and was only read to verify claims. Previously known r03 minors D-02..D-14 were not re-filed; the slice does not make any of them worse.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "summary": "slice-02 is documentation, agent instructions, a schema and a version bump. Every security claim in it (allowed user id only, once, one hour, pressedBy/pressedAt recorded, recorded head, plain complete has no TTY check) was checked against head code and holds. One info: cli-reference.md lists plain `complete` as needing a terminal, contradicting the code and TM-04.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "docs/docs/cli-reference.md",
+      "line": 4921,
+      "quote": "The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal.",
+      "problem": "The sentence says plain `keryx review complete` needs a terminal. review.ts runComplete (lines 4556-4562) checks isTerminal only for --waive and --waive-coverage, and TM-04 section 8 states that a plain complete has no TTY check. The cli-reference text overstates the control.",
+      "impact": "A reader may believe an agent cannot close a ready review from shell_exec without a card. It can, with no pressedBy record. The limit is already stated in TM-04, so this is a wording inconsistency, not a new vulnerability.",
+      "suggested_fix": "Name only `complete --waive` and `complete --waive-coverage` as needing a terminal, and add that plain `complete` runs the same gates without one, so the review_complete card is a rule for the agent (TM-04 section 8).",
+      "evidence": "docs/docs/cli-reference.md:4921 vs src/commands/review.ts:4556-4562 (isTerminal checked only for the waiver flags) vs docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:127 (A plain `review complete` has no TTY check).",
+      "confidence": "high"
+    }
+  ]
+}
+```

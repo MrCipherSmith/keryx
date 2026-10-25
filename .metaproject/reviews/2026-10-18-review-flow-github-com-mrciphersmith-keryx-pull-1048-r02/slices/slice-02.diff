@@ -1,0 +1,1320 @@
+--- src/commands/agent-commands.ts
+@@ 410,450 @@
+     // TUI-only: the per-turn tag and `sb-route` sidebar row are OpenTUI
+     // surfaces, same reasoning as `/guard`.
+     name: "/route",
+     description: "Opt-in routing classifier: sorts the request into a category and routes it to that model — /route [on|off]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 343 (Jev EDIT GUARD): a `PostToolUse` hook check, not a
+     // per-turn one — this modal shows the opt-in state, threshold, and
+     // recent flags of the Claude Code hook installed by `keryx review
+     // jev-edit-guard install`, and toggles it. TUI-only, same reasoning as
+     // `/guard`/`/route`.
+     name: "/editguard",
+     description: "Jev EDIT GUARD status/threshold/recent flags, with a toggle — install via keryx review jev-edit-guard install",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 461: project rules and implementation context — the last resolve, the cap,
+     // and whether a missing `project_context_applied` only warns or blocks. TUI-only.
+     name: "/projectctx",
+-    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement — /projectctx [warn|block]",
++    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement, conditional references — /projectctx [warn|block|refs]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 346: the EXTERNAL switch — blocks/allows sending private work
+     // (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed
+     // providers/models. Bare `/external` prints state/source/effective-list
+     // (what `keryx external status`/`list` show); `/external on|off` toggles
+     // + persists per-user (project override stays CLI/tasks.config.json-only
+     // — same reasoning `/route`'s bare-print/toggle split already uses).
+     name: "/external",
+     description: "Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on|off]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 373: the one-step opt-in for the external agent RUNTIME (bare = status,
+     // `on`/`off` = the same enable/disable as `keryx agents external enable|disable`).
+     // Not `/external` — that is the privacy switch for sending work to listed
+     // providers; this one decides whether a vendor coding CLI may be spawned at all.
+     name: "/external-agents",
+     description: "Turn the external agent runtime (claude/codex/agy CLIs) on or off — /external-agents [on|off]; not /external (the privacy switch)",
+
+--- src/commands/skills-references.ts
+@@ 1,67 @@
++// `keryx skills references check|suggest` (flow 462): authoring help for the
++// conditional-read declarations in `.metaproject/rules/project/references.json`.
++// The router in skills.ts dispatches here; the analysis is gdskills/references-check.ts.
++
++import { checkReferences, suggestReferences, type ReferencesCheckReport } from "../gdskills/references-check";
++
++const USAGE = "Usage: keryx skills references check [--json] | keryx skills references suggest";
++
++export function printReferencesHelp(): void {
++  console.log(`keryx skills references
++
++Authoring help for .metaproject/rules/project/references.json: the documents project rules
++cite, and when a task must read them. Reads files only; nothing is written.
++
++Usage:
++  keryx skills references check [--json]
++  keryx skills references suggest
++
++  check    Errors (exit 1): a declared document that is missing, outside the project root or
++           over the size limit; an anchor that matches no heading; an invalid file.
++           Warnings: a description under 20 characters, a keyword under 4, a cited document with
++           no declaration, a declaration no rule cites. A missing references.json is not an error.
++  suggest  Prints a JSON skeleton for every cited document with no declaration: path, size in
++           bytes, the document's headings as anchor candidates, an empty description and an
++           empty condition. Fill it in and copy the entries into references.json yourself.
++`);
++}
++
++export function renderReferencesReport(report: ReferencesCheckReport): string {
++  const lines = ["# skills references check", ""];
++  lines.push(report.present ? `${report.declared} declared` : "No references.json: nothing is declared.");
++  for (const finding of report.findings) {
++    lines.push(`- ${finding.severity.padEnd(7)} ${finding.path} [${finding.code}] ${finding.message}`);
++  }
++  lines.push("", `${report.errors} ${report.errors === 1 ? "error" : "errors"}, ${report.warnings} ${report.warnings === 1 ? "warning" : "warnings"}`);
++  return lines.join("\n");
++}
++
++/** `keryx skills references <action>`. A check with errors, or a suggest that cannot read the declarations, exits 1. */
++export async function referencesCommand(args: string[], projectRoot: string = process.cwd()): Promise<void> {
++  const action = args[0];
++  if (action === undefined || action === "--help" || action === "-h") {
++    printReferencesHelp();
++    return;
++  }
++
++  if (action === "check") {
++    const report = await checkReferences(projectRoot);
++    console.log(args.includes("--json") ? JSON.stringify(report, null, 2) : renderReferencesReport(report));
++    if (!report.ok) process.exitCode = 1;
++    return;
++  }
++
++  if (action === "suggest") {
++    const result = await suggestReferences(projectRoot);
++    if (!result.ok) {
++      for (const message of result.errors) console.error(message);
++      process.exitCode = 1;
++      return;
++    }
++    console.log(JSON.stringify(result.suggestion, null, 2));
++    return;
++  }
++
++  console.error(`Unknown skills references action: ${action}. ${USAGE}`);
++  process.exitCode = 1;
++}
+
+--- src/commands/skills.ts
+@@ 50,92 @@
+ } from "../gdskills/sync";
+ import {
+   createProjectSkill,
+   metaprojectRelative,
+   normalizeProjectSkillFormat,
+   PROJECT_SKILL_REPORTS_DIR,
+   PROJECT_SKILLS_CATALOG_PATH,
+   PROJECT_SKILLS_MANIFEST_PATH,
+   projectSkillKey,
+   projectSkillReportFileName,
+   type ProjectSkillRegistryEntry,
+ } from "../gdskills/project-skills";
+ import {
+   printSkillsImportHelp,
+   printSkillsUpdateHelp,
+   runSkillsImportCommand,
+   runSkillsUpdateCommand,
+ } from "../gdskills/import-skills";
+ import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
+ import { checkResolvedContext, formatResolvedHeadline, formatResolvedReport, readResolvedFile, RESOLVED_SCHEMAS } from "../gdskills/resolved-context-check";
++import { TASK_TEXT_MAX_CHARS } from "../gdskills/context-resolver";
+ import { runResolveContextCommand } from "../gdskills/resolve-context-command";
++import { printReferencesHelp, referencesCommand } from "./skills-references";
+ import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
+ import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
+ import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
+ import { verifyProjectSkill } from "../gdskills/verify";
+ import {
+   defaultBundledRoot,
+   evaluateBundledTree,
+   renderBundledEvaluation,
+ } from "../gdskills/bundled-eval";
+ 
+ type MetaprojectManifest = {
+   modules?: {
+     gdskills?: {
+       enabled?: boolean;
+       profile?: GdskillsProfile;
+       skills?: string;
+       catalog?: string;
+       projectSkillRegistry?: ProjectSkillRegistryEntry[];
+     };
+   };
+
+--- src/commands/skills.ts
+@@ 160,204 @@
+   if (command === "inspect") {
+     await inspectProjectSkill(args);
+     return;
+   }
+ 
+   if (command === "route") {
+     await routeProjectSkills(args);
+     return;
+   }
+ 
+   if (command === "resolve-context") {
+     try {
+       await runResolveContextCommand(args.slice(1));
+     } catch (error) {
+       console.error(error instanceof Error ? error.message : String(error));
+       process.exitCode = 1;
+     }
+     return;
+   }
+ 
++  if (command === "references") {
++    await referencesCommand(args.slice(1));
++    return;
++  }
++
+   if (command === "create" || command === "generate") {
+     await createSkillCommand(args);
+     return;
+   }
+ 
+   if (command === "import") {
+     try {
+       if (args.includes("--rules")) await runSkillsImportRulesCommand(args);
+       else await runSkillsImportCommand(args);
+     } catch (error) {
+       console.error(error instanceof Error ? error.message : String(error));
+       process.exitCode = 1;
+     }
+     return;
+   }
+ 
+   if (command === "update") {
+     try {
+       if (args.includes("--rules")) await runSkillsUpdateRulesCommand(args);
+       else await runSkillsUpdateCommand(args);
+
+--- src/commands/skills.ts
+@@ 1828,1936 @@
+ function relativeToCwd(filePath: string): string {
+   return path.relative(process.cwd(), filePath) || ".";
+ }
+ 
+ /**
+  * The help a `keryx skills <subcommand> --help` question is answered with.
+  *
+  * A TABLE OF PRINTERS, not a route. `cli-registry.ts` intercepts `--help` in
+  * front of every skills subcommand it has not been told is safe (`install`
+  * writes files and does not look for `--help`), and asks
+  * {@link printSkillsHelpFor} for the text instead of running anything. So a
+  * subcommand's own help is reached by adding ONE entry here, next to its
+  * printer — no registry edit, and no way for the entry to execute the
+  * subcommand. A subcommand with no entry gets the group help.
+  */
+ const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+   ["doctor", printDoctorHelp],
+   ["uninstall", printUninstallHelp],
+   ["route", printRouteHelp],
+   ["resolve-context", printResolveContextHelp],
++  ["references", printReferencesHelp],
+   ["inspect", printInspectHelp],
+   ["create", () => printCreateHelp("create")],
+   ["generate", () => printCreateHelp("generate")],
+   ["import", printSkillsImportHelp],
+   ["update", printSkillsUpdateHelp],
+   ["remove", printSkillsRemoveHelp],
+   ["verify", printVerifyHelp],
+   ["learn", printLearnHelp],
+   ["export", printExportHelp],
+   ["sync", printSyncHelp],
+   ["contracts", printContractsHelp],
+ ]);
+ 
+ /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
+ export function printSkillsHelpFor(rest: readonly string[] = []): void {
+   const subcommand = rest[0];
+   const own = subcommand === undefined ? undefined : SKILLS_SUBCOMMAND_HELP.get(subcommand);
+   (own ?? printSkillsHelp)();
+ }
+ 
+ function printSkillsHelp(): void {
+   console.log(`keryx skills
+ 
+ Usage:
+   keryx skills status
+   keryx skills status --json
+   keryx skills list
+   keryx skills inspect <project-skill>
+   keryx skills route <query-or-target>
+   keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+       [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]
++  keryx skills references check [--json]
++  keryx skills references suggest
+   keryx skills catalog [--profile minimal|recommended|full|custom]
+   keryx skills install [--profile minimal|recommended|full|custom]
+   keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
+       [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]
+   keryx skills doctor [--target <harness>] [--json]
+   keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
+   keryx skills create <target> --module <module> --name <skill-name>
+   keryx skills generate <target> --module <module> --name <skill-name>
+   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
+       [--only <glob>]... [--dry-run] [--force] [--json]
+   keryx skills update [<module>/<name>|--all] [--from <origin>] [--dry-run] [--json]
+   keryx skills remove <module>/<name> [--dry-run] [--json]
+   keryx skills verify <skill-or-target>
+   keryx skills verify --all
+   keryx skills verify --bundled [--root <dir>] [--json]
+   keryx skills learn --from-review <path> --skill <module>/<skill>
+   keryx skills learn apply <proposal.json>
+   keryx skills export <project-skill> --runtime codex|claude
+   keryx skills sync --runtime codex|claude --target <dir>
+   keryx skills contracts list
+   keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]
+   keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+               [--origin learned --source-ref <id>] [--json]
+   keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>]
+               [--judge <provider>[:<model>]] [--model-grader] [--json]
+   keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--record] [--json]
+   keryx skills stocktake [--scope bundled|all] [--quick] [--json]
+ 
+ Commands:
+   status    Show local gdskills installation status
+   list      List registered project skills
+   inspect   Inspect one registered project skill
+   route     Route a query or target to matching project skills
+   resolve-context  List the project rules and skills a worker must read for these files (project first)
++  references  Check the conditional-read declarations (references.json) or print a skeleton for undeclared citations
+   catalog  Print bundled gdskills catalog for a profile
+   install   Install bundled gdskills into .metaproject (legacy profile), or resolve/apply a
+             profile->modules/components install-manifest plan (--with/--without/--target/
+             --dry-run/--json/--include-deprecated, or a non-legacy profile id such as
+             core|react|nestjs|python). --target only accepts claude|keryx-shell (the only
+             targets with a v1 destination table) — any other value is a named error, never
+             an empty plan. --profile/--target/--with/--without given with no usable value
+             (a bare trailing flag, immediately followed by another flag, or --flag= with
+             nothing after it) is also a named error, never a silent default. NOTE:
+             --dry-run/--json on a LEGACY profile id (minimal|full|...) with no other
+             manifest flag always previews the MANIFEST-driven installer's own same-named
+             profile, which can differ from the legacy install the same command without
+             --dry-run/--json would run; the CLI prints this note when it applies.
+   doctor    Compare recorded install-state to disk: ok/drifted/missing/orphaned per path.
+             orphaned is a file under this target's destination roots that install-state
+             doesn't know about (often the operator's own file, e.g. .claude/rules/my-own.md)
+             — it is reported but never fails the command; only a drifted/missing recorded
+             path, or an unreadable/unsafe install-state file, sets a non-zero exit code.
+             --target with no usable value is a named error, never a silent default.
+   uninstall Remove only the paths recorded in install-state for a target (optionally one
+
+--- src/commands/skills.ts
+@@ 1998,2046 @@
+ Usage:
+   keryx skills route <query-or-target> [--json]
+ 
+ Examples:
+   keryx skills route src/pipelines/PipelineStepStore.ts
+   keryx skills route "подготовь пакет документации"
+   keryx skills route "change pipeline step store behavior" --json
+ `);
+ }
+ 
+ function printResolveContextHelp(): void {
+   console.log(`keryx skills resolve-context
+ 
+ Decides which project rules and project skills a worker must read before it
+ writes code or tests, project first, bundled second. Reads files on disk only;
+ no model is asked. A successful resolve exits 0 whatever the budget says.
+ 
+ Usage:
+   keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+       [--task-type ui_component|store_logic|service_api|fix|mixed]
+-      [--max-bytes <4096..1048576>] [--out <path>] [--json]
++      [--task-text <text>] [--max-bytes <4096..1048576>] [--out <path>] [--json]
+ 
+   --files       Target files, repo-relative; commas or a repeated flag.
+   --for         implement: rules and implementation skills; test: rules and testing skills;
+                 review: project rules only.
+   --task-type   Adds the bundled rules for that task type (the task-implementer table).
++  --task-text   What the task is about (title and description). Matched against the keywords of the
++                documents declared in .metaproject/rules/project/references.json; a match makes that
++                document must_read. Cut to ${TASK_TEXT_MAX_CHARS} characters, then recorded in the last-resolve record.
+   --max-bytes   Cap on project content that is must_read (default 131072, or
+                 gdskills.projectContext.maxBytes in .metaproject/tasks.config.json). Over the cap,
+                 later entries become on_demand and a warning goes to stderr.
+   --out         Write the JSON here (inside the project); its path is the task's resolved_context_file.
+ 
+ Each entry carries path, sha256, bytes, reason and tier (must_read | on_demand).
+ Check a worker's result against it with:
+   keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>
+ 
+ Examples:
+   keryx skills resolve-context --files src/stores/UserStore.ts --for implement --task-type store_logic --json
+   keryx skills resolve-context --files src/a.test.tsx --for test --out .metaproject/data/resolved.json
+ `);
+ }
+ 
+ function printInspectHelp(): void {
+   console.log(`keryx skills inspect
+ 
+ Usage:
+   keryx skills inspect <project-skill> [--json]
+
+--- src/commands/skills-references.test.ts
+@@ 1,329 @@
++import { afterEach, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { knownSubcommandsFor } from "../cli-registry";
++import { skillsCommand } from "./skills";
++import type { ReferencesCheckReport, ReferencesSuggestion } from "../gdskills/references-check";
++
++// Flow 462, T9: `keryx skills references check|suggest` and the import hint.
++// The analysis is tested through the router, the way an operator reaches it.
++
++const roots: string[] = [];
++const startCwd = process.cwd();
++
++afterEach(async () => {
++  process.chdir(startCwd);
++  process.exitCode = 0;
++  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
++});
++
++async function capture(run: () => Promise<void>): Promise<{ out: string; err: string }> {
++  const out: string[] = [];
++  const err: string[] = [];
++  const originalLog = console.log;
++  const originalError = console.error;
++  console.log = (...parts: unknown[]) => void out.push(parts.map(String).join(" "));
++  console.error = (...parts: unknown[]) => void err.push(parts.map(String).join(" "));
++  try {
++    await run();
++  } finally {
++    console.log = originalLog;
++    console.error = originalError;
++  }
++  return { out: out.join("\n"), err: err.join("\n") };
++}
++
++const STYLING_DOC = "# Styling\n\nIntro.\n\n## Class conventions\n\nUse tokens, never raw colours.\n\n## Spacing\n\nUse the scale.\n";
++const GOOD_DESCRIPTION = "Class naming and the Tailwind cascade contract.";
++const RULE = "---\ndescription: styling\nglobs: src/**/*.css\nalwaysApply: false\n---\n\nRead `STYLING.md` before touching a class.\n";
++
++type Declaration = { path: string; when: { globs?: string[]; keywords?: string[] }; anchor?: string | undefined; description: string };
++
++/** `undefined` removes a field: an entry without an anchor is a declaration of the whole file. */
++type Overrides = { [Key in keyof Declaration]?: Declaration[Key] | undefined };
++
++function declaration(overrides: Overrides = {}): Declaration {
++  const entry: Declaration = { path: "STYLING.md", when: { globs: ["src/**/*.css"], keywords: ["className"] }, anchor: "Class conventions", description: GOOD_DESCRIPTION };
++  return {
++    path: overrides.path ?? entry.path,
++    when: overrides.when ?? entry.when,
++    description: overrides.description ?? entry.description,
++    ..."anchor" in overrides ? (overrides.anchor === undefined ? {} : { anchor: overrides.anchor }) : { anchor: entry.anchor },
++  };
++}
++
++async function project(options: {
++  rules?: Record<string, string>;
++  files?: Record<string, string>;
++  references?: Declaration[] | string;
++}): Promise<string> {
++  const root = await mkdtemp(path.join(tmpdir(), "keryx-skills-references-"));
++  roots.push(root);
++  await mkdir(path.join(root, ".metaproject", "rules", "project"), { recursive: true });
++  await writeFile(path.join(root, ".metaproject", "metaproject.json"), "{}\n", "utf8");
++  for (const [name, text] of Object.entries(options.rules ?? { "styling.mdc": RULE })) {
++    await mkdir(path.dirname(path.join(root, ".metaproject", "rules", "project", name)), { recursive: true });
++    await writeFile(path.join(root, ".metaproject", "rules", "project", name), text, "utf8");
++  }
++  for (const [name, text] of Object.entries(options.files ?? { "STYLING.md": STYLING_DOC })) {
++    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
++    await writeFile(path.join(root, name), text, "utf8");
++  }
++  if (options.references !== undefined) {
++    const text = typeof options.references === "string" ? options.references : `${JSON.stringify({ schema: 1, references: options.references }, null, 2)}\n`;
++    await writeFile(path.join(root, ".metaproject", "rules", "project", "references.json"), text, "utf8");
++  }
++  process.chdir(root);
++  return root;
++}
++
++async function check(...extra: string[]): Promise<{ out: string; err: string; report?: ReferencesCheckReport }> {
++  const result = await capture(() => skillsCommand(["references", "check", ...extra]));
++  return extra.includes("--json") ? { ...result, report: JSON.parse(result.out) as ReferencesCheckReport } : result;
++}
++
++function codes(report: ReferencesCheckReport | undefined, severity: "error" | "warning"): string[] {
++  return (report?.findings ?? []).filter((finding) => finding.severity === severity).map((finding) => `${finding.code}:${finding.path}`);
++}
++
++async function listing(root: string, relative = ""): Promise<string[]> {
++  const found: string[] = [];
++  for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
++    const ref = relative === "" ? entry.name : `${relative}/${entry.name}`;
++    found.push(ref);
++    if (entry.isDirectory()) found.push(...(await listing(root, ref)));
++  }
++  return found.sort();
++}
++
++test("`references` is a known skills subcommand and the help lists check and suggest", async () => {
++  expect(knownSubcommandsFor("skills")).toContain("references");
++  const { out } = await capture(() => skillsCommand(["--help"]));
++  expect(out).toContain("keryx skills references check");
++  expect(out).toContain("keryx skills references suggest");
++});
++
++test("references check: a project whose declarations are sound reports nothing and exits 0", async () => {
++  await project({ references: [declaration()] });
++  const { out, err } = await check();
++  expect(process.exitCode ?? 0).toBe(0);
++  expect(err).toBe("");
++  expect(out).toContain("0 errors");
++  expect(out).toContain("0 warnings");
++});
++
++test("references check: a declared document that does not exist is an error naming the entry, and exits 1", async () => {
++  await project({ references: [declaration(), declaration({ path: "docs/GONE.md", anchor: undefined })] });
++  const { out, report } = await check("--json");
++  expect(codes(report, "error")).toEqual(["document-missing:docs/GONE.md"]);
++  expect(report?.ok).toBe(false);
++  expect(process.exitCode).toBe(1);
++  const text = await check();
++  expect(text.out).toContain("docs/GONE.md");
++  expect(out).toContain("document-missing");
++});
++
++test("references check: a declared document that resolves outside the project root is an error", async () => {
++  const root = await project({ references: [declaration({ path: "linked.md", anchor: undefined })] });
++  const outside = await mkdtemp(path.join(tmpdir(), "keryx-skills-references-outside-"));
++  roots.push(outside);
++  await writeFile(path.join(outside, "SECRET.md"), "# Secret\n", "utf8");
++  await symlink(path.join(outside, "SECRET.md"), path.join(root, "linked.md"));
++  const { report } = await check("--json");
++  expect(codes(report, "error")).toContain("document-outside-root:linked.md");
++  expect(process.exitCode).toBe(1);
++});
++
++test("references check: a declared document over the size limit is an error", async () => {
++  await project({
++    references: [declaration({ anchor: undefined })],
++    files: { "STYLING.md": `# Styling\n\n${"x".repeat(262145)}\n` },
++  });
++  const { report } = await check("--json");
++  expect(codes(report, "error")).toEqual(["document-too-large:STYLING.md"]);
++  expect(process.exitCode).toBe(1);
++});
++
++test("references check: an anchor that matches no heading is an error and lists the headings the file has", async () => {
++  await project({ references: [declaration({ anchor: "Nonexistent section" })] });
++  const { report } = await check("--json");
++  expect(codes(report, "error")).toEqual(["anchor-not-found:STYLING.md"]);
++  const finding = report?.findings.find((entry) => entry.code === "anchor-not-found");
++  expect(finding?.message).toContain("Nonexistent section");
++  expect(finding?.message).toContain("Class conventions");
++  expect(process.exitCode).toBe(1);
++});
++
++test("references check: a description under 20 characters is a warning and does not fail the run", async () => {
++  await project({ references: [declaration({ description: "Styling rules." })] });
++  const { report } = await check("--json");
++  expect(codes(report, "warning")).toEqual(["description-short:STYLING.md"]);
++  expect(codes(report, "error")).toEqual([]);
++  expect(report?.ok).toBe(true);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: a keyword under 4 characters is a warning naming the keyword", async () => {
++  await project({ references: [declaration({ when: { globs: ["src/**/*.css"], keywords: ["css", "className", "ui"] } })] });
++  const { report } = await check("--json");
++  expect(codes(report, "warning")).toEqual(["keyword-short:STYLING.md", "keyword-short:STYLING.md"]);
++  const messages = (report?.findings ?? []).filter((entry) => entry.code === "keyword-short").map((entry) => entry.message);
++  expect(messages.some((message) => message.includes('"css"'))).toBe(true);
++  expect(messages.some((message) => message.includes('"ui"'))).toBe(true);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: a citation with no declaration is a warning, and a missing references.json is not an error", async () => {
++  await project({});
++  const { report } = await check("--json");
++  expect(report?.present).toBe(false);
++  expect(codes(report, "error")).toEqual([]);
++  expect(codes(report, "warning")).toEqual(["undeclared-citation:STYLING.md"]);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: a declaration that no rule cites is a warning", async () => {
++  await project({
++    rules: { "styling.mdc": "---\ndescription: styling\nglobs: src/**/*.css\nalwaysApply: false\n---\n\nNo document is cited here.\n" },
++    references: [declaration()],
++  });
++  const { report } = await check("--json");
++  expect(codes(report, "warning")).toEqual(["unused-declaration:STYLING.md"]);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: malformed JSON is an error that carries the loader's message", async () => {
++  await project({ references: "{ not json" });
++  const { out, err, report } = await check("--json");
++  expect(process.exitCode).toBe(1);
++  expect(report?.ok).toBe(false);
++  expect(codes(report, "error")).toEqual([`invalid-file:.metaproject/rules/project/references.json`]);
++  expect(report?.findings[0]?.message).toContain("is not valid JSON");
++  expect(err).toBe("");
++  expect(out).toContain("is not valid JSON");
++});
++
++test("references check: a schema violation names the entry", async () => {
++  await project({ references: JSON.stringify({ schema: 1, references: [{ path: "STYLING.md", when: {}, description: GOOD_DESCRIPTION }] }) });
++  const { report } = await check("--json");
++  expect(process.exitCode).toBe(1);
++  expect(report?.findings.some((entry) => entry.severity === "error" && entry.message.includes('references[0] ("STYLING.md")'))).toBe(true);
++});
++
++test("references check: two declarations of one document are an error naming both entries", async () => {
++  await project({ references: [declaration(), declaration({ anchor: "Spacing" })] });
++  const { report } = await check("--json");
++  expect(process.exitCode).toBe(1);
++  expect(codes(report, "error")).toEqual([`invalid-file:.metaproject/rules/project/references.json`]);
++  expect(report?.findings[0]?.message).toContain("references[1]");
++  expect(report?.findings[0]?.message).toContain("references[0]");
++});
++
++test("references check: a rule citing ./STYLING.md counts as citing the declared document", async () => {
++  await project({
++    rules: { "styling.mdc": RULE.replace("`STYLING.md`", "`./STYLING.md`") },
++    references: [declaration()],
++  });
++  const { report } = await check("--json");
++  expect(report?.findings).toEqual([]);
++});
++
++test("references check: --json carries the same findings the text report prints", async () => {
++  await project({ references: [declaration({ description: "short", anchor: "Missing" })] });
++  const json = await check("--json");
++  process.exitCode = 0;
++  const text = await check();
++  for (const finding of json.report?.findings ?? []) {
++    expect(text.out).toContain(finding.path);
++    expect(text.out).toContain(finding.message);
++  }
++  expect(text.out).toContain(`${json.report?.errors} error`);
++  expect(text.out).toContain(`${json.report?.warnings} warning`);
++});
++
++test("references check: an unknown action is refused with usage and exits 1", async () => {
++  await project({});
++  const { err } = await capture(() => skillsCommand(["references", "bogus"]));
++  expect(err).toContain("keryx skills references");
++  expect(process.exitCode).toBe(1);
++});
++
++test("references suggest: prints a skeleton for each undeclared citation and writes no file", async () => {
++  const root = await project({});
++  const before = await listing(root);
++  const { out } = await capture(() => skillsCommand(["references", "suggest"]));
++  const parsed = JSON.parse(out) as ReferencesSuggestion;
++  expect(parsed.schema).toBe(1);
++  expect(parsed.references).toHaveLength(1);
++  const entry = parsed.references[0]!;
++  expect(entry.path).toBe("STYLING.md");
++  expect(entry.bytes).toBe(Buffer.byteLength(STYLING_DOC));
++  expect(entry.anchorCandidates).toEqual(["Styling", "Class conventions", "Spacing"]);
++  expect(entry.description).toBe("");
++  expect(entry.when).toEqual({ globs: [], keywords: [] });
++  expect(await listing(root)).toEqual(before);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references suggest: leaves out citations that are already declared and prints an empty list when none remain", async () => {
++  await project({ references: [declaration()] });
++  const { out } = await capture(() => skillsCommand(["references", "suggest"]));
++  expect((JSON.parse(out) as ReferencesSuggestion).references).toEqual([]);
++});
++
++test("references suggest: lists only citations that name a file inside the project", async () => {
++  await project({
++    rules: { "styling.mdc": `${RULE}\nAlso see \`docs/missing.md\`, \`../outside.md\` and \`THEMING.md\`; rule \`core/other.mdc\`.\n` },
++    files: { "STYLING.md": STYLING_DOC, "THEMING.md": "# Theming\n" },
++  });
++  const { out } = await capture(() => skillsCommand(["references", "suggest"]));
++  expect((JSON.parse(out) as ReferencesSuggestion).references.map((entry) => entry.path)).toEqual(["STYLING.md", "THEMING.md"]);
++});
++
++test("references suggest: a malformed references.json is reported and exits 1 instead of guessing what is declared", async () => {
++  await project({ references: "{ not json" });
++  const { out, err } = await capture(() => skillsCommand(["references", "suggest"]));
++  expect(out).toBe("");
++  expect(err).toContain("is not valid JSON");
++  expect(process.exitCode).toBe(1);
++});
++
++async function importProject(ruleText: string, files: Record<string, string>): Promise<{ root: string; source: string }> {
++  const root = await project({ rules: {}, files });
++  const source = path.join(root, "upstream-rules");
++  await mkdir(source, { recursive: true });
++  await writeFile(path.join(source, "styling.mdc"), ruleText, "utf8");
++  return { root, source };
++}
++
++test("references suggest: skills import --rules ends with the count of undeclared citations and the command to run", async () => {
++  const { source } = await importProject(RULE, { "STYLING.md": STYLING_DOC });
++  const { out } = await capture(() => skillsCommand(["import", "--rules", source]));
++  const lines = out.trimEnd().split("\n");
++  expect(lines.at(-1)).toContain("keryx skills references suggest");
++  expect(lines.at(-2)).toContain("1 cited document");
++  expect(out).toContain("imported");
++});
++
++test("references suggest: skills import --rules prints no hint when every citation is declared or none exists", async () => {
++  const withoutCitation = await importProject("---\ndescription: s\nglobs: src/**/*.css\nalwaysApply: false\n---\n\nNo citation.\n", {});
++  const quiet = await capture(() => skillsCommand(["import", "--rules", withoutCitation.source]));
++  expect(quiet.out).not.toContain("references suggest");
++
++  const declared = await importProject(RULE, { "STYLING.md": STYLING_DOC });
++  await mkdir(path.join(declared.root, ".metaproject", "rules", "project"), { recursive: true });
++  await writeFile(
++    path.join(declared.root, ".metaproject", "rules", "project", "references.json"),
++    `${JSON.stringify({ schema: 1, references: [declaration()] })}\n`,
++    "utf8",
++  );
++  const done = await capture(() => skillsCommand(["import", "--rules", declared.source]));
++  expect(done.out).not.toContain("references suggest");
++});
++
++test("references suggest: skills import --rules --json stays pure JSON", async () => {
++  const { source } = await importProject(RULE, { "STYLING.md": STYLING_DOC });
++  const { out } = await capture(() => skillsCommand(["import", "--rules", source, "--json"]));
++  expect(() => JSON.parse(out)).not.toThrow();
++});
+
+--- src/flow/task-project-context.test.ts
+@@ 1,25 @@
+-import { afterEach, expect, test } from "bun:test";
++import { afterEach, expect, spyOn, test } from "bun:test";
+ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
++import { skillsCommand } from "../commands/skills";
+ import { sha256Hex } from "../gdskills/project-rules";
+ import { createFlowService } from "./service";
+ import type { FlowService } from "./types";
+ 
+ const roots: string[] = [];
+ 
+ afterEach(async () => {
+   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+ });
+ 
+ const RULE = ".metaproject/rules/project/styling.mdc";
+ const RULE_TEXT = "use tokens, not hex\n";
+ 
+ type Fixture = { root: string; dir: string; service: FlowService; flowId: string };
+ 
+ async function fixture(enforcement?: "warn" | "block"): Promise<Fixture> {
+   const root = await mkdtemp(path.join(tmpdir(), "keryx-task-ctx-"));
+   roots.push(root);
+   await mkdir(path.join(root, ".metaproject", "rules", "project"), { recursive: true });
+   await writeFile(path.join(root, RULE), RULE_TEXT, "utf8");
+
+--- src/flow/task-project-context.test.ts
+@@ 99,227 @@
+   await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: result, resolvedFile: resolved } });
+   expect(await taskStatus(f, "T2")).toBe("done");
+   const journal = await readFile(path.join(f.root, f.dir, "journal.md"), "utf8");
+   expect(journal).toContain("1 miss(es), 0 drifted (enforcement warn)");
+   expect(journal).toContain(RULE);
+ });
+ 
+ test("default install (no config): a miss passes and a task without a result is not checked", async () => {
+   const f = await fixture();
+   const { result, resolved } = await files(f.root, false);
+   await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: result, resolvedFile: resolved } });
+   await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T3" });
+   expect(await taskStatus(f, "T3")).toBe("done");
+ });
+ 
+ test("--result without --resolved (or the reverse) is an error in any mode", async () => {
+   const f = await fixture("warn");
+   await expect(f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: "result.json" } })).rejects.toThrow(/go together/);
+   await expect(f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resolvedFile: "resolved.json" } })).rejects.toThrow(/go together/);
+ });
++
++// --- conditional reads (flow 462): the proof of a promoted document, through task done and the standalone check ---
++
++const DOC = "docs/STYLING.md";
++const DOC_TEXT = "# Styling\n\n## Tokens\n\nUse design tokens instead of hex values. Spacing follows the spacing scale.\n\n## Layout\n\nGrid containers carry the gutters.\n";
++const GOOD_SUMMARY = "Use design tokens instead of hex values and follow the spacing scale";
++const BAD_SUMMARY = "I read the whole document carefully and it was all fine really";
++
++async function promotedFiles(root: string, summary: string): Promise<{ result: string; resolved: string }> {
++  const sha = sha256Hex(DOC_TEXT);
++  await mkdir(path.join(root, "docs"), { recursive: true });
++  await writeFile(path.join(root, DOC), DOC_TEXT, "utf8");
++  const resolved = {
++    schema: 1,
++    for: "implement",
++    files: ["src/a.css"],
++    entries: [
++      {
++        kind: "contract",
++        source: "project",
++        path: DOC,
++        sha256: sha,
++        bytes: DOC_TEXT.length,
++        reason: "condition:glob:src/**/*.css",
++        tier: "must_read",
++        anchor: "Tokens",
++        condition: { globs: ["src/**/*.css"], keywords: [] },
++      },
++    ],
++  };
++  const result = {
++    task_id: "task-2",
++    task_name: "Style the form",
++    task_type: "ui_component",
++    status: "success",
++    project_context_applied: [{ path: DOC, sha256: sha, how: "read", anchor: "Tokens", summary }],
++  };
++  await writeFile(path.join(root, "resolved.json"), JSON.stringify(resolved), "utf8");
++  await writeFile(path.join(root, "result.json"), JSON.stringify(result), "utf8");
++  return { result: "result.json", resolved: "resolved.json" };
++}
++
++async function standalone(root: string, files: { result: string; resolved: string }): Promise<{ exitCode: number; lines: string[] }> {
++  const originalCwd = process.cwd();
++  const originalExitCode = process.exitCode;
++  const lines: string[] = [];
++  const logSpy = spyOn(console, "log").mockImplementation((...parts: unknown[]) => void lines.push(parts.join(" ")));
++  const errSpy = spyOn(console, "error").mockImplementation((...parts: unknown[]) => void lines.push(parts.join(" ")));
++  process.exitCode = 0;
++  try {
++    process.chdir(root);
++    await skillsCommand(["contracts", "validate", files.result, "--schema", "task-implementer-output", "--resolved", files.resolved]);
++    return { exitCode: Number(process.exitCode ?? 0), lines };
++  } finally {
++    logSpy.mockRestore();
++    errSpy.mockRestore();
++    process.chdir(originalCwd);
++    process.exitCode = originalExitCode ?? 0;
++  }
++}
++
++test("block: a promoted document cited with a summary that shares no words with the section is refused, and the standalone check exits 1 with the same lines", async () => {
++  const f = await fixture("block");
++  const files = await promotedFiles(f.root, BAD_SUMMARY);
++  const refusal = await f.service
++    .taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } })
++    .then(() => undefined, (error: unknown) => error as Error);
++  expect(refusal?.message).toContain("project context: 1 miss(es), 0 drifted (enforcement block)");
++  const refused = (refusal?.message ?? "").split("\n").slice(1);
++  expect(refused).toHaveLength(1);
++  expect(refused[0]).toContain(`project context miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
++  expect(await taskStatus(f, "T2")).not.toBe("done");
++
++  const check = await standalone(f.root, files);
++  expect(check.exitCode).toBe(1);
++  expect(check.lines.filter((line) => line.startsWith("- project context"))).toEqual(refused);
++});
++
++test("block: a promoted document cited with its anchor and a summary in the section's words closes the task, and the standalone check exits 0", async () => {
++  const f = await fixture("block");
++  const files = await promotedFiles(f.root, GOOD_SUMMARY);
++  await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
++  expect(await taskStatus(f, "T2")).toBe("done");
++  expect((await standalone(f.root, files)).exitCode).toBe(0);
++});
++
++test("warn: the same proof miss passes with exit 0 and the lines go to the flow journal and the standalone output", async () => {
++  const f = await fixture("warn");
++  const files = await promotedFiles(f.root, BAD_SUMMARY);
++  await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
++  expect(await taskStatus(f, "T2")).toBe("done");
++  const journal = await readFile(path.join(f.root, f.dir, "journal.md"), "utf8");
++  expect(journal).toContain("1 miss(es), 0 drifted (enforcement warn)");
++  expect(journal).toContain(`miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
++
++  const check = await standalone(f.root, files);
++  expect(check.exitCode).toBe(0);
++  expect(check.lines.join("\n")).toContain(`- project context miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
++});
++
++test("block: editing a promoted document between resolve and close is drift and refuses the task", async () => {
++  const f = await fixture("block");
++  const files = await promotedFiles(f.root, GOOD_SUMMARY);
++  await writeFile(path.join(f.root, DOC), `${DOC_TEXT}\nA late edit.\n`, "utf8");
++  const refusal = f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
++  await expect(refusal).rejects.toThrow(/1 drifted/);
++  await expect(refusal).rejects.toThrow(new RegExp(`project context drift: ${DOC.replace(/\./g, "\\.")} \\(must_read\\)`));
++  expect((await standalone(f.root, files)).exitCode).toBe(1);
++});
+
+--- src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+@@ 303,366 @@
+ `subagent-dispatch` object
+ (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
+ worker reply is a `subagent-result` object
+ (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
+ line is `STATUS: <status>`
+ (`.metaproject/rules/core/subagent-status-protocol.md`).
+ 
+ `<worktree_path>` below is the absolute root of the checkout this flow's work
+ happens in: the git worktree the flow runs in, or the project root when it runs
+ in the main checkout. Resolve it once, before the first dispatch
+ (`git rev-parse --show-toplevel` from that checkout), check
+ `git -C <worktree_path> branch --show-current` is the branch the work belongs
+ on, and pin every dispatch to it (`rules/core/git-concurrency.mdc`, "Pinning A
+ Dispatch To Its Worktree").
+ 
+ Workers do not commit: flow-orchestrator owns every commit and dispatches with
+ auto-commit off (task-implementer's `automation.auto_commit: false`). A
+ `subagent-dispatch` has no `automation` field, so the setting travels as the
+ explicit constraint below — never as the worker's default, which is `true`.
+ 
+-Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
++Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --task-text "<the task's title and description>" --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. `--task-text` (the harness and MCP field is `task_text`) is what lets a keyword of a document declared in `references.json` match; without it only globs promote. A promoted entry comes back as `must_read` with reason `condition:glob:<g>` or `condition:keyword:<k>`, and its `project_context_applied` item must carry the `path`, the `sha256` of the whole file as pinned, the declared `anchor`, a `summary` (at least 40 characters, in the worker's own words, reusing at least three distinct words of five or more letters from the anchored section) and `how` `read` or `followed`, never `n/a`. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
+ 
+ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
+ 
+ ```json
+ {
+   "contract_version": "1.0.0",
+   "run_id": "<flow-id>",
+   "dispatch_id": "<flow-id>-<Tn>",
+   "orchestrator": "flow-orchestrator",
+   "target_skill": "task-implementer",
+   "task": { "title": "<Tn title>", "description": "<what to do>", "intent": "implement" },
+   "acceptance_criteria": ["<the frozen ACn lines this task must satisfy>"],
+   "context_refs": [
+     { "path": ".metaproject/flows/<dir>/context.md", "kind": "context", "exists": true },
+     { "path": ".metaproject/flows/<dir>/plan.md", "kind": "plan", "exists": true },
+     { "path": ".metaproject/flows/<dir>/acceptance-criteria.md", "kind": "custom", "exists": true },
+     { "path": ".metaproject/flows/<dir>/resolved/<Tn>.<for>.json", "kind": "custom", "exists": true }
+   ],
+   "files_to_read": ["<only files gdgraph/gdctx narrowed to>"],
+   "constraints": [
+     "Never edit flow.json.",
+     "Never edit frozen acceptance criteria.",
+-    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied.",
++    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+     "Return a subagent-result; first line must be STATUS:.",
+     "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
+     "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",
+     "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary."
+   ],
+   "allowed_actions": ["read", "write", "run-command", "git"],
+   "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/<dir>/journal.md" },
+   "budget": { "max_output_tokens": null },
+   "provenance": { "created_at": "<iso-utc>", "created_by": "flow-orchestrator" }
+ }
+ ```
+ 
+ **Task boundary commit, after every accepted worker result** (`DONE` or
+ `DONE_WITH_CONCERNS`), then mark task progress. It commits exactly those
+ `changed_files` from the worker's `subagent-result` that git still shows as
+ changed, never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc` rule 4 and
+ "Reporting Back"). It skips cleanly when none remain (expected for a worker that
+ reported no files or committed on its own, like tests-creator's stubs):
+ 
+ ```bash
+
+--- src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+@@ 729,782 @@
+ what agents *return*, not with what they do; a returned result file path costs a line,
+ an inlined verification log costs thousands. After 3–4 waves of inlined results the
+ session freezes on context reload, which is the failure this rule exists to avoid.
+ 
+ ---
+ 
+ #### Wave ordering
+ 
+ Waves come from `dependency_order` in `ANALYSIS_RESULT`, which `issue-analyzer` already
+ returned topologically sorted and which 2.2 validated. Wave 1 is every task with no
+ unsatisfied dependency; wave N+1 is every task whose dependencies are all in waves 1..N.
+ Do not re-derive an ordering the analysis already produced.
+ 
+ #### Execution pattern
+ 
+ ```
+ FOR wave_index, wave_tasks in enumerate(WAVES):
+ 
+   keryx job step <job-name> tests-creator --status in-progress      # wave 1 only
+   # Step A — tests-creator (MANDATORY, run first)
+-  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
++  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --task-text "<task title and description>" --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+   Dispatch one tests-creator per task in this wave, in a SINGLE turn (parallel), each carrying resolved_context_file.
+   Wait for ALL of them. Collect TEST_SPECS[task_id] from each response, then per result:
+     keryx skills contracts validate <task_id>-tests.json --schema tests-creator-output --resolved <that resolved file>
+   keryx job step <job-name> tests-creator --status completed         # last wave only
+ 
+   # Parallel safety check, before Step B:
+   # if two tasks in this wave share a target_file, dispatch them sequentially.
+ 
+   keryx job step <job-name> implement --status in-progress           # wave 1 only
+   # Step B — task-implementer (after all test stubs are committed)
+   keryx skills resolve-context --for implement ... --out <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json
+   Dispatch one task-implementer per task in this wave, in a SINGLE turn (parallel),
+-  each carrying test_case_specs: TEST_SPECS[task_id] and resolved_context_file.
++  each carrying test_case_specs: TEST_SPECS[task_id] and resolved_context_file (an entry promoted by a declared condition, reason condition:glob:<g> or condition:keyword:<k>, needs its project_context_applied item to carry path, sha256 of the whole file, the declared anchor, a summary of 40+ characters in the worker's own words, and how read|followed, never n/a).
+   Wait for ALL of them; per result: keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that resolved file>
+ 
+   Read each result's STATUS line:
+     DONE / DONE_WITH_CONCERNS → accept it (record every concern)
+     BLOCKED                   → do not accept it; read its result file
+ 
+   # Task boundary commit, for EVERY accepted result, before anything else,
+   # whatever auto_commit was (see "Task boundary commit" below):
+   FOR each accepted result: commit its still-changed reported paths, or skip
+ 
+   any BLOCKED → STOP, resolve or ask the user
+   otherwise   → continue to next wave
+ ```
+ 
+ #### tests-creator dispatch (Step A)
+ 
+ ```
+ Task({
+   description: "Wave <N> tests: <task_id>",
+   subagent_type: "general-purpose",
+
+--- src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+@@ 1287,1327 @@
+ reviewer did not look at is not fixed: absence-as-evidence, which the completion gate refuses.
+ 
+ ```
+ UNRESOLVED_FINDINGS = OPEN from step 2.6          # never a HELD finding (Classify, 2.6.1)
+ PREVIOUS_REVIEW_OUTPUT = <the ingested report from step 2.6>
+ 
+ FOR iteration in [1, 2, 3]:
+   IF NOT NEEDS_FIX: BREAK
+ 
+   keryx job step <job-name> fix --status in-progress     # increments metrics.steps[].retries
+ 
+   1. Group UNRESOLVED_FINDINGS by file
+   2. Construct fix prompt — MUST include unresolved findings from previous attempt:
+ 
+      task_type: "fix"
+      findings: <UNRESOLVED_FINDINGS, in the canonical finding shape>
+      iteration: <N>
+      previously_unresolved: <findings that were in UNRESOLVED_FINDINGS last iteration but still present>
+          → Prefix: "These specific findings were NOT fixed in iteration <N-1>: [list]"
+ 
+-  3. Re-run `keryx skills resolve-context --for implement` on the fix files (fresh `--out`), then launch task-implementer
++  3. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text "<fix task description>"` and a fresh `--out`), then launch task-implementer
+      with the fix prompt and `resolved_context_file` (subagent_type: "general-purpose"),
+      on the model `keryx review tier --fix-attempt <N> --findings <n> --json` computes
+   4. Run the sanity check (step 2.5.2 logic) — verify commits were made — and `contracts validate --resolved` on the result
+   5. Run the next managed round — the FULL 2.6.1 sequence, not a bare re-dispatch:
+        keryx review budget  --spent <usd> --outstanding <n>
+        keryx review plan    --target branch --ref <feature-branch> --head <new-head>
+                             # start + scope + blast-radius + slice + required + estimate on the new head;
+                             # round.json names the delta, scope.json and blast-radius.json land in the package
+        keryx review comments collect --repo <r> --pr <n> --sha <new-head> --round <N+1> --out <file>
+        <run review-orchestrator inline, in this session; it takes the round from round.json>
+        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
+                             --scope scope.json --blast-radius blast-radius.json \
+                             --verifications <file> --premises <file> --refuted <file> --outstanding <n>
+   6. Recompute HELD, OPEN and NEEDS_FIX from the ingested findings; a new HELD finding is asked about as in Classify
+   7. Record what became of each finding raised in the PREVIOUS round — every one of
+      them, before the next iteration starts:
+ 
+        keryx review complete <previous-review-id-or-path> \
+          --finding F-001 --disposition acted-on --evidence "fixed in <commit-sha>" \
+          --finding F-002 --disposition dismissed-incorrect --evidence "<what was run, what it showed>" \
+
+--- src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md
+@@ 112,160 @@
+ - no → Phase 3
+ 
+ ### Step: PREPARE — Create Feature Branch
+ 
+ > **CRITICAL**: Use ONLY `git worktree add`. NEVER `git checkout -b`.
+ 
+ ```bash
+ git -C <project_dir> fetch origin <base_branch>
+ git -C <project_dir> worktree add ../<branch-slug> -b feature/<branch-slug> origin/<base_branch>
+ # then install with the DETECTED package manager — never hardcode npm
+ ```
+ 
+ All subsequent operations ONLY in the worktree directory.
+ 
+ ### Step: TESTS-CREATOR + IMPLEMENT — Waves
+ 
+ ```
+ WAVES = dependency_order from ANALYSIS_RESULT (already topologically sorted)
+ 
+ FOR wave_index, wave_tasks in enumerate(WAVES):
+-  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
++  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --task-text "<task title and description>" --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+      Dispatch one tests-creator per task, in a SINGLE turn (parallel), each carrying
+      resolved_context_file. Wait for all; per result run
+      keryx skills contracts validate <result.json> --schema tests-creator-output --resolved <that file>
+      Load skill: skills/gdskills/quality/tests-creator/SKILL.md
+   2. Parallel safety check: tasks sharing a target_file run sequentially.
+   3. keryx skills resolve-context --for implement ... --out <...>/<task_id>.implement.resolved.json
++     A promoted entry (reason condition:glob:<g> or condition:keyword:<k>) needs path, sha256, the declared anchor, a summary
++     (40+ characters, own words) and how read|followed in the worker's project_context_applied; validate refuses it otherwise.
+      Dispatch one task-implementer per task, in a SINGLE turn (parallel), each carrying
+      resolved_context_file. Wait for all; per result run
+      keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that file>
+      Load skill: skills/gdskills/orchestration/task-implementer/SKILL.md
+   4. Read each STATUS line:
+        all DONE               → next wave
+        any DONE_WITH_CONCERNS → record concerns, continue
+        any BLOCKED            → STOP, read the result file, resolve or ask the user
+ 
+ There is no wave-executor agent. Instruct every dispatched agent to write full
+ detail to <JOBS_ROOT>/<job-name>/results/<task_id>.json and return only a compact
+ summary — context grows with what agents RETURN.
+ ```
+ 
+ Record with `keryx job document --type implementation-report`.
+ 
+ ### Step: VERIFY — Quality Gate
+ 
+ Dispatch `code-verifier` (`skills/gdskills/orchestration/code-verifier/SKILL.md`) with
+ `codebase_path`, `base_branch`, `scope: changed`. Record with
+
+--- src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md
+@@ 168,208 @@
+ keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha> --round <n> --out <file>
+ keryx review scope        --ref "$BASE_SHA" --json > scope.json
+ keryx review blast-radius --ref "$BASE_SHA" --json > blast-radius.json    # KEEP BOTH
+ keryx review stack --json                                                # which reviewers apply
+ keryx review tier  --scope <scope> --diff-lines <n> --json                # model per dispatch
+ # run review-orchestrator inline (skills/gdskills/review/review-orchestrator/SKILL.md);
+ # it runs review-verifier in Wave C and emits the ```json keryx:findings``` block
+ keryx review ingest --report <report.md> --ref <feature-branch> --head <sha> \
+   --scope scope.json --blast-radius blast-radius.json \
+   --verifications <file> --refuted <file> --outstanding <n>
+ ```
+ 
+ `--blast-radius` is required on any round that dispatched `review-regression`; an
+ ingest carrying a scope-B finding without it is refused. Severities are
+ `blocker|major|minor|info`. Record with `keryx job document --type review`.
+ 
+ ### Step: FIX — Review-Fix Loop (max 3 iterations)
+ 
+ If `blocker` or `major` findings exist:
+ 1. Group by file
+-2. Re-run `keryx skills resolve-context --for implement` on the fix files, then launch task-implementer (`task_type: "fix"`) with the findings and `resolved_context_file`
++2. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text "<fix task description>"`), then launch task-implementer (`task_type: "fix"`) with the findings and `resolved_context_file`
+ 3. Run the sanity check — verify commits were made — and `contracts validate --resolved` on the result
+ 4. Run the NEXT managed round: `keryx review plan --target branch --ref <feature-branch> --head <new-head>` (or `review start`) on the new head, then review-orchestrator. The round, range and prior findings come from `round.json`: no own range, no `--all` per round, no whole-branch re-review.
+ 5. Disposition every finding of the previous round:
+    ```bash
+    keryx review complete <review-id> --finding F-001 --disposition acted-on --evidence "<commit>"
+    ```
+ 6. STUCK CHECK — break on a repeated finding identity or an identical report, even
+    with iterations left. `keryx review loop --flow <id>` detects it from the record.
+ 
+ After the LAST round only:
+ ```bash
+ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file> --review <review-id> --sha <sha> --final
+ ```
+ 
+ ### Step: REPORT — Generate Final Report
+ 
+ Markdown report per template in SKILL.md (section 2.9).
+ 
+ ### Step: PR — Propose Draft PR (optional)
+ 
+
+--- src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+@@ 162,204 @@
+ **2.0 Read job context (if available):**
+ 
+ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
+ - Read `CONTEXT_PATH` (e.g., `<JOBS_ROOT>/<job-name>/ai/context.md`)
+ - Extract relevant sections: library docs, codebase patterns, conventions, best practices
+ - Use this context throughout Phase 2-4 to guide implementation decisions
+ - If the file does not exist, proceed without it — context is optional
+ 
+ **2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+ 
+ Before you rely on a project-skill's guidance, confirm it still matches the code:
+ - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
+ - If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
+ - If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+ - If it is **`fresh`**: apply it. Its rules, templates and conventions for the target are part of the task, not background reading, and they supplement this skill's phases: a project skill never replaces a phase, the TDD order or the output contract. Where it and a bundled rule disagree, the project skill wins; say so in `notes`.
+ - If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
+ 
+ This step is read-only and inline; do not spawn a subagent for it.
+ 
+ **2.0c Resolve the project's standard (before 2.1):**
+-- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --out <project-relative path>`.
++- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --task-text "<task.description>" --out <project-relative path>` (`--task-text` lets a declared keyword promote a document).
+ - Read every `must_read` entry in full, project entries first; read `on_demand` ones only when the work touches them. A project rule listed with `shadows` replaces the bundled one. An entry with `also_at` is one file under several paths: citing any of them, with the entry's sha256, counts.
+-- Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
++- An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition and carries an `anchor`, a `description` and `section_bytes`: read the anchored section in full. Its `project_context_applied` item needs the `path`, the `sha256` of the whole file as pinned, the `anchor` exactly as declared, a `summary` and `how` `read` or `followed`, never `n/a`. Write the `summary` in your own words, at least 40 characters, naming at least three distinct words of five or more letters taken from the anchored section; `contracts validate --resolved` rejects a copied hash without it. Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
+ 
+ **2.1 Read all target files:**
+ - Read each file from `target_files` in full
+ - If a file does not exist yet, note it as "new file to create"
+ - Read the `context` field for additional type/signature info
+ 
+ **2.2 Read existing tests and stories:**
+ - `existing_tests` and `existing_stories` default to `[]`; the string `"none"` is not a legal value and 1.4 refuses it
+ - Read each file listed in either array
+ - Understand existing test patterns (describe/it structure, mocks, fixtures) and, for every file in `existing_stories`, the story patterns it uses (`Meta`/`StoryObj` shape, how variants are declared, how callbacks are stubbed) — 4.4 builds on what you record here
+ 
+ **2.3 Read module neighbors:**
+ - List sibling files in the same directory as each target file
+ - Read 2-3 similar files to understand module patterns (naming, exports, structure)
+ - Pay attention to import aliases, named vs default exports, interfaces vs types, observer wrapping and props naming, and store patterns (makeObservable(this), explicit decorators, private fields before public, thin public @action.bound UI actions, non-mutating public helpers, private API methods, runInAction after await)
+ 
+ **2.4 Load relevant rules (from `module_patterns` or by detection):**
+ 
+ Rules `resolve-context` listed are already read (2.0c); load the rest by what you're implementing.
+ 
+
+--- src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+@@ 408,448 @@
+ mkdir -p <JOBS_ROOT>/<JOB_NAME>/results
+ ```
+ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
+ ```json
+ {
+   "task_id": "<task_id>",
+   "task_name": "<task_name>",
+   "task_type": "<task_type>",
+   "status": "<success|partial|failed>",
+   "description": "<what was implemented>",
+   "files_modified": ["src/path/file.ts"],
+   "files_created": ["src/path/newfile.ts"],
+   "files_deleted": [],
+   "commits": ["abc1234", "def5678"],
+   "lint_result": "<pass|N errors: details>",
+   "type_check_result": "<pass|N errors: details>",
+   "test_result": "<pass|N passed, M failed: details|skipped>",
+   "story_result": "<pass|build error: details|not applicable>",
+   "acceptance_criteria_met": "<all|partial: list of unmet criteria|none>",
+   "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
+-  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a" }],
++  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a", "anchor": "<declared heading; promoted entries only>", "summary": "<own words, 40+ chars; promoted entries only>" }],
+   "noticed_not_touched": [{ "what": "<problem>", "where": "<path|symbol>" }],
+   "assumptions": ["<what you assumed where the task did not say>"],
+   "behavior_changes": [{ "description": "<what now behaves differently>", "user_visible": true, "needs_operator": true, "alternatives": ["<option you did not take>"] }],
+   "not_touched": [{ "path": "src/path/file.ts", "reason": "<why left alone>" }],
+   "notes": "<any warnings, blockers, or additional context>"
+ }
+ ```
+ 
+ Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
+ 
+ Four of those fields have a bar, and a field that collects noise trains the reader to skim all of them. Omit one rather than pad it. The first three are adapted (MIT; see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
+ 
+ - `assumptions` — what you assumed where the task was silent AND acted on. If the assumption being wrong would not change a line you wrote, it is a hedge, not an assumption; leave it out.
+ - `noticed_not_touched` — a problem in code you actually read, stated so a follow-up task could be written from it alone, with `where` it lives. Not a dumping ground for every smell seen in passing, and not style opinion.
+ - `not_touched` — of the files this task was aimed at (`target_files`), the ones absent from `files_modified`/`files_created`/`files_deleted`, each with why. It answers that one question and no other: a reader subtracts those lists and this one from `target_files`, and flags the remainder as an unexplained omission.
+ - `behavior_changes` — behavior you chose where the task and the plan's state × event matrix did not decide it. **Every user-visible tradeoff goes here with `user_visible: true, needs_operator: true`** and the `alternatives` you rejected: message wording, where an error appears, which state resets or survives a switch, retry or reload. Never only in `assumptions`, `notes` or a journal line — the orchestrator asks the operator before it accepts a result carrying one, and a tradeoff it cannot see is accepted unasked.
+ 
+ Then check the shape and record the file — two commands, both of which refuse rather than warn:
+ 
+ ```bash
+
+--- src/gdskills/bundled/skills/quality/tests-creator/SKILL.md
+@@ 73,113 @@
+ `find` for test files; that is exactly what `keryx test analyze` already
+ walks the project for. Read the result compactly:
+ 
+ ```bash
+ keryx ctx read .metaproject/data/testing/context.md
+ ```
+ 
+ On a project with no keryx testing config, fall back to the project's own
+ configured way of finding its test framework and existing tests (discovered,
+ not a hardcoded `cat`/`ls`/`find` invocation).
+ 
+ **1.2 Read 2-3 existing test files** (from the `context.md` test file list) to understand:
+ - Import style (`import { describe, it, expect } from 'vitest'` vs global)
+ - Test file location (co-located `*.test.ts` vs `__tests__/` directory)
+ - Describe/it/test nesting patterns
+ - Common assertion patterns (`expect(x).toBe(y)` vs `assert.equal(x, y)`)
+ - Mock patterns (`vi.fn()` vs `jest.fn()` vs manual mocks)
+ - Fixture/factory patterns (how test data is created)
+ - Before/after hook usage
+ 
+-**1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and any rule the task names) in this order: `.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one; a project rule with a different name adds to it. Take the list from `workspace.resolved_context_file` when the task carries one, otherwise run `keryx skills resolve-context --for test --files <target_files, comma-joined> --out <project-relative path>`; read its `must_read` entries in full and record each in `project_context_applied` with the resolver's `sha256`. Where a project test convention and a bundled one conflict, the project wins. A project skill only supplements these steps; it never replaces this skill.
++**1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and any rule the task names) in this order: `.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one; a project rule with a different name adds to it. Take the list from `workspace.resolved_context_file` when the task carries one, otherwise run `keryx skills resolve-context --for test --files <target_files, comma-joined> --task-text "<task description>" --out <project-relative path>` (`--task-text` lets a declared keyword promote a document); read its `must_read` entries in full and record each in `project_context_applied` with the resolver's `sha256`. An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition: read its anchored section, and its item needs the `path`, the `sha256` of the whole file as pinned, the `anchor` exactly as declared, a `summary` (at least 40 characters, in your own words, naming at least three distinct words of five or more letters from that section) and `how` `read` or `followed`, never `n/a`. Where a project test convention and a bundled one conflict, the project wins. A project skill only supplements these steps; it never replaces this skill.
+ 
+ **1.3 Identify test file naming:**
+ - Pattern (`<component>.test.ts`, `<service>.spec.ts`, `test_<module>.py`) and location (co-located, or `__tests__`/`tests/`)
+ 
+ **Output of Phase 1:**
+ ```
+ TEST_ENV:
+   framework: vitest | jest | bun:test | mocha | pytest | go_test
+   import_style: esm | cjs | global
+   file_pattern: "*.test.ts" | "*.spec.ts" | "test_*.py"
+   file_location: co-located | __tests__ | tests/
+   assertion_style: expect | assert | chai
+   mock_library: vi | jest | sinon | unittest.mock
+   fixture_pattern: <description of how test data is created>
+ ```
+ 
+ ---
+ 
+ ### Phase 2: ANALYZE
+ 
+
+--- src/gdskills/bundled/skills/quality/tests-creator/SKILL.md
+@@ 248,288 @@
+ ### Phase 4: REPORT
+ 
+ Emit the `test_case_specs` block for consumption by `task-implementer`.
+ 
+ **Output structure:**
+ 
+ ```
+ TEST_CASE_SPECS:
+   framework: <vitest|jest|pytest|...>
+   test_files:
+     - path: <test file path>
+       target_module: <source file to implement>
+       test_count: <N>
+       tests:
+         - id: test-1
+           description: <it description>
+           criterion: <which acceptance criterion>
+           type: happy_path | edge_case | error_path
+           status: written  # test file exists, test is RED
+ 
+-  project_context_applied: [{path: <rule path, project first>, sha256: <resolver's sha256>, how: read|followed|n/a}]
++  project_context_applied: [{path: <rule path, project first>, sha256: <resolver's sha256>, how: read|followed|n/a, anchor: <declared heading, promoted entries only>, summary: <own words, 40+ chars, promoted entries only>}]
+ 
+   run_command: "<command to run just these tests>"
+   expected_result: "all failing (RED phase)"
+   notes: "<any test design decisions or assumptions>"
+ ```
+ 
+ **STATUS reporting:**
+ 
+ ```
+ STATUS: DONE
+ tests_written: <N>
+ test_files: [<list of paths>]
+ all_criteria_covered: true | false (with explanation)
+ ```
+ 
+ ---
+ 
+ ## Integration with Task Implementer
+ 
+ When `task-implementer` receives a task that includes `test_case_specs`:

@@ -1,0 +1,54 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "One major: the new References tab prints text from references.json, from the declared documents' headings and from the validator's messages into the /projectctx modal with no terminal escaping, although the repository already treats working-tree files as attacker-controlled and escapes them elsewhere (terminalSafe). The sidebar segment carries only counts and is safe. The feed's error path does not leak file contents.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.join(\"\\n\"), \"plain\") }));",
+      "problem": "paint() joins the lines built by formatProjectReferencesLines and passes them to a TextRenderable as is; stylePlanText with tone \"plain\" returns the string untouched. The new References tab puts attacker-writable strings into those lines with no escaping: declaration.path, declaration.anchor, every glob and keyword (conditionText), declaration.description (shown in the \"on demand\" row), the invalid-file messages (label() interpolates the raw path and the JSON.parse reason), and the finding messages (anchor-not-found lists up to 12 heading texts read from the declared document, unused-declaration and the others quote the path). All of them come from .metaproject/rules/project/references.json or from the documents it names, which are committed project files. JSON allows \\u001b and \\r in any of these strings, and parseReferences only trims them. The repository's own rule for exactly this input (src/lib/terminal-safe.ts: hooks.json is 'a committed file an attacker fully controls'; research-sync-panel.ts: 'The page is a file in the working tree: ... escaped before it reaches the terminal'; external-diff-modal.ts) is to pass such strings through terminalSafe/terminalSafeBlock. This modal and the new tab skip it.",
+      "impact": "Trigger: a user clones or checks out a repository whose references.json (or a declared .md heading) carries an escape sequence, for example description \"x\\u001b[1A\\u001b[2K...\" or a heading with the same, and runs /projectctx refs (or opens the References tab). Observed in a probe: createTestRenderer with a TextRenderable holding \"AB\\u001b[2JCD\\u001b[1A...\" keeps the ESC bytes in the cell buffer (captureCharFrame returns them verbatim) and a bare \\r starts a new row, so the sequences reach the cell contents that the renderer writes out; I did not capture the final byte stream sent to a real terminal. Outcome if they are emitted: cursor movement or line erase can repaint rows of the modal, for instance to hide a problems (n) line or to forge 'promoted' / 'matched glob' rows, in a view the operator reads to decide whether the rules are being applied. Bidi and zero-width characters also pass, so a path can read differently from what it is. The ordinary sidebar line is not affected (see clean areas).",
+      "suggested_fix": "Escape in the one sink, paint(): content: stylePlanText(otui, terminalSafeBlock(lines.join(\"\\n\")).text, \"plain\") with import { terminalSafeBlock } from \"../lib/terminal-safe\". terminalSafeBlock keeps \\n and \\t and replaces ESC, \\r, U+2028/2029, bidi and zero-width code points with visible \\xHH / \\uHHHH, so line counts (and the contentRows computation) are unchanged and all three tabs are covered, including the pre-existing Last resolve tab. Add a test in project-context-inspector.test.ts: a references.json whose description, anchor, glob and keyword contain \\u001b[2K and \\r must not put an ESC or CR in the renderable's content.",
+      "evidence": "src/tui/project-context-inspector.ts paint() (diff hunk @@ 76,283 @@); src/tui/project-references-view.ts rowLines, conditionText, findingLine, formatProjectReferencesLines; src/gdskills/references-config.ts parseEntry (values only trimmed; label() interpolates raw path); src/gdskills/references-check.ts declarationFindings (anchor-not-found message includes headings of the declared document); src/lib/terminal-safe.ts header comment; probe script in the review scratchpad.",
+      "confidence": 0.75,
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/tui/project-references-view.ts:rowLines (path, anchor, description via entry.description ?? declaration.description)",
+          "src/tui/project-references-view.ts:conditionText (globs, keywords)",
+          "src/tui/project-references-view.ts:formatProjectReferencesLines (invalid-file errors)",
+          "src/tui/project-references-view.ts:findingLine (finding.path, finding.message with document headings)",
+          "src/tui/project-references-view.ts:reasonText (entry.reason from last.json, shown as recorded)",
+          "src/tui/project-context-inspector.ts:paint (the single sink for the three tabs)"
+        ],
+        "enumeration_method": "Read every string interpolated in project-references-view.ts and traced it to references.json, a declared document or last.json; searched src for terminalSafe users (keryx ctx rg terminal-safe) and found no use in project-context-inspector.ts or project-references-view.ts; one sink (paint) covers all of them."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Security Review (slice-05)
+
+Changed files reviewed: project-context-inspector.ts, project-references-view.ts, tui-shell.ts (hunks).
+
+Clean areas checked:
+- Sidebar: referencesSidebarSegment emits only `refs <n>/<m>`, ` !<k>`, `refs ?`; renderProjectContextSidebarValue adds no declared text. No file-controlled text reaches the sidebar.
+- Feed error path: poll() reports `error.message` once through io.onSystem. The errors that can reach it are fs errors (they name a path, not content) and the references.json parse error, whose Bun message carries only a token (`JSON Parse error: Unexpected identifier "secretvalue123"`; probed, it does not quote the file). inspectDocument reads a declared document only after lstat, realpath, isPathInside(rootReal, real) and stat().isFile() and the size cap, so a symlink out of the root, a FIFO or a large file is not read; its error detail is the fs message. No file contents leak through the error path.
+- `/projectctx refs` parsing: the argument is compared with fixed words; the invalid-argument message echoes `rest.join(" ")` that the user typed in their own input line.
+- Command and path injection: nothing in the slice spawns a process or builds a path from the typed argument.
+- Secrets, crypto, CSRF, redirects, auth: not applicable to the slice.
+
+Not repeated (reported in earlier waves): quadratic HEADING regex, heading control characters reaching warnings (the resolver-side warnings; F-001 is the TUI sink that prints them and the validator messages), unguarded --resolved read, last.json persisting task text, shell quoting of --task-text, `--` prefix in optionValue.
+
+Routing audit: graph_used: no (not-relevant, slice-bound review); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no

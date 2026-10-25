@@ -1,0 +1,153 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review (review-highload, wave 4, slice-04: src/tui/*)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm, head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Load profile: not provided. This is a single-operator TUI, so "load" means concurrent cards, repeated repaints and a long-lived shell, not RPS.
+- Files read: slice-04.diff in full, plus at head: src/tui/tui-shell.ts (confirmOperatorCard, requestApprovalLocally, trackApproval), src/remote/client.ts (askApproval), src/remote/shell-bridge.ts (askApproval, mirrorUndeliveredNote), src/commands/agent.ts (ApprovalResponse), src/remote/protocol.ts and src/commands/operator-confirm-tools.ts (the two 1-hour constants).
+
+### Summary
+The slice adds an in-memory log of operator cards (`OperatorConfirmationLog`) and three read-only views of it: the sidebar Remote row, the /remote-control status tab and the /decisions modal. The lens items about unbounded log reads and repeated disk reads per render do not apply. `operator-confirmations.ts` touches no disk, and every new render-path call is an in-memory filter over at most 5 answered entries plus the open ones. The TUI-vs-topic race is the existing `raceApproval` first-answer-wins design, and the PR adds no new window. The two findings below are both bookkeeping drift in the new log: a card can stay "waiting" in the sidebar after nothing is waiting any more. Neither blocks.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 1
+
+### Findings
+
+#### Concurrency & Race Conditions
+None detected. Checked:
+- TUI answer vs topic answer. `raceApproval` sets `topicAnswer` in a network-driven `.then` and reads it after `await options.dock(race)`. A dock verdict and a topic press cannot interleave inside one microtask drain. `confirmOperatorCard` also returns `false` when `race.topicWon()` is true. The log write sits on exactly one of the two branches (dock or topic), so a card is never recorded as answered in both places.
+- `answer()` is idempotent: `entry.answered !== undefined` returns early. A repeated or late answer cannot overwrite the first.
+- `pressedBy` and `pressedAt` come from `answer.fromId` and `new Date()` only in `remoteApproval`, which is called only on the topic-won and topic-only paths. The dock path builds no such object, so the TUI path never records them (consistent with the brief).
+- Concurrent cards each get their own `id` from `nextId++`. JS is single-threaded, so there is no read-modify-write hazard on `items`.
+
+#### Resource Management
+None detected beyond F-001. Checked:
+- approval-mirror.ts adds no timer and no listener. The only change is `onUndelivered?.()` inside the existing `.then`, guarded by `settled`. The existing `finally` still aborts `topicAbort` unless the topic won (a leg that already ended ignores the abort).
+- `operatorCards.subscribe(...)` in tui-shell.ts is never unsubscribed. The log is shell-scoped and dies with the shell, and `liveRemotePanel.refresh()` checks `disposed`, so I do not file it.
+- `remoteModalListeners` is the existing set, with an unsubscribe on modal close.
+- Answered entries are capped at `ANSWERED_CARDS_KEPT = 5`. Open entries are unbounded in principle (see F-001) but are bounded in practice by the number of approvals asked.
+
+#### Caching
+None detected. The new code adds no cache.
+
+#### Database Under Load
+None detected.
+- No query, disk read or log scan is added in src/tui/*. `operatorCardLines` = `confirmationLines(entries(), Date.now())` is a filter and a short sort over a handful of entries.
+- `openDecisions` still reads the journal once per modal open via `reportText(cwd)`. That predates the PR and is not on a render path. `withConfirmationLines` only concatenates strings.
+- The sidebar `getWaitingCards` calls `waiting()` (an in-memory filter) from `draw()`. `draw()` runs only on a bridge or log change, not on a timer.
+
+#### Async / Queues
+None detected beyond F-001/F-002.
+
+#### Retry / Timeout / Circuit Breaker
+None detected. The topic leg uses `timeoutMs: MAX_APPROVAL_TIMEOUT_MS` (60 min), which equals `REMOTE_CARD_TTL_MS` (60 min), so the displayed countdown matches the topic leg's own timeout. Whether the bridge token store expires at the same moment is outside this slice.
+
+#### Idempotency & Distributed Invariants
+None in this slice. The expiry shown in the TUI is display-only: `pendingConfirmationLine` computes `left` from the local `askedAt`. It is never used to accept or refuse an answer.
+
+### Findings detail
+
+### [F-001] A card is never settled in the log if the dock leg throws
+
+- **Severity**: minor
+- **File**: src/tui/tui-shell.ts:6104 (unmirrored path), :6116 (mirrored path)
+- **Pattern**: Resource B3 / Async — state registered before an await with no try/finally
+- **Quote**: `const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });`
+- **Evidence**: `operatorCards.ask(...)` is called before `await inner(...)` on the unmirrored path (line 6103 in the diff). `operatorCards.answer(...)` is called after the await, not in a `finally`. The mirrored path is the same shape: `const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;` before `await raceApproval(...)`. `raceApproval` swallows topic-leg errors (`.catch(() => undefined)`), but a rejection from `options.dock` (`inner` / `showComposerChoice` / `chrome.withOverlay`) propagates and skips both `answer()` calls. The same file already guards a sibling bookkeeping pair with try/finally in `trackApproval`, which restores `pendingApprovalCall`.
+- **Failure mode**: One throwing dock leaves a mirrored entry in `items` with `answered === undefined`. The sidebar Remote row then shows "N card waiting" in the attention colour for the rest of the shell session, `entries()` lists it as waiting in /remote-control and /decisions, and the "57m left of the 1-hour token" countdown runs out into "token expired, ask again" with nothing left to answer. The entry is never evicted, because only answered entries are. It accumulates one entry per failed dock. The trigger is rare (a renderer error mid-dock), so this stays minor.
+- **Fix**: Settle the entry in a `finally`. For example, track `let settled = false`, set it after each normal `answer(...)`, and in `finally` call `operatorCards.answer(id, { place: "withdrawn", yes: false })` when it is still false. Do this on both the unmirrored and mirrored paths.
+- **Confidence**: high (reading the paths; I did not run it)
+
+### [F-002] A card whose topic leg ended without a press still counts as "waiting" in the topic
+
+- **Severity**: minor
+- **File**: src/tui/approval-mirror.ts:52 and src/tui/operator-confirmations.ts:62
+- **Pattern**: Async — view state not updated on the early-end branch
+- **Quote**: `if (answer.undelivered === true) options.onUndelivered?.();`
+- **Evidence**: `onUndelivered` is wired in tui-shell.ts only to `io.onSystem?.("◇ Telegram mirror not delivered ...")`. It does not touch the log. The entry was created with `mirrored = true` (`operatorCards.ask(meta.card[0] ?? tool, true)`), and `waiting()` returns `item.answered === undefined && item.mirrored`. Three ways the topic leg ends with no press while the dock stays open:
+  - (a) The client POST fails or returns no id. `askApproval` in src/remote/client.ts returns `{ decision: "deny", undelivered: true }` (lines 441, 453, 457, 461).
+  - (b) The bridge loses its connection after the connected check, which `mirrorUndeliveredNote` runs only once, before the post. client.ts line 471 then returns `{ decision: "deny" }` with no `undelivered` flag, so no notice at all.
+  - (c) The 60-minute topic timeout fires with the dock still open.
+- **Failure mode**: The sidebar row says "N card waiting" and /remote-control says "waiting ... 57m left of the 1-hour token" for a card that is no longer in the topic (a, b) or whose token has expired (c). The operator may wait for Telegram when the only live place is the dock. The AC5 text on the card itself is correct in case (a) via the system note. The persistent views are what drift. Nothing is accepted wrongly: the dock stays authoritative and the answer path is unchanged.
+- **Fix**: On `onUndelivered`, and on any non-press topic end (`!isTopicPress(answer)` while the dock is still open), flip the log entry to not mirrored. For example add `OperatorConfirmationLog.unmirror(id)`, which replaces the entry with `{ ...entry, mirrored: false }` and calls `changed()`. Call it from the `onUndelivered` handler and when the topic leg ends without a press. That is the same state `pendingConfirmationLine` already prints as "Telegram mirror not delivered, answer in the shell". Alternatively, let `waiting()` also drop entries older than `REMOTE_CARD_TTL_MS`.
+- **Confidence**: high for (a) and (c); medium for (b), which depends on connection timing
+
+### [F-003] Displayed ages and "time left" are frozen between repaints, and answered-entry order follows ask order
+
+- **Severity**: info
+- **File**: src/tui/operator-confirmations.ts:104
+- **Pattern**: view freshness (no failure mode beyond display)
+- **Quote**: `const left = REMOTE_CARD_TTL_MS - elapsed;`
+- **Evidence**: `pendingConfirmationLine(entry, now)` is evaluated only when something repaints: a bridge change, a log change, a keypress or a modal open. There is no ticker, so an open /remote-control modal can keep showing "57m left" long after that. Separately, `entries()` and the eviction in `answer()` order answered cards by their position in `items`, which is ask order, not answer order. The comment says "newest first". A card asked first and answered last is evicted first once more than 5 are answered.
+- **Failure mode**: Cosmetic. A stale countdown and a slightly wrong "recent" order. The heartbeat age in the same modal already behaves this way. Not worth a timer (a repaint timer is itself a cleanup hazard).
+- **Fix**: Optional. Sort `done` by `answered.at` and evict by `answered.at`. Leave the countdown as is, or paint it on the existing change events only.
+- **Confidence**: medium
+
+### Clean Areas
+- Part A (A1 shared mutable state; A2 check-then-act): reviewed. Single-threaded, idempotent `answer()`, no shared writer outside the shell.
+- Part B1/B2: no connections, files or streams in the slice.
+- Part C: no cache in the slice.
+- Part D: no database access in the slice. Journal read in `openDecisions` is pre-existing and on modal open, not on render.
+- Part E: no queue added.
+- Part F: topic timeout equals the 1-hour card constant (60 min each); fail-closed behaviour is unchanged (`askApproval` denies on any error).
+- Part G: the TUI countdown is display-only and gates nothing. Idempotency and token consumption live in src/flow, src/remote and src/commands, which belong to other slices.
+
+### REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "src/tui/* adds an in-memory operator-card log and read-only views. No disk or log read is on a render path, no timer or listener leaks, and the TUI-vs-topic race is the existing first-answer-wins design with no new window. Two minor bookkeeping drifts: a card is not settled in the log when the dock throws, and a card whose topic leg ended without a press still counts as waiting in the topic. One info item on frozen ages.",
+  "slices": [
+    { "id": "slice-04", "coverage": "whole diff read; callers in tui-shell.ts, client.ts, shell-bridge.ts, agent.ts, protocol.ts, operator-confirm-tools.ts read at head", "status": "DONE" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });",
+      "problem": "operatorCards.ask() runs before the await and operatorCards.answer() runs after it, outside a finally, on both the unmirrored and the mirrored path. A rejection from the dock leg skips answer().",
+      "impact": "The entry stays unanswered for the shell's life: the sidebar keeps showing 'N card waiting', /remote-control and /decisions list it as waiting with an expired-token countdown, and it is never evicted. Rare trigger (dock throws), cosmetic consequence.",
+      "suggested_fix": "Settle the entry in a finally: track whether answer() ran and, if not, answer with place 'withdrawn', yes false. Apply to both paths.",
+      "evidence": "tui-shell.ts mirrorApprovalToTopic: ask() then 'await inner(...)' then answer() with no try/finally; mirrored path 'const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;' then 'await raceApproval(...)'. raceApproval swallows topic errors only; options.dock rejections propagate. trackApproval in the same file shows the try/finally idiom.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/approval-mirror.ts",
+      "line": null,
+      "quote": "if (answer.undelivered === true) options.onUndelivered?.();",
+      "problem": "The undelivered branch only prints a system line. The log entry stays mirrored=true and answered=undefined, so waiting() keeps counting it. Connection loss after the single connected check (no undelivered flag) and the 60-minute topic timeout leave the same state.",
+      "impact": "The Remote sidebar row and the /remote-control and /decisions views say a card is waiting in Telegram, with a token countdown, when it is no longer in the topic or its token expired. The operator may wait on Telegram while the dock is the only live place. The dock answer path is unchanged, so nothing is accepted wrongly.",
+      "suggested_fix": "Add OperatorConfirmationLog.unmirror(id), which sets mirrored=false and notifies. Call it from onUndelivered and whenever the topic leg ends without a press while the dock is open. Alternatively drop entries older than REMOTE_CARD_TTL_MS from waiting().",
+      "evidence": "approval-mirror.ts:52 calls onUndelivered, wired in tui-shell.ts only to io.onSystem. operator-confirmations.ts:62 waiting() = answered === undefined && mirrored. client.ts askApproval returns undelivered at 441/453/457/461, returns {decision:'deny'} without the flag at 471 when !connected after the post, and the topic leg times out at MAX_APPROVAL_TIMEOUT_MS = REMOTE_CARD_TTL_MS = 60 min.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "const left = REMOTE_CARD_TTL_MS - elapsed;",
+      "problem": "Age and time-left are computed only when a view repaints (no ticker), so an open modal shows a frozen countdown. Answered entries are ordered and evicted by ask order, not answer order, although the comment says newest first.",
+      "impact": "Cosmetic: a stale countdown and a slightly wrong 'recent' order. No resource or correctness effect.",
+      "suggested_fix": "Optional: order and evict answered entries by answered.at. Leave the countdown to repaint on change events; do not add a repaint timer.",
+      "evidence": "pendingConfirmationLine is called from confirmationLines at repaint time with Date.now(); entries() reverses insertion order; answer() evicts answered.slice(0, length - ANSWERED_CARDS_KEPT) in insertion order.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```

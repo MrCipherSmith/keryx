@@ -1,0 +1,41 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Delta round r03, wave 2, slice-02 (kind new, 143720 bytes, head 5382b56abf17). One info finding; no blocker, major or minor. The performance-relevant new code is: the rewrite of heading parsing in references-section.ts (regex to hand-written scan), the poll in-flight guard and stale-load guard in createProjectContextFeed, stopping the feed on shell destroy, link-mode rule reads in references-check.ts scanCitations, and the task-text length record in context-resolver.ts. Checked and clean: parseHeadingLine, stripClosingHashes and scanHeadings are single linear passes (every loop only advances, no nested rescans; the remaining regexes /^#+$/, FENCE, /[\\r\\u2028\\u2029]/ cannot backtrack), which closes review-highload-w3:F-001; the polling guard (`if (polling) return`, reset in finally) stops overlapping scans, and `mine > applied` drops an older load that finishes last without losing the newer status; the interval is stopped from onDestroy via stopProjectContextFeed, so the timer no longer outlives the shell; the new link-mode branch in scanCitations adds one registry read and reads each linked rule once per scan, serially, which only extends the per-poll cost already filed as review-performance-w3:F-001, review-performance-w5:F-001, review-highload-w3:F-002 and review-highload-w5:F-001 (those stay open and are not re-filed); cardSafe on the sidebar value is a short string operation per repaint; the linear-time test (120k blanks, four inputs, < 1000 ms against ~12 s for the quadratic form) has a wide margin and is not flaky in practice. The rest of the slice is skill/doc text, flow bookkeeping and tests with no executable hot path.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "taskTextLength: Array.from(options.taskText!).length",
+      "problem": "recordLastResolve converts the whole task text to a code-point array to count it, after truncateTaskText has already done the same conversion on the same string (truncateTaskText calls Array.from(text) on the full input and then slices it). The resolver itself calls truncateTaskText once more on the same text. One resolve therefore materialises the full text as an array of code points three times, although only the first 4000 are ever used and only the length of the rest is wanted. The new line is the third conversion; the length could come from the first one.",
+      "impact": "Negligible today: it runs once per resolve (not per request or per render), CLI arguments are capped by the OS (~128 KB) and the MCP/harness `task_text` is a task title and description. An unusually large task_text passed through the MCP tool would cost transient memory of about 8 bytes per code point per conversion before it is cut. No measurable effect at expected sizes, hence info.",
+      "suggested_fix": "Have truncateTaskText also return the original length (`{ text, truncated, length }`, computing it from the same Array.from) and use `task.length` in recordLastResolve instead of a second Array.from; or count code points with a loop that does not allocate.",
+      "evidence": "src/gdskills/context-resolver.ts: truncateTaskText does `const chars = Array.from(text)`; recordLastResolve calls truncateTaskText(options.taskText) and then `Array.from(options.taskText!).length`; resolveProjectContext calls `truncateTaskText(input.taskText ?? \"\")`. Hot path: once per `resolve-context` invocation (per task dispatch), not per poll or per render.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read in full: the executable hunks (src/commands/skills.ts help text, context-resolver.ts record/length change, references-check.ts link-mode scan, references-section.ts heading parser, project-context-inspector.ts feed guards, tui-shell.ts feed stop) and the test hunks for the guard, the heading scan and the task-text record; skimmed the skill, doc and flow bookkeeping hunks. Verified the changed code against files at head (references-section.ts, project-context-inspector.ts, references-check.ts, context-resolver.ts, reference-entries.ts).",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 1
+  }
+}
+```
+
+Slice-02 holds the heading-parser rewrite, the poll guards, the feed shutdown and the task-text record change. The hand-written heading scan is linear and closes the earlier quadratic-regex finding, the in-flight guard and the stale-load check remove the pile-up of overlapping scans, and the feed timer is now stopped on shell destroy. The only new note is an info finding: the task text is turned into a code-point array three times per resolve where once would do (no hot path, no measurable cost). The per-poll cost of the references scan, now slightly extended by reading link-mode rules at their origin, is already covered by the open findings review-performance-w3:F-001, review-performance-w5:F-001, review-highload-w3:F-002 and review-highload-w5:F-001, so I cite them rather than file them again.

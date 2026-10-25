@@ -1,0 +1,24 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-06 (second-look, unchanged since r03) read once for logic defects at head 77d2eff20. The remote-card checks in operator-confirm-tools.ts (pressedBy present, pressedBy on binding.allowedUserIds(), 1h TTL, token spent before the checks) are ordered correctly and a refused press cannot be replayed. The review_complete card now closes through completeReviewGated, the same function as the CLI, so the run-profile and narrowed-routing refusals apply to both. The dispositions input added for E-02 is validated, shown on the card, digested, and forwarded from prepared, not re-read at apply time. allowedUserIds is number[] (src/remote/config.ts:42), so the allowed-list comparison is type-sound. No new logic defect found in this slice; no blocker or major.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Minor, not raised as a finding: the card clips each disposition's evidence to 300 chars (WAIVER_QUOTE_CHARS) while the recorded evidence is the full trimmed text, so an operator confirms a shortened view of what is written. Acceptable only if the clip is marked as a clip on the card.",
+    "Minor, not raised as a finding: the number of dispositions shown on one card is not capped, so a very large batch can exceed the Telegram message limit; consider a count cap with an explicit 'N more' line."
+  ],
+  "prior_dispositions": [
+    {"id": "E-02", "disposition": "fixed", "note": "review_complete takes a dispositions input, validates it before the card is issued, renders it on the card, includes it in prepared and the facts digest, and passes prepared.dispositions into completeReviewGated. The close path records exactly what was shown."},
+    {"id": "E-03", "disposition": "fixed in slice-06 scope", "note": "pressedBy/pressedAt are carried by cardPressFields and returned by record() for remote presses only; the schema side lives in slice-02 and was not re-read here."}
+  ],
+  "slices": [
+    {"id": "slice-06", "coverage": "diff and head files read: operator-confirm-tools.ts invoke path, operator-confirm-review.ts review_complete spec, complete-gated.ts, managed.ts completeManagedReview ordering, shell.ts allowedUserIds, agent.ts ApprovalResponse forwarding", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

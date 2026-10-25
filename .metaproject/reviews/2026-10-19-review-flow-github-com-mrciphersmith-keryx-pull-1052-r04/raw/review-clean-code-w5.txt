@@ -1,0 +1,180 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Clean Code Review (wave 5, slice-05: the TUI part)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66 (head b1c6da0e6992e4df473bae6b2fde78bc94d28776)
+- Slice: slice-05 (src/tui/operator-confirmations.ts new, tui-shell.ts, remote-control-surface.ts, decisions-surface.ts, approval-mirror.ts, unattended.ts, help-groups.ts, operator-confirmations.test.ts)
+- Files opened at head for context: src/tui/tui-shell.ts (approval path, 5545-5566 and 6095-6148), src/commands/agent.ts (ApprovalResponse), src/tui/remote-control-surface.ts, src/tui/decisions-surface.ts.
+- Not re-filed (already filed by others or earlier rounds): operatorCards ask/settle wired only into mirrorApprovalToTopic; unmirrored branch repeating the place/yes rule of settle; value-import of REMOTE_CARD_TTL_MS; waiting() cutoff not repainted; untested tui-shell hop and card-log orchestration; untested sidebar/status/decisions forwards; PC-007/PC-008 doc claims; CC3-001..008, CC4-001..005; r03 minors D-02..D-14; autonomous-profile.ts wording.
+
+### Summary
+The new OperatorConfirmationLog and its formatters are small, pure and well named, and the test file covers them directly. The concerns are all maintenance costs, none a wrong outcome: the mirrorApprovalToTopic closure grew to about 52 lines and re-derives the "is this an operator card" decision a third time with a slightly different rule, the new module copies two time helpers that the same Status tab already has in a different rounding, and the same concept is named "card" and "confirmation" interchangeably. Everything is minor or info.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 6  |  info: 1
+
+### Findings
+
+#### Naming
+[CC5-005] minor, src/tui/operator-confirmations.ts:11 (and the call sites below). The concept "operator confirmation card" carries two vocabularies in one diff, and the status vocabulary is misleading.
+- Sites: type `CardAnswerPlace` has the member "withdrawn" (a withdrawn card has no place it was answered; it was not answered); `answered` holds withdrawn cards too, and `confirmationLines` prints them under the prefix `answered` (operator-confirmations.ts:11, :19-24, :148-155). The exported function `confirmationLines(entries, now, heading)` (operator-confirmations.ts:148) shares its name with the option `confirmationLines?: () => readonly string[]` (decisions-surface.ts:439, a different signature: zero args, no heading), so tui-shell.ts has to alias the import (`confirmationLines as operatorConfirmationLines`, tui-shell.ts:126) and then adds a third name `operatorCardLines` (tui-shell.ts:3941). The log is `operatorCards` (tui-shell.ts:3940) but its class is `OperatorConfirmationLog`; the remote surface says `getWaitingCards` / `waitingCardsText` / `getConfirmationLines` side by side.
+- Impact: a reader grepping "confirmationLines" lands on two unrelated things; the alias exists only to hide the collision.
+- Fix: pick one noun ("card" is what the operator sees). Rename the option and the function apart (for example `formatCardLines` for the function, `cardLines` for the option), move "withdrawn" out of the place enum (a separate `withdrawn: true` or a distinct `state`), and print withdrawn cards under their own prefix.
+
+#### Functions
+[CC5-001] minor, src/tui/tui-shell.ts:6097. The `mirrorApprovalToTopic` closure is now about 52 lines (6097-6148, it was about 20) and holds five jobs at different levels: classifying the call as a card, the no-topic card path with its own ask/answer/finally bookkeeping (6102-6111), the inactive/too-long passthroughs, the race with its own try/finally and `onUndelivered` wiring (6120-6139), and applying a topic answer to the shell (6140-6147).
+- Quote: `const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;`
+- Also in this function: `isCard` is a plain boolean, so TypeScript cannot narrow `meta.card` from it and the code re-checks `meta?.card !== undefined` twice (6102, 6120) and re-derives the card title `meta.card[0] ?? tool` twice (6103, 6120).
+- Impact: the next change to card handling (for example wiring the Telegram-turn path, which another reviewer already noted lacks the log) has to be made inside a 50-line closure that already mixes abstraction levels.
+- Fix: compute `const cardTitle = isCard ? (meta.card[0] ?? tool) : undefined` once from a type guard (see CC5-002), and extract two named helpers next to the closure: one for the unmirrored card (`askCardInShellOnly`) and one that runs the race and settles the log (`raceCardInTopic`). The closure then reads as the dispatch it is.
+
+[CC5-003] minor, src/tui/remote-control-surface.ts:120. `formatRemoteStatusLines(status, posture?, confirmations?)` takes two optional positional arrays of the identical type `readonly string[]`.
+- Quote: `export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[], confirmations?: readonly string[]): string[] {`
+- Evidence: the test already has to write a placeholder, `formatRemoteStatusLines(status, undefined, confirmationLines(log.entries(), T0 + 60_000))` (operator-confirmations.test.ts), and the production caller at remote-control-surface.ts:262 passes `options.getPostureLines?.(), options.getConfirmationLines?.()`. Swapping the two arguments compiles and silently prints the posture lines under the "Operator confirmations" slot.
+- Impact: Clean Code B2 (three positional parameters, two interchangeable). Cost is a transposition bug that the type checker cannot see.
+- Fix: take an options object, `formatRemoteStatusLines(status, { posture, confirmations })`; the existing two callers (168, 262) are the only ones.
+
+#### Comments
+[CC5-007] info, src/tui/operator-confirmations.ts:86-90. The doc says "waiting first (oldest first), then the answered ones (newest first)", but `entries()` orders answered cards by when they were asked (`items` is appended at `ask` time and `answer` replaces in place), and the retention in `answer` (lines 57-60) drops the oldest-asked answered card, not the oldest-answered one.
+- Quote: `const done = this.items.filter((item) => item.answered !== undefined).reverse();`
+- Reproducible only if two cards overlap in time (card A asked first and still open, card B asked and answered, then A answered): A sorts after B although it was answered last, and with five answered cards already held, A is the one trimmed the moment it is answered. I found no path in the diff that overlaps two cards (the dock serializes them), so this is `info`. What settles it: whether `trackApproval`/parallel tool calls can hold two approvals open at once; if yes, sort by `answered.at` and trim by it, or reword the doc to "in the order asked".
+
+#### Error Handling
+No error handling issues found. The log's `settle(undefined, ...)` maps a thrown race to "withdrawn", and both card paths record the answer in a `finally`, so a throw cannot leave a card marked as waiting.
+
+#### DRY
+[CC5-002] minor, src/tui/tui-shell.ts:5555, :5563, :6100. The "is this approval an operator card" decision is written out at three sites with three different rules.
+- 5555: `if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {`
+- 5563: `if (meta?.alwaysAsk === true && meta.card !== undefined) {` (relies on the branch above for excluding user_prompt)
+- 6100: `const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);`
+- Divergence already present: a call whose `card` is an empty array is an operator card to the dock (5563 shows `confirmOperatorCard(meta.card, ...)`), but not a card to the mirror (6100 requires `length > 0`), so the log, the sidebar count and the undelivered note skip a question the operator is in fact being asked.
+- Fix: one exported predicate `isOperatorCardApproval(tool, meta): meta is Meta & { card: readonly string[] }` next to `isUserPromptApprovalCard`, used by all three sites (it also removes the re-checks in CC5-001). Sites enumerated with `keryx ctx rg "alwaysAsk === true" src/tui/tui-shell.ts` (4 matches, 3 of them this shape).
+
+[CC5-004] minor, src/tui/operator-confirmations.ts:105 and :113. The new module copies two time helpers that already exist beside it and renders them differently in the same tab.
+- Quote: `function age(ms: number): string {` and `function clock(at: number): string {`
+- Sites: `clock` is the same expression `new Date(at).toISOString().slice(11, 19)` at remote-control-surface.ts:144 and (with a " UTC" suffix) channels-surface.ts:128, so three copies including the new one. `age` re-implements `formatAge` (remote-control-surface.ts:102) with different rounding: formatAge rounds minutes and prints "2h", `age` floors and prints "2h05m"; for 90 seconds formatAge says "2m" and `age` says "1m".
+- Impact: the `/remote-control` Status tab now shows "Last heartbeat: 90s ago -> 2m ago" from formatAge and "asked 1m ago" from age for the same elapsed time; whoever fixes one rounding will not know about the other.
+- Fix: export `formatAge` and `clock` from one place. remote-control-surface.ts already imports operator-confirmations.ts, so import them from a small shared module (or the surface that owns them) rather than from remote-control-surface to avoid a cycle; if the "h05m" form is deliberate for the 1-hour token, add a second named function and say so.
+
+#### SOLID
+[CC5-006] minor, src/tui/decisions-surface.ts:467 (ISP, F4). `OpenDecisionsOptions` is shared by `openDecisions` and `openDecisionsArms`, but the new member is silently dropped by one of them.
+- Quote: `const { cwd, confirmationLines: _cards, ...rest } = options;`
+- Evidence: `openWith` in the sidebar always passes `confirmationLines` (decisions-surface.ts ~330) and `showArms` goes through the same `openWith`, so the arms modal receives a callback it never calls; the type's doc ("appended under the report") is true for one of the two openers.
+- Impact: the option reads as supported on the arms modal; a later reader may add cards there or wonder why the callback is never called.
+- Fix: keep `confirmationLines` out of the shared type (an `OpenReportOptions = OpenDecisionsOptions & { confirmationLines? }` for `openDecisions` only), and let `openWith` pass it to `openDecisions` alone.
+
+### Clean Areas
+- Naming A1/A2: remaining new identifiers (`ConfirmationEntry`, `markUndelivered`, `pendingConfirmationLine`, `answeredConfirmationLine`, `remoteApproval`, `withMirrorNote`) say what they do; booleans `mirrored`, `isCard`, `yes` read unambiguously apart from CC5-005.
+- Functions B1/B3: OperatorConfirmationLog methods and the formatters are 3-15 lines each and pure; `raceApproval` gained one line of behavior and stays one job.
+- Comments: flow-tagged comments in approval-mirror.ts, unattended.ts, decisions-surface.ts and remote-control-surface.ts match the code beside them (checked each against its statement); no commented-out code.
+- Error handling D1/D2: no empty catch, no log-and-rethrow, no null-as-failure introduced.
+- SOLID SRP/OCP/LSP/DIP: OperatorConfirmationLog has one reason to change, takes its clock by constructor (injectable, no `new` of collaborators); no instanceof chains or switch growth; REMOTE_CARD_TTL_MS import is filed elsewhere.
+- Magic values E2: the 5 and 80 in operator-confirmations.ts are named (`ANSWERED_CARDS_KEPT`) or local presentation widths; the 1-hour token goes through REMOTE_CARD_TTL_MS.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-05 (TUI part) is clean at the class level; six minor maintenance findings (a 52-line approval closure, a three-way operator-card predicate with one divergence, a triadic same-typed signature, copied time helpers rendering ages differently in one tab, mixed card/confirmation vocabulary, an option silently dropped by one opener) and one info on an ordering doc. No blocker or major.",
+  "stats": { "blocker": 0, "major": 0, "minor": 6, "info": 1 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "CC5-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6097,
+      "quote": "const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;",
+      "problem": "mirrorApprovalToTopic's closure is about 52 lines (6097-6148) mixing card classification, a no-topic card path with its own ask/answer/finally, passthroughs, the race with onUndelivered wiring and try/finally settle, and applying a topic answer. isCard is a boolean, so meta.card is re-checked (6102, 6120) and meta.card[0] ?? tool derived twice (6103, 6120).",
+      "impact": "Maintenance cost: the next change to card handling must be made inside one 50-line closure at several abstraction levels; no wrong behaviour today.",
+      "suggested_fix": "Derive the card title once from a type-guard predicate (see CC5-002) and extract two named helpers for the unmirrored path and for the race-and-settle path, leaving the closure as dispatch.",
+      "evidence": "src/tui/tui-shell.ts:6095-6148 read at head; prior version of the closure was about 20 lines (diff slice-05 lines 1205-1265).",
+      "confidence": 0.85
+    },
+    {
+      "id": "CC5-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6100,
+      "quote": "const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);",
+      "problem": "The 'is this an operator card' decision is spelled out at three sites with different rules: 5555 (user_prompt card), 5563 (operator card, no length check, user_prompt excluded only by branch order) and 6100 (length > 0 and explicit user_prompt exclusion). A card with an empty array is a card to the dock (5563) but not to the mirror (6100).",
+      "impact": "Maintenance cost, and a latent divergence: the log, the sidebar count and the undelivered note would skip a question the operator is being asked if a gate ever passes an empty card.",
+      "suggested_fix": "Add one exported type-guard isOperatorCardApproval(tool, meta) beside isUserPromptApprovalCard and use it at all three sites.",
+      "evidence": "keryx ctx rg 'isUserPromptApprovalCard|alwaysAsk === true' src/tui/tui-shell.ts -> lines 1611, 5555, 5563, 6100; bodies read at head.",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC5-003",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/remote-control-surface.ts",
+      "line": 120,
+      "quote": "export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[], confirmations?: readonly string[]): string[] {",
+      "problem": "Three positional parameters, the last two optional arrays of the same type. A caller can swap them without a type error, and the test already passes a placeholder undefined to reach the third.",
+      "impact": "Maintenance cost: a transposed call prints permission posture lines under the operator-confirmations slot with no compile error.",
+      "suggested_fix": "Take an options object: formatRemoteStatusLines(status, { posture, confirmations }); only two callers exist (remote-control-surface.ts:168, :262).",
+      "evidence": "keryx ctx rg 'formatRemoteStatusLines\\(' src --glob '!*.test.ts' --all -> definition 120, callers 168 and 262; test call with undefined placeholder in operator-confirmations.test.ts.",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC5-004",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 105,
+      "quote": "function age(ms: number): string {",
+      "problem": "age() and clock() are new copies of helpers that already exist: clock is the same toISOString().slice(11, 19) expression at remote-control-surface.ts:144 and channels-surface.ts:128; age re-implements formatAge (remote-control-surface.ts:102) with different rounding (floor and 'XhYYm' versus round and 'Xh').",
+      "impact": "The /remote-control Status tab shows two age conventions for the same elapsed time (Last heartbeat via formatAge, asked ... ago via age); 90 s reads '2m' in one and '1m' in the other, and a fix to one rounding misses the other.",
+      "suggested_fix": "Export one clock and one age formatter from a shared module and use them in all three surfaces (import from a neutral module, not from remote-control-surface, to avoid a cycle with its new import of operator-confirmations); keep a second named formatter only if the 'h05m' form is deliberate.",
+      "evidence": "keryx ctx rg 'toISOString\\(\\).slice\\(11, 19\\)' src/tui -> 3 files; formatAge body at remote-control-surface.ts:102-107 versus age at operator-confirmations.ts:105-111.",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC5-005",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 11,
+      "quote": "export type CardAnswerPlace = \"telegram\" | \"shell\" | \"withdrawn\";",
+      "problem": "Two names for one concept and a misleading status model: 'card' (operatorCards, getWaitingCards, waitingCardsText) versus 'confirmation' (OperatorConfirmationLog, confirmationLines, getConfirmationLines). The function confirmationLines (operator-confirmations.ts:148) and the option confirmationLines (decisions-surface.ts:439) share a name with different signatures, forcing the alias 'confirmationLines as operatorConfirmationLines' (tui-shell.ts:126) and a third name operatorCardLines (tui-shell.ts:3941). 'withdrawn' is not a place, and withdrawn cards sit in the 'answered' field and print under the 'answered' prefix.",
+      "impact": "Maintenance cost: grepping one name lands on two unrelated symbols; the alias only hides the collision.",
+      "suggested_fix": "Settle on 'card'; rename the function and the option apart; model withdrawal as its own state rather than a CardAnswerPlace value and print it under its own prefix.",
+      "evidence": "keryx ctx rg 'confirmationLines|operatorCardLines|operatorCards' src --glob '!*.test.ts' -> tui-shell.ts 126, 3940, 3941, 4584; decisions-surface.ts 439, 448, 467; operator-confirmations.ts 148.",
+      "confidence": 0.75
+    },
+    {
+      "id": "CC5-006",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/decisions-surface.ts",
+      "line": 467,
+      "quote": "const { cwd, confirmationLines: _cards, ...rest } = options;",
+      "problem": "OpenDecisionsOptions (shared by openDecisions and openDecisionsArms) gained confirmationLines, documented as 'appended under the report', but openDecisionsArms destructures and discards it; the sidebar's openWith passes it to both openers.",
+      "impact": "Maintenance cost: the option looks supported on the arms modal and is a no-op there.",
+      "suggested_fix": "Put confirmationLines in an options type used by openDecisions only and have openWith pass it to openDecisions alone.",
+      "evidence": "decisions-surface.ts:448 (openDecisions uses it) versus :467 (openDecisionsArms drops it); openWith passes it unconditionally (diff slice-05 lines 326-334).",
+      "confidence": 0.75
+    },
+    {
+      "id": "CC5-007",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 87,
+      "quote": "const done = this.items.filter((item) => item.answered !== undefined).reverse();",
+      "problem": "entries() is documented as answered 'newest first' and the log as keeping 'the last few answered cards', but items are ordered by when each card was asked; answer() replaces in place, and the retention at lines 57-60 trims the oldest-asked answered card.",
+      "impact": "Only if two cards overlap (A asked, B asked and answered, then A answered): A sorts after B and, with five answered cards held, A is trimmed the moment it is answered. No path in the diff overlaps two cards.",
+      "suggested_fix": "What would settle it: whether two approvals can be open at once. If so sort and trim by answered.at; if not, reword the doc to 'in the order asked'.",
+      "evidence": "operator-confirmations.ts:49-61 (answer) and :86-90 (entries) read in diff slice-05 lines 402-415 and 439-444.",
+      "confidence": 0.5
+    }
+  ]
+}
+```
+
+Routing audit: graph_used no (not-relevant: slice review of supplied diff); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg and read); raw_rg_used no.

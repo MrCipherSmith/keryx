@@ -1,0 +1,92 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Delta slice-03 (task-text no longer recorded in last.json, single-quoted --task-text in skill examples, feed overlap/staleness guards, cardSafe on TUI text) is clean at the Clean Code level. Two minor findings, both in the new recordLastResolve body and its test. No r02 finding was re-filed: the payload carries no prior_findings, so no r02 ids could be cited; nothing in this slice re-introduces a shape that r02 covered.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "taskTextLength: Array.from(options.taskText!).length",
+      "problem": "recordLastResolve now needs the full (uncut) code-point length of the task text, but truncateTaskText returns only the cut text and a flag, so the length is recomputed with a second Array.from over the whole string (truncateTaskText already built that array) and a non-null assertion (`options.taskText!`) is used to get past the narrowing that `task !== undefined` implies but TypeScript cannot see. After this change `task.text` is unused here: `task` exists only to carry `.truncated`.",
+      "impact": "Maintenance cost only. The `!` hides a coupling between two separate conditions (`options.taskText !== undefined` and `task !== undefined`); a later edit to the guard on line 531 can leave the assertion lying. The text is code-point-split twice per record. No wrong result today.",
+      "suggested_fix": "Have truncateTaskText return the length it already computed: `{ text, truncated, length: chars.length }`, then write `taskTextLength: task.length` and drop the `!`. Callers of truncateTaskText (context-resolver.ts:464, 531) need no other change.",
+      "evidence": "src/gdskills/context-resolver.ts:74-77 builds `const chars = Array.from(text)` and discards its length; :531 binds `const task = ... truncateTaskText(options.taskText) : undefined`; :535 re-runs `Array.from(options.taskText!).length`. Searched: `keryx ctx rg truncateTaskText src` gives two callers, both in this file.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:context-resolver:task-text-length-recompute",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/gdskills/context-resolver.test.ts",
+      "line": null,
+      "quote": "{ taskText: `${\"x\".repeat(TASK_TEXT_MAX_CHARS + 50)}` }",
+      "problem": "The edit wrapped the argument in a template literal whose only content is one interpolation, which is `String(\"x\".repeat(...))` and changes nothing. The same test then asserts absence with a bare literal `\"xxxxxxxxxx\"` (ten x) whose link to the repeated text is implicit.",
+      "impact": "Noise for the next reader of the test: the wrapper reads as if something were being concatenated. Minor; the assertion is correct.",
+      "suggested_fix": "Use `{ taskText: \"x\".repeat(TASK_TEXT_MAX_CHARS + 50) }`, and name the probe (`const leakProbe = \"x\".repeat(10)`) or derive it from the same repeat so the not.toContain check visibly targets the recorded text.",
+      "evidence": "src/gdskills/context-resolver.test.ts:432 (the wrapped argument) and :436 (`expect(await recordedFile()).not.toContain(\"xxxxxxxxxx\")`). The line before the change was `{ taskText: \"x\".repeat(TASK_TEXT_MAX_CHARS + 50) }` without the wrapper.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:context-resolver-test:noop-template-literal",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [{ "id": "slice-03", "coverage": "all hunks of slice-03.diff read; changed files read at head 5382b56ab and compared with git diff d6267d4a5..5382b56ab", "status": "DONE" }]
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/conditional-reads`
+- Parent ref: `main`
+- Merge-base: `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d` (delta round r03 on top of r02; head `5382b56abf17d23db61108554f3c6c68c8e3c036`)
+- Scope mode: `explicit-hash-range` (slice-03)
+- Changed files reviewed: 14 in slice-03 (skill/prompt copies of the `--task-text` quoting change in `.metaproject` and `src/gdskills/bundled`, `docs/docs/cli-reference.md`, `docs/docs/guides/apply-project-rules.md`, `src/commands/skills.ts`, `src/gdskills/context-resolver.ts` and test, `src/tui/project-context-inspector.ts`)
+
+### Summary
+The slice makes the last-resolve record keep only the task-text length, so no secret lands in a tracked file, and guards the TUI feed against slow or out-of-order loads. The code and the docs agree: the cli-reference row, the guide paragraph, the `--help` text and the type comments all say "length only", and a search for `taskText`, `last.json` and `last-resolve` over src, docs and README found no sentence still claiming the text is recorded. Two minor readability points remain.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Findings
+
+#### Naming
+No naming issues found. (`mine`/`started`/`applied` in `createProjectContextFeed` are local to a 10-line closure with a comment stating the rule; not worth a finding.)
+
+#### Functions
+[F-001] recordLastResolve recomputes the code-point length and relies on a non-null assertion (minor, `src/gdskills/context-resolver.ts`, B3 / DRY). See REVIEW_RESULT.
+
+#### Comments
+No comment issues found. Checked for documentation drift against the changed statements: the `TASK_TEXT_MAX_CHARS` doc ("The most task text matched against keywords"), the `RecordedResolve` field docs, the `--task-text` help line, the cli-reference row and the guide paragraph all describe the new behaviour. The comment above the `mine > applied` guard and the `polling` comment match their code.
+
+#### Error Handling
+No error handling issues found. `poll` now resets `polling` in `finally`, so a throwing load cannot wedge the guard; the empty `catch` in `recordLastResolve` carries its stated reason ("best effort", pre-existing and unchanged).
+
+#### DRY
+No DRY violations found. The same quoting edit repeated in 5 skill files plus their 5 bundled copies is mirrored content kept in sync by `skill-sync.test.ts`, not an extractable duplicate.
+
+#### SOLID
+[F-002] is a test-readability point, not SOLID. No SOLID violations found.
+
+#### Test readability
+[F-002] No-op template literal and an unlinked probe string in `context-resolver.test.ts` (minor).
+
+### Clean Areas
+- Names (A1-A3), function size and arguments (B1-B2: `createProjectContextFeed` stays under 50 lines of body with one closure per concern; `reload` and `poll` are each under 15 lines), comments (C1-C3), error handling (D1-D2), magic numbers (E2), SRP/OCP/LSP/ISP/DIP (F1-F5) reviewed with no findings.
+- `cardSafe` is applied at both text sinks in `project-context-inspector.ts` (sidebar value and modal body) through one imported helper, not a copy.
+
+Parent follow-up: none.
+
+routing audit: graph_used: not-relevant (delta slice of 14 files, all hunks supplied and read directly); wiki_used: not-relevant (no architecture question); ctx_used: yes (keryx ctx rg for the taskText/last.json sweeps; two raw git diff/ls calls carried keryx:raw reasons or were blocked and replaced by Read); raw_rg_used: no

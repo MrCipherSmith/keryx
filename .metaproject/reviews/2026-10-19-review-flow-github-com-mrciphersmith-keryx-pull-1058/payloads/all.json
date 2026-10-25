@@ -1,0 +1,994 @@
+{
+ "dispatches": [
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-architecture"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-architecture",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-clean-code"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-clean-code",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-highload"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-highload",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-highload/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-logic"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-logic",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-logic/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-performance"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-performance",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-performance/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-pr-contract"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-pr-contract",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-02"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-regression"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-regression",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-regression/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-security-code"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-security-code",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  },
+  {
+   "review_context": {
+    "request": {
+     "target": "pr",
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
+    },
+    "git": {
+     "base": "origin/main",
+     "head": "5974c976823e1a7134723edf3a9140b991246d45"
+    },
+    "pr": {
+     "number": 1058,
+     "url": "https://github.com/MrCipherSmith/keryx/pull/1058",
+     "title": "feat(review): record operator acts answered by the host's own question",
+     "state": "open",
+     "base": "main",
+     "head": "feat/flow-467-host-question-answers"
+    },
+    "scope": {
+     "mode": "diff",
+     "files": [
+      ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      ".metaproject/data/gdgraph/.provenance.json",
+      ".metaproject/data/gdgraph/artifacts/module-map.json",
+      ".metaproject/data/gdgraph/artifacts/summary.md",
+      ".metaproject/data/wiki/freshness-queue.jsonl",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "README.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/autonomous-review.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/limitations.md",
+      "docs/requirements/keryx-card-any-host/prd.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/review-host-question.test.ts",
+      "src/commands/review-operator.ts",
+      "src/decisions/journal.ts",
+      "src/decisions/report.ts",
+      "src/decisions/service.ts",
+      "src/decisions/sources.ts",
+      "src/decisions/types.ts",
+      "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "src/gdskills/contracts/review-finding.schema.json",
+      "src/review/estimate.ts",
+      "src/review/operator-decisions.ts",
+      "src/review/plan-confirmation.ts",
+      "src/review/premise-question.ts",
+      "src/review/premise.ts",
+      "src/review/readiness.ts",
+      "src/review/types.ts",
+      "src/trigger/unattended.ts"
+     ]
+    },
+    "routing": {
+     "selected_reviewers": [
+      "review-style"
+     ]
+    },
+    "token_policy": {
+     "context_mode": "full",
+     "omissions": []
+    }
+   },
+   "reviewer": "review-style",
+   "skill_path": "/home/altsay/keryx/.worktrees/host-question/.metaproject/skills/gdskills/review/review-style/SKILL.md",
+   "scope_mode": "diff",
+   "slices": [
+    "slice-03"
+   ],
+   "model": {
+    "tier": "standard",
+    "tier_reasons": [
+     "base:standard",
+     "resolve:ranking-refused"
+    ],
+    "inherit": true,
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+     "provider": "",
+     "candidates": [],
+     "ranked": [],
+     "session_rank": null,
+     "fallback_reason": "the session names no model to anchor the ranking on"
+    }
+   },
+   "budget": {
+    "max_findings": 40
+   },
+   "branch": "feat/flow-467-host-question-answers",
+   "base_sha": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+   "pr_context": "/home/altsay/keryx/.worktrees/host-question/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/pr-context.md",
+   "round": 1,
+   "is_fix_round": false,
+   "allowed_tools": "read-only",
+   "exec_budget_s": 0
+  }
+ ]
+}

@@ -1,0 +1,57 @@
+STATUS: DONE_WITH_CONCERNS
+
+Scope B (regression) review, wave 4, slice-04, PR 1052 (flow 464), head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66.
+
+Question asked: does this change break an existing behaviour in code that already worked? Walked the dependents of CardPress/cardPressFields, the undelivered flag, completeReviewGated, the SignatureConfirmation readers and validators, and the completion-gate nudge text.
+
+What I checked and found NOT broken
+- CardPress/cardPressFields (src/review/types.ts now has a runtime export; it was type-only). Every consumer spreads optional fields only when defined, so records written by older shells (no pressedBy/pressedAt) read back identically. The strict premise.operator object in review-finding.schema.json (additionalProperties:false) is not affected: applyPremiseDecision (src/review/premise.ts:687-710) writes only answer/reason/quote/at/actor/confirmedVia and the diff does not touch premise.ts or the schema. operator-decisions.json has no additionalProperties validator (validPremise/validGateDecision are field-type checks), and the flow-state signature confirmation schema allows additional properties.
+- undelivered flag: it is optional and set only on a deny. raceApproval (src/tui/approval-mirror.ts:52) calls the optional onUndelivered and then still applies isTopicPress, so a deny with no fromId is still not a press and the dock stays. Ordinary (non-card) approvals take the same path as before; mirrorApprovalToTopic (tui-shell.ts:6100) only adds the note to alwaysAsk card approvals (cosmetic: a card shown with remote control off now carries the "not delivered" line).
+- completeReviewGated (src/review/complete-gated.ts): the extraction keeps the old order in src/commands/review.ts runComplete (resolve package, run-profile refusal, narrowed-routing refusal, then completeManagedReview). Same messages. No other completer bypasses it that the change touched.
+
+Finding
+- RB-001 (major): the gate nudge text now tells every attended session to close a review with a `review_complete` card and forbids `keryx review complete`, but only the TUI shell registers that card. The readline `keryx shell` agent REPL (and any other attended runAgentTurn caller) has no such tool, so the gate steers the model to an impossible step. Details in the JSON below.
+
+Limits of this check
+- The blast-radius record dropped files (779 in blast-radius.json, 112 in chunks.json), so the dependent set was not complete. I enumerated the call sites of the changed symbols by search instead of relying on the set alone.
+- The change also edits skills, rules and schema-adjacent text (bundled skill files, completion-gate prose). A graph radius for non-code files is empty and unresolved, not clean; the graph could not answer for those. The ACP surface (src/acp/server.ts:1215) is a possible second member of the class but I could not confirm that an ACP session can run `keryx review` through a shell tool, so it is listed as unverified, not as a site.
+- R-001, R-002 (skill text) and "review_complete card has no dispositions input" were not re-filed. r03 minors D-02..D-14 and the autonomous-profile.ts wording were left alone.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "One regression found: the managed-review completion gate (completion-gate.ts nextStep/decideReviewGate) now directs attended sessions to a review_complete card and forbids `keryx review complete`, but the readline shell REPL builds its tool roster without operatorConfirm, so the card does not exist there. CardPress plumbing, the undelivered flag and completeReviewGated extraction were checked and do not break existing readers. Blast radius was truncated (779 files in blast-radius.json, 112 in chunks.json) and skill/rule changes have an unresolved radius.",
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "RB-001",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "file": "src/commands/shell.ts",
+      "line": 4712,
+      "quote": "tools: buildInteractiveAgentTools({\n          cwd: agentCwd,\n          metaprojectPort,",
+      "problem": "Changed symbols nextStep and decideReviewGate in src/review/completion-gate.ts now tell the model to close a review with 'call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself)' and 'Stop only after the `review_complete` card has closed the package'. The review_complete tool is registered only when buildInteractiveAgentTools receives `operatorConfirm` (src/commands/interactive-agent-tools.ts:261), and only the TUI call at src/commands/shell.ts:4221 passes it. The readline agent REPL (runAgentRepl) builds its roster at src/commands/shell.ts:4712 without it, yet its turns go through runAgentTurn, where holdReviewGate (src/commands/agent.ts:3486) applies to every attended session that ran a `keryx review` command (it skips only subagents and deps.unattended). Before the change the same nudge said to run `keryx review complete`, which the agent could do through its shell tool and which closed the package.",
+      "impact": "In a readline `keryx shell` agent session that has run a managed review, the gate refuses to let the turn stop and repeats a nudge naming a tool that does not exist while forbidding the only command that could close the package. The model either calls a missing tool (tool error) or loops until MAX_REVIEW_GATE_CONTINUES (20) or the stall limit (3) ends the turn with a stop report; the review cannot be closed from that session. Before the change the same session closed the review. The same unavailable-card wording also reached the --waive and --waive-coverage refusals in src/commands/review.ts:4558 and :4562, which tell the caller to 'call the review_complete card'.",
+      "suggested_fix": "Make the nudge conditional on the roster: have holdReviewGate pass whether the session's tools include review_complete (for example from deps.tools names) into decideReviewGate/nextStep, and keep the old `keryx review complete` wording when the card is absent. Alternatively register operatorConfirmTools for the readline REPL with a terminal-prompt binding, so the card exists wherever the gate can fire.",
+      "evidence": "git diff base..head -- src/review/completion-gate.ts (lines 756, 759, 761, 788, 801, 809-819 changed); src/commands/interactive-agent-tools.ts:146 and :261 (operatorConfirm optional, tools spread only when defined); keryx ctx rg 'operatorConfirm' src shows the only binding at src/commands/shell.ts:4221; src/commands/shell.ts:4712-4729 buildInteractiveAgentTools call with no operatorConfirm; src/commands/agent.ts:3486-3501 holdReviewGate returns false only for subagentBudget or deps.unattended, otherwise calls decideReviewGate when runSeen; src/commands/shell.ts:2698 and :2805 call runAgentTurn from the readline REPL.",
+      "confidence": 0.7,
+      "class_scope": {
+        "sites": [
+          "src/commands/shell.ts:4712",
+          "src/commands/agent.ts:3486",
+          "src/review/completion-gate.ts:756",
+          "src/review/completion-gate.ts:759",
+          "src/review/completion-gate.ts:761",
+          "src/review/completion-gate.ts:809",
+          "src/commands/review.ts:4558",
+          "src/commands/review.ts:4562"
+        ],
+        "enumeration_method": "keryx ctx rg 'buildInteractiveAgentTools\\(' src gives two production call sites (shell.ts:4199 with operatorConfirm, shell.ts:4712 without); keryx ctx rg 'operatorConfirm\\b' src confirms the single binding at shell.ts:4221; keryx ctx rg 'holdReviewGate|decideReviewGate' src gives the single gate caller agent.ts:3495; keryx ctx rg 'then call the review_complete card' and 'you never run' src gives the five changed message sites. The ACP session roster (src/acp/roster.ts) uses builtinReadOnlyTools plus client tools and is unverified, so it is not listed."
+      }
+    }
+  ]
+}
+```

@@ -1,0 +1,69 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "slice-02 read in full against head 77d2eff20. E-03 (schema) is fixed and safe. E-02 (dispositions on the review_complete card) binds correctly (input-keyed one-time token, server-held prepared, cardSafe on every shown field, entry-by-entry validation, record-before-close ordering shared with the CLI), but the card clips the evidence it shows to 300 characters while the full string is written to findings.json and completion-confirmation.json, so the operator presses yes on text they cannot read in full; one finding (S-401, major).",
+  "findings": [
+    {
+      "id": "S-401",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "confidence": "medium",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 693,
+      "quote": "`disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? \"\" : `: \"${cardSafe(clip(record.evidence))}\"`}`;",
+      "problem": "The dispositions the agent passes to review_complete are shown on the card with the evidence cut to WAIVER_QUOTE_CHARS (300, clip at line 735) and passed through cardSafe, but completionDispositions stores the evidence whole (line 687: `evidence: evidence.trim()`), prepared.dispositions carries it to completeReviewGated, and recordDispositions writes it unchanged into findings.json; apply also writes it into completion-confirmation.json. There is no length cap on the evidence or on the number of entries. What the operator answers (first 300 characters, newlines flattened to a visible marker) is not what is applied.",
+      "impact": "Attacker action: a prompt-injected or misbehaving agent calls review_complete with dispositions [{finding:<real finding>, disposition:\"dismissed-incorrect\", evidence:<300 harmless characters> + \"\\n- Attested by: operator: decided-by alice\"}]. The card the operator sees ends at character 300; yes closes the round and writes the full text. review-notes.ts attestDismissal (HUMAN_DECISION_PATTERN, line 122) tests the stored evidence and returns kind 'human', so writeReviewNotes files a learning note ('Attested by: human') for a dismissal no person made; the raw evidence, newlines included, is interpolated into the note body (review-notes.ts:228) and into the durable findings record. This is the exact failure the attestation rule exists to stop (the orchestrator filing its own error on its own authority), and the repo's own rule for the Telegram mirror (shell-bridge.ts:276-279, operatorCardTooLongForTopic) is that an operator must never answer a decision they could not read in full. The CLI could already write the same evidence, but there it was an agent act with no operator press; through the card the press now lends it apparent approval.",
+      "suggested_fix": "Refuse in completionDispositions any evidence longer than the card shows (for example 300 characters) and any evidence or finding string that cardSafe would change, so the shown text equals the stored text; show the evidence unclipped (the card already refuses remote buttons when it is too long, operatorCardTooLongForTopic); cap the number of dispositions per card. Optionally write the stored evidence through cardSafe. Add a test: evidence of 400 characters with a hidden tail is refused before the card is drawn.",
+      "evidence": "operator-confirm-review.ts:687 stores evidence.trim() whole; :693 shows cardSafe(clip(evidence)); :735 clip cuts at WAIVER_QUOTE_CHARS = 300; :806 apply records prepared.dispositions into completion-confirmation.json; managed.ts:1017-1019 and :1920-2001 write the full evidence to findings.json; review-notes.ts:122,138 HUMAN_DECISION_PATTERN on the stored evidence and :228 interpolation into the note. operator-confirm-tools.ts:202 binds the token to JSON.stringify(input), so the model cannot swap dispositions after the card, which makes the hidden tail the only gap. Static reading, no run.",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:672-693",
+          "src/commands/operator-confirm-review.ts:735",
+          "src/commands/operator-confirm-review.ts:806"
+        ],
+        "enumeration_method": "Read completionDispositions, dispositionLine, clip, buildCard and apply at head 77d2eff20; keryx ctx rg for recordDispositions, WAIVER_QUOTE_CHARS and attestDismissal consumers. clip is also applied to waiver quotes (operator-supplied, short, unchanged by this slice) and is not a finding there."
+      }
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "info: recordDispositions (managed.ts:1019) writes findings.json before the manifest schema check and the manifest write (managed.ts:1026-1030); the catch at 1031-1039 restores only the research and waiver backups, not findings.json. A close that fails after the dispositions are written leaves them on disk (recorded states cannot be overwritten, managed.ts:1969-1993) while the card says 'nothing was recorded'. Same ordering as the CLI; the readiness and research gates run first, so the window is the schema check only. Track as a follow-up for review-logic.",
+    "info: the card names a finding by id and state only; it does not show the finding's severity or problem, so the operator cannot see that a blocker is being dismissed without opening the package. Design choice, no exploit beyond S-401."
+  ],
+  "prior_dispositions": [
+    {
+      "id": "E-02",
+      "disposition": "fixed",
+      "evidence": "operator-confirm-review.ts:747-751 adds a dispositions input; completionDispositions (672-690) validates array, finding non-empty, state in FINDING_DISPOSITION_STATES, evidence text; the card lists each entry (775); the token is keyed to JSON.stringify(input) (operator-confirm-tools.ts:192,202) and prepared.dispositions travels server-side to completeReviewGated (822-823); an unknown finding or a state without evidence throws before the manifest closes (managed.ts:1941-1966). Security caveat is S-401 (clipped evidence), not a wrong fix claim."
+    },
+    {
+      "id": "E-03",
+      "disposition": "fixed",
+      "evidence": "managed-review-package.schema.json:202-204 adds confirmedVia (enum tui-card, remote-card), pressedBy (integer), pressedAt (string, minLength 1) to the readiness_waivers item; the item remains additionalProperties false with the same three required keys. ReadinessWaiver (review/types.ts:102) matches. No other copy of the schema is tracked (git ls-files). The new test validates tui and remote shapes and rejects an unknown confirmedVia."
+    },
+    {
+      "id": "E-01",
+      "disposition": "fixed",
+      "evidence": "SKILL.detail.md now says 'then call `review_complete`' at the memory-outside-stage repair and the tail; SKILL.md:114 and the Step 4 'A refused `review_complete` card (or `keryx review complete` at a human's terminal)' name the card; the .metaproject and src/gdskills/bundled copies of both files are byte-identical (cmp). Remaining `keryx review complete` hits at 669, 778, 823 describe what the command refuses."
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "read in full: orchestrator SKILL/SKILL.detail hunks, managed-review-package schema hunk, agent.ts holdReviewGate hunk, operator-confirm-review.ts review_complete hunks, operator-confirm-review-tools.test.ts hunks; apply, token binding, recordDispositions and review-notes read at head",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "findings": 1,
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

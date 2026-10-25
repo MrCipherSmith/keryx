@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 148955,
+      "contentHash": "40d0eadabe8579631e48b799566c6abe205fbcde38a408e0baed198205db9d16",
+      "files": [
+        ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+        ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+        ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/description.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+        ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+        "README.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/commands-by-task.md",
+        "docs/docs/guides/apply-project-rules.md",
+        "docs/requirements/keryx-conditional-reads/README.md",
+        "docs/requirements/keryx-conditional-reads/TUI-states.md",
+        "docs/requirements/keryx-conditional-reads/live-run.md",
+        "docs/requirements/keryx-conditional-reads/schemas/references.schema.json",
+        "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+        "package.json"
+      ],
+      "domain": ".metaproject, .metaproject [docs], . [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+          "risk class schema: .metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+          "risk class schema: .metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+          "risk class schema: .metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json, .metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json, .metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json (+3)",
+          "agent instructions: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md (+2)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 74674,
+      "contentHash": "cbd163b3de539e53d18f85e91fb622698728c9fe1cad45630bf2bc4a59557bad",
+      "files": [
+        "src/commands/agent-commands.ts",
+        "src/commands/skills-references.ts",
+        "src/commands/skills.ts",
+        "src/commands/skills-references.test.ts",
+        "src/flow/task-project-context.test.ts",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+        "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md"
+      ],
+      "domain": "src/commands, src/commands [test], src/flow [test] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/agent-commands.ts, src/commands/skills-references.ts, src/commands/skills.ts",
+          "agent instructions: src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md, src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md, src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md (+2)"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 82136,
+      "contentHash": "b067874e5694a8c63b39c03406bbbc83377637e238d0759d7a7fe6f986246292",
+      "files": [
+        "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+        "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+        "src/gdskills/context-resolver.ts",
+        "src/gdskills/import-rules.ts",
+        "src/gdskills/project-context-status.ts",
+        "src/gdskills/reference-entries.ts",
+        "src/gdskills/reference-proof.ts",
+        "src/gdskills/references-check.ts",
+        "src/gdskills/references-config.ts",
+        "src/gdskills/references-section.ts",
+        "src/gdskills/resolve-context-command.ts",
+        "src/gdskills/resolved-context-check.ts"
+      ],
+      "domain": "src/gdskills",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+          "risk class schema: src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+          "schema: src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json, src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+          "source code: src/gdskills/context-resolver.ts, src/gdskills/import-rules.ts, src/gdskills/project-context-status.ts (+7)"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 137651,
+      "contentHash": "1a58a0a12d32711c7d52acdc9a2915b2d31413f7c7133f202656328d1f20cc77",
+      "files": [
+        "src/gdskills/conditional-reads.e2e.test.ts",
+        "src/gdskills/context-resolver.test.ts",
+        "src/gdskills/output-schema.test.ts",
+        "src/gdskills/project-context-status.test.ts",
+        "src/gdskills/references-config.test.ts",
+        "src/gdskills/references-section.test.ts",
+        "src/gdskills/resolved-context-check.test.ts",
+        "src/gdskills/skill-sync.test.ts",
+        "src/harness/tool/metaproject-adapter.ts",
+        "src/harness/tool/metaproject-operations.ts",
+        "src/harness/tool/metaproject-port.ts",
+        "src/harness/tool/metaproject-operations.test.ts",
+        "src/lib/group-subcommands.ts",
+        "src/mcp/metaproject-tools.ts",
+        "src/standard/help-groups.ts",
+        "src/tui/project-context-inspector.test.ts"
+      ],
+      "domain": "src/gdskills [test], src/harness, src/harness [test] +4 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/harness/tool/metaproject-adapter.ts, src/harness/tool/metaproject-operations.ts, src/harness/tool/metaproject-port.ts (+3)"
+        ]
+      }
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 25038,
+      "contentHash": "79b12a0811286ce2f1062a92478f52d7737fdec7e0bc92c8b6dead0c52a69105",
+      "files": [
+        "src/tui/project-context-inspector.ts",
+        "src/tui/project-references-view.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": "src/tui",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/tui/project-context-inspector.ts, src/tui/project-references-view.ts, src/tui/tui-shell.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 5,
+    "bytes": 468454,
+    "files": 62,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

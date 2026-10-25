@@ -1,0 +1,19 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slices 03 and 04 (delta b1c6da0e6..77d2eff20, head 77d2eff20) hold the card-lifecycle refactor (raceMirroredCard / askUnmirroredCard / remoteApproval moved into operator-confirmations.ts, onTopicEnded added to raceApproval, markUndelivered(id, 'ended')), the cardAvailable wording switch in completion-gate.ts, and doc/skill wording edits. No high-load defect found. Checked: (1) every card logged by ask() is settled on all paths: raceMirroredCard settles in finally (a throwing dock gives outcome undefined, so 'withdrawn'), askUnmirroredCard answers in finally ('withdrawn' on throw or aborted turn), so no entry can stay in the waiting list after its race ends and the open-entry set is bounded by concurrent approvals; answered entries stay capped by ANSWERED_CARDS_KEPT = 5. (2) raceApproval: onTopicEnded and onUndelivered are mutually exclusive (else-if), both are guarded by `settled` and fire at most once because `started` allows one topic leg; topicAbort is aborted only in finally after settled = true, so the abort of an answered-in-dock leg cannot be reported as 'ended'. A throwing listener from changed() is swallowed by the .catch and cannot break the dock. (3) The refactor is behaviour-preserving against b1c6da0e6: onUndelivered is still passed only for a real card (question defined means isCard and meta.card defined), the unmirrored path keeps 'withdrawn' on abort or throw, and `verdict !== false` is still correct because the dock never returns an {approved:false} object (only true or {approved:true,...}). (4) completion-gate cardAvailable: the gate stays bounded (MAX_REVIEW_GATE_CONTINUES, stall signature), runs once per attempted stop, and the `deps.tools.some(...)` scan is O(tools) with no I/O; a session without the card tool gets the command wording, which cannot lengthen the loop. (5) review.ts import removal of completeManagedReview leaves no use in the file. The remaining slice-04 hunks are prose/doc edits with no load-bearing behaviour. Nothing here is a prior r04 finding fix slice (slices carry no findingIds), so prior_dispositions is empty.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": [
+    {"id": "slice-03", "coverage": "read in full: completion-gate.ts cardAvailable hunks, approval-mirror.ts onTopicEnded option, operator-confirmations.ts (topicEnded, markUndelivered reason, remoteApproval, askUnmirroredCard, raceMirroredCard), tui-shell.ts import hunks, card-lifecycle.test.ts, operator-confirmations.test.ts; cross-read at head 77d2eff20: approval-mirror.ts lines 28-74, tui-shell.ts 6090-6126, agent.ts 3486-3502, completion-gate.ts 754-769", "status": "DONE"},
+    {"id": "slice-04", "coverage": "read in full: SKILL.md wording hunks (both copies), cli-reference.md note, review.ts import removal (no remaining use of completeManagedReview), tui-shell.ts import/call-site hunks (verified against git diff b1c6da0e6 77d2eff20 of tui-shell.ts)", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

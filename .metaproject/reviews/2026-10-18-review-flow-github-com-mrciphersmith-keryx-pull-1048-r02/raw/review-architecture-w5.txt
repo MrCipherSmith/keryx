@@ -1,0 +1,51 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice 05 adds the References tab and `refs` sidebar segment as a pure view module (project-references-view.ts) over ProjectContextStatus, plus a polling ProjectContextFeed that replaces the shell's mutable projectContextStatus. Dependency direction is sound (tui -> gdskills, no cycle; the inspector re-exports from the view module, which does not import the inspector). One lifecycle gap: the feed's stop() is never called, unlike the sibling live panels disposed in onDestroy. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const projectContextFeed = createProjectContextFeed({\n      load: () => loadProjectContextStatus(projectContextDir()),\n      onError: (message) => io.onSystem?.(`projectctx: ${message}\\n`),\n    });",
+      "problem": "createProjectContextFeed starts a 5 s setInterval at construction and returns stop(), but the shell never calls projectContextFeed.stop(). Every other live panel/poller in this shell is released in the renderer's onDestroy (disposeExecutionPlanPanel, liveSchedules.dispose(), liveIntake.dispose(), liveDecisions.dispose() and others). After the renderer is destroyed the poll keeps running and, when the status changes, calls the subscribed refreshProjectContextSidebar, which does clearTranscriptChildren/sbProjectCtx.add on destroyed renderables.",
+      "impact": "Lifecycle ownership is inconsistent with the siblings. The timer is unref'd, so it does not hold the process open, and a throwing listener is caught by poll() and reported through onError, so the observable harm is a leaked timer plus a possible stray 'projectctx: ...' system line after teardown, mainly where a shell is torn down inside a longer-lived process (tests, embedding). Verified: `keryx ctx rg projectContextFeed src/tui/tui-shell.ts` returns 5 matches, none is .stop().",
+      "suggested_fix": "Call projectContextFeed.stop() in the createShellRenderer onDestroy block next to the other dispose() calls (the feed is declared later in the same scope, so hoist a `let stopProjectContextFeed: (() => void) | undefined` as disposeExecutionPlanPanel is, or register it where liveSchedules is). Optionally make the listener a no-op once destroyed.",
+      "evidence": "src/tui/tui-shell.ts onDestroy block (disposeExecutionPlanPanel?.(); liveSchedules?.dispose(); ...) has no feed stop; slice-05 hunk @@ 5249 creates the feed with the default interval; defaultInterval returns () => clearInterval(timer) as stop.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "export function createProjectContextFeed(options: ProjectContextFeedOptions): ProjectContextFeed {",
+      "problem": "The polling, change-detection and subscription logic (a data-source concern with timers and listener sets) now lives in the modal/view module project-context-inspector.ts, next to formatting and presentProjectContext. The feed adds a second responsibility (state source) to a presentation file, and tui-shell imports it from there.",
+      "impact": "No violation of dependency direction and no defect: a mild SRP/placement smell. If another surface wants the same feed it must import a TUI view module. Whether a separate *-source/feed file is the local convention was not verified across all siblings, so this stays info.",
+      "suggested_fix": "Optional: move ProjectContextFeed, createProjectContextFeed and PROJECT_CONTEXT_POLL_MS to a sibling such as src/tui/project-context-feed.ts and import it from tui-shell and the tests; the inspector keeps only the subscribe option.",
+      "evidence": "Slice-05 hunk @@ 76,283 of project-context-inspector.ts adds the feed between the sidebar renderer and presentProjectContext. src/tui/project-references-view.ts, by contrast, is correctly a separate pure module.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Architecture Review
+
+### Summary
+Structure is clean: a pure references view module over ProjectContextStatus, the inspector re-exporting from it with no import cycle, and the shell reading status through a single feed instead of a mutable local. The only structural gap is the feed's missing stop() on shell teardown (F-001); feed placement in the view file is an optional observation (F-002).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+Routing audit: graph_used: no (not-relevant, diff-local lifecycle and placement question); wiki_used: no (not-relevant); ctx_used: yes; raw_rg_used: no

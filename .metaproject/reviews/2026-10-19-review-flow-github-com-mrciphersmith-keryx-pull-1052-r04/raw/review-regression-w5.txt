@@ -1,0 +1,58 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer: review-regression (scope B, blast radius), wave 5, slice-05 (TUI part), PR 1052 / flow 464.
+
+Result: no finding at major or blocker severity. The findings array is empty. Scope B refuses anything below major, so the below-major observations are in this prose only.
+
+What was checked (dependents of the changed symbols):
+
+1. raceApproval / onUndelivered (src/tui/approval-mirror.ts).
+   - The new option is optional. The only added statements are `if (answer.undelivered === true) options.onUndelivered?.()` placed after the `settled` guard and before the `isTopicPress` guard. A non-card caller does not pass `onUndelivered`, so its behaviour is unchanged.
+   - `RemoteApprovalAnswer.undelivered` is set in src/remote/client.ts (lines 441/453/457/461) and passed through by `mapApprovalAnswer` in src/remote/shell-bridge.ts. The other bridge consumers (agent.ts, ACP permission paths) do not read the field.
+
+2. mirrorApprovalToTopic (src/tui/tui-shell.ts).
+   - Non-card approvals take the same path as before.
+   - The `via/pressedBy/pressedAt` answer built by the `remoteApproval` helper is read in src/commands/agent.ts (~6121) and checked in src/commands/operator-confirm-tools.ts (~214). The shapes match: pressedBy is present for a topic press, and a missing pressedBy is refused there.
+   - The `verdict !== false` check is safe because `requestApprovalLocally` returns only booleans.
+
+3. OperatorConfirmationLog / sidebar remote row / status tab / /decisions modal.
+   - These are new, additive consumers. `formatRemoteStatusLines`, `PresentRemoteOptions.getConfirmationLines`, `RemotePanelOptions.getWaitingCards`, `OpenDecisionsOptions.confirmationLines` and `DecisionsSidebarOptions.confirmationLines` are all optional parameters. Existing callers compile and behave as before. `openDecisionsArms` discards the option.
+   - I found no import cycle through `operator-confirmations`. It only makes `remote-control-surface` heavier.
+
+4. Unattended roster (src/trigger/unattended.ts, `review_complete` added to OPERATOR_CONFIRM_TOOL_NAMES).
+   - The blast radius contains src/commands/trigger-dispatch.ts:142 and src/commands/trigger-agent-task.ts:547 (hop 1, via src/trigger/unattended.ts). Both only ask `isUnattendedExcludedTool` about tools from fixed rosters (read-only builtins, shell exec, apply_patch, granted tools). Adding a name to the exclusion list cannot exclude a tool they previously offered.
+
+5. help-groups (src/standard/help-groups.ts).
+   - The summaries have no length cap in src/standard/help-groups.test.ts, and docs/docs/commands-by-task.md is already regenerated, so the staleness test holds.
+
+Below-major observations, not findings:
+- With remote control off, every `alwaysAsk` card gets a "Telegram mirror not delivered: remote control is not on in this shell" note and an entry in the /decisions "Telegram cards" list. That is what AC5 asks for. It is noise for operators who never enabled remote control.
+- `projectRemoteRow(status, width, waitingCards)`: waiting cards take precedence over the `N unconfirmed` text in the sidebar row. The status tab still shows the unconfirmed count.
+- Bridge active but not connected: the race is skipped, and the old "approval denied: not connected" event is no longer pushed. Cosmetic.
+- Stale "asked Nm ago" ages in the modal: already filed under the waiting() repaint finding. Not re-filed.
+- Already filed and not re-filed: RB-001, operatorCards not wired into requestApprovalForTelegramTurn, tui-shell hop untested.
+
+What this review could not see:
+- The radius is a code graph. It has no runtime edges: no hooks, no spawned processes, no string-keyed registry lookups, no file handoffs. The Telegram topic leg and the answer callback travel over the bridge at runtime, so I traced them by reading src/remote/shell-bridge.ts and src/remote/client.ts directly.
+- The set is capped. counts: retained 40, droppedByCap 112, maxFiles 40. 21 of 64 changed files are unresolved (not-a-graph-node: Markdown, JSON and flow files). Dependents among the 112 dropped files were not walked. The retained set for this slice held only trigger-dispatch.ts and trigger-agent-task.ts as slice-related dependents; I did not enumerate the rest of the dropped files.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-05 (TUI part) of PR 1052: no major or blocker regression. raceApproval.onUndelivered, the remoteApproval answer shape, the new optional parameters on the remote status, sidebar and decisions surfaces, the review_complete unattended exclusion and the help-groups summaries all leave existing callers unchanged. Radius limits: 112 files dropped by the cap, 21 of 64 changed files unresolved, no runtime edges in the code graph.",
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0,
+    "blast_radius_retained": 40,
+    "blast_radius_dropped_by_cap": 112,
+    "changed_files_unresolved": 21,
+    "changed_files_total": 64
+  },
+  "slices": ["slice-05"],
+  "findings": []
+}
+```

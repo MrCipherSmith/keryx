@@ -1,0 +1,48 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "slices": [{ "id": "slice-02", "coverage": "read in full (1570 lines)" }],
+  "prior_dispositions": [
+    {
+      "id": "C-30",
+      "disposition": "open",
+      "evidence": "docs/docs/limitations.md:187 at head 6f47bf35f still carries the parenthetical inside the original sentence ('A Telegram or web card for these approvals (the review acts `review_confirm_plan`, ... see decision TM-04), session-wide grants ...'). It is now longer (the 'proves an allowed account pressed this card' clause was added), the TM-04 mention is not a link, and the sentence was not split into a separate paragraph as suggested. The cli-reference.md text in the delta is consistent but is a single very long line."
+    },
+    {
+      "id": "C-44",
+      "disposition": "partial",
+      "evidence": "Fixed: prBound is gone from CompletionFacts (the type and completionFacts were reworked in the delta). Still open at head: in src/commands/operator-confirm-review.ts the imports `cardPressFields` (line 34, between ../lib and ../flow) and `writeFileAtomic` (line 43, between ../review/* lines) are still out of their groups; factsDigest is still an arrow const among function declarations (around line 690). Info severity, no change was required for this PR."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 18,
+      "quote": "// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's",
+      "problem": "Comments and card text in this file contradict the delta. The header still advertises `[--head]` although the delta removed the `head` input from review_complete (the schema has none and a test pins that). Line 24 says 'Closing the review is still `keryx review complete`', and the waiver tools' descriptions (lines 262, 312) and outputs (lines 296, 358) tell the agent to 'run `keryx review complete`' to close, while this PR's skills, TM-04 section 8 and the gate messages say an agent closes a review only through the review_complete card and never runs the CLI.",
+      "impact": "The tool descriptions and outputs are read by the model at the moment it decides how to close the round; they point it at the path the rest of the PR forbids. The header comment misleads the next maintainer into thinking a head can be passed.",
+      "suggested_fix": "Header: '... review_complete (keryx review complete <package>): one card with the recorded head, ...'. Line 24: 'Closing the review is the review_complete card, which finds the waiver in the package; the CLI flags (for a human in a terminal) record the waiver and close in one run.' Lines 262, 296, 312, 358: replace 'run/Run `keryx review complete` ... to close the review' with 'call the review_complete card to close the review'.",
+      "evidence": "operator-confirm-review.ts lines 18, 24, 262, 296, 312, 358 at head 6f47bf35f; the same file's review_complete description (line 705) and slice-02 hunk for the review_complete input schema (no head property).",
+      "confidence": "medium"
+    }
+  ],
+  "positive_notes": [
+    "remoteApproval was moved above isToolAvailableToSideWorker in tui-shell.ts, so the side-worker JSDoc is attached to its own function again.",
+    "pressedBy/pressedAt wording ('shell's clock when the press arrived') is now the same in agent.ts, confirm-token.ts, types.ts, review/types.ts, schema.ts and the JSON schema.",
+    "The shared reason() helper in completeSpec removes the repeated error-text ternary."
+  ]
+}
+```
+
+# Style Review Report (round r03, wave 2, slice-02)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+One minor finding (stale comments and tool wording on how a round is closed). C-30 stays open (limitations.md sentence), C-44 is partly fixed.

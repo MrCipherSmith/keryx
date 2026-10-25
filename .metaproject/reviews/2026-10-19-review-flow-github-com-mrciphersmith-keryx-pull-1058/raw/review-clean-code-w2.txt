@@ -1,0 +1,100 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-02 (TM-04 6b, CLI reference, limitations, PRD, review-operator.ts host-question path, 41-test file). The code is readable and the refuse-before-write ordering is deliberate and commented. One finding has a concrete wrong outcome: the shared decline check is the only gate on three of the four verbs, so the verb's own declared decline option ('keep') and non-answers are recorded as waivers, which contradicts the 'free text is not a decision' rule the docs state. The rest is minor: a 95-line recordHostQuestion with casts that hide a validation/use split, the source list and test arg-stripping repeated 4 and 3 times, and doc drift on what the other three verbs accept as --answer.",
+  "findings": [
+    {
+      "id": "CC2-001",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": 302,
+      "quote": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "For confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is refuseDecline, a deny-list on the first word. Nothing requires an affirmative. HOST_OPTIONS declares the decline option of waive-mutation and override-reviewers as 'keep' (lines 257, 265, label 'Keep: run the mutation pass'), but LEAD_DECLINE does not contain 'keep'. The code refuses `--answer keep` as a decline (test 'AC3 an --answer that is the decline option') yet records the same word when it arrives in --answer-text. The vocabulary is also inconsistent across verbs: CHOICE_WORDS.uphold treats 'keep' as the confirming word for decide-premise, while for waive-mutation and override-reviewers 'keep' is the declining option. TM-04 6b, limitations.md and cli-reference.md all state that an answer that is not one of the verb's options is refused ('free text is not a decision'); for these three verbs the code accepts any text that does not start with a listed decline word. New evidence beyond wave 1's 'first word only' finding: that finding is about a negation after the first word; this one is that the verb's own decline option, and any non-answer, passes.",
+      "impact": "Agent passes the operator's answer to the question that keryx itself journals with options [waive, keep]. Input: `keryx review waive-mutation --package P --reason r --answered-by claude-code:q1 --answer-text \"Keep: run the mutation pass\" --question-text \"Waive the mutation pass?\"` exits 0, writes a mutation-waiver with confirmedVia host-question, and the journal entry is then answered with choice 'waive' (line 944, choices.confirm), so the record states the opposite of what the operator chose. Same for `--answer-text \"what does that mean?\"` on override-reviewers or confirm-plan: recorded as a yes.",
+      "suggested_fix": "Require a positive match per verb as decide-premise already does (refuseOtherChoice): an affirmative word set (yes/y/ok/да/waive/override/подтверждаю, ...) and refuse when the words name the decline option of HOST_OPTIONS[verb].decline or contain none of the affirmatives. Derive the decline words from HOST_OPTIONS so the option table and the check cannot drift. Add tests: waive-mutation 'Keep: run the mutation pass' and 'what does that mean?' refused with nothing recorded.",
+      "evidence": "Diff lines 785 (LEAD_DECLINE has no 'keep'), 813-818 (refuseDecline), 766-781 (decline: 'keep'), 872-878 (--answer keep refused), 922-926 (waive-mutation path calls only refuseDecline), 1155-1158 and 1208-1214 (tests cover --answer keep and a list of lead declines, none for 'keep' or a non-answer in --answer-text). Docs: limitations.md 'An answer that is not one of the verb's options (free text is not a decision)', TM-04 6b 'for the others a yes'.",
+      "confidence": 0.85,
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:896 (confirm-plan: refuseDecline only)",
+          "src/commands/review-operator.ts:922 (waive-mutation and override-reviewers: refuseDecline only)"
+        ],
+        "enumeration_method": "Read recordHostQuestion branch by branch: decide-premise additionally calls refuseOtherChoice; the other three verbs' only content check on --answer-text is refuseDecline. grep of refuseDecline shows its one definition and three call sites."
+      },
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC2-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 343,
+      "quote": "async function recordHostQuestion(",
+      "problem": "Clean Code B1/B3. recordHostQuestion runs about 95 lines and mixes four levels: refusal gates, --answer validation per verb, per-verb preparation, building a deferred write, and the decisions-journal write. Validation and use are split across a closure, so the code has to cast around the type system: `premiseAnswer as \"uphold\" | \"dismiss\"` (lines 396, 401) and `(reason as string).trim()` (lines 401, 413), each safe only because of a check 40 lines earlier. The variable `recorded` is a thunk that performs the write and returns a log line, but reads like a state flag.",
+      "impact": "Cost to the next editor, not a current defect: moving or reordering the checks (e.g. when a fifth verb is added to the if/else-if chain) turns the casts into silent undefined access with no compiler warning. No runtime failure today.",
+      "suggested_fix": "Split into one function per verb that returns the prepared write (prepareDecidePremise, prepareConfirmPlan, prepareOperatorDecision), each taking already-narrowed inputs (premiseAnswer: 'uphold'|'dismiss', reason: string) so the casts disappear, and a small writeJournalEntry(). recordHostQuestion keeps gates, dispatch, write and journal. Rename `recorded` to `commit`.",
+      "evidence": "Diff lines 854-949; casts at 907, 912, 924.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC2-003",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 65,
+      "quote": "<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question",
+      "problem": "Clean Code E1/E2. The list of allowed sources is typed out in four help strings (waive-mutation line 65, override-reviewers 78, confirm-plan about 94, decide-premise 108) while parseAnsweredBy reads the same set from HOST_QUESTION_SOURCES (src/review/types.ts:106). The 'Refused, with nothing recorded, for a decline (n, no, an empty answer), a blank text, ... in an unattended run and under KERYX_TOOL_CALL=1' sentence is also repeated in four variants that differ only by which per-verb refusals are listed.",
+      "impact": "Adding or renaming a source in HOST_QUESTION_SOURCES leaves four help texts (and cli-reference, limitations, TM-04, which repeat it again) stating the old set; the parser and the help then disagree for a user who reads the help.",
+      "suggested_fix": "Build the shared tail of the four help blocks from one helper that interpolates HOST_QUESTION_SOURCES.join(', ') and the shared refusals, and keep only the per-verb lines literal.",
+      "evidence": "Diff lines 598, 612, 627-628, 644; HOST_QUESTION_SOURCES in the working tree at src/review/types.ts:106; parseAnsweredBy at diff 797-810.",
+      "confidence": 0.7,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC2-004",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": 293,
+      "quote": "const args = (await argsFor(verb, dir)).filter((_, i, all) => ![\"--answered-by\", \"--answer-text\", \"--question-text\"].includes(all[i - 1] ?? \"\") && ![\"--answered-by\", \"--answer-text\", \"--question-text\"].includes(all[i] ?? \"\"));",
+      "problem": "Clean Code E1. The same 170-character expression that strips the three host-question flags from an argument list appears three times, and each copy writes the flag list twice. The shape also treats any value that follows a flag as part of the flag, so it would strip a value that happens to equal a flag name.",
+      "impact": "Cost to whoever edits the tests next: adding a fourth host-question flag means six edits in three places, and missing one makes the AC4/AC8 'behaves as before' tests pass with the flag still present or fail with a misleading message.",
+      "suggested_fix": "Give argsFor an option (or add withoutHostFlags(args)) that drops the three flags once, using a HOST_FLAGS constant, and call it from the three tests.",
+      "evidence": "Test file lines 293, 456, 489 (working tree) = diff lines 1245, 1408, 1441.",
+      "confidence": 0.9,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC2-005",
+      "severity": "minor",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": 131,
+      "quote": "an answer that is not one of the verb's options (`uphold` or `dismiss` for `decide-premise`; for the others a yes)",
+      "problem": "Clean Code C1a (documentation describes a rule the code does not implement). Two parts. (1) For waive-mutation and override-reviewers the verb's options are waive/keep and override/keep (HOST_OPTIONS), and the code accepts `--answer waive` or `--answer override` only; `--answer yes` is refused ('--answer must be waive ... or left out'). The doc says a yes. (2) The doc and limitations.md say a non-option answer is refused; for these verbs the code never checks --answer-text against an option (see CC2-001). The cli-reference usage lines for the four verbs also do not list `--answer` for confirm-plan, waive-mutation and override-reviewers, although the code accepts it and the AC2 test exercises it.",
+      "impact": "An agent following TM-04 6b passes `--answer yes` to waive-mutation and gets a refusal it cannot predict from the doc; an operator reading limitations.md believes free text cannot be recorded for these verbs when it can.",
+      "suggested_fix": "State the per-verb option ids (waive, override, yes) in 6b, the CLI reference and the limitations page, or drop the --answer acceptance for the three verbs and say the confirming text is checked; make the docs match whatever CC2-001 settles on.",
+      "evidence": "Diff lines 131, 409, 416, 872-878; HOST_OPTIONS diff 749-782; test 'AC2 an --answer naming the confirming option' diff 1137-1143 uses waive/override.",
+      "confidence": 0.75,
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 4, "info": 0 },
+  "slices": ["slice-02"]
+}
+```
+
+## Clean Code Review (slice-02, wave 2)
+
+### Summary
+The new code path is well commented, refuses before the first write, and the test file covers each documented refusal by snapshot comparison. The concrete defect is CC2-001: the decline heuristic is the only content gate on three of four verbs, so the verb's own decline option and non-answers are recorded as waivers, which the docs say is refused. The remaining findings are maintenance cost: one 95-line function with casts, repeated help text and test argument stripping, and doc drift on `--answer`.
+
+### Clean areas
+- Naming of the new constants and seams (HOST_OPTIONS, parseAnsweredBy, requireText, refuseHostQuestionHere) is intention-revealing.
+- Error messages name the flag, the verb and the next step.
+- The try/catch around the journal write is a deliberate, commented choice (the review record is written first; a journal failure warns instead of double-recording), not a swallowed exception. Not flagged (law 4).
+- The `// Everything below refuses before the first write` comment matches the code order.
+- Wave-1 items were not repeated.
+
+Routing audit: graph_used no (not-relevant: reading a given diff), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg for symbol lookups; two raw awk line-number lookups with the keryx:raw marker because ctx rg truncates), raw_rg_used no.

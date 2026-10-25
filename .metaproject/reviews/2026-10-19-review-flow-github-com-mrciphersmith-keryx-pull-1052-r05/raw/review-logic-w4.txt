@@ -1,0 +1,35 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second-look pass over slice-07 (unchanged since r03) at head 77d2eff20. I traced the new pressedBy/pressedAt fields from the card press (agent.ts approval response, operator-confirm-tools.ts remote path with allowed-user and 1-hour TTL checks) into every record that spreads cardPressFields(): chunk answer, coverage waiver, readiness waiver, operator decision, plan confirmation, premise decision, publish, and the flow confirmation token (parseStoredToken -> consumeConfirmationToken -> SignatureConfirmation with mechanism remote-card-token). Stored fields survive validation and re-append unchanged. I also traced the undelivered flag (RemoteClient.askApproval -> mapApprovalAnswer keeps it on deny only -> raceApproval.onUndelivered guarded by settled -> markUndelivered -> the 'Telegram mirror not delivered' note), the evidence-level line regex (no g flag, fenced lines skipped), review_complete in OPERATOR_CONFIRM_TOOL_NAMES, and completeReviewGated, which the CLI runComplete and the review_complete card both call. No new logic defect found. L5-001 and L5-101 are not repeated.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    {
+      "id": "L5-FU-301",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "note": "Around line 699 the premise.operator record copied into findings.json carries confirmedVia but not pressedBy/pressedAt. The press is still recorded in the operator-decisions store, so no information is lost; only the findings.json copy is less complete. Not a spec gap by itself."
+    },
+    {
+      "id": "L5-FU-302",
+      "severity": "info",
+      "file": "src/remote/client.ts",
+      "note": "askApproval: when the post succeeded but the stream then drops (if (!this.connected) return { decision: \"deny\" }), no undelivered flag is set. That is correct, because the question did reach the topic; the dropped-stream case is handled through onTopicEnded instead. Noted only so the two paths are not confused later."
+    }
+  ],
+  "prior_dispositions": [],
+  "slices": [
+    {
+      "id": "slice-07",
+      "coverage": "All hunks of slice-07 read once for logic defects, including the cross-file wiring of pressedBy/pressedAt (agent.ts, operator-confirm-tools.ts, confirm-token.ts, operator-decisions.ts, types.ts) and of the undelivered flag (client.ts, shell-bridge.ts, approval-mirror.ts, operator-confirmations.ts), plus complete-gated.ts against its two callers.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

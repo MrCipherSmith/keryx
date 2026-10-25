@@ -1,0 +1,73 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-03 (completion-gate.ts card flag, approval-mirror onTopicEnded, operator-confirmations.ts lifecycle helpers, tui-shell wiring, card-lifecycle.test.ts, operator-confirmations.test.ts). The E-04 and E-08 tests assert behaviour and fail without the fix: reverting onTopicEnded or the 'ended' reason leaves log.waiting() non-empty inside the dock (the assertion throws, the race rejects) and the wording assertion fails; dropping fromId, pressedAt or the settle in the finally fails the lifecycle tests; ignoring turnAborted fails the stopped-turn test. The E-05 gate wording is pinned for both card and no-card sessions (completion-gate.test.ts:80-101, not my slice for the predicate, F-103 already open). No blocker or major. Two new low findings only: a topic press with no Telegram user id is not pinned at the lifecycle or settle level, so a fabricated pressedBy would survive (F-201), and the askUnmirroredCard test pins an unobservable `yes` value on a withdrawn card (F-202). Already raised and not repeated: wave 1 F-001..F-003 (unpinned remoteApproval call sites at tui-shell.ts:6083/6125, fixed 10 ms sleeps in card-lifecycle.test.ts:24/62/86, unreachable aborted clause) and wave 2 F-101..F-103. No test command was run; mutation candidates are in follow_ups.",
+  "findings": [
+    {
+      "id": "F-201",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": 198,
+      "quote": "expect(settled({ from: \"topic\", answer: { decision: \"deny\" } })).toEqual(expect.objectContaining({ place: \"telegram\", yes: false }));",
+      "problem": "The E-08 fix moved the topic-answer-to-record hop into settle and raceMirroredCard, and card-lifecycle.test.ts drives every topic press with a presser (allow(9), fromId 4). The only case where the topic answer carries no fromId is this settle row, and it asserts with expect.objectContaining, which does not say that pressedBy is absent. card-lifecycle.test.ts defines allow() with an optional fromId but uses allow() without an id only inside the throwing-dock test, where the topic answer is never read. So the branch `outcome.answer.fromId === undefined ? {} : { pressedBy: ... }` (operator-confirmations.ts:73) is pinned only for the defined side. The line shown for such a card (`a Telegram user` fallback in answeredConfirmationLine, operator-confirmations.ts:142) has no assertion anywhere in the suite.",
+      "impact": "A change such as `pressedBy: outcome.answer.fromId ?? 0` (or an unconditional `pressedBy: outcome.answer.fromId`, which stores an explicit undefined) keeps every test green, and the sidebar and /decisions line would then claim `pressed by Telegram user 0` for an answer that named nobody. That is the same who-pressed record E-08 was about, in its absent-id half.",
+      "suggested_fix": "In card-lifecycle.test.ts add a case through raceMirroredCard with `topic: async () => allow()` (an allow with no fromId): expect the entry's `answered` toEqual-match `{ place: \"telegram\", yes: true }` with no pressedBy key (`expect(answered).not.toHaveProperty(\"pressedBy\")`), and expect answeredConfirmationLine(entry) toContain `pressed by a Telegram user`. Tighten the settle row at operator-confirmations.test.ts:198 the same way.",
+      "evidence": "git grep at 77d2eff20: operator-confirmations.ts:73 holds the conditional spread; operator-confirmations.test.ts:198 is the only no-fromId topic row and uses objectContaining; the string `a Telegram user` appears in no src test (git grep -n 'a Telegram user\\b' lists only unrelated hits). card-lifecycle.test.ts:11 allow(fromId?) is called without an id only at :107 (throwing dock).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-202",
+      "severity": "info",
+      "file": "src/tui/card-lifecycle.test.ts",
+      "line": 162,
+      "quote": "[\"B?\", \"withdrawn\", true],",
+      "problem": "The askUnmirroredCard test asserts that a card whose turn stopped is logged `withdrawn` with yes === true. A withdrawn card never shows its verdict (answeredConfirmationLine prints `withdrawn (the turn stopped)` and ignores `yes`), and the sibling test for raceMirroredCard (card-lifecycle.test.ts:114-128) correctly asserts only `place: \"withdrawn\"`. The `true` here pins an incidental value of `yes: answered && verdict !== false` in askUnmirroredCard (operator-confirmations.ts:184), not behaviour an operator or a store can see.",
+      "impact": "Normalising a withdrawn card to yes false (the saner record, and what the dock-throws row already produces) fails this test although nothing observable changes. It also locks in the E-52 partial duplication between askUnmirroredCard and settle.",
+      "suggested_fix": "Compare only question and place for the withdrawn rows (`[\"B?\", \"withdrawn\"]`) and keep yes for the shell row, or assert yes false for every withdrawn card if that is the intended record.",
+      "evidence": "card-lifecycle.test.ts:158-163 expects [[\"C?\",\"withdrawn\",false],[\"B?\",\"withdrawn\",true],[\"A?\",\"shell\",false]]; operator-confirmations.ts:140 and the withdrawn branch of answeredConfirmationLine never read `yes` for place withdrawn.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Mutant M-E04-a: operator-confirmations.ts raceMirroredCard, delete the `onTopicEnded: () => options.log.markUndelivered(id, \"ended\"),` line. Expected killed by card-lifecycle.test.ts 'a topic leg that ended with no press' (the assertion inside the dock sees waiting() length 1).",
+    "Mutant M-E04-b: markUndelivered(id, \"ended\") ignores reason (always the undelivered wording). Expected killed by operator-confirmations.test.ts:~68-74 ('no longer waiting' and not 'not delivered') and card-lifecycle.test.ts:~88.",
+    "Mutant M-E04-c: change the wiring to `onTopicEnded: () => options.onUndelivered?.()`. Expected killed by `expect(told).toBe(0)` in the ended test.",
+    "Mutant M-E04-d: pendingConfirmationLine, invert the topicEnded ternary. Expected killed by both wording tests (undelivered and ended).",
+    "Mutant M-E08-a: remoteApproval drops `pressedBy` or `pressedAt`, or stamps `new Date()` instead of `now()`. Expected killed by the toEqual in 'remoteApproval names who pressed'.",
+    "Mutant M-E08-b: raceMirroredCard finally skips `options.log.settle(...)`. Expected killed by the allow, deny, dock-throw and stopped-turn tests (waiting() or answered missing).",
+    "Mutant M-E08-c: settle ignores turnAborted (`place: \"shell\"` for an aborted dock). Expected killed by 'a turn that stopped withdraws the card' and operator-confirmations.test.ts settle row with aborted = true.",
+    "Mutant M-E08-d: askUnmirroredCard logs `shell` when the turn aborted, or `answered` flag removed so a throw logs shell. Expected killed by the third card-lifecycle askUnmirroredCard test.",
+    "Mutant M-E08-e: raceMirroredCard passes `question` through even when undefined (log.ask(undefined ...)). Expected killed by 'a question that is not an operator card logs nothing'.",
+    "Mutant M-201 (backs F-201, expected to SURVIVE): operator-confirmations.ts:73 replace the conditional spread with `pressedBy: outcome.answer.fromId ?? 0`.",
+    "Mutant M-202 (backs F-202, expected to be KILLED although behaviour is unchanged): askUnmirroredCard `yes: answered && verdict !== false` -> `yes: !turnSignal.aborted && answered && verdict !== false`.",
+    "Mutant M-E05-g: completion-gate.ts describeBlockers, make the empty-list branch ignore `card` (always the card wording). Expected killed by the no-card test loop over {blockers: []} (completion-gate.test.ts:~91). Mutant: decideReviewGate `const card = input.cardAvailable !== false` -> `=== true` (undefined means no card). Expected killed by the card-present test, since idle omits cardAvailable and the test expects the card wording by default.",
+    "Mutant M-001 (carried from wave 1, still expected to survive): tui-shell.ts:6125 replace `outcome.answer.fromId` with `undefined`; tui-shell.ts:6083 replace `answer.fromId` with `undefined`.",
+    "Carried, deferred and not re-raised: D-03 (overflow line at completion-gate.ts:68 still says `keryx review complete` lists them all, now also true in card mode where the same message forbids that command); the fixed 10 ms sleeps of wave-1 F-002 in card-lifecycle.test.ts:24/62/86."
+  ],
+  "prior_dispositions": [
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-05", "disposition": "partial" },
+    { "id": "E-08", "disposition": "closed" },
+    { "id": "E-10", "disposition": "closed" },
+    { "id": "E-35", "disposition": "closed" },
+    { "id": "E-52", "disposition": "partial" },
+    { "id": "E-58", "disposition": "closed" },
+    { "id": "D-03", "disposition": "open" }
+  ],
+  "slices": [
+    {
+      "id": "slice-03",
+      "coverage": "Read the full slice diff, approval-mirror.ts, operator-confirmations.ts, the tui-shell.ts mirrorApprovalToTopic region (6040-6140 at head and the pre-fix version at b1c6da0e6 to confirm the helper extraction preserves behaviour), card-lifecycle.test.ts, operator-confirmations.test.ts, completion-gate.test.ts:55-105 and mirror-undelivered.test.ts:95-200 as context, plus my wave-1 and wave-2 reports to avoid duplicates. The E-05 roster predicate (agent.ts) and the review.ts refusal texts are outside this slice. No test command was run.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```

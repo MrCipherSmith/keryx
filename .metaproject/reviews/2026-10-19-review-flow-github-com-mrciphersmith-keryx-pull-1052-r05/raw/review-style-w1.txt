@@ -1,0 +1,83 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Fix slice slice-01 of 77d2eff20, style lane only. E-07 (cli-reference terminal-only list) and E-01 (SKILL.md and SKILL.detail.md plus both bundled copies now say 'call the review_complete card'; the two copies are byte-identical) are fixed completely. E-06 (apply split into runCompletionGates, writeCompletionRecord, completionOutput) and E-58 (remoteApproval moved out of the middle of tui-shell.ts) are fixed. E-10 is only half done: the three pasted clauses became one closeStep helper, but the same card-or-command choice is now spelled out as five inline ternaries on an unprefixed boolean. Three info items on the new code. No major or blocker; D-03 (describeBlockers overflow line still says 'keryx review complete lists them all') stays a known open minor and is not re-raised.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 796,
+      "quote": "export function describeBlockers(open: OpenManagedReview, card = true): string {",
+      "problem": "The E-10 fix replaced the clause pasted in three returns of nextStep with a closeStep(card) helper, but the same wording choice (card tool or command) is now also written inline in describeBlockers (line 797), decideReviewGate (lines 814, 822 and 829) and closeStep itself. That is five places that must agree on the card wording and the command wording, none of them sharing a constant, so the DRY problem E-10 named is moved, not removed. The switch is a bare boolean named `card`, without an is/has/can prefix, and it collides with the `card` lines array that the card specs and tui-shell use elsewhere; the input field is called `cardAvailable` while the parameters are `card`. Defaults differ too: describeBlockers has `card = true`, nextStep and closeStep take it required.",
+      "impact": "The next wording change (for example the D-03 overflow line, which still says `keryx review complete` lists them all) has to be repeated in the card and command branch of every site, and a boolean named card does not tell a reader at the call site what true means.",
+      "suggested_fix": "Name the flag `hasCardTool` (or `cardAvailable` everywhere) and hold both phrasings in one small table next to closeStep, for example CLOSE_WORDING = { card: { close: 'call the `review_complete` card', refused: 'The review_complete card', stop: 'the `review_complete` card has' }, command: { ... } }, then index it by the flag in describeBlockers, decideReviewGate and closeStep.",
+      "evidence": "src/review/completion-gate.ts at 77d2eff20: closeStep(card: boolean) at 755; nextStep(open, card) at 761; describeBlockers(open, card = true) at 796 with a card ? ... : ... ternary at 797; `const card = input.cardAvailable !== false;` at 806; ternaries at 814, 822 and 829.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 3,
+      "quote": "// Held in memory only: the stores keep the durable record (`confirmedVia`, `pressedBy`, `pressedAt`); this is the",
+      "problem": "The module header still says the file is only the in-memory live view that the sidebar, /remote-control and /decisions read. The fix added remoteApproval, askUnmirroredCard and raceMirroredCard to the same file, and they are not a view: remoteApproval builds the ApprovalResponse that carries the durable pressedBy and pressedAt, and the two helpers drive raceApproval and the dock. The file also gained value and type imports from ../commands/agent, ../remote/shell-bridge and ./approval-mirror for them.",
+      "impact": "A reader who trusts the header does not look here for the code that produces the durable press record, and the next change to the race wiring gets filed under a view-model module.",
+      "suggested_fix": "Add a second sentence to the header naming the card-lifecycle helpers (remoteApproval, askUnmirroredCard, raceMirroredCard) and what they do, or move them to approval-mirror.ts as the E-58 fix suggested, leaving this file as the log and its text projections.",
+      "evidence": "src/tui/operator-confirmations.ts lines 1-8 at 77d2eff20 (header and new imports); the three helpers are appended at the end of the file in the same commit.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 813,
+      "quote": "const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "The extraction of apply (E-06) promoted the in-function `reason` arrow to a module-level `errorText`. A function with the same name and body already exists in the sibling file src/commands/operator-confirm-other.ts:82 (`function errorText(error: unknown): string`), unexported there. It is also written as a const arrow while the helpers around it (runCompletionGates, writeCompletionRecord, completionOutput) are function declarations. In the same commit, completionDispositions repeats the FINDING_DISPOSITION_STATES membership check and the refusal text that runComplete already has in src/commands/review.ts (around line 4669).",
+      "impact": "Small. Three copies of one two-line helper across the operator-confirm files, and two validators for the same --disposition state that must be kept in step.",
+      "suggested_fix": "Export one errorText from a shared place in src/commands (or from operator-confirm-tools.ts, which both operator-confirm files already import) and use it in both files; optionally reuse one disposition-state check for the CLI flag and the card input.",
+      "evidence": "src/commands/operator-confirm-review.ts:813 and src/commands/operator-confirm-other.ts:82 at 77d2eff20; FINDING_DISPOSITION_STATES membership check in src/commands/review.ts and in completionDispositions in operator-confirm-review.ts.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/approval-mirror.ts",
+      "line": 56,
+      "quote": "if (!isTopicPress(answer)) return;",
+      "problem": "The new onTopicEnded branch (line 55) evaluates `!isTopicPress(answer)` and, one line later, line 56 tests the same condition again, so the same predicate is read twice in three lines and the reader has to prove that the two branches (undelivered, ended) both end in the return at 56.",
+      "impact": "Readability only: the shape of the callback (undelivered, then ended, then return) is harder to follow than a single early return.",
+      "suggested_fix": "Compute `const press = isTopicPress(answer);` once; `if (!press) { if (answer.undelivered === true) options.onUndelivered?.(); else if (!topicAbort.signal.aborted) options.onTopicEnded?.(); return; }` then set topicAnswer and abort the dock.",
+      "evidence": "src/tui/approval-mirror.ts lines 54-56 at 77d2eff20.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "closed" },
+    { "id": "E-06", "disposition": "closed" },
+    { "id": "E-07", "disposition": "closed" },
+    { "id": "E-10", "disposition": "partial" },
+    { "id": "E-35", "disposition": "closed" },
+    { "id": "E-52", "disposition": "partial" },
+    { "id": "E-58", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```
+
+Notes on the fix claims checked (style lane):
+- E-01 closed. At 77d2eff20 SKILL.md:136 and :782 and SKILL.detail.md:386 say `then call review_complete`; :47, :65, :124, :136, :669 and :866 name the card first and the CLI as the human fallback. diff -q of both files against src/gdskills/bundled/skills/review/review-orchestrator/ is empty.
+- E-07 closed. docs/docs/cli-reference.md now lists only `complete --waive-coverage` and `complete --waive` as terminal-only and says plain `complete` has no terminal check (TM-04 section 8).
+- E-06 closed. apply in completeSpec is 25 lines and delegates to runCompletionGates, writeCompletionRecord and completionOutput.
+- E-10 partial, see F-001. E-52 partial: askUnmirroredCard still maps place and yes by hand instead of calling OperatorConfirmationLog.settle (architecture's finding; noted only as seen in the code).
+- E-58 closed: remoteApproval no longer sits between SIDE_WORKER_DENIED_TOOL_NAMES and isToolAvailableToSideWorker; tui-shell.ts imports are clean (no leftover raceApproval, ApprovalRaceOutcome or ApprovalResponse).
+- D-03 is unchanged and stays a known open minor.

@@ -1,0 +1,37 @@
+# Decisions
+
+- S-401: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-01: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-02: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-03: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-04: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-05: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-06: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-07: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-08: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-09: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-10: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-11: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-12: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-13: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-14: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-15: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-16: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-17: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-18: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-19: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-20: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-21: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-22: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-23: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-24: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-25: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-26: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-27: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-28: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-29: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-30: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-31: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-32: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-33: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F5-34: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

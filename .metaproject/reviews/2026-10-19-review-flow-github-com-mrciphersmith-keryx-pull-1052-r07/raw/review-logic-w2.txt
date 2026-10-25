@@ -1,0 +1,27 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-04 holds flow 464 artifacts, the review-orchestrator and review-premise skill wording, and the 0.3.124 changelog entry. I checked the claims against the head 5444f96e4 sources: the review_complete card exists with the stated input (`package`, `dispositions` of {finding, disposition, evidence}), the card shows head, evidence level, waivers and dispositions, readiness waivers are recorded by the waiver cards and read by the completion card, both skill copies carry the same eight/three review_complete edits, package.json is 0.3.124 and matches the changelog heading. One minor wording gap found: the new 'Done when' rule leaves a host without card tools (Claude Code, Codex, other AGENTS.md hosts) with no stated way to close a round. No defect in the flow files or the changelog.",
+  "findings": [
+    {
+      "id": "L8-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 136,
+      "quote": "an agent never runs `keryx review complete`; that command is for a human in a terminal",
+      "problem": "The 'Done when' rule makes a managed round done only when the `review_complete` card has been answered and forbids the agent to run `keryx review complete`. The card tools are registered only for the interactive keryx shell (operatorConfirmSpecs is consumed by buildInteractiveAgentTools; the keryx MCP server lists no card tool). The Hosts table and the 'Operator decisions' bullet give the exact terminal command for the operator on Claude Code and AGENTS.md hosts, but the commands listed for them contain `keryx review complete <package> --waive <item>` and `--waive-coverage` only, never the plain close, and no sentence says that on such a host the operator runs `keryx review complete <package>` after the waivers. SKILL.detail.md also says 'An agent completes a review only through that card' while the same paragraph says the operator runs the command 'outside keryx shell'.",
+      "impact": "An orchestrator running on Claude Code or Codex reads a completion condition it cannot satisfy and a prohibition on the only command that satisfies it. It either stops with the round never closed, or runs the command anyway and violates the stated rule. This is a documentation gap, not a code defect: nothing in the CLI refuses a non-TTY plain `review complete`.",
+      "suggested_fix": "Add to 'Done when' (both skill copies and SKILL.detail.md 'Readiness') one clause for hosts without cards: 'outside keryx shell give the operator `keryx review complete <package>` to run in their terminal and wait; unattended, record Not run', and list the plain close next to the other terminal commands in the 'Operator decisions' bullet.",
+      "evidence": "src/commands/operator-confirm-tools.ts:245-257 (specs built for the interactive shell); `keryx ctx rg review_complete src` shows the card only in operator-confirm-review.ts, agent.ts and trigger/unattended.ts; SKILL.md line 47 lists the terminal commands for other hosts without a plain `keryx review complete <package>`; SKILL.md line 136 and SKILL.detail.md line 669 as quoted.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "slices": ["slice-04"],
+  "questions": []
+}
+```

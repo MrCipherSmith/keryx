@@ -1,0 +1,45 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-03 has no real performance cost. The diff is prose in three skill files, optional pressedBy/pressedAt fields passed through existing writers, a one-line `undelivered` flag on already-failing paths, a getter and a pure string helper, a new gated-complete wrapper, and a test file. Nothing it adds runs per render, per item in a large loop, or per request, and it adds no new I/O round trip, unbounded collection, listener or timer.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "inputs_unreadable": []
+}
+```
+
+## Performance Review (review-performance, wave 3, slice-03)
+
+### Scope
+- Package: .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052
+- Head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice diff read in full (1972 lines), 24 file hunks.
+
+### Findings
+None.
+
+### What was checked, by lens category
+1. N+1 / DB queries: the slice has no DB access. Read-modify-write of package JSON files (`operator-decisions.json`, `chunk-estimate.json`, `research.json`, `manifest.json`) already existed. The PR adds only `...cardPressFields(x)` spreads to those records, so the count of reads and writes is unchanged.
+2. Re-renders / hot paths: no React or MobX in this slice. `src/tui/*` is outside slice-03 apart from the test imports of `raceApproval` and `withMirrorNote`.
+3. Expensive work in loops: `cardPressFields` is two `undefined` checks and a spread of at most two keys. Callers run once per operator act (a card press or a terminal command), a human-rate event. `readCoverageWaiver` adds a `Number.isSafeInteger` check and a `text()` check per read, which is trivial.
+4. Indexes / pagination: not applicable, because there are no queries.
+5. Leaks / unbounded growth:
+   - `RemoteBridge.connected` is a getter over `this.client?.connected`. It adds no listener, timer or retained state.
+   - `askApproval`'s new `undelivered: true` returns are on paths that already returned a deny. They add no allocation of note and no retained state.
+   - `mirror-undelivered.test.ts` registers `client.drop()` in the cleanups and removes its temp dir. It builds a `RemoteClient` with a fetch that always rejects, so there is no real network or retry loop left running.
+6. Bundle imports: `complete-gated.ts` imports four first-party modules. `types.ts` now exports a runtime function, so `import type` became `import { cardPressFields, type ... }` in 8 files. `types.ts` was already imported by these files, so no new module enters the graph.
+7. Sync blocking: `completeReviewGated` (new, `src/review/complete-gated.ts`) calls `runProfileRefusal` and `packageRoutingRefusal`. These are probably synchronous file reads of the package; I did not open them, and the cost, if any, is small. They run once per `review complete`, which is an operator act measured in minutes, not a request path. The wrapper does not repeat the existing gates inside `completeManagedReview`. It only moves the CLI's own two pre-checks into one function so the card and the CLI share them. At most one extra `resolveReviewPackagePath` call results, which is negligible. I make no claim here about correctness or gate coverage; that is for review-logic and review-security-code.
+8. Redundant calls: the `evidenceLevelLine` helper (`src/review/evidence-level.ts`) re-scans `withoutFences(report)` after `parseEvidenceLevel` has scanned it. This is a one-off over a single report.md for a card render. The report is a few tens of KB at most, so it is not worth a finding. Info only, no action.
+9. MobX derived state: not applicable to this slice.
+
+### Not in this lens (left to others)
+- The `askApproval` early-return at client.ts after `if (!this.connected) return { decision: "deny" }` (the line right after the `earlyDecisions` block) does not set `undelivered`, while the other connect-failure returns do. That could be an inconsistency in when the mirror note shows. It is a logic and contract question, not a cost question, so I raise it as a hand-off to review-logic and file no finding.
+- Prose edits to `SKILL.md`, `SKILL.detail.md` and `review-premise/SKILL.md`: no cost implication.
+
+### Routing audit
+graph_used: no (not-relevant: the slice is a diff of plumbing and prose, with no caller-fan-out claim); wiki_used: no (not-relevant); ctx_used: no (the read-only host allowed no command; the diff was read with Read); raw_rg_used: no.

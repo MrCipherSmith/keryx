@@ -1,0 +1,44 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "6 findings given, 6 checked from saved orchestrator evidence plus cited source at 5382b56: 1 execution (mutation survivors), 5 site-check; 6 confirmed, 0 refuted, 0 unverifiable, 0 not checked. I ran no command myself.",
+  "verifications": [
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Saved output verify-review-security-code-w5_F-001-1.txt (python3 v_escape.py, exit 0) prints RULE only for flow-orchestrator/SKILL.md (bundled and managed copy) and NORULE for job-orchestrator/SKILL.md, job-orchestrator/orchestrator-prompt.md, task-implementer/SKILL.md, tests-creator/SKILL.md in both trees: 'files using single-quoted --task-text: 10 ; with the escape rule: 2'. The scan would have printed RULE for these files had the finding been false. Source read at head: task-implementer/SKILL.md:182 reads --task-text '<task.description>' with no escape sentence on lines 176-184; flow-orchestrator/SKILL.md:323 carries 'a ' inside it becomes '\\'''. This confirms the instruction sites lack the rule; it does not re-run the apostrophe-splitting behaviour in a shell."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Same saved scan (verify-review-security-code-w5_F-001-1.txt): 10 files use single-quoted --task-text, 2 carry the escape rule (both flow-orchestrator copies); task-implementer, tests-creator and job-orchestrator (SKILL.md and orchestrator-prompt.md) are NORULE in src/gdskills/bundled and .metaproject/skills/gdskills. Source read at head: task-implementer/SKILL.md:182 bare '<task.description>'; flow-orchestrator/SKILL.md:323 has the rule. Confirms the missing-rule shape at the named sites; the injection outcome (agent copying an attacker-written body verbatim) was not executed and is not claimed confirmed."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w6:F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Saved output verify-review-security-code-w6_F-001-1.txt (python3 v_read.py, exit 0): 'scanCitations lines: 26 | readFile: 1 | stat/lstat: 0 | size cap: 0 | isFile: 0' against 'inspectDocument ... readFile: 1 | stat/lstat: 2 | size cap: 4 | isFile: 1'. Source read at head: references-check.ts:105 readFile(origin === undefined ? ... : resolveOriginPath(origin, projectRoot), \"utf8\") inside scanCitations with no guard; project-rules.ts:51-60 isEntry checks only kind, ref, mode, sha256 so origin is unvalidated; project-context-status.ts:74-79 readReferences -> checkReferences; tui-shell.ts:5275 load: () => loadProjectContextStatus(...) and project-context-inspector.ts:148,199 PROJECT_CONTEXT_POLL_MS = 5000 polling. This establishes the unguarded read and the unattended reachability chain. The ENOMEM / blocking-read outcome is the reviewer's own probe (/dev/zero under ulimit -v) and is not in the saved evidence; it was not re-run here."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w7:F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Same saved scan (verify-review-security-code-w5_F-001-1.txt): only the two flow-orchestrator files carry the escape rule; the task-implementer, tests-creator, job-orchestrator SKILL.md and orchestrator-prompt.md files (both trees) do not. Source read at head: task-implementer/SKILL.md:182 bare form; flow-orchestrator/SKILL.md:323 has the sentence and its placeholder '<the task's title and description>' itself contains an apostrophe. The saved scan did not cover README.md:270, which this finding also names; that site was not checked. Shell-level execution of the apostrophe case was not run."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Saved output verify-review-style-w2_F-001-1.txt (python3 v_docs.py, exit 0) prints 'DOC 261 only: a rule imported with `--link` is not scanned, and neither are bundled', a CLI line 3491 for the references check row, and CODE 99/105 where scanCitations builds links from mode === \"link\" entries and reads resolveOriginPath(origin, projectRoot). Independently re-searched at head with keryx ctx rg 'not scanned': exactly 2 matches, apply-project-rules.md:261 and cli-reference.md:3491 col 643. references-check.ts:16 states 'A linked rule ... is scanned at its origin'. The docs contradict the code at both named sites."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w1:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Saved mutation-1.md (baseline bun test over 16 files, exit 0, run in a scratch copy): main-M-10 reference-entries.ts:51 'const before = WORD_CHAR.test(chars[0] ?? \"\") ? \"(?<![\\\\p{L}\\\\p{N}_])\" : \"\";' -> unconditional lookbehind: survived, exit 0. main-M-11 reference-entries.ts:52 same change for the lookahead: survived, exit 0. If any assertion pinned the symbol-edge case ('styles.css' for '.css', 'a@apply' for '@apply') those mutants would have exited 1, as the six killed mutants (w3-M-01/02/03/06/08, main-M-12) did. Source read at head: reference-entries.ts:48-53 keywordOccurs matches the mutated lines, so the mutants are the pre-fix form the finding describes."
+    }
+  ],
+  "stats": { "confirmed": 6, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}

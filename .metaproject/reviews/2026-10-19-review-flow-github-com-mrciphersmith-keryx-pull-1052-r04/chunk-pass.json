@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "totals": {
+    "chunks": 14,
+    "files": 112,
+    "done": 14,
+    "failed": 0,
+    "pending": 0
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/governance/types.ts",
+        "src/harness/tool/builtin/apply-patch-tool.ts",
+        "src/review/autonomous-run.ts",
+        "src/review/complete-head-gate.ts",
+        "src/tui/ops-sidebar.ts",
+        "src/tui/review-panel.ts",
+        "src/commands/agents-external.ts",
+        "src/commands/review-slice.ts",
+        "src/tui/flow-hygiene.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "scripts/benchmark/long-runner-shared.ts",
+        "src/commands/doctor.ts",
+        "src/commands/goal-command.ts",
+        "src/commands/review-operator.ts",
+        "src/harness/tool/builtin/slate-tool.ts",
+        "src/harness/tool/builtin/workspace-lifecycle-tool.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/learning/accept.ts",
+        "src/review/loop.ts",
+        "src/tui/foreground-operation.ts",
+        "src/bus/agent-tools.ts",
+        "src/commands/review-notify.ts",
+        "src/commands/review-plan.ts",
+        "src/commands/schedule-tools.ts",
+        "src/governance/flow-narrative.ts",
+        "src/governance/spend.ts",
+        "src/harness/external/acp-client.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "src/harness/external/acp-run.ts",
+        "src/harness/flow/managed-flow-port.ts",
+        "src/tui/external-diff-modal.ts",
+        "src/acp/agent-io.ts",
+        "src/acp/commands.ts",
+        "src/acp/roster.ts",
+        "src/commands/learn.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "src/learning/graduate.ts",
+        "src/learning/promote.ts",
+        "src/review/bot/packages.ts",
+        "src/tui/flow-origin-command.ts",
+        "src/tui/governance-flows.ts",
+        "src/tui/governance-inspector.ts",
+        "src/tui/review-layers-actions.ts",
+        "src/tui/schedules-sidebar.ts",
+        "scripts/benchmark/run-containment.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        "scripts/benchmark/run-safety.ts",
+        "src/acp/capability-tools.ts",
+        "src/acp/server.ts",
+        "src/acp/session-mcp.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        "src/commands/acp.ts",
+        "src/commands/bundle.ts",
+        "src/commands/help.ts",
+        "src/commands/hooks.ts",
+        "src/commands/project-tools.ts",
+        "src/commands/version.ts",
+        "src/governance/accountability.ts",
+        "src/harness/external/supervise-mcp.ts",
+        "src/harness/tool/builtin/spill-search.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        "src/harness/tool/builtin/web-fetch-tool.ts",
+        "src/harness/tool/builtin/web-search-tool.ts",
+        "src/harness/tool/builtin/workspace-context-tool.ts",
+        "src/review/publish-guard.ts",
+        "src/tui/approvals-sidebar.ts",
+        "src/tui/autoreview-surface.ts",
+        "src/tui/chat-shell.ts",
+        "src/tui/external-diff-sidebar.ts",
+        "src/tui/governance-flow-actions.ts",
+        "src/tui/help-modal.ts",
+        "src/tui/remote-queue-wiring.ts",
+        "src/wiki/deep-enrich.ts",
+        "scripts/benchmark/run-ablation-mutating.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        "scripts/benchmark/run-ablation-raw.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "src/harness/tool/builtin/execution-plan-tool.ts",
+        "fixtures/routing-shell-pty.ts",
+        "scripts/benchmark/run-ablation-long.ts",
+        "scripts/generate-commands-by-task.ts",
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/bus/client.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        "src/review/pr-comments.ts",
+        "src/cli.ts",
+        "src/harness/external/runtime.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        "src/review/blast-radius.ts",
+        "src/integrations/install-state.ts",
+        "src/mcp/dispatch.ts",
+        "src/review/verification.ts",
+        "src/scheduler/digest.test-helpers.ts",
+        "src/session/slate-course.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        "src/wiki/enrich.ts",
+        "src/remote/channels.test-helpers.ts",
+        "src/tui/reviews-inspector.ts",
+        "src/commands/schedule.ts",
+        "src/mcp/metaproject-tools.ts",
+        "src/review/bot/run.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        "src/governance/report.ts",
+        "src/review/bot/metrics.ts",
+        "src/review/prior-round.ts",
+        "src/review/review-notes.ts",
+        "src/acp/server-harness.test-helpers.ts",
+        "src/commands/review-jev-contract.ts",
+        "src/commands/serve-digest.ts",
+        "src/lib/routing-entrypoint.ts",
+        "src/scheduler/digest-run.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-014",
+      "files": [
+        "src/tui/governance-panel.ts",
+        "src/review/repair.ts",
+        "src/tui/working-memory-command.ts",
+        "src/commands/agents.ts",
+        "src/commands/review-run.ts",
+        "src/decisions/context.ts",
+        "src/review/bot/post.ts",
+        "src/review/dedupe.ts",
+        "src/review/rebuttal-citation.ts",
+        "src/tui/turn-loop.ts",
+        "src/commands/trigger-review.ts",
+        "src/commands/workspace.ts",
+        "src/governance/aggregate.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    }
+  ],
+  "uncoveredFiles": [],
+  "findings": []
+}

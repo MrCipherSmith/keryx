@@ -1,0 +1,90 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776 (verified with git rev-parse)
+- Scope mode: delta over r03 (fix slice slice-01 only)
+- Spec compliance gate: skipped (no issue; PR AC are in flow 464, not attached to this slice)
+
+### Summary
+slice-01 closes D-01 and D-08 and half-closes D-03. D-12 is claimed fixed, but nothing in slice-01 or the rest of the delta adds the remote-press assertions it asked for. The wording changes are logically sound and are consistent with the unattended roster, which still excludes review_complete.
+
+### Verification of claimed fixes
+- D-01 (closed): at head, operator-confirm-review.ts lines 262 and 312 (tool descriptions) say "call review_complete afterwards to close the review", and lines 296 and 358 (results) say "Call review_complete to close the review." The header comment at lines 24-25 now says closing is the review_complete card. The remaining mentions of `keryx review complete` (lines 8, 9, 18, 261, 279, 705) are CLI-equivalence statements, not instructions. The delta also reworded the agent-facing errors in review.ts (--waive-coverage and --waive) to "call the review_complete card". The new test asserts the readiness result contains "Call review_complete to close the review." and does not contain "keryx review complete".
+- D-03 (partial): completion-gate.ts describeBlockers line 788 is fixed ("call the `review_complete` card to close the package"). Line 791 is unchanged and still tells the agent that `keryx review complete` lists the remaining blockers (F-001).
+- D-08 (closed): docs/docs/guides/autonomous-review.md line 35 now states the autonomous exception: the unattended run is excluded from the card gate, is not given the card tools, and closes through the CLI path. src/trigger/unattended.ts lines 63-87 confirm review_complete is in OPERATOR_CONFIRM_TOOL_NAMES and refused for unattended runs. The exit-code table line 26 ("closed by `keryx review complete`") and autonomous-profile.ts 144/153 now agree with it. cli-reference.md carries the same sentence.
+- D-12 (open): the delta's test change in operator-confirm-review-tools.test.ts is two wording assertions in the review_waive_readiness test. At head, the only tests that press with "remote" are the chunks-estimate, decide_premise, confirm_plan and review_complete cases (lines 127, 426, 503, 519, 532, 548, 583). There is none for review_publish, review_waive_coverage, review_waive_readiness or the mutation-waiver and reviewer-override decisions (F-002).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-01 closes D-01 and D-08, leaves D-03 partial (line 791 of completion-gate.ts still points the agent at `keryx review complete`), and does not deliver the D-12 test the fix claims.",
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [ { "id": "slice-01", "status": "DONE", "coverage": "all three hunks read (autonomous-review.md, operator-confirm-review.ts:296, completion-gate.ts describeBlockers) and checked against files at head b1c6da0e6, plus the rest of the r03 to r04 delta for the claimed D-12 test" } ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "more (\\`keryx review complete\\` lists them all)",
+      "problem": "describeBlockers was fixed for the empty-list case (line 788 now says to call the `review_complete` card), but the truncation branch right below it still says `keryx review complete` lists all remaining blockers. This is the second half of D-03 and was not changed.",
+      "impact": "The nudge built by decideReviewGate ends with 'you never run `keryx review complete` yourself', yet a blocker list longer than 20 entries sends the agent to that command to read the rest. Plain `complete` has no TTY check, so it closes the round if the gates pass, with no card and no press record. Only reachable with more than 20 blockers, and the gates still apply.",
+      "suggested_fix": "Reword to point at the read-only listing, e.g. `- … and ${more} more (\\`keryx review status <package>\\` lists them all)`, or at the card's refusal text, and add the matching assertion next to the line-788 one.",
+      "evidence": "git grep at b1c6da0e6: src/review/completion-gate.ts:788 reads 'call the `review_complete` card to close the package'; :791 reads '- … and ${more} more (`keryx review complete` lists them all)'. slice-01 hunk shows only the 788 change.",
+      "confidence": "high",
+      "dedupe_key": "D-03-791"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "expect(result.output).not.toContain(\"keryx review complete\");",
+      "problem": "D-12 is claimed fixed by slice-01, but no change in slice-01 or in the r03 to r04 delta adds a remote-press assertion (remote-card, pressedBy, pressedAt) for review_publish, review_waive_coverage, review_waive_readiness or the mutation-waiver and reviewer-override decisions. The only test change in this file is the two wording assertions added to the review_waive_readiness test.",
+      "impact": "Deleting cardPressFields(confirmation) at operator-confirm-review.ts lines 236, 294, 357 and 444 still leaves the suite green, so the audit trail for who pressed a waiver or a publish is unpinned, as D-12 described.",
+      "suggested_fix": "Add the table-driven test from D-12: for each of the four specs press a remote yes (yes(t, input, 'remote', pressedBy)), read the record it writes, and expect confirmedVia remote-card, pressedBy and pressedAt; press a tui yes and expect neither field. Otherwise withdraw the 'fixed' claim and carry D-12 as a follow-up.",
+      "evidence": "git grep '\"remote\"' src/commands/operator-confirm-review-tools.test.ts at b1c6da0e6 lists lines 55, 127, 426, 503, 519, 532, 548, 583 only (chunks estimate, decide_premise, confirm_plan, review_complete); git diff 6f47bf35f..b1c6da0e6 on that file is +2 lines of wording assertions.",
+      "confidence": "high",
+      "dedupe_key": "D-12-open"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-12", "disposition": "open" }
+  ]
+}
+```

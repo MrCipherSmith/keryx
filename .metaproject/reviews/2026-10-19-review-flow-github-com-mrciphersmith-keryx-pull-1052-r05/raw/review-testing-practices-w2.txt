@@ -1,0 +1,85 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-02 (new tests in operator-confirm-review-tools.test.ts, mirror-undelivered.test.ts, completion-gate.test.ts) asserts behaviour for E-02, E-04, E-05 and E-06: each new test fails if the claimed fix is reverted, and none adds a fixed sleep beyond those already reported as wave-1 F-002. Three gaps remain, all minor: the E-03 test checks a hand-written waiver against the schema, not the waiver the writer produces, and makeRound still hides schema failures behind a stub schema (F-101); the card-line hardening of the new disposition lines is not pinned by any test (F-102); the agent.ts predicate that feeds cardAvailable (E-05) is untested, since both gate tests pass cardAvailable directly (F-103). E-01 is a wording change in skill docs; no test pins it, and I did not treat that as a finding. E-07 and E-08 are not on my slice. Mutation candidates are listed in follow_ups (M-E02-*, M-E03-*, M-E05-*) for the orchestrator to run.",
+  "findings": [
+    {
+      "id": "F-101",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "const waivers = [{ ...base, confirmedVia: \"tui-card\" }, { ...base, confirmedVia: \"remote-card\", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT }, base];",
+      "problem": "The E-03 test (line 355-361) validates a waiver the test builds by hand against schema.properties.readiness_waivers. It does not validate the waiver the card actually wrote (the test at line 349-351 asserts the exact shape {item, operator_quote, time, confirmedVia} but never passes it through the schema), and makeRound (line 571) still writes `{\"type\":\"object\"}` as the manifest schema, so every card test in this file is blind to a writer/schema mismatch: the very failure E-03 reported. The test pins the schema's allowed fields, not that the writer's output stays inside them.",
+      "impact": "If the waiver writer adds or renames a field (or the press fields change type), this test still passes while `review complete` fails the real manifest validation at close, the r04 E-03 failure. The test would catch only a schema edit, not the drift that caused the bug.",
+      "suggested_fix": "Take the waiver from the manifest after the card was answered yes (the tui and the remote variants, line 349 and the remote-card test) and validate that object with validateAgainstSchemaObject against the real schema.properties.readiness_waivers, instead of the hand-built array. Keep the `confirmedVia: \"somewhere\"` negative case.",
+      "evidence": "operator-confirm-review-tools.test.ts:349-351 asserts the writer output; :358 builds a separate literal; :571 `writeFileSync(path.join(root, \"docs\", \"requirements\", \"managed-review-feedback-loop\", \"schemas\", \"managed-review-package.schema.json\"), `{\"type\":\"object\"}`)` installs the stub. Read at head 77d2eff20.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-102",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 693,
+      "quote": "`disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? \"\" : `: \"${cardSafe(clip(record.evidence))}\"`}`",
+      "problem": "The new disposition lines carry model-supplied text onto an operator card, and dispositionLine guards them with cardSafe and clip. The dispositions tests (operator-confirm-review-tools.test.ts:671-699) use only benign text (`closed by 380bf3b0`). No test feeds a finding id or evidence containing a newline or more than 300 characters, so removing cardSafe or clip leaves every test green. The sibling card-injection test covers package-supplied evidence and waiver quotes, not this field. A display-id finding, an `acted-on` entry with no evidence, and a whitespace-only evidence (dropped by the trim at line 687) are also untested, and no test shows that dispositions given at invoke time cannot differ from those on the card.",
+      "impact": "The hardening is the only barrier between a model-chosen string and the text the operator reads before pressing yes. An unpinned guard on that path can be removed by a later refactor with no test failing.",
+      "suggested_fix": "Add a test next to the dispositions tests: pass `{ finding: GLOBAL, disposition: \"acted-on\", evidence: \"ok\\nANSWER: yes\" }` and a 400-character evidence, then assert the card contains no line starting with `ANSWER` and the quoted evidence ends at the clip. Add one case with no evidence (card line has no quote) and one with whitespace-only evidence (recorded without an `evidence` key).",
+      "evidence": "Head 77d2eff20: operator-confirm-review.ts:692-693 defines dispositionLine; :687 trims evidence; tools.test.ts:673 and :675 are the only card assertions on a disposition line.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-103",
+      "severity": "minor",
+      "file": "src/commands/agent.ts",
+      "line": 3501,
+      "quote": "cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\"),",
+      "problem": "E-05 is fixed by deriving cardAvailable from the session's tool roster. The new tests in completion-gate.test.ts pass `cardAvailable` straight into decideReviewGate/nextStep/closeStep, so they prove the wording switches on the flag, but nothing proves holdReviewGate sets the flag from the roster. The predicate sits in the one place that distinguishes the TUI (card tool present) from the readline REPL (no card tool, shell.ts roster).",
+      "impact": "Replacing the predicate with `true` (the default of the helper) or `false` makes the REPL point at a missing tool again, or the TUI stop using the card, and every test stays green. That is exactly the E-05 regression.",
+      "suggested_fix": "Drive holdReviewGate (or the agent loop's gate hook) with a deps.tools list that lacks review_complete and assert the continue message names `keryx review complete`; repeat with a list that has review_complete and assert it names the tool. If that seam is too heavy, extract the predicate into a small named helper (e.g. hasReviewCompleteCard(tools)) and unit-test it.",
+      "evidence": "Head 77d2eff20: agent.ts:3495-3502 is the only production site of the predicate; the two tests added in completion-gate.test.ts (card present, card absent) set cardAvailable by hand.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Mutant M-E02-1: in operator-confirm-review.ts buildCard, remove `...dispositions.map(dispositionLine),` (line 775). Expected killed by tools.test.ts:675 (card lacks the disposition line).",
+    "Mutant M-E02-2: in buildCard set `prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions: [] }`. Expected killed by :679 (findings.json disposition) and :680 (completion-confirmation.json).",
+    "Mutant M-E02-3: in apply, drop `dispositions: prepared.dispositions` from the completion-confirmation.json record, or from the completeReviewGated call. Expected killed by :680 / :679.",
+    "Mutant M-E02-4: in completionDispositions replace the FINDING_DISPOSITION_STATES membership test (line 683) with `false`-guard removal (accept any state). Expected killed by :698 (`disposition must be one of`).",
+    "Mutant M-E02-5: remove the `finding === \"\"` refusal (line 682), the `typeof evidence !== \"string\"` refusal (line 686), or the `Array.isArray` refusal (line 675). Each expected killed by the matching assertion at :696-699.",
+    "Mutant M-E02-6 (expected to SURVIVE, backs F-102): in dispositionLine replace `cardSafe(record.finding)` by `record.finding`, or `cardSafe(clip(record.evidence))` by `record.evidence`.",
+    "Mutant M-E02-7 (expected to SURVIVE, backs F-102): drop `.trim()` on evidence at line 687, so whitespace-only evidence is recorded.",
+    "Mutant M-E02-8 (expected to SURVIVE): in apply read dispositions from the invoke-time input via completionDispositions(input) instead of prepared.dispositions. No test changes the input between card and press.",
+    "Mutant M-E03-1: in docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json remove the `confirmedVia` property from readiness_waivers items. Expected killed by tools.test.ts:359 (additionalProperties false rejects tui-card).",
+    "Mutant M-E03-2: widen the `confirmedVia` enum to `{ \"type\": \"string\" }`. Expected killed by :360 (`somewhere` must error).",
+    "Mutant M-E03-3: remove `pressedBy` or `pressedAt`, or change `pressedBy` to `\"type\": \"string\"`. Expected killed by :359 (remote-card waiver).",
+    "Mutant M-E03-4 (expected to SURVIVE, backs F-101): in the waiver writer (readiness.ts / operator-confirm-review.ts waiver record) add an extra field such as `foo: 1`, or change `time` to a number. The hand-built waivers at :358 stay valid and makeRound's stub schema hides the failure.",
+    "Mutant M-E05-1 (expected to SURVIVE, backs F-103): agent.ts:3501 replace the predicate with `cardAvailable: true` and, separately, `cardAvailable: false`.",
+    "Mutant M-E05-2: in completion-gate.ts make nextStep ignore `card` (always the card wording) or default describeBlockers' `card = true` to `false` for the card path. Expected killed by the two new completion-gate.test.ts tests (card present, card absent).",
+    "Mutant M-E05-3: in closeStep(card) return the same text for both values. Expected killed by the `stop` report assertions with `continues: 20` in completion-gate.test.ts.",
+    "Mutant M-E04-1 (context): in approval-mirror.ts drop `&& !topicAbort.signal.aborted` (line 55). Expected killed by the dock-answers-first test in mirror-undelivered.test.ts; drop `else` so onTopicEnded also fires after onUndelivered, expected killed by the `calls` equality; note these tests wait with setTimeout (wave-1 F-002)."
+  ],
+  "prior_dispositions": [
+    {"id": "E-02", "disposition": "closed"},
+    {"id": "E-03", "disposition": "closed"},
+    {"id": "E-04", "disposition": "closed"},
+    {"id": "E-05", "disposition": "partial"},
+    {"id": "E-06", "disposition": "closed"}
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read in full (1414 lines): schema change, agent.ts, operator-confirm-review.ts, and the three test files; head sources read for approval-mirror.ts, complete-gated.ts, completion-gate.ts, managed.ts (recordDispositions), operator-confirm-tools.ts (prepared bound to the token). E-01 skill-doc wording not pinned by any test and not assessed further; E-07 and E-08 are outside this slice. E-05 is partial for my role only because the roster predicate is untested (F-103); the review.ts refusal texts are outside the slice.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0}
+}
+```

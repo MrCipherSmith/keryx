@@ -1,0 +1,205 @@
+{
+  "review_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02",
+  "head": "d6267d4a5099f39b74e86a71e5c8f61ca47aa63d",
+  "findings": [
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-architecture-w3:F-001",
+      "reviewer": "review-architecture",
+      "severity": "major",
+      "file": "src/gdskills/reference-proof.ts",
+      "quote": "the anchored section \"${entry.anchor}\" cannot be found in ${entry.path} now",
+      "problem": "The resolver and the validator disagree about a declaration whose anchor no longer matches a heading. reference-entries.ts falls back to the whole file and states the obligation: \"the whole file (${bytes} bytes) is the obligation\" (AC6: fall back with a warning, never silence). The proof module's currentSection returns { ok: false } for the same declaration, wordsFailure turns that into a summary-words failure, and nothing in the worker's control (citing the right anchor, reading the whole file, writing a good summary) can clear it.",
+      "impact": "Trigger: references.json declares an anchor that is renamed or removed in the document, and a task matches the declaration's condition. Outcome: the resolver tells the worker to read the whole file; the worker does, cites path, sha256, the declared anchor and a real summary; checkResolvedContext still emits a 'summary that cannot be checked' miss on every run. Under enforcement block this makes `flow task done` and the standalone check exit 1 until someone edits references.json, a fix the worker was never told about by the validator line. The fallback the resolver advertises is not honoured by the checker that enforces it.",
+      "evidence": "Diff, reference-entries.ts resolveReferences: when !section.found it sets sectionBytes = bytes and pushes a warning ending 'the whole file (...) is the obligation', and the entry stays must_read. Diff, reference-proof.ts currentSection: `if (!section.found) return { ok: false, why: ... }`; wordsFailure: `if (!section.ok) return { rule: \"summary-words\", detail: ... cannot be checked ... }`; proofFailures always calls wordsFailure when a summary exists. The only inputs are entry.anchor (from the resolver output) and the file text, so no worker-supplied value can make currentSection succeed.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/reference-proof.ts currentSection",
+          "src/gdskills/reference-entries.ts resolveReferences dead-anchor fallback"
+        ],
+        "enumeration_method": "every extractSection caller in the slice was read: reference-entries.ts falls back to the whole file, references-check.ts declarationFindings reports the dead anchor as an error, reference-proof.ts currentSection fails it; the single disagreement is between the first and the third."
+      },
+      "cluster": "dead-anchor",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-architecture-w3_F-001-2.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-architecture-w3:F-002",
+      "reviewer": "review-architecture",
+      "severity": "major",
+      "file": "src/gdskills/references-check.ts",
+      "quote": "A linked rule (registered in place, not copied) is not scanned.",
+      "problem": "scanCitations iterates listRuleRefs(), which lists only files copied under .metaproject/rules/project/. The resolver's collectProjectRules also reads rules registered with mode link from their origin and scans their citations. The authoring checker therefore sees a different rule set from the engine it is authoring for. The header comment records the limit but gives no reason for it, and the limit hits the primary import mode: `keryx skills import --rules <dir> --link` registers rules in place and copies nothing.",
+      "impact": "Trigger: a project whose rules are linked (import --rules --link) and which cite STYLING.md or similar. Outcomes: (1) undeclaredCitationHint finds nothing, so the AC15 closing lines (undeclared count and the command to run) never print after a --link import; (2) `references suggest` omits the documents cited only by linked rules; (3) `references check` reports 'unused-declaration: no project rule cites this document' for a declaration that a linked rule does cite and the resolver treats as cited. Check output and resolver output disagree about the same project.",
+      "evidence": "Diff, references-check.ts scanCitations: `for (const ref of (await listRuleRefs(projectRoot)).sort(compare))`. Head src/gdskills/context-resolver.ts: listRuleRefs is `return listRuleFiles(projectRoot)` (copied files only), while collectProjectRules adds `registry.keys()` and reads `resolveOriginPath(entry.origin, projectRoot)` for entries with mode link. Diff, import-rules.ts: the hint is computed by undeclaredCitationHint(process.cwd()) with no regard to --link.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/references-check.ts:96 scanCitations (used by checkReferences and suggestReferences)",
+          "src/gdskills/references-check.ts:262 undeclaredCitationHint (called from src/gdskills/import-rules.ts:275)"
+        ],
+        "enumeration_method": "searched src for listRuleRefs, scanCitations and undeclaredCitationHint callers; the resolver's collectProjectRules reads linked rules, scanCitations does not."
+      },
+      "cluster": "linked-rules-not-scanned",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-logic-w2_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-logic-w2:F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/gdskills/references-check.ts",
+      "quote": "for (const ref of (await listRuleRefs(projectRoot)).sort(compare)) {",
+      "problem": "scanCitations reads only rule files that exist on disk under .metaproject/rules/project/ (listRuleRefs is a readdir). A rule imported with `keryx skills import --rules <dir> --link` is registered in place and has no copy there (import-rules.ts writes only the registry entry), so its citations are never seen. The resolver does read linked rules (collectProjectRules reads the registry's link entries and feeds their text to the citation pass), so the two disagree about which documents are cited.",
+      "impact": "Trigger: a project whose rules came in by `--link` and cite STYLING.md. (1) `skills import --rules <dir> --link` prints no 'N cited documents have no declaration' hint, although AC15 says import --rules ends with the undeclared count and the command to run. (2) `references suggest` prints an empty list while `resolve-context` lists the same document under `undeclared`. (3) `references check` reports a declaration for STYLING.md as `unused-declaration` ('no project rule cites this document') although a linked rule does cite it, and reports no `undeclared-citation` for an undeclared one. The comment in references-check.ts says a linked rule is not scanned, but gives no reason, and the user-facing help text does not mention the limit.",
+      "evidence": "references-check.ts:93-114 (scanCitations over listRuleRefs); context-resolver.ts:156-175 (listRuleFiles = readdir only) versus context-resolver.ts:205-230 (collectProjectRules also reads registry link entries) and 455-462 (citations taken from those candidates); import-rules.ts:196-203 (link mode writes no copy), :274-277 (hint calls undeclaredCitationHint, which uses the same scan).",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/references-check.ts:96 (scanCitations, used by checkReferences and suggestReferences)",
+          "src/gdskills/references-check.ts:262 (undeclaredCitationHint, called from src/gdskills/import-rules.ts:275)"
+        ],
+        "enumeration_method": "searched src for listRuleRefs/scanCitations/undeclaredCitationHint: scanCitations has two callers (checkReferences, suggestReferences), the hint goes through suggestReferences; the only other listRuleRefs user is project-context-status.ts (status display, not a citation scan)."
+      },
+      "cluster": "linked-rules-not-scanned",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-logic-w2_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-logic-w3:F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/gdskills/reference-proof.ts",
+      "quote": "if (!section.found) return { ok: false, why: `the anchored section \"${entry.anchor}\" cannot be found in ${entry.path} now (${section.reason})` };",
+      "problem": "The resolver treats a dead anchor as 'the whole file is the obligation' (reference-entries.ts: `sectionBytes = bytes` with the warning 'the whole file (...) is the obligation'; AC6: 'falls back to the whole file with a warning'). The entry is still emitted with `anchor` set and tier must_read when promoted. The validator does not apply the same fallback: wordsFailure -> currentSection calls extractSection(text, entry.anchor) again, gets found:false, and returns a `summary-words` failure 'has a summary that cannot be checked: the anchored section ... cannot be found'. That failure is returned for every cited summary, however faithful.",
+      "impact": "Trigger: references.json declares anchor 'Class conventions' for STYLING.md, the heading is absent or renamed at resolve time, and a task file matches the glob. The worker follows the resolver's own instruction (reads the whole file), cites the right sha256, the declared anchor and a good 40+ character summary in the file's words; checkResolvedContext still pushes a miss on every run. Under enforcement 'block' `flow task done` and the standalone check exit 1 with no action the worker can take; only an operator edit of references.json clears it. No drift is reported either (the file hash is unchanged), so the miss reads as a worker failure. This contradicts the resolver's stated fallback and AC6/AC12 intent (a warning, never an unsatisfiable obligation). The existing test covers a section that vanishes after resolve, not a dead anchor at resolve time.",
+      "evidence": "reference-entries.ts resolveReferences: `if (section.found) sectionBytes = section.bytes; else { sectionBytes = bytes; ... warnings.push(... the whole file (${bytes} bytes) is the obligation ...` then `...(declaration.anchor !== undefined ? { anchor: declaration.anchor } : {})` on the same entry. reference-proof.ts currentSection: `if (entry.anchor === undefined) return { ok: true, text, what: \"the file\" }; const section = extractSection(text, entry.anchor); if (!section.found) return { ok: false, ... }`. wordsFailure turns ok:false into `{ rule: \"summary-words\", detail: \"has a summary that cannot be checked: ...\" }`, which proofMisses maps to a ResolvedMiss, which sets `blocking` under block.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/reference-proof.ts currentSection",
+          "src/gdskills/reference-entries.ts resolveReferences dead-anchor fallback"
+        ],
+        "enumeration_method": "searched the slice for every extractSection caller: reference-entries.ts (falls back to whole file), references-check.ts declarationFindings (reports an error, intended), reference-proof.ts currentSection (no fallback). Only the last one disagrees with the resolver."
+      },
+      "cluster": "dead-anchor",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-architecture-w3_F-001-2.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-logic-w3:F-002",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/gdskills/reference-entries.ts",
+      "quote": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);",
+      "problem": "The not-a-word-character lookarounds are applied unconditionally. When the keyword itself begins (or ends) with a non-word character, the lookaround demands that the neighbouring text character is also a non-word character, which is the opposite of a word boundary at that edge. Verified at head: keywordOccurs('fix styles.css please', '.css') returns false, keywordOccurs('a@apply', '@apply') returns false, while keywordOccurs('use @apply here', '@apply') returns true.",
+      "impact": "Trigger: a declaration with a keyword such as '.css', '.scss', '@apply' or '::part' (the natural spelling for a styling document) and a task text like 'fix styles.css' or 'tidy a.scss'. The reference is not promoted and stays on_demand, so the obligation to read STYLING.md is silently skipped. `check` does not warn (a 4-character keyword passes MIN_KEYWORD_CHARACTERS). AC5 says 'on a word boundary', which a conventional \\b would satisfy for 'styles.css'.",
+      "evidence": "Ran keywordOccurs from src/gdskills/reference-entries.ts under bun at head: ('fix styles.css please', '.css') -> false; ('use @apply here', '@apply') -> true; ('a@apply', '@apply') -> false. The regex source is the quoted line.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/reference-entries.ts keywordOccurs"
+        ],
+        "enumeration_method": "keywordOccurs is the only keyword matcher in the slice (promotionReason is its only caller in this slice); the single-entry list is deliberate."
+      },
+      "cluster": "single:review-logic-w3:F-002",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-logic-w3_F-002-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w3:F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/gdskills/references-section.ts",
+      "quote": "const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/;",
+      "problem": "scanHeadings matches every line with a lazy `(.*?)` followed by `[ \\t]*$`, and stripClosingHashes then runs `/[ \\t]+#+$/` over the captured text. Both backtrack quadratically on a heading line that holds a long run of spaces or tabs followed by a non-space character. scanHeadings runs on the whole declared document whenever an anchor is resolved, checked or proven, and the size cap is 262144 bytes (CONTRACT_MAX_BYTES), so the line can be that long.",
+      "impact": "Trigger: a contributor changes a markdown document that references.json declares with an anchor (STYLING.md style), adding one heading line such as `## x` + 120000 spaces + `x`. The next `keryx skills resolve-context`, `keryx skills references check`, `keryx skills contracts validate --resolved`, or a TUI status refresh (loadProjectContextStatus -> checkReferences) runs extractSection synchronously. Measured on this head with bun: 20000 spaces = 0.37 s, 60000 = 3.3 s, 120000 = 13.2 s, and the cost grows with the square, so a 250 KB line is about a minute of 100% CPU with the event loop blocked. A reviewer who checks out a hostile PR hangs the CLI and freezes the TUI. A file with no anchor in its declaration is not scanned.",
+      "evidence": "node/bun timing of extractSection(\"# Title\\n\\n## Class conventions\\nbody\\n\\n## Hostile \" + \" \".repeat(n) + \"x\\n\", \"Class conventions\"): n=20000 -> 372 ms, n=60000 -> 3323 ms, n=120000 -> 13247 ms. Isolated regex timing: HEADING on \"# a\"+spaces(40000)+\"b\" = 1027 ms; strip regex on \"a\"+spaces(80000)+\"b\" = 3606 ms.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/references-section.ts:37 HEADING",
+          "src/gdskills/references-section.ts:49 stripClosingHashes"
+        ],
+        "enumeration_method": "keryx ctx rg for (.*?), stripClosingHashes and HEADING in src/gdskills excluding tests: both are in references-section.ts; bundled-eval.ts heading patterns are unrelated and run on bundled skill text, not on declared documents."
+      },
+      "cluster": "heading-regex-quadratic",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-logic-w3_F-002-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w4:F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/gdskills/context-resolver.ts",
+      "quote": "...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {})",
+      "problem": "recordLastResolve now writes up to 4000 characters of the raw --task-text into .metaproject/data/skills/project-context/last.json. Before this PR that file held only rule paths, hashes and warnings. The path is not in .gitignore (only .metaproject/data/skills/stocktake/ is) and not in renderMetaprojectGitignoreBlock(), and writeContained is called without a mode, so the file is created 0664 (the worktree's own copy is 664). `git check-ignore -v` exits 1 for it, `git status` lists .metaproject/data/skills/ as untracked, and the file here already holds a taskText entry. Nothing in src/ reads taskText back: project-context-status.readLast passes it through, and no TUI view, validator or command uses it. The only reason given is a docs sentence that last.json 'records' the cut text, with no consumer named.",
+      "impact": "Trigger: an orchestrator or operator runs `keryx skills resolve-context --task-text \"<issue title and body>\"`, as the five orchestration skills now instruct for every dispatch. Issue and task bodies routinely hold pasted tokens, connection strings, customer data and logs. Outcome: the text lands in an untracked, non-ignored, group-readable file. A later `git add -A`, `git add .metaproject` or `git add .` commits it and a push publishes it; the repo already tracks hundreds of files under .metaproject/data/review*, so broad adds there are routine. The file also sits where any other local process or agent can read it.",
+      "evidence": "context-resolver.ts recordLastResolve (lines 529-541) builds `record` with taskText and calls writeContained(projectRoot, LAST_RESOLVE_PATH, ...) with no mode. LAST_RESOLVE_PATH = .metaproject/data/skills/project-context/last.json (line 84). The baseline recordLastResolve at merge-base 1658f77d3 wrote only { recordedAt, result }. `git check-ignore -v .metaproject/data/skills/project-context/last.json` exits 1; `git status --short` shows `?? .metaproject/data/skills/`; `ls -la` shows `-rw-rw-r-- last.json`; the file holds `\"taskText\": \"documentation for conditional reads\"`. src/lib/metaproject-gitignore.ts:386 lists only data/skills/stocktake/, and the sibling `.metaproject/data/decisions/` entry (lines 413-415) documents the 0o600 and ignored precedent for personal runtime state. A search for taskText in non-test src/tui and src/gdskills finds no reader.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/context-resolver.ts:529 recordLastResolve (the only writer of last.json)",
+          "src/gdskills/resolve-context-command.ts:50 (its only non-test caller)"
+        ],
+        "enumeration_method": "keryx ctx rg for recordLastResolve|LAST_RESOLVE_PATH|taskText over src excluding tests: one writer, one caller; the --out file and the MCP/adapter path never contain the text (resolveProjectContext does not return it), so last.json is the only place the text reaches disk"
+      },
+      "cluster": "last-json-task-text",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-security-code-w4_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w4:F-002",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "quote": "--task-text \"<the task's title and description>\"",
+      "problem": "Five bundled skill files, with byte-identical managed copies under .metaproject/skills/gdskills, tell the executing agent to substitute the task title and description into a double-quoted shell argument of `keryx skills resolve-context`. Inside double quotes a POSIX shell still expands $(...), backticks and $VAR. Markdown task descriptions use backticks all the time. The CLI has no way to read the text from a file or stdin, so the argv string is the only route, and the instruction never says to escape it. The docs example also uses double quotes.",
+      "impact": "Trigger: a task or issue description contains `cmd` or $(cmd), either by accident (inline code is ubiquitous) or planted by whoever authors the issue. An orchestrator or implementer that follows the template literally runs that command with its own shell permissions before keryx starts. Outcome: arbitrary command execution on the developer's machine or CI, or at minimum a mangled task text that silently stops keyword promotion. The MCP and agent-tool route (`task_text` field) does not go through a shell and is not affected.",
+      "evidence": "flow-orchestrator/SKILL.md line 323 reads: `run keryx skills resolve-context --for test|implement --files ... --task-text \"<the task's title and description>\" --out ...`. job-orchestrator/orchestrator-prompt.md:132 and :188 and job-orchestrator/SKILL.md:749 and :1307 use `--task-text \"<task title and description>\"` and `--task-text \"<fix task description>\"`. task-implementer/SKILL.md:182 and tests-creator/SKILL.md:93 give the same form, and docs/docs/guides/apply-project-rules.md:170 shows it. resolve-context-command.ts reads the text only through optionValue(args, \"--task-text\"), with no file or stdin option.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "the same lines in the managed copies under .metaproject/skills/gdskills/",
+          "docs/docs/guides/apply-project-rules.md:170"
+        ],
+        "enumeration_method": "keryx ctx rg for task-text over src/gdskills/bundled and .metaproject/skills/gdskills (*.md): 14 matches in 10 files, 7 distinct bundled sites, each with a double-quoted placeholder; docs found by a separate rg over docs/"
+      },
+      "cluster": "shell-quoted-task-text",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-security-code-w4_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w5:F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/tui/project-context-inspector.ts",
+      "quote": "body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.join(\"\\n\"), \"plain\") }));",
+      "problem": "paint() joins the lines built by formatProjectReferencesLines and passes them to a TextRenderable as is; stylePlanText with tone \"plain\" returns the string untouched. The new References tab puts attacker-writable strings into those lines with no escaping: declaration.path, declaration.anchor, every glob and keyword (conditionText), declaration.description (shown in the \"on demand\" row), the invalid-file messages (label() interpolates the raw path and the JSON.parse reason), and the finding messages (anchor-not-found lists up to 12 heading texts read from the declared document, unused-declaration and the others quote the path). All of them come from .metaproject/rules/project/references.json or from the documents it names, which are committed project files. JSON allows \\u001b and \\r in any of these strings, and parseReferences only trims them. The repository's own rule for exactly this input (src/lib/terminal-safe.ts: hooks.json is 'a committed file an attacker fully controls'; research-sync-panel.ts: 'The page is a file in the working tree: ... escaped before it reaches the terminal'; external-diff-modal.ts) is to pass such strings through terminalSafe/terminalSafeBlock. This modal and the new tab skip it.",
+      "impact": "Trigger: a user clones or checks out a repository whose references.json (or a declared .md heading) carries an escape sequence, for example description \"x\\u001b[1A\\u001b[2K...\" or a heading with the same, and runs /projectctx refs (or opens the References tab). Observed in a probe: createTestRenderer with a TextRenderable holding \"AB\\u001b[2JCD\\u001b[1A...\" keeps the ESC bytes in the cell buffer (captureCharFrame returns them verbatim) and a bare \\r starts a new row, so the sequences reach the cell contents that the renderer writes out; I did not capture the final byte stream sent to a real terminal. Outcome if they are emitted: cursor movement or line erase can repaint rows of the modal, for instance to hide a problems (n) line or to forge 'promoted' / 'matched glob' rows, in a view the operator reads to decide whether the rules are being applied. Bidi and zero-width characters also pass, so a path can read differently from what it is. The ordinary sidebar line is not affected (see clean areas).",
+      "evidence": "src/tui/project-context-inspector.ts paint() (diff hunk @@ 76,283 @@); src/tui/project-references-view.ts rowLines, conditionText, findingLine, formatProjectReferencesLines; src/gdskills/references-config.ts parseEntry (values only trimmed; label() interpolates raw path); src/gdskills/references-check.ts declarationFindings (anchor-not-found message includes headings of the declared document); src/lib/terminal-safe.ts header comment; probe script in the review scratchpad.",
+      "class_scope": {
+        "sites": [
+          "src/tui/project-references-view.ts:rowLines (path, anchor, description via entry.description ?? declaration.description)",
+          "src/tui/project-references-view.ts:conditionText (globs, keywords)",
+          "src/tui/project-references-view.ts:formatProjectReferencesLines (invalid-file errors)",
+          "src/tui/project-references-view.ts:findingLine (finding.path, finding.message with document headings)",
+          "src/tui/project-references-view.ts:reasonText (entry.reason from last.json, shown as recorded)",
+          "src/tui/project-context-inspector.ts:paint (the single sink for the three tabs)"
+        ],
+        "enumeration_method": "Read every string interpolated in project-references-view.ts and traced it to references.json, a declared document or last.json; searched src for terminalSafe users (keryx ctx rg terminal-safe) and found no use in project-context-inspector.ts or project-references-view.ts; one sink (paint) covers all of them."
+      },
+      "cluster": "single:review-security-code-w5:F-001",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/research-evidence/verify-review-security-code-w4_F-001-1.txt"
+      ]
+    }
+  ]
+}

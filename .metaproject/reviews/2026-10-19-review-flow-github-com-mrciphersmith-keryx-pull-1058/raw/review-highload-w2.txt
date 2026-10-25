@@ -1,0 +1,80 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Slice-02 (the host-question path in review-operator.ts, the completion-card line, docs, test file) holds up under concurrency for the review records: recordOperatorDecision and recordPremiseDecisionAfter append under the package lock, confirm-plan overwrites one file atomically and binds to the estimate it computed, and the journal write comes after the review write and is downgraded to a warning. Two minor findings: the journal's same-question twin merge folds two parallel host-question records into one decision (the second answer is stored as a changed answer and its source, ref and answer text are lost), and agent-supplied question and answer text is stored in the review records with no length cap and re-rendered whole into later cards. Two info notes: a retried verb duplicates records, and the three non-premise verbs accept any non-decline free text (outside this reviewer's scope; overlaps the wave-1 decline finding).",
+  "findings": [
+    {
+      "id": "HL-W2-001",
+      "severity": "minor",
+      "file": "src/decisions/journal.ts",
+      "line": 113,
+      "quote": "const twin = findOpenTwin(records, questionHash(question, [...ids]), input.session, now);\n  if (twin !== undefined) return resultOf(twin);",
+      "problem": "recordHostQuestion (src/commands/review-operator.ts, the try block after `const line = await recorded()`) writes the keryx decisions entry as openDecision() then answerDecision(): two steps, and only the open runs under the journal lock. openLocked is idempotent per question: it returns an existing UNANSWERED open of the same normalised question text, same session (undefined here), under one hour old. A host question is one record per recorded act, but it goes through that twin lookup, so a second process that opens between the first process's open and its answer is handed the first process's decision id.",
+      "impact": "Failing scenario: an agent issues two review verbs in parallel (two Bash calls in one turn) with the same --question-text, for example `waive-mutation` on two packages with the template question 'Waive the mutation pass?', or `decide-premise` on two findings with a generic question. Both review records are written correctly. In the journal, process B's open returns A's id; A answers 'waive' or 'uphold', B then answers the same id, so the journal holds one question with a changed answer (seq 2, changed: true). B's hostQuestion (source, ref, verb, answerText) is never written, because the open record that carries it was never appended. `keryx decisions report` shows one decision where there were two, and a changed answer nobody changed. The review records stay right; the audit trail that TM-04 6b relies on ('so a reviewer can check them against the host's own log') loses the second poll or message ref. The window is the few milliseconds between A's open and A's answer, so it is rare, and the loss is confined to the secondary journal: minor.",
+      "suggested_fix": "Give host-question opens an identity the twin lookup cannot match: pass a distinct `id` (OpenInput accepts input.id), for example a hash of source:ref:verb:packageDir, or make findOpenTwin skip records that carry hostQuestion. Optionally run open and answer under one withJournalLock so the pair is atomic.",
+      "evidence": "journal.ts findOpenTwin skips only answered or backfilled records (no hostQuestion exclusion); the openDecision comment says 'Idempotent per question: asking the same question again while it is still unanswered returns the arm already drawn'; recordHostQuestion calls openDecision then answerDecision, passes no `id`, and answerDecision does not take the journal lock. review-host-question.test.ts has no concurrent-call test (no match for concurrent, parallel, twin, Promise.all, lock).",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-W2-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 864,
+      "quote": "const answerText = requireText(\"--answer-text\", optionValue(own, \"--answer-text\"), command);\n  const questionText = requireText(\"--question-text\", optionValue(own, \"--question-text\"), command);",
+      "problem": "requireText rejects only blank text. The values are stored verbatim in the review package: plan-confirmation.json (quote is `${questionText}: ${answerText}`), operator-decisions.json (quote and hostQuestion.questionText/answerText), and, for decide-premise, findings.json (src/review/premise.ts writes quote: decision.quote and the hostQuestion). The decisions journal side caps its copy (storedOperatorText, MAX_OPERATOR_TEXT_LENGTH 2000; oneLine on the question), so the two stores diverge. On the terminal path the quote was what a person typed; here it is an agent-supplied argv string of up to ARG_MAX (about 128 KB per argument on Linux).",
+      "impact": "Failing input: `keryx review waive-mutation --package P --reason r --answered-by other:x --answer-text \"$(head -c 120000 /dev/zero | tr '\\0' a)\" --question-text q`. 120 KB lands in operator-decisions.json and is rewritten in full on every later decision append (the file is a whole-file read-modify-write under the lock). The completion card builds `waiver: mutation pass not run: \"${quoteWhole(decision.quote)}\"` (src/commands/operator-confirm-review.ts:759) and quoteWhole shows the stored quote whole, so every later review_complete card the operator is asked to press carries a 120 KB waiver line; a premise answer puts the same text in findings.json. This is bounded by argv, not by request rate, so nothing is exhausted; the cost is an unreadable approval card and file bloat from a path that, unlike the terminal one, is fed by an agent.",
+      "suggested_fix": "Cap both texts at the CLI before the first write (reuse MAX_OPERATOR_TEXT_LENGTH from src/decisions/text.ts) and refuse above the cap rather than cutting, since a cut answer is no longer the verbatim one.",
+      "evidence": "recordHostQuestion passes questionText and answerText unchanged into hostQuestion, the plan-confirmation quote and the operator-decision quote; validHostQuestion in operator-decisions.ts checks only non-empty strings; quoteWhole returns the text unmodified unless it holds hidden characters; the 2000-character cap in src/decisions/text.ts applies only on the journal side.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-W2-003",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 924,
+      "quote": "await recordOperatorDecision(packageDir, { kind, quote: answerText, reason: (reason as string).trim(), confirmedVia: \"host-question\", at, subject, hostQuestion });",
+      "problem": "The host-question path has no idempotency key. --answered-by <source>:<ref> names the question, but nothing checks whether that ref was already recorded for this package; recordOperatorDecision and the journal open both append.",
+      "impact": "Scenario: the agent's Bash tool times out after the verb has written, and it retries the same command (harness retry, or a re-run after the 'journal was not updated' warning the code itself anticipates). `waive-mutation` writes two identical decisions to operator-decisions.json and a second journal entry, and the completion card lists the waiver twice. The gate reads the latest decision, so the outcome is unchanged: duplicated rows only. confirm-plan overwrites one file and a decide-premise retry replaces the answer, so only waive-mutation and override-reviewers duplicate. A human re-running the terminal command did the same, but an agent retry is more likely. Info: no corrupted state, no gate effect.",
+      "suggested_fix": "Optional: skip the append when a record of the same kind already carries the same hostQuestion.source and ref, and say 'already recorded'.",
+      "evidence": "appendDecision always writes `[...decisions, entry]`; no lookup of hostQuestion.ref exists in recordHostQuestion or recordOperatorDecision.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-W2-004",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 922,
+      "quote": "refuseDecline(answerText, command);\n    recorded = async () => {",
+      "problem": "Outside this reviewer's scope (a logic point, for review-logic); noted because it sits in the function the wave-1 'first word only' finding covers, with different evidence. For confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is that its first word is not in LEAD_DECLINE. Nothing requires the text to affirm, although limitations.md and TM-04 6b say 'free text is not a decision' and 'for the others a yes', and PRD Q2 says the answer must be one of the verb's options. The wave-1 gap (a negation after the first word) and this one (no positive match required) are separate.",
+      "impact": "Failing input: `keryx review waive-mutation --package P --reason r --answered-by claude-code:q1 --answer-text \"what do you mean by waive?\" --question-text \"Waive the mutation pass?\"` exits 0 and records a mutation waiver (the first word 'what' is not a decline). 'maybe later' and 'ask me again tomorrow' are recorded the same way. decide-premise is stricter: refuseOtherChoice requires a choice word. Not a load issue; listed for review-logic to weigh.",
+      "suggested_fix": "For the three verbs require an affirmative token (yes, y, да, waive, override, ok) in the answer, as decide-premise requires a choice word.",
+      "evidence": "In recordHostQuestion the confirm-plan branch and the waive/override else-branch call refuseDecline only; refuseOtherChoice is called only in the decide-premise branch. Overlaps the wave-1 decline finding, so reported as info.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 },
+  "slices": ["slice-02"]
+}
+```
+
+## High-Load Review (slice-02, wave 2)
+
+Load profile: not provided. This is a single-operator CLI, so severity assumes occasional parallel agent tool calls, not request-rate load.
+
+Clean areas reviewed: shared mutable state on the review stores (operator-decisions.json is appended under `.operator-decisions.lock`; a premise answer applies findings.json and the decision under one lock with an undo; plan-confirmation.json is one atomic write bound to the estimate computed in the same call, so a plan that moves refuses); resource handling (the new code opens no handles or processes); retries and timeouts (the journal lock has a 15 s timeout and a stale-lock breaker, and a journal failure is a warning after the review record is written); queues and caches (none).
+
+Findings
+- HL-W2-001 (minor): the journal twin lookup merges two parallel same-question host-question opens into one decision; the second answer's source, ref and answerText are lost and it shows as a changed answer.
+- HL-W2-002 (minor): host-question texts are stored uncapped in plan-confirmation.json, operator-decisions.json and findings.json and re-rendered whole in later review_complete cards; the journal side caps at 2000.
+- HL-W2-003 (info): no idempotency on the --answered-by ref; a retried waive-mutation or override-reviewers duplicates the record.
+- HL-W2-004 (info, out of scope): three verbs record any answer whose first word is not a decline; no affirmative is required.
+
+Not repeated from wave 1: stale terminal wording, plan numbers in the confirm-plan question, first-word-only decline of "don't waive it", the missing if/then coupling in the schema, the ask_user/keryx-shell source under KERYX_TOOL_CALL=1, AC12 and AC7.

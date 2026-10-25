@@ -1,0 +1,162 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Fix commit 77d2eff20 (b1c6da0e6..77d2eff20, slice-01) holds up on the Clean Code axis. E-06 (completeSpec apply) is genuinely split into runCompletionGates / writeCompletionRecord / completionOutput and the apply is about 24 lines; E-01, E-04, E-07, E-35 and E-58 are closed. E-10 (card/command wording) and E-52 (settle mapping) are only partly fixed: the hand-written 'card ? ... : ...' clauses still repeat at four sites in completion-gate.ts, and askUnmirroredCard re-implements the place/yes mapping that OperatorConfirmationLog.settle owns. The new code adds small smells (redundant abort guard, a markUndelivered name that now means two things, a stale header comment, a fourth errorText copy). No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 829,
+      "quote": "`Stop only after ${card ? \"the `review_complete` card has\" : \"`keryx review complete` has\"} closed the package, or report the one real blocker with its evidence.`,",
+      "problem": "The E-10 fix introduced closeStep(card: boolean) for nextStep only. The same card-versus-command clause is still written by hand at 797 (describeBlockers), 814, 822 and 829 (decideReviewGate), each with its own inline ternary and its own phrasing of the same two options. The boolean 'card' is threaded as a flag through four functions and every site branches on it.",
+      "impact": "The wording of how the agent closes the package lives in five places. Changing the tool name or the gate text means finding every ternary; one site drifting (as D-03 at line 800 already has: it still says 'keryx review complete' lists them all inside the card-aware function) sends the agent contradictory instructions.",
+      "suggested_fix": "Resolve the wording once from 'card' into a small object, for example const close = closeWording(card) returning { step, doneBy, stoppedBy, blockedOn }, and pass that (or the one string each site needs) instead of the boolean. nextStep, describeBlockers and decideReviewGate then only interpolate.",
+      "class_scope": {
+        "sites": [
+          "src/review/completion-gate.ts:757-758 (closeStep, the one already shared)",
+          "src/review/completion-gate.ts:797 (describeBlockers)",
+          "src/review/completion-gate.ts:814 (decideReviewGate stop report)",
+          "src/review/completion-gate.ts:822 (decideReviewGate continue message)",
+          "src/review/completion-gate.ts:829 (decideReviewGate stop-only-after clause)"
+        ],
+        "enumeration_method": "Read of completion-gate.ts lines 752-831 at 77d2eff20 and listing every `${card ? ... : ...}` / `card ?` expression in closeStep, nextStep, describeBlockers and decideReviewGate."
+      },
+      "evidence": "Read of src/review/completion-gate.ts at head 77d2eff20, lines 755-831: closeStep exists at 755; the ternaries on `card` appear again at 797, 814, 822 and 829.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/approval-mirror.ts",
+      "line": 55,
+      "quote": "else if (!isTopicPress(answer) && !topicAbort.signal.aborted) options.onTopicEnded?.();",
+      "problem": "The new branch evaluates isTopicPress(answer) twice (here and on the next line, 'if (!isTopicPress(answer)) return;') and carries a '!topicAbort.signal.aborted' guard. By this point 'settled' is already checked at line 52, and the topic leg is only aborted after settled becomes true, so the guard cannot change the outcome for a leg that reaches this line.",
+      "impact": "Readers have to prove the guard is dead or live to trust the branch; the shape if / else-if / early return on the same predicate obscures that undelivered and ended are the two non-press outcomes.",
+      "suggested_fix": "Fold into one branch: if (!isTopicPress(answer)) { if (answer.undelivered === true) options.onUndelivered?.(); else options.onTopicEnded?.(); return; }. Drop the abort guard, or add a comment naming the case it covers if one exists.",
+      "evidence": "Read of src/tui/approval-mirror.ts lines 52-60 at head 77d2eff20; git grep on HEAD confirms line 55 holds the quoted text.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 77,
+      "quote": "markUndelivered(id: number, reason: \"undelivered\" | \"ended\" = \"undelivered\"): void {",
+      "problem": "markUndelivered now also records a card that WAS delivered and whose topic leg later ended; the name says the opposite. The state is carried as two flags (mirrored: false plus an optional topicEnded: true) that must be read together, a string-literal mode argument selects between them, and pendingConfirmationLine (line 132) turns the pair into text with a nested ternary: const where = entry.mirrored ? \"\" : entry.topicEnded === true ? \" ...\" : \" ...\";",
+      "impact": "The method name misleads at the call site (onTopicEnded: () => options.log.markUndelivered(id, \"ended\")); a third topic state would add another flag and another nesting level.",
+      "suggested_fix": "Keep one topic state on the entry (for example topic: 'mirrored' | 'undelivered' | 'ended') and expose two methods, markUndelivered(id) and markTopicEnded(id); render the note from a small lookup keyed by that state instead of the nested ternary.",
+      "evidence": "Read of src/tui/operator-confirmations.ts at head 77d2eff20: line 24 (topicEnded?: true), lines 77-83 (markUndelivered with reason), line 132 (nested ternary), line 211 (markUndelivered(id, \"ended\")).",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 175,
+      "quote": "export async function askUnmirroredCard<V>(log: OperatorConfirmationLog, question: string, turnSignal: AbortSignal, ask: () => Promise<V>): Promise<V> {",
+      "problem": "E-52 is only partly fixed. The tui-shell closure no longer maps outcomes by hand, but askUnmirroredCard re-implements the place/yes mapping that OperatorConfirmationLog.settle already owns (line 184: log.answer(id, { place: turnSignal.aborted || !answered ? \"withdrawn\" : \"shell\", yes: answered && verdict !== false }); against settle at line 72). It also takes four positional parameters while its sibling raceMirroredCard, 14 lines below, takes an options object, and it keeps two bookkeeping locals (verdict, answered) only to rebuild that mapping.",
+      "impact": "The rule 'a dock answer is withdrawn when the turn aborted, otherwise yes unless the verdict is false' now lives in two functions; one can change without the other. The two sibling factories have different call shapes.",
+      "suggested_fix": "Settle through the log: log.settle(id, answered ? { from: 'dock', result: verdict } : undefined, turnSignal.aborted) in the finally block, and take an options object { log, question, turnSignal, ask } like raceMirroredCard.",
+      "evidence": "Read of src/tui/operator-confirmations.ts lines 70-74 and 175-220 at head 77d2eff20.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 1,
+      "quote": "// Flow 464 (AC6): the operator-confirmation cards this shell mirrored to the Telegram topic — each question still",
+      "problem": "The header comment describes a read-only in-memory view for the sidebar, /remote-control and /decisions. The module now also hosts remoteApproval, askUnmirroredCard and raceMirroredCard: race orchestration that drives raceApproval and writes to the log. The exported type at line 34 (export type MirroredCardOutcome =) is a structural copy of ApprovalRaceOutcome imported from approval-mirror at line 9.",
+      "impact": "A stale comment misleads about what the file owns; the duplicated outcome type has to be kept in step with approval-mirror by hand. The file has two reasons to change (display text and race orchestration).",
+      "suggested_fix": "Update the header to say the module also settles the card from the race. Reuse ApprovalRaceOutcome (or derive MirroredCardOutcome from it with Pick/Extract) instead of restating it; if the orchestration keeps growing, move askUnmirroredCard / raceMirroredCard / remoteApproval next to raceApproval in approval-mirror.ts.",
+      "evidence": "Read of src/tui/operator-confirmations.ts lines 1-9, 34-36 and 169-220 at head 77d2eff20.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 813,
+      "quote": "const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "The E-06 split added errorText as a new helper but left the same expression written inline at line 715 (cardSafe(error instanceof Error ? error.message : String(error))), in `failed` at line 87 and in operator-confirm-other.ts:83. That is four copies of the same one-liner, and the new helper is not used where the pattern first appears in the file.",
+      "impact": "The E-30 residue grew by one copy instead of shrinking; a change to how errors are rendered (for example a cause chain) needs four edits.",
+      "suggested_fix": "Export one errorText from a shared module (operator-confirm-tools or a small errors helper), delete the local const, and use it at 87, 715 and in operator-confirm-other.ts.",
+      "evidence": "git grep on HEAD (77d2eff20): operator-confirm-review.ts:87, :715, :813 and operator-confirm-other.ts:83 each hold `error instanceof Error ? error.message : String(error)`.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "function completionDispositions(",
+      "problem": "The card's disposition validation (completionDispositions with dispositionsSchema) restates the membership checks the CLI keeps in parseDispositions (src/commands/review.ts:4627, function parseDispositions(args: readonly string[]): FindingDispositionRecord[]). Two parsers for the same record shape, with different input forms (JSON versus argv).",
+      "impact": "No present defect found; the validation rules (allowed dispositions, required fields) can drift between the CLI and the card. Recorded as a follow-up, not a finding against the fix.",
+      "suggested_fix": "Have both entry points convert their input to raw records and call one shared validator that returns FindingDispositionRecord[].",
+      "evidence": "Read of src/commands/operator-confirm-review.ts lines 655-690 at head 77d2eff20; git grep on HEAD confirms review.ts:4627.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "closed" },
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-06", "disposition": "closed" },
+    { "id": "E-07", "disposition": "closed" },
+    { "id": "E-10", "disposition": "partial" },
+    { "id": "E-25", "disposition": "open" },
+    { "id": "E-35", "disposition": "closed" },
+    { "id": "E-45", "disposition": "open" },
+    { "id": "E-52", "disposition": "partial" },
+    { "id": "E-53", "disposition": "open" },
+    { "id": "E-58", "disposition": "closed" }
+  ],
+  "slices": [
+    {
+      "id": "slice-01",
+      "coverage": "Fix slice b1c6da0e6..77d2eff20 read at head 77d2eff20: slice diff, completion-gate.ts, approval-mirror.ts, operator-confirmations.ts, operator-confirm-review.ts (completeSpec, helpers), tui-shell.ts mirror closure. E-44 is outside the Clean Code role and was not dispositioned.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 6, "info": 1 }
+}
+```
+
+## Clean Code Review (round r05, fix slice-01, b1c6da0e6..77d2eff20)
+
+### Summary
+The E-claims that fall to this role are mostly fixed as claimed. E-06 is complete: the apply function is short orchestration. E-10 and E-52 are partial (F-001, F-004). The new code adds minor smells only (F-002, F-003, F-005, F-006); F-007 is info. No blocker or major.
+
+### Prior findings
+- Closed: E-01, E-04, E-06, E-07, E-35 (residue is the deferred E-36), E-58.
+- Partial: E-10 (closeStep covers nextStep only, F-001), E-52 (askUnmirroredCard still maps place/yes itself, F-004).
+- Open, unchanged: E-25, E-45, E-53 (operator-confirmations.ts line 7 still imports REMOTE_CARD_TTL_MS from the commands layer).
+- Not dispositioned: E-44 (outside this role; src/remote/mirror-undelivered.test.ts:168 and src/tui/approval-mirror.test.ts:27 cover the dock-first abort but I did not verify them as the E-44 test).
+- D-03 (completion-gate.ts:800) stays open; mentioned in F-001, not re-raised.
+
+### Method note
+Besides git log / git blame I used git grep, keryx ctx rg and file reads, which goes beyond the pure-git instruction. Nothing was modified.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 6  |  info: 1

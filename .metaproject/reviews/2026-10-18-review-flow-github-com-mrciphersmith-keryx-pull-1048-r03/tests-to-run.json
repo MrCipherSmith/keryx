@@ -1,0 +1,190 @@
+[
+  {
+    "file": "src/cli-reference-coverage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/import-only.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-learn-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-bus.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-cli-validation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-launch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ShellCommandRuntime",
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-task-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "launchTuiAgentShell"
+    ]
+  },
+  {
+    "file": "src/commands/shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/skills-governance.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/skills-install-route.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/skills-install-warnings.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/skills-remove.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/skills-route.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/skills.bundled-verify.installed.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/skills.bundled-verify.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/flow/task-project-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/gdskills/context-resolver.vantage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "resolveProjectContext"
+    ]
+  },
+  {
+    "file": "src/gdskills/import-skills-rules.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/gdskills/import-skills-update.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/gdskills/output-schema.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/gdskills/project-context-status.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "loadProjectContextStatus"
+    ]
+  },
+  {
+    "file": "src/gdskills/project-skills-registry-kind.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/gdskills/resolve-context-command.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readLastResolve"
+    ]
+  },
+  {
+    "file": "src/gdskills/task-implementer-contract.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-operations.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/job/job.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/tui/tui-shell.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  }
+]

@@ -1,0 +1,121 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-04 (src/tui/*) adds an in-memory operator-card view (operator-confirmations.ts), threads it into the Remote sidebar row, the /remote-control status tab and the /decisions modal, and wires it into tui-shell's approval mirror. Layering against src/commands, src/remote and src/review is acceptable and follows the existing tui->commands precedent (47 tui files import from commands/review/flow). No blocker or major. Five minor findings: the view is an unauthoritative second copy of state the gate owns (it records the transport answer before the gate runs and recomputes the TTL on its own clock), the 'mirror not delivered' state is held in two places that disagree, the log is fed from only one of the two approval entry points, card lifecycle plus a pure helper were put in the giant shell file instead of the new module, and a helper split a JSDoc from its function. One info on the sidebar row masking the unconfirmed count. operator-confirmations.ts reads no decision record: it holds a parallel in-memory log fed by the bridge answer.",
+  "slices": [{ "id": "slice-04", "coverage": "whole diff read, plus operator-confirm-tools.ts, shell-bridge.ts, agent.ts ApprovalResponse, tui-shell.ts approval paths at head", "status": "DONE" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6131,
+      "quote": "if (cardId !== undefined) operatorCards.answer(cardId, { place: \"telegram\", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });",
+      "problem": "OperatorConfirmationLog is a second, unauthoritative copy of state the gate owns, and it reads no decision record. It writes 'yes, pressed by Telegram user N' from the bridge answer (fromId) at the moment the topic leg wins, before the gate has run. The gate then re-checks in operatorConfirmTool.invoke (allowed list, missing press fields, 1-hour TTL measured from issuedAt, operator-confirm-tools.ts:207-221) and may refuse with isError. The log is never told. Separately, pendingConfirmationLine derives 'N left of the 1-hour token' from the view's own askedAt and imports REMOTE_CARD_TTL_MS from the gate module, instead of reading the token's issuedAt; and it prints 'token expired, ask again' for a card whose dock is still open and still answerable in the shell, where no TTL applies (the TTL branch in invoke is inside `if (remote)`).",
+      "impact": "/decisions and the status tab can show 'answered yes, pressed by Telegram user 9' for a press the record refused. This is the surface the operator reads to see who pressed. The topic leg is capped at MAX_APPROVAL_TIMEOUT_MS = 60 min (src/remote/protocol.ts:169), equal to the TTL, and issuedAt is stamped earlier than the ask, so a press in the last seconds of the leg is refused by the gate yet logged as accepted. No stored state is corrupted; the display is wrong on a security-relevant surface.",
+      "suggested_fix": "Feed `answered` from the outcome of the gated call, not from the transport event: either have the tool result (applied vs refused) reach the log, or label the line 'answered in Telegram, awaiting the gate' until it does. Take the deadline from the gate (expose the token's issuedAt or a `remoteDeadline` with the card) rather than recomputing it from askedAt, and reword 'token expired, ask again' to say that only the Telegram answer expired and the shell can still answer.",
+      "evidence": "operator-confirm-tools.ts:192 sets issuedAt in confirmation(); :207-221 applies the allowed-list, press-field and TTL refusals in invoke, after requestApproval returned; tui-shell.ts:6131 and :6126/:6105 write the log at answer time with yes derived from `decision`/`!== false`; operator-confirmations.ts pendingConfirmationLine uses `REMOTE_CARD_TTL_MS - elapsed` with elapsed from the log's own askedAt.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "tui-log-second-copy-of-gate-state"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6119,
+      "quote": "onUndelivered: () => io.onSystem?.(",
+      "problem": "'Mirror not delivered' is held in two places that can disagree. Before the race, mirrorUndeliveredNote(bridge) decides it and the log entry is created with mirrored=false (line 6103). If the bridge looks active and connected, the entry is created with mirrored=true (line 6116) and the topic leg may still come back undelivered (client.ts returns { decision: 'deny', undelivered: true }; approval-mirror.ts:52 calls onUndelivered). That callback only prints one transcript line. It does not update the log entry and the card already open in the dock cannot carry the note.",
+      "impact": "After a failed send the Remote sidebar row still says '1 card waiting' (role attention) and /remote-control and /decisions still show 'asked Nm ago, 57m left of the 1-hour token' for a card the topic never received, while AC5 expects the card to say it was not delivered. The operator is told to wait on a channel that holds nothing.",
+      "suggested_fix": "Give OperatorConfirmationLog a `markUndelivered(id)` (mirrored=false) and call it from onUndelivered, so waiting() and pendingConfirmationLine drop the countdown and show 'Telegram mirror not delivered, answer in the shell'. Keep one place that decides mirrored-ness.",
+      "evidence": "tui-shell.ts:6116 ask(..., true); :6119 onUndelivered only calls io.onSystem; operator-confirmations.ts has no mutator for `mirrored` after ask(); waiting() filters on item.mirrored.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "undelivered-state-two-places"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6028,
+      "quote": "const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo[\"requestApproval\"]> = async (tool, inputJson, meta) => {",
+      "problem": "The card log is fed from only one of the shell's two approval entry points. operatorCards.ask/answer exist only in mirrorApprovalToTopic (lines 6103 and 6116). requestApprovalForTelegramTurn, the topic-only path for a turn that started in Telegram, asks the same alwaysAsk+card approvals, answers them from the topic and now returns remoteApproval(..., answer.fromId), but never logs them. The too-long-card branch (line 6111) also runs a card in the dock with no entry, although the no-bridge branch does log.",
+      "impact": "A review_complete or confirm-plan card raised during a Telegram-started turn, which is the main case where a remote-card answer with pressedBy is recorded, is absent from the sidebar count, the status tab and the /decisions list. The 'who pressed' view is blind exactly to the cards answered remotely from a Telegram turn. Display only; the durable record is written by the gate.",
+      "suggested_fix": "Put the ask/answer bookkeeping at one seam both wrappers share (a small `trackOperatorCard(meta, run)` helper in operator-confirmations.ts, or a wrapper applied to both wrappers), instead of inlining it in one branch of one closure.",
+      "evidence": "ctx rg for `operatorCards` in src: ask() at tui-shell.ts:6103 and :6116 only; requestApprovalForTelegramTurn spans :6028-6089 with no reference to operatorCards.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "card-log-one-of-two-entry-points"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 1616,
+      "quote": "export function withMirrorNote(card: readonly string[], note: string): readonly string[] {",
+      "problem": "New logic went into the 7,000-line shell file while the new module holds only a log and formatters. (a) withMirrorNote is a pure card-formatting function; its sibling mirrorUndeliveredNote lives in remote/shell-bridge.ts. Because it is exported from tui-shell, src/remote/mirror-undelivered.test.ts:10 imports `../tui/tui-shell`, so a remote-layer test loads the whole shell and points src/remote at src/tui. (b) The card lifecycle (isCard classification, mirrored decision, ask, then answer on three separate branches with place derived by `foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\"`) is inlined three times in mirrorApprovalToTopic, with no try/finally. If `inner` or `raceApproval` rejects, the entry is never answered and stays in waiting() as '1 card waiting' for the rest of the session. Whether `inner` can reject in practice was not traced.",
+      "impact": "Hard to test without mounting the shell, a dependency pointing from remote tests into tui, and a lifecycle that leaks an entry on an exception. Each future approval branch must repeat the bookkeeping.",
+      "suggested_fix": "Move withMirrorNote next to mirrorUndeliveredNote in src/remote/shell-bridge.ts (or into operator-confirmations.ts) and import it from there. Add `async function track<T>(log, title, mirrored, run: () => Promise<T>, place: (r: T) => ...)` to operator-confirmations.ts that does ask, try/finally answer, so tui-shell has one call per branch and the withdrawn/shell rule is unit-tested.",
+      "evidence": "tui-shell.ts:1616 export; src/remote/mirror-undelivered.test.ts:10 `import { withMirrorNote } from \"../tui/tui-shell\"`; tui-shell.ts:6103-6106, :6116-6131 repeat ask/answer with no finally.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "tui-shell-growth-lifecycle"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 583,
+      "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+      "problem": "remoteApproval was inserted between the 11-line JSDoc of isToolAvailableToSideWorker (lines 571-581, which ends with `*/`) and that function. The side-worker documentation now attaches to remoteApproval, and isToolAvailableToSideWorker (line 587) is left under a one-line comment about topic approvals. The helper also builds an ApprovalResponse, a type owned by commands/agent.ts, but is private to the shell, so it cannot be unit-tested.",
+      "impact": "Misleading documentation on two functions (hover docs and readers); a security-adjacent helper that cannot be tested on its own.",
+      "suggested_fix": "Move remoteApproval above the side-worker JSDoc block (or, better, next to the ApprovalResponse type in commands/agent.ts or in src/remote), export it and test it; keep the JSDoc directly above isToolAvailableToSideWorker.",
+      "evidence": "tui-shell.ts:571-581 JSDoc for isToolAvailableToSideWorker, :582 new `/** Flow 464 ... */`, :583 remoteApproval, :587 isToolAvailableToSideWorker.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "orphaned-jsdoc-remoteapproval"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/remote-control-surface.ts",
+      "line": null,
+      "quote": "if (cards !== undefined) return {",
+      "problem": "projectRemoteRow returns early on waiting cards, ahead of the existing flow-397 branch, so when both a card is waiting and an approval is unconfirmed the row shows only '<topic> · N cards waiting' and drops 'N unconfirmed'. Both are attention, but the count is lost from the sidebar.",
+      "impact": "Low: the /remote-control status tab still prints 'Approvals not confirmed: N'. Noted because the row is the only always-visible surface and its width budget is 26 columns.",
+      "suggested_fix": "Compose both fragments (`${topic} · ${cards} · ${unconfirmed} unconf.`) with the existing fit(), or document that cards take precedence.",
+      "evidence": "remote-control-surface.ts projectRemoteRow: the `cards` branch returns before the `unconfirmed > 0` branch.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "remote-row-masks-unconfirmed"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 1 }
+}
+```
+
+## Architecture Review (review-architecture, wave 4, slice-04)
+
+### Review Scope
+- PR 1052, base 062aa9c36484e7b7f6b8a1dd6140671330646e66, head d2cb377f59f7f9c8553d9f377f99360bff3f6328
+- Stack: TUI shell (OpenTUI), remote bridge, review gates; no NestJS or MobX
+
+### Checked and found sound
+- Dependency direction: operator-confirmations.ts imports a runtime constant (REMOTE_CARD_TTL_MS) from commands/operator-confirm-tools, which pulls in the review and flow gate graph. Heavy for one constant, but 47 tui files already import commands/review/flow, there is no cycle (the gate modules import nothing from src/tui) and the view does not feed back into the gate. Not filed. Cleaner: move the constant to a leaf module such as flow/confirm-token.ts.
+- The agent cannot reach the log or the answer path from tool-result text: the log is written only from bridge answers (fromId, decision) and from the dock verdict, and the operator question text comes from meta.card.
+- pressedBy / pressedAt are set only inside remoteApproval (topic answers); the dock branches return outcome.result untouched, so a tui-card answer carries no press fields. (Field duplication across sites is excluded by the brief.)
+- decisions-surface.ts: confirmationLines is an optional thunk threaded through OpenDecisionsOptions and DecisionsSidebarOptions. openDecisionsArms drops it deliberately. Unchanged output with no cards. Acceptable coupling for AC6.
+- approval-mirror.ts: onUndelivered is optional and fires before the press check; behaviour for existing callers unchanged.
+- remote-control-surface.ts: the confirmations argument is optional and the output is unchanged when it is empty.
+
+### Not reviewed here
+AC9 (owner's live check) and AC10 (release) per the brief; security and logic of the gate itself (other reviewers).

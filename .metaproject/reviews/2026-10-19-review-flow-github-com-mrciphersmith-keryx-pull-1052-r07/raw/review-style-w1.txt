@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Style lane, slices slice-02 and slice-03 of delta 77d2eff20..5444f96e4. The delta is clean: the removed preview and listing constants (LISTED_FILES, BODY_PREVIEW_LINES, BODY_PREVIEW_CHARS, MAX_LISTED, REPLY_PREVIEW) and clip have no remaining references, and the dropped completeManagedReview import in review.ts and raceApproval import in tui-shell.ts leave nothing dangling (DockRace stays imported as a type at tui-shell.ts:125). F6-02 (repeated trim) and F6-03 (literal 300 in the schema text) are resolved. Four style findings remain, none above minor. Known minors (D-*, E-*, F5-*, F6-*) are not re-reported.",
+  "findings": [
+    {
+      "id": "ST-701",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text);",
+      "problem": "Two 'would the card hide this' predicates with different strictness, and the shared one is defined in the wrong section. hiddenInCard (line 672) and HIDDEN_IN_CARD (line 669) sit under '10. review_complete', yet reasonOf (lines 373-377) and quoteWhole (763) use them from above and below. shownBody (lines 62-67), about six hundred lines up beside the other shared helpers, still tests only `cardSafe(line) !== line` (line 64). src/lib/card-safe.ts strips bidi and U+200E/F but not U+200B-D, U+FEFF or U+2028/9, so a post body or reply body holding a zero-width character passes shownBody while the same character in a reason or a disposition is refused. A tab is the reverse: shownBody normalises it (line 63) and accepts it, hiddenInCard refuses it (cardSafe rewrites a tab to a space), yet the HIDDEN_IN_CARD message does not name tabs.",
+      "impact": "The two definitions of 'shown as given' will drift. The shownBody gap is the same class as S-402 for post and reply bodies (logic and security reviewers: this note is anchored to style only).",
+      "suggested_fix": "Move HIDDEN_IN_CARD and hiddenInCard next to shownBody (around line 62). Make shownBody call hiddenInCard per line (after its tab normalisation) so one predicate decides refusal, and add 'tab' to the HIDDEN_IN_CARD wording or normalise tabs before the check in the reason and disposition paths.",
+      "evidence": "src/commands/operator-confirm-review.ts at 5444f96e4: shownBody 62-67 with the check at line 64 (cardSafe(line) !== line); HIDDEN_IN_CARD at 669; hiddenInCard at 672; uses at 377, 713 and 764. src/lib/card-safe.ts strips only \\u200e, \\u200f, \\u202a-\\u202e and \\u2066-\\u2069 among format characters.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-702",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 691,
+      "quote": "function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {",
+      "problem": "completionDispositions grew past ten branches and now holds a tuple loop and a vague local name. Lines 691-720 hold one for-of over entries with five direct refusal branches (finding empty, state invalid, evidence not text, finding too long, evidence too long) plus the hidden check inside a nested loop, a typeof ternary at the finding read, an object ternary at the item read, `evidence?.trim()` and a final spread ternary; the delta added about five decisions. `text` (line 707) is the trimmed evidence but reads as generic text; the loop at line 712 builds a two-element tuple array and coalesces undefined to an empty string only to feed hiddenInCard, which is false for an empty string anyway.",
+      "impact": "The function is harder to read and to extend with the next card-visible field, and the loop shape hides that only two fields are checked.",
+      "suggested_fix": "Extract the per-entry checks into `dispositionRecord(entry, index): FindingDispositionRecord | { refusal: string }` and keep the outer loop to array and cap checks. Rename `text` to `evidenceText`. Replace the tuple loop with two direct checks: `if (hiddenInCard(finding)) ...` and `if (evidenceText !== undefined && hiddenInCard(evidenceText)) ...`.",
+      "evidence": "src/commands/operator-confirm-review.ts at 5444f96e4: function at 691, `const text = evidence?.trim();` at 707, `for (const [field, value] of [[\"finding\", finding], [\"evidence\", text ?? \"\"]] as const) {` at 712.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-703",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 373,
+      "quote": "const reasonOf = (input: Record<string, unknown>): { reason: string } | { refusal: string } => {",
+      "problem": "reasonOf now validates and refuses, but keeps its accessor name, and both callers repeat the same unwrap. It returns { reason } | { refusal } and hiddenInCard decides the refusal, so it is a validator, not an accessor. Both callers write `const given = reasonOf(input);` then `if (\"refusal\" in given) return given; const { reason } = given;` (lines 401-405 and 608-616). `given` is a union, not a reason; the other input readers in the file (packageRef) still return undefined for a missing value.",
+      "impact": "Readability only: the name and the local do not tell a reader that the call can refuse.",
+      "suggested_fix": "Rename to `checkedReason` and name the local `reasonOrRefusal`. Low value on its own.",
+      "evidence": "src/commands/operator-confirm-review.ts at 5444f96e4: reasonOf at 373-377; callers at 401 and 403-404, and 608 and 614-615.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-704",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 763,
+      "quote": "function quoteWhole(text: string): string {",
+      "problem": "quoteWhole is not whole when the quote holds hidden characters, and it carries an inline message literal. The function returns the text unchanged only when hiddenInCard is false; otherwise it returns cardSafe(text) plus the literal ' [the stored quote holds characters this card hides or rewrites]'. The name and doc comment say 'shown whole', but the second branch shows a rewritten quote with a marker. The marker is a one-use literal separate from HIDDEN_IN_CARD, which says nearly the same thing on the refusal path.",
+      "impact": "Two sentences that describe the same condition are maintained in two places, and the name misdescribes the rewritten branch.",
+      "suggested_fix": "Rename to `quoteForCard` and give the marker a named constant next to HIDDEN_IN_CARD, so both sentences are maintained together.",
+      "evidence": "src/commands/operator-confirm-review.ts at 5444f96e4: function at 763, marker literal at 764, HIDDEN_IN_CARD at 669.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    }
+  ],
+  "questions": []
+}
+```

@@ -1,0 +1,192 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "probeId",
+    "planDigest",
+    "updatedAt",
+    "phase",
+    "spendUsd",
+    "reservedUsd",
+    "seeds",
+    "finalization"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "probeId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{12}$"
+    },
+    "planDigest": {
+      "$ref": "probe-plan.schema.json#/$defs/digest"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "phase": {
+      "enum": [
+        "running",
+        "finalizing",
+        "finalized"
+      ]
+    },
+    "spendUsd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reservedUsd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "seeds": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "planDigest",
+          "arm",
+          "seed",
+          "state",
+          "transcript",
+          "answered",
+          "success",
+          "chargedUsd",
+          "reservedUsd"
+        ],
+        "properties": {
+          "planDigest": {
+            "$ref": "probe-plan.schema.json#/$defs/digest"
+          },
+          "arm": {
+            "enum": [
+              "base",
+              "probe"
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "state": {
+            "enum": [
+              "running",
+              "completed",
+              "failed"
+            ]
+          },
+          "transcript": {
+            "$ref": "probe-plan.schema.json#/$defs/relativePath"
+          },
+          "answered": {
+            "type": "boolean"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "chargedUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "reservedUsd": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "finalization": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/finalization"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/learn-probe/checkpoint.schema.json",
+  "title": "Learn Probe Mutable Checkpoint",
+  "description": "Schema version 1. Atomic seed/spend and finalization marker. Plan linkage, cumulative usage and receipt semantics require semantic validation.",
+  "$defs": {
+    "finalization": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evidence"
+          ],
+          "properties": {
+            "evidence": {
+              "const": "applied"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evidence"
+          ],
+          "properties": {
+            "evidence": {
+              "const": "not-needed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evidence",
+            "reason"
+          ],
+          "properties": {
+            "evidence": {
+              "const": "skipped"
+            },
+            "reason": {
+              "const": "environment-drift"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "finalized"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "finalization": {
+            "$ref": "#/$defs/finalization"
+          },
+          "reservedUsd": {
+            "const": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "finalization": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

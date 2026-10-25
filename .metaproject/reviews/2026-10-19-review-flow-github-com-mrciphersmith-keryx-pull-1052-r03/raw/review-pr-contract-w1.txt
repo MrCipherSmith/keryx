@@ -1,0 +1,73 @@
+## Checklist form (PR body of #1052, head 6f47bf35f, slice-01 = delta d2cb377f5..6f47bf35f)
+
+| Box or claim (quoted) | State | What the diff / head shows | Expectation |
+|---|---|---|---|
+| `CI green` | unticked | pr-context.md: `AC8 full suite (5000 ms, preload): pending`, `typecheck-and-tests: pending` | Open by the author's own box; nothing to contradict. Not a finding. |
+| `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` | unticked | slice-01 adds tests in `operator-confirm-tools.test.ts` (+18), `confirm-token.test.ts` (+16), `shell.test.ts` (+1), and the rosters test pins 19 names | Box is a run instruction, not a claim about the diff. Not a finding. |
+| `Owner live check from the Telegram topic` | unticked | AC9, the owner's own check | Not decidable from the diff. Not a finding. |
+| "A remote-card answer now records `pressedBy` and `pressedAt`; it is accepted only from an allowed user id, once, for one question, within 1 hour." | claim | `operator-confirm-tools.ts:196-221` refuses outside the allowed list, past the TTL from `issuedAt`, and on missing press fields; `REMOTE_CARD_TTL_MS` is 1 hour; `flow-state.schema.json:549-553` documents both fields | Holds at head. |
+| "New `review_complete` card (SHA, evidence level, waivers); `review_confirm_plan` and `review_decide_premise` answer through the card too." | claim | `buildReviewConfirmSpecs` has 10 specs; `completeSpec` at `operator-confirm-review.ts:700-799`; `OPERATOR_CONFIRM_TOOL_NAMES` has 19 names (`unattended.ts:63-83`), the rosters test says `toHaveLength(19)` | Holds. Evidence level is shown on the card (`evidenceLevelLine`) but not validated there (see C-22). |
+| "The card says when the Telegram mirror was not delivered; the terminal commands stay as fallback." | claim | `mirrorApprovalToTopic` (`tui-shell.ts:6095-6152`) calls `markUndelivered` in a `finally`; `operator-confirmations.ts:61-67` | Holds. |
+| "TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`." | claim | `pendingConfirmationLine`, `answeredConfirmationLine` (`operator-confirmations.ts:121-131`); help/command text test at `operator-confirmations.test.ts:170-177` | Holds. |
+| "Docs: TM-04 section, review guides, cli-reference, review skills." | claim | TM-04 §8, `autonomous-review.md`, `cli-reference.md:4921`, both review-orchestrator SKILL copies are in the PR | Holds that they are touched. Two of them contradict each other and the code (PC-001) or the TM-04 section (C-05 residual). |
+| "`flow ac confirm` is unchanged (operator decision)." | claim | slice-01 does not touch `flow ac confirm` | Holds. |
+
+## Prior findings (19), checked against source at 6f47bf35f, not against the prior text
+
+REVIEW_RESULT below carries the dispositions in the schema enum (closed / open / partial). Mapping: fixed = closed, not-fixed = open, partially fixed = partial.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Round r03 fix slice. 19 prior findings: 11 closed, 4 partial (C-05, C-21, C-22, C-26), 4 open (C-16, C-32, C-41, C-45). One new minor finding: the new card-only wording in the autonomous-review guide and the orchestrator Done-when contradicts the same guide's exit-0 row and the autonomous prompt, because a --no-tui autonomous run has no card.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "global_id": null,
+      "severity": "minor",
+      "repo": null,
+      "file": "docs/docs/guides/autonomous-review.md",
+      "line": null,
+      "quote": "An agent completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal.",
+      "problem": "Two statements in the PR's own docs and the code disagree about who closes an autonomous review. New text, autonomous-review.md:35: \"An agent completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal.\" New text, review-orchestrator/SKILL.md:136 (Done-when): \"the `review_complete` card has been answered (an agent never runs `keryx review complete`; that command is for a human in a terminal)\". Against that, autonomous-review.md:26 (exit 0): \"The package was closed by `keryx review complete`.\"; src/review/autonomous-profile.ts:144: \"finish it yourself: keryx review start, the reviewer waves, keryx review ingest, then keryx review complete.\"; autonomous-profile.ts:153: \"The run is finished only when keryx review complete has closed the package.\"; src/review/autonomous-run.ts:408 reports status `complete` for a closed package. The autonomous child is launched as `keryx shell --no-tui ...` with the card tools excluded (`OPERATOR_CONFIRM_TOOL_NAMES` in unattended.ts:63-83), so it has no card to answer and its prompt tells the agent to run the command the new text says an agent never runs.",
+      "impact": "A reader of the guide or of the orchestrator skill cannot tell whether an unattended review ends with the agent running `keryx review complete` (what the code does and exit-0 row says) or is left open until a person answers a card (what the new sentence says). Documentation only; the code is consistent with its prompt.",
+      "suggested_fix": "Scope the new sentence to an interactive keryx shell with a Telegram topic: in that setting an agent closes through the `review_complete` card; an unattended or --no-tui run still runs `keryx review complete` itself. Make the SKILL.md Done-when line carry the same scope.",
+      "evidence": "docs/docs/guides/autonomous-review.md:26 and :35; .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:136 (and the identical src/gdskills/bundled copy); src/review/autonomous-profile.ts:144,153; src/review/autonomous-run.ts:408; src/trigger/unattended.ts:63-83.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pc:autonomous-review-completion-doc-vs-prompt",
+      "blocking_merge": false,
+      "location_class": "doc"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "C-01", "disposition": "closed", "evidence": "Fixed. The quoted contradiction is gone at head; the text and the code agree."},
+    {"id": "C-03", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-05", "disposition": "partial", "evidence": "The quoted clause is fixed. Residuals: docs/docs/cli-reference.md:4921 says plain `complete` needs a terminal, while TM-04 section 8 says plain `review complete` has no TTY check; src/commands/command-risk.ts is untouched; the tail wording at review-orchestrator/SKILL.md:134 and SKILL.detail.md:866 still points an agent at the terminal command."},
+    {"id": "C-06", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-13", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-16", "disposition": "open", "evidence": "docs/docs/guides/autonomous-review.md:35 still says \"it stops at the floor\" for the card refusal. The autonomous child is `shell --no-tui` with no card tools (autonomous-profile.ts:115-153); `isFloorRefusal` (autonomous-profile.ts:171-179) matches only \"not approved by the user; not executed\" and \"refused earlier\", so a card refusal is not a floor stop and does not give exit 3."},
+    {"id": "C-17", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-18", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-19", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-20", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-21", "disposition": "partial", "evidence": "The Done-when line (SKILL.md:136) is fixed. The review_waive_* tool descriptions and outputs (operator-confirm-review.ts:24, 262, 296, 312, 358) and SKILL.md:134 / SKILL.detail.md:866 still say \"run `keryx review complete`\" where an agent in a card session is told to answer review_complete."},
+    {"id": "C-22", "disposition": "partial", "evidence": "The prBound / --head drift is gone. The evidence level is still shown on the card by evidenceLevelLine only and is not validated there (parseEvidenceLevel is not called by the card), and the preflight is still written twice."},
+    {"id": "C-23", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-24", "disposition": "closed", "evidence": "The misplaced JSDoc is fixed: remoteApproval at tui-shell.ts:571-574 sits above the Flow 173 JSDoc. Still not exported and not tested; that is the C-32 gap, not a separate defect."},
+    {"id": "C-26", "disposition": "partial", "evidence": "The head-normalisation duplication is gone. The duplicate refusal text and the triple `12` literal remain."},
+    {"id": "C-32", "disposition": "open", "evidence": "No test exercises remoteApproval, mirrorApprovalToTopic behaviour or the shell's allowedUserIds binding. keyed searches over *.test.ts find only source-text assertions (tui-shell.test.ts:2963-2965, operator-confirmations.test.ts:180-186), withMirrorNote in mirror-undelivered.test.ts, and gate tests that inject allowedUserIds (operator-confirm-tools.test.ts, operator-confirm-review-tools.test.ts:39). shell.test.ts (+1 in slice-01) has no allowedUserIds, remote-card or pressedBy match."},
+    {"id": "C-39", "disposition": "closed", "evidence": "Fixed at head."},
+    {"id": "C-41", "disposition": "open", "evidence": "Unchanged and info / low confidence. The digest check precedes the awaited gate; re-reading gives no evidence either way, so it stays as it was."},
+    {"id": "C-45", "disposition": "open", "evidence": "The answered line is still logged from the transport event at tui-shell.ts:6141 (`yes: outcome.answer.decision === \"allow\"` with `pressedBy`). The gate (operator-confirm-tools.ts:196-221) can refuse afterwards, so the log can show an answer the gate rejected."}
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Summary
+
+Fix slice for r03: of 19 prior findings 11 are closed, 4 are partial (C-05, C-21, C-22, C-26) and 4 are open (C-16, C-32, C-41, C-45). One new minor finding, PC-001: the new "an agent completes a review only through the `review_complete` card" text contradicts the exit-0 row and the autonomous prompt, because a `--no-tui` run has no card. The PR body's own boxes are all unticked author-run items; none is contradicted by the diff. Routing audit: ctx_used yes, graph_used not-relevant, wiki_used not-relevant, raw_rg_used no.

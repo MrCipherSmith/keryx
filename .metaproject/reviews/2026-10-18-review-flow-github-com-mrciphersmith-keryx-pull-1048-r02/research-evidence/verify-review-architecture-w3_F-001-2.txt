@@ -1,0 +1,40 @@
+# keryx review verify-run
+finding: review-architecture-w3:F-001
+command: sh /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/m1.sh
+cwd: /home/altsay/keryx/.worktrees/conditional-reads
+time: 2026-10-18T14:09:27.366Z
+exit: 0
+
+--- stdout ---
+--- resolve-context
+# skills resolve-context (implement)
+
+Files: src/a.ts
+Budget: 3120 of 131072 bytes (default)
+
+## must_read (2)
+- .metaproject/rules/project/styling.mdc — project rule, always, 99 bytes, sha256 18d36fdf31c5
+- DOC.md — project contract, condition:keyword:theme, 3021 bytes, sha256 820727777912 (anchor "Missing heading", section 3021 bytes)
+
+## on_demand (0)
+
+Resolved context written to r.json
+resolve exit=0
+entries: [{"path":".metaproject/rules/project/styling.mdc","tier":"must_read","reason":"always"},{"path":"DOC.md","tier":"must_read","reason":"condition:keyword:theme","anchor":"Missing heading","section_bytes":3021}]
+warnings: ["DOC.md: anchor \"Missing heading\" not found (no heading matches anchor \"Missing heading\"); the whole file (3021 bytes) is the obligation. Headings in the file: Doc; Real heading; Guideline 0; Guideline 1; Guideline 2; Guideline 3; Guideline 4; Guideline 5; Guideline 6; Guideline 7; Guideline 8; Guideline 9; Guideline 10; Guideline 11; Guideline 12; Guideline 13; Guideline 14; Guideline 15; Guideline 16; Guideline 17; Guideline 18; Guideline 19; Guideline 20; Guideline 21; Guideline 22; Guideline 23; Guideline 24; Guideline 25; Guideline 26; Guideline 27; Guideline 28; Guideline 29; Guideline 30; Guideline 31; Guideline 32; Guideline 33; Guideline 34; Guideline 35. Fix the anchor in .metaproject/rules/project/references.json."]
+--- contracts validate (enforcement block)
+valid: /tmp/tmp.Q6kL1Wpurr/result.json
+schema: task-implementer-output
+validate exit=1
+--- references check
+# skills references check
+
+1 declared
+- error   DOC.md [anchor-not-found] anchor "Missing heading" matches no heading; the document has: Doc, Real heading, Guideline 0, Guideline 1, Guideline 2, Guideline 3, Guideline 4, Guideline 5, Guideline 6, Guideline 7, Guideline 8, Guideline 9, ...
+
+1 error, 0 warnings
+check exit=1
+--- stderr ---
+warning: DOC.md: anchor "Missing heading" not found (no heading matches anchor "Missing heading"); the whole file (3021 bytes) is the obligation. Headings in the file: Doc; Real heading; Guideline 0; Guideline 1; Guideline 2; Guideline 3; Guideline 4; Guideline 5; Guideline 6; Guideline 7; Guideline 8; Guideline 9; Guideline 10; Guideline 11; Guideline 12; Guideline 13; Guideline 14; Guideline 15; Guideline 16; Guideline 17; Guideline 18; Guideline 19; Guideline 20; Guideline 21; Guideline 22; Guideline 23; Guideline 24; Guideline 25; Guideline 26; Guideline 27; Guideline 28; Guideline 29; Guideline 30; Guideline 31; Guideline 32; Guideline 33; Guideline 34; Guideline 35. Fix the anchor in .metaproject/rules/project/references.json.
+project context: 1 miss(es), 0 drifted (enforcement block)
+- project context miss: DOC.md (condition:keyword:theme) has a summary that cannot be checked: the anchored section "Missing heading" cannot be found in DOC.md now (no heading matches anchor "Missing heading")

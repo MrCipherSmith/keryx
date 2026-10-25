@@ -1,0 +1,35 @@
+# keryx review verify-run
+finding: review-security-code-w4:F-001
+command: sh /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/m5m6m7.sh
+cwd: /home/altsay/keryx/.worktrees/conditional-reads
+time: 2026-10-18T14:09:47.642Z
+exit: 0
+
+--- stdout ---
+--- M5: resolve with a secret in the task text
+-rw-rw-r-- 1 altsay altsay 692 Oct 18 14:09 .metaproject/data/skills/project-context/last.json
+1
+add '.metaproject/data/skills/project-context/last.json'
+--- M5: gitignore block rendered by keryx and the repo's own .gitignore
+check-ignore exit=1 (1 = not ignored)
+block mentions project-context: false | mentions stocktake: true
+--- M6: double-quoted task description is expanded by the shell
+ARG=[<title>: fix the build EXECUTED_BACKTICK and EXECUTED_SUBSHELL]
+--- M6: sites that instruct this
+src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182:- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_
+src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749:  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --task-text "<task t
+src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307:  3. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text "<fix task description>"` and a 
+src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132:  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --task-text "<task title an
+src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188:2. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text "<fix task descriptio
+src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323:Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's t
+src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93:**1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and an
+docs/docs/guides/apply-project-rules.md:170:    --task-text "Add a loading spinner to the Button"
+--- M7: References tab lines keep control characters
+lines: ["References: 1 declared, no resolve yet","","A\u001b[2Jb.md § x","  when: keyword k\u001b]0;pwn\u0007","  not resolved","","problems (1):","  [warning] c p: m\u001b[1Ahidden"]
+contains raw ESC byte: true
+--- M7: does the inspector use terminalSafe anywhere?
+10:import { stylePlanText } from "./execution-plan-inspector";
+225:    body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.join("\n"), "plain") }));
+grep exit=0
+--- stderr ---
+

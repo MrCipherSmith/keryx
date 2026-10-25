@@ -1,0 +1,128 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Delta round r03, slice-01 read in full (task-implementer SKILL.md, skills-references test, flow-orchestrator SKILL.md, context-resolver recordLastResolve, reference-entries keywordOccurs, reference-proof currentSection, references-check scanCitations, references-section HEADING removal, project-context-inspector feed ordering and paint). No new performance defect. The quadratic heading regexes are replaced by linear hand scans (probe: 320000-space heading lines parsed in 31 ms). The feed ordering guard (started/applied counters plus the polling flag) correctly drops stale loads. Prior findings dispositioned against head.",
+  "findings": [],
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w3:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-clean-code-w2:F-004",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-clean-code-w5:F-001",
+      "disposition": "open"
+    },
+    {
+      "id": "review-clean-code-w5:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "partial"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "disposition": "withdrawn"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-highload-w5:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-logic-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "id": "review-performance-w5:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w3:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w4:F-001",
+      "disposition": "closed"
+    },
+    {
+      "id": "review-security-code-w4:F-002",
+      "disposition": "partial"
+    },
+    {
+      "id": "review-style-w5:F-002",
+      "disposition": "open"
+    },
+    {
+      "id": "review-testing-practices-w2:F-008",
+      "disposition": "closed"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-01",
+      "status": "DONE",
+      "coverage": "read in full; head code of the touched functions and sibling sites checked"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Summary: No new performance defect in slice-01. The r02 quadratic heading regexes are gone (linear scans, 320k-space line in 31 ms) and the feed ordering plus single-flight guard drops stale loads correctly. Of 21 prior findings, 13 are closed, 1 withdrawn (info, no action), 2 partial (task-text quoting: the apostrophe escape rule exists only in flow-orchestrator, four other dispatch sites lack it) and 5 open (SKILL bullet layout, tab-formatter mapping twice, unguarded listener loop, BOM before first heading). None of the open items is a performance issue.
+
+Disposition evidence (checked at head 5382b56ab):
+- architecture-w3:F-002, logic-w2:F-001 closed: scanCitations (references-check.ts:94-119) adds registry entries with mode link not in copies and reads them via resolveOriginPath; suggestReferences and undeclaredCitationHint go through scanCitations; header comment updated.
+- clean-code-w1:F-003 open: the 2.0c bullet in task-implementer/SKILL.md (bundled and managed copy) is still one bullet; the diff only changes the quoting.
+- clean-code-w2:F-004 closed: skills-references.test.ts imports CONTRACT_MAX_BYTES and uses CONTRACT_MAX_BYTES + 1.
+- clean-code-w5:F-001 and style-w5:F-002 open: paint() still nests the ternary, contentRows still lists the three formatters, `let tab: string` unchanged (project-context-inspector.ts:218-259).
+- clean-code-w5:F-003 open: the listener loop in reload() (project-context-inspector.ts:178) is still unguarded; a throwing listener is reported as a failed poll and also leaves `applied` un-advanced because applied = Math.max(...) runs after the loop.
+- highload-w2:F-001 and security-code-w4:F-002 partial: all five dispatch sites (bundled and managed copies identical) now single-quote --task-text, which removes $(...) and backtick expansion. Only flow-orchestrator/SKILL.md tells the dispatcher to write an embedded apostrophe as '\'' ; job-orchestrator SKILL.md and orchestrator-prompt.md, task-implementer 2.0c and tests-creator 1.2b give no escape rule, so a description containing an apostrophe (common) ends the argument early, and a crafted one could break out of the quote. The argv-size limit is not addressed (no file or stdin form).
+- highload-w2:F-002 withdrawn: informational, no action was required; recordLastResolve still writes atomically via writeContained.
+- highload-w3:F-001, security-code-w1:F-001, security-code-w3:F-001 closed: HEADING regex removed; parseHeadingLine and stripClosingHashes are linear scans. Probe with 20000/80000/320000-space heading lines, tab runs and trailing ' #' runs took 3/8/31 ms. distinctWords (/\p{L}{5,}/gu) and DOCUMENT_CITATION are linear.
+- highload-w5:F-002, performance-w5:F-002 closed: reload() takes a ticket (started) and applies only when mine > applied, so a poll that began before the toggle reload cannot overwrite a newer status whatever order they finish in; poll() also skips when a poll is in flight. All callers (poll, sidebar, modal toggle via loadStatus at tui-shell.ts:5304) go through the feed.
+- logic-w3:F-001 closed: reference-proof currentSection falls back to the whole file on a dead anchor, matching reference-entries.ts:106-113.
+- logic-w3:F-002 closed: keywordOccurs demands a boundary only on a side where the keyword starts or ends with a word character; tests at reference-entries.test.ts:7-29.
+- logic-w3:F-003 open: probe at head, extractSection("\uFEFF# Title\nbody\n", "Title").found === false. Only references-config.ts:272 strips a BOM, not readDeclaredFile, inspectDocument or scanHeadings.
+- security-code-w1:F-002, security-code-w4:F-001 closed: recordLastResolve stores taskTextLength (+ taskTextTruncated) only; the e2e test asserts the text is absent from the record; no reader uses record.taskText.
+- testing-practices-w2:F-008 closed: tests cover digit adjacency (css3), underscore (my_css, css_modules), Cyrillic, leading and trailing symbols (.css, @apply, c++), regex metacharacters.

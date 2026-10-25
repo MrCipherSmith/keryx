@@ -1,0 +1,1452 @@
+--- docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md
+@@ 1,67 @@
+ # TM-04: Operator Confirmation Cards
+ 
+ ## Decisions Only the Operator May Take, Asked as a Card in `keryx shell`, and What a Card Does Not Prove
+ 
+ **Status**: Implemented
+ **Frozen**: 2026-10-15
+ **Task**: flow 456
++**Amended**: 2026-10-19, flow 467 (§6b: the host-question path; reverses the `ask_user` rejection of §5 for four review acts)
+ **Depends on**: TM-03 (terminal confirmation token). This record changes where the operator answers, not what the answer is worth. Flow 295 (`schedule_create`) is the pattern it generalises.
+ **Reviewer Track**: architecture
+ 
+ ---
+ 
+ ## 1. Purpose
+ 
+ Nineteen keryx decisions are the operator's alone: lifting a review pass ceiling, confirming a review plan, deciding a held finding's premise, closing a review round, posting a review to GitHub, waiving unreviewed files or a readiness item, minting a flow completion token, landing an external agent's patch, accepting, promoting or graduating a learned pattern, and changing or running a schedule. Each CLI path refuses unless stdin and stdout are terminals. Inside `keryx shell` the agent runs commands through `shell_exec`, which has no terminal, so it stopped and told the operator to open another terminal and type a long command.
+ 
+ This record replaces that hand-off. In `keryx shell` each decision is a native tool. The tool shows the operator a card (what is decided, the exact effect, the subject) and takes a yes or no. The terminal paths stay exactly as they were.
+ 
+ ## 2. The tools
+ 
+ | Tool | Same effect as |
+ |---|---|
+ | `review_chunks_answer` | `keryx review chunks estimate --answer yes\|no` |
+ | `review_confirm_plan` | `keryx review confirm-plan` |
+ | `review_decide_premise` | `keryx review decide-premise` |
+ | `review_complete` | `keryx review complete` (closes the round after every gate passes; the head is the recorded manifest head, not one the model supplies. The agent completes a review only through this card; the CLI stays for a human in a terminal) |
+ | `review_publish` | `keryx review publish` |
+ | `review_waive_coverage` | `keryx review complete --waive-coverage` (records the waiver only) |
+ | `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |
+ | `flow_confirm` | `keryx flow confirm <id> [--merged]` |
+ | `external_apply` | `keryx agents external apply <run-id>` |
+ | `learn_accept`, `learn_promote`, `learn_graduate` | `keryx learn accept`, `promote`, `graduate apply` |
+ | `schedule_create`, `schedule_resume`, `schedule_run`, `schedule_pause`, `schedule_remove` | `keryx schedule add`, `resume`, `run`, `pause`, `remove` |
+ 
+ The framework is `src/commands/operator-confirm-tools.ts`. The specs are in `operator-confirm-review.ts` and `operator-confirm-other.ts`.
+ 
+ **How a call runs.**
+ 1. `buildCard` reads the real state on disk and builds the card. A card is never built from the model's input alone. A refusal (nothing to confirm) ends the call without asking.
+ 2. The tool declares a confirmation, so the approval gate treats it as a hard floor: every permission mode asks (`auto` included), review-auto never grants it, no saved pattern or MCP trust grant applies, and an unattended run is denied.
+ 3. The card's single-use token lives in the shell process's memory. It reaches `invoke` only after the operator's yes. A declined or denied card drops it; a replay finds nothing.
+ 4. On yes, `apply` calls the same library function the CLI calls, in process, and re-checks that the state did not move between the card and the yes.
+ 5. The decision is stored with `confirmedVia`: `tui-card` when the operator answered in this shell, `remote-card` when they answered in the session's remote topic. The quote is the card title plus `: yes`.
+ 
+ ## 3. What a card proves
+ 
+-A person pressed yes, in this keryx shell session or in its remote topic, on a card whose text was built from the state that the decision then changed. For the remote topic, "a person" means an account on the remote allowlist (`src/remote/config.ts`) answering in the session's own topic, the same rule that governs every other remote approval. A card is never weaker than an existing `alwaysAsk` approval.
++A person pressed yes, in this keryx shell session or in its remote topic, on a card whose text was built from the state that the decision then changed. For the remote topic, "a person" means an account on the remote allowlist (`src/remote/config.ts`) answering in the session's own topic, the same rule that governs every other remote approval. A card is never weaker than an existing `alwaysAsk` approval. A card press (`tui-card`, `remote-card`) is the verified kind of record; the host question of §6b (`confirmedVia: "host-question"`) is the weaker one, and a record says which it is.
+ 
+ ## 4. What a card does not prove
+ 
+ - **Who.** Nothing identifies the person. The shell session belongs to whoever sits at it, and a remote answer belongs to whichever allowlisted account pressed the button.
+ - **That they read it.** The card shows the decision; keryx cannot tell that anyone looked.
+ - **That a same-user process cannot forge the stores.** The stores are plain files in the project and under `~/.keryx`. An agent with an unrestricted shell as the same user can still write a waiver, a learning record or a token hash directly. TM-03 §5 applies unchanged. The card closes the honest path, not the dishonest one.
+ - **That `flow_confirm`'s token stays private.** The tool returns the minted token to the agent so it can run `flow complete --confirm-token`. The token is therefore visible to the agent. That is delegation (TM-03 §4): the operator pressed yes on a card that said what the token completes.
+ 
+ ## 4a. What `flow_confirm` changes against TM-03
+ 
+ TM-03's token was minted by one verb that demanded a typed challenge on `/dev/tty`. `flow_confirm` mints the same token behind a weaker proof:
+ 
+ - **The challenge is one keypress or one button.** The operator presses Yes on the card in the shell, or an allowlisted Telegram account presses the button in the session's topic. No typed text, no `/dev/tty`.
+ - **A remote allowlisted press can mint.** The flow completion token can be minted from the remote topic, by whoever is on the allowlist and answers first.
+ - **The agent sees the token.** The tool returns it so the agent can run `flow complete --confirm-token`. In TM-03 the operator held it.
+ - The mint sites are now two: the CLI verb and the `flow_confirm` card tool. The CLI verb is unchanged.
+ 
+ Every other bypass in TM-03 §5 still applies.
+ 
+ ## 4b. Safeguards the framework adds
+
+--- docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md
+@@ 80,157 @@
+ 
+ The package manifest carries the operator-gate stamp that `review start|attach` writes, so deleting `run-profile.json` does not make a package read as pre-457: a stamped package without its run profile is refused. The autonomous runner's exemption from the mutation gate (`src/review/coverage.ts`, `mutationErrors`) predates flow 457 and is kept on purpose: nobody is at the keyboard there to waive anything.
+ 
+ ## 4d. Which previous round a delta round may trust (flow 458)
+ 
+ A delta round reviews only prevHead..head, so a forged previous round would make a round review nothing. A pull request author can commit any file to the branch, including a review package under `.metaproject/reviews/` that claims this pull request was reviewed at its base. So `review start` cuts a delta only from a round it can attribute to this pipeline:
+ 
+ - a `keryx:round` block on the pull request authored by our own `gh` login (a pull request author cannot post as us); or
+ - a package in the working tree with completion evidence (published.json, a ledger with `scopeReviewed`, or a closed status) that no commit of merge-base..head added or changed — typically an untracked one, the user's own; or
+ - a package read from git history whose commit is merged into the base branch (an ancestor of it): a local branch may be anybody's checked-out pull request, so an unmerged one counts for nothing on its own; or
+ - a package the branch did commit (keryx commits flow review packages on the PR branch by design), or an unmerged one from history, whose manifest identity (target, head, flow, mode, start's stamps — not lifecycle fields such as status), findings.json and round.json hash to an entry of the machine-local round registry. `review ingest` (of a round past its draft), `review complete` and `review publish` append that entry under the user's keryx directory (`keryxConfigDir()/review-rounds/<repo>.jsonl`), outside the repository; the file is compacted to the newest entry per package past 512 KB. `sourcesTried` says "trusted: local registry".
+ 
+ Anything else is a full round (`fallback-first`) with the candidate's findings attached as context only, and `sourcesTried` says why it was not trusted. On another machine the registry has no entry, so a committed package is trusted only through our own round block.
+ 
+ The registry moves the boundary to the user, as everywhere else in this document: it stops a pull request author, who cannot write the reviewer's home directory, from committing a fake previous round. It does not stop a hostile agent running as the same user, which can append an entry exactly as it can write any other user-owned file, or the operator-decision records of §4c. The round record itself (`round.json`, `prior_findings.json`) is hashed into the manifest at start and refused by slice, ledger build and complete when edited, which catches a cooperating agent's careless edit, not a determined one.
+ 
+ ## 5. Why child-process proofs were rejected
+ 
+ The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.
+ 
+-The in-process tool has no such surface. The decision never leaves the shell process: no argument, environment variable, file or socket carries it. `ask_user` was rejected for a different reason: it can be answered by review-auto, the arbiter or an answers file, and its answer returns through the model.
++The in-process tool has no such surface. The decision never leaves the shell process: no argument, environment variable, file or socket carries it. `ask_user` was rejected for a different reason: it can be answered by review-auto, the arbiter or an answers file, and its answer returns through the model. That second rejection was reversed for four review acts by flow 467, on the operator's instruction: see §6b.
+ 
+ ## 6. Remote answering
+ 
+ A card raised while the remote topic is active is mirrored to the topic like any other approval. The first answer wins: a press in the topic closes the dock, an answer in the dock removes the buttons in the topic. When the topic answers, the gate records `confirmedVia: "remote-card"`, so a record always says where the yes came from. Silence in the topic never ends the dock.
+ 
+ ### 6a. What a Telegram answer proves, and what it does not
+ 
+ Flow 464 puts the review acts an agent used to hand to a terminal (`review confirm-plan`, `review decide-premise`, `review complete --waive` and `--waive-coverage`, and the closing `review complete`) behind cards: `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness` / `review_waive_coverage`, and `review_complete`. A card the topic answers is accepted only when all of these hold: the press comes from a Telegram user id in the binding's `allowedUserIds` (a binding with none refuses every remote answer), it carries this question's token, the token is unused, and it is under one hour old. Each refusal leaves the token spent. The record keeps `pressedBy` (the Telegram user id) and `pressedAt` (the shell's clock, not Telegram's) beside `confirmedVia: "remote-card"`. A card answered in the shell has neither field. If the topic cannot be reached, the card says "Telegram mirror not delivered" and is answered in the shell.
+ 
+ What the press proves: someone logged in to an allowed Telegram account pressed yes on this card, within the hour, once.
+ 
+ What it does not prove:
+ 
+ - **That a person pressed.** An agent running as the same OS user can write the stores the shell reads (the confirmation records, the review package JSON) without any card, exactly the limit TM-03 and §4 state. A card narrows the honest path; it does not stop that agent.
+ - **That the bot token is out of the agent's reach.** The token that posts and reads the topic sits in the shell's environment or in the `BOT_TOKEN_FILE` file (owner-only, but readable by an agent running as the same OS user). Holding it, the agent can post as the bot and read updates. It cannot make Telegram report a press from an allowed user id, but it can talk to the bot API, so a press is evidence of an allowed account, not of an unreachable channel.
+ - **That the operator read the text the shell holds.** Whoever holds the bot token can edit or replace the text of the mirrored card. A press proves a press on a card with the real approval id, not that the operator read what the shell built.
+ - **That a card survives a restart.** The token and the TUI card view are process memory. A restart drops every pending card; a later press is refused with no record, and the operator asks again. A late press is also refused by serve's expiry or its resolved state, not only by keryx's token rules.
+ - **Message order.** Telegram can drop, delay or reorder messages. A dropped card leaves the shell waiting (the dock stays open); a delayed press can arrive after the question was answered or has aged out, and is refused by the token rules above. Nothing in the answer proves the operator saw the card text last shown, only that this token was pressed.
+ 
+ The pending cards (age and time left of the token) and the answered ones (with `pressedBy`) are shown in the `/remote-control` status tab, the sidebar Remote row and the `/decisions` modal.
+ 
++## 6b. The host-question path (flow 467)
++
++A card exists only in `keryx shell`. An agent in Claude Code, Codex or another host has no card tool, and the CLI still refused without a terminal, so the operator's answer to a question the agent had already asked could not be recorded. Flow 467 adds a second path for four acts: `keryx review decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers`. With no terminal they accept `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. The source is `claude-code`, `codex`, `keryx-shell`, `helyx-poll` or `other`; the ref is the question id, and for a Helyx poll the poll id and the message id. `decide-premise` still takes `--answer uphold|dismiss --reason "<why>"`; `waive-mutation` and `override-reviewers` still take `--reason`. The record carries `confirmedVia: "host-question"` with the source, ref, question, answer and time, and a `keryx decisions` entry is written beside it. The review report and the `/decisions` modal show it as a host question, apart from a card.
++
++**This reverses §5 for these four acts, on the operator's instruction (polls 225 and 227, 2026-10-19).** §5 refused `ask_user` and agent-sent polls because their answer returns through the model. The operator accepted that weaker proof, the same trade made for `flow ac confirm` (poll 222): "it should be just a question, every harness can do that". §5 still holds for everything else: `review complete`, `review complete --waive` and `--waive-coverage`, `review chunks estimate`, `review publish`, flow completion and the other acts of §2 stay on the card or terminal path.
++
++What a host question proves: the operator answered a question, and the agent that asked it reports the question and the answer. keryx keeps both verbatim, with the poll or message id, so a reviewer can check them against the host's own log.
++
++What it does not prove:
++
++- **That the agent reported them truthfully.** keryx never sees the question or the answer, only what the agent passes. An agent can invent either one, or ask a different question from the one it records. keryx does not verify them.
++- **That a person answered.** The answer can come from a hook, an answers file, review-auto, the arbiter or the model itself. This is the gap §5 named.
++- **Who answered**, or that they read the question. TM-03 §5 and §4 above apply unchanged: an agent running as the same user can still write the stores directly, and a host question adds an honest-looking path, not a lock.
++
++What the path refuses, with nothing recorded: an answer that is not one of the verb's options (`uphold` or `dismiss` for `decide-premise`; for the others a yes), a decline, an empty answer or question, a missing or malformed `--answered-by`, an unknown package, an unknown or not-held finding, a stale plan, a missing `--reason`. Free text is not a decision. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag, since no operator is there to have answered. With no `--answered-by`, the verbs refuse without a terminal exactly as before.
++
++**Two kinds of record.** A verified press (`tui-card`, `remote-card`) is a button pressed on a card keryx built and a token keryx checked; keryx saw it. A host question (`host-question`) is an answer an agent reports; keryx did not see it. Both are the operator's recorded decision, and the second is the weaker. The card stays the first choice wherever a card is available, and the skills and the verbs' help say so.
++
+ ## 7. Unattended runs
+ 
+-An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before.
++An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before. Outside `keryx shell`, for the four acts of §6b, they say: ask the operator with the host's own question tool and record the answer with the verb and `--answered-by`; `review complete` and its waivers still go to the operator.
+ 
+ ## 8. The CLI paths and the approval floor
+ 
+-In a real terminal every command behaves as it did. `review confirm-plan` and `review decide-premise` check for a terminal, and so do `review complete --waive` and `--waive-coverage`; without one they point to their card tool. A plain `review complete` has no TTY check: the CLI runs the same gates without a terminal, so the card is a rule for the agent, which the skills and the gate messages state, not a lock on the command. The gate's refusals are unchanged. An agent never closes a review with the CLI: it calls the `review_complete` card, and `keryx review complete` is for a human in a terminal. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
++In a real terminal every command behaves as it did. (Flow 467 adds the `--answered-by` path of §6b to `confirm-plan`, `decide-premise`, `waive-mutation` and `override-reviewers`; without that flag they behave as described here.) `review confirm-plan` and `review decide-premise` check for a terminal, and so do `review complete --waive` and `--waive-coverage`; without one they point to their card tool. A plain `review complete` has no TTY check: the CLI runs the same gates without a terminal, so the card is a rule for the agent, which the skills and the gate messages state, not a lock on the command. The gate's refusals are unchanged. An agent never closes a review with the CLI: it calls the `review_complete` card, and `keryx review complete` is for a human in a terminal. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
+ 
+ `touchesHumanConfirmation` (`src/lib/command-risk.ts`) already forced `ask` for `flow confirm`, `schedule add|remove|pause|resume|run`, `review chunks estimate --answer`, `review complete --waive-coverage` and `--waive`, and `review publish`. It now also covers `keryx learn accept|promote|graduate` and `keryx agents external apply` (`touchesOperatorDecision`), so a `shell_exec` attempt of any of them asks in every mode. Like the rest of that floor it is a text match and has the limits TM-03 §5 states.
+ 
+ ## 9. References
+ 
+ - `src/commands/operator-confirm-tools.ts`, `operator-confirm-review.ts`, `operator-confirm-other.ts`, `schedule-tools.ts`.
+ - `src/commands/agent.ts`, `src/tui/tui-shell.ts`: the approval driver, the dock and the topic mirror.
+ - `src/lib/command-risk.ts`: `touchesHumanConfirmation`, `touchesOperatorDecision`.
+ - `src/trigger/unattended.ts`: interactive-only tool names.
+ - `src/flow/confirm-token.ts`: the token and its caveat.
+ - TM-03 (`TM-03-terminal-confirmation-token.md`): the token this record's `flow_confirm` mints, and the bypasses that still apply.
+
+--- docs/docs/cli-reference.md
+@@ 4873,4946 @@
+ keryx review jev-comments --pr <n> --repo <owner/repo>
+                           [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+ keryx review learn --pr <n> [--dry-run] [--json]
+ keryx review learn --reviewer <id> [--dry-run] [--json]
+ keryx review loop --flow <flow-id> [--task <Tn>]
+ keryx review status <review-id-or-path>
+ keryx review report-parity <review-id-or-path>
+ keryx review complete <review-id-or-path>
+                       [--finding <id> --disposition <state> --evidence <ref>]...
+ keryx review lightweight
+ keryx review reviewers [--json]
+ keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]
+ keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
+ keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+ keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
+ keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]
+ keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote "<words>"] [--json]
+ keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
+ keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+ keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+-keryx review confirm-plan --package <review-dir>                                     (fallback outside keryx shell; card review_confirm_plan)
+-keryx review waive-mutation --package <review-dir> --reason "<why>"                  (terminal; card review_waive_mutation)
+-keryx review override-reviewers --package <review-dir> --reason "<why>"              (terminal; card review_override_reviewers)
+-keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+-                                                                                     (fallback outside keryx shell; card review_decide_premise)
++keryx review confirm-plan --package <review-dir> [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
++                                                                                     (terminal or host question; card review_confirm_plan)
++keryx review waive-mutation --package <review-dir> --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
++                                                                                     (terminal or host question; card review_waive_mutation)
++keryx review override-reviewers --package <review-dir> --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
++                                                                                     (terminal or host question; card review_override_reviewers)
++keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
++                                                                                     (terminal or host question; card review_decide_premise)
+ keryx review verify-run --package <review-dir> --finding <id> [--timeout <s>] -- <command…>
+ keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
+ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
+ keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                           [--package <review-dir>] [--json|--brief] [--out <file>]
+ keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
+ keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
+ keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
+                         [--state <file>] [--dry-run] [--json]
+ keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+ keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+ keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+ keryx review layers status  --package <review-dir> [--json]
+ keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+ keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+ keryx review coverage --package <review-dir> [--json]
+ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...   (card review_complete)
+ keryx review readiness <review-id-or-path> [--json]
+ keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
+ ```
+ 
+-The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal; plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
++The operator-only steps here (`confirm-plan`, `waive-mutation`, `override-reviewers`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal, except that the first four also accept a host question (below); plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
++
++**A host question.** Outside keryx shell there is no card tool. For four acts the agent asks the operator with the host's own question tool (Claude Code's question tool, Codex's, a Telegram poll through Helyx, keryx's `ask_user`), offering the verb's options, and records the answer with `confirm-plan`, `waive-mutation`, `override-reviewers` or `decide-premise` and, with no terminal, `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. `<source>` is `claude-code`, `codex`, `keryx-shell`, `helyx-poll` or `other`; `<ref>` is the question id, and for a Helyx poll the poll id and the message id. `decide-premise` still takes `--answer uphold|dismiss --reason "<why>"`; the other two still take `--reason`. `confirm-plan` refuses a stale plan: `--question-text` must show the plan's current dispatch count and minute range (as `keryx review estimate` prints them), otherwise ask the operator again with the current numbers. The record carries `confirmedVia: "host-question"` with the source, ref, question and answer, and a `keryx decisions` entry is written; the review report and `/decisions` show it apart from a card. keryx does not verify the answer: a host question is weaker than a card press (`tui-card`, `remote-card`), which stays the first choice where a card is available (TM-04 section 6b, [limitations](limitations.md)). Nothing is recorded, and the command exits non-zero, for an answer that is not one of the verb's options (free text is not a decision), a decline, an empty answer or question, a malformed `--answered-by`, an unknown package, a finding that is not held, a stale plan or a missing `--reason`. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag. `review complete` and its `--waive` and `--waive-coverage` flags refuse these flags and stay on the terminal and card path. Without `--answered-by` the four verbs behave as before: a terminal question, refused without a TTY. `keryx review <verb> --help` prints the flags and names the card as the stronger path.
+ 
+ **An unrecognised option is refused, not ignored**, and the command exits 1. A
+ flag that is silently dropped writes nothing and still reports success.
+ 
+ `--head <sha>` is the commit the round ran against, written to
+ `manifest.target.head` and read by the `review` completion gate — which refuses
+ to complete a flow whose last round cannot say which tree it read. Omitted, it
+ is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+ `pr` target's own head so that a round run against something other than what
+ will merge *fails* the gate instead of passing it. With no checkout to ask and a
+ `pr` target, the pull request's head is used instead; with neither, the head is
+ left off and the gate reports it as unobserved.
+ 
+ `review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+ at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+ records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+ head that is not the pull request's head still needs the first line of `report.md` to name it and
+ say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+ 
+ A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+
+--- docs/docs/cli-reference.md
+@@ 4979,5020 @@
+ | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
+ | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
+ | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
+ | `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
+ | `jev-risk` | ADDITIONAL orchestrator reviewer (`engine: jev`): a deterministic risk map of every changed hunk, ranked, with a routing hint. See below. |
+ | `jev-scenarios` | ADDITIONAL orchestrator reviewer (`engine: jev`): which user scenarios a diff likely changes. See below. |
+ | `jev-docs` | ADDITIONAL orchestrator reviewer (`engine: jev`): find doc sections that went stale because of a diff. See below. |
+ | `jev-comments` | ADDITIONAL orchestrator reviewer (`engine: jev`): check whether open PR review comments were addressed. See below. |
+ | `jev-contract` | ADDITIONAL orchestrator reviewer (`engine: jev`): check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff. See below. |
+ | `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
+ | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
+ | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `flagWarnings`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. `paths` come from `metadata.paths`, else from the globs in the description plus any literal file path named beside them; a description with no glob gives `pathsSource: none` (dispatched on every round) even when it names a file. `flags` come from `metadata.flags` when it has at least one non-empty entry — entries split on commas/whitespace, trimmed, lower-cased and `--`-prefixed; one that is still not `--name` is dropped and reported in `flagWarnings` (a `warning:` line in the text output), and the description's flags are not used even if none survives or the list holds only `--all` (no flags, and no warning for `--all`) — else from the description; an empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. `metadata.flags` and `metadata.paths` accept a comma-separated string, a flow list or a YAML block list; the frontmatter reader accepts a BOM and CRLF, drops trailing `#` comments, counts only keys directly under `metadata:`, and reads any shape outside that subset as not declared. `drift` is `clean`, `changed`, `missing`, or `none` when no origin was recorded (the text row reads `(no recorded origin)`). The top-level `bundledSource` says where the bundled half was read: `project` (this project's installed `.metaproject/skills/gdskills/review`), `package` (that directory is absent, so the keryx package's own review skills are listed — not evidence of what is installed here) or `not-found` (neither; exit `1`). |
+ | `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-contract, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. `review-pr-contract` joins the set, in both modes, only when `pr-context.md` is in the package (`--pr-context` names it, as `--blast-radius` does for `review-regression`); without it the reviewer prints as excluded with that reason. The rule binds a package whose `research.json` was written by `review ledger build` of this version, which stamps `dispatch.roles` with the roles it knows; a `dispatch` without that stamp predates the role, so a package already in flight is not newly refused: the gate passes and `review complete` warns `review-pr-contract not run (package predates the role)`. |
+ | `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
+ | `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
+ | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
+ | `estimate` | Print the plan's reviewer dispatches and minutes from the slice manifest and roles, and flag a plan over the threshold: `dispatch-check` and `ledger` refuse such a plan until the operator confirms it (`confirm-plan` or `estimate --confirm --quote` at a terminal, or the `review_confirm_plan` card in keryx shell). Limits: `routing.config.json` `reviewPlan.maxDispatches` (default 40) and `reviewPlan.maxMinutes` (default 90). |
+ | `plan` | The round plan in one command, without dispatching (`keryx review plan --target <pr-url\|branch> [--ref <base>] [--head <sha>] [--host <host>] [--json]`): `review start` (which finds the previous round of the target in the local packages, git history, the PR's round block and comments, and the flow, and writes `round.json`), `scope`, `blast-radius --package`, `slice --package` (a delta round slices only prevHead..head; the lines in a fix hunk are cut apart from every other changed line, even in the same file; a slice of fix lines is `kind: fix` with its `findingIds`, read deep by review-logic, review-regression, the reviewers that authored those findings, review-security-code when one is a security finding, and the roles its own changed lines route by content (review-security-code for a fix that spawns a process); every other slice is `kind: new`, routed as in round 1), `required --depth auto --scope --package` and `estimate`. Writes `<review-dir>/plan.json` (round, slices by kind, roster, dispatches, minutes, `overThreshold`, `next`: `dispatch`, or confirm the plan with the `review_confirm_plan` card / `keryx review confirm-plan`) and prints a short summary. A fix slice is covered once every reviewer on its roster read it and every finding attached to it has a disposition (`closed`, `open`, `partial`, `regressed` or `withdrawn`, in the `prior_dispositions` of a finished result of that roster); findings carried over from the previous round keep their recorded disposition but cover no fix slice. A previous round is cut from only when it is ours and finished — a round block from our own login, or a package with completion evidence (published.json, a scopeReviewed ledger, a closed status) that no commit of merge-base..head added or changed; anything else is a full round with its findings as context. `--memory-query` and `--unattended` are passed to `review start`. |
+ | `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
+ | `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
+-| `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead and never sends the operator to a terminal. |
+-| `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_decide_premise` card and never sends the operator to a terminal. |
++| `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY, unless `--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"` records the operator's answer to a host question (`confirmedVia: "host-question"`, weaker than a card); inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead, the stronger path, and never sends the operator to a terminal. |
++| `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY, unless `--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"` records the operator's answer to a host question (`uphold` or `dismiss`; `confirmedVia: "host-question"`, weaker than a card); inside keryx shell the agent calls the `review_decide_premise` card, the stronger path, and never sends the operator to a terminal. |
+ | `verify-run` | Run a verification command in the parent session and save its stdout, stderr and exit status to `<review-dir>/research-evidence/verify-<id>-<n>.txt`, for the verifier to cite as executed evidence. |
+ | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
+ | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
+ 
+ Target kinds are validated by the runtime. Review packages are stored under the
+ linked flow when attached, or in the managed standalone review location selected
+ by the review service.
+ 
+ ### `review run` {#review-run}
+ 
+ ```text
+ keryx review run --autonomous --target pr --ref <pull request URL>
+                  [--budget-minutes N] [--budget-tokens N] [--stall-minutes N]
+                  [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+ ```
+ 
+ One review of one pull request with nobody at the keyboard, in the `review-autonomous` profile
+ (`keryx shell --print` in `trust` mode under `--review-system review-auto`, source only). It needs no
+ terminal. It starts the review package, dispatches the reviewers, ingests their findings and closes
+ the package with `review complete`.
+
+--- docs/docs/guides/autonomous-review.md
+@@ 15,55 @@
+ ```
+ keryx review run --autonomous --target pr --ref https://github.com/owner/repo/pull/123 \
+     [--budget-minutes 60] [--budget-tokens 2000000] [--stall-minutes 10] \
+     [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+ ```
+ 
+ `--ref` must be a pull request URL. No terminal is needed on any stream, so this is the form
+ to put in a script, a cron line or a CI job. `--target pr` is the only target.
+ 
+ | Exit code | Status | Meaning |
+ |---|---|---|
+ | 0 | `complete` | The package was closed by `keryx review complete`. |
+ | 2 | `incomplete` | The run ended, or was stopped, before the package was closed. |
+ | 3 | `floor` | The run was stopped at a floor: an action that always needs a human was refused. |
+ | 4 | `budget` | `--budget-minutes` or `--budget-tokens` was spent. |
+ | 5 | `stalled` | No new event for `--stall-minutes` (default 10). |
+ | 1 | refused | Bad arguments, or another run of the same pull request holds the lock. |
+ 
+ ## What it does where a person would answer
+ 
+-- **The review acts (`review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage`, `review_complete`).** These are cards a person answers, in the shell or in the Telegram topic (one allowed user, once, within an hour; the record keeps `pressedBy` and `pressedAt`). An autonomous (unattended) run has nobody to answer them, so it is excluded from the card gate: it is not given these tools and closes the package through the CLI path as before (`keryx review complete`), while any waiver, which needs a terminal, stops it at the floor. An interactive agent in the shell completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal.
++- **The review acts (`review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage`, `review_complete`).** These are cards a person answers, in the shell or in the Telegram topic (one allowed user, once, within an hour; the record keeps `pressedBy` and `pressedAt`). An autonomous (unattended) run has nobody to answer them, so it is excluded from the card gate: it is not given these tools and closes the package through the CLI path as before (`keryx review complete`), while any waiver, which needs a terminal, stops it at the floor. An interactive agent in the shell completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal. The four acts that also take a host question (`confirm-plan`, `decide-premise`, `waive-mutation`, `override-reviewers`) refuse `--answered-by` in an unattended run, because nobody is there to have answered.
+ - **A menu (`ask_user`).** A question marked irreversible is refused (the run sees it as
+   cancelled). Any other question takes the recommended option, or the first one when none is
+   recommended. A question with nothing to choose from is refused. Every automatic answer is
+   written to `answers.ndjson` with its basis (`recommended`, `first`, `refused-irreversible`,
+   `refused-no-option`), so you can read later what was decided for you. A question the review
+   skill tagged as policy (scope, budget, partial coverage, a smaller slice) goes to the
+   [review arbiter](review-arbiter.md) instead: it answers from numbered rules, and a `deny` or
+   an `escalate` is a refusal, with its basis in `answers.ndjson`.
+ - **A floor.** The calls that always need a human (destructive, credentials, publishing)
+   are refused, not granted. A refused call stays refused: the same call in any spelling is
+   declined without a new question, and the run is told to choose another path. A run that can
+   only go on through a floor stops with exit code 3. When the last thing that happened was the
+   loop guard turning away a call the run had already made three times, the reason in the summary
+   says so first and then counts the floor refusals; the status and the exit code stay `floor`.
+ - **Time and tokens.** `--budget-minutes` and `--budget-tokens` are checked while the run
+   goes. When one is spent, the run is stopped at a safe point, the package is kept as it is,
+   and the exit code is 4.
+ - **A hang.** The child process is watched through its events file. If nothing new appears for
+   `--stall-minutes`, the run is stopped and the exit code is 5.
+ - **Silence on the terminal.** While the run goes, stderr gets one line
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 595,645 @@
+   --verifications verifier-result.json \
+   --premises premise-result.json
+ ```
+ 
+ `--premises` takes the judge's JSON, or a reply that holds it in one
+ `` ```json keryx:premises `` block. A `challenged` or `owner-decision` finding is
+ **held**: it is not an open blocker or major, it is not handed to a fixer, the
+ verdict lists it as "awaiting operator", and readiness and the flow review gate
+ fail until you answer. You decide it with the `review_decide_premise` card. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. Outside keryx shell, at a terminal:
+ 
+ ```bash
+ keryx review decide-premise --package .metaproject/reviews/round7 \
+   --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls"
+ ```
+ 
+ `--answer uphold` returns the finding to kept at its original severity;
+ `--answer dismiss` records it `dismissed-incorrect` with your reason as the
+ evidence. An agent's shell cannot answer for you: the command
+ is refused without a terminal, so the agent never sends you there from keryx shell; it calls the card.
+ 
++**Without a card: a host question.** In Claude Code, Codex or another host there is no card. The agent asks you the question with the host's own question tool (or a Telegram poll through Helyx) and offers `uphold` or `dismiss`; it then records what you chose, with no terminal:
++
++```bash
++keryx review decide-premise --package .metaproject/reviews/round7 \
++  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls" \
++  --answered-by helyx-poll:poll-223/msg-214878 \
++  --answer-text "dismiss" --question-text "LY-003: dismiss or uphold?"
++```
++
++The record carries `confirmedVia: "host-question"`, the question and your answer verbatim, and a `keryx decisions` entry is written. keryx does not verify the answer, so it is a weaker record than a card press: it proves the agent reports that you answered, not that it reported truthfully (see [limitations](../limitations.md#a-host-question-is-a-weaker-proof-than-a-card)). The same holds for `confirm-plan`, `waive-mutation` and `override-reviewers`. `review complete` and its waivers still need you at a card or a terminal.
++
+ ## Ingest a report someone already wrote
+ 
+ ```bash
+ keryx review ingest --target report --ref round6-review.md --report path/to/report.md
+ ```
+ 
+ **The parser has a shape, and it will refuse rather than guess.** Two things
+ that cost real time when they are learned the hard way:
+ 
+ - A finding must be a `## F-nnn — title` heading with `severity: <level>` in its
+   block. A heading like `## F-040 (blocker) — …` is read as **prose**, and the
+   ingest reports success having recorded **zero findings** — a ten-finding
+   review stored as an empty package.
+ - A `blocker` or `major` finding **without a `class_scope`** is refused. The
+   scope must name the sites and the enumeration method: *how* you established
+   that this is the whole class, not just the instance you happened to see.
+ 
+ The second is the more useful constraint. It is the difference between "I found
+ a bug here" and "I know where else this shape occurs, and here is how I looked."
+ 
+
+--- docs/docs/limitations.md
+@@ 190,242 @@
+ has its own Allow/Always/Deny buttons in the topic; that path has been exercised only
+ against a fake Bot API, not real Telegram. In that path a topic holds at most 500
+ undelivered lines, and a pure-collision batch after Telegram renumbers its updates,
+ one whose ids are all ones already seen, cannot be told from a redelivery and is
+ dropped. A turn from the topic runs in `trust` by default, so a person with an
+ allowed Telegram id can run any command the floors do not stop, including network
+ and outside-project commands, with no run time limit; set `permissionMode: "ask"`
+ and a `runTimeoutMs` in `remote/config.json` to be stricter. An `Always` rule is
+ removed only in the shell or with `keryx permissions remove`, never from a topic.
+ The 15-minute approval wait and `/remote-policy` apply to the Telegram path only; a
+ running `keryx serve` hands changed values to shells that register after its own
+ restart or reload.)
+ 
+ Boundaries that hold:
+ 
+ - The remote policy profile is compared against the local one on every turn, and
+   a weaker remote profile is refused rather than accepted.
+ - Authentication happens *before* routing, so an unauthenticated caller cannot
+   distinguish a known path from an unknown one.
+ 
++## A host question is a weaker proof than a card
++
++Four review acts (`keryx review decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers`) can be recorded without a card and without a terminal: the agent asks the operator with the host's own question tool (Claude Code's, Codex's, a Telegram poll through Helyx, keryx's `ask_user`) and passes the answer with `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. The record carries `confirmedVia: "host-question"`, the source, the ref (a Helyx poll's poll id and message id) and the verbatim question and answer, and a `keryx decisions` entry is written. The operator chose this trade on 2026-10-19 (polls 225 and 227), the one already made for `flow ac confirm`.
++
++There are now two kinds of record, and a record says which it is. A card press (`tui-card`, `remote-card`) is verified by keryx: a person pressed yes on a card keryx built, with a single-use token. A host question is not: keryx never sees the question or the answer, only what the agent reports.
++
++- **keryx cannot verify the agent reported them truthfully.** An agent can invent an answer, or record a different question from the one it asked. The record keeps the question, the answer and the poll or message id so a reviewer can check them against the host's own log; keryx cannot.
++- **It does not prove a person answered.** The answer can come from a hook, an answers file, review-auto, the arbiter or the model itself, the gap TM-04 section 5 named when it refused `ask_user` as proof. Section 6b of TM-04 reverses that, for these four acts only.
++- **The old limits are unchanged.** Nothing identifies who answered, and an agent running as the same OS user can still write the stores directly (TM-03 section 5, TM-04 section 4).
++- **What is refused.** An answer that is not one of the verb's options (free text is not a decision), a decline, an empty answer or question, a malformed `--answered-by`, an unknown package or finding, a stale plan or a missing `--reason` records nothing. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag. `review complete`, `--waive` and `--waive-coverage` do not accept it.
++
++A card stays the first choice wherever one is available. See [the review verbs](cli-reference.md#review) and decision TM-04 section 6b.
++
+ ## Harness gaps
+ 
+ Three of them, each stated in full on [the harness page](./harness.md#what-the-harness-does-not-do-yet):
+ 
+ - **No shipped non-interactive path registers a tool.** Both production
+   executors are refusals, so `keryx harness run` and `keryx serve` complete a
+   single text turn. Tools run in `keryx shell`.
+ - **Replay is `validate-log`.** `keryx harness replay` checks that a fixture
+   still describes the run it was built from. It re-executes nothing and contacts
+   nothing, so it is an integrity check, not divergence detection.
+   `simulate-recorded-results` is not implemented.
+ - **Branch merge is out of scope.** `keryx sessions fork` branches a
+   conversation and records its ancestry; there is no merge back.
+ 
+ ## Format stability
+ 
+ The `.metaproject/` layout, artifact formats and CLI surface are still moving
+ before 1.0. `keryx update` refreshes managed service files without touching data
+ artifacts, and the [changelog](https://github.com/MrCipherSmith/keryx/blob/main/CHANGELOG.md)
+ records what changed in each release, including a standing known-gaps list.
+
+--- docs/requirements/keryx-card-any-host/prd.md
+@@ 1,42 @@
++# PRD: operator acts answered by the host's own question (Claude Code, Codex, keryx shell, others)
++
++Status: APPROVED v3 (operator polls 225 and 227, message 214878, 2026-10-19); flow 467. Acceptance criteria are in the flow package. Supersedes draft v1, which proposed a keryx-run card with its own press verification for hosts outside the shell; the operator rejected that as too heavy: "it should be just a question, every harness can do that".
++
++## Problem
++
++The operator's acts in the review lifecycle (`confirm-plan`, `decide-premise`, `waive-*`, `complete`) can be recorded only through a keryx shell card or a terminal. The CLI refuses without a TTY (`src/commands/review-operator.ts`, `requireTerminal`), and the keryx MCP server exposes no card tool. An agent in Claude Code or Codex that already asked the operator the question, and got the answer, still cannot record it. Case: PR 1052 held findings C-05, C-10, C-25 (decided uphold, uphold, dismiss in poll 223) and E-42 stayed unrecorded.
++
++Every harness already has a way to ask: Claude Code's question tool, Codex's, keryx's `ask_user`, and in this deployment a Telegram poll through helyx (`send_poll`). The operator uses it every day.
++
++## Goal
++
++The operator's answer to a plain question, asked through whichever question tool the host has, is accepted as the operator's decision. The agent records it through one keryx verb that keeps the question and the answer, so the record is attributable and checkable later.
++
++## Decision this reverses
++
++TM-04 §5 and flow 464 refused `ask_user`/agent-sent polls as proof, because the answer returns through the model, and review-auto, the arbiter or an answers file can produce one. This flow accepts that weaker proof on the operator's instruction, the same trade the operator already made for `flow ac confirm` (poll 222). The record must say so: it carries `confirmedVia: "host-question"`, not `remote-card`, and the text of TM-04 §3/§6a and the limitations page says which of the two a record is. A keryx-verified press (`tui-card`, `remote-card`) stays available and stays the stronger kind.
++
++## Proposed behaviour
++
++- Each gated verb accepts a recorded question answer when there is no TTY: `--answered-by <source>:<ref> --answer-text "<operator's words, verbatim>" --question-text "<the question as asked>"`. `source` is `claude-code`, `codex`, `keryx-shell`, `helyx-poll` or `other`; `ref` is the question or poll id (for helyx the poll id plus message id).
++- keryx builds the usual effect from disk state and refuses what the CLI refuses today: unknown package, unknown or not held finding, missing reason, a stale plan.
++- The record keeps `confirmedVia: "host-question"`, the source, ref, the verbatim question and answer, and the time. It also writes a `keryx decisions` entry, so `decisions report` shows the question, the options and the choice.
++- The answer must be one of the options the question offered for that verb (for `decide-premise`: uphold or dismiss); free text is not a decision.
++- Unattended runs and a nested keryx (`KERYX_TOOL_CALL=1`) still refuse: no operator is there to have answered.
++- The skills (`review-orchestrator`, `job-orchestrator`, `review-premise`) say: ask the operator with the host's question tool, then record the answer with the verb. They no longer say "stop and ask the operator to open a terminal or keryx shell".
++
++## Decisions (poll 227)
++
++- Q1: all four standalone verbs (`decide-premise`, `confirm-plan`, `waive-mutation`, `override-reviewers`) accept a recorded question. `review complete` does not; its `--waive` and `--waive-coverage` flags exist only on `complete` and stay on the terminal and card path.
++- Q2: free text is never a decision; the answer must be one of the verb's options.
++
++## Out of scope
++
++- Proving who answered, or that a person did (TM-03 §5, TM-04 §4: unchanged limits; this flow loosens the proof further and says so).
++- Any new transport, token, serve route or MCP tool.
++- Other TM-04 acts (learn, schedule, external apply, flow confirm).
++
++## Risks
++
++- An agent can invent an answer. The record keeps the verbatim question, answer and poll or message id so a reviewer can check them against the Telegram log; keryx cannot check them itself. This is the cost the operator accepted.
++- The loosened path could be used where the stronger one was meant. The verbs' help and the skills name the stronger path as the first choice where a card is available.
+
+--- src/commands/operator-confirm-review.ts
+@@ 739,779 @@
+     readiness_waivers?: Array<{ item: string; operator_quote: string }>;
+   };
+   const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
+   const report = readFileSync(path.join(dir, "report.md"), "utf8");
+   const evidenceLine = evidenceLevelLine(report);
+   const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${quoteWhole(waiver.operator_quote)}"`);
+   let coverage: ReturnType<typeof readCoverageWaiver>;
+   try {
+     coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
+   } catch (error) {
+     // A package with no research.json carries no coverage waiver; one that cannot be read is not "none".
+     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+       waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);
+     }
+     coverage = undefined;
+   }
+   if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${quoteWhole(coverage.operatorQuote)}"`);
+   for (const decision of await readOperatorDecisions(dir)) {
+     const items = decision.subject?.items ?? [];
+     const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
+-    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia})`);
++    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia}${decision.hostQuestion === undefined ? "" : ` ${cardSafe(decision.hostQuestion.source)}:${cardSafe(decision.hostQuestion.ref)}`})`);
+   }
+   return {
+     reviewId: manifest.reviewId ?? path.basename(dir),
+     head: recorded === undefined ? undefined : cardSafe(recorded),
+     evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
+     waivers,
+     status: manifest.status ?? "",
+   };
+ }
+ 
+ /** A stored waiver quote shown whole; when the card has to rewrite or hide something in it, the card says so. */
+ function quoteWhole(text: string): string {
+   return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;
+ }
+ 
+ const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+ 
+ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePrepared> {
+   return {
+     name: "review_complete",
+
+--- src/commands/review-operator.ts
+@@ 1,133 @@
+ // Terminal counterparts of the flow-457 operator cards, and `verify-run` (flow 457, T7).
+ //
+ //   keryx review waive-mutation      --package <dir> --reason "<why>"     (TTY; card: review_waive_mutation)
+ //   keryx review override-reviewers  --package <dir> --reason "<why>"     (TTY; card: review_override_reviewers)
+ //   keryx review confirm-plan        --package <dir>                      (TTY; card: review_confirm_plan)
+ //   keryx review decide-premise      --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"  (TTY; card: review_decide_premise)
+ //   keryx review verify-run          --package <dir> --finding <id> [--timeout <s>] -- <command…>
+ //
+ // The first four record the operator's own decision, so each asks at the terminal and refuses when stdin or stdout
+ // is not a TTY: an agent's shell cannot answer for the operator. verify-run only runs a command and saves its output.
++//
++// Flow 467: the same four also take the operator's answer to a question the HOST asked through its own tool (Claude Code,
++// Codex, keryx shell, a Telegram poll), with no TTY:
++//
++//   keryx review <verb> ... --answered-by <source>:<ref> --answer-text "<the operator's words>" --question-text "<the question as asked>"
++//
++// The record says `confirmedVia: "host-question"` with the source, the ref, both texts and the time. keryx cannot see the
++// host's question: it records what the agent reports, and says so in the record, the review report and `keryx decisions`.
++// An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag; `review complete` does not take it at all.
+ 
+ import { createInterface } from "node:readline/promises";
++import { DECISION_SOURCES, answerDecision, openDecision } from "../decisions/service";
+ import { optionValue } from "../lib/args";
+ import { operatorDecisionSubject } from "../review/coverage";
+ import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
+ import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
+ import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
++import { isAutonomousEnv, readRunProfile } from "../review/run-profile";
++import { HOST_QUESTION_SOURCES, type HostQuestion } from "../review/types";
+ import { verifyRun } from "../review/verify-run";
+ import { cardSafe } from "../lib/card-safe";
+ import { resolvePackageDir } from "./review-layers";
+ 
+ export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise", "verify-run"] as const;
+ export type OperatorCommand = (typeof OPERATOR_COMMANDS)[number];
+ 
+ export type OperatorCommandSeams = {
+   isTerminal?: () => boolean;
+   /** The operator's answer to the question; default reads a line from the terminal. */
+   ask?: (question: string) => Promise<string>;
+   cwd?: string;
+   log?: (line: string) => void;
++  /** The process environment, for the host-question refusals (default `process.env`). */
++  env?: Readonly<Record<string, string | undefined>>;
+ };
+ 
+ const CARD: Record<Exclude<OperatorCommand, "verify-run">, string> = {
+   "waive-mutation": "review_waive_mutation",
+   "override-reviewers": "review_override_reviewers",
+   "confirm-plan": "review_confirm_plan",
+   "decide-premise": "review_decide_premise",
+ };
+ 
+ export function printOperatorCommandHelp(command: OperatorCommand): void {
+   const lines: Record<OperatorCommand, string> = {
+     "waive-mutation": `keryx review waive-mutation --package <review-dir> --reason "<why>"
+ 
+ Records the operator's waiver of the mutation pass in <review-dir>/operator-decisions.json: the review may
+ record \`Not run: mutation pass\` with unrun mutants. Asks at the terminal; refused without a TTY. In keryx
+-shell the review_waive_mutation tool asks the same as a card.`,
++shell the review_waive_mutation tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review waive-mutation --package <review-dir> --reason "<why>" --answered-by <source>:<ref> \\
++    --answer-text "<the operator's words>" --question-text "<the question as asked>"
++<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question (a poll
++or message id). The record says confirmedVia host-question with both texts, and \`keryx decisions\` keeps the question.
++keryx cannot see the question: it records what you report. Refused, with nothing recorded, for a decline (n, no, an
++empty answer), a blank text, a missing --reason, in an unattended run and under KERYX_TOOL_CALL=1.`,
+     "override-reviewers": `keryx review override-reviewers --package <review-dir> --reason "<why>" [--selected a,b]
+ 
+ Records the operator's decision to run a smaller reviewer set than \`keryx review required\` names (an
+ override or mode diff) in <review-dir>/operator-decisions.json. Asks at the terminal; refused without a TTY.
+-In keryx shell the review_override_reviewers tool asks the same as a card.`,
++In keryx shell the review_override_reviewers tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review override-reviewers --package <review-dir> --reason "<why>" [--selected a,b] --answered-by <source>:<ref> \\
++    --answer-text "<the operator's words>" --question-text "<the question as asked>"
++<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question. The
++record says confirmedVia host-question; keryx cannot see the question, it records what you report. Refused, with
++nothing recorded, for a decline (n, no, an empty answer), a blank text, a missing --reason, in an unattended run and
++under KERYX_TOOL_CALL=1.`,
+     "confirm-plan": `keryx review confirm-plan --package <review-dir>
+ 
+ Shows the plan's dispatches and minutes (\`keryx review estimate\`) and records the operator's yes in
+ <review-dir>/plan-confirmation.json for exactly this plan. Asks at the terminal; refused without a TTY. In
+-keryx shell the review_confirm_plan tool asks the same as a card.`,
++keryx shell the review_confirm_plan tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review confirm-plan --package <review-dir> --answered-by <source>:<ref> \\
++    --answer-text "<the operator's words>" --question-text "<the question as asked>"
++The question must show this plan's dispatches and minutes (as \`keryx review estimate\` prints them): a question that
++does not is refused as a stale plan, so ask again with the current numbers. <source> is claude-code, codex,
++keryx-shell, helyx-poll or other; <ref> is the host's own id for the question. The record says confirmedVia
++host-question; keryx cannot see the question, it records what you report. Refused, with nothing recorded, for a
++decline (n, no, an empty answer), a blank text, in an unattended run and under KERYX_TOOL_CALL=1.`,
+     "decide-premise": `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+ 
+ Answers the premise question on a finding the premise judge held (verdict challenged or owner-decision) and
+ records it in <review-dir>/operator-decisions.json, with your typed words, and on the finding in findings.json
+ (so the next round and the published round block read the answer too). uphold returns the finding to kept at its original
+ severity; dismiss records it dismissed-incorrect with your reason as the evidence. Refused for an unknown
+ finding, a finding that is not held, or a missing reason. Asks at the terminal; refused without a TTY. In
+-keryx shell the review_decide_premise tool asks the same as a card.`,
++keryx shell the review_decide_premise tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>" \\
++    --answered-by <source>:<ref> --answer-text "<the operator's words>" --question-text "<the question as asked>"
++<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question (a poll
++or message id). The operator's words must name the same choice as --answer (uphold or dismiss, or the same in
++Russian) and no other. The record says confirmedVia host-question with both texts, the finding changes as on the
++terminal path, and \`keryx decisions\` keeps the question. keryx cannot see the question: it records what you report.
++Refused, with nothing recorded, for a decline (n, no, an empty answer), words that name the other choice or none, a
++blank text, a missing --reason, an unknown or not-held finding, in an unattended run and under KERYX_TOOL_CALL=1.`,
+     "verify-run": `keryx review verify-run --package <review-dir> --finding <id> [--timeout <seconds>] -- <command…>
+ 
+ Runs a verification command in this (the parent's) session and saves its stdout, stderr and exit status to
+ <review-dir>/research-evidence/verify-<id>-<n>.txt. Hand that file to the verifier as context; a verification
+ claim whose evidence cites it is recorded as executed (method execution), not reasoning. One argument after --
+ runs through sh -c. Default timeout 600 s.`,
+   };
+   console.log(lines[command]);
+ }
+ 
+ async function terminalAsk(question: string): Promise<string> {
+   const rl = createInterface({ input: process.stdin, output: process.stdout });
+   try {
+     return await rl.question(question);
+   } finally {
+     rl.close();
+   }
+ }
+ 
+ function requireTerminal(command: Exclude<OperatorCommand, "verify-run">, isTerminal: () => boolean): void {
+
+--- src/commands/review-operator.ts
+@@ 145,189 @@
+     printOperatorCommandHelp(command);
+     return 0;
+   }
+   const cwd = seams.cwd ?? process.cwd();
+   const separator = args.indexOf("--");
+   const own = separator === -1 ? args : args.slice(0, separator);
+   const packageDir = resolvePackageDir(own, cwd, command);
+ 
+   if (command === "verify-run") {
+     const finding = optionValue(own, "--finding");
+     if (finding === undefined) throw new Error("Missing --finding <id>. See `keryx review verify-run --help`.");
+     const timeout = optionValue(own, "--timeout");
+     const timeoutMs = timeout === undefined ? undefined : Number(timeout) * 1000;
+     if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout must be a positive number of seconds");
+     const result = await verifyRun({ packageDir, finding, argv: separator === -1 ? [] : args.slice(separator + 1), cwd, timeoutMs });
+     log(`verify-run: exit ${result.exitCode}${result.timedOut ? " (timed out)" : ""}; saved to ${result.file}`);
+     log("Hand that file to the verifier (context_files) and have it cite the file in the claim's evidence.");
+     return 0;
+   }
+ 
++  // Flow 467: the host asked the operator; the agent records the answer. No terminal, no ask: a different path with its own refusals.
++  if (own.some((arg) => arg === "--answered-by" || arg.startsWith("--answered-by="))) {
++    return recordHostQuestion(command, own, packageDir, { cwd, log, env: seams.env ?? process.env });
++  }
++
+   const isTerminal = seams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+   requireTerminal(command, isTerminal);
+   const ask = seams.ask ?? terminalAsk;
+   const at = new Date().toISOString();
+ 
+   if (command === "confirm-plan") {
+     const estimate = await estimatePlan(packageDir);
+     const question = `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for ${packageDir}?`;
+     const answer = (await ask(`${question} [y/N] `)).trim();
+     if (!/^y(es)?$/i.test(answer)) {
+       log("not confirmed; nothing was recorded");
+       return 1;
+     }
+     const record = await recordPlanConfirmation(packageDir, estimate, { quote: `${question}: ${answer}`, confirmedVia: "terminal", at });
+     log(`plan confirmed (terminal, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min`);
+     return 0;
+   }
+ 
+   const reason = optionValue(own, "--reason");
+   if (reason === undefined || reason.trim() === "") throw new Error(`Missing --reason "<why>". See \`keryx review ${command} --help\`.`);
+
+--- src/commands/review-operator.ts
+@@ 210,438 @@
+     await answerPremiseQuestion(packageDir, { finding, answer: answerArg, reason: reason.trim(), quote: answer, at, confirmedVia: "terminal" }, { cwd, warn: (line) => log(`warning: ${line}`) });
+     log(`premise-question ${answerArg} recorded for ${finding.key} (terminal, ${at}) in operator-decisions.json and findings.json`);
+     return 0;
+   }
+   const kind: OperatorDecisionKind = command === "waive-mutation" ? "mutation-waiver" : "reviewer-override";
+   const selectedArg = optionValue(own, "--selected");
+   const selected = selectedArg === undefined ? undefined : selectedArg.split(",").map((item) => item.trim()).filter(Boolean);
+   // Security review M4: the record binds to what this question shows (head, mutant ids or reviewers left out).
+   const subject = await operatorDecisionSubject(packageDir, kind, kind === "mutation-waiver" ? undefined : selected);
+   const shown = `head ${subject.head ?? "not recorded"}; ${kind === "mutation-waiver" ? "unrun mutants" : "reviewers left out"}: ${subject.items.join(", ") || "none"}`;
+   const question = command === "waive-mutation" ? `Waive the mutation pass for ${packageDir} (${reason.trim()}; ${shown})?` : `Run a smaller reviewer set than required for ${packageDir} (${reason.trim()}; ${shown})?`;
+   const answer = (await ask(`${question} Type your own words to confirm, or nothing to decline: `)).trim();
+   if (answer === "" || /^n(o)?$/i.test(answer)) {
+     log("not confirmed; nothing was recorded");
+     return 1;
+   }
+   await recordOperatorDecision(packageDir, { kind, quote: answer, reason: reason.trim(), confirmedVia: "terminal", at, subject });
+   log(`${kind} recorded (terminal, ${at}) in operator-decisions.json`);
+   return 0;
+ }
++
++// ---------------------------------------------------------------------------------------------------------------------
++// Flow 467: a question the host asked, answered by the operator in the host's own tool, recorded by the agent.
++// ---------------------------------------------------------------------------------------------------------------------
++
++type HostVerb = Exclude<OperatorCommand, "verify-run">;
++
++/** The options of the question each verb records: the one that records the decision, the one that declines it. */
++const HOST_OPTIONS: Record<HostVerb, { confirm: string; decline: string; options: Array<{ id: string; label: string }> }> = {
++  "decide-premise": {
++    confirm: "uphold",
++    decline: "dismiss",
++    options: [
++      { id: "uphold", label: "Uphold: the finding stands at its original severity" },
++      { id: "dismiss", label: "Dismiss: the finding is incorrect" },
++    ],
++  },
++  "confirm-plan": {
++    confirm: "yes",
++    decline: "no",
++    options: [
++      { id: "yes", label: "Yes: run the plan as estimated" },
++      { id: "no", label: "No: do not run it" },
++    ],
++  },
++  "waive-mutation": {
++    confirm: "waive",
++    decline: "keep",
++    options: [
++      { id: "waive", label: "Waive: the mutation pass is not run" },
++      { id: "keep", label: "Keep: run the mutation pass" },
++    ],
++  },
++  "override-reviewers": {
++    confirm: "override",
++    decline: "keep",
++    options: [
++      { id: "override", label: "Override: run the smaller reviewer set" },
++      { id: "keep", label: "Keep: run the required reviewers" },
++    ],
++  },
++};
++
++/** Words that open a refusal. An answer that starts with one declines: nothing is recorded. */
++const LEAD_DECLINE = new Set(["n", "no", "nope", "nah", "not", "never", "cancel", "stop", "decline", "declined", "reject", "нет", "не", "отмена"]);
++
++/** What decide-premise's operator words must say. A word of the other choice, or none of this one, refuses. */
++const CHOICE_WORDS: Record<"uphold" | "dismiss", ReadonlySet<string>> = {
++  uphold: new Set(["uphold", "upheld", "upholds", "keep", "kept", "оставить", "оставляем", "оставляю", "подтвердить", "подтверждаю", "поддержать"]),
++  dismiss: new Set(["dismiss", "dismissed", "dismisses", "drop", "dropped", "отклонить", "отклоняю", "отклоняем", "снять", "закрыть"]),
++};
++const NEGATIONS = new Set(["not", "never", "no", "dont", "don", "t", "nt", "не", "нет"]);
++
++const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word !== "");
++
++/** The `--answered-by` value as `<source>:<ref>`, split on the first colon (a ref may hold colons: a poll id plus a message id). */
++function parseAnsweredBy(raw: string | undefined, command: HostVerb): Pick<HostQuestion, "source" | "ref"> {
++  const refuse = (): never => {
++    throw new Error(
++      `--answered-by must be <source>:<ref>: <source> one of ${HOST_QUESTION_SOURCES.join(", ")} and <ref> the host's own id for the question, not empty` +
++        `${raw === undefined ? " (the flag has no value)" : ` (got ${JSON.stringify(raw.slice(0, 80))})`}. See \`keryx review ${command} --help\`.`,
++    );
++  };
++  if (raw === undefined) return refuse();
++  const colon = raw.indexOf(":");
++  const source = colon <= 0 ? "" : raw.slice(0, colon);
++  const ref = colon <= 0 ? "" : raw.slice(colon + 1).trim();
++  if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source) || ref === "") return refuse();
++  return { source: source as HostQuestion["source"], ref };
++}
++
++/** The operator's words refuse when they decline (an empty answer, n, no, nope, ...). The message names the refusal. */
++function refuseDecline(answerText: string, verb: HostVerb): void {
++  const words = wordsOf(answerText);
++  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {
++    throw new Error(`--answer-text reads as a decline (${JSON.stringify(answerText.trim().slice(0, 80))}): a declined question records nothing. Ask again if the operator meant yes. See \`keryx review ${verb} --help\`.`);
++  }
++}
++
++/** decide-premise: the words must name the chosen option and not the other one, and not behind a negation. */
++function refuseOtherChoice(answerText: string, answer: "uphold" | "dismiss"): void {
++  const words = wordsOf(answerText);
++  const other = answer === "uphold" ? "dismiss" : "uphold";
++  const chosen = CHOICE_WORDS[answer];
++  const named = words.some((word) => chosen.has(word));
++  const namesOther = words.some((word) => CHOICE_WORDS[other].has(word));
++  const negated = words.some((word, index) => (chosen.has(word) || CHOICE_WORDS[other].has(word)) && NEGATIONS.has(words[index - 1] ?? ""));
++  if (!named || namesOther || negated) {
++    throw new Error(
++      `--answer-text does not name the same choice as --answer ${answer}: the operator's words must say ${answer} (and not ${other}, and not behind a "not"). ` +
++        `Nothing was recorded; ask the operator again, or pass the --answer they gave.`,
++    );
++  }
++}
++
++function requireText(flag: "--answer-text" | "--question-text", value: string | undefined, command: HostVerb): string {
++  if (value === undefined || value.trim() === "") throw new Error(`${flag} "<text>" is required and must not be blank: it holds ${flag === "--answer-text" ? "the operator's own words" : "the question as it was asked"}. See \`keryx review ${command} --help\`.`);
++  return value;
++}
++
++/** An unattended run, and a keryx started from an agent's shell, have no operator to have asked: the flag is refused for both. */
++function refuseHostQuestionHere(command: HostVerb, packageDir: string, env: Readonly<Record<string, string | undefined>>): void {
++  if (env["KERYX_TOOL_CALL"] === "1") {
++    throw new Error(
++      `keryx review ${command} --answered-by is refused: this keryx was started from an agent's shell (KERYX_TOOL_CALL=1), and an agent can type into it. ` +
++        `Nothing was recorded. The operator answers the ${CARD[command]} card instead.`,
++    );
++  }
++  if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === "unattended") {
++    throw new Error(`keryx review ${command} --answered-by is refused in an unattended run: nobody is there to be asked, so nothing was recorded.`);
++  }
++}
++
++async function recordHostQuestion(
++  command: HostVerb,
++  own: string[],
++  packageDir: string,
++  context: { cwd: string; log: (line: string) => void; env: Readonly<Record<string, string | undefined>> },
++): Promise<number> {
++  const { cwd, log, env } = context;
++  refuseHostQuestionHere(command, packageDir, env);
++  const by = parseAnsweredBy(optionValue(own, "--answered-by"), command);
++  const answerText = requireText("--answer-text", optionValue(own, "--answer-text"), command);
++  const questionText = requireText("--question-text", optionValue(own, "--question-text"), command);
++  const choices = HOST_OPTIONS[command];
++  const answerArg = optionValue(own, "--answer");
++  // Everything below refuses before the first write; the writes come last, in one run of statements.
++  let premiseAnswer: "uphold" | "dismiss" | undefined;
++  if (command === "decide-premise") {
++    if (answerArg !== "uphold" && answerArg !== "dismiss") throw new Error("--answer must be uphold or dismiss. See `keryx review decide-premise --help`.");
++    premiseAnswer = answerArg;
++  } else if (answerArg !== undefined && answerArg !== choices.confirm) {
++    throw new Error(
++      answerArg === choices.decline
++        ? `--answer ${answerArg} is a decline: a declined question records nothing. See \`keryx review ${command} --help\`.`
++        : `--answer must be ${choices.confirm} (the option this verb records) or left out; got ${JSON.stringify(answerArg.slice(0, 40))}. See \`keryx review ${command} --help\`.`,
++    );
++  }
++  const at = new Date().toISOString();
++  const hostQuestion: HostQuestion = { source: by.source, ref: by.ref, questionText, answerText, time: at };
++  const where = `host-question, ${by.source}:${by.ref}`;
++
++  const reason = optionValue(own, "--reason");
++  if (command !== "confirm-plan" && (reason === undefined || reason.trim() === "")) throw new Error(`Missing --reason "<why>". See \`keryx review ${command} --help\`.`);
++
++  let recorded: () => Promise<string>;
++  if (command === "confirm-plan") {
++    const estimate = await estimatePlan(packageDir);
++    const shown = new Set(questionText.match(/\d+/g) ?? []);
++    if (![estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every((value) => shown.has(String(value)))) {
++      throw new Error(
++        `The plan changed, or the question does not show it: the plan now is ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) ` +
++          `and --question-text names other numbers. Ask the operator again with the current numbers in the question. Nothing was recorded.`,
++      );
++    }
++    refuseDecline(answerText, command);
++    recorded = async () => {
++      const record = await recordPlanConfirmation(packageDir, estimate, { quote: `${questionText}: ${answerText}`, confirmedVia: "host-question", at, hostQuestion });
++      return `plan confirmed (${where}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min`;
++    };
++  } else if (command === "decide-premise") {
++    const ref = optionValue(own, "--finding");
++    if (ref === undefined || ref.trim() === "") throw new Error("Missing --finding <id>. See `keryx review decide-premise --help`.");
++    const held = await findHeldFinding(packageDir, ref);
++    if (!held.ok) throw new Error(held.refusal);
++    refuseDecline(answerText, command);
++    refuseOtherChoice(answerText, premiseAnswer as "uphold" | "dismiss");
++    const finding = held.finding;
++    recorded = async () => {
++      await answerPremiseQuestion(
++        packageDir,
++        { finding, answer: premiseAnswer as "uphold" | "dismiss", reason: (reason as string).trim(), quote: answerText, at, confirmedVia: "host-question", hostQuestion },
++        { cwd, warn: (line) => log(`warning: ${line}`) },
++      );
++      return `premise-question ${premiseAnswer} recorded for ${finding.key} (${where}, ${at}) in operator-decisions.json and findings.json`;
++    };
++  } else {
++    const kind: OperatorDecisionKind = command === "waive-mutation" ? "mutation-waiver" : "reviewer-override";
++    const selectedArg = optionValue(own, "--selected");
++    const selected = selectedArg === undefined ? undefined : selectedArg.split(",").map((item) => item.trim()).filter(Boolean);
++    const subject = await operatorDecisionSubject(packageDir, kind, kind === "mutation-waiver" ? undefined : selected);
++    refuseDecline(answerText, command);
++    recorded = async () => {
++      await recordOperatorDecision(packageDir, { kind, quote: answerText, reason: (reason as string).trim(), confirmedVia: "host-question", at, subject, hostQuestion });
++      return `${kind} recorded (${where}, ${at}) in operator-decisions.json`;
++    };
++  }
++
++  const line = await recorded();
++  log(line);
++  // The keryx decisions journal keeps the question beside the others. The review record is already written: a journal that
++  // cannot be written is a warning, not a reason to leave the operator's answer unrecorded or to record it twice on a retry.
++  try {
++    const opened = await openDecision({
++      cwd,
++      question: questionText,
++      options: choices.options,
++      stage: `review ${command}`,
++      channel: by.source,
++      source: DECISION_SOURCES.hostQuestion,
++      hostQuestion: { source: by.source, ref: by.ref, verb: command, answerText },
++      salt: "host-question",
++    });
++    await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });
++  } catch (error) {
++    log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);
++  }
++  return 0;
++}
+
+--- src/commands/review-host-question.test.ts
+@@ 1,500 @@
++// Flow 467: the four standalone review verbs accept a recorded host question.
++//
++//   keryx review decide-premise|confirm-plan|waive-mutation|override-reviewers ... \
++//     --answered-by <source>:<ref> --answer-text "<verbatim>" --question-text "<question as asked>"
++//
++// The operator answered a plain question through the host's own tool (Claude Code, Codex, keryx shell, a Telegram poll);
++// the agent records the answer with the verb. No TTY is needed. Each test uses the `isTerminal` seam of
++// `runOperatorCommand` and a scratch repository, as review-operator-cli.test.ts does.
++
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { execFileSync } from "node:child_process";
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { loadReport, reportText } from "../decisions/service";
++import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
++import { readOperatorDecisions, readPremiseDecisions } from "../review/operator-decisions";
++import { estimatePlan, readPlanConfirmation } from "../review/plan-confirmation";
++import { heldFinding } from "../review/premise-fixtures";
++import { computeReadiness, renderReadiness } from "../review/readiness";
++import { buildRunProfile, writeRunProfile } from "../review/run-profile";
++import { formatDecisionsLines } from "../tui/decisions-surface";
++import { unattendedShellRefusal } from "../trigger/unattended";
++import { runOperatorCommand, type OperatorCommand } from "./review-operator";
++
++const CLI = path.join(import.meta.dir, "..", "cli.ts");
++const held = heldFinding();
++const SOURCES = ["claude-code", "codex", "keryx-shell", "helyx-poll", "other"] as const;
++const FOUR = ["decide-premise", "confirm-plan", "waive-mutation", "override-reviewers"] as const;
++type Verb = (typeof FOUR)[number];
++
++let repo: string;
++beforeEach(() => {
++  repo = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-host-question-")));
++  execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "ignore" });
++});
++afterEach(() => rmSync(repo, { recursive: true, force: true }));
++
++function pkgDir(findings: unknown[] = [held]): string {
++  const dir = mkdtempSync(path.join(repo, "pkg-"));
++  mkdirSync(path.join(dir, "raw"), { recursive: true });
++  writeFileSync(
++    path.join(dir, "manifest.json"),
++    JSON.stringify({ schemaVersion: 1, reviewId: "r1", mode: "ingest", status: "draft", target: { kind: "report", ref: "r.md" }, artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" }, coverage: [] }),
++  );
++  writeFileSync(path.join(dir, "findings.json"), JSON.stringify(findings));
++  return dir;
++}
++
++const ASKED = "Premise question on r1#LY-003 (major: the timeline is not mirrored). Uphold it or dismiss it?";
++
++type Over = Record<string, string | undefined>;
++
++/** The flags of one verb; a key set to undefined drops the flag. */
++async function argsFor(verb: Verb, dir: string, over: Over = {}): Promise<string[]> {
++  let base: Over;
++  if (verb === "decide-premise") {
++    base = { "--package": dir, "--finding": "LY-003", "--answer": "dismiss", "--reason": "platforms do not mirror media controls", "--answer-text": "dismiss it, the platforms do not mirror media controls", "--question-text": ASKED };
++  } else if (verb === "confirm-plan") {
++    const estimate = await estimatePlan(dir);
++    base = { "--package": dir, "--answer-text": "yes, run it", "--question-text": `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for the plan?` };
++  } else {
++    base = { "--package": dir, "--reason": "the suite takes an hour", "--answer-text": verb === "waive-mutation" ? "yes, waive it" : "yes, only logic", "--question-text": verb === "waive-mutation" ? "Waive the mutation pass? The suite takes an hour." : "Run a smaller reviewer set than required?" };
++  }
++  base = { "--answered-by": "claude-code:ask-17", ...base, ...over };
++  return Object.entries(base).flatMap(([flag, value]) => (value === undefined ? [] : [flag, value]));
++}
++
++function seams(extra: { env?: Record<string, string | undefined>; lines?: string[] } = {}) {
++  return { isTerminal: () => false, cwd: repo, log: (line: string) => void extra.lines?.push(line), env: extra.env ?? {} };
++}
++
++/** Every file under `dir` with its bytes, so "recorded nothing" is a comparison, not a guess. */
++function snapshot(dir: string): Record<string, string> {
++  const out: Record<string, string> = {};
++  const walk = (current: string): void => {
++    for (const name of readdirSync(current)) {
++      const full = path.join(current, name);
++      if (statSync(full).isDirectory()) walk(full);
++      else out[path.relative(dir, full)] = readFileSync(full, "utf8");
++    }
++  };
++  walk(dir);
++  return out;
++}
++
++const journalFile = () => path.join(repo, ".metaproject", "data", "decisions", "journal.jsonl");
++
++/** The verb is refused: it throws, the package is byte-identical and the journal has no entry. */
++async function expectRefused(verb: Verb, dir: string, over: Over, message?: string | RegExp, extra: Parameters<typeof seams>[0] = {}): Promise<void> {
++  const before = snapshot(dir);
++  const args = await argsFor(verb, dir, over);
++  const result = runOperatorCommand(verb, args, seams(extra));
++  if (message === undefined) await expect(result).rejects.toThrow();
++  else await expect(result).rejects.toThrow(message);
++  expect(snapshot(dir)).toEqual(before);
++  expect(existsSync(journalFile())).toBe(false);
++}
++
++async function journalRows() {
++  return (await loadReport(repo)).hostQuestions ?? [];
++}
++
++describe("AC1: decide-premise records a host question with no TTY", () => {
++  test("AC1 dismiss: the decision and the finding change as on the terminal path, and the record carries the host question", async () => {
++    const dir = pkgDir();
++    const lines: string[] = [];
++    const before = Date.now();
++    const code = await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir), seams({ lines }));
++    expect(code).toBe(0);
++    expect(lines.join("\n")).toContain("premise-question dismiss recorded for r1#LY-003 (host-question, claude-code:ask-17");
++    const [decision] = await readPremiseDecisions(dir);
++    expect(decision).toMatchObject({ kind: "premise-question", finding: "r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", actor: "operator", confirmedVia: "host-question" });
++    expect(decision?.subject).toMatchObject({ severity: "major", verdict: "challenged" });
++    expect(decision?.hostQuestion).toMatchObject({ source: "claude-code", ref: "ask-17", questionText: ASKED, answerText: "dismiss it, the platforms do not mirror media controls" });
++    expect(Date.parse(decision?.hostQuestion?.time ?? "")).toBeGreaterThanOrEqual(before - 1000);
++    expect(decision?.hostQuestion?.time).toBe(decision?.at);
++    const [record] = JSON.parse(readFileSync(path.join(dir, "findings.json"), "utf8")) as Array<{ disposition?: { state: string } }>;
++    expect(record?.disposition?.state).toBe("dismissed-incorrect");
++    expect((await computeReadiness(dir)).items.find((item) => item.id === "premise-decisions")?.status).toBe("pass");
++  });
++
++  test("AC1 uphold returns the finding to open, and a ref may hold colons (a helyx poll id plus message id)", async () => {
++    const dir = pkgDir();
++    const args = await argsFor("decide-premise", dir, { "--answer": "uphold", "--answered-by": "helyx-poll:poll-223:msg-214878", "--answer-text": "uphold, mirror it" });
++    expect(await runOperatorCommand("decide-premise", args, seams())).toBe(0);
++    const [decision] = await readPremiseDecisions(dir);
++    expect(decision).toMatchObject({ answer: "uphold", confirmedVia: "host-question" });
++    expect(decision?.hostQuestion).toMatchObject({ source: "helyx-poll", ref: "poll-223:msg-214878" });
++    expect((await computeReadiness(dir)).items.find((item) => item.id === "premise-decisions")?.status).toBe("pass");
++  });
++
++  test("AC1 every allowed source is accepted", async () => {
++    for (const source of SOURCES) {
++      const dir = pkgDir();
++      expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answered-by": `${source}:q1` }), seams())).toBe(0);
++      expect((await readPremiseDecisions(dir))[0]?.hostQuestion?.source).toBe(source);
++    }
++  });
++
++  test("AC1 the equals form of the flags works too", async () => {
++    const dir = pkgDir();
++    const args = (await argsFor("decide-premise", dir, { "--answered-by": undefined, "--answer-text": undefined, "--question-text": undefined })).concat(["--answered-by=codex:t-9", "--answer-text=dismiss it", `--question-text=${ASKED}`]);
++    expect(await runOperatorCommand("decide-premise", args, seams())).toBe(0);
++    expect((await readPremiseDecisions(dir))[0]?.hostQuestion).toMatchObject({ source: "codex", ref: "t-9", answerText: "dismiss it" });
++  });
++});
++
++describe("AC2: the same flags work with no TTY on the other three verbs", () => {
++  test("AC2 confirm-plan records plan-confirmation.json for exactly this plan", async () => {
++    const dir = pkgDir();
++    const estimate = await estimatePlan(dir);
++    const args = await argsFor("confirm-plan", dir);
++    const lines: string[] = [];
++    expect(await runOperatorCommand("confirm-plan", args, seams({ lines }))).toBe(0);
++    expect(lines.join("\n")).toContain("plan confirmed (host-question, claude-code:ask-17");
++    const record = await readPlanConfirmation(dir);
++    expect(record).toMatchObject({ dispatches: estimate.dispatches, minutes: [estimate.minutes.min, estimate.minutes.max], confirmedVia: "host-question" });
++    expect(record?.quote).toContain("yes, run it");
++    expect(record?.hostQuestion).toMatchObject({ source: "claude-code", ref: "ask-17", answerText: "yes, run it" });
++    expect(record?.hostQuestion?.questionText).toContain(`Run ${estimate.dispatches} reviewer dispatches`);
++    expect(record?.hostQuestion?.time).toBe(record?.at);
++  });
++
++  test("AC2 waive-mutation records the waiver as the terminal path does, bound to head and unrun mutants", async () => {
++    const dir = pkgDir();
++    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seams())).toBe(0);
++    const [decision] = await readOperatorDecisions(dir);
++    expect(decision).toMatchObject({ kind: "mutation-waiver", reason: "the suite takes an hour", confirmedVia: "host-question" });
++    expect(decision?.quote).toContain("yes, waive it");
++    expect(decision?.subject).toBeDefined();
++    expect(decision?.hostQuestion).toMatchObject({ source: "claude-code", ref: "ask-17", questionText: "Waive the mutation pass? The suite takes an hour.", answerText: "yes, waive it" });
++    expect(decision?.hostQuestion?.time).toBe(decision?.at);
++  });
++
++  test("AC2 override-reviewers records the override, with --selected bound into the subject", async () => {
++    const dir = pkgDir();
++    expect(await runOperatorCommand("override-reviewers", await argsFor("override-reviewers", dir, { "--selected": "review-logic" }), seams())).toBe(0);
++    const [decision] = await readOperatorDecisions(dir);
++    expect(decision).toMatchObject({ kind: "reviewer-override", reason: "the suite takes an hour", confirmedVia: "host-question" });
++    expect(decision?.subject).toBeDefined();
++    expect(decision?.hostQuestion).toMatchObject({ source: "claude-code", ref: "ask-17", answerText: "yes, only logic" });
++  });
++
++  test("AC2 an --answer naming the confirming option is accepted on the three verbs", async () => {
++    const accepted: Array<[Verb, string]> = [["confirm-plan", "yes"], ["waive-mutation", "waive"], ["override-reviewers", "override"]];
++    for (const [verb, answer] of accepted) {
++      const dir = pkgDir();
++      expect(await runOperatorCommand(verb, await argsFor(verb, dir, { "--answer": answer }), seams())).toBe(0);
++    }
++  });
++});
++
++describe("AC3: each refusal records nothing and exits non-zero with a message", () => {
++  test("AC3 an --answer that is not one of the verb's options", async () => {
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "maybe" }, "uphold or dismiss");
++    await expectRefused("decide-premise", pkgDir(), { "--answer": undefined }, "uphold or dismiss");
++    await expectRefused("confirm-plan", pkgDir(), { "--answer": "maybe" }, "--answer");
++    await expectRefused("waive-mutation", pkgDir(), { "--answer": "uphold" }, "--answer");
++    await expectRefused("override-reviewers", pkgDir(), { "--answer": "dismiss" }, "--answer");
++  });
++
++  test("AC3 an --answer that is the decline option records nothing", async () => {
++    await expectRefused("confirm-plan", pkgDir(), { "--answer": "no" }, "decline");
++    await expectRefused("waive-mutation", pkgDir(), { "--answer": "keep" }, "decline");
++  });
++
++  test("AC3 a blank or missing --answer-text or --question-text", async () => {
++    for (const verb of FOUR) {
++      await expectRefused(verb, pkgDir(), { "--answer-text": "   " }, "--answer-text");
++      await expectRefused(verb, pkgDir(), { "--answer-text": undefined }, "--answer-text");
++      await expectRefused(verb, pkgDir(), { "--question-text": "" }, "--question-text");
++      await expectRefused(verb, pkgDir(), { "--question-text": undefined }, "--question-text");
++    }
++  });
++
++  test("AC3 a missing or malformed --answered-by", async () => {
++    for (const bad of ["telegram:1", "claude-code:", "claude-code", ":ask-1", "", "claude-code:   ", "Claude-Code:1"]) {
++      await expectRefused("decide-premise", pkgDir(), { "--answered-by": bad }, "--answered-by");
++    }
++    // The flag with no value at all (the next token is another flag) is malformed, not absent.
++    const dir = pkgDir();
++    const before = snapshot(dir);
++    const args = (await argsFor("waive-mutation", dir, { "--answered-by": undefined })).concat(["--answered-by"]);
++    await expect(runOperatorCommand("waive-mutation", args, seams())).rejects.toThrow("--answered-by");
++    expect(snapshot(dir)).toEqual(before);
++  });
++
++  test("AC3 an unknown package", async () => {
++    for (const verb of FOUR) {
++      await expect(runOperatorCommand(verb, await argsFor(verb, pkgDir(), { "--package": path.join(repo, "nope") }), seams())).rejects.toThrow("--package");
++    }
++    expect(existsSync(journalFile())).toBe(false);
++  });
++
++  test("AC3 an unknown finding and a finding that is not held", async () => {
++    const dir = pkgDir([held, { ...held, id: "LY-004", global_id: "r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
++    await expectRefused("decide-premise", dir, { "--finding": "LY-999" }, "No finding");
++    await expectRefused("decide-premise", dir, { "--finding": "LY-004" }, "not held");
++    await expectRefused("decide-premise", dir, { "--finding": undefined }, "--finding");
++  });
++
++  test("AC3 a stale plan: a question that does not show this plan's numbers", async () => {
++    const dir = pkgDir();
++    await expectRefused("confirm-plan", dir, { "--question-text": "Run 987 reviewer dispatches (654-655 min) for the plan?" }, /plan/i);
++    await expectRefused("confirm-plan", dir, { "--question-text": "Run the plan?" }, /plan/i);
++  });
++
++  test("AC3 a missing --reason", async () => {
++    await expectRefused("decide-premise", pkgDir(), { "--reason": undefined }, "--reason");
++    await expectRefused("decide-premise", pkgDir(), { "--reason": "  " }, "--reason");
++    await expectRefused("waive-mutation", pkgDir(), { "--reason": undefined }, "--reason");
++    await expectRefused("override-reviewers", pkgDir(), { "--reason": "" }, "--reason");
++  });
++
++  test("AC3 an --answer-text that is a decline: empty, n, no", async () => {
++    for (const verb of FOUR) {
++      for (const declined of ["n", "N", "no", "No.", " no ", "nope", "нет", "no, not now"]) {
++        await expectRefused(verb, pkgDir(), { "--answer-text": declined }, /decline/i);
++      }
++    }
++  });
++
++  test("AC3 decide-premise: an --answer-text that does not name the same choice as --answer", async () => {
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "dismiss", "--answer-text": "uphold it" }, "--answer-text");
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "uphold", "--answer-text": "dismiss it" }, "--answer-text");
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "uphold", "--answer-text": "yes" }, "--answer-text");
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "dismiss", "--answer-text": "I am not sure what to say" }, "--answer-text");
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "dismiss", "--answer-text": "do not dismiss it" }, "--answer-text");
++    await expectRefused("decide-premise", pkgDir(), { "--answer": "uphold", "--answer-text": "uphold or dismiss, either" }, "--answer-text");
++  });
++
++  test("AC3 decide-premise: the choice is named in the operator's words, in either language", async () => {
++    for (const [answer, text] of [["uphold", "Upheld: keep the severity"], ["dismiss", "Dismissed, it is wrong"], ["uphold", "оставляем как есть"], ["dismiss", "снять, это неверно"]] as const) {
++      const dir = pkgDir();
++      expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answer": answer, "--answer-text": text }), seams())).toBe(0);
++      expect((await readPremiseDecisions(dir))[0]?.answer).toBe(answer);
++    }
++  });
++
++  test("AC3 nothing is recorded when a refusal is raised after parsing: the journal stays empty", async () => {
++    const dir = pkgDir();
++    await expect(runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--finding": "LY-999" }), seams())).rejects.toThrow();
++    expect(await readPremiseDecisions(dir)).toEqual([]);
++    expect(await journalRows()).toEqual([]);
++  });
++});
++
++describe("AC4 stays: without the flag the verbs behave as before", () => {
++  test("AC4 the refusal without a TTY is unchanged and names the card", async () => {
++    for (const verb of FOUR) {
++      const dir = pkgDir();
++      const args = (await argsFor(verb, dir)).filter((_, i, all) => !["--answered-by", "--answer-text", "--question-text"].includes(all[i - 1] ?? "") && !["--answered-by", "--answer-text", "--question-text"].includes(all[i] ?? ""));
++      await expect(runOperatorCommand(verb, args, seams())).rejects.toThrow(`records the operator's own decision and needs a terminal: refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_${verb.replace("-", "_")} tool`);
++    }
++  });
++
++  test("AC4 a terminal with --answered-by still takes the flag path and never asks", async () => {
++    const dir = pkgDir();
++    const asked: string[] = [];
++    const seam = { isTerminal: () => true, ask: async (question: string) => (asked.push(question), "yes"), cwd: repo, log: () => undefined };
++    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seam)).toBe(0);
++    expect(asked).toEqual([]);
++    expect((await readOperatorDecisions(dir))[0]?.confirmedVia).toBe("host-question");
++  });
++});
++
++describe("AC5: an unattended run and a nested keryx refuse the flag, on every one of the four verbs", () => {
++  test("AC5 KERYX_TOOL_CALL=1 (a nested keryx in keryx shell) refuses and records nothing", async () => {
++    for (const verb of FOUR) {
++      await expectRefused(verb, pkgDir(), {}, "KERYX_TOOL_CALL", { env: { KERYX_TOOL_CALL: "1" } });
++    }
++  });
++
++  test("AC5 the autonomous runner's environment refuses and records nothing", async () => {
++    for (const verb of FOUR) {
++      await expectRefused(verb, pkgDir(), {}, /unattended/i, { env: { [ENV_AUTONOMOUS_ANSWERS_FILE]: "/tmp/answers.json" } });
++    }
++  });
++
++  test("AC5 a package whose run profile says unattended refuses and records nothing", async () => {
++    for (const verb of FOUR) {
++      const dir = pkgDir();
++      await writeRunProfile(dir, buildRunProfile({ unattended: true, env: {} }));
++      await expectRefused(verb, dir, {}, /unattended/i, { env: {} });
++    }
++  });
++
++  test("AC5 the refusal holds at a terminal too, and a real keryx tool-call environment is read from process.env by default", async () => {
++    const dir = pkgDir();
++    const before = process.env["KERYX_TOOL_CALL"];
++    process.env["KERYX_TOOL_CALL"] = "1";
++    try {
++      await expect(runOperatorCommand("decide-premise", await argsFor("decide-premise", dir), { isTerminal: () => true, cwd: repo, log: () => undefined })).rejects.toThrow("KERYX_TOOL_CALL");
++    } finally {
++      if (before === undefined) delete process.env["KERYX_TOOL_CALL"];
++      else process.env["KERYX_TOOL_CALL"] = before;
++    }
++    expect(await readPremiseDecisions(dir)).toEqual([]);
++  });
++
++  test("AC5 an unattended run's shell floor refuses the flag on each of the four verbs, however the line is wrapped", () => {
++    for (const verb of FOUR) {
++      const line = `keryx review ${verb} --package .metaproject/reviews/r1 --reason x --answered-by claude-code:q1 --answer-text yes --question-text "ok?"`;
++      expect(unattendedShellRefusal(line)).toContain("--answered-by");
++      expect(unattendedShellRefusal(`sh -c '${line}'`)).toContain("--answered-by");
++      expect(unattendedShellRefusal(`bun src/cli.ts review ${verb} --answered-by=codex:1`)).toContain("--answered-by");
++    }
++    // The verbs without the flag are not the floor's business, and neither is another command that mentions the flag.
++    expect(unattendedShellRefusal("keryx review confirm-plan --package p")).toBeUndefined();
++    expect(unattendedShellRefusal("keryx review estimate --package p")).toBeUndefined();
++  });
++});
++
++describe("AC6: an accepted host question also writes a keryx decisions entry", () => {
++  test("AC6 the entry carries the question, the options, the choice, the source and the ref", async () => {
++    const dir = pkgDir();
++    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answered-by": "helyx-poll:poll-223:msg-9" }), seams())).toBe(0);
++    const [row] = await journalRows();
++    expect(row).toMatchObject({ question: ASKED, choice: "dismiss", source: "helyx-poll", ref: "poll-223:msg-9", verb: "decide-premise" });
++    expect(row?.options.map((option) => option.id)).toEqual(["uphold", "dismiss"]);
++    expect(row?.answerText).toBe("dismiss it, the platforms do not mirror media controls");
++  });
++
++  test("AC6 it is readable with `keryx decisions report --json`", async () => {
++    const dir = pkgDir();
++    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir, { "--answered-by": "codex:turn-4" }), seams())).toBe(0);
++    const child = Bun.spawnSync(["bun", CLI, "decisions", "report", "--json"], { cwd: repo, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
++    expect(child.exitCode).toBe(0);
++    const report = JSON.parse(child.stdout.toString()) as { hostQuestions: Array<{ question: string; options: Array<{ id: string }>; choice: string; source: string; ref: string }> };
++    expect(report.hostQuestions).toHaveLength(1);
++    expect(report.hostQuestions[0]).toMatchObject({ question: "Waive the mutation pass? The suite takes an hour.", choice: "waive", source: "codex", ref: "turn-4" });
++    expect(report.hostQuestions[0]?.options.map((option) => option.id)).toEqual(["waive", "keep"]);
++  });
++
++  test("AC6 every verb writes one, with its own options", async () => {
++    const expected: Record<Verb, { options: string[]; choice: string }> = {
++      "decide-premise": { options: ["uphold", "dismiss"], choice: "dismiss" },
++      "confirm-plan": { options: ["yes", "no"], choice: "yes" },
++      "waive-mutation": { options: ["waive", "keep"], choice: "waive" },
++      "override-reviewers": { options: ["override", "keep"], choice: "override" },
++    };
++    for (const verb of FOUR) {
++      expect(await runOperatorCommand(verb, await argsFor(verb, pkgDir()), seams())).toBe(0);
++    }
++    const rows = await journalRows();
++    expect(rows).toHaveLength(4);
++    for (const verb of FOUR) {
++      const row = rows.find((entry) => entry.verb === verb);
++      expect(row?.options.map((option) => option.id)).toEqual(expected[verb].options);
++      expect(row?.choice).toBe(expected[verb].choice);
++    }
++  });
++
++  test("AC6 a refused question writes none", async () => {
++    const dir = pkgDir();
++    await expectRefused("decide-premise", dir, { "--answer-text": "no" }, /decline/i);
++    await expectRefused("confirm-plan", dir, { "--answer-text": "  " }, "--answer-text");
++    await expectRefused("waive-mutation", dir, { "--reason": undefined }, "--reason");
++    expect(await journalRows()).toEqual([]);
++    expect((await loadReport(repo)).total).toBe(0);
++  });
++
++  test("AC6 a host question is not a recommendation: it adds to no arm and no match share", async () => {
++    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", pkgDir()), seams())).toBe(0);
++    const report = await loadReport(repo);
++    expect(report.hostQuestions).toHaveLength(1);
++    expect(report.total).toBe(0);
++    expect(report.answered).toBe(0);
++  });
++});
++
++describe("AC7: review complete refuses the host-question flags", () => {
++  function complete(...extra: string[]): { exitCode: number; output: string } {
++    const child = Bun.spawnSync(["bun", CLI, "review", "complete", "no-such-review", ...extra], { cwd: repo, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
++    return { exitCode: child.exitCode ?? -1, output: `${child.stdout.toString()}${child.stderr.toString()}` };
++  }
++
++  test("AC7 its flag check names --answered-by, --answer-text and --question-text as unknown", () => {
++    const result = complete("--answered-by", "claude-code:q1", "--answer-text", "yes", "--question-text", "ok?");
++    expect(result.exitCode).not.toBe(0);
++    expect(result.output).toContain("--answered-by");
++    expect(result.output).toContain("--answer-text");
++    expect(result.output).toContain("--question-text");
++    expect(result.output.toLowerCase()).toContain("unknown");
++  });
++
++  test("AC7 each flag alone is refused as unknown, and its own flags stay accepted", () => {
++    for (const flag of ["--answered-by", "--answer-text", "--question-text"]) {
++      const result = complete(flag, "x");
++      expect(result.exitCode).not.toBe(0);
++      expect(result.output).toContain(flag);
++      expect(result.output.toLowerCase()).toContain("unknown");
++    }
++    // --waive and --waive-coverage are still complete's own flags: they get past the flag check.
++    for (const own of [["--waive", "x"], ["--waive-coverage", "x"]]) {
++      expect(complete(...own).output.toLowerCase()).not.toContain("unknown flag");
++    }
++  });
++});
++
++describe("AC8: the record is visible as a host question, distinct from a card", () => {
++  test("AC8 the readiness line of the review report names host-question and the source", async () => {
++    const dir = pkgDir();
++    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answered-by": "helyx-poll:poll-223" }), seams())).toBe(0);
++    const readiness = await computeReadiness(dir);
++    const evidence = readiness.items.find((item) => item.id === "premise-decisions")?.evidence ?? "";
++    expect(evidence).toContain("host-question");
++    expect(evidence).toContain("helyx-poll");
++    expect(renderReadiness(readiness).join("\n")).toContain("host-question");
++  });
++
++  test("AC8 a card or terminal answer reads as before, with no host-question wording", async () => {
++    const dir = pkgDir();
++    const seam = { isTerminal: () => true, ask: async () => "dismiss it", cwd: repo, log: () => undefined };
++    const args = (await argsFor("decide-premise", dir)).filter((_, i, all) => !["--answered-by", "--answer-text", "--question-text"].includes(all[i - 1] ?? "") && !["--answered-by", "--answer-text", "--question-text"].includes(all[i] ?? ""));
++    expect(await runOperatorCommand("decide-premise", args, seam)).toBe(0);
++    const evidence = (await computeReadiness(dir)).items.find((item) => item.id === "premise-decisions")?.evidence ?? "";
++    expect(evidence).not.toContain("host-question");
++  });
++
++  test("AC8 the dismissal evidence on the finding says it was a host question and from where", async () => {
++    const dir = pkgDir();
++    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answered-by": "codex:turn-4" }), seams())).toBe(0);
++    const text = readFileSync(path.join(dir, "findings.json"), "utf8");
++    expect(text).toContain("host-question");
++    expect(text).toContain("codex");
++  });
++
++  test("AC8 the /decisions modal data lists the host question with confirmedVia and the source", async () => {
++    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", pkgDir(), { "--answered-by": "helyx-poll:poll-223:msg-9" }), seams())).toBe(0);
++    const text = await reportText(repo);
++    expect(text).toContain("host-question");
++    expect(text).toContain("helyx-poll");
++    expect(text).toContain("poll-223:msg-9");
++    expect(text).toContain("dismiss");
++    expect(formatDecisionsLines(text).join("\n")).toContain("host-question");
++  });
++
++  test("AC8 the report text with no host question is as before", async () => {
++    expect(await reportText(repo)).not.toContain("host-question");
++  });
++});
++
++describe("older records stay readable", () => {
++  test("an operator-decisions.json with no hostQuestion field reads as before", async () => {
++    const dir = pkgDir();
++    const seam = { isTerminal: () => true, ask: async () => "yes, waive it", cwd: repo, log: () => undefined };
++    const args = (await argsFor("waive-mutation", dir)).filter((_, i, all) => !["--answered-by", "--answer-text", "--question-text"].includes(all[i - 1] ?? "") && !["--answered-by", "--answer-text", "--question-text"].includes(all[i] ?? ""));
++    expect(await runOperatorCommand("waive-mutation", args, seam)).toBe(0);
++    const [decision] = await readOperatorDecisions(dir);
++    expect(decision?.confirmedVia).toBe("terminal");
++    expect(decision?.hostQuestion).toBeUndefined();
++  });
++
++  test("the verbs keep their names", () => {
++    const names: OperatorCommand[] = [...FOUR];
++    expect(names).toHaveLength(4);
++  });
++});

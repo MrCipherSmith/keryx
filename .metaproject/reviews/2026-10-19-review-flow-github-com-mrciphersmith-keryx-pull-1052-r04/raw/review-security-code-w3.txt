@@ -1,0 +1,45 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 3, slice-03)
+
+### Scope
+- Package: .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04
+- Head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice reviewed: slice-03 only (source and tests), files read at head for context.
+- Excluded as instructed: r03 minors D-02..D-14, autonomous-profile.ts wording, stale "then run keryx review complete" text in the orchestrator skill, completion-gate.ts:791 wording, missing D-12 remote-press tests. Earlier waves already filed the same-user shell_exec bypass of `keryx review complete` (w2 F-001) and TM-04 section 8 documents it, so it is not repeated here.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### What I tried to break, and why it held
+
+1. Allowed user id. The hub drops senders outside `config.allowedUserIds` before routing (src/remote/hub.ts route). The record repeats the check in `operatorConfirmTool.invoke` against `binding.allowedUserIds()`, which the shell reads fresh from `loadRemoteConfig()` (src/commands/shell.ts). It fails closed in three cases: no binding, config not loadable (undefined), or `pressedBy` missing. The remote fields only reach the invoke context when `confirmationVia === "remote"` (agent.ts), and only `operatorConfirmTool` consumes them. A local press carries no pressedBy and records no press fields.
+2. One press per card. The token is deleted from `pending` synchronously in `invoke` before any await and before the remote checks, so a concurrent or replayed press cannot reach `apply` twice. At the hub, `pressApproval` accepts only an approval id the hub generated for that session and `dropApproval` makes it single-use (src/remote/http-surface.ts).
+3. One hour. `REMOTE_CARD_TTL_MS` is compared against `entry.issuedAt` taken from the shell clock via `now()`. A stale card is refused after the token is already burned, so a late press cannot be retried.
+4. Token burned on refusal. Every refusal path (input changed, missing press fields, user not allowed, card expired) happens after, or together with, `pending.delete`. An input mismatch deletes the token as well.
+5. pressedBy / pressedAt. `pressedAt` is stamped by the shell (tui-shell.ts `remoteApproval`), not by the sender. `cardPressFields` spreads both into every recorder: chunk estimate, publish, coverage waiver, readiness waiver, operator decisions, plan confirmation, premise decision and the schedule decision log. The new tests cover the remote case for the chunk, premise and plan cards and for review_complete.
+6. review_complete head binding. `completeSpec` takes no head from the model: the input schema has no `head` property and a model-supplied `head` is ignored (test "the model cannot supply a head"). `completionFacts` reads the head from `manifest.target.head`, and the card shows that head. `factsDigest` over head, evidence line, readiness waivers, coverage waiver and operator decisions is recomputed in apply, so a waiver or decision added after the card refuses (tests "a waiver added between the card and the yes", "an operator decision added between..."). Apply runs `completeReviewGated`: the run-profile refusal, the narrowed-routing refusal, then `completeManagedReview` (head gate, evidence level, research, readiness). A merged PR or a moved head is refused unless the report's first line names the SHA. Card lines are single-line sanitized (test "a recorded head with a line break cannot add a line to the card").
+7. Package path. `resolvePackage` confines the package to the project through `placeReviewPath`, and a bare id resolves under the review roots via `resolveReviewPackagePath`. The card cannot point review_complete at a directory outside the project.
+8. Parity with the terminal. `review.ts runComplete` now goes through the same `completeReviewGated`, so the card and the command meet the same gates. The card meets the premise-decisions rule and never waives it.
+9. Roster. `review_complete` is registered in the unattended exclusion list and the roster tests (19 tools) keep it out of MCP, ACP, subagent and readline rosters.
+
+### Residual observations (not filed, consistent with TM-04)
+- The review_complete facts digest covers the evidence line but not the rest of the report body, and the `pending` map has no sweep, so unanswered cards stay in memory for the session. Neither gives an attacker anything beyond what TM-04 section 4 and section 8 already state: a same-user agent with shell access can write the stores directly, and the card is a record of the operator's answer, not a lock. No attack vector in the changed code, so below the INFO bar of Iron Law 1.
+
+### Clean Areas
+Injection (SQL, command, template, eval); authentication and authorization on the remote press (allowlist enforced twice, fail closed); privilege escalation (the model cannot supply head, pressedBy or pressedAt); IDOR/package confinement; input validation (strict schemas, additionalProperties false); secrets and logging (no secrets, the Telegram user id is the only identity recorded); cryptography (UUID tokens from the platform CSPRNG); path traversal (placeReviewPath and review-root resolution); CSRF and open redirect (not applicable to this slice); replay and TOCTOU (token deleted before await, digest re-checked in apply).
+
+## REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "summary": "Slice-03 holds the remote-answer guarantees: allowed user id enforced at the hub and again at the record (fail closed), one press per card with the token burned before any await and on every refusal, one hour TTL from the shell clock, pressedBy/pressedAt carried into every store, and review_complete bound to manifest.target.head with a digest re-check and the same gates as the terminal command. No exploitable path found.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "findings": []
+}
+```

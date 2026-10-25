@@ -1,0 +1,84 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "slices": ["slice-04"],
+  "summary": "No exploitable vulnerability in slice-04. The producer of via:\"remote\" (remoteApproval in src/tui/tui-shell.ts) is reachable only from the two topic-answer branches; the dock (confirmOperatorCard) returns a bare boolean, so a TUI answer can never carry via/pressedBy. fromId comes from the hub's callback (allowlist + chat + topic checked in hub.route, session and single-use checked in http-surface.pressApproval), never from model text, and a missing fromId fails closed at operator-confirm-tools.invoke. The new OperatorConfirmationLog is memory-only and holds the card title and a numeric user id. Four findings, all display/AC-fidelity (2 minor, 2 info); none changes who can record an operator act.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;",
+      "problem": "When the topic leg ends undelivered AFTER the card was logged as mirrored (client connected at ask time, but the POST to serve fails or returns no approvalId), raceApproval fires onUndelivered, which only writes a transcript line. The log entry stays mirrored=true, so the sidebar Remote row keeps saying 'N card waiting', the status tab and /decisions keep saying 'N left of the 1-hour token', and the dock card (already open) never gets the 'Telegram mirror not delivered' note that withMirrorNote adds only on the pre-flight path.",
+      "evidence": "src/tui/tui-shell.ts mirrorApprovalToTopic: operatorCards.ask(..., true) is called before raceApproval; the onUndelivered option is `() => io.onSystem?.(\"◇ Telegram mirror not delivered: ...\")` and does not touch operatorCards or the card. src/remote/client.ts:439-462 returns {decision:'deny', undelivered:true} on a non-ok POST. src/tui/operator-confirmations.ts waiting() counts every entry with mirrored=true and answered===undefined, and has no setter to flip mirrored.",
+      "impact": "The operator is told a Telegram press can still answer a card that serve never received; AC5 ('the card says the mirror was not delivered') and AC6 (pending line) are only met on the not-connected path. Fails safe (the dock still answers, nothing is recorded remotely), so it is a display-integrity defect, not a bypass.",
+      "suggested_fix": "Give OperatorConfirmationLog a markUndelivered(id) that sets mirrored=false, call it from the onUndelivered callback (it already has cardId in scope once the callback is built inside the isCard branch), and let it notify subscribers so the sidebar and modals repaint.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: verdict !== false });",
+      "problem": "Both ask()/answer() pairs in mirrorApprovalToTopic are straight-line code with no try/finally. If inner(...) or raceApproval(...) rejects, the entry is never answered. OperatorConfirmationLog only trims ANSWERED entries (ANSWERED_CARDS_KEPT), so an open entry is kept for the life of the shell; a mirrored one also keeps the sidebar at 'N card waiting' with a TTL that eventually reads 'token expired, ask again'.",
+      "evidence": "src/tui/operator-confirmations.ts answer(): the eviction loop runs over items filtered by answered !== undefined only; ask() pushes without a cap. src/tui/tui-shell.ts: the unmirrored branch awaits inner() and the topic branch awaits raceApproval() with the answer() calls after the await and not in a finally. raceApproval (src/tui/approval-mirror.ts) rethrows a dock rejection (try/finally with no catch).",
+      "impact": "Only reachable through an internal rejection (overlay or dock failure), so growth is small and nothing security-relevant is recorded; the visible effect is a permanent false 'card waiting' indicator that can mislead the operator about a live remote token.",
+      "suggested_fix": "Wrap each await in try/finally and answer the entry as 'withdrawn' on a throw: `try { ... } catch (error) { operatorCards.answer(id, { place: 'withdrawn', yes: false }); throw error; }`.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const answer = await bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), offer === undefined ? {} : { remember: offer.pattern });",
+      "problem": "The topic-only path for a Telegram-started turn (requestApprovalForTelegramTurn) is not wired to the new OperatorConfirmationLog and has no undelivered fallback: an operator card asked in such a turn never appears in the sidebar, the status tab or /decisions (so 'pressed by Telegram user N' is not shown for it), and if the stream is down askApproval returns deny+undelivered and the call is refused without a TUI card being opened.",
+      "evidence": "src/tui/tui-shell.ts requestApprovalForTelegramTurn calls bridge.askApproval directly and returns false on any non-allow; only mirrorApprovalToTopic calls operatorCards.ask/answer. src/remote/shell-bridge.ts:963-966 returns undelivered:true when not connected. AC5 reads 'the card still opens in the TUI'.",
+      "impact": "Fail-closed, and arguably intended for a topic-only turn (the sender decides), so no bypass. It is an AC5/AC6 coverage gap for that one turn type, worth an owner decision rather than a code change. I could not confirm from the slice whether telegramTurnActive is cleared when the stream drops mid-turn, which would route the call back to the dock.",
+      "suggested_fix": "Either record the card in operatorCards in that path too (ask before askApproval, answer with pressedBy after), or state in the AC/limitations that a Telegram-started turn answers its cards only in the topic.",
+      "confidence": "low",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "return { approved: true, fingerprint, via: \"remote\", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };",
+      "problem": "pressedAt is the time the shell built the response, not the time Telegram delivered the press; the type comment in operator-confirm-tools.ts calls it 'ISO time of that press'. The hub's approval event carries no timestamp (ApprovalEvent: updateId, approvalId, decision, fromId), so the shell cannot do better without a protocol field.",
+      "evidence": "src/remote/http-surface.ts:1268 builds the ApprovalEvent without a time; src/tui/tui-shell.ts remoteApproval stamps new Date() when the race result is turned into a response (after raceApproval returns, so also after the dock has closed).",
+      "impact": "The recorded press time can lag the real press by the dock-teardown time (milliseconds in the normal path). The 1-hour TTL is checked against issuedAt, not pressedAt, so expiry is unaffected. Audit accuracy only.",
+      "suggested_fix": "Document pressedAt as 'when the shell received the press', or add a server timestamp to ApprovalEvent and pass it through RemoteApprovalAnswer.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+## Checked and clean (lens questions)
+
+1. TUI-originated approval labelled remote or carrying pressedBy: no. `remoteApproval` (src/tui/tui-shell.ts) is called from exactly two places, both after `bridge.askApproval` produced a topic answer (the Telegram-turn path and the `from: "topic"` branch of the mirror race). The dock side, `confirmOperatorCard`, returns `Promise<boolean>`; agent.ts:6120-6124 maps a non-object response to `confirmationVia = "local"` and drops pressedBy/pressedAt, and operator-confirm-tools.invoke only writes them when `ctx.confirmationVia === "remote"`. A dock answer that lands in the same tick as a topic press cannot be relabelled either: microtasks drain before the next network frame, so the earlier human wins, as before this PR.
+2. fromId source and fail-closed: `fromId` is the numeric `callback.fromId` that serve's hub took from the Telegram update after `allowedUserIds`, `chatId` and registered-thread checks (hub.ts:1085-1097), passed through `mapApprovalAnswer` (Number.isSafeInteger only). Allow with no fromId yields `via:"remote"` without pressedBy, and `invoke` refuses it ("did not say who pressed it"). A missing fingerprint falls back to a bare `true`, which is recorded as tui-card with no pressedBy (understates, never overstates).
+3. Different user / chat / topic / stale callback: users, chat and topic are refused in hub.route; `pressApproval` rejects another session's approval id, accepts only an id this server issued (`ap` + 48 random bits), still inside its window, and `dropApproval` makes it single-use; a replay or late press finds the `finished`/`awaiting` entry and changes nothing. The shell side keeps one waiter per approvalId, so a press for question A cannot resolve question B. The callback itself carries no fingerprint: the fingerprint in `remoteApproval` is copied from the question being asked, so the binding of answer to question is the approvalId, not the fingerprint. That is sound here and unchanged by this PR.
+4. Unmirrored-card wrapper: it only runs `inner` (the dock) with a copy of `meta` whose card gained one note line above the subject; it cannot produce a remote response, does not touch the token, and the topic is never asked in that branch. The note is not part of the stored `shown` card or the quote (those come from `confirmation()` in operator-confirm-tools.ts). `isCard` excludes `user_prompt`.
+5. operator-confirmations.ts: in memory only (no file, no path handling); holds the card title and a numeric Telegram id, no tokens, fingerprints, input JSON or secrets; answered entries capped at 5 (open entries are not, see F-002); pressedBy shown only for place `telegram`, and it is set from `outcome.answer.fromId`, never from model input. Text is flattened and clipped to 80 characters.
+6. remote-control-surface.ts / decisions-surface.ts: only append pre-built lines and a waiting count; no input is parsed, nothing is written.
+7. Expiry: the topic leg waits MAX_APPROVAL_TIMEOUT_MS (60 min) and the record check is `now() - issuedAt > 60 min` against a value held in the tool closure, so a press at the edge is refused, not accepted.
+
+Not re-reported (known): token Map never evicted; close-before-record in review_complete.
+
+Files read: slice-04.diff; src/commands/operator-confirm-tools.ts; src/commands/agent.ts (6060-6195, 276-315, 5290-5313); src/remote/shell-bridge.ts; src/remote/client.ts (420-503); src/remote/http-surface.ts (1190-1320); src/remote/hub.ts (1060-1170); src/tui/tui-shell.ts (5538-5650, 5990-6140).

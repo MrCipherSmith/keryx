@@ -27,6 +27,7 @@ test("keryx init's managed ignore block ignores the W3 observation/candidate pat
 
     expect(gitCheckIgnoreExitCode(root, OBSERVATION_PATH)).toBe(0);
     expect(gitCheckIgnoreExitCode(root, CANDIDATE_PATH)).toBe(0);
+    expect(gitCheckIgnoreExitCode(root, ".metaproject/data/learning/probes/pattern/abcdef123456/plan.json")).toBe(0);
     expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });

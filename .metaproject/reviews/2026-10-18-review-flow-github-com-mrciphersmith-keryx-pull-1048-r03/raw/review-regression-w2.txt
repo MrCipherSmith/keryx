@@ -1,0 +1,26 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check of slice-02 (kind new, r03 delta d6267d4a5099..5382b56abf17): no change in this slice breaks an existing behaviour of a dependent. Checked each moved contract against its consumers at head: (1) RecordedResolve.taskText removed in favour of taskTextLength/taskTextTruncated in src/gdskills/context-resolver.ts - no non-test reader of the recorded taskText exists (keryx ctx rg taskText over src: the only readers are resolve-context-command.ts, reference-entries.ts, mcp/metaproject-tools.ts, harness metaproject-operations/adapter, all of which pass the input text to the resolver, not read it back from last.json; readLastResolve validates only recordedAt/result, so an old last.json carrying taskText still loads); (2) references-section.ts heading parsing replaced the HEADING regex /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/ and the stripClosingHashes regexes with hand scans - traced equivalent on indentation (0-3 spaces), level bounds, required blank after the hashes, trailing blanks, closing-hash runs ('Alpha ##', 'C#', '# ##', 'a # #'), and the line-terminator exclusion that '.' gave (\\r, \\u2028, \\u2029), so extractSection/markdownHeadings consumers (reference-entries.ts, reference-proof.ts, references-check.ts, project-references-view.ts) see the same headings; (3) references-check.ts scanCitations now also reads link-mode rules at their origin through the same resolveOriginPath the resolver, import-rules and update-rules use - a missing origin becomes a rule-unreadable warning (not an error), so the check's exit code for existing projects is unchanged; (4) renderProjectContextSidebarValue now wraps in cardSafe, which only strips ANSI/C0/C1/bidi controls and maps newlines/tabs, leaving every existing sidebar value byte-identical; (5) createProjectContextFeed's polling guard and started/applied ordering only drop overlapping or older loads, reload() still returns the loaded status to its callers (showProjectContext, modal loadStatus) as before, and tui-shell.ts adds stopProjectContextFeed to onDestroy without moving other teardown; (6) the skill-instruction edits (single-quoted --task-text) are byte-identical between .metaproject/skills/gdskills and src/gdskills/bundled/skills for all five changed skills (cmp), so skill-sync stays green. Not a regression but worth a scope-A note: docs/docs/cli-reference.md, references check row, still says 'a linked rule is not scanned', which the scanCitations change in this delta made false. Blast-radius limits: the record retains 20 files, drops 117 (49 text hubs, 39 unrelated-symbol, 29 test consumers; 0 by the 40-file cap), and leaves 16 changed non-code files (the skills, flow bookkeeping, docs) unresolved because they are not graph nodes; for those the radius cannot answer the question and I checked consumers by search instead.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Whole slice-02.diff read (2050 lines, 29 files). At head: src/gdskills/context-resolver.ts (RecordedResolve, recordLastResolve, readLastResolve), src/gdskills/references-check.ts (scanCitations), src/tui/project-context-inspector.ts (createProjectContextFeed), src/lib/card-safe.ts; base d6267d4a5099 src/gdskills/references-section.ts HEADING/FENCE regex compared with the new parser. Consumers traced with keryx ctx rg: taskText/taskTextLength over src, resolveOriginPath and link-mode handling over src/gdskills, last.json/last-resolve over docs and README. Skill copy sync checked with cmp for the five changed skills.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Summary: No regression findings on slice-02 at head 5382b56abf17. The delta's moved contracts are the last-resolve record dropping `taskText`, the hand-written heading parser, link-mode rules now scanned by `references check`, `cardSafe` on the sidebar value, and the feed's overlap and ordering guards. I traced each one to its consumers in the blast radius and by search. None of them breaks an existing caller: no code reads the recorded task text back, the new parser produces the same headings as the old regexes for every shape I traced, a linked rule's missing origin is only a warning, and the skill copies are byte-identical. There is one stale doc line, outside scope B and for scope A to take up: `docs/docs/cli-reference.md` still says "a linked rule is not scanned". The blast-radius record dropped 117 files (none by the cap) and left 16 changed non-code files unresolved, so the radius alone cannot vouch for the skill and docs edits. I covered those by search, not by the graph. Routing audit: graph_used: blast-radius record (no fresh build, read-only), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

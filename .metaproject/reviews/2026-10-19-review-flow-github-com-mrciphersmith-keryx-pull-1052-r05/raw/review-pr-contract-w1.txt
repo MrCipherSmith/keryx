@@ -1,0 +1,66 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "slices": ["slice-02"],
+  "summary": "Slice-02 only. The five Summary claims and the three Test-plan boxes of pr-context.md hold against the slice diff, with one unverifiable gap: the Test-plan command does not run src/review/, where the E-05 regression tests live (PC-001, info). Fixes E-01..E-06 claimed by 77d2eff20 are complete and regression-free in this slice; E-07 and E-08 are outside slice-02 and not judged. My deferred findings are untouched by this slice and stay open.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "info",
+      "file": "src/review/completion-gate.test.ts",
+      "line": null,
+      "problem": "Test-plan box: \"- [ ] `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/`\" (pr-context.md:20). The slice adds the regression test for the E-05 fix in src/review/completion-gate.test.ts: `test(\"a session with the review_complete card is told to call it, never to run the command\", () => {`. The listed command names no path under src/review/, so ticking the box does not run the test that guards the cardAvailable change in src/commands/agent.ts (`cardAvailable: deps.tools.some((tool) => tool.definition.name === \"review_complete\"),`, slice-02.diff:323). Unverified: whether CI's full suite (typecheck-and-tests, AC8 full suite, both pending in pr-context.md) covers it.",
+      "impact": "A reader who runs only the command in the box and ticks it believes the changed behaviour is tested; the E-05 gate message is not part of that run. Not a code defect.",
+      "suggested_fix": "Add `src/review/` to the command in the Test plan (and any other changed test directory), or replace the line with the full suite. Settled by: the CI result of typecheck-and-tests once it finishes.",
+      "evidence": "pr-context.md:20 (box text, quoted above); src/review/completion-gate.test.ts new test name (quoted above); slice-02.diff:323 (agent.ts cardAvailable line).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "closed" },
+    { "id": "E-02", "disposition": "closed" },
+    { "id": "E-03", "disposition": "closed" },
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-05", "disposition": "closed" },
+    { "id": "E-06", "disposition": "closed" },
+    { "id": "E-13", "disposition": "open" },
+    { "id": "E-14", "disposition": "open" },
+    { "id": "E-16", "disposition": "open" },
+    { "id": "E-17", "disposition": "open" },
+    { "id": "E-18", "disposition": "open" },
+    { "id": "E-19", "disposition": "open" },
+    { "id": "E-20", "disposition": "open" },
+    { "id": "E-48", "disposition": "open" }
+  ]
+}
+```
+
+Checklist rows (box or claim, state, what the slice diff shows, expectation)
+
+| Box or claim (quoted) | State | Slice-02 evidence (file:line, quoted) | Expectation / result |
+|---|---|---|---|
+| "- [ ] CI green" | unticked | pr-context.md: typecheck-and-tests, AC8 full suite, client matrix (terminal) pending | Cannot be settled from the diff; unticked is the honest state. No finding. |
+| "- [ ] `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/`" | unticked | the slice adds tests in src/commands/operator-confirm-review-tools.test.ts and src/remote/mirror-undelivered.test.ts (inside the command), and src/review/completion-gate.test.ts (outside it) | Partly covered; see PC-001 (info). |
+| "- [ ] Owner live check from the Telegram topic" | unticked | no diff signal either way (AC9 is the owner's live check) | Unticked matches the stated "AC9 is the owner's live check". No finding. |
+| "A remote-card answer now records `pressedBy` and `pressedAt`; it is accepted only from an allowed user id, once, for one question, within 1 hour." | claim | slice-02.diff:277-279, managed-review-package.schema.json readiness_waivers: `"confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card"] },` `"pressedBy": { "type": "integer" },` `"pressedAt": { "type": "string", "minLength": 1 }`; operator-confirm-review.ts imports `cardPressFields` (slice-02.diff:368) | Persisted fields exist in the schema and the schema test; the allow-list, once and 1 hour rules are enforced outside slice-02 and not judged here. |
+| "New `review_complete` card (SHA, evidence level, waivers); `review_confirm_plan` and `review_decide_premise` answer through the card too." | claim | slice-02.diff:351-352 (operator-confirm-review.ts header): `Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's evidence level and every waiver the package carries`; `evidenceLevelLine` imported at slice-02.diff:376 | Holds for the slice. |
+| "The card says when the Telegram mirror was not delivered; the terminal commands stay as fallback." | claim | src/remote/mirror-undelivered.test.ts (`onTopicEnded` tests); slice-02.diff:69: `the \`review_complete\` card (\`keryx review complete\` for a human at a terminal)`; slice-02.diff:24 keeps `keryx review complete <package> --waive memory-outside-stage "<operator quote>"` "in a terminal" | Holds: the card is the agent path, the CLI stays the terminal fallback. |
+| "TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`." | claim | no TUI source file in slice-02 | Not in this slice; not judged. |
+| "Docs: TM-04 section, review guides, cli-reference, review skills. `flow ac confirm` is unchanged (operator decision)." | claim | both review-orchestrator SKILL.md / SKILL.detail.md copies (.metaproject and src/gdskills/bundled) carry the same `review_complete` wording (slice-02.diff:24, :69 and the mirrored hunks); no `flow ac confirm` change in the slice | Review skills part holds; TM-04, guides and cli-reference are outside this slice. |
+
+Prior findings claimed fixed by 77d2eff20, as far as slice-02 shows
+
+- E-01 closed. Every listed site of "then run `keryx review complete`" in both SKILL copies is now "call `review_complete`" (item 10 at slice-02.diff:24, early-verdict tail at :69, One memory read, slicing step 4, Control "Early verdict", chunks paragraph), identical in the .metaproject and bundled copies. No site left behind in the slice; no regression.
+- E-02, E-03, E-04 closed. The dispositions paragraph, the CLI-surface comment and the schema fields (slice-02.diff:277-279) agree with the docs; the schema `additionalProperties: false` now admits the three new keys, so a recorded remote-card waiver validates.
+- E-05 closed. `cardAvailable` is passed to `decideReviewGate` (slice-02.diff:323) and has tests in completion-gate.test.ts. The log line at slice-02.diff:329 ("`review complete` still refuses") only describes the refusal and is not filed. The test command gap is PC-001 (info).
+- E-06 closed. The `FINDING_DISPOSITION_STATES` refactor in operator-confirm-review.ts (slice-02.diff:368, :379) and its dispositions tests are consistent with the schema enum; no regression seen.
+- E-07 and E-08 are not in slice-02: no disposition given.
+- E-13, E-14, E-16, E-17, E-18, E-19, E-20, E-48 are my deferred findings; slice-02 does not touch them: open, not claimed fixed.
+
+Not read / not judged: files outside slice-02 (TUI, docs, remote mirror source, pressedBy enforcement code). No document was needed that I did not hold, so no NEEDS_CONTEXT.

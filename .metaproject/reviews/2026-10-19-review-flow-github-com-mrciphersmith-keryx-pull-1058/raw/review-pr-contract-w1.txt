@@ -1,0 +1,67 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-01 (wave 1 of 4), PR 1058. Checklist rows: 5 test-plan boxes (4 ticked, 1 unticked 'review round') and 5 stated claims, all settled. The diff and the documents outside it (TM-04 6b, limitations, CLI reference, README, review-with-a-record, autonomous-review, both bundled skill copies, both schema copies) agree with the body on scope, flags, sources, refusals and the card-first ordering. Two minor disagreements filed: the docs and skills name `ask_user` and source `keryx-shell` as a working host-question path although every shell_exec child carries KERYX_TOOL_CALL=1 and a nested keryx refuses the flag; and one sentence in review-with-a-record.md still says an agent's shell cannot answer for you and the command is refused without a terminal, directly above the paragraph that says the agent records your answer. Not repeated: the four already-reported items.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/limitations.md",
+      "line": 212,
+      "quote": "the agent asks the operator with the host's own question tool (Claude Code's, Codex's, a Telegram poll through Helyx, keryx's `ask_user`) and passes the answer with `--answered-by <source>:<ref>",
+      "problem": "pr-context.md says `review complete` ... \"unattended runs and a nested keryx still refuse\" the flag, and unattended.ts / review-operator.ts refuse it under `KERYX_TOOL_CALL=1`. src/harness/process/shell-spawn.ts:140 sets `env.KERYX_TOOL_CALL = \"1\"` on every shell_exec child, so an agent inside keryx shell that asked with `ask_user` and then runs `keryx review <verb> --answered-by keryx-shell:<ref> ...` is a nested keryx and is refused. The docs and skills nevertheless list `ask_user` as a host question tool and `keryx-shell` as an accepted source, as if that path worked. In keryx shell the working path is the card (SKILL.md: 'In keryx shell call the card and never send the operator to a terminal').",
+      "impact": "A reader or agent in keryx shell who follows the `ask_user` plus `--answered-by keryx-shell:` instruction gets a refusal and, by the skill's own rule, has no terminal to send the operator to. The documented source value `keryx-shell` is one no caller can record in practice.",
+      "suggested_fix": "Drop `ask_user` from the host-question tool lists and say that keryx shell uses cards (the nested-keryx refusal covers it), or, if keryx-shell is meant to be recordable, say which path reaches it. Sites: docs/docs/limitations.md:212, docs/docs/cli-reference.md:4926, review-orchestrator SKILL.md Operator decisions bullet (line 47: '`ask_user`'), the `keryx-shell` entry in the source list in the schema, TM-04 6b, README-adjacent help text in src/commands/review-operator.ts:65,78,93,108. If keryx-shell stays for completeness, add one sentence that it is refused from a shell_exec child.",
+      "evidence": "pr-context.md: 'unattended runs and a nested keryx still refuse'. slice-01.diff review-orchestrator SKILL.md Operator decisions: 'Ask the operator with the host's own question tool (`AskUserQuestion`, Codex's question tool, a Telegram poll through Helyx, `ask_user`)' and review-finding.schema.json: '\"source\": { \"type\": \"string\", \"enum\": [\"claude-code\", \"codex\", \"keryx-shell\", \"helyx-poll\", \"other\"] }'. src/harness/process/shell-spawn.ts:140: 'env.KERYX_TOOL_CALL = \"1\";' (comment lines 135-139: marks every shell_exec child). src/commands/review-operator.ts:19: 'An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag'. I did not run the command to observe the refusal; it rests on reading those lines.",
+      "confidence": 0.6,
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": 612,
+      "quote": "An agent's shell cannot answer for you: the command\nis refused without a terminal, so the agent never sends you there from keryx shell; it calls the card.",
+      "problem": "The PR body says the four verbs 'accept `--answered-by ...` without a TTY'. This sentence, left unedited directly above the new 'Without a card: a host question' paragraph (line 615: 'it then records what you chose, with no terminal'), states the command is refused without a terminal and that an agent cannot answer for the operator. It is true only without `--answered-by`.",
+      "impact": "A reader of the guide meets two adjacent statements that disagree about whether an agent can record the operator's decision without a terminal. The first one also reads as the guarantee the operator relied on before this change.",
+      "suggested_fix": "Qualify the sentence: 'Without --answered-by the command is refused without a terminal; inside keryx shell the agent calls the card' and let the next paragraph carry the host-question path.",
+      "evidence": "docs/docs/guides/review-with-a-record.md:612-613 versus :615 and :618-621 (the same file, same PR).",
+      "confidence": 0.5,
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {
+    "files_reviewed": 11,
+    "claims_checked": 10,
+    "findings_by_severity": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+    "documents_read_outside_diff": [
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/limitations.md",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/review-with-a-record.md",
+      "docs/docs/guides/autonomous-review.md",
+      "src/gdskills/bundled/skills/** (byte-identical to .metaproject copies for job-orchestrator, review-premise, review-orchestrator SKILL.md and SKILL.detail.md, flow-orchestrator)",
+      "src/gdskills/contracts/review-finding.schema.json (byte-identical to the .metaproject/core copy)"
+    ],
+    "rows_settled_without_finding": [
+      "'TM-04 §6b, README, CLI reference and guides updated': TM-04 6b exists (line 122), limitations anchor '#a-host-question-is-a-weaker-proof-than-a-card' exists (limitations.md:210), CLI reference carries the flags and the 'A host question' paragraph.",
+      "'review complete (and its --waive flags) ... still refuse': README, TM-04 6b, CLI reference and the skills all keep complete and its waivers on the card or terminal path; none says otherwise.",
+      "'existing review-operator, operator-confirm-review and harness-robustness tests pass unedited': none of the three test files is in the PR file list.",
+      "'bun test src/commands/review-host-question.test.ts (41 tests)': 41 test( declarations in the file.",
+      "'Skills (review-orchestrator, job-orchestrator, review-premise)': updated in both copies; schema enum matches the CLI source list in skill, TM-04, CLI reference and limitations.",
+      "'keryx does not verify the answer / reverses TM-04 §5': stated in TM-04 6b, limitations, README and the skill."
+    ],
+    "unverified": [
+      "AC8 (report and /decisions show the host question) and the 'keryx decisions entry' claim rest on src/decisions/*, which is outside slice-01; not read here.",
+      "The PR 1052 records (AC11) and the live operator check (AC12) follow after merge per the body; nothing in slice-01 contradicts that."
+    ]
+  },
+  "slices": ["slice-01"]
+}
+```
+
+Routing audit: graph_used no (not relevant, claims are about prose and a flag list); wiki_used no (not relevant); ctx_used yes (`keryx ctx rg`, `keryx ctx diff`-style reads); raw_rg_used no. Two plain `sed -n` / `cmp` calls on named files for line extraction and byte comparison.

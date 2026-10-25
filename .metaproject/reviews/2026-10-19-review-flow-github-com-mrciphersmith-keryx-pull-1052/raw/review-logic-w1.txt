@@ -1,0 +1,71 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 (flow 464 docs, CHANGELOG, package.json, docs/docs/*, TM-04, review-orchestrator and review-premise SKILL files) states what the code does on every point I could verify against src: the 1-hour TTL (REMOTE_CARD_TTL_MS), the allowed-id check against binding.allowedUserIds with an empty list refusing everything, single use (the pending token is deleted before any check), pressedBy/pressedAt only for remote-card, pressedAt from the shell clock, the Telegram-mirror-not-delivered card text, the ten card specs, and review_complete re-deriving head, evidence line and waivers from the package at answer time (factsDigest compare) and running completeReviewGated, the one function the CLI also uses. No instruction in the SKILL or docs tells the agent to bypass or fabricate an operator act; SKILL.md keeps the ban on --mode automatic / --yes / writing an operator quote. No blocker or major. Three wording findings (one minor, two info) where the prose is looser than the code.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "a replayed, expired, foreign or text-only answer changes nothing",
+      "problem": "The 0.3.124 entry says a rejected remote answer 'changes nothing'. In src/commands/operator-confirm-tools.ts the pending token is deleted (pending.delete(token)) before the allowed-id and TTL checks, so every refusal, including a foreign-id press, spends the token and the card cannot be answered again; it has to be asked again. TM-04 section 6a says this correctly ('Each refusal leaves the token spent'); the CHANGELOG and AC2 ('each rejection leaves state unchanged') read as if the card stays open.",
+      "impact": "An operator or reader of the release notes may expect a mistaken press (wrong account, press after 1 hour) to leave the card answerable. In fact it is dead and the agent must raise a new card. No record is written, so nothing is corrupted; the defect is the wording only.",
+      "suggested_fix": "Reword to 'is refused and records nothing; the card is spent and must be asked again'. Keep TM-04 as the reference wording.",
+      "evidence": "CHANGELOG.md:18; docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:104 ('Each refusal leaves the token spent'); src/commands/operator-confirm-tools.ts: pending.delete(token) precedes the allowedUserIds and REMOTE_CARD_TTL_MS refusals.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": null,
+      "quote": "it carries this question's token",
+      "problem": "TM-04 6a says the press 'carries this question's token'. In code the one-time randomUUID token lives in the shell process (the pending map) and is handed to invoke by the driver only after the yes; the Telegram press itself carries the approval id and the pressing user id (fromId), and the binding between approval and token is made in-process. The sentence describes the effect, not the mechanism, and could be read as the token travelling through Telegram.",
+      "impact": "Could mislead a later security reader into assuming the token is a Telegram-side secret (guessable or replayable from the topic). It is not; the claim that matters (question binding, single use) holds in code.",
+      "suggested_fix": "Say: 'the shell maps the press to this card's one-time token, held in the shell process; the press itself carries only the approval id and the pressing user id'.",
+      "evidence": "TM-04 line 104; src/commands/operator-confirm-tools.ts (pending map, token deleted at entry of invoke); src/remote/shell-bridge.ts mapApprovalAnswer keeps only fromId.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "the exact terminal command, for the operator",
+      "problem": "The hosts table in the review-orchestrator SKILL still gives the 'Operator decision' row the terminal command for the non-keryx-shell hosts, while AC7 and the CHANGELOG say the skills 'tell the agent to call the card and never send the operator to a terminal'. The line-47 and line-56 text qualifies this correctly ('in keryx shell call the card ... (never send them to a terminal); outside ...'). The cards exist only as keryx-shell tools, so the table follows the code; the CHANGELOG sentence is the broad one.",
+      "impact": "No behaviour defect. A reader checking AC7 literally will find a terminal instruction for Claude Code/Codex hosts and may think the criterion is unmet. It is met for keryx shell, which is the only place a card exists.",
+      "suggested_fix": "Add 'outside keryx shell' to the table row, and in the CHANGELOG say 'in keryx shell' where it says 'never send the operator to a terminal'.",
+      "evidence": "SKILL.md:40 (table row), SKILL.md:47 and :56 (qualified wording); acceptance-criteria.md AC7; src/commands/operator-confirm-review.ts buildReviewConfirmSpecs (cards are keryx-shell tools).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": ["slice-01"],
+  "follow_ups": [
+    "Check that src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md, SKILL.detail.md and review-premise/SKILL.md are byte-identical in the changed passages to the .metaproject/skills/gdskills copies (slice-01 contains only the .metaproject copies).",
+    "Check the TUI text claims in cli-reference.md and TM-04 (status tab, sidebar Remote row, /decisions show age, time left and pressedBy) against src/tui/* for AC6.",
+    "Check the unattended-floor claim in docs/docs/guides/autonomous-review.md (every card tool refused by name) against the list in src/trigger/unattended.ts."
+  ]
+}
+```
+
+## Review Logic (slice-01)
+
+Scope: PR 1052, head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66. Spec gate ran against AC1-AC10; AC9 (owner live check) and AC10 (release) not treated as defects; completion-confirmation.json not re-reported.
+
+Checked and found accurate against src: 1-hour TTL, allowed-id check (empty allowlist refuses), single use (token spent on any refusal), pressedBy/pressedAt only for remote-card, shell clock for pressedAt, mirror-not-delivered text, review_complete re-derives facts at answer time and runs completeReviewGated, unattended list names the card tools. Bypass/fabrication instructions: none found.
+
+Stats: blocker 0 | major 0 | minor 1 | info 2
+
+Routing audit: graph_used no (not-relevant: docs slice, claims checked by direct reads); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg for quotes and line lookups); raw_rg_used no.

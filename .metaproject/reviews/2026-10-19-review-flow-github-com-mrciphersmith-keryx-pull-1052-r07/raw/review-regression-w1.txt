@@ -1,0 +1,63 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B (regression) over fix slice slice-01, delta 77d2eff20..5444f96e4 of PR 1052. One major regression and one info observation. Removed constants and helpers (MAX_LISTED, limited, LISTED_FILES, BODY_PREVIEW_LINES, BODY_PREVIEW_CHARS, REPLY_PREVIEW, WAIVER_QUOTE_CHARS, clip) have no remaining reference in src/commands except the kept listFiles. The apply paths of review_publish, review_comments_reply, external_apply and review_complete are unchanged (only buildCard output and input validation moved); factsDigest now covers whole quotes, which only makes a changed quote ask again. OperatorConfirmation.card is not persisted by any non-test caller. Blast-radius caveat: the record is incomplete (droppedByCap 112, droppedTextHub 96, droppedTestConsumer 433, 22 non-code changed files unresolved), so it did not cut nothing. The runtime consumers of a card (the Telegram topic limit in src/remote/shell-bridge.ts and src/remote/protocol.ts, the dock in src/tui/tui-shell.ts) are not in the code graph and were found by reading. Open questions: whether the 20-entry disposition cap (MAX_DISPOSITIONS) is reachable by a real fix round, and whether reports that quote terminal output with escape characters now make review_publish refuse (a behaviour change with a recoverable, line-naming refusal, not a defect).",
+  "findings": [
+    {
+      "id": "F-R07-001",
+      "severity": "major",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6104,
+      "quote": "        if (operatorCardTooLongForTopic(tool, inputJson, meta)) {\n          void bridge.noticeCardTooLong(tool);\n          return inner(tool, inputJson, meta);",
+      "problem": "Showing every card whole pushes review_publish, review_comments_reply, review_complete and other cards past the 3000-character topic limit, so the Telegram Yes/No is withdrawn for them. Changed: shownBody (operator-confirm-review.ts:62, used at :208/:220 and :510), quoteWhole, listFiles, the removed LISTED_FILES / BODY_PREVIEW_LINES / REPLY_PREVIEW / limited() caps, and the new uncapped lists in operator-confirm-other.ts. Before 5444f96e4 each of these cards was bounded (8 body lines of 140 characters, 6 replies of 140, 12-15 list rows, quotes clipped at 300), so it stayed under MAX_APPROVAL_PROMPT_CHARS (src/remote/protocol.ts:160 = 3000) and could be answered from the topic. Now operatorCardTooLongForTopic (src/remote/shell-bridge.ts:285-286) joins the whole card, redacts it and compares with 3000. Over the limit, mirrorApprovalToTopic (tui-shell.ts:6104-6106) posts only 'too long, answer it in the shell' (shell-bridge.ts:1002-1010) and asks the dock alone, and requestApprovalForTelegramTurn (tui-shell.ts:6029-6031) does the same for a turn that started in Telegram.",
+      "impact": "Trigger: review_publish with any report.md body over about 3000 characters (a normal review report), review_comments_reply with a few replies, review_complete with a few waivers plus up to 20 dispositions (each up to 200+300 characters, so 8000+), external_apply with a long file list. Outcome: the operator who is away from the machine and answers through the topic (flow 464 AC2/AC5; SKILL.detail.md:669 tells the agent 'the operator answers it in the shell or in the Telegram topic') cannot approve; a Telegram-started turn blocks on the local dock until someone is at the shell or the run timer ends it. It degrades safely (no buttons, a notice), so nothing is posted wrongly, but a path that worked is gone.",
+      "suggested_fix": "Do not cut the shown text (S-401/S-402 forbid it). Either send the topic an overflow notice plus a topic-side way to read the rest, or state the limit in the tool description and in a refusal that tells the agent to shorten the report, or accept and record that these cards are shell-only. Add a test that builds a real publish card from a normal-size report and checks it against operatorCardTooLongForTopic; src/remote/operator-card-length.test.ts uses a synthetic card only.",
+      "evidence": "src/remote/protocol.ts:160 MAX_APPROVAL_PROMPT_CHARS = 3_000; src/remote/shell-bridge.ts:285-286 returns true when the redacted, joined card is longer than that; operatorCardTooLongForTopic is called only from tui-shell.ts:6029 and :6104 (keryx ctx rg). The new tests in operator-confirm-review-tools.test.ts build cards through the card tool and never through the bridge.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:208",
+          "src/commands/operator-confirm-review.ts:220",
+          "src/commands/operator-confirm-review.ts:510",
+          "src/commands/operator-confirm-review.ts:282",
+          "src/commands/operator-confirm-review.ts:415",
+          "src/commands/operator-confirm-review.ts:434",
+          "src/commands/operator-confirm-review.ts:563",
+          "src/commands/operator-confirm-review.ts:803",
+          "src/commands/operator-confirm-review.ts:804",
+          "src/commands/operator-confirm-other.ts:304",
+          "src/tui/tui-shell.ts:6029",
+          "src/tui/tui-shell.ts:6104"
+        ],
+        "enumeration_method": "every card builder whose cap or preview this commit removed (the removed constants and limited()), checked against the one consumer that bounds a card, operatorCardTooLongForTopic, which keryx ctx rg shows is called only from tui-shell.ts:6029 and :6104; builders: review_publish body, review_comments_reply bodies, review_waive_mutation and review_override_reviewers lists, review_confirm_plan perRole, review_complete waivers and dispositions, review_chunks_answer file list, external_apply files and flagged paths"
+      }
+    },
+    {
+      "id": "F-R07-002",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 62,
+      "quote": "function shownBody(text: string): { lines: string[] } | { refusal: string } {",
+      "problem": "shownBody refuses a line only when cardSafe(line) !== line, while dispositions, reasons and waiver quotes also refuse Cf/Zl/Zp characters through hiddenInCard. A posted body can therefore carry invisible characters the card cannot show, and the two rules disagree about the same character.",
+      "impact": "Same S-402 class (the card shows less than what is stored or posted). Whether a zero-width character in a posted review body can hide anything the operator needs is not shown by the code, so this is an observation, not a reproduced harm. In the other direction, a report holding a legitimate emoji ZWJ sequence passes shownBody but would be refused by hiddenInCard.",
+      "suggested_fix": "Decide the rule once and use it for both: apply hiddenInCard (or one shared predicate) in shownBody, or state why bodies are allowed to hold Cf characters. What would settle it: a test that puts U+200B into report.md and reads the card.",
+      "evidence": "cardSafe (src/lib/card-safe.ts:7) does not touch U+200B-U+200D, U+2060, U+FEFF or U+061C. hiddenInCard (operator-confirm-review.ts:672) adds /[\\p{Cf}\\p{Zl}\\p{Zp}]/u. A report.md line holding U+200B therefore passes shownBody and is posted, while the same text in a disposition is refused.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    }
+  ],
+  "questions": [
+    "Is the 20-entry cap on dispositions (MAX_DISPOSITIONS) reachable by a real fix round? SKILL.detail.md:671 asks for one disposition per prior finding and review_complete refuses an already-closed round, so a round with more than 20 findings that still need an explicit disposition cannot record them through the card. The ledger also takes dispositions from reviewer prior_dispositions and canonical findings, so this may be unreachable; it could not be settled from the slice.",
+    "Does any reviewer report quote terminal output with ESC or form-feed characters? shownBody now refuses the whole review_publish for one such line (operator-confirm-review.ts:62-66), where the old preview stripped it. The refusal text names the line, so it is recoverable; reported as a behaviour change, not a defect."
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "all hunks of slice-01.diff read; card consumers (src/remote, src/tui) and removed constants enumerated by keryx ctx rg and read", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+```

@@ -1,0 +1,43 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Delta slice-03 (r03) has no new performance finding. The slice is skill/doc text for the resolve-context --task-text flag, a test import change, and one production line: renderProjectContextSidebarValue now returns cardSafe(parts.join(' · ')). The same round also adds an overlap guard and a stale-load guard to createProjectContextFeed (src/tui/project-context-inspector.ts), which fixes the pile-up half of r02 F-001. The other half of r02 F-001 (each 5-second poll still runs the full references check through loadProjectContextStatus) is not changed by this delta and still applies; it is not re-filed.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Performance Review
+
+### Scope
+- Branch: `feat/conditional-reads`
+- Merge-base / base: `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`; head `5382b56abf17d23db61108554f3c6c68c8e3c036`
+- Scope mode: explicit slice (delta round r03, slice-03)
+- Files reviewed: 3 skill pairs (`.metaproject/skills/...` and `src/gdskills/bundled/skills/...`: flow-orchestrator, job-orchestrator SKILL.md and orchestrator-prompt.md, task-implementer SKILL.md), `docs/docs/cli-reference.md`, `src/gdskills/context-resolver.test.ts`, `src/tui/project-context-inspector.ts` (plus the feed and `tui-shell.ts` stop wiring at head)
+
+### Summary
+- Blockers: 0, Major: 0, Minor: 0, Info: 0
+
+### Findings
+None new.
+
+### Prior findings (not re-filed)
+- r02 F-001 (minor, `src/gdskills/project-context-status.ts`): the 5-second TUI poll still does the full references check on each tick. `project-context-status.ts:75` calls `loadReferences`, and `checkReferences` is still imported at line 16. Unchanged by this delta. One part is resolved at head: `poll()` now returns early while a previous load is still running (`if (polling) return;` with the flag reset in `finally`), so a slow disk can no longer stack ticks. The per-tick disk work remains, so the finding stays open as minor.
+
+### Checked and clean
+- `cardSafe(parts.join(" · "))` in the sidebar value (`project-context-inspector.ts:105`): runs on a short string of at most five segments, only when the status changes, because the feed notifies listeners only when `sameStatus` is false. The function is four linear regex passes (`src/lib/card-safe.ts`). No hot-path cost.
+- `lines.map(cardSafe)` in `paint()` (line 239): runs on tab switch or status change, over tens of short lines. No cost. The lazy OSC pattern `\u001b[\]P^_][\s\S]*?(?:\u0007|\u001b\\)` could go quadratic on many unterminated ESC] sequences. Input is operator-authored `references.json` descriptions, so no input is shown to reach it. I treat this as theoretical and file nothing.
+- Feed ordering guard (`started`/`applied`, lines 168-181): O(1) bookkeeping. An older load that finishes late no longer overwrites newer status or fires listeners, which avoids a spurious repaint. A rejected load does not advance `applied`, which is correct.
+- `stopProjectContextFeed` wiring in `tui-shell.ts`: the interval is `unref`'d and now also cleared in `onDestroy`. No leaked timer.
+- Skill and doc text (`resolve-context` in task-implementer, flow-orchestrator and job-orchestrator, `cli-reference.md`): no runtime code. The only change that touches performance is the documented 256 KB and cap behaviour, which matches the implementation reviewed in r02.
+- `context-resolver.test.ts` import change: test-only.
+- No N+1, bundle-import, sync-blocking, pagination or redundant-call patterns in the changed lines.
+
+Routing audit: graph_used: no (not-relevant, slice is text plus one line), wiki_used: no (not-relevant), ctx_used: yes (`keryx ctx rg`, `keryx ctx read`), raw_rg_used: no

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 15,
+  "droppedKey": "0e56c821fbf7ccf3",
+  "fileBytes": {
+    "fixtures/routing-shell-pty.ts": 4860,
+    "src/cli-registry.ts": 41220,
+    "src/commands/agent.ts": 314312,
+    "src/commands/research-sync.ts": 17469,
+    "src/commands/review-bot.ts": 6943,
+    "src/commands/shell.ts": 225711,
+    "src/commands/trigger.ts": 44378,
+    "src/flow/types.ts": 33898,
+    "src/review/complete-gated.ts": 1273,
+    "src/review/ledger.ts": 53391,
+    "src/review/prior-round.ts": 54135,
+    "src/review/research.ts": 8723,
+    "src/trigger/config.ts": 51150,
+    "src/tui/ask-user-bridge.ts": 7544,
+    "src/tui/reviews-inspector.ts": 18287
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/flow/types.ts"
+      ],
+      "bytes": 33898
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/commands/agent.ts"
+      ],
+      "bytes": 314312
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/trigger/config.ts"
+      ],
+      "bytes": 51150
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "src/commands/shell.ts"
+      ],
+      "bytes": 225711
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "src/review/ledger.ts",
+        "src/commands/trigger.ts",
+        "src/review/research.ts",
+        "src/tui/ask-user-bridge.ts"
+      ],
+      "bytes": 114036
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        "src/cli-registry.ts",
+        "src/commands/research-sync.ts",
+        "src/tui/reviews-inspector.ts",
+        "src/review/prior-round.ts",
+        "src/review/complete-gated.ts",
+        "src/commands/review-bot.ts",
+        "fixtures/routing-shell-pty.ts"
+      ],
+      "bytes": 144187
+    }
+  ]
+}

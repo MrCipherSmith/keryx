@@ -1,0 +1,37 @@
+[
+  {
+    "finding": "S-701",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "research-evidence/verify-S-701-1.txt (keryx review verify-run, exit 1, head 5444f96e4): the probe built a real review_publish card for 7 bodies (zero-width space, tag-block instruction, BOM, U+2028, U+2029, word joiner, soft hyphen). For every one, cardAsked, cardSaysShownWhole and storedHoldsHiddenChar are all true; the file ends 'DEFECT REPRODUCED: 7 of 7'.",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-R07-001",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "research-evidence/verify-F-R07-001-1.txt (exit 1): a real review_publish card from an ordinary 40-line report gives {\"cardLines\":54,\"cardChars\":4650,\"limit\":3000,\"operatorCardTooLongForTopic\":true}, so the Telegram Yes/No is withdrawn. Lost reach only; the degradation is safe.",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-R07-003",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "research-evidence/verify-F-R07-003-1.txt (exit 1): review_complete with 21 and with 35 dispositions is refused with 'dispositions holds 21 entries; a card shows at most 20' (and 35); the refusal names the cap and no other route. The 20-entry control line shows a refusal about the disposition value (the probe used an invalid state word), so the file shows the cap firing at 21 and not that 20 passes; the defect does not depend on that control.",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "T-701",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "research-evidence/mutation-1.md: m31 (operator-confirm-review.ts:747) and m32 (:751), which restore the 300-character clip at the coverage-waiver and decision sites, both survived the 7-file suite (test exit 0); the sibling m30 at :736 was killed, so only the readiness-waiver site is pinned. research-evidence/verify-T-701-1.txt (rg, exit 0): the only operator quote values in operator-confirm-review-tools.test.ts are short (lines 321, 659, 673, 674, 689).",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "T-702",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "research-evidence/verify-T-702-1.txt: rg for tool(\"review_comments_reply\") and commentsReplyPass over src test files exits 1 with empty stdout, so no test builds the reply card. research-evidence/mutation-1.md: m11 (drop the 'Reply N' refusal at :511) and m12 (clip reply bodies to 8 lines at :512) both survived.",
+    "verifier": "review-verifier"
+  }
+]

@@ -1,0 +1,38 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-05 (second-look, unchanged since r03: flow 464 files, both review-orchestrator skill copies, review-premise skill, CHANGELOG, TM-04, cli-reference, guides, limitations, flow-state schema, package.json) read once for logic and contract defects. I checked the factual claims against src at 77d2eff20: the remote-answer rules in TM-04 section 6a (allowed id, one-time token spent on every refusal, 1 hour from card creation, pressedAt from the shell clock), the TTY claims in section 8, the unattended exclusion list and the schema placement of pressedBy/pressedAt under signature.confirmation all match the code. One new minor: the skill gives no route to close a review on an interactive host that has no review_complete card.",
+  "findings": [
+    {
+      "id": "L5-101",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 136,
+      "quote": "(an agent never runs `keryx review complete`; that command is for a human in a terminal)",
+      "problem": "The Done-when bullet makes the review_complete card the only way an agent closes a managed round and forbids the agent to run `keryx review complete`. The card exists only in keryx shell. The hosts table (SKILL.md lines 233-240) lists Claude Code and Codex/other AGENTS.md hosts as interactive hosts whose operator decisions go to 'the exact terminal command, for the operator', and the Operator decisions bullet (line 47) lists those exact commands, but its list omits the closing command itself: it names `keryx review complete <package> --waive <item> ...` and `--waive-coverage`, never a plain `keryx review complete <package>`. So on an interactive non-shell host with a READY package (or after the operator already waived by terminal) the agent has no card to call, is told never to run the command, and is not told to hand the plain command to the operator; the round cannot reach `completed` by the skill's own instructions. This is a different site from the open E-45 (unattended/autonomous run): the host is interactive and an operator is present. The mirrored copy under src/gdskills/bundled/skills/review/review-orchestrator/ carries the same text.",
+      "impact": "A review run from Claude Code or Codex stalls at the last step: the agent either stops without closing the package or, to finish, breaks the stated rule and runs the CLI itself with no press, which is the bypass the PR set out to remove. No data is corrupted and the gates still apply.",
+      "suggested_fix": "In the Done-when bullet and in the Operator decisions bullet, add the plain close to the outside-keryx-shell terminal commands: `keryx review complete <package>` (with the disposition triples when needed), run by the operator, and state the rule as 'in keryx shell call the review_complete card; on any other interactive host give the operator the command'. Keep E-45's carve-out for unattended runs in the same sentence. Apply to both skill copies.",
+      "evidence": "git show 77d2eff20:.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md lines 47 (command list without a plain `keryx review complete <package>`), 136 (Done when), 233-240 (hosts table: Claude Code and Codex columns give 'the exact terminal command, for the operator').",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    { "id": "E-13", "disposition": "open" },
+    { "id": "E-15", "disposition": "open" },
+    { "id": "E-45", "disposition": "open" }
+  ],
+  "slices": [
+    { "id": "slice-05", "coverage": "Whole slice read once: all 24 file hunks. Skill, TM-04, CLI reference, guides, limitations, CHANGELOG and schema claims checked against src/commands/operator-confirm-tools.ts, src/commands/review.ts, src/trigger/unattended.ts and src/review/autonomous-profile.ts at 77d2eff20. Flow 464 bookkeeping files (acceptance-criteria, context, description, journal, plan, tasks, flow.json) skimmed for contradictions with the delivered behaviour; none found beyond the open E-16.", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```

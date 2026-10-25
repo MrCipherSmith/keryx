@@ -1,0 +1,134 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Clean Code Review
+
+### Summary
+Slice 1 is skill/doc prose, one JSON schema hunk and flow/graph data files; it holds no executable code, so Parts B, D and F (functions, error handling, SOLID) do not apply. The relevant checks are comments/docs drift (C1a), DRY (E1) and naming. The change leaves a few pre-existing instructions that contradict the new rule, one internal contradiction in the new Wave D text, and schema descriptions that overclaim. No blocker or major.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 5  |  info: 2
+
+### Clean Areas
+Names in the schema hunk (`hostQuestion`, `questionText`, `answerText`) and the `<source>:<ref>` vocabulary are consistent across the schema, SKILL.md, SKILL.detail.md and README. Error handling, functions and SOLID: no code in this slice.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 1 (skills, schema hunk, README, flow and graph data) has no executable code. Findings are documentation drift and duplication: unchanged instructions that still send the operator to a terminal for acts the change moved to a host question, a contradiction about who writes --reason, schema descriptions that overclaim, and the same command template repeated in eight places. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "line": 440,
+      "quote": "elsewhere the question tool, then the exact `keryx review decide-premise` command for them to run in their terminal",
+      "problem": "Stale instructions the diff did not touch. The change rewrote Wave D in review-orchestrator to say 'never send them to a terminal' and to record the answer with `--answered-by`, but flow-orchestrator still tells the agent to hand the operator the decide-premise command to run in their terminal. review-orchestrator/SKILL.md:124 likewise still reads 'Only the operator can accept a smaller set than that (`review_override_reviewers`, or `keryx review override-reviewers` in their terminal)'. Both describe the rule the change replaced. The class (documentation drift, C1a) is 'a skill that names one of the four verbs and still gives the terminal as the only non-card path'.",
+      "impact": "An agent following flow-orchestrator (the flow fix loop) or the dispatch rule sends the operator to a terminal that AC9 says it should no longer use, or does not know the host-question path exists there. AC9 names only three skills, so the sibling skills were not in its verification.",
+      "suggested_fix": "In flow-orchestrator/SKILL.md:440 replace the terminal hand-off with 'ask with the host's question tool, then record it with `keryx review decide-premise ... --answered-by ...` (review-orchestrator \"Wave D\")'. In review-orchestrator/SKILL.md:124 add 'or their answer to the host question recorded with `keryx review override-reviewers ... --answered-by ...`'. Apply both to the bundled copies (src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:440 and src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:124, which `git grep` shows carry the same lines).",
+      "evidence": "git grep -n over .metaproject/skills and src/gdskills/bundled for the four verbs, excluding lines that mention answered-by/host question, returned flow-orchestrator/SKILL.md:440 and review-orchestrator/SKILL.md:124 in both trees. Their content was read in .metaproject/skills (the bundled copies match by line number and by the grep hit, not by a full read).",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "docs-drift-terminal-instruction-four-verbs",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 1129,
+      "quote": "Record only an answer they gave and never write their words or their reason yourself.",
+      "problem": "The new Wave D text contradicts the command it gives. The same paragraph tells the agent to run `keryx review decide-premise ... --reason \"<why>\" --answered-by ...`, and the Operator decisions paragraph (line 47) says 'plus `--reason \"<why>\"` on `waive-mutation`, `override-reviewers` and `decide-premise`'. With no terminal, the agent is the only party that can type `--reason`, and AC3 refuses a missing one. 'Never write ... their reason yourself' therefore cannot be followed. Nothing says where `<why>` comes from (the operator's answer, a second question, or the agent's own rationale).",
+      "impact": "An agent that follows the command has to break the stated rule or invent a reason; one that follows the rule cannot run the verb. The record then stores a reason of unknown origin next to a verbatim answer, which blurs the audit trail the host-question record exists to keep.",
+      "suggested_fix": "State the source: either ask for the reason in the same question and pass it verbatim, or say `--reason` is the agent's own stated grounds and `--answer-text` is the only operator-authored field. Drop 'or their reason' from the 'never write' sentence accordingly. Make the same statement in line 47.",
+      "evidence": "SKILL.md:1129 'never write their words or their reason yourself' versus the same line's command `--reason \"<why>\"`; SKILL.md:47 'plus `--reason \"<why>\"` on `waive-mutation`, `override-reviewers` and `decide-premise`'; AC3 'a missing `--reason`' is a refusal.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "wave-d-reason-contradiction",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": 167,
+      "quote": "Set with confirmedVia host-question only: the question the host asked the operator and the answer that came back, as the agent reported them.",
+      "problem": "Three schema descriptions do not match the new contract. (1) 'Set with confirmedVia host-question only' is stated as a rule, but the schema has no `if/then` tying `hostQuestion` to `confirmedVia: host-question`, so a record with `hostQuestion` and `confirmedVia: \"tui-card\"` (or the reverse, host-question with no object) validates; the sentence reads as enforced when it is only advice. The file already uses `allOf` if/then for the verdict rules a few lines below, so the pattern exists. (2) `quote` still says 'what they typed at the terminal, or the card text they said yes to', with no mention of a host answer; where the host-question answer lives (`quote` or `hostQuestion.answerText`) is not stated. (3) `hostQuestion.time` and the existing `at` both carry a timestamp for the same act, with no description saying which one is which.",
+      "impact": "A reader or a record writer trusts a constraint the schema does not apply, and has two timestamps and two answer fields to choose from.",
+      "suggested_fix": "Add an `if confirmedVia = host-question then required hostQuestion` (and the converse) to the operator object, or reword to 'Present when confirmedVia is host-question'. Extend the `quote` description to say where a host answer is recorded, and say in `hostQuestion.time` whether it equals `at`.",
+      "evidence": "review-finding.schema.json:159 `quote` description, :160 `\"at\": { \"type\": \"string\", \"minLength\": 1 }`, :167 description, :173 `\"time\": { \"type\": \"string\", \"minLength\": 1 }`; the operator object's `required` is `[\"answer\", \"reason\", \"at\", \"actor\"]`, so neither `hostQuestion` nor a conditional is required.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "schema-hostquestion-description-overclaims",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 47,
+      "quote": "`keryx review <verb> --package <package> --answered-by <claude-code|codex|keryx-shell|helyx-poll|other>:<ref> --answer-text \"<their words, verbatim>\" --question-text \"<the question as asked>\"`",
+      "problem": "The host-question recording command is restated at eight sites, each with a different elision, so a future change to a flag name or to the source list has to be made in all of them. Sites: SKILL.md:47 (full template and source list), :56 (`--answered-by … --answer-text … --question-text …`), :1060 (`--answered-by … --answer-text … --question-text …`), the mutation-pass sentence near :1077 (`--answered-by …`), :1129 (full template with `<source>:<ref>`); SKILL.detail.md item 11 at :666 (full template), 'Preflight 4' step 4 (full template), and the mutation-pass section (`--answered-by … --answer-text … --question-text …`). The source enumeration appears in full only in SKILL.md:47 and the schema enum; the others say `<source>`. Three or more repetitions; each is one place to edit. Line 47 is also a single paragraph of roughly 3,300 characters that mixes the card rule, the host-question rule, the record format, the refusal rules and the terminal-only acts.",
+      "impact": "Cost to whoever edits it next, and drift risk: the templates already differ (`<source>:<ref>` against `<claude-code|...>:<ref>`, `--reason` present in some and not others).",
+      "suggested_fix": "Keep the one full template in 'Hosts' (SKILL.md:47) and have the other sites say 'record it with the host-question flags of `keryx review <verb>` (\"Hosts\", Operator decisions)', naming only what is verb-specific (`--reason`, `--finding`, `--answer`). Split line 47 into separate bullets for the card rule, the host-question rule and the terminal-only acts.",
+      "evidence": "Sites listed above, each quoted in the diff hunks for SKILL.md and SKILL.detail.md.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "dry-host-question-template",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 40,
+      "quote": "| Operator decision | the card tool | `AskUserQuestion`, then the verb (\"Operator decisions\") | its question tool, else the question in your reply, then the verb | refused: recorded Not run |",
+      "problem": "The row is labelled 'Operator decision' in general, and the new cells say that on Claude Code and Codex the answer is a question tool followed by 'the verb'. That holds for four acts only. `complete`, `--waive`, `--waive-coverage`, `chunks estimate --answer`, `publish` and `comments reply --final` still go to the operator's own terminal outside keryx shell (line 47 and SKILL.detail.md readiness item 2 and the paragraph after item 12 say so). A reader of the table alone gets the wrong rule for those acts, and 'the verb' has no antecedent in the table.",
+      "impact": "An agent that stops at the table asks a question and runs `keryx review complete`/`publish` itself, which refuses without a TTY; the correct hand-off is in a paragraph below.",
+      "suggested_fix": "Label the row 'Operator decision (confirm-plan, waive-mutation, override-reviewers, decide-premise)' and add 'others: the exact terminal command'. Or keep the cells and add the exception in one clause.",
+      "evidence": "SKILL.md:40 against SKILL.md:47 ('The other acts stay with the operator, who runs the exact command in their own terminal outside keryx shell').",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "hosts-table-overgeneralizes",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      "line": null,
+      "quote": "- AC12 (operator-only): The operator asks for a held finding in a live review",
+      "problem": "The file's own rule says criteria use the exact format `- ACn: <criterion>`. AC12 is written `AC12 (operator-only):`, and flow.json records `\"detail\": \"11 criteria; checksum recorded\"` and has `acKinds` for AC1 to AC11 only. AC12 is therefore very likely not tracked by the flow gates, although the file presents it as a criterion the operator must confirm.",
+      "impact": "Not settled: whether the gates read AC12. If they do not, the flow can complete without the one criterion that only the operator can confirm. What would settle it: `keryx flow status` listing AC12, or the parser in src/flow reading `AC12 (` lines.",
+      "suggested_fix": "Use `- AC12: ... (operator-only) ...` with a `[verify: judged]` marker in the accepted position, via `keryx flow ac update`, so the freeze count is 12.",
+      "evidence": "flow.json history 'frozen ... 11 criteria; checksum recorded'; flow.json acKinds ends at AC11; acceptance-criteria.md line for AC12.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "ac12-not-tracked",
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "line": null,
+      "quote": "-- Skipped generated/static directories: 18\n+- Skipped generated/static directories: 15",
+      "problem": "The committed gdgraph summary was rebuilt in this worktree and its 'Skipped Directories' list lost `.git`, `dist` and `node_modules` (18 to 15). That reflects the worktree's missing build output, not a change in what the project skips, so the committed artifact now misstates the skip policy. The other changes (file and edge counts, the new test file in module-map.json) are expected.",
+      "impact": "Noise in a tracked artifact; a later rebuild in a full checkout flips it back. Not a defect in the change's behaviour.",
+      "suggested_fix": "Do not commit regenerated gdgraph artifacts from a worktree without node_modules/dist, or drop `summary.md` and `.provenance.json` from this PR.",
+      "evidence": "Diff of .metaproject/data/gdgraph/artifacts/summary.md: removed lines `- \\`.git\\``, `- \\`dist\\``, `- \\`node_modules\\`` under 'Skipped Directories'.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "gdgraph-summary-worktree-skip-drift",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 2 }
+}
+```
+
+History was not read (git log/blame not needed: no finding rests on a deliberate-choice reason). Line numbers for the schema and SKILL.md are working-tree lines from `git grep -n`; SKILL.detail.md positions are cited by section.

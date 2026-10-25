@@ -1,0 +1,94 @@
+{
+  "v": 1,
+  "package": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1052",
+    "base": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+    "head": "672e37687b7c27184e88c5d6571f8c509a2c671e"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+      "head": "672e37687b7c27184e88c5d6571f8c509a2c671e"
+    },
+    "fixHunks": 0,
+    "newHunks": 64,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "CHANGELOG.md",
+          "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/autonomous-review.md",
+          "src/commands/agent.ts",
+          "src/commands/operator-confirm-review.ts",
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "src/commands/operator-confirm-rosters.test.ts",
+          "src/commands/operator-confirm-tools.test.ts",
+          "src/commands/shell.test.ts",
+          "src/flow/confirm-token.test.ts",
+          "src/flow/confirm-token.ts",
+          "src/flow/schema.ts",
+          "src/flow/types.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/review/types.ts",
+          "src/tui/operator-confirmations.test.ts",
+          "src/tui/operator-confirmations.ts",
+          "src/tui/tui-shell.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "dispatches": 9,
+  "minutes": {
+    "min": 6,
+    "max": 15
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "2fdc4e29a7aab06b",
+  "warnings": [],
+  "next": "dispatch"
+}

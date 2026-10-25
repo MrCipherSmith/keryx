@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-05 (operator-confirm-tools invoke, agent.ts press-field plumbing, shell.ts allowedUserIds, review.ts runComplete, and the review_complete card in operator-confirm-review.ts) judged against head 5444f96e4. No new logic defect found. Checked and sound: the single-use token is deleted before the remote checks, so a refused remote answer cannot be replayed; the allowed-list check refuses when the list is absent or does not hold the presser; the 1-hour TTL runs from the card's issuedAt on the shell's clock; the S-401 fix holds because disposition finding and evidence are capped (200/300 characters after trim), refused when cardSafe or the format-character test would change them, and stored as the trimmed text the card shows; quoteWhole flags any stored waiver quote the card must rewrite; evidenceLevelLine and parseEvidenceLevel use the same fence-skipping first-match rule, so the card shows the line the gate parses; runCompletionGates reads the manifest status after a throw, matching the status \"closed\" the engine writes (managed.ts:1023) before its own bookkeeping, so a post-close throw is reported as closed with a problem rather than as a refusal; keryx review complete and the card both go through completeReviewGated, so the run-profile and narrowed-routing refusals apply to both; loadRemoteConfig is read fresh and a failed load yields undefined, which refuses every remote answer.",
+  "findings": [],
+  "slices": ["slice-05"],
+  "questions": []
+}
+```

@@ -1,0 +1,71 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Delta round r03 (base d6267d4a5099, head 5382b56abf17), slice-01. Of 21 attached prior findings: 13 closed, 1 withdrawn (info, no action asked), 2 partial (both the shell-quoting class), 5 open (code the fix commits did not touch). Two new info findings, no new blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/gdskills/references-check.ts",
+      "line": null,
+      "quote": ".filter((entry) => entry.mode === \"link\" && !copies.includes(entry.ref))",
+      "problem": "The fix for the linked-rules finding re-implements the resolver's link reading inside scanCitations instead of sharing collectProjectRules. The two copies already differ: collectProjectRules excludes a linked rule whose origin is unreadable or whose sha256 no longer matches the registry entry (with a warning), scanCitations reads the origin without that gate. For a linked rule, scanCitations also records the virtual path `.metaproject/rules/project/<ref>`, where no file exists (the resolver uses the origin path), and that path is what `undeclared-citation` ('cited by ...') and `rule-unreadable` print.",
+      "impact": "Edge only: after a linked file changed since linking, the resolver drops the rule and its citations while `references check` / `suggest` still count them, so the two tools disagree for one project in that state. For any linked rule, the 'cited by <path>' message points at a path that does not exist. Neither changes the main case the previous finding was about, which is now correct and tested (skills-references.test.ts:333).",
+      "suggested_fix": "When convenient, factor a 'rule texts of this project, copied and linked' helper out of context-resolver.ts that both collectProjectRules and scanCitations call, so the exclusion policy (copy wins, sha256 gate) lives once; carry the origin path for linked rules so the messages name a file that exists. Otherwise reword the header comment from 'as the resolver does' to say the sha256 gate is not applied.",
+      "evidence": "Head src/gdskills/references-check.ts:97-109 (links map built from the registry, readFile on resolveOriginPath, rulePath = PROJECT_RULES_DIR/ref for both kinds). Head src/gdskills/context-resolver.ts:205-229: collectProjectRules checks `sha256Hex(text) !== entry.sha256` and pushes a warning, then `continue`; it names `origin` as the candidate path.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "linked-scan-vs-resolver-policy",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "if (!section.found) return { ok: true, text, what:",
+      "problem": "The dead-anchor policy ('an anchor that is not found makes the whole file the obligation') now lives in two places that must agree: reference-entries.ts resolveReferences (sectionBytes = bytes, warning) and reference-proof.ts currentSection (whole-file text for the words check). Each calls extractSection and branches on `found` on its own. The previous finding was exactly a disagreement between these two, and the fix repairs it by making the validator copy the resolver's branch, not by giving both one function.",
+      "impact": "No wrong behaviour today; both branches agree and the new test at resolved-context-check.test.ts:296 pins the validator side. A later change to the fallback (say, refuse to promote an entry with a dead anchor) has to be made in both files, and a miss reopens the unsatisfiable-proof defect.",
+      "suggested_fix": "Put the policy in references-section.ts, for example `sectionOrWhole(markdown, anchor): { text: string; bytes: number; fellBack: boolean; reason?: string }`, and have resolveReferences and currentSection both call it.",
+      "evidence": "Head reference-entries.ts:106-116 (found ? section.bytes : whole-file bytes plus warning) and head reference-proof.ts currentSection (found ? section.text : whole text); the only two non-authoring callers of extractSection (references-check.ts declarationFindings reports the dead anchor as an error on purpose).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "dead-anchor-policy-two-sites",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "review-architecture-w3:F-002", "disposition": "closed", "note": "scanCitations now adds registry entries with mode link (no copy) and reads them at resolveOriginPath, as references-check.ts:97-109; test skills-references.test.ts:333 covers suggest and unused-declaration for a linked rule; import-rules.ts registers the link before undeclaredCitationHint runs. Residual differences are in new finding F-001 (info)." },
+    { "id": "review-clean-code-w1:F-003", "disposition": "open", "note": "task-implementer SKILL.md 2.0c bullet only changed quote style (double to single); the promoted-entry paragraph still precedes the general citation sentences in one bullet. Not split." },
+    { "id": "review-clean-code-w2:F-004", "disposition": "closed", "note": "skills-references.test.ts imports CONTRACT_MAX_BYTES (line 7) and uses CONTRACT_MAX_BYTES + 1 (line 143). The r02 premise was challenged (sibling test uses a literal); the change was applied anyway." },
+    { "id": "review-clean-code-w5:F-001", "disposition": "open", "note": "project-context-inspector.ts at head still has the nested ternary in paint (lines 232-237), the Math.max list for contentRows (251-256), `let tab: string` (218) and the inline `tab?: \"references\"` (25). Untouched by the fix commits." },
+    { "id": "review-clean-code-w5:F-003", "disposition": "open", "note": "reload() still calls `listener(next)` in a loop inside the same async function whose rejection poll() reports as a failed poll (project-context-inspector.ts:178). No per-listener isolation. One consequence of the new generation counter: if a listener throws, `applied` is not advanced for that load, which is harmless." },
+    { "id": "review-highload-w2:F-001", "disposition": "partial", "note": "Every resolve-context template now uses single quotes (flow-orchestrator, job-orchestrator x2, orchestrator-prompt x2, task-implementer, tests-creator; bundled and managed copies match), which stops $() and backtick expansion. Only flow-orchestrator says how to escape a `'` inside the text; the other six sites say nothing, and an apostrophe in a task description ends the quote and re-exposes the rest to the shell. No --task-text-file or stdin option was added, so the argv size limit remains. The docs example (apply-project-rules.md:172) and live-run.md still show double quotes around a fixed literal." },
+    { "id": "review-highload-w2:F-002", "disposition": "withdrawn", "note": "Info finding that asked for no change. The record no longer carries the task text, and writes remain atomic; nothing to act on." },
+    { "id": "review-highload-w3:F-001", "disposition": "closed", "note": "HEADING regex and the regex closing-hash strip are replaced by hand-written linear parseHeadingLine and stripClosingHashes (references-section.ts:54-80). Measured at head: a heading with 200000 interior spaces plus a trailing char is scanned in 7 ms. A 200000-case differential run against the old regex pair found no difference in level or text." },
+    { "id": "review-highload-w5:F-002", "disposition": "closed", "note": "Both halves are addressed: a generation counter drops a load older than the last applied one (project-context-inspector.ts:172-182), and poll() skips a tick while the previous load is pending (184-197). The modal's own reload can still return an older status to its caller after a newer load applied, which is self-correcting within one poll." },
+    { "id": "review-logic-w2:F-001", "disposition": "closed", "note": "Same defect as review-architecture-w3:F-002; fixed in scanCitations and tested." },
+    { "id": "review-logic-w3:F-001", "disposition": "closed", "note": "currentSection (reference-proof.ts) now returns the whole file text when the anchor is not found, so the words check is satisfiable; the anchor-equality rule is kept. Test resolved-context-check.test.ts:296 covers pass and fail. The two-site policy is noted as info F-002." },
+    { "id": "review-logic-w3:F-002", "disposition": "closed", "note": "keywordOccurs adds each lookaround only on a side where the keyword starts or ends with a word character (reference-entries.ts:186-200). Verified at head: '.css' in 'fix styles.css please' true, '@apply' in 'a@apply' true, 'css' in 'css3' false, 'c++' true. Tests at reference-entries.test.ts:7-29." },
+    { "id": "review-logic-w3:F-003", "disposition": "open", "note": "Still reproduces at head: extractSection('\\uFEFF# Title\\ntext\\n## B\\nx\\n', 'Title') returns found:false, available ['B']. parseHeadingLine requires line[0] to be '#' (or up to 3 spaces), and scanHeadings does not strip a leading U+FEFF; only references-config.ts strips the BOM, for references.json." },
+    { "id": "review-performance-w5:F-002", "disposition": "closed", "note": "Same defect as review-highload-w5:F-002; fixed by the generation counter and the polling guard." },
+    { "id": "review-security-code-w1:F-001", "disposition": "closed", "note": "Same defect as review-highload-w3:F-001; linear heading scan." },
+    { "id": "review-security-code-w1:F-002", "disposition": "closed", "note": "recordLastResolve writes taskTextLength and taskTextTruncated, no text (context-resolver.ts:523-535). RecordedResolve type, tests (context-resolver.test.ts:427-452, conditional-reads.e2e.test.ts:520-521 asserts the text is absent from the record) and docs (apply-project-rules.md:163-166) agree. No reader of taskText remains in src." },
+    { "id": "review-security-code-w3:F-001", "disposition": "closed", "note": "Same defect as review-highload-w3:F-001; verified linear at head." },
+    { "id": "review-security-code-w4:F-001", "disposition": "closed", "note": "Same defect as review-security-code-w1:F-002; the text is no longer persisted, so the ignore rule and file mode concerns no longer apply to it." },
+    { "id": "review-security-code-w4:F-002", "disposition": "partial", "note": "Same state as review-highload-w2:F-001: single quotes everywhere in the templates, the escape rule for `'` stated at one of seven sites, no file or stdin input, docs example still double-quoted." },
+    { "id": "review-style-w5:F-002", "disposition": "open", "note": "Same as review-clean-code-w5:F-001; the mapping from tab id to formatter is still spelled out twice in presentProjectContext." },
+    { "id": "review-testing-practices-w2:F-008", "disposition": "closed", "note": "reference-entries.test.ts:7-29 pins digit and underscore adjacency (css3, my_css, css_modules), a Cyrillic neighbour (подтема), regex metacharacters (a.b vs axb, (draft), a+) and symbol-edged keywords (.css, @apply, c++)." }
+  ],
+  "slices": [
+    { "id": "slice-01", "status": "DONE", "coverage": "read in full; every attached prior finding checked against head code and, where claimed fixed, against sibling sites" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+Summary: The r02 fixes hold for the structural defects this reviewer cares about. Linked rules are now scanned from their origin, so the authoring checker and the resolver agree on the main case; the dead-anchor contradiction between resolver and validator is gone; the heading scan is linear (verified against the old regex pair on 200000 random lines and on a 200000-space heading); the feed orders and serialises its loads; task text is no longer written to last.json. Still open are five items the fix commits did not touch (the task-implementer bullet split, the tab-to-formatter table, listener isolation in the feed, and a leading BOM hiding a first-line heading), and two partials in the shell-quoting class, where six of seven templates now say single quotes but do not say how to escape an apostrophe and no file or stdin input exists. Two info findings are new: the linked-rule scan re-implements the resolver's link reading without its sha256 gate and names a nonexistent path in messages, and the dead-anchor fallback is now written out twice instead of once.

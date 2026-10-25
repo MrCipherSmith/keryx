@@ -1,0 +1,51 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B over slice-03. One regression at major: the PR registers review_complete as an operator card tool (src/commands/operator-confirm-review.ts, mirrored in OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts), which makes the registry 19 names, while src/commands/operator-confirm-rosters.test.ts still pins 18 (that count is origin/main's, which already holds review_decide_premise). The pinned test fails on this head (bun test run: 'there are 18 operator card tools ... Expected length: 18, Received length: 19'). Everything else in the lens held: the two bundled/installed SKILL copies are byte-identical (cmp) and review-orchestrator/SKILL.md is 1572 lines = the recorded ceiling in skill-length-ceilings.ts; help-groups.test.ts and commands-by-task.test.ts (on-disk docs equal generated) pass; remote shell-bridge/mirror-undelivered tests pass; review, learning, harness/external, remote, flow, acp, gdskills and docs suites pass (16477 pass, 1 fail, the roster test). Coverage limits: the blast radius was capped (100 files dropped by the cap, plus 46 text-hub, 428 test-consumer and 180 unrelated-symbol drops) and 20 of 58 changed files are non-graph files (flow files, SKILL/docs/markdown) the graph reports as unresolved, not clean. The graph has no runtime edges (the string-keyed tool registry, the Telegram topic hand-off, the hook-fired spawn paths), so the roster break above was found by running the pinned test, not from the dependency path. AC9 (owner's live check) and AC10 (release) are not code defects and are not reported.",
+  "findings": [
+    {
+      "id": "RG-W3-001",
+      "severity": "major",
+      "file": "src/trigger/unattended.ts",
+      "line": null,
+      "quote": "\"review_complete\",",
+      "problem": "The change adds `review_complete` to the operator card roster (registered in src/commands/operator-confirm-review.ts, listed in OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts alongside the already-present `review_decide_premise`), so `operatorConfirmToolNames()` now returns 19 names. src/commands/operator-confirm-rosters.test.ts still asserts `expect(NAMES).toHaveLength(18)` under the title 'there are 18 operator card tools to keep out of the other rosters'. 18 is the count origin/main already had (it holds review_decide_premise but not review_complete), so the branch merged main's bump and never added its own.",
+      "impact": "`bun test src/commands/operator-confirm-rosters.test.ts` fails on this head: 'Expected length: 18, Received length: 19'. Reproduced by running it, and by running the wider review/remote/flow/acp/gdskills/learning suites, where it is the only failure of 16481 tests. This is the guard flow 456 put in place so that a card tool stays out of the MCP registry, ACP rosters, spawn_subagent children and the readline shell; with its first test red, CI blocks the merge, and the three roster-exclusion tests are not the ones that fail, so the red is the count pin, not an exposure. No runtime exposure was found: the other four tests in that file (unattended list equals registry, MCP registry, ACP roster, spawn_subagent children) pass with the 19 names.",
+      "suggested_fix": "Change the test title and assertion in src/commands/operator-confirm-rosters.test.ts to 19. Keep the count pin; it is the reminder that a new card tool needs a roster decision.",
+      "evidence": "git grep on origin/main: operator-confirm-rosters.test.ts line 16 says 18, and src/commands/operator-confirm-review.ts there has review_decide_premise but no review_complete. On this head operator-confirm-review.ts registers both (name: \"review_decide_premise\" at line 580, name: \"review_complete\" at line 694). A throwaway script importing operatorConfirmToolNames() printed 19 names (review_chunks_answer ... schedule_remove) and OPERATOR_CONFIRM_TOOL_NAMES.length printed 19. `keryx ctx run -- bun test src/commands/operator-confirm-rosters.test.ts ...` exits 1 with the single failure above.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "dedupe_key": "operator-confirm-rosters-count-19",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-rosters.test.ts:16",
+          "src/commands/operator-confirm-rosters.test.ts:17"
+        ],
+        "enumeration_method": "keryx ctx rg for 'operator card tools', 'toHaveLength(18|19)' and the digits 18/19 followed by card/confirm/gate over src, docs/docs, README.md and CHANGELOG.md: the only count pin of the roster is those two lines (src/commands/agent.recovery.test.ts matched the pattern but is unrelated to the roster). Every other consumer of the roster (OPERATOR_CONFIRM_TOOL_NAMES in src/review/harness-robustness.test.ts, the unattended list test, the MCP/ACP/spawn_subagent exclusion tests in the same file) derives from the registry and passed."
+      }
+    }
+  ],
+  "slices": [
+    "slice-03"
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Checked and found intact (no finding):
+- Bundled vs installed SKILL copies: review-orchestrator SKILL.md, SKILL.detail.md and review-premise SKILL.md are byte-identical (`cmp`). review-orchestrator/SKILL.md is 1572 lines, equal to the recorded ceiling (`SKILL_LENGTH_CEILINGS` entry 1572), so review-orchestrator-skill-parity.test.ts holds. No test pins the replaced SKILL phrases.
+- src/standard/help-groups.ts summaries: help-groups.test.ts and commands-by-task.test.ts (on-disk docs/docs/commands-by-task.md equals the generated text) pass; remote-control-surface, help-grouped and agent-commands tests also pass.
+- src/remote/client.ts `undelivered`: no test or caller pins an exact `{decision:"deny"}`; `mapApprovalAnswer` keeps the flag only on a denial; shell-bridge, mirror-undelivered and approval-mirror tests pass. Narrow residual: the post-post `if (!this.connected) return {decision:"deny"}` branch in `askApproval` carries no flag, so a link that drops after the post reads as an operator denial, not an undelivered card (logic reviewers own this; not a regression of existing behaviour).
+- src/harness/external/write-land.ts and src/learning/decisions.ts: the added `pressedBy`/`pressedAt` are optional and read tolerantly; the existing decision-file and decisions readers pass their suites.
+- src/review/* exports (estimate, publish, readiness, premise-question, operator-decisions, coverage-complete, evidence-level, complete-gated): extra keys are tolerated by every validator read (`isPlanConfirmation` does not check them; `operator-decisions.ts` validators do not reject extra keys); review-finding.schema.json `premise.operator` is untouched because press fields are not copied onto it; `evidenceLevelLine` uses a non-global regexp so `.test` is stateless; `runComplete` in src/commands/review.ts now routes through `completeReviewGated` with the same gates.
+
+Routing audit: graph_used: yes (blast-radius.json summarised with jq; no runtime edges, graph predates nothing I added). wiki_used: not-relevant (a regression sweep with named files). ctx_used: yes (keryx ctx rg, read, run). raw_rg_used: no. Raw git calls (stat of three paths, git grep on origin/main, cmp) carried a `# keryx:raw` reason.

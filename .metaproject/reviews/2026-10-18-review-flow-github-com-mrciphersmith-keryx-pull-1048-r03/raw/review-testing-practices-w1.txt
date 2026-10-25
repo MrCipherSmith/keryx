@@ -1,0 +1,77 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Delta round r03, slice-01 only (non-test hunks plus skills-references.test.ts). 21 prior findings dispositioned against head 5382b56ab: 13 closed, 5 open, 3 partial, 0 regressed. One new major: the keywordOccurs tests added for F-002/F-008 all pass under the pre-fix regex, so the punctuation-edge fix is not pinned. The new linear-time, ordering, dead-anchor, linked-rule and task-text-not-persisted tests do fail on revert and use no sleeps or network. Targeted run of the six touched test files: 137 pass, 0 fail.",
+  "slices": [{"id": "slice-01", "status": "DONE", "coverage": "slice read in full; fixes checked at head against sibling sites, tests run"}],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-testing-practices",
+      "severity": "major",
+      "file": "src/gdskills/reference-entries.test.ts",
+      "line": null,
+      "quote": "expect(keywordOccurs(\"rename the .css files\", \".css\")).toBe(true);",
+      "problem": "The fix for review-logic-w3:F-002 (conditional lookarounds in keywordOccurs) is covered by tests that the old, buggy regex also passes. The defect was a symbol-edged keyword failing when a word character sits next to that edge ('styles.css' for '.css', 'a@apply' for '@apply'). Every symbol-edge assertion in the new first test puts a space (or the string start/end) next to the symbol: 'rename the .css files', 'use @apply in the sheet', 'add c++ bindings', 'USE @APPLY'. A lookbehind or lookahead that is unconditional succeeds on a space, so these cases never exercised the bug. No test in the delta contains 'styles.css' or any word character directly adjacent to a symbol edge of a keyword.",
+      "impact": "Trigger: someone reverts or re-breaks keywordOccurs to apply both lookarounds unconditionally (the pre-fix form), or swaps the before/after edge test. Outcome: the suite stays green, and a task such as 'fix styles.css' silently stops promoting a document declared with keyword '.css', which is the exact silent skip of a mandatory read that F-002 reported. The F-008 gap is therefore only partly closed: digits, underscore, Cyrillic and metacharacters are now pinned (css3, my_css, css_modules, подтема, a.b vs axb, c++), the punctuation-edge case is not.",
+      "suggested_fix": "Add cases with a word character glued to the symbol edge, e.g. expect(keywordOccurs(\"fix styles.css please\", \".css\")).toBe(true); expect(keywordOccurs(\"a@apply\", \"@apply\")).toBe(true); expect(keywordOccurs(\"c++x\", \"c++\")).toBe(true) (no trailing boundary after a symbol), plus the boundary kept on the word side: expect(keywordOccurs(\"xc++\", \"c++\")).toBe(false) (leading boundary kept because the keyword starts with a word character). Optionally add one resolveReferences case with taskText 'tidy styles.css' and keyword '.css'.",
+      "evidence": "Ran the pre-fix regex (`(?<![\\p{L}\\p{N}_])<escaped>(?![\\p{L}\\p{N}_])`, flags iu) under bun on the four inputs of the first new test: all four return true, the same as the fixed function. The same regex returns false only for ('fix styles.css please', '.css'), which no test uses; the fixed function returns true for it and for ('a@apply', '@apply'). So reverting the fix would not fail any assertion in reference-entries.test.ts.",
+      "confidence": "high",
+      "dedupe_key": "keyword-edge-test-not-pinned",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/reference-entries.test.ts: keywordOccurs 'a keyword starting or ending with a symbol' (four assertions, none with a word char next to the symbol edge)",
+          "src/gdskills/context-resolver.test.ts and src/gdskills/conditional-reads.e2e.test.ts: keyword promotion cases use word keywords only"
+        ],
+        "enumeration_method": "keryx ctx rg for keywordOccurs and for the keywords '.css'/'@apply' across src tests; ran the old regex against every symbol-edge input in the delta to see which would distinguish old from new behaviour."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-architecture-w3:F-002", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-clean-code-w1:F-003", "disposition": "open"},
+    {"id": "review-clean-code-w2:F-004", "disposition": "closed"},
+    {"id": "review-clean-code-w5:F-001", "disposition": "open"},
+    {"id": "review-style-w5:F-002", "disposition": "open"},
+    {"id": "review-clean-code-w5:F-003", "disposition": "open"},
+    {"id": "review-highload-w2:F-001", "disposition": "partial"},
+    {"id": "review-security-code-w4:F-002", "disposition": "partial"},
+    {"id": "review-highload-w2:F-002", "disposition": "closed"},
+    {"id": "review-highload-w3:F-001", "disposition": "closed"},
+    {"id": "review-security-code-w1:F-001", "disposition": "closed"},
+    {"id": "review-security-code-w3:F-001", "disposition": "closed"},
+    {"id": "review-highload-w5:F-002", "disposition": "closed"},
+    {"id": "review-performance-w5:F-002", "disposition": "closed"},
+    {"id": "review-logic-w3:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-logic-w3:F-003", "disposition": "open"},
+    {"id": "review-security-code-w1:F-002", "disposition": "closed"},
+    {"id": "review-security-code-w4:F-001", "disposition": "closed"},
+    {"id": "review-testing-practices-w2:F-008", "disposition": "partial"}
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 0, "info": 0}
+}
+```
+
+Disposition notes (checked at head, not from commit messages)
+
+- review-architecture-w3:F-002 and review-logic-w2:F-001 (linked rules not scanned): closed. references-check.ts scanCitations now merges copied refs with registry entries whose mode is link and that have no copy, and reads the origin through resolveOriginPath, as the resolver does. The header comment was updated. The new test in skills-references.test.ts builds a linked registry with two rules and asserts suggest finds OTHER.md and check no longer reports unused-declaration; reverting the scan would fail it. The hint goes through suggestReferences, so the import hint is covered by the same path. Residual, not filed: the scan does not compare the origin file's sha256 to the registry as the resolver does.
+- review-clean-code-w1:F-003 (2.0c bullet): open. The delta changes only the quote style in the first 2.0c bullet; the promoted-entry paragraph in the third bullet still sits in front of the general sentences ("Cite what you used ... `n/a` needs a reason in `notes`. Never edit a resolved file"), unsplit.
+- review-clean-code-w2:F-004: closed. The size-limit test uses CONTRACT_MAX_BYTES + 1 and imports it (premise judge had challenged it; the fix is harmless).
+- review-clean-code-w5:F-001 and review-style-w5:F-002 (tab-to-formatter mapping): open. project-context-inspector.ts still has the nested ternary in paint(), the separate Math.max(...) list in contentRows, and `let tab: string`.
+- review-clean-code-w5:F-003 (listener throw shares the poll catch): open. reload() still runs `for (const listener of [...listeners]) listener(next)` inside the function the poll catch wraps.
+- review-highload-w2:F-001 and review-security-code-w4:F-002 (double-quoted --task-text): partial. Every skill template now single-quotes the text, which closes the backtick and $(...) expansion trigger, and flow-orchestrator and job-orchestrator SKILL state the `'\''` rule. orchestrator-prompt.md (two sites), task-implementer 2.0c and tests-creator 1.2b switched to single quotes but carry no escape rule, so a description containing an apostrophe breaks out of the quoting in those four sites. Static examples in docs and live-run.md are operator-typed literals, not substituted text.
+- review-highload-w2:F-002: closed (info, no change was required; recordLastResolve still writes whole-or-nothing).
+- review-highload-w3:F-001, review-security-code-w1:F-001, review-security-code-w3:F-001 (quadratic heading regex): closed. HEADING and the regex stripClosingHashes are replaced by a hand-written parseHeadingLine and linear stripClosingHashes; no other quadratic pattern remains in references-section.ts. Measured at head: a heading with 120000 blanks scans in about 5 ms. The new test asserts a 1000 ms ceiling on four 120k-blank inputs (a roughly 200x margin over the linear time, versus about 12 s before), uses performance.now and no sleeps. It also pins closing-hash and indentation semantics.
+- review-highload-w5:F-002 and review-performance-w5:F-002 (reload ordering): closed. reload() carries a start sequence and drops a result older than the last applied one; poll() has an in-flight guard. The new test drives it with manually released promises and an injected interval, no timers or sleeps, and covers both the no-overlap and the older-finishes-last cases.
+- review-logic-w3:F-001 (dead anchor): closed. currentSection now returns the whole file with an explanatory `what` when the anchor is not found, so the proof matches the resolver's fallback. The new test in resolved-context-check.test.ts covers a pass in the file's words and a summary-words miss outside them.
+- review-logic-w3:F-002 (punctuation-edged keywords): closed in code (keywordOccurs verified at head: 'fix styles.css please'/'.css' and 'a@apply'/'@apply' return true). The test side is the new F-001 above.
+- review-logic-w3:F-003 (BOM before first heading): open. No BOM handling was added to scanHeadings or parseHeadingLine; extractSection("﻿# Title\ntext\n## B\nx\n", "Title") still returns found:false with available ["B"].
+- review-security-code-w1:F-002 and review-security-code-w4:F-001 (task text persisted in last.json): closed. recordLastResolve now stores taskTextLength and taskTextTruncated only; no non-test reader of taskText remains. Tests assert the secret string and the text are absent from the file contents, in context-resolver.test.ts and conditional-reads.e2e.test.ts. Docs and the CLI help were updated.
+- review-testing-practices-w2:F-008: partial. New tests pin digit, underscore, Cyrillic neighbour, metacharacter and c++ cases (each would fail if the corresponding lookaround or the escape were dropped), but not the symbol-edge boundary rule (see F-001).
+
+Summary: slice-01 fixes hold up in code and mostly in tests: the linear heading parse, the load-ordering guard, the dead-anchor fallback, the linked-rule scan and the task-text-not-persisted change each have a test that fails on revert and none uses a fixed sleep or real network. One new major, the keywordOccurs tests do not distinguish the fixed matcher from the old one, so a revert of the F-002 fix would stay green. Open from r02 and untouched by the delta: the 2.0c bullet shape, the tab-formatter mapping, listener isolation in the feed and the BOM before a first-line heading. The single-quote switch for --task-text is partial because four skill sites lack the apostrophe-escape rule. Routing audit: graph_used no (not-relevant, delta of known files), wiki_used no (not-relevant), ctx_used yes, raw_rg_used no.

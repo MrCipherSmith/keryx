@@ -1,0 +1,84 @@
+STATUS: DONE
+
+## Architecture Review (PR 1052, round r04, wave 1, slice-02)
+
+### Review Scope
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776, merge-base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice read in full: slice-02 (flow 464 artifacts, review-orchestrator SKILL.md / SKILL.detail.md, review-premise SKILL.md, CHANGELOG, TM-04, cli-reference, commands-by-task, review-with-a-record, limitations, flow-state.schema.json, package.json). The slice carries no TypeScript; it is docs, skills, one JSON schema and the version bump.
+- Stack: generic-ts (keryx CLI + TUI), no NestJS or MobX.
+
+### Summary
+The slice moves the "agent never runs `keryx review complete`" rule into the skills and docs consistently, and states the autonomous exception in cli-reference. The schema addition (`pressedBy`, `pressedAt` on the signature `confirmation` object) matches `src/flow/types.ts` (SignatureConfirmation) and `src/flow/schema.ts` exactly, and TM-04 6a matches `operatorConfirmTool().invoke` in `src/commands/operator-confirm-tools.ts` (allowed-id check, one hour TTL, a refusal leaves the token spent, press fields only on remote). One residual: two skill sentences, in both copies of each file, still tell the agent to run the CLI after a waiver card. No layering, dependency or boundary violation is in the slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A - not detected in stack.
+
+### Findings
+
+#### [AR-W1-001] Two skill sentences still send the agent to `keryx review complete` after a waiver card
+- Severity: minor
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (line 782) and SKILL.detail.md (line 386); identical text in src/gdskills/bundled/skills/review/review-orchestrator/
+- Problem: The delta rewrites the "Done when" bullet, the "Operator decisions" bullet, "Round plan" step 6 and the readiness section to say an agent closes a round only through the `review_complete` card and never runs `keryx review complete`. SKILL.md line 782 (chunk coverage) still says "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`", and SKILL.detail.md line 386 (readiness item 10) says "in keryx shell call `review_waive_readiness` ..., then run `keryx review complete <package>`". The same file's "Done when" says the opposite.
+- Why it matters: this is the D-01 shape in the skill layer. TM-04 section 8 says plain `review complete` has no TTY check, so the card is a rule for the agent and the skills are the only place that rule is stated. An agent that follows line 782 or 386 after a waiver closes the round with no `review_complete` card, no `confirmedVia` and no `pressedBy`. The two lines are not in the diff, so the contradiction is new with this change.
+- Fix: change both to "then call the `review_complete` card" (keep the CLI wording only for "elsewhere"), in the .metaproject copy and the bundled copy (4 files). Same pass: SKILL.md "Round plan" step 9 ends the tail with "`readiness`, `complete`" and "Early verdict" says "`keryx review complete` continue as the tail"; name the card there too.
+- Confidence: medium (the lines are untouched by the PR; whether they count as in scope is the panel's call, hence minor)
+
+### Checks that came out clean
+- Schema parity: docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json vs src/flow/schema.ts:331-332 and src/flow/types.ts:187-189.
+- TM-04 6a claims vs src/commands/operator-confirm-tools.ts:207-221 (allowed list required, 1 hour TTL, pressedBy and pressedAt only on remote, entry deleted before the checks so a refusal spends the token).
+- Orchestrator skill parity: the "an agent never runs `keryx review complete`" sentence is present in both the project and bundled SKILL.md.
+- Autonomous exception is stated in cli-reference (matches the deliberate autonomous-profile.ts wording; not re-raised).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "summary": "Docs, skills and schema in slice-02 are consistent with the code for the card gate; one minor residual: SKILL.md:782 and SKILL.detail.md:386 (both copies) still say to run keryx review complete after a waiver card.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": [ { "id": "slice-02", "coverage": "read in full" } ],
+  "findings": [
+    {
+      "id": "AR-W1-001",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`",
+      "problem": "SKILL.md line 782 and SKILL.detail.md line 386 (and the same lines in src/gdskills/bundled/skills/review/review-orchestrator/) still tell the agent to run `keryx review complete` after a waiver card, while this delta states in Done when, Operator decisions, Round plan step 6 and the readiness section that an agent closes a round only through the review_complete card and never runs the CLI.",
+      "impact": "Plain `review complete` has no TTY check (TM-04 section 8), so the skill text is the only guard. An agent following these two sentences closes the round without a review_complete card, confirmedVia or pressedBy: the D-01 bypass in the skill layer, and the file now contradicts itself.",
+      "suggested_fix": "Reword both sentences in all four files to 'then call the `review_complete` card', keeping the CLI wording only for 'elsewhere'; also name the card in Round plan step 9 ('readiness, complete') and in Early verdict ('keryx review complete continue as the tail').",
+      "evidence": "keryx ctx rg \"then (you )?(run|call) .?keryx review complete\" over .metaproject/skills/gdskills/review, src/gdskills/bundled/skills/review, docs/docs, src/trigger, src/review/autonomous-profile.ts returns exactly 4 matches: SKILL.md:782 and SKILL.detail.md:386 in each copy. The Done-when bullet of SKILL.md (changed in this delta) says 'an agent never runs `keryx review complete`'.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:386",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:782",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:386"
+        ],
+        "enumeration_method": "keryx ctx rg 'then (you )?(run|call) .?keryx review complete' over the review skills (both copies), docs/docs, src/trigger and src/review/autonomous-profile.ts: 4 matches, each read; other `review complete` mentions in SKILL.md describe the command or its gate and are accurate."
+      }
+    }
+  ],
+  "prior_dispositions": []
+}
+```

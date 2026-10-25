@@ -1,0 +1,35 @@
+STATUS: DONE
+
+## Performance Review (round r02 delta d2cb377f5..672e37687, slice-01 read in full)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No code-level performance problem was found in the delta.
+
+### Checked, no finding
+- Repeated disk reads per render or per card: `completionFacts` (src/commands/operator-confirm-review.ts) now also awaits `readOperatorDecisions(dir)` (one more read of operator-decisions.json). It runs at most three times per `review_complete` card (buildCard, the digest re-check in apply, and one re-read only when the gate threw). The path is gated by an operator yes and runs once per review close, not per render or per list item. The sidebar, `/remote-control` and `/decisions` read `OperatorConfirmationLog` (memory only): `waiting()` is a filter plus `this.now()` over a short array. No disk read was added to any render path.
+- Unbounded growth of the card/answer store: answered entries stay capped at `ANSWERED_CARDS_KEPT = 5`. The delta fixes a growth path rather than adding one. Before, an exception from `inner` / `raceApproval` left the card entry unanswered forever (never trimmed); now both exits settle the entry in `finally` (`withdrawn` when no outcome). `markUndelivered` mutates one entry in place and adds none, and it is idempotent (no repeat `changed()`).
+- Timers not cleared: the delta adds no timer, interval, listener or subscription. The 1-hour token expiry in `waiting()` / `pendingConfirmationLine` is computed from the clock when read, so there is nothing to clear. The existing `raceApproval` timers are untouched by the diff.
+- TUI redraw cost: `markUndelivered` fires `changed()` once per card, only when the entry is mirrored and unanswered; `answer()` still fires once. No new per-keystroke or per-frame work. `remoteApproval` is hoisted (one `new Date().toISOString()` per remote press).
+- `consumeConfirmationToken` spreads two optional fields, once per flow completion.
+- N+1, re-renders, bundle imports, sync blocking and pagination: the added reads in the changed path use async fs, and the delta introduces none of the other patterns.
+
+### Pre-existing
+None.
+
+### REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Delta r02 reviewed in full (slice-01). No performance findings: the added operator-decisions.json read is one-shot behind an operator yes, the card log stays bounded and now settles on every exit path, no timers or listeners were added, and no render path gained disk I/O.",
+  "findings": [],
+  "pre_existing": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

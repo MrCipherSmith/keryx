@@ -1,0 +1,52 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Round r07, head 5444f96e4ce2f5b00cb0dea390a818e5ca182c23, slices slice-02 and slice-03. The delta removes every card cap and replaces it with a refusal for text the card would rewrite or hide (hiddenInCard) plus a length cap on stored dispositions. No new unbounded in-process resource, race or retry issue; whole-card growth is bounded downstream by operatorCardTooLongForTopic (src/remote/shell-bridge.ts:280), which takes an over-long card out of the remote Yes/No path. The slice-03 import removals leave no dangling use at head. Two minor findings and one info. Load profile not provided; this is a single-operator confirmation path.",
+  "findings": [
+    {
+      "id": "HL-701",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 62,
+      "quote": "function shownBody(text: string): { lines: string[] } | { refusal: string } {",
+      "problem": "shownBody (lines 62-67) only tests cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:7-17) strips ANSI, C0/C1 and bidi controls but not zero-width or other Cf characters (U+200B-200D, U+2060, U+FEFF, tag characters U+E0000-E007F) and not U+2028/U+2029. The new hiddenInCard (line 672) adds /[\\p{Cf}\\p{Zl}\\p{Zp}]/u for reason, dispositions and quoteWhole, because those draw nothing or break a line. The review body (publish, line 208) and every reply body (line 510) are posted exactly as stored but are checked only by shownBody, so a body holding such characters is shown to the operator without them and posted with them. The split at line 63 is on \\r?\\n only, so a U+2028 stays inside one card line. This is the same card-shows-what-is-stored class the commit closes for reason and dispositions.",
+      "impact": "Invisible text reaches a public PR review that the operator approved without seeing it; no load effect. The body is built from package findings, which are reviewer/model text.",
+      "suggested_fix": "Use hiddenInCard(line) in shownBody for the bad-line test (after the tab-to-space replace) so the three paths share one predicate.",
+      "evidence": "src/commands/operator-confirm-review.ts:62-67 (shownBody tests cardSafe only); :672 (hiddenInCard adds Cf, Zl, Zp); :208 and :510 (shownBody applied to publish and reply bodies); src/lib/card-safe.ts:15 (character class lists bidi but no Cf zero-width or tag characters).",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-702",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 529,
+      "quote": "const posted = await commentsReplyPass([...prepared.argv], false);",
+      "problem": "apply runs commentsReplyPass(prepared.argv, true) at line 527, compares JSON.stringify(requests) with prepared.requests (line 528), then runs commentsReplyPass(prepared.argv, false) at line 529, which rebuilds the requests again. If the outcomes file, the package or the PR comment set changes between the second dry run and the real pass, what is posted is not what was compared or shown. The hunk at lines 461-482 in this delta rewrites this spec's card (REPLY_PREVIEW removed), and the same shown-equals-applied class is the point of the commit. Not introduced by the delta, so a follow-up.",
+      "impact": "A window of a few hundred ms to seconds per confirmation; under concurrent edits a reply the operator never saw can be posted, and this tool cannot retract a posted reply.",
+      "suggested_fix": "Have the real pass accept the already-compared requests, or post from prepared.requests (JSON.parse) instead of recomputing.",
+      "evidence": "src/commands/operator-confirm-review.ts:526-530 (dry run, compare, then a separate real pass that recomputes from argv).",
+      "confidence": "low",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-703",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 219,
+      "quote": "`body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:`,",
+      "problem": "The review body is shown whole (lines 219-220), so any realistic review body exceeds MAX_APPROVAL_PROMPT_CHARS and operatorCardTooLongForTopic (src/remote/shell-bridge.ts:280, called at src/tui/tui-shell.ts:6029 and 6104) routes the card to the shell only. This is correct degradation, not a defect. Same for review_comments_reply (line 516) and a mutation waiver with many mutants (line 415).",
+      "impact": "No failure; the remote-confirm acceptance criteria should not assume a Telegram Yes/No button for these tools.",
+      "suggested_fix": "None required; document it in the tool descriptions if remote answering of these cards is expected.",
+      "evidence": "src/commands/operator-confirm-review.ts:219-220, 415, 516; src/remote/operator-card-length.test.ts (a card over the approval prompt limit is not answerable in the topic).",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    }
+  ],
+  "questions": []
+}
+```

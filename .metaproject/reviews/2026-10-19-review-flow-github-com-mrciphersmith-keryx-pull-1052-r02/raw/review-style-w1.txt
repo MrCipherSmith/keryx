@@ -1,0 +1,169 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Delta d2cb377f5..672e37687 (slice-01, read in full). Style is healthy: the remoteApproval helper is moved out from between the isToolAvailableToSideWorker docblock and its function, the dropped `head` input and `prBound` field leave no dead code behind, the new tests are named as behaviours, and the five pressedAt/pressedBy doc comments agree. Remaining points are minor: one error-message ternary copied four times in a file that already has a helper, an `apply` that grew to about 55 lines and 13 branches, a source-text test that pins formatter output, and a loose test-helper type. No major findings.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "The expression `error instanceof Error ? error.message : String(error)` now appears four times in operator-confirm-review.ts: in the existing `failed` helper (module level), in completionFacts (research.json read error), in apply (facts read error and the `!closed` refusal, which spells it out for `gateError`), and in a new local `reason` arrow. `reason` is declared near the end of `apply`, after two inline copies of the same expression that it could have served. Its name is also a noun, not a verb phrase.",
+      "impact": "Four spellings of one conversion drift apart. A later change, such as redacting the message through cardSafe, has to be made in every copy and one will be missed.",
+      "suggested_fix": "Add one module-level `const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));`. Use it in `failed`, completionFacts, and all three places in `apply`. Delete the local `reason`.",
+      "evidence": "keryx ctx rg for the expression in src/commands/operator-confirm-review.ts lists the 4 copies at the reviewed head (lines 87, 675, 747, 783). `gateError instanceof Error ? gateError.message : String(gateError)` at about line 766 is a fifth spelling that rg does not match.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-confirm-review:error-message-dup",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {",
+      "problem": "The review_complete `apply` is now about 55 lines with roughly 13 branches: four early-return or guard ifs, three try/catch blocks, and ternaries for head, readiness, warnings and the isError spread. Three mutable `let`s carry state across the blocks (`done`, `gateError`, `recordError`). Besides the gate call it re-reads the facts, decides whether the round closed, builds the record, writes it, and formats the output. `done` is a vague name for the result of completeReviewGated.",
+      "impact": "Cyclomatic complexity above the 10-branch guideline. The close-versus-refuse decision is the subtle part of this function, and it is spread across the let/try/catch sequence, so a reader has to trace three optional values to see which output line is produced.",
+      "suggested_fix": "Extract two small functions: `runCompletionGate(...)`, returning `{ result, error, closed }`, and `describeCompletion(facts, prepared, confirmation, outcome)`, which builds the output lines and the problems list. Rename `done` to `completion`. `apply` is then: guard, digest check, gate, record write, describe.",
+      "evidence": "Branch count taken from the new `apply` body in the slice diff (hunk @@ 635,816 @@).",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-confirm-review:apply-complexity",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": null,
+      "quote": "expect(mirror.match(/\\} finally \\{/g)).toHaveLength(2);",
+      "problem": "The new test pins the shell wiring by slicing tui-shell.ts source between two string markers and counting `} finally {` occurrences. The count 2 is a magic number that depends on formatter output (brace and keyword spacing) and on the exact text `io.requestApproval = trackApproval(mirrorApprovalToTopic`. The comment names remote-queue-wiring.test.ts as precedent, but the same file's own comment says flow 277 converted a source-text audit into a unit-testable predicate.",
+      "impact": "The test fails on any harmless reformat or rename of the wrapper, and passes if a `finally` is present but does the wrong thing. It also tells the next reader nothing about which two paths each `finally` covers.",
+      "suggested_fix": "Preferably extract the settle-the-log-entry logic into an exported function in operator-confirmations.ts (for example `settleCard(log, id, outcome, aborted)`) and unit-test it. If the source audit stays, name the constant (`const FINALLY_BLOCKS_IN_MIRROR = 2`) with a comment naming the two paths.",
+      "evidence": "Test body in the slice diff, hunk @@ 158,186 @@ of src/tui/operator-confirmations.test.ts.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-confirmations.test:source-audit",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "function tool(name: string, seams: Partial<Parameters<typeof buildReviewConfirmSpecs>[0]> = {}): InteractiveTool {",
+      "problem": "The new `seams` parameter is typed `Partial<Parameters<typeof buildReviewConfirmSpecs>[0]>`. The module already exports `ReviewConfirmSeams`, whose three properties are all optional, so `Partial` adds nothing. `Parameters<...>[0]` also includes `undefined`, which makes the type more confusing than it needs to be.",
+      "impact": "An indirect type that restates a named, exported one; harder to read and breaks if the builder's signature gains a second parameter.",
+      "suggested_fix": "`import type { ReviewConfirmSeams } from \"./operator-confirm-review\";` and `function tool(name: string, seams: ReviewConfirmSeams = {}): InteractiveTool {`.",
+      "evidence": "`export interface ReviewConfirmSeams` with optional prLookup, prFiles and postReview, in src/commands/operator-confirm-review.ts (hunk @@ 30,70 @@ of the slice).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-confirm-review-tools.test:seams-type",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": null,
+      "quote": "import { readFileSync } from \"node:fs\";",
+      "problem": "The two new `node:` imports are placed above `import { expect, test } from \"bun:test\"`. The sibling test files (operator-confirm-review-tools.test.ts, operator-confirm-rosters.test.ts) put `bun:test` first and then `node:` modules.",
+      "impact": "Import order differs from the neighbouring tests; no functional effect.",
+      "suggested_fix": "Move the `bun:test` import first and keep the `node:fs` and `node:path` imports in one block after it, or follow whatever order the repository linter enforces.",
+      "evidence": "Hunk @@ 1,86 @@ of the slice, compared with the first lines of operator-confirm-review-tools.test.ts and operator-confirm-rosters.test.ts at the reviewed head.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-confirmations.test:import-order",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);",
+      "problem": "A read failure is pushed into the `waivers` array under the prefix `waiver: coverage`, so the array holds both real waivers and an error notice. The same array is then written to completion-confirmation.json as `waivers`.",
+      "impact": "The name and prefix claim an operator waiver that does not exist. A reader of the stored record may take the line as a recorded coverage waiver.",
+      "suggested_fix": "Keep the notice in a separate `notes` field of CompletionFacts, with its own prefix such as `warning: coverage unknown`, and show it on the card next to the waivers. Include `notes` in the digest.",
+      "evidence": "Hunk @@ 635,816 @@ of the slice, completionFacts catch block.",
+      "confidence": "low",
+      "reviewer": "review-style",
+      "dedupe_key": "style:operator-confirm-review:waivers-naming",
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": null,
+      "quote": "Nineteen keryx decisions are the operator's alone:",
+      "problem": "The prose count (Nineteen) and the sentence that follows do not map to the table in section 2. The table lists 17 tool rows, and the roster test counts 19 tools; review_override_reviewers, review_waive_mutation and review_comments_reply (in the shell.test.ts roster) have no row. The delta raises the number from 13 to 19 while adding only three named decisions to the sentence and three rows to the table.",
+      "impact": "A reader cannot reconcile 19, the sentence and the table. The next addition will change the number again without anything to check it against.",
+      "suggested_fix": "Either drop the number from the prose (\"These keryx decisions are the operator's alone:\") or add the three missing rows so that the table has 19 entries.",
+      "evidence": "Counted from the §1 sentence and the §2 table in the slice hunk @@ 1,46 @@, and from operator-confirm-rosters.test.ts (toHaveLength(19)).",
+      "confidence": "low",
+      "reviewer": "review-style",
+      "dedupe_key": "style:TM-04:decision-count",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "A replayed, expired, foreign or text-only answer is refused and records nothing; a rejected remote answer burns the card, so nothing is applied and the card has to be asked again.",
+      "problem": "The two clauses say nearly the same thing: \"records nothing\" and \"nothing is applied\". The bullet is also now the longest entry in the 0.3.124 section.",
+      "impact": "Wordy for a changelog line; the new fact (a rejected answer spends the card) is buried in the second half.",
+      "suggested_fix": "\"A replayed, expired, foreign or text-only answer is refused and changes nothing; it also spends the card, so the card has to be asked again.\"",
+      "evidence": "CHANGELOG.md hunk @@ 1,41 @@ of the slice.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:CHANGELOG:redundant-clause",
+      "location_class": "in-diff"
+    }
+  ],
+  "pre_existing": [
+    {
+      "file": "src/review/types.ts",
+      "quote": "/** A readiness item the operator waived in their own words (`keryx review complete --waive <item> \"<quote>\"`). */",
+      "problem": "Two stacked doc comments: the ReadinessWaiver description sits above the ConfirmedVia docblock, so it documents the wrong declaration. Unchanged context lines in this delta, not introduced by it.",
+      "suggested_fix": "Move the ReadinessWaiver comment down to `export type ReadinessWaiver`."
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 4 }
+}
+```
+
+# Style Review Report (round r02, delta d2cb377f5..672e37687)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+The delta tidies naming and layout well. `remoteApproval` no longer splits the `isToolAvailableToSideWorker` docblock from its function, the removed `head` input and `prBound` field leave no dead code or unused import, and the new tests describe behaviours. The remaining points are minor: a duplicated error-to-message conversion, a long `apply`, a formatter-dependent source-text test and a loose helper type.
+
+## Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base: `d2cb377f5` (delta base)
+- Reviewed head: `672e37687b7c27184e88c5d6571f8c509a2c671e`
+- Scope mode: explicit-hash-range
+- Changed files in slice-01: 24
+
+## Stats
+- major: 0
+- minor: 4 (F-001 to F-004)
+- info: 4 (F-005 to F-008)
+
+## Positive Notes
+- The five pressedAt doc comments (agent.ts, confirm-token.ts, types.ts, flow/types.ts, schema.ts) use the same wording: the shell's clock when the press arrived.
+- The two bundled/.metaproject copies of the review-orchestrator SKILL files carry identical edits.
+- Test titles say what is refused and why. No `console.*` was added in production code.
+
+Routing audit: graph_used no (not-relevant: diff-only style review); wiki_used no (not-relevant); ctx_used yes (`keryx ctx rg`); raw_rg_used no.

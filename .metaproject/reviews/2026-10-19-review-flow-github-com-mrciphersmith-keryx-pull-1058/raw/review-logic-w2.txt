@@ -1,0 +1,105 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review (slice-02, wave 2)
+
+Slice-02 (docs, PRD, review-operator.ts host-question path, operator-confirm-review.ts waiver line, 41-test file) reads correct on the guarded paths: every refusal (unattended, KERYX_TOOL_CALL, malformed --answered-by, blank texts, unknown package or finding, stale plan numbers, missing --reason) throws before the first write, the journal write happens after the record and degrades to a warning, and decide-premise demands a positive choice word. The one new defect is that the three yes/no verbs (confirm-plan, waive-mutation, override-reviewers) have no positive check on --answer-text, only a first-word decline list that also misses the verb's own decline label 'keep'; this contradicts PRD Q2 and the shipped docs. Four smaller items (decide-premise false decline, option vocabulary mismatch, help text claim, flow attribution of the journal entry) are minor or info. Wave-1 findings are not repeated.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 (docs, PRD, review-operator.ts host-question path, operator-confirm-review.ts waiver line, 41-test file) reads correct on the guarded paths: every refusal (unattended, KERYX_TOOL_CALL, malformed --answered-by, blank texts, unknown package or finding, stale plan numbers, missing --reason) throws before the first write, the journal write happens after the record and degrades to a warning, and decide-premise demands a positive choice word. The one new defect is that the three yes/no verbs (confirm-plan, waive-mutation, override-reviewers) have no positive check on --answer-text, only a first-word decline list that also misses the verb's own decline label 'keep'; this contradicts PRD Q2 and the shipped docs. Four smaller items (decide-premise false decline, option vocabulary mismatch, help text claim, flow attribution of the journal entry) are minor or info. Wave-1 findings are not repeated.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "confirm-plan, waive-mutation and override-reviewers record ANY --answer-text whose first word is not on the 14-word LEAD_DECLINE list. Nothing requires the text to be an affirmative. `--answer` is optional on these verbs (`answerArg !== undefined && ...`), so it is no backstop. decide-premise is different: refuseOtherChoice demands the chosen word, so the three verbs are asymmetric. The check is also blind to the verbs' own decline label: HOST_OPTIONS declares `decline: \"keep\"` for waive-mutation and override-reviewers (and `--answer keep` is refused as a decline), yet \"keep\" is not in LEAD_DECLINE, so the same word in --answer-text is accepted as the confirmation. This is new evidence beyond wave 1's first-word finding (\"don't waive it\"): there the text is negative but starts with a word outside the list; here the text carries no yes at all, or is the verb's own decline option.",
+      "impact": "Failing inputs, each exits 0 and writes the record plus a journal entry: (1) `keryx review waive-mutation --package P --reason slow --answered-by claude-code:q1 --answer-text \"Keep: run the mutation pass\" --question-text \"Waive the mutation pass? Waive / Keep\"` records a mutation-waiver (the review may then close with `Not run: mutation pass`) although the operator chose to keep it. (2) `--answer-text \"let me think about it first\"` (first word `let`), `\"what does that mean?\"`, `\"maybe later\"`, `\"hold on\"` each record a plan confirmation, a mutation waiver or a reviewer override. This contradicts PRD Q2 (\"free text is never a decision; the answer must be one of the verb's options\") and the shipped wording in docs/docs/cli-reference.md and limitations.md (\"Nothing is recorded ... for an answer that is not one of the verb's options (free text is not a decision)\") and TM-04 6b (\"for the others a yes\"). The tests cover only `--answer keep`/`no` and the declines n/no/nope/нет/\"no, not now\"; none passes a non-affirmative, non-listed text to the three verbs, so the gap is unpinned.",
+      "suggested_fix": "For the three yes/no verbs require an affirmative the way decide-premise requires a choice word: accept the text only when its words include an affirmative from an explicit set (yes, y, yeah, ok, okay, confirm, confirmed, approve, go, proceed, waive, override, да, ок, подтверждаю, ...) and no word from a decline set that includes the verb's decline label (keep, не, нет, don/t, dont, cancel...), with the same negation test refuseOtherChoice uses (any decline or negation word anywhere refuses, not only the first). Add keep/hold/wait/later to the decline set now, and add tests for \"keep\", \"let me think\" and \"maybe\" on each of the three verbs.",
+      "evidence": "review-operator.ts refuseDecline (line ~302) checks `words.length === 0 || LEAD_DECLINE.has(words[0])`; callers at lines 385 (confirm-plan), 395 (decide-premise, which then also runs refuseOtherChoice) and 411 (waive-mutation / override-reviewers). HOST_OPTIONS line ~238: waive-mutation `confirm: \"waive\", decline: \"keep\"`. LEAD_DECLINE line ~274 has no keep/hold/wait/later. recordHostQuestion line ~361 validates `--answer` only when given. Test file: AC3 declines list is [\"n\",\"N\",\"no\",\"No.\",\" no \",\"nope\",\"нет\",\"no, not now\"] only.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:385 (confirm-plan)",
+          "src/commands/review-operator.ts:411 (waive-mutation and override-reviewers, one shared branch)"
+        ],
+        "enumeration_method": "keryx ctx rg for `refuseDecline(` in src/commands/review-operator.ts: three call sites; the decide-premise call at 395 is additionally guarded by refuseOtherChoice (positive choice word required), so the class is the other two call sites, which cover all three affected verbs."
+      },
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "const LEAD_DECLINE = new Set([\"n\", \"no\", \"nope\", \"nah\", \"not\", \"never\", \"cancel\", \"stop\", \"decline\", \"declined\", \"reject\", \"нет\", \"не\", \"отмена\"]);",
+      "problem": "On decide-premise both uphold and dismiss are decisions, but refuseDecline runs before refuseOtherChoice and treats a leading no/not/stop/reject as a decline, so a clear dismissal that is phrased negatively is refused with the wrong reason (\"reads as a decline\").",
+      "impact": "`keryx review decide-premise ... --answer dismiss --answer-text \"Not a real issue, dismiss it\"` (or \"No, dismiss it\", \"Нет, снять\") exits non-zero with `--answer-text reads as a decline ... Ask again if the operator meant yes`. Nothing is recorded and the agent is told to ask again with a message that points at the wrong problem; the fail-safe direction means no wrong record, only a mis-labelled refusal and an extra operator round trip. For a binary uphold/dismiss question a bare \"no\" is also ambiguous, which the message does not say.",
+      "suggested_fix": "For decide-premise skip refuseDecline and rely on refuseOtherChoice (which already demands the chosen word and rejects the other one and negations), or reword the message for this verb to say the words must name uphold or dismiss.",
+      "evidence": "recordHostQuestion decide-premise branch: `refuseDecline(answerText, command); refuseOtherChoice(answerText, premiseAnswer ...)` (lines ~395-396). Word lists: LEAD_DECLINE contains \"no\", \"not\", \"не\", \"нет\"; first word of \"Not a real issue, dismiss it\" is \"not\".",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "} else if (answerArg !== undefined && answerArg !== choices.confirm) {",
+      "problem": "The vocabulary the agent is told to ask with, the vocabulary `--answer` accepts and the options the journal records disagree for waive-mutation and override-reviewers. The review-orchestrator skill tells the agent to ask the operator \"the verb's options: yes or no\"; the docs (TM-04 6b: \"for the others a yes\") say the answer is a yes; but `--answer yes` is refused on those two verbs (only `waive` / `override` pass), and the journal entry stores options [waive, keep] / [override, keep] with labels the operator was never shown.",
+      "impact": "An agent that follows the docs and passes `--answer yes` to `waive-mutation` exits non-zero: `--answer must be waive (the option this verb records) or left out; got \"yes\"`. When it omits `--answer`, the `keryx decisions` entry says the operator chose `waive` from [waive, keep] although the question put to the operator was yes/no, so the audit record the PRD says a reviewer will check against the host log (\"the question, the options and the choice\") shows options that were not asked.",
+      "suggested_fix": "Make the vocabulary one: accept `yes` (and the verb word) for `--answer` on the three verbs, and journal the options as asked (yes/no) or let the agent pass the options it offered; otherwise change the skill and TM-04 6b to say which words to use.",
+      "evidence": "HOST_OPTIONS (line ~238) ids waive/keep, override/keep; the check at line ~361 refuses any `--answer` other than choices.confirm; AC6 test pins `options: [\"waive\",\"keep\"]` and `choice: \"waive\"`; bundled review-orchestrator SKILL.md: \"with the verb's options: yes or no\".",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "`keryx review <verb> --help` prints the flags and names the card as the stronger path.",
+      "problem": "The help text added in review-operator.ts does not call the card the stronger path. Each help block adds only `Without a TTY, record the operator's answer ...` and keeps the old sentence `In keryx shell the review_<verb> tool asks the same as a card.`; the words stronger/weaker/first choice appear nowhere in it. The PRD promises (\"The verbs' help and the skills name the stronger path as the first choice\") and the CLI reference repeats the claim.",
+      "impact": "`keryx review waive-mutation --help` shows the flag path with no statement that a card press is the verified kind and a host question the weaker, so the one place an agent reads before running the verb does not carry the caveat the docs say it carries.",
+      "suggested_fix": "Add one sentence to each of the four help blocks: a card press (tui-card, remote-card) is verified by keryx and is the first choice where a card exists; a host question is weaker because keryx cannot see the question. Or drop the claim from cli-reference.md.",
+      "evidence": "printOperatorCommandHelp blocks for waive-mutation, override-reviewers, confirm-plan and decide-premise in this diff: 'asks the same as a card' and 'keryx cannot see the question: it records what you report' only.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "const opened = await openDecision({",
+      "problem": "The decisions-journal entry is opened without `flow` or `flowSource`, unlike the other callers that go through resolveFlowContext (src/commands/decisions.ts, src/decisions/ask.ts, src/tui/ask-user-bridge.ts). A host question recorded under KERYX_FLOW or on a flow branch therefore has `flow: null`, and journalToFlow (which returns early when `open.flow === null`) writes no line into that flow's journal.md.",
+      "impact": "Not proven to be a defect: the PRD asks only for a `keryx decisions` entry, which is written. What would settle it is whether `decisions report` or the flow journal is expected to group these by flow; if so, the host-question decisions of a flow will be missing from it.",
+      "suggested_fix": "Resolve the flow context the way decisions.ts does and pass `flow`/`flowSource` to openDecision, or state in TM-04 6b that the entry is project-wide only.",
+      "evidence": "openDecision call at review-operator.ts line ~423 passes cwd, question, options, stage, channel, source, hostQuestion, salt; journal.ts openLocked sets `flow: input.flow ?? null`; journalToFlow `if (open.flow === null || ...) return`.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 3,
+    "info": 1
+  },
+  "slices": [
+    "slice-02"
+  ]
+}
+```
+
+### Summary
+- F-001 (major): three yes/no verbs accept any non-declining free text; 'keep' (the verb's own decline label) records a waiver.
+- F-002 (minor): decide-premise refuses a valid negatively phrased dismissal as a decline.
+- F-003 (minor): option vocabulary differs between skill (yes/no), --answer (waive/override) and the journal (waive/keep).
+- F-004 (minor): cli-reference claims --help names the card as the stronger path; the help text does not.
+- F-005 (info): journal entry carries no flow attribution.
+
+Routing audit: graph_used no (diff supplied; not-relevant), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg/read), raw_rg_used no.

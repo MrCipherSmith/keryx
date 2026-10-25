@@ -1,0 +1,53 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice-05 (second look, 144087 bytes) read in full. The executable surface is small: the new `skills references check|suggest` dispatcher (src/commands/skills-references.ts), its router entry and help row in src/commands/skills.ts, the /projectctx description, and the docs:check script in package.json. None of it uses a shell, eval, a dynamic require or a network call, and `check`/`suggest` write no file. No blocker or major. One info finding: the docs say a linked rule is not scanned, but references-check.ts at head scans linked rules at their origin. Prior security findings that still apply unchanged are cited, not re-filed: review-security-code-w1:F-101 (task-text apostrophe escape missing in 4 of 5 skills), w1:F-102 (linked-rule scan skips the sha256 gate in references-check.ts), w3:F-002 (heading text with control characters reaches warnings and the check report), w1:F-003 and w3:F-003 (reference-proof.ts currentSection reads entry.path from the resolved JSON without containment), w4:F-003 (a --task-text value starting with -- is dropped by optionValue).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "line": null,
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "problem": "The guide and docs/docs/cli-reference.md (`a linked rule is not scanned`) tell the operator that `skills references check` skips rules imported with --link. At head src/gdskills/references-check.ts builds a `links` map from the registry entries whose mode is link and scans them at their origin. An operator who reads the docs believes a linked rule outside the project cannot influence the report; in fact its content is read and its backticked X.md names are reported.",
+      "impact": "Documentation drift on a trust boundary, not an exploit: no attack vector in the changed code (the report only prints names and warnings, and the origin is one the operator imported). Info only, per the rubric. It matters because the same linked-rule scan is the one that lacks the sha256 gate (w1:F-102), so the doc currently hides that a linked origin file is read at all.",
+      "suggested_fix": "Change both sentences to say that a linked rule is scanned at its origin and that a bundled rule is not; or, if linked rules are meant to be skipped, remove the `links` branch in scanCitations.",
+      "evidence": "docs/docs/guides/apply-project-rules.md:261 `only: a rule imported with `--link` is not scanned, and neither are bundled`; docs/docs/cli-reference.md:3491 `a linked rule is not scanned.`; src/gdskills/references-check.ts:99 `const links = new Map((await readProjectRuleRegistry(projectRoot)).filter((entry) => entry.mode === \"link\" && !copies.includes(entry.ref))`.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "dedupe_key": "docs:linked-rule-scan-claim",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-05",
+      "coverage": "Whole diff read. Checked the new CLI dispatcher (args parsing, exit codes, output), the router and help edits, package.json docs:check, the bundled skill instruction edits, and, at head, references-check.ts, reference-proof.ts and references-config.ts for injection, traversal, secrets, unsafe writes and privilege widening. Nothing exploitable.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Security Review (round r03, wave 3, slice-05)
+
+Scope: PR #1048, head 5382b56abf17d23db61108554f3c6c68c8e3c036, base d6267d4a5099f39b74e86a71e5c8f61ca47aa63d, delta over r02.
+
+Checked and clean for the changed code: injection (no exec/spawn/eval, no SQL, no template rendering), path traversal (references-config.ts rejects absolute and escaping paths; references-check.ts uses lstat, realpath and a containment check, then a size cap, before reading), secrets and logging (none added), cryptography (sha256 only for whole-file pinning), authorization (local CLI, no new permission surface), CSRF and open redirect (not applicable).
+
+Still open from earlier rounds, not re-filed:
+- review-security-code-w1:F-101 (partial of w4:F-002): apostrophe escape in the task-text example is missing in 4 of 5 bundled skills.
+- review-security-code-w1:F-102: linked-rule scan in references-check.ts line 99 does not compare the sha256 of the origin file.
+- review-security-code-w3:F-002 (info): heading text with control characters reaches warnings and the `check` report.
+- review-security-code-w1:F-003 and w3:F-003 (info): reference-proof.ts line 53 joins `entry.path` from the resolved JSON without containment.
+- review-security-code-w4:F-003 (minor): a `--task-text` value beginning with `--` is dropped by `optionValue` in src/lib/args.ts.
+
+Docs inconsistencies already filed by other reviewers (two-word threshold in live-run.md, "2 required" in the apply-project-rules.md example while the threshold is 3) are not repeated here.
+
+routing audit: graph_used: no (not-relevant, slice is a diff read), wiki_used: no (not-relevant), ctx_used: yes, raw_rg_used: no

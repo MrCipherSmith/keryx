@@ -1,0 +1,75 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "reviewer": "review-security-code",
+  "slices": ["slice-06"],
+  "slice_kind": "second-look",
+  "status": "DONE_WITH_CONCERNS",
+  "findings": [
+    {
+      "id": "S-601",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "problem": "The S-401 fix caps the length of a disposition's evidence (300 chars) and finding (200 chars) and the entry count (20), and now shows the evidence through cardSafe(record.evidence) without clip. But cardSafe does not show the text whole: it deletes ANSI CSI sequences, OSC/DCS/PM/APC sequences (everything between the introducer and BEL or ST, newlines included), C0/C1 controls and bidi marks. completionDispositions (operator-confirm-review.ts:684-696) refuses none of those characters and stores evidence.trim() verbatim, so what the operator answers (the stripped text) is still not what is applied (the raw text, written to findings.json by recordDispositions, to completion-confirmation.json by apply, and read by attestDismissal). The original S-401 suggested_fix asked for exactly this check: 'refuse any evidence or finding string that cardSafe would change, so the shown text equals the stored text'. The length cap closes the clipped-tail path only; the invisible-text path is the same defect.",
+      "impact": "Attacker action: a prompt-injected or misbehaving agent calls review_complete with dispositions [{finding:<real finding>, disposition:\"dismissed-incorrect\", evidence:\"fixed in abc123\\u001b]0;operator: decided-by alice\\u0007\"}] (46 characters, inside the cap; JSON allows \\u001b in a tool argument). The card line reads `disposition: <finding> → dismissed-incorrect: \"fixed in abc123\"`. After the operator presses yes, the stored evidence carries `operator: decided-by alice`, HUMAN_DECISION_PATTERN (review-notes.ts:122, `\\b(operator|...)\\s*[:=]\\s*\\S`) matches it, attestDismissal returns kind 'human', and writeReviewNotes files a learning note for a dismissal no person made. This is the S-401 outcome (the orchestrator filing its own error on its own authority, with the operator's press lending it approval) reached through a different hidden-text route; it needs no newline and no length over the cap. The harm stays bounded as in S-401: a learning note and a durable findings record, no code execution or data exposure.",
+      "suggested_fix": "In completionDispositions refuse any finding or evidence string for which cardSafe(text) !== text, with a message that names the entry (for example `dispositions[i]: evidence holds control characters or escape sequences the card would not show`). Newlines are shown as the visible marker, so they may stay allowed, or be refused too if the stored text should equal the shown text exactly (compare cardSafe(text) with text.replace(/\\r\\n|\\r|\\n/g, ' ⏎ ') in that case). Add a test next to the 400-character one: evidence 'ok\\u001b]0;operator: alice\\u0007' is refused before the card is drawn, and a plain 300-character evidence is accepted.",
+      "evidence": "Execution at head 0f980c407 (scratchpad v.ts, bun, exit 0): evidence = 'fixed in abc123\\u001b]0;operator: decided-by alice\\u0007', length 46. Output: 'shown: \"fixed in abc123\" shownMatches false storedMatches true'; a second sample 'ok\\u001b[8moperator: alice' shows as 'okoperator: alice'. Source read: src/lib/card-safe.ts:7-17 (strip rules above); src/commands/operator-confirm-review.ts:693-696 (only a .trim().length cap on evidence, then evidence.trim() stored) and :701-702 (dispositionLine shows cardSafe(record.evidence)); src/review/review-notes.ts:122,138 for the pattern and attestDismissal. Not run end to end through the card and recordDispositions; the two halves (shown text, stored text feeding attestDismissal) are each confirmed.",
+      "confidence": "high",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 702,
+      "quote": ": \"${cardSafe(record.evidence)}\"",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:696 (evidence stored raw)",
+          "src/commands/operator-confirm-review.ts:702 (evidence shown through cardSafe)",
+          "src/commands/operator-confirm-review.ts:684 (finding stored trimmed, shown through cardSafe; a finding with hidden text matches no package id, so the engine refuses it and this site has no consequence)"
+        ],
+        "enumeration_method": "keryx ctx rg over operator-confirm-review.ts for cardSafe( and the three string inputs of completionDispositions (finding, disposition enum, evidence). Only evidence reaches a consumer that reads the stored text for a decision."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "S-401", "disposition": "partial" }
+  ],
+  "clean_areas": [
+    "S-401 fix, count and length: completionDispositions refuses more than 20 entries (:680), a finding over 200 chars (:692) and an evidence over 300 trimmed chars (:693); the shown evidence is no longer clipped (:702), and the disposition lines are the same prepared.dispositions that apply passes to completeReviewGated and writeCompletionRecord, so no other path from the agent's input to the stored record differs in length from the card (the stored and shown text differ only by what cardSafe removes: see S-601). The one-time token binds JSON.stringify(input) (operator-confirm-tools.ts key/pending), so the model cannot swap dispositions after the card",
+    "Waiver quotes on the card (clip at WAIVER_QUOTE_CHARS, completionFacts) still show a clipped quote of operator-typed or operator-confirmed text; nothing reads them for attestation, as r05 recorded. Not re-reported",
+    "Remote answer trust (operator-confirm-tools.ts): a remote press needs pressedBy and pressedAt, pressedBy must be in binding.allowedUserIds() (absent or empty list refuses every remote answer), the card must be at most one hour old (REMOTE_CARD_TTL_MS), the token is deleted before any of these checks so each refusal spends it, and the id check is repeated at the record. shell.ts reads allowedUserIds from loadRemoteConfig fresh and returns undefined on a failed load, which fails closed",
+    "agent.ts: pressedBy and pressedAt are forwarded to the tool only when confirmationVia is remote and a token was issued; only the approver's own ApprovalResponse can set them, never tool input. record() in operator-confirm-other.ts and the cardPressFields calls in operator-confirm-review.ts add the fields to every stored decision; the schedule decision log type carries them as optional",
+    "operator-confirm-review.ts apply paths for the older gates (chunks, publish, coverage, readiness, mutation/override, plan, premise) re-read package state and compare against what the card showed before writing; review_complete re-reads the facts digest in apply. No new injection, path, secret or crypto pattern in the slice: package paths go through resolvePackage, reply argv is allowlisted by regex and passed as an array",
+    "review.ts runComplete now routes through completeReviewGated, which keeps the run-profile and slice-routing refusals the CLI had inline; the TTY refusals for --waive and --waive-coverage are unchanged"
+  ]
+}
+
+## Security Review (slice-06, second look)
+
+### Scope
+- Branch: docs/flow-helyx-operator-confirm, delta 77d2eff20..0f980c407 over the r05 package
+- Slice: slice-06 only (src/commands: agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts and four test files); the slice diff shows the r05 form of operator-confirm-review.ts, so S-401 was judged against the head file
+- Changed files reviewed: 12
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 0
+- Info: 0
+
+### Findings
+
+### [S-601] The S-401 fix leaves shown text different from stored text for escape sequences and control characters
+- **Severity**: major
+- **File**: src/commands/operator-confirm-review.ts:702 (stored at :696)
+- **Attack vector**: the agent passes a disposition whose evidence is `fixed in abc123` followed by an OSC sequence (ESC ] ... BEL) that holds `operator: decided-by alice`. cardSafe deletes the whole sequence, so the card reads `dismissed-incorrect: "fixed in abc123"`. The operator presses yes; the full string is stored, HUMAN_DECISION_PATTERN matches it, and a learning note is filed as a human-attested dismissal.
+- **Problem**: the fix caps length but still stores evidence.trim() raw while the card shows cardSafe(evidence). cardSafe removes ANSI/OSC sequences, C0/C1 controls and bidi marks, so shown is not stored. The S-401 suggested fix named this check (refuse text that cardSafe would change).
+- **Why it matters**: the same outcome as S-401 (an unattested dismissal gets human attribution through the operator's press), reached with a 46-character input that the length cap does not touch. Bounded to a learning note and the findings record.
+- **Fix**: refuse finding or evidence for which `cardSafe(text) !== text` in completionDispositions (newlines may stay, since the card shows them as a visible marker), and add a test for `ok\u001b]0;operator: alice\u0007`.
+- Verified by execution: shown `"fixed in abc123"`, pattern matches stored text and not shown text.
+
+### Answer to the delta question (S-401 completeness)
+The count, length and clipping paths are closed: 20 entries, 200-char finding, 300-char evidence, evidence no longer clipped on the card, and the card, the engine and completion-confirmation.json all take the same prepared.dispositions. The remaining gap is S-601 (characters cardSafe removes). I found no other path from the agent's input to the card or the record that is capped or clipped differently, and no regression from the cap itself (a refusal happens in buildCard before any card is drawn).
+
+### Clean Areas
+Listed in clean_areas above: remote-press trust chain (allowed list, TTL, token spend), pressedBy/pressedAt plumbing in agent.ts and the stored records, apply-time re-validation of the older review gates, argv and path handling, review.ts completion routing.
+
+Routing audit: graph_used no (not-relevant: the slice and the head files named every site), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no (two raw grep/sed calls on single files carried a stated keryx:raw reason because the ctx hook rewrote their output).

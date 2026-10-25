@@ -1,0 +1,109 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-03 (all 1973 diff lines read) is mostly pass-through plumbing: the CardPress type and cardPressFields helper are a sound extraction and the new review/complete-gated.ts is a clean single seam that the CLI (src/commands/review.ts:4572) and the card both call, so its comment is true. Four clean-code concerns: the press data is threaded as a sixth positional parameter into two functions that already had four or five (major, the caller already holds an object that carries every field), one redundant cardPressFields call that suggests filtering where there is none, one avoidable re-cast in mapApprovalAnswer, and an orphaned doc comment. The known pressedBy/pressedAt hand-copy finding is not re-reported (write-land.ts, tui-shell.ts, operator-confirm-other.ts, flow/*, interactive-tools.ts). No naming, error-handling or SOLID violations with a concrete impact were found in the slice.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "repo": null,
+      "file": "src/review/chunks-estimate.ts",
+      "line": null,
+      "quote": "export async function answerChunkEstimate(packageDir: string, value: \"yes\" | \"no\", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<ChunkEstimateRecord> {",
+      "problem": "Clean Code B2 (function arguments): the PR appends `press?: CardPress` as a sixth positional parameter to answerChunkEstimate, and the same shape as a fifth parameter to recordCoverageWaiver (src/review/coverage-complete.ts: `now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress`). Both already had four. `confirmedVia` and `press` describe one thing (how and by whom the operator answered) and are split across two optional trailing parameters behind a defaulted `now`, so a caller that wants to pass a press must pass or skip the earlier ones positionally.",
+      "impact": "The card caller already holds one object that carries all of it (`confirmation`: quote, at, confirmedVia, pressedBy, pressedAt) and takes it apart again at the call: `answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation))` (src/commands/operator-confirm-review.ts:157) and the same for recordCoverageWaiver (operator-confirm-review.ts:294). The next field the confirmation gains is a seventh parameter. The terminal caller src/commands/review-chunks.ts:142 passes three and relies on the defaults, so it does not share the cost. waiveReadiness and recordPlanConfirmation in the same PR already take an options object and are the better pattern.",
+      "suggested_fix": "Give both functions one trailing options/confirmation object, e.g. `confirmation?: { at?: Date; confirmedVia?: ConfirmedVia } & CardPress`, so the card call becomes `answerChunkEstimate(dir, value, quote, confirmation)` and cardPressFields is applied once inside. Keep the existing terminal call shape working by leaving the object optional.",
+      "evidence": "diff of src/review/chunks-estimate.ts (answerChunkEstimate signature, +/-) and src/review/coverage-complete.ts (recordCoverageWaiver signature); callers read at src/commands/operator-confirm-review.ts:157 and :294 and src/commands/review-chunks.ts:142.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:positional-press-param",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/review/chunks-estimate.ts answerChunkEstimate (6 positional parameters)",
+          "src/review/coverage-complete.ts recordCoverageWaiver (5 positional parameters)",
+          "src/review/readiness.ts waiveReadiness (options object, already correct)",
+          "src/review/plan-confirmation.ts recordPlanConfirmation (object, already correct)",
+          "src/review/operator-decisions.ts recordOperatorDecision (object, already correct)"
+        ],
+        "enumeration_method": "Every function in the slice whose signature changed to take `CardPress`/`press`: found by reading the whole slice diff for `CardPress` and `press?:`; the callers of the two positional ones came from `keryx ctx rg 'answerChunkEstimate\\(|recordCoverageWaiver\\('` over src (non-test)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "repo": null,
+      "file": "src/review/operator-decisions.ts",
+      "line": null,
+      "quote": "const entry: OperatorDecision = { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...cardPressFields(decision), ...(subject === undefined ? {} : { subject }) };",
+      "problem": "Clean Code, dead code / misleading intent: `...decision` on the same line already copies `pressedBy` and `pressedAt` into `entry`, so `...cardPressFields(decision)` re-sets exactly the values that are there (and only differs by dropping keys whose value is the explicit `undefined`, which JSON.stringify drops anyway). In the other writers in this PR (recordPremiseDecisionAfter, recordPlanConfirmation) the helper is needed because the record is built field by field; here it is not, and its presence reads as a filter that is not happening.",
+      "impact": "A reader will assume the helper is what lets the press fields through, or that it narrows what a caller-supplied `decision` can carry. Neither is true, and the next editor may remove the spread of `decision` or trust the helper for a guarantee it does not give here.",
+      "suggested_fix": "Delete `...cardPressFields(decision),` from this line. If the intent is to control which keys of `decision` are persisted, build `entry` field by field like recordPremiseDecisionAfter does.",
+      "evidence": "diff of src/review/operator-decisions.ts, recordOperatorDecision: the unchanged `...decision` is the first element of the object literal.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:redundant-cardPressFields",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "repo": null,
+      "file": "src/remote/shell-bridge.ts",
+      "line": null,
+      "quote": "...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),",
+      "problem": "Clean Code, type safety/readability: mapApprovalAnswer already narrows `got` to `{ decision?: unknown; approvalId?: unknown; fromId?: unknown }` one line above and then re-casts `o` inline to reach the new `undelivered` field. The one new field is read through a second, local type assertion instead of being declared with its three siblings.",
+      "impact": "Small, but it is the only field of the three read through an extra cast, so the next field added will copy the pattern. The local cast also compiles whatever the field is called.",
+      "suggested_fix": "Add `undelivered?: unknown` to the type on the `const o = got as { ... }` line and write `o.undelivered === true`.",
+      "evidence": "diff of src/remote/shell-bridge.ts, mapApprovalAnswer.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:mapApprovalAnswer-cast",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "repo": null,
+      "file": "src/review/types.ts",
+      "line": null,
+      "quote": "/** A readiness item the operator waived in their own words (`keryx review complete --waive <item> \"<quote>\"`). */",
+      "problem": "Clean Code C1/C2, misplaced comment: this doc comment describes ReadinessWaiver but sits above a second doc comment and `ConfirmedVia`, so two JSDoc blocks stack on one declaration. The line was already like that; the PR now inserts `CardPress` and `cardPressFields` between `ConfirmedVia` and `ReadinessWaiver`, which moves the comment two declarations further from the type it describes.",
+      "impact": "Tooling attaches only the nearest block to `ConfirmedVia`, and a reader sees a waiver description above an unrelated union. No behaviour effect.",
+      "suggested_fix": "Move the waiver comment down onto `export type ReadinessWaiver`.",
+      "evidence": "diff of src/review/types.ts hunk @@ 71,122: both comment lines are unchanged context, the added CardPress block follows them.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:types-orphan-comment",
+      "blocking_merge": false,
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Clean Code Review (slice-03)
+
+### Checked, no finding
+- Meaningful names: `CardPress`, `cardPressFields`, `completeReviewGated`, `evidenceLevelLine`, `mirrorUndeliveredNote`, `MIRROR_NOT_DELIVERED`, `undelivered`: intention-revealing, consistent vocabulary with the rest of the PR.
+- Functions: `completeReviewGated` is 7 lines at one abstraction level; both gates run before `completeManagedReview`, and the comment that the CLI and the card share it holds (src/commands/review.ts:4572 calls it). `evidenceLevelLine` shares `LINE` (non-global regex, so `.test` is not stateful) and `withoutFences` with `parseEvidenceLevel`.
+- Error handling: `completeReviewGated` throws before anything is recorded; `askApproval` keeps failing closed. The `undelivered` flag is carried only on a deny (test in mirror-undelivered.test.ts covers `mapApprovalAnswer` with an allow).
+- DRY: `{ decision: "deny", undelivered: true }` repeats four times in RemoteClient.askApproval; each is a different early exit and the literal is trivial, so it was not raised. The pressedBy/pressedAt hand-copies are the known finding and are not re-reported. `PlanConfirmation` in estimate.ts spells the two fields inline while plan-confirmation.ts uses `& CardPress`: same known class.
+- The invariant "press fields only with remote-card" is enforced once at the source (src/commands/operator-confirm-tools.ts:227, `remote ? { pressedBy, pressedAt } : {}`), so the pass-through writers in this slice do not each need to re-check it (a security or logic question, not raised here).
+- SOLID: no violations with a concrete impact in the slice.
+- Docs/skill text (SKILL.md, SKILL.detail.md, review-premise SKILL.md, help-groups.ts, unattended.ts): consistent with the new `review_complete` card; the five card names are listed in two help summaries and one comment (two or three occurrences, below the DRY threshold).
+- Tests in the slice (mirror-undelivered.test.ts): readable, one behaviour per test.
+
+Routing audit: graph_used no (not-relevant: diff-only review), wiki_used no (not-relevant), ctx_used yes (`keryx ctx rg` for callers), raw_rg_used no.

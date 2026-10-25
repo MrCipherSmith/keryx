@@ -1,0 +1,28 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope-B regression review of slice-02 (src/commands/review-operator.ts, src/commands/operator-confirm-review.ts, tests, docs). Blast radius: 40 files at depth 2; the cap was reached and test consumers were dropped (the `dropped` array is non-empty). The radius answered the question for the TypeScript changes. The docs and other non-code files are listed as unresolved (not-a-graph-node): they are not verified clean, only not graph-reachable. The TTY path, `optionValue` parsing, the validators in operator-decisions.ts / estimate.ts / plan-confirmation.ts, the review_complete card waiver line (old records print as before) and the gate consumers in coverage.ts are additive and do not regress existing behaviour. One regression of an existing invariant: the host-question writer drops the M4 binding of a waiver, override or premise decision to what the operator was actually shown (RG2-001). Minor, below the reporting bar: decisionWriters() in operator-decisions.ts and planGateRefusal() in estimate.ts still name only the card and the terminal, so the host route is not discoverable from a gate refusal. Wave-1 items (stale terminal wording, plan numbers in the confirm-plan question, first-word decline check, no if/then in the schema, ask_user source unreachable from shell_exec, AC12 outside the flow gate, AC7 negative assertion) are not repeated.",
+  "findings": [
+    {
+      "id": "RG2-001",
+      "severity": "major",
+      "file": "src/review/coverage.ts",
+      "line": 690,
+      "quote": "if ((await confirmedDecision(dir, kind, now)) !== undefined) return undefined;",
+      "problem": "Existing invariant (security review M4, comment in the TTY path of review-operator.ts: \"the record binds to what this question shows (head, mutant ids or reviewers left out)\"): an operator decision's `subject` is computed from the question that was put to the operator, and `decisionCovers` makes the gate accept the decision only for that subject. The new host-question branches in `recordHostQuestion` (src/commands/review-operator.ts) compute `subject` from disk state or from the agent's own flags (`operatorDecisionSubject(packageDir, kind, selected)`, `findHeldFinding`), and never compare it with `--question-text`. Only the confirm-plan branch checks the question text (plan numbers). So for waive-mutation, override-reviewers and decide-premise the stored `subject` describes something the host question never mentioned, and the gate sites in coverage.ts (690, 759, 808, 829) accept it because `confirmedDecision` does not look at `confirmedVia` or at the question text.",
+      "impact": "Failing input: `keryx review override-reviewers --package P --reason \"docs-only\" --selected review-logic --answered-by claude-code:q9 --answer-text \"yes\" --question-text \"Skip review-style?\"`. The record is written with `subject.items` equal to every required reviewer except review-logic, `confirmedVia: \"host-question\"`, and the reviewer-coverage gate accepts it, although the operator said yes to skipping review-style only. `waive-mutation --question-text \"Skip the mutation pass?\"` (names no mutant ids) is recorded and covers every unrun mutant at the head. `decide-premise --finding F-002` with a question about F-001 is recorded against F-002. Before this change the binding could not drift from the shown question, because the card and the terminal derive the question from the same subject. The PRD and TM-04 §6b promise only a \"stale plan\" refusal and say keryx \"builds the usual effect from disk state\", so the loss of the M4 binding for these three verbs is not among the stated trade-offs (\"keryx does not verify the answer\" covers the answer, not what was asked).",
+      "suggested_fix": "Treat the question text as part of the subject for these verbs: require `--question-text` to name what the subject lists (the finding id for decide-premise, every unrun mutant id for waive-mutation, every reviewer left out for override-reviewers), as confirm-plan already does for plan numbers, and refuse otherwise. Or record host-question subjects as unbound and let `decisionCovers` refuse an unbound subject at the gate unless `hostQuestion.questionText` names its items.",
+      "evidence": "src/commands/review-operator.ts: `const subject = await operatorDecisionSubject(packageDir, kind, kind === \"mutation-waiver\" ? undefined : selected);` followed by `refuseDecline(answerText, command);` and `recordOperatorDecision(packageDir, { kind, quote: answerText, ..., confirmedVia: \"host-question\", at, subject, hostQuestion })`; no use of `questionText` between them. src/review/coverage.ts:690 `confirmedDecision` call, no `confirmedVia` filter. Docs: slice-02.diff lines 116-155 and 441-485.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "class_scope": "Sites with the same unbound-subject shape: the waive-mutation, override-reviewers and decide-premise host branches in src/commands/review-operator.ts (recordHostQuestion), and the gate consumers that trust the stored subject: src/review/coverage.ts lines 690, 759, 808 and 829."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-02"]
+}
+```

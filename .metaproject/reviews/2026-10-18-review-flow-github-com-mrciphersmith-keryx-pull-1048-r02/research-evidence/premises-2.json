@@ -1,0 +1,116 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-clean-code-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "Step A at job-orchestrator/SKILL.md:749 spells out --task-text, while Step B at :760 and orchestrator-prompt.md:138 keep an unexplained ellipsis. The note at :762 describes the proof, not the flags. No intent signal or practice source against it."
+    },
+    {
+      "finding_id": "review-architecture-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "conditional-reads.e2e.test.ts:251 redeclares isPromoted with no comment saying it is an independent oracle, although reference-proof.ts:35 exports the same predicate. The file is new on this branch (A in the diff), so nothing in it counts as prior intent."
+    },
+    {
+      "finding_id": "review-clean-code-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "The unnamed /20 and +2_000 literals are in a file added by this branch. The file names other sizes but not these, so there is no signal of a deliberate choice."
+    },
+    {
+      "finding_id": "review-logic-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "renderResolutionMarkdown (resolve-context-command.ts:10-26) builds flags from index, linked, shadows, also_at and anchor and prints no description or condition. Workers are fed the --out JSON (job-orchestrator SKILL.md:760), which weakens the impact, but nothing marks the omission as deliberate and the agent tool and CLI default still return the Markdown."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-003",
+      "verdict": "upheld",
+      "reasoning": "A test-coverage gap in a test the branch changed. No intent signal and no practice source against it."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "The finding charges only the growth of resolveProjectContext, not its pre-existing size. The `declarations ?? []` repetition is new, and there is no signal of intent."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "collectContracts gained a fifth positional parameter, and two Set<string> arguments sit side by side so a swap still compiles. No exemption or comment explains the choice."
+    },
+    {
+      "finding_id": "review-style-w3:F-005",
+      "verdict": "upheld",
+      "reasoning": "Same cause as review-clean-code-w3:F-001: the diff grows the function and repeats the null-coalescing. No signal against it."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "import-rules.ts:274-277 computes the hint for every text-mode run, with no check of dryRun (set at :265). The comment at :272 says the hint is about rules 'the imported rules cite', which a dry run does not import. The code and comment are branch-introduced, so no earlier intent applies."
+    },
+    {
+      "finding_id": "review-architecture-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "Both test files are new on this branch and keep separate path tables for the same copies. The finding itself offers the alternative of one shared table. No signal that the duplication is deliberate."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-007",
+      "verdict": "upheld",
+      "reasoning": "project-context-status.ts:75 and :78 load references.json twice (loadReferences, then checkReferences). The type comment at :26 shows findings in the status are intended, but that ratifies including findings, not reading the file twice. The comment is also branch-introduced."
+    },
+    {
+      "finding_id": "review-highload-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The cost is the full checkReferences on a 5000 ms TUI poll. The file's header comment calls it a 'read-only snapshot' and says every read is fail-soft, and neither speaks to polling cost. The reviewer already calls the cost small for typical projects, and the severity stays minor. No signal of intent or practice source against it."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-006",
+      "verdict": "upheld",
+      "reasoning": "reference-entries.ts, references-check.ts and the contract loop repeat the lstat, realpath, containment and size sequence. All files are new on this branch, so there is no earlier decision, and the finding says no divergence was shown."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "resolveReferences is a new function of about 46 lines that mixes several levels. No exemption or comment gives a reason."
+    },
+    {
+      "finding_id": "review-highload-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "The anchor-not-found warning lists every heading uncapped, while references-check.ts caps the same list at 12 (references-check.ts:349). A sibling that caps argues for consistency, not against the finding."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-008",
+      "verdict": "upheld",
+      "reasoning": "A test gap for keywordOccurs boundary and escape cases. The code at reference-entries.ts has the lookarounds and escapeRegExp, so the finding is about missing assertions. No signal against it."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-009",
+      "verdict": "upheld",
+      "reasoning": "A test gap for several resolveReferences branches (taken collision, maxFileBytes boundary, glob-before-keyword precedence, missing-anchor headings). No signal against it."
+    },
+    {
+      "finding_id": "review-architecture-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "The thresholds live in reference-proof.ts:14-16 and are repeated in prose in about ten files. The module header (reference-proof.ts:1-7) says the check is a proxy, which is the accepted vocabulary-proxy point and not this one. Nothing marks the drift risk of the copied numbers as accepted."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-005",
+      "verdict": "upheld",
+      "reasoning": "reference-proof.ts:36 decides promotion from the free-text prefix `condition:`, with no shared constant with the producer in reference-entries.ts. The module is new on this branch, so there is no earlier intent. The fix options are sound."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-009",
+      "verdict": "upheld",
+      "reasoning": "reference-proof.ts:16 exports WORD_MIN_LETTERS = 5, but :41 hard-codes /\\p{L}{5,}/gu. The doc comment at :39 says 'WORD_MIN_LETTERS letters or more', so the constant was meant to govern the rule. Only the message uses it."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:F-010",
+      "verdict": "upheld",
+      "reasoning": "A test gap for code-point counting, NFC normalisation and the letter threshold. charCount at reference-proof.ts:66-68 uses Array.from(text.trim()).length and distinctWords uses normalize(\"NFC\"). No signal against it."
+    },
+    {
+      "finding_id": "review-clean-code-w3:F-007",
+      "verdict": "upheld",
+      "reasoning": "A magic number 12 appears twice in one expression in a new file. No signal of intent."
+    }
+  ]
+}

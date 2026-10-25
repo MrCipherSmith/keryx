@@ -1,0 +1,60 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-03 (delta on top of r02): no blocker or major architectural violation. The slice mirrors the single-quoted --task-text instruction across the bundled and installed skill copies, switches last.json from recording the task text to recording its length, and adds cardSafe sanitising plus stale-load and overlap guards to the project-context TUI feed. One minor finding: the shell-quoting rule for untrusted task text is stated at one of seven instruction sites; the other six switched to single quotes without the escape rule.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task title and description>'",
+      "problem": "This slice moves the model-composed `skills resolve-context` command from double to single quotes so that a backtick or `$(...)` in a task description is not executed. The rule that makes single quotes safe, 'a `'` inside it becomes `'\\''`', is stated only in flow-orchestrator/SKILL.md (line 323). The other sites that tell a model to build the same command carry the single quotes with no escape rule: job-orchestrator/SKILL.md lines 749 and 1307, job-orchestrator/orchestrator-prompt.md lines 132 and 188, task-implementer/SKILL.md line 182, and tests-creator/SKILL.md line 93. A task title or description with an apostrophe (\"don't\", \"the button's\") is common, and inside '...' it ends the quoted string. The one site that does state the rule also writes its own placeholder as `'<the task's title and description>'`, an unescaped apostrophe inside single quotes. So the rule for how untrusted text crosses into a shell command exists as prose in one place and is copied without its condition into the rest. The boundary has no structured entry on the CLI side: resolve-context-command.ts reads the text only through `optionValue(args, \"--task-text\")`, with no file or stdin form, although the harness and MCP paths already take a structured `task_text` field.",
+      "impact": "A worker or orchestrator following job-orchestrator, task-implementer or tests-creator on a description containing an apostrophe produces a command with an unterminated quote or a split argument. The result is either a shell error, which is loud, or a truncated `--task-text` that silently stops a keyword from promoting a reference. The promotion step is what this feature relies on. The injection the slice set out to close stays closed only where the escape rule is read. The sites will drift further apart because each is edited separately, in two mirrored trees each.",
+      "suggested_fix": "Give the CLI a form that needs no quoting (`--task-text-file <path>` or `--task-text -` reading stdin) and have the six sites write the description to a file or pipe it, so the quoting question disappears. Short of that, put the single-quote rule in one shared place (the resolve-context row of docs/docs/cli-reference.md or one rule file) and make each site say 'quote it as described there'. Either way, fix the placeholder in flow-orchestrator/SKILL.md so it contains no apostrophe, e.g. `<task title and description>`.",
+      "evidence": "Searched `--task-text` across .metaproject/skills, src/gdskills/bundled, docs and README (excluding flows and reviews) and searched for the literal `'\\''` in the same trees. The escape rule appears only in flow-orchestrator/SKILL.md line 323, in both the .metaproject and src/gdskills/bundled copies. `cmp` shows the five skill files identical between .metaproject/skills/gdskills and src/gdskills/bundled/skills, so every site is doubled. Fixed-literal double-quoted examples also remain in docs/docs/guides/apply-project-rules.md line 172 and docs/requirements/keryx-conditional-reads/live-run.md lines 136, 155 and 170. They are harmless as literals, but they teach the form the skills now forbid for variable text.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "task-text-quoting-rule-single-site",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (states the rule)",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "the same seven lines in .metaproject/skills/gdskills/ (byte-identical mirrors)",
+          "docs/docs/guides/apply-project-rules.md:172",
+          "docs/requirements/keryx-conditional-reads/live-run.md:136,155,170"
+        ],
+        "enumeration_method": "keryx ctx rg for `--task-text` over .metaproject/skills, src/gdskills/bundled, docs and README, minus flows and reviews; a second search for the literal `'\\''` showing it only in flow-orchestrator; cmp of the five skill files between the two trees"
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": [{ "id": "slice-03", "status": "DONE", "coverage": "slice diff read; changed files read at head (project-context-inspector.ts in full, project-references-view.ts, context-resolver.ts last-resolve record, resolve-context-command.ts, tui-shell.ts feed wiring, card-safe.ts); instruction sites and mirrors enumerated by search" }],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Summary: slice-03 introduces no layer violation, dependency inversion or module-boundary break.
+
+- Recording only the task text length in `last.json`. `recordLastResolve` now stores `taskTextLength` and `taskTextTruncated` and never the text, and `readLastResolve` and `readLast` in project-context-status.ts tolerate its absence. `RecordedResolve` stays the one shape both writer and TUI reader use.
+- `cardSafe` use. The import is a leaf utility in `src/lib/` already used by `src/commands/` and `src/tui/`, so the dependency direction is correct. Sanitising at the render sink (the sidebar value and each modal line) is the right place.
+- Feed guards. In `createProjectContextFeed`, the `started` and `applied` counters drop a load that began before one already applied, and the `polling` flag stops overlapping polls. The logic holds: an older load that finishes late is discarded, and an explicit `reload` is not blocked by `polling`.
+- Mirror parity. The five bundled skill files are byte-identical to the installed `.metaproject` copies.
+
+Still open and not re-filed, because this slice leaves them unchanged:
+- review-architecture-w5:F-002 (feed and polling logic live in the presentation module). This slice adds three state variables to it.
+- The slice-02 findings in raw/review-architecture-w2.txt (F-001: the checker has no sha256 pin check for linked rules; F-002: the guide and CLI reference still say linked rules are not scanned). Their files are outside this slice, so I did not re-verify them here.
+
+Routing audit: graph_used: no (not-relevant, slice is prompt text plus one TUI module read at head); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg and keryx ctx read); raw_rg_used: no (raw cmp, grep -c and directory listing only, each with a stated reason).
+
+STATUS: DONE

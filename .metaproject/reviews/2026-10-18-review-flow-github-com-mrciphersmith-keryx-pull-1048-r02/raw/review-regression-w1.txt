@@ -1,0 +1,19 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slice-01 (wave 1 of 5). No regression found at any blast-radius site this slice reaches. Slice-01 holds one code-graph edge, package.json, plus four output-contract schemas, one resolve-result schema, five orchestrator/worker skill texts, docs and flow files. (1) package.json: the only change is a new `docs:check` script. The version and every other field are unchanged. I searched the package.json dependents in the set (src/commands/doctor.ts, shell.ts, version.ts, acp.ts, bundle.ts, hooks.ts, src/lib/install-plan.ts, src/cli-registry.ts, src/tui/chat-shell.ts, src/bus/client.ts) for reads of `scripts` or `docs:check`: none read the scripts map, and the only hits were two unrelated comment or message strings in hooks.ts. Nothing that consumes package.json changes behaviour. (2) Output-contract schemas (task-implementer and tests-creator, .metaproject/core copies and .metaproject/skills copies): the only change adds the optional properties `anchor` and `summary` to the `project_context_applied` item. `required`, the `how` enum and `additionalProperties: false` are unchanged, so the change only loosens the schema and every result that was valid before is still valid. `keryx skills contracts validate` loads these schemas through the `sourcePath` field in src/gdskills/contracts.ts (`src/gdskills/bundled/skills/.../output-contract.schema.json`, the slice-03 copy), not from src/gdskills/contracts/. That folder holds no task-implementer or tests-creator schema, so it has no stale copy to drift. (3) skills-resolve-context-result.schema.json: adds optional `undeclared`, `anchor`, `section_bytes` and `condition`, and widens the `reason` description. Also loosen-only. (4) Skill texts and docs: these are not code. The code graph cannot answer for them: they are among the 50 changed files the brief lists as absent from the graph, so their radius is unknown, not empty. The runtime edge they carry is the new `--task-text` flag and the MCP field `task_text`, which the orchestrators now pass to `skills resolve-context`. The CLI and MCP side of that flag is in slice-02 and slice-04, not this one; I did not check it here. COVERAGE: per the brief, the cap dropped 17 of 210 candidate files (blast_radius_max_files=40). This round does not cover them, and the 5 chunks in chunks.json would. The 50 changed files absent from the graph are unresolved, not clean.",
+  "findings": [],
+  "slices": [{ "id": "slice-01", "status": "DONE", "coverage": "full diff read (lines 1-1827); package.json dependents in the set searched for any read of the scripts map; schema loader in src/gdskills/contracts.ts read to confirm which copy validate uses" }],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Summary: no regression in slice-01. The package.json change adds one script, which no dependent reads. The three schema changes only add optional properties, so every result valid before the change still validates. The skill and doc changes are not in the code graph, so the blast radius cannot answer for them; the runtime edge they introduce (`--task-text` / `task_text`) belongs to slices 02 and 04. The cap dropped 17 files, which this round did not review.
+
+Routing audit: graph_used: no (the brief already holds the computed blast-radius set; I did not widen it). wiki_used: not-relevant (a narrow regression check). ctx_used: yes (keryx ctx rg). raw_rg_used: no.

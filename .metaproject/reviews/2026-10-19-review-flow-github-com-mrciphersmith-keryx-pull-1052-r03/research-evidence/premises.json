@@ -1,0 +1,100 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "D-01",
+      "verdict": "upheld",
+      "reasoning": "The four agent-facing strings (operator-confirm-review.ts:262, 296, 312, 358) were written in 9c6eaeb4af, an ancestor of the delta base, before the review_complete card existed (6528f9a97); the header comment at :24 dates from the same commit, so they are stale rather than a deliberate exception to the round-1 rule. Nothing in the code or history shows a reason to keep telling an attended agent to run the CLI, the waiver tools are excluded from unattended runs (unattended.ts:63-83), and completion-gate.ts nextStep (:756-761) says the opposite. The finding is from review-security-code, so it cannot be downgraded in any case."
+    },
+    {
+      "finding_id": "D-02",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "intent_signals": [
+        {
+          "ref": "ad618cb2f (git show, src/review/completion-gate.ts nextStep)",
+          "says": "the removed lines also carried the same closing clause as a pasted literal in all three returns (`then \\`keryx review complete\\`.` x3), so the delta kept the pre-existing three-return structure and only reworded its tail; the duplication is inherited, not newly introduced"
+        },
+        {
+          "ref": "src/review/completion-gate.ts:756-761",
+          "says": "the three returns differ in their heads and are plain nudge prose; the finding names no input that makes any of them show a wrong instruction, only a future edit that might miss one"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, section 'major / minor / info - the boundary test' (lines 1279-1281, 1302-1305)",
+          "says": "a finding with no trigger-and-outcome whose cost lands on whoever edits the code next is minor, however crisply the trigger is worded"
+        }
+      ],
+      "reasoning": "A real, small DRY defect, but by the boundary test it names a maintenance cost at a named site and no trigger with an observable wrong outcome, and the repetition was already there before the delta, so major overstates it."
+    },
+    {
+      "finding_id": "D-03",
+      "verdict": "upheld",
+      "reasoning": "completion-gate.ts:788 and :791 (from 53ea4f1bb0, before the delta base) sit in the same continue message as nextStep and the stop sentence, which now say the agent never runs `keryx review complete`; the message therefore gives two opposite instructions. describeBlockers is reached only through decideReviewGate, and holdReviewGate returns false for unattended runs (agent.ts:3487), so the audience is exactly the attended agent the round-1 rule governs and no autonomous exception explains the old wording."
+    },
+    {
+      "finding_id": "D-04",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "practice_sources": [
+        {
+          "name": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, section 'major / minor / info - the boundary test' (lines 1272-1288)",
+          "says": "major needs a trigger and the wrong behaviour it produces; a finding whose cost lands on the next reader or editor and names a site is minor"
+        }
+      ],
+      "reasoning": "A 57-line apply (operator-confirm-review.ts:741-797) is an outlier among the sibling specs (their apply bodies run about 10-23 lines), so the complaint is fair, but the finding itself names no input that produces a wrong result: the sequence is straight-line, and the 'throw is not proof nothing closed' rule it calls buried is implemented as stated at :764-768 and exercised by the tests at operator-confirm-review-tools.test.ts:681-724. It is a readability cost, which is minor under the boundary test, and the verifier's site-check confirms only that the length is as stated."
+    },
+    {
+      "finding_id": "D-05",
+      "verdict": "upheld",
+      "reasoning": "The same error-to-text expression is written at operator-confirm-review.ts:87, :675 and :743 (plus operator-confirm-tools.ts), and :87 and :743 are one helper under two names in one file; no signal shows this was chosen, and a shared helper would make the sites more consistent."
+    },
+    {
+      "finding_id": "D-06",
+      "verdict": "upheld",
+      "reasoning": "tui-shell.ts:6109 hand-writes the dock half of the mapping that OperatorConfirmationLog.settle (operator-confirmations.ts:65-69) now owns and tests, with an equivalent but differently spelled condition; routing the unmirrored branch through settle(unmirroredId, verdict === undefined ? undefined : {from:'dock', result: verdict}, aborted) gives identical results and brings it under the settle test, so the fix is sound and more consistent."
+    },
+    {
+      "finding_id": "D-07",
+      "verdict": "upheld",
+      "reasoning": "completion-confirmation.json is written by the command layer after the engine closes the round (operator-confirm-review.ts:780), while every sibling card passes the press fields into the domain library call; the file is referenced only by that line and the tests, and no design record names it, so no signal shows the sidecar as a deliberate choice and the fix (pass the confirmation into the engine, or register the file) is sound."
+    },
+    {
+      "finding_id": "D-08",
+      "verdict": "upheld",
+      "reasoning": "The unattended exclusion of review_complete (unattended.ts:55-83) and the unchanged autonomous-profile.ts:144/153 show the profile is deliberate, and the same guide's exit table (autonomous-review.md:26) says exit 0 is 'closed by keryx review complete', so an autonomous agent does close a review through the CLI. The new sentence at :35, added by fa3f1a4da inside the delta, states without exception that an agent completes a review only through the card, which is false for the very run this guide describes; the author's intent keeps the profile as is and therefore points to the doc needing the exception (the finding's first fix), not against the finding. The finding's claim that 'never tells you to run the terminal command' contradicts the profile is a misreading (you is the human reader), but the rest stands."
+    },
+    {
+      "finding_id": "D-09",
+      "verdict": "upheld",
+      "reasoning": "The close-then-gate-throws branch (operator-confirm-review.ts:765-787) has no test; the only close-then-fail case at operator-confirm-review-tools.test.ts:716-724 fails the record write, and no signal shows the gap is accepted."
+    },
+    {
+      "finding_id": "D-10",
+      "verdict": "upheld",
+      "reasoning": "I found no test that exercises or even greps the onUndelivered wiring at tui-shell.ts:6128 or the unmirrored finally: operator-confirmations.test.ts only unit-tests markUndelivered (:48-63) and settle (:177-191), and the '180-186 source-text grep' the finding cites is not in that file at head. tui-shell.test.ts pins the mirror function only by source text (:2963-2969). The cited location is inaccurate but the gap the finding reports is real, if anything larger."
+    },
+    {
+      "finding_id": "D-11",
+      "verdict": "upheld",
+      "reasoning": "The ENOENT guard at operator-confirm-review.ts:674 is pinned in only one direction; no signal shows the gap is intended, and the suggested card-content test is a sound fix."
+    },
+    {
+      "finding_id": "D-12",
+      "verdict": "upheld",
+      "reasoning": "The press-field spreads at :236, :294, :357 and :444 are the audit trail the remote card exists for and are untested for pressedBy and pressedAt, while sibling specs (:157, :566, :639) are asserted; the sibling coverage shows the project expects this assertion, and the table-driven test is a sound fix."
+    },
+    {
+      "finding_id": "D-13",
+      "verdict": "upheld",
+      "reasoning": "cardSafe on the evidence line (:688) and the waiver operator_quote (:668) is applied in code and pinned for the recorded head only; both strings come from agent-writable files, so a test over all three card fields is consistent with the head test that already exists."
+    },
+    {
+      "finding_id": "D-14",
+      "verdict": "upheld",
+      "reasoning": "completion-gate.test.ts does not mention review_complete at all (its only wording matches are about the CLI command parsing at :609-638), so reverting the rewritten nudge and stop texts at completion-gate.ts:761, :804 and :819 stays green; nothing indicates the gap is deliberate."
+    }
+  ]
+}

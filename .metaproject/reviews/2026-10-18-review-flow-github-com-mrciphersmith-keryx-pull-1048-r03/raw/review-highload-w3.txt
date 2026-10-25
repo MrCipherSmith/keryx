@@ -1,0 +1,113 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Delta r03, slice-03 (mostly skill/doc text plus the project-context feed guard from 5382b56ab). The in-flight guard and the ordering counter in createProjectContextFeed close r02 highload-w4:F-001 and highload-w5:F-002 (and performance-w5:F-002); stop() is now wired (stopProjectContextFeed at tui-shell.ts closes architecture-w5:F-001 / clean-code-w5:F-004). Two minor leftovers: the ordering fix still hands the caller an older status and skips its bookkeeping when a subscriber throws; the single-quote escape for --task-text was added in flow-orchestrator only, four sibling instruction sites still teach an unescapable quoting. r02 highload-w5:F-001 (5 s poll runs the full references analysis) still applies unchanged and is not re-filed. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "    applied = Math.max(applied, mine);\n    return next;",
+      "problem": "reload() drops an older load from the feed but still returns that older `next` to its caller, and `applied` is only advanced after the subscriber loop. (a) A modal toggle calls loadStatus() = feed.reload() (mine=1); a poll starts after it (mine=2) and finishes first, so the feed holds the newer status. The toggle's reload then returns its own older `next`, and presentProjectContext does `status = next` with it. The feed never notifies again (current already equals the newer status and later polls compare equal), so the open modal keeps the older status until the status really changes again. (b) If a subscriber throws (sidebar repaint on a destroyed renderable, see clean-code-w5:F-003), `applied = Math.max(applied, mine)` is skipped, so a still-in-flight older load can later pass `mine > applied` and overwrite `current` with older data, which is the very overwrite the counter exists to stop.",
+      "impact": "Stale modal contents after a concurrent poll and toggle, and a possible regression of the feed to older data after one failing subscriber. The window is a few milliseconds per race and TUI-local, so it is a UI-consistency defect, not a capacity one; it needs a status change landing between the two loads to be visible.",
+      "suggested_fix": "Advance the counter before notifying and return what the feed holds: `const fresh = mine > applied; applied = Math.max(applied, mine); if (fresh && !sameStatus(current, next)) { current = next; for (const l of [...listeners]) { try { l(next); } catch { /* subscriber failures are not load failures */ } } } return fresh ? next : (current ?? next);`. Add a test that asserts the return value of the older reload and one with a throwing subscriber.",
+      "evidence": "reload() at head: `const mine = ++started; const next = await options.load(); if (mine > applied && !sameStatus(current, next)) { current = next; for (const listener of [...listeners]) listener(next); } applied = Math.max(applied, mine); return next;`. The modal path is `.then(() => options.loadStatus()).then((next) => { status = next; options.onStatus?.(next); })` with loadStatus: reloadProjectContext = projectContextFeed.reload (tui-shell.ts). The R7 test 'an older load that finishes last cannot overwrite a newer status' asserts feed.current() only, never the value `older` resolves to.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "feed-reload-stale-return-applied-after-notify",
+      "class_scope": {
+        "sites": ["src/tui/project-context-inspector.ts: reload() return value and applied bookkeeping"],
+        "enumeration_method": "keryx ctx rg for createProjectContextFeed, projectContextFeed.reload and loadStatus: the only consumers of the returned status are showProjectContext (initial) and the modal toggle in presentProjectContext; the sidebar reads feed.current()."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task title and description>'",
+      "problem": "Partial close of r02 highload-w2:F-001. flow-orchestrator line 323 now says to write the text single-quoted and to turn an inner `'` into `'\\''`. The sibling instructions that carry the same command are single-quoted too but give no escape rule, so an orchestrator following them verbatim breaks on any task title or description containing an apostrophe (\"don't\", \"user's\"), and an issue body such as `x'; cmd; '` closes the quote and runs. Sites without the escape note: job-orchestrator SKILL.md (wave command and the fix re-resolve, `'<fix task description>'`), orchestrator-prompt.md (two lines), task-implementer SKILL.md 2.0c (`'<task.description>'`), each in both the .metaproject copy and the bundled copy.",
+      "impact": "In a job with many parallel tasks every task whose text holds an apostrophe fails resolve-context with a shell parse error. The resolved file is then missing; under `gdskills.projectContext.enforcement: block` the dispatch is refused for that task, under `warn` promotion is silently off for it. Task text comes from issue bodies, so the unescaped form is also an injection path (the security reviewer owns that).",
+      "suggested_fix": "Put the same sentence next to every `--task-text '<...>'` occurrence, or better pass the text through a file or stdin (`--task-text-file`) so no quoting rule is needed. Minimum: copy 'Write the text single-quoted (a `'` inside it becomes `'\\''`)' into job-orchestrator SKILL.md (both sites), orchestrator-prompt.md (both sites) and task-implementer SKILL.md 2.0c, in .metaproject/skills and src/gdskills/bundled/skills.",
+      "evidence": "keryx ctx rg -F \"'\\\\''\" over src/gdskills/bundled/skills and .metaproject/skills/gdskills/orchestration returns only flow-orchestrator/SKILL.md:323 (both copies). keryx ctx rg task-text lists 13 matches: job-orchestrator SKILL.md:749 and :1307, orchestrator-prompt.md:132 and :188, task-implementer SKILL.md:182, tests-creator SKILL.md:93, flow-orchestrator SKILL.md:323, each mirrored; only :323 carries the escape rule.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "dedupe_key": "task-text-single-quote-escape-missing",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1307",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93 (task-text mention, quoting not verified)",
+          "flow-orchestrator/SKILL.md:323 in both trees (already correct)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all task-text over src/gdskills/bundled/skills/orchestration, src/gdskills/bundled/skills/quality and .metaproject/skills/gdskills/orchestration (13 matches, complete), cross-checked with a fixed-string search for the '\\'' escape (2 matches, both flow-orchestrator)."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [
+    { "id": "slice-03", "coverage": "skill/doc text hunks, context-resolver.test.ts import hunk, project-context-inspector.ts hunks (cardSafe, feed guard) read at head 5382b56ab and compared with prior findings", "status": "DONE" }
+  ],
+  "follow_ups": [],
+  "inputs_unreadable": []
+}
+```
+
+## High-Load Review (delta r03, slice-03)
+
+### Review Scope
+- Branch: `feat/conditional-reads`, head `5382b56abf17d23db61108554f3c6c68c8e3c036`, merge-base `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: diff, delta round on top of r02
+- Load profile: not provided (assumes moderate-to-high traffic; the TUI feed is a single-user process, the orchestration skills run parallel waves)
+
+### Summary
+The r02 asks on the project-context feed are fixed: `polling` stops a slow load from stacking scans behind it, the `started`/`applied` counters keep an older load from overwriting a newer one, and the shell now calls `stopProjectContextFeed`. Two minor items remain (F-001, F-002). The `cardSafe` wrapper on the sidebar value is a cheap string transform on a short string and adds no load concern.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Closed or unchanged r02 items (not re-filed)
+- Closed by this delta: review-highload-w4:F-001 (no in-flight guard), review-highload-w5:F-002 and review-performance-w5:F-002 (no ordering), review-architecture-w5:F-001 and review-clean-code-w5:F-004 (feed never stopped; `stopProjectContextFeed?.()` at tui-shell.ts now runs on teardown).
+- Partly closed: review-highload-w2:F-001 (task-text quoting): fixed in flow-orchestrator, see F-002 for the rest.
+- Still apply unchanged: review-highload-w5:F-001 and review-performance-w5:F-001 (every 5 s poll runs `loadProjectContextStatus` with the full references analysis), review-clean-code-w5:F-003 (subscriber exceptions reported as poll failures; F-001 here adds the bookkeeping consequence), review-highload-w3:F-001 to F-003, review-highload-w2:F-002 (info).
+
+### Findings
+
+#### Concurrency & Race Conditions
+F-001 (minor) feed `reload()` returns an older status and skips `applied` when a subscriber throws.
+
+#### Resource Management
+None detected. The `polling` flag is reset in `finally`; the interval is `unref`'d and now stopped on shell teardown. The flag has no timeout, so a load that never settles would freeze sidebar updates, but the load only reads local files (info-level, not filed).
+
+#### Caching
+None detected.
+
+#### Database Under Load
+Not applicable.
+
+#### Async / Queues
+None detected.
+
+#### Retry / Timeout / Circuit Breaker
+None detected.
+
+#### Idempotency & Distributed Invariants
+F-002 (minor) the apostrophe escape for `--task-text` exists in flow-orchestrator only; five sibling instruction sites in each of two trees lack it, so parallel job waves break per task on text with `'`.
+
+### Clean Areas
+A1 shared mutable state (feed counters are single-threaded JS, updated synchronously around the await), A3 unbounded concurrency (poll is serial, the `[...listeners]` copy is safe), B1 to B3, C, D, E, F, G1 to G3 (last-resolve record now keeps only text length; parallel `last.json` writes already covered by w2:F-002).
+
+routing audit: graph_used: no (not-relevant, delta of ~100 lines in known files), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg, ctx run, ctx diff), raw_rg_used: no (two raw git/awk reads with a stated reason: exact diff of the feed commit, exact skill line text)

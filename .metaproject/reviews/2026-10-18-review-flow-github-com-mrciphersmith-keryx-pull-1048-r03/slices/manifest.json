@@ -1,0 +1,395 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 24924,
+      "contentHash": "d1abf06160afe66628a9e6c99ab2e01cb71a76f791cfea98cdb4de685bc63306",
+      "files": [
+        ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+        "src/commands/skills-references.test.ts",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/context-resolver.ts",
+        "src/gdskills/reference-entries.ts",
+        "src/gdskills/reference-proof.ts",
+        "src/gdskills/references-check.ts",
+        "src/gdskills/references-section.ts",
+        "src/tui/project-context-inspector.ts"
+      ],
+      "domain": ".metaproject [docs], src/commands [test], src/gdskills [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md, src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+          "source code: src/gdskills/context-resolver.ts, src/gdskills/reference-entries.ts, src/gdskills/reference-proof.ts (+3)",
+          "fix slice: answers 21 prior finding(s) review-architecture-w3:F-002, review-clean-code-w1:F-003, review-clean-code-w2:F-004, review-clean-code-w5:F-001, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "review-architecture-w3:F-002",
+        "review-clean-code-w1:F-003",
+        "review-clean-code-w2:F-004",
+        "review-clean-code-w5:F-001",
+        "review-clean-code-w5:F-003",
+        "review-highload-w2:F-001",
+        "review-highload-w2:F-002",
+        "review-highload-w3:F-001",
+        "review-highload-w5:F-002",
+        "review-logic-w2:F-001",
+        "review-logic-w3:F-001",
+        "review-logic-w3:F-002",
+        "review-logic-w3:F-003",
+        "review-performance-w5:F-002",
+        "review-security-code-w1:F-001",
+        "review-security-code-w1:F-002",
+        "review-security-code-w3:F-001",
+        "review-security-code-w4:F-001",
+        "review-security-code-w4:F-002",
+        "review-style-w5:F-002",
+        "review-testing-practices-w2:F-008"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 143720,
+      "contentHash": "e9444a1fbd7c1bfdea36f5d241d67be41e70188373afe71d0eaf804b5c48a86c",
+      "files": [
+        ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+        "README.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/apply-project-rules.md",
+        "src/commands/skills-references.test.ts",
+        "src/commands/skills.ts",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+        "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md",
+        "src/gdskills/conditional-reads.e2e.test.ts",
+        "src/gdskills/context-resolver.test.ts",
+        "src/gdskills/reference-entries.test.ts",
+        "src/gdskills/references-section.test.ts",
+        "src/gdskills/resolved-context-check.test.ts",
+        "src/gdskills/context-resolver.ts",
+        "src/gdskills/references-check.ts",
+        "src/gdskills/references-section.ts",
+        "src/harness/tool/metaproject-adapter-task-text.test.ts",
+        "src/mcp/metaproject-tools.test.ts",
+        "src/tui/project-context-inspector.test.ts",
+        "src/tui/project-context-inspector.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, . [docs] +10 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md (+5)",
+          "source code: src/commands/skills.ts, src/gdskills/context-resolver.ts, src/gdskills/references-check.ts (+3)"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 14400,
+      "contentHash": "8ce52a43c93d22dfb079b8233a3bc01af0a257931a1704382f92cb1bd6c8c559",
+      "files": [
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+        "docs/docs/cli-reference.md",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+        "src/gdskills/context-resolver.test.ts",
+        "src/tui/project-context-inspector.ts"
+      ],
+      "domain": ".metaproject [docs], docs [docs], src/gdskills [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md (+5)",
+          "source code: src/tui/project-context-inspector.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 108034,
+      "contentHash": "e86868f23700efee0a30821b0f6a060d08fdecdf1c4edc521e8c7d501f457660",
+      "files": [
+        ".metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+        ".metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/flow.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T10.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T11.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T12.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T13.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T5.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T6.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T7.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T8.result.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.implement.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/resolved/T9.result.json",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+        ".metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/context.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/description.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/journal.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/plan.md",
+        ".metaproject/flows/462-2026-10-18-conditional-reads/tasks.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+        ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md",
+        "README.md"
+      ],
+      "domain": ".metaproject, .metaproject [docs], . [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json",
+          "risk class schema: .metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json",
+          "risk class schema: .metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json",
+          "risk class schema: .metaproject/skills/gdskills/quality/tests-creator/output-contract.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/task-implementer-output-contract.schema.json, .metaproject/core/gdskills/contracts/tests-creator-output-contract.schema.json, .metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json (+1)",
+          "agent instructions: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md (+2)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 144087,
+      "contentHash": "6cf63697ac7d240f818cf97095320d13d04395f10461ce5f63d77d5717d0d08d",
+      "files": [
+        "docs/docs/cli-reference.md",
+        "docs/docs/commands-by-task.md",
+        "docs/docs/guides/apply-project-rules.md",
+        "docs/requirements/keryx-conditional-reads/README.md",
+        "docs/requirements/keryx-conditional-reads/TUI-states.md",
+        "docs/requirements/keryx-conditional-reads/live-run.md",
+        "docs/requirements/keryx-conditional-reads/schemas/references.schema.json",
+        "docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+        "package.json",
+        "src/commands/agent-commands.ts",
+        "src/commands/skills-references.ts",
+        "src/commands/skills.ts",
+        "src/commands/skills-references.test.ts",
+        "src/flow/task-project-context.test.ts",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+        "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md"
+      ],
+      "domain": "docs [docs], ., src/commands +3 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "schema: docs/requirements/keryx-conditional-reads/schemas/references.schema.json, docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json",
+          "source code: src/commands/agent-commands.ts, src/commands/skills-references.ts, src/commands/skills.ts",
+          "agent instructions: src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md, src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md, src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md (+2)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 81546,
+      "contentHash": "615b37d8393342e9b1135b616d87f13e67c37a0def643bde26328f4911631e93",
+      "files": [
+        "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+        "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+        "src/gdskills/context-resolver.ts",
+        "src/gdskills/import-rules.ts",
+        "src/gdskills/project-context-status.ts",
+        "src/gdskills/reference-entries.ts",
+        "src/gdskills/reference-proof.ts",
+        "src/gdskills/references-check.ts",
+        "src/gdskills/references-config.ts",
+        "src/gdskills/references-section.ts",
+        "src/gdskills/resolve-context-command.ts",
+        "src/gdskills/resolved-context-check.ts"
+      ],
+      "domain": "src/gdskills",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+          "risk class schema: src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+          "schema: src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json, src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+          "source code: src/gdskills/context-resolver.ts, src/gdskills/import-rules.ts, src/gdskills/project-context-status.ts (+7)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 137105,
+      "contentHash": "0440388d45f973b38877538089bcbcd9ae661d64a6988e9e140a04b2808ecc6c",
+      "files": [
+        "src/gdskills/conditional-reads.e2e.test.ts",
+        "src/gdskills/context-resolver.test.ts",
+        "src/gdskills/output-schema.test.ts",
+        "src/gdskills/project-context-status.test.ts",
+        "src/gdskills/references-config.test.ts",
+        "src/gdskills/references-section.test.ts",
+        "src/gdskills/resolved-context-check.test.ts",
+        "src/gdskills/skill-sync.test.ts",
+        "src/harness/tool/metaproject-adapter.ts",
+        "src/harness/tool/metaproject-operations.ts",
+        "src/harness/tool/metaproject-port.ts",
+        "src/harness/tool/metaproject-operations.test.ts",
+        "src/lib/group-subcommands.ts",
+        "src/mcp/metaproject-tools.ts",
+        "src/standard/help-groups.ts",
+        "src/tui/project-context-inspector.test.ts"
+      ],
+      "domain": "src/gdskills [test], src/harness, src/harness [test] +4 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/harness/tool/metaproject-adapter.ts, src/harness/tool/metaproject-operations.ts, src/harness/tool/metaproject-port.ts (+3)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 24747,
+      "contentHash": "bef81d93b4d4986e290d9f1029ce44977cac7ef12b967f857fc2205d7f6fe2f4",
+      "files": [
+        "src/tui/project-context-inspector.ts",
+        "src/tui/project-references-view.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": "src/tui",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/tui/project-context-inspector.ts, src/tui/project-references-view.ts, src/tui/tui-shell.ts",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 8,
+    "bytes": 678563,
+    "files": 88,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

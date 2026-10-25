@@ -1,0 +1,49 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Slice-04 (src/tui/*), scope B. No blocker or major regression found. I read the approval-mirror.ts, decisions-surface.ts, remote-control-surface.ts and tui-shell.ts hunks against their callers and the existing tests. Checked: (1) raceApproval: the `settled` guard and isTopicPress are unchanged in effect, the only addition is the optional onUndelivered callback, and the sole caller that passes it is the card path. (2) Plain tool approvals (shell_exec, spawn_subagent, MCP, non-card patches) take the same path as before: isCard is false, so no log entry, no mirror note and no callback. They only gain pressedBy/pressedAt on the remote answer object; every consumer reads that object through isApprovalFor, and only the card branch at agent.ts:6120-6124 reads pressedBy/pressedAt. (3) user_prompt hook cards are excluded from isCard via isUserPromptApprovalCard, so the hook-ask path is unchanged. (4) The Telegram-started-turn path only swaps the `via: remote` literal for remoteApproval(); the new fields are additive. (5) formatRemoteStatusLines, projectRemoteRow, openDecisions and mountRemotePanel gained only optional trailing parameters; with none passed their output is byte-identical (the existing equality test at operator-confirmations.test.ts shows it for the status lines), and openDecisionsArms drops confirmationLines. (6) The source-text audit in tui-shell.test.ts:2957-2972 (flow 396/419: no `telegramTurnActive` between `const mirrorApprovalToTopic =` and the `io.requestApproval = ...` line, and `inner(tool, inputJson, meta, race)` still present) still holds for the new code. (7) A disconnected-but-active bridge short-circuits to the shell dock, which matches what bridge.askApproval already did (immediate deny with undelivered, shell-bridge.ts:963-966). (8) New import edge remote-control-surface.ts -> operator-confirmations.ts -> commands/operator-confirm-tools.ts (REMOTE_CARD_TTL_MS): I found no import cycle (nothing under src/review, src/flow or the operator-confirm-* files imports src/tui). It does pull the operator-confirm spec modules into every importer of remote-control-surface. Two findings below, both info: they are side effects of the new card handling on cards that existed before this PR, and both fall below scope B's major floor, so ingest will refuse them. Radius limits: the blast-radius record for this round has changedFilesUnresolved=20 (all Markdown/JSON, not-a-graph-node), droppedByCap=100, droppedTestConsumer=428, droppedUnrelatedSymbol=180, droppedTextHub=46, dropped=754 in total, 40 of 568 candidates retained and testsRetained=0. So 'no dependents found' covers the retained 40 only, and the 428 dropped test consumers were not checked against the tui surfaces. I could not run the tests (read-only lens), so I could not confirm that no snapshot or exact-text test of remote-control-surface/decisions-surface fails. Runtime edges (string-keyed tool names, hooks) are outside a code graph; tool-name routing in agent.ts was read by hand.",
+  "findings": [
+    {
+      "id": "RG-W4-001",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;",
+      "problem": "isCard is true for every alwaysAsk+card approval that is not user_prompt, so it also covers the schedule cards (schedule_create/resume/run/pause/remove, whose card text the code documents as 'the same text on every surface'), not only the new review cards. Before this PR, with remote control off (the default) such a card went straight to inner(tool, inputJson, meta). Now mirrorUndeliveredNote(undefined) returns 'Telegram mirror not delivered: remote control is not on in this shell. Answer it here.', withMirrorNote() splices it into the card before its last line, and confirmOperatorCard prints every card line to the transcript. The card is also logged by operatorCards.ask(..., false) and shown as 'answered ... answered in the shell' under 'Operator confirmations (Telegram cards)' in the /decisions modal, although the operator never turned the Telegram mirror on.",
+      "impact": "Cosmetic and informational for the schedule flow: an extra line appears inside the schedule confirmation card in the TUI for every user who never enabled /remote-control, and schedule cards pollute the new Telegram-cards list. The yes/no decision, the draft token and the fingerprint binding are not affected (the note is added to the displayed copy of meta.card only; the draft the token is bound to is separate). Below the major floor, filed as info; flagged because the pre-PR behaviour of this card is changed for the default configuration, not only for the new review cards.",
+      "suggested_fix": "Restrict the undelivered-note and the OperatorConfirmationLog entry to cards that carry meta.cardTitle (the operator-confirm gates), or drop the 'remote control is not on' note when the bridge was never enabled and keep it only for 'active but not connected'.",
+      "evidence": "src/tui/tui-shell.ts:6100-6101 (isCard has no cardTitle condition; unmirrored computed for any card), src/remote/shell-bridge.ts:296-297 (undefined bridge or !active returns the note), src/commands/agent.ts:6101 (cardTitle is passed only for operator-confirm gates; schedule cards have none), src/tui/tui-shell.ts:5426-5437 (confirmOperatorCard prints all card lines, subtitle is card[0] when cardTitle is undefined). Dispatch: schedule_create -> agent.ts card branch -> requestApproval -> mirrorApprovalToTopic.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["src/tui/tui-shell.ts:6100-6101", "src/tui/tui-shell.ts:6116"],
+        "enumeration_method": "keryx ctx rg for alwaysAsk|card in src/commands/agent.ts, schedule-tools.ts, schedule.ts, interactive-tools.ts: the only producers of meta.card are agent.ts:6101 (schedule_* tools and operator-confirm gates); user_prompt (agent.ts:3132) is excluded by isUserPromptApprovalCard."
+      }
+    },
+    {
+      "id": "RG-W4-002",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;",
+      "problem": "A card is logged as mirrored=true before the topic leg runs. If the bridge is active and connected at ask time but the POST to serve then fails (client.askApproval returns { decision: 'deny', undelivered: true }, client.ts:452-461), raceApproval calls onUndelivered, which only prints a system line. The log entry stays mirrored=true and unanswered, so the sidebar Remote row says 'N card waiting' (attention) and the /remote-control status tab says 'waiting ... 57m left of the 1-hour token' for a card that never reached Telegram, until the operator answers in the dock. The card text in the dock does not carry the 'mirror not delivered' note in this late-failure case either (the note is applied only to the up-front inactive/disconnected case).",
+      "impact": "Misleading status for the new surfaces only (no pre-existing behaviour breaks, no decision is recorded wrongly): the operator is told a token is running on a card that has no Telegram counterpart. Info because it is the new feature's own late-failure path and no existing behaviour changes.",
+      "suggested_fix": "In the onUndelivered callback, mark the log entry as not mirrored (e.g. an OperatorConfirmationLog.markUnmirrored(cardId)) so waiting() drops it and pendingConfirmationLine prints the 'mirror not delivered' text.",
+      "evidence": "src/tui/approval-mirror.ts:41 (onUndelivered is a no-argument callback), src/tui/tui-shell.ts:6119 (callback only calls io.onSystem), src/tui/operator-confirmations.ts waiting() filters on item.mirrored, set once at ask().",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ],
+  "needs_context": [],
+  "slices": [
+    { "id": "slice-04", "coverage": "all hunks of approval-mirror.ts, decisions-surface.ts, remote-control-surface.ts, operator-confirmations.ts(+test), tui-shell.ts read; callers and consumers read in agent.ts, shell-bridge.ts, client.ts, tui-shell.test.ts source-text audit", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (blast-radius.json read via jq instead; its graph was the supplied record); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg); raw_rg_used: no. Two jq calls on the package JSON carried a keryx:raw reason (structured package file, bounded output).

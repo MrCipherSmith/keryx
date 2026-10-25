@@ -1,0 +1,96 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "PR 1052 carries no Documentation / Tests / Breaking-change / Screenshots checkbox; its only boxes are the three Test-plan items (CI green, a bun test run, owner live check), all unticked and consistent with CI still pending and AC9 being the owner's live check. The claims in the Summary were checked against slice-01 and the docs outside it: the TM-04 section, the review guides, cli-reference, commands-by-task, limitations and both copies of the review-orchestrator and review-premise skills agree with operator-confirm-tools.ts (allowed-id check, one-hour TTL, token spent on every refusal, pressedBy/pressedAt only for remote-card, shell clock for pressedAt, 'Telegram mirror not delivered' wording, review_complete in the unattended exclusion list). The bundled and .metaproject skill copies are byte-identical. Four disagreements remain, all minor or info: cli-reference says a bare `review complete` needs a terminal (code and the autonomous guide say it does not), autonomous-review.md says the card tools 'stop at the floor' (unattended.ts and TM-04 section 7 say the item is excluded and recorded Not run), CHANGELOG puts the 0.3.124 heading below an [Unreleased] block whose entries ship in that version, and the PR test plan names none of the AC5/AC7/AC8 checks. Code-level questions (token binding, atomicity, gates) belong to other lanes and were not judged here.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 4921,
+      "quote": "The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal.",
+      "problem": "The PR rewrites this sentence to list a bare `complete` among the steps that 'need a terminal'. The code refuses a non-terminal only for the two waiver flags: `runComplete` in src/commands/review.ts checks `isTerminal()` solely when `--waive-coverage` (line 4557) or `--waive` (line 4561) is present; a plain `keryx review complete <ref>` runs without a TTY. The same PR's docs/docs/guides/autonomous-review.md:26 (exit 0, 'The package was closed by `keryx review complete`') and the review-orchestrator SKILL.detail.md readiness text ('or run `keryx review complete`') also treat the bare command as runnable by the agent.",
+      "impact": "A reader of cli-reference concludes that closing a review always needs a terminal or the new card, which is false for a package with nothing to waive. No runtime harm: the cost is a reader who trusts the sentence and asks the operator for an answer the command does not need.",
+      "suggested_fix": "Name only `complete --waive-coverage` and `complete --waive` in the terminal list, and say separately that `review_complete` is the card for the operator's own close of the package.",
+      "evidence": "Claim: cli-reference.md:4921 (diff lines 757-758 of slice-01). Contradicting code: src/commands/review.ts:4557 and :4561 (`!isTerminal()` guards on the waiver flags only; no guard on plain complete). Contradicting doc: docs/docs/guides/autonomous-review.md:26. Read directly; not run.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:cli-reference:complete-needs-terminal",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/autonomous-review.md",
+      "line": 35,
+      "quote": "An autonomous run has nobody to answer them: it stops at the floor and never tells you to run the terminal command.",
+      "problem": "The new bullet says an autonomous run facing the five review cards 'stops at the floor'. The PR's own code and decision record say something else: src/trigger/unattended.ts:59-61 (comment added by this PR) says an unattended run 'never sends the operator to a terminal and records the item as Not run', and the card names sit in OPERATOR_CONFIRM_TOOL_NAMES, so the tools are not offered to the run at all. TM-04 section 7 says the same ('record the item as Not run'). The `floor` exit (code 3, same guide, table at line 22) is defined as 'an action that always needs a human was refused', which is a different event from a tool that is never offered. The same guide also reports exit 0 for a run that closed the package with `keryx review complete`.",
+      "impact": "A person reading the guide expects exit code 3 and a halted run when a card-only act is needed, and may instead get a finished run with the item recorded Not run. Which of the two happens is not settled by the slice: the bullet is unverified against the autonomous runner.",
+      "suggested_fix": "Replace 'stops at the floor' with what unattended.ts and TM-04 section 7 state (the card tools are excluded, the item is recorded Not run), or cite the runner code path that produces exit 3 for these cards.",
+      "evidence": "Claim: autonomous-review.md:35. Other side: src/trigger/unattended.ts:59-61 and :63-83 (OPERATOR_CONFIRM_TOOL_NAMES includes review_complete and the four others); docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md section 7. The runner (src/commands/review-run.ts) was not read, so the exit code actually produced is unverified.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:autonomous-guide:floor-vs-not-run",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": null,
+      "quote": "## [0.3.124] - 2026-10-19",
+      "problem": "The PR bumps package.json to 0.3.124 and adds a dated `## [0.3.124] - 2026-10-19` section, but inserts it BELOW the existing `## [Unreleased]` block, which still holds two entries ('A project rule under `rules/project/core/` replaces its bundled twin', 'A citation with a heading anchor cites its document') that this version will ship. The file now says those two fixes are newer than 0.3.124, while package.json says 0.3.124 is the version that contains them. The heading is also dated as released while AC10 (publish to npm, record in journal.md) is open, CI is pending, and the PR body mentions neither the version bump nor the changelog entry.",
+      "impact": "Someone reading the changelog after the release attributes two shipped fixes to an unreleased future version. The cost is a misleading release record, not runtime behaviour.",
+      "suggested_fix": "Fold the two Unreleased entries under 0.3.124 (or leave Unreleased empty above it), and say in the PR body that the PR bumps the version; if the date is meant to be the release date, set it when AC10 is done.",
+      "evidence": "slice-01 diff, CHANGELOG.md hunk: the two Unreleased entries are context lines above the added `## [0.3.124] - 2026-10-19`; package.json hunk changes `\"version\": \"0.3.123\"` to `\"version\": \"0.3.124\"`. pr-context.md Summary lists no version or changelog change. Whether the repository convention is to date the heading at PR time was not checked.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:changelog:unreleased-order",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-004",
+      "severity": "info",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "The PR body's Test plan lists three boxes, all unticked: 'CI green', '`bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/`' and 'Owner live check from the Telegram topic'. The frozen criteria name checks the second box leaves out: AC5 runs `src/commands/review-tty-refusal.test.ts`, AC7 runs `bun test src/trigger/ src/gdskills/` (the docs and skill copies this PR edits), and AC8 runs typecheck, lint and `test:core`. The body also says nothing of the version bump or CHANGELOG entry (see PC-003).",
+      "impact": "A reviewer who ticks the three boxes has not run the checks that guard the docs and the skill copies (AC7) or the TTY fallback (AC5). CI may cover them (the AC8 full suite is pending); this is a gap in what the body promises, not a defect in the code.",
+      "suggested_fix": "Add the AC5 and AC7 commands to the Test plan, or state that CI's full suite is the check for them.",
+      "evidence": "pr-context.md 'Test plan' versus .metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md lines for AC5, AC7, AC8 (slice-01 diff). Unverified: whether those commands pass on the head; they are run by CI jobs still pending.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:test-plan:missing-ac-checks",
+      "location_class": "pr-process",
+      "publication": "question"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3,
+    "info": 1
+  },
+  "slices": ["slice-01"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Checklist rows (pr-context.md):
+| Box or claim (quoted) | State | What the diff shows | Expectation |
+|---|---|---|---|
+| `CI green` | unticked | CI listing in pr-context.md: typecheck-and-tests, client matrix (terminal), AC8 full suite, opentui darwin-x64 pending | consistent, nothing to file |
+| `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` | unticked | the four test files (operator-confirm-tools.test.ts, operator-confirm-review-tools.test.ts, mirror-undelivered.test.ts, operator-confirmations.test.ts) are in the PR scope list | consistent; see PC-004 for checks it omits |
+| `Owner live check from the Telegram topic` | unticked | AC9, judged by the owner | not a code defect, not filed |
+| "records `pressedBy` and `pressedAt` ... only from an allowed user id, once, for one question, within 1 hour" | claim | operator-confirm-tools.ts:202-221 (id list check, token deleted on every path, 1 hour TTL from stored issuedAt); TM-04 6a, cli-reference, review-with-a-record agree | consistent |
+| "The card says when the Telegram mirror was not delivered" | claim | MIRROR_NOT_DELIVERED in shell-bridge.ts:290, operator-confirmations.ts:106, tui-shell.ts:6119; docs use the same wording | consistent |
+| "Docs: TM-04 section, review guides, cli-reference, review skills" | claim | all present in slice-01, plus commands-by-task, limitations, autonomous-review; both skill copies byte-identical | consistent (PC-001, PC-002 are wording defects inside them) |
+| "`flow ac confirm` is unchanged" | claim | no flow-ac hunk in slice-01; src code slices not read here | unverified in this lane |
+| Documentation needed / Breaking change / Screenshots | no box in the body | the diff adds user-visible card text, a TUI tab and a command-list entry, and no exported symbol is removed in slice-01 | no row to contradict |
+
+Documentation outside the diff searched with keryx ctx rg (docs, README.md, src/gdskills, .metaproject/skills): no further file still tells the operator to run `decide-premise`, `confirm-plan` or `review complete` in a terminal for these acts. flow-orchestrator/SKILL.md:440 already says "the card in keryx shell; elsewhere ... in their terminal", and review-pr-feedback/SKILL.md:366 runs no package. Not read: src/gdskills/bundled/skills/orchestration/job-orchestrator and feature-dev bodies beyond their matched lines; .metaproject/data wiki pages.

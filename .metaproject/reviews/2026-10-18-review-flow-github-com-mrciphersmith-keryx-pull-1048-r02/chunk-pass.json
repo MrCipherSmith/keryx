@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "totals": {
+    "chunks": 5,
+    "files": 17,
+    "done": 5,
+    "failed": 0,
+    "pending": 0
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/cli.ts",
+        "src/lib/serve-turn.ts",
+        "src/integrations/install-state.ts",
+        "src/mcp/dispatch.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/wiki/enrich.ts",
+        "src/commands/harness.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/commands/agents-external.ts",
+        "src/lib/routing-entrypoint.ts",
+        "scripts/benchmark/run-safety.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "src/acp/server.ts",
+        "src/harness/rpc.ts",
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "src/harness/resume/resume.ts",
+        "src/harness/run/cli.ts",
+        "scripts/benchmark/run-ablation-long.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "scripts/stress/keryx-shell-stress.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    }
+  ],
+  "uncoveredFiles": [],
+  "findings": []
+}

@@ -1,0 +1,97 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "slices": ["slice-03"],
+  "summary": "Slice-03 holds no concurrency, idempotency or atomicity defect in the new press-field writes or in the askApproval undelivered paths. The press fields ride the existing locked writers (chunks-estimate, operator-decisions) or the single atomic plan-confirmation file; askApproval cleans its timer, waiter and abort listener on every exit and settles each approval id once. One minor leak (operator-card log entries when the mirrored or unmirrored approval throws) and three info notes (two pre-existing, one low-confidence labelling) remain. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });",
+      "problem": "mirrorApprovalToTopic registers an operator-card log entry (operatorCards.ask at both the unmirrored and the mirrored branch) and records the answer only after the awaited inner approval or raceApproval returns. Neither branch has try/finally, so a rejection from inner or raceApproval leaves the entry unanswered. OperatorConfirmationLog trims only answered entries (ANSWERED_CARDS_KEPT = 5), so an unanswered entry is never evicted.",
+      "impact": "Failure mode: every approval whose inner call throws (dock render error, bridge rejection other than the handled undelivered path) leaves one permanent unanswered entry in the in-process log and a stale 'open card' in the TUI surface that reads it. Growth is per failure, not per request, so it is slow; in a long unattended session with a persistently failing bridge it is unbounded.",
+      "suggested_fix": "Wrap each branch in try/finally and answer the card in the finally (operatorCards.answer(id, { ... }) with a 'failed' or 'cancelled' outcome), or have OperatorConfirmationLog cap unanswered entries as well.",
+      "evidence": "src/tui/tui-shell.ts lines 6103-6104 (unmirrored branch: operatorCards.ask, then await inner, then operatorCards.answer) and 6116-6117 (mirrored branch: operatorCards.ask, then await raceApproval); src/tui/operator-confirmations.ts trims only answered entries.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/approval-mirror.ts",
+      "line": null,
+      "quote": "dockAbort.abort(\"topic\");",
+      "problem": "raceApproval sets settled only in its finally, so between the dock resolving and the finally running a late topic press can still pass the 'if (settled) return' guard, store topicAnswer and be returned as 'from: topic', overriding a dock answer that already resolved.",
+      "impact": "Failure mode: the two answers race inside one event-loop turn; the confirmOperatorCard path has no async hop between the dock answer and its topicWon() check besides input.focus(), so the window is microtask-sized and needs both channels to answer in the same turn. The effect is a first-answer-wins tie broken toward the topic, not a lost or doubled write (the token and the card answer are each single-use). Pre-existing structure, touched by the diff only through onUndelivered.",
+      "suggested_fix": "Set a local 'decided' flag synchronously when the dock promise resolves (before awaiting anything), and test it in the topic .then.",
+      "evidence": "src/tui/approval-mirror.ts topic .then: 'if (settled) return; ... topicAnswer = answer; dockAbort.abort(\"topic\")'; settled assigned only in finally.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/remote/client.ts",
+      "line": null,
+      "quote": "      approvalId = id;\n    } catch {\n      return { decision: \"deny\", undelivered: true };",
+      "problem": "The catch around the approval POST (including response.json()) marks every failure as undelivered: true. A POST that timed out client-side after the server already created and sent the card is reported as 'not delivered', and the TUI card then tells the operator the mirror was not delivered while a live card may sit in the topic.",
+      "impact": "Failure mode: after a slow bridge response the operator sees 'mirror not delivered' in the TUI but may still press the Telegram card; that press finds no waiter and is dropped, so it is harmless to state (fail-closed) but the note is wrong in that window. A cosmetic mislabel, not a data-integrity issue.",
+      "suggested_fix": "Mark undelivered: true only when the failure is known to precede the request being accepted (not connected, non-ok response, missing id); for a thrown error after send, either omit the flag or word the note as 'delivery unconfirmed'.",
+      "evidence": "src/remote/client.ts lines 450-462: one catch for post(), response.ok, and json() failures, returning undelivered: true.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/remote/client.ts",
+      "line": null,
+      "quote": "    if (!this.connected) {\n      return { decision: \"deny\" };",
+      "problem": "After a successful POST, a disconnect before the waiter is installed returns a deny with neither undelivered nor closePrompt, so the topic card stays open on the server until its own expiry.",
+      "impact": "Failure mode: a press on that orphaned card is ignored (no waiter) so nothing is recorded, but the card is shown to the operator as live for up to the expiry window. Pre-existing path, not changed by this diff.",
+      "suggested_fix": "Call await this.closePrompt(approvalId, ...) before returning, as the aborted-signal branch just below does.",
+      "evidence": "src/remote/client.ts lines 471-477: the !connected branch returns without closePrompt, the isAborted branch calls closePrompt.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```
+
+## High-Load Review (slice-03)
+
+### Summary
+No blocker or major. The press fields (pressedBy, pressedAt) are written only through cardPressFields and only for remote-card; the writers that carry them are serialised (withChunkStateLock, withOperatorDecisionsLock plus writeFileAtomic; plan-confirmation is a single atomic file written under a single-use token). A re-recorded answer builds a fresh object, so stale press fields do not carry over. askApproval releases its timer, waiter and abort listener on every path and settles each approval id exactly once (settleApproval, earlyDecisions park and drop are idempotent per id).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 3
+
+### Findings
+- F-001 (minor, in-diff): operator-card log entries leak when the mirrored or unmirrored approval throws (no try/finally).
+- F-002 (info, pre-existing): raceApproval late-topic override window, microtask-sized.
+- F-003 (info): POST timeout after send is labelled undelivered.
+- F-004 (info, pre-existing): post-POST disconnect leaves the topic card open without closePrompt.
+
+### Pre-existing observations, outside the diff, not filed as findings
+- src/review/publish.ts computes readiness and the body before awaiting options.confirm, then posts, then writes published.json: a confirm that waits long can post a body built from an earlier state, and a crash between post and write allows a second post. Not touched by this diff beyond the confirm hook.
+- src/review/coverage-complete.ts recordCoverageWaiver does an unlocked read-modify-write of research.json.
+
+### Clean Areas
+- askApproval: timers, listeners and waiters cleaned on every path; no double resolution; early-decision park is bounded (2 s).
+- Locked writers carrying press fields (chunks-estimate, operator-decisions, recordPremiseDecisionAfter with undo on failed append).
+- plan-confirmation atomic single-file write under a single-use token.
+- cardPressFields: no stale pressedBy/pressedAt on replaced answers; tui-card never carries them.
+- Known items not re-reported: close-before-record in review_complete; pending token map never evicted.
+
+Load profile: not provided (interactive operator surface, low RPS); severities assume that.

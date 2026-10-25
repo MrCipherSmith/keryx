@@ -1,0 +1,724 @@
+[
+ {
+  "id": "review-security-code-w5:S-401",
+  "status": "finding",
+  "evidence": "report.md keryx:findings S-401",
+  "reason": "reported as canonical finding S-401",
+  "finding": "S-401"
+ },
+ {
+  "id": "review-clean-code-w2:F-101",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-01",
+  "reason": "reported as canonical finding F5-01",
+  "finding": "F5-01"
+ },
+ {
+  "id": "review-style-w2:F-101",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-01",
+  "reason": "reported as canonical finding F5-01",
+  "finding": "F5-01"
+ },
+ {
+  "id": "review-logic-w2:L5-101",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-02",
+  "reason": "reported as canonical finding F5-02",
+  "finding": "F5-02"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-101",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-02",
+  "reason": "reported as canonical finding F5-02",
+  "finding": "F5-02"
+ },
+ {
+  "id": "review-style-w3:F-204",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-02",
+  "reason": "reported as canonical finding F5-02",
+  "finding": "F5-02"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-102",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-03",
+  "reason": "reported as canonical finding F5-03",
+  "finding": "F5-03"
+ },
+ {
+  "id": "review-architecture-w2:A2-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-03",
+  "reason": "reported as canonical finding F5-03",
+  "finding": "F5-03"
+ },
+ {
+  "id": "review-logic-w6:L5-501",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-04",
+  "reason": "reported as canonical finding F5-04",
+  "finding": "F5-04"
+ },
+ {
+  "id": "review-logic-w1:L5-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-04",
+  "reason": "reported as canonical finding F5-04",
+  "finding": "F5-04"
+ },
+ {
+  "id": "review-logic-w6:L5-502",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-05",
+  "reason": "reported as canonical finding F5-05",
+  "finding": "F5-05"
+ },
+ {
+  "id": "review-logic-w6:L5-503",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-06",
+  "reason": "reported as canonical finding F5-06",
+  "finding": "F5-06"
+ },
+ {
+  "id": "review-highload-w1:H-01",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-06",
+  "reason": "reported as canonical finding F5-06",
+  "finding": "F5-06"
+ },
+ {
+  "id": "review-architecture-w2:A2-002",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-07",
+  "reason": "reported as canonical finding F5-07",
+  "finding": "F5-07"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-103",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-08",
+  "reason": "reported as canonical finding F5-08",
+  "finding": "F5-08"
+ },
+ {
+  "id": "review-clean-code-w1:F-006",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-09",
+  "reason": "reported as canonical finding F5-09",
+  "finding": "F5-09"
+ },
+ {
+  "id": "review-clean-code-w2:F-105",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-09",
+  "reason": "reported as canonical finding F5-09",
+  "finding": "F5-09"
+ },
+ {
+  "id": "review-style-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-09",
+  "reason": "reported as canonical finding F5-09",
+  "finding": "F5-09"
+ },
+ {
+  "id": "review-style-w2:F-102",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-09",
+  "reason": "reported as canonical finding F5-09",
+  "finding": "F5-09"
+ },
+ {
+  "id": "review-architecture-w2:A2-003",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-09",
+  "reason": "reported as canonical finding F5-09",
+  "finding": "F5-09"
+ },
+ {
+  "id": "review-architecture-w3:A3-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-10",
+  "reason": "reported as canonical finding F5-10",
+  "finding": "F5-10"
+ },
+ {
+  "id": "review-clean-code-w1:F-005",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-10",
+  "reason": "reported as canonical finding F5-10",
+  "finding": "F5-10"
+ },
+ {
+  "id": "review-style-w3:F-203",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-10",
+  "reason": "reported as canonical finding F5-10",
+  "finding": "F5-10"
+ },
+ {
+  "id": "review-style-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-10",
+  "reason": "reported as canonical finding F5-10",
+  "finding": "F5-10"
+ },
+ {
+  "id": "review-architecture-w3:A3-002",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-11",
+  "reason": "reported as canonical finding F5-11",
+  "finding": "F5-11"
+ },
+ {
+  "id": "review-clean-code-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-11",
+  "reason": "reported as canonical finding F5-11",
+  "finding": "F5-11"
+ },
+ {
+  "id": "review-style-w3:F-202",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-11",
+  "reason": "reported as canonical finding F5-11",
+  "finding": "F5-11"
+ },
+ {
+  "id": "review-clean-code-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-12",
+  "reason": "reported as canonical finding F5-12",
+  "finding": "F5-12"
+ },
+ {
+  "id": "review-clean-code-w2:F-104",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-12",
+  "reason": "reported as canonical finding F5-12",
+  "finding": "F5-12"
+ },
+ {
+  "id": "review-style-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-12",
+  "reason": "reported as canonical finding F5-12",
+  "finding": "F5-12"
+ },
+ {
+  "id": "review-style-w3:F-201",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-12",
+  "reason": "reported as canonical finding F5-12",
+  "finding": "F5-12"
+ },
+ {
+  "id": "review-clean-code-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-13",
+  "reason": "reported as canonical finding F5-13",
+  "finding": "F5-13"
+ },
+ {
+  "id": "review-style-w1:F-004",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-13",
+  "reason": "reported as canonical finding F5-13",
+  "finding": "F5-13"
+ },
+ {
+  "id": "review-clean-code-w1:F-004",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-14",
+  "reason": "reported as canonical finding F5-14",
+  "finding": "F5-14"
+ },
+ {
+  "id": "review-clean-code-w2:F-103",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-15",
+  "reason": "reported as canonical finding F5-15",
+  "finding": "F5-15"
+ },
+ {
+  "id": "review-clean-code-w2:F-102",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-16",
+  "reason": "reported as canonical finding F5-16",
+  "finding": "F5-16"
+ },
+ {
+  "id": "review-clean-code-w2:F-106",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-17",
+  "reason": "reported as canonical finding F5-17",
+  "finding": "F5-17"
+ },
+ {
+  "id": "review-clean-code-w3:F-201",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-18",
+  "reason": "reported as canonical finding F5-18",
+  "finding": "F5-18"
+ },
+ {
+  "id": "review-clean-code-w3:F-202",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-19",
+  "reason": "reported as canonical finding F5-19",
+  "finding": "F5-19"
+ },
+ {
+  "id": "review-clean-code-w3:F-203",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-20",
+  "reason": "reported as canonical finding F5-20",
+  "finding": "F5-20"
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-21",
+  "reason": "reported as canonical finding F5-21",
+  "finding": "F5-21"
+ },
+ {
+  "id": "review-testing-practices-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-22",
+  "reason": "reported as canonical finding F5-22",
+  "finding": "F5-22"
+ },
+ {
+  "id": "review-testing-practices-w2:F-101",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-23",
+  "reason": "reported as canonical finding F5-23",
+  "finding": "F5-23"
+ },
+ {
+  "id": "review-testing-practices-w2:F-102",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-24",
+  "reason": "reported as canonical finding F5-24",
+  "finding": "F5-24"
+ },
+ {
+  "id": "review-testing-practices-w2:F-103",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-25",
+  "reason": "reported as canonical finding F5-25",
+  "finding": "F5-25"
+ },
+ {
+  "id": "review-testing-practices-w3:F-201",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-26",
+  "reason": "reported as canonical finding F5-26",
+  "finding": "F5-26"
+ },
+ {
+  "id": "review-architecture-w1:A-01",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-27",
+  "reason": "reported as canonical finding F5-27",
+  "finding": "F5-27"
+ },
+ {
+  "id": "review-clean-code-w2:F-109",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-27",
+  "reason": "reported as canonical finding F5-27",
+  "finding": "F5-27"
+ },
+ {
+  "id": "review-clean-code-w1:F-007",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-28",
+  "reason": "reported as canonical finding F5-28",
+  "finding": "F5-28"
+ },
+ {
+  "id": "review-clean-code-w2:F-107",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-29",
+  "reason": "reported as canonical finding F5-29",
+  "finding": "F5-29"
+ },
+ {
+  "id": "review-clean-code-w2:F-108",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-30",
+  "reason": "reported as canonical finding F5-30",
+  "finding": "F5-30"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-001",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-31",
+  "reason": "reported as canonical finding F5-31",
+  "finding": "F5-31"
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-32",
+  "reason": "reported as canonical finding F5-32",
+  "finding": "F5-32"
+ },
+ {
+  "id": "review-testing-practices-w3:F-202",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-33",
+  "reason": "reported as canonical finding F5-33",
+  "finding": "F5-33"
+ },
+ {
+  "id": "review-style-w3:F-205",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-34",
+  "reason": "reported as canonical finding F5-34",
+  "finding": "F5-34"
+ },
+ {
+  "id": "review-architecture-w1:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-16",
+  "reason": "review.ts:4558/4562 wording is F5-16",
+  "finding": "F5-16"
+ },
+ {
+  "id": "review-clean-code-w2:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-03",
+  "reason": "job-orchestrator sites are F5-03",
+  "finding": "F5-03"
+ },
+ {
+  "id": "review-clean-code-w2:fu2",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-08",
+  "reason": "docs gap is F5-08",
+  "finding": "F5-08"
+ },
+ {
+  "id": "review-clean-code-w3:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-16",
+  "reason": "review.ts:4558/4562 duplicate message is F5-16",
+  "finding": "F5-16"
+ },
+ {
+  "id": "review-clean-code-w3:fu2",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-22",
+  "reason": "fixed sleeps are F5-22",
+  "finding": "F5-22"
+ },
+ {
+  "id": "review-logic-w3:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings S-401",
+  "reason": "clipped card evidence vs stored evidence is S-401",
+  "finding": "S-401"
+ },
+ {
+  "id": "review-logic-w3:fu2",
+  "status": "finding",
+  "evidence": "report.md keryx:findings S-401",
+  "reason": "uncapped disposition count is part of S-401",
+  "finding": "S-401"
+ },
+ {
+  "id": "review-logic-w4:fu1",
+  "status": "out-of-scope",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "reviewer marked it info and not a defect: the press is still recorded; no behaviour risk; stays a note"
+ },
+ {
+  "id": "review-logic-w4:fu2",
+  "status": "out-of-scope",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "reviewer marked it info; stream-drop deny path outside this delta; not a defect of the change"
+ },
+ {
+  "id": "review-pr-contract-w2:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-03",
+  "reason": "PC-102 is F5-03",
+  "finding": "F5-03"
+ },
+ {
+  "id": "review-pr-contract-w2:fu2",
+  "status": "out-of-scope",
+  "evidence": "raw/review-pr-contract-w2.txt",
+  "reason": "E-13, E-14 and D-03 are r04/r03 deferred minors carried unchanged; D-03 is raised again as F5-15; the others stay open follow-ups, not part of this delta"
+ },
+ {
+  "id": "review-regression-w2:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-04",
+  "reason": "optional evidence vs engine refusal is F5-04",
+  "finding": "F5-04"
+ },
+ {
+  "id": "review-regression-w2:fu2",
+  "status": "finding",
+  "evidence": "report.md keryx:findings S-401",
+  "reason": "unbounded disposition list on the card is part of S-401",
+  "finding": "S-401"
+ },
+ {
+  "id": "review-regression-w2:fu3",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-03",
+  "reason": "stale job-orchestrator instructions are F5-03",
+  "finding": "F5-03"
+ },
+ {
+  "id": "review-regression-w2:fu4",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-15",
+  "reason": "completion-gate.ts:800 overflow line is F5-15",
+  "finding": "F5-15"
+ },
+ {
+  "id": "review-regression-w2:fu5",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-01",
+  "reason": "ambiguous SKILL.md:59/134 wording is F5-01",
+  "finding": "F5-01"
+ },
+ {
+  "id": "review-regression-w3:fu1",
+  "status": "refuted",
+  "evidence": "research-evidence/verify-F5-26-1.txt",
+  "reason": "ran the named test files at 77d2eff20: 156 pass, 0 fail, exit 0; the equivalence holds"
+ },
+ {
+  "id": "review-regression-w3:fu2",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-15",
+  "reason": "completion-gate.ts:800 is F5-15",
+  "finding": "F5-15"
+ },
+ {
+  "id": "review-regression-w3:fu3",
+  "status": "out-of-scope",
+  "evidence": "raw/review-regression-w3.txt",
+  "reason": "cosmetic double wording on an expired-token topic-ended card; the reviewer classed it as a follow-up with no behavioural risk; not raised as a finding"
+ },
+ {
+  "id": "review-security-code-w3:fu1",
+  "status": "out-of-scope",
+  "evidence": "raw/review-security-code-w3.txt",
+  "reason": "reviewer marked it informational and not a finding; pressedBy/pressedAt are operator-authored records inside the package"
+ },
+ {
+  "id": "review-security-code-w5:fu1",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-06",
+  "reason": "findings.json written before manifest validation is F5-06",
+  "finding": "F5-06"
+ },
+ {
+  "id": "review-security-code-w5:fu2",
+  "status": "out-of-scope",
+  "evidence": "raw/review-security-code-w5.txt",
+  "reason": "reviewer marked it info and a design choice: the card names finding id and state by design; the hidden-evidence defect is S-401"
+ },
+ {
+  "id": "review-testing-practices-w2:fu1",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E02-1 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu2",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E02-2 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu3",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E02-3 and M-E02-3b killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu4",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E02-4 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu5",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E02-5a, 5b and 5c killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu9",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E03-1 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu10",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E03-2 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu11",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E03-3a, 3b and 3c killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu15",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E05-3 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w2:fu6",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-24",
+  "reason": "M-E02-6 and M-E02-6b survived: F5-24",
+  "finding": "F5-24"
+ },
+ {
+  "id": "review-testing-practices-w2:fu7",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-24",
+  "reason": "M-E02-7 survived: F5-24",
+  "finding": "F5-24"
+ },
+ {
+  "id": "review-testing-practices-w2:fu8",
+  "status": "narrowed",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "M-E02-8 survived (apply reading the invoke-time input instead of prepared.dispositions); the reviewer expected this",
+  "remains": "no test changes the input between card and apply, so apply reading the invoke-time input is not pinned; minor, not raised as a canonical finding"
+ },
+ {
+  "id": "review-testing-practices-w2:fu12",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-23",
+  "reason": "M-E03-4 was killed, so the writer shape is pinned elsewhere; the assertion-source gap is F5-23",
+  "finding": "F5-23"
+ },
+ {
+  "id": "review-testing-practices-w2:fu13",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-25",
+  "reason": "M-E05-1a and M-E05-1b survived: F5-25",
+  "finding": "F5-25"
+ },
+ {
+  "id": "review-testing-practices-w2:fu14",
+  "status": "narrowed",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "M-E05-2a killed but M-E05-2b (describeBlockers default arg card=false) survived; nextStep is pinned, the describeBlockers default argument is not",
+  "remains": "describeBlockers default `card = true` can flip without a failing test (M-E05-2b)"
+ },
+ {
+  "id": "review-testing-practices-w2:fu16",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-32",
+  "reason": "M-E04-1a survived and agrees that the guard cannot change behaviour (F5-32); M-E04-1b was killed",
+  "finding": "F5-32"
+ },
+ {
+  "id": "review-testing-practices-w3:fu1",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E04-a killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu2",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E04-b killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu3",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E04-c killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu4",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E04-d killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu5",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E08-a1 and M-E08-a2 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu6",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E08-b killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu7",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E08-c killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu8",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E08-d1 and M-E08-d2 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu9",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E08-e killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu11",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-202 killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu12",
+  "status": "refuted",
+  "evidence": "research-evidence/mutation-1.json",
+  "reason": "mutation pass: M-E05-g killed by the suite; the suspected unpinned behaviour is pinned"
+ },
+ {
+  "id": "review-testing-practices-w3:fu10",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-26",
+  "reason": "M-201 survived: F5-26",
+  "finding": "F5-26"
+ },
+ {
+  "id": "review-testing-practices-w3:fu13",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-21",
+  "reason": "M-001a and M-001b survived: F5-21",
+  "finding": "F5-21"
+ },
+ {
+  "id": "review-testing-practices-w3:fu14",
+  "status": "finding",
+  "evidence": "report.md keryx:findings F5-15",
+  "reason": "carried D-03 overflow line is F5-15",
+  "finding": "F5-15"
+ }
+]

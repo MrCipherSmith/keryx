@@ -1,0 +1,49 @@
+STATUS: DONE
+
+## High-Load Review, wave 4 (slice-05)
+
+Scope: slice-05 of PR 1052 (flow 464) at head b1c6da0e6992e4df473bae6b2fde78bc94d28776. Files: src/standard/help-groups.ts, src/trigger/unattended.ts, src/tui/approval-mirror.ts, src/tui/decisions-surface.ts, src/tui/operator-confirmations.ts (+test), src/tui/remote-control-surface.ts, src/tui/tui-shell.ts. Load profile: not provided; this is a single-operator interactive shell, so the load-relevant surface is correctness under concurrency (parallel cards, abort, races between the dock and the topic leg) and bounded in-memory state.
+
+Summary: The slice adds an in-memory OperatorConfirmationLog and wires it into the approval mirror. I traced each ask() to its settlement. The mirrored path settles in a finally block (settle), the unmirrored path answers in a finally block, and a race that throws maps to "withdrawn", so no entry stays open after its call returns. Answered entries are capped at 5. Unanswered entries are bounded by the number of calls currently waiting in a dock. The race code is safe: onUndelivered only fires while `settled` is false, and `markUndelivered` and `answer` are idempotent, so a late topic-leg result cannot overwrite a dock answer. Ids are monotonic, so parallel cards do not collide. Listener fan-out copies the set before iterating. Only one minor display-staleness issue.
+
+Stats: blocker 0 | major 0 | minor 1 | info 0
+
+### Concurrency & Race Conditions
+None detected. Checked: ask/answer/settle id handling under parallel approvals; settled guard in raceApproval; markUndelivered after answer (no-op); abort path ("withdrawn").
+
+### Resource Management
+None detected. The `items` array is bounded (answered capped at ANSWERED_CARDS_KEPT=5, open entries tied to live calls). Listener set is process-lifetime and holds one subscriber from tui-shell.
+
+### Caching / Database / Async queues / Retry / Idempotency
+None detected in this slice. unattended.ts adds review_complete to OPERATOR_CONFIRM_TOOL_NAMES, which keeps unattended runs from being offered it; nothing to flag.
+
+### Minor
+F-01: the "N cards waiting" sidebar count and the age and time-left lines are computed only when something triggers a repaint (log changes, bridge onChange). Nothing ticks, so a card whose 1-hour token passed (REMOTE_CARD_TTL_MS equals MAX_APPROVAL_TIMEOUT_MS, 60 min) still reads "1 card waiting" and its "57m left" text is frozen until an unrelated change.
+
+### Clean Areas
+A1 shared state, A3 async primitives, B3 memory growth, E1 queue bounds (log is bounded), F1 retry (none added), G1 idempotency (settle/answer/markUndelivered are idempotent).
+
+```json REVIEW_RESULT
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "Slice-05 adds a bounded in-memory card log wired into the approval race. Every ask is settled in a finally block, answered entries are capped, and late topic-leg results cannot overwrite a dock answer. One minor staleness issue in the sidebar count and age text.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "H4-01",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 81,
+      "quote": "waiting(): readonly ConfirmationEntry[] {\n    const now = this.now();\n    return this.items.filter((item) => item.answered === undefined && item.mirrored && now - item.askedAt <= REMOTE_CARD_TTL_MS);",
+      "problem": "waiting() applies the 1-hour token cutoff only when it is called, and it is called only from repaints triggered by log changes or bridge onChange (tui-shell.ts getWaitingCards at 4584, subscribe at 7348, onChange at 10492). No timer re-evaluates it, so the sidebar Remote row keeps saying 'N cards waiting' and the status tab keeps showing a frozen 'Xm left of the 1-hour token' after the token has expired and the topic leg has timed out (MAX_APPROVAL_TIMEOUT_MS = 60 min, same as REMOTE_CARD_TTL_MS).",
+      "impact": "After an idle hour the operator is told a card is still answerable in Telegram when it is not, until an unrelated change repaints. Display only; the dock stays answerable and the token check in the tool still refuses an expired press.",
+      "suggested_fix": "Schedule one timeout per open mirrored card at askedAt + REMOTE_CARD_TTL_MS that calls the log's change notification, cleared in answer(). Or repaint the remote row from the existing sidebar tick if one exists.",
+      "evidence": "src/tui/operator-confirmations.ts:80-85; src/tui/tui-shell.ts:4584, 7348-7352, 10492; src/remote/protocol.ts:169; src/commands/operator-confirm-tools.ts:117; grep found no interval or timer in operator-confirmations.ts or remote-control-surface.ts",
+      "confidence": 0.7
+    }
+  ]
+}
+```

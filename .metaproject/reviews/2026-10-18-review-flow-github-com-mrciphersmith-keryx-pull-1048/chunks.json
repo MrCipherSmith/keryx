@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 17,
+  "droppedKey": "c874a76750b3e273",
+  "fileBytes": {
+    "scripts/benchmark/run-ablation-long.ts": 17715,
+    "scripts/benchmark/run-ablation-mutating.ts": 16269,
+    "scripts/benchmark/run-ablation.ts": 12764,
+    "scripts/benchmark/run-safety.ts": 24632,
+    "scripts/stress/keryx-shell-stress.ts": 38974,
+    "src/acp/server.ts": 77812,
+    "src/cli.ts": 10584,
+    "src/commands/agents-external.ts": 42111,
+    "src/commands/harness.ts": 57788,
+    "src/harness/resume/resume.ts": 7567,
+    "src/harness/rpc.ts": 3101,
+    "src/harness/run/cli.ts": 1064,
+    "src/integrations/install-state.ts": 16709,
+    "src/lib/routing-entrypoint.ts": 8035,
+    "src/lib/serve-turn.ts": 58580,
+    "src/mcp/dispatch.ts": 6673,
+    "src/wiki/enrich.ts": 72632
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/cli.ts",
+        "src/lib/serve-turn.ts",
+        "src/integrations/install-state.ts",
+        "src/mcp/dispatch.ts"
+      ],
+      "bytes": 92546
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/wiki/enrich.ts",
+        "src/commands/harness.ts"
+      ],
+      "bytes": 130420
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/commands/agents-external.ts",
+        "src/lib/routing-entrypoint.ts",
+        "scripts/benchmark/run-safety.ts"
+      ],
+      "bytes": 74778
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "src/acp/server.ts",
+        "src/harness/rpc.ts",
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "src/harness/resume/resume.ts",
+        "src/harness/run/cli.ts",
+        "scripts/benchmark/run-ablation-long.ts"
+      ],
+      "bytes": 136292
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "scripts/stress/keryx-shell-stress.ts"
+      ],
+      "bytes": 38974
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# keryx review verify-run
+finding: E-08
+command: sh -c n=$(rg -l -e remoteApproval -e markUndelivered -e operatorCards -g '*.test.ts' src | grep -v -e operator-confirmations.test -e mirror-undelivered.test | wc -l); echo test files other than the two named in the finding that reach remoteApproval/operatorCards/markUndelivered: $n; test $n -gt 0
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:36.029Z
+exit: 1
+
+--- stdout ---
+test files other than the two named in the finding that reach remoteApproval/operatorCards/markUndelivered: 0
+--- stderr ---
+

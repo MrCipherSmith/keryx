@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.3.131] - 2026-10-24
+
+### Paired pattern probes (PR #1072)
+
+- **Added:** `keryx learn probe <id> --task <task-id>` runs the same task with and without a learned pattern in isolated git worktrees, compares the outcomes, and records probe evidence when the result improves or regresses.
+- **Added:** probe runs persist plans, checkpoints, comparisons, transcripts, usage, and scores. Interrupted runs can be recovered, concurrent runs cannot overwrite each other's records, and completed runs can be pruned without losing audit evidence.
+- **Added:** probe execution supports model/provider selection, run limits, task sets, dry-run and JSON output, a wall-clock deadline, and a spend ceiling.
+- **Added:** the CLI reference and the `learn probe` requirements document pack describe the command, lifecycle, schemas, and validation contract.
+
+### Review and execution fixes
+
+- **Fixed:** managed reviews can continue beyond the per-wave reviewer cap using registered continuation waves instead of stopping with an incomplete coverage report.
+- **Fixed:** native probe turns preserve an error status instead of reporting a successful run after provider failure.
+- **Fixed:** probe scoring compares file and symbol identifiers case-sensitively.
+- **Fixed:** probe transcripts redact secrets recursively before they are persisted.
+- **Fixed:** the probe-plan schema identifier matches the references used by the probe documents.
+
+### Fixed
+- Restored 13 review packages left in local worktrees during October 2026 reviews, preserving the more complete processed #1058 report already on `main` (PR #1060). This restores review evidence, not changes to the review completion or operator decision gates.
+
+### Security
+- Raised the `fast-uri` override to `^3.1.9`, the `body-parser` override to `^2.4.0`, and the `zod` override to `^4.6.6` to resolve the current advisories in the transitive dependency tree.
+- Raised the `ip-address` override to `^10.7.4` and updated the lockfile to resolve GHSA-rxp7-6hxx-x8q5 in the transitive dependency tree.
+
 ## [0.3.130] - 2026-10-22
 
 0.3.129 was tagged but never published to npm: its release had no changelog section. Its changes ship here.

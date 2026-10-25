@@ -1,0 +1,32 @@
+STATUS: DONE
+
+## Performance Review (wave 2, slice-03)
+
+Scope: slice-03 (src/commands: agent.ts, agent-commands.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts, plus their tests). PR 1052 head b1c6da0e6992, base 062aa9c36484.
+Metaproject index not loaded: narrow, bounded diff review; no codebase navigation beyond locating loadRemoteConfig.
+
+No findings. Each category was checked against the diff and the code at head:
+
+- Remote press path (operator-confirm-tools.ts invoke): runs once per remote card answer, a human-rate event. `allowedUserIds()` calls `loadRemoteConfig()` (shell.ts), a small synchronous config read plus JSON.parse, only inside `if (remote)`. Not on any render or per-request path.
+- Pending-card map: the new `issuedAt` field is a number, so entry size is unchanged. The refusal paths now delete the entry before refusing, so no entry is retained on refusal. Abandoned cards behave as before this PR.
+- review_complete (operator-confirm-review.ts): `completionFacts` reads manifest.json, report.md (largest seen about 85 KB), research.json and operator-decisions with sync reads. It runs at most three times per card (buildCard, apply, and the post-throw closed check), once per operator decision. Not a hot path, so below info.
+- completeReviewGated in apply makes the same PR lookup and file calls as `keryx review complete`. No new loop or fan-out. The refactor in review.ts moves the profile and routing checks into the shared function without duplicating them.
+- Press-field plumbing (agent.ts, operator-confirm-other.ts, cardPressFields spreads): constant-size object spreads per approved card.
+- N+1, re-renders, bundle imports, pagination, redundant API calls, MobX derived state: nothing applicable in this slice. The imports are internal modules. There is no UI render code.
+
+Clean areas: N+1 queries, re-renders, hot-path computation, indexes, leaks and unbounded collections, bundle imports, sync blocking in handlers, pagination, redundant calls, MobX.
+
+prior_dispositions: none re-filed. r03 minors D-02..D-14 are untouched by this slice's performance surface.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "slice-03 adds a human-rate operator-confirmation path; no hot path, leak, or blocking regression found.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "findings": [],
+  "prior_dispositions": []
+}
+```

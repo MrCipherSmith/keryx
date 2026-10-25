@@ -1,0 +1,94 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- PR: 1052 (flow 464), round r04
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776
+- Base: 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-04 (src/flow, src/remote, src/review, src/learning, src/harness, bundled review skills)
+- Stack detected: generic-ts
+
+### Summary
+Slice-04 adds the press-provenance plumbing (pressedBy / pressedAt / confirmedVia) and a single completion choke point, completeReviewGated in src/review/complete-gated.ts. The structure is sound. The CLI (src/commands/review.ts:4572) and the review_complete card (src/commands/operator-confirm-review.ts:756) both go through completeReviewGated, and completeManagedReview has no other non-test caller, so the run-profile and routing gates cannot be bypassed by one entry point. The `undelivered` flag is carried only on a deny and handled in one place (raceApproval). I found no layer violation, dependency-direction problem or import cycle: the new CardPress / cardPressFields in src/review/types.ts add no imports to a file whose header promises type-only imports. Two low-severity items remain: additional stale agent-facing wording beyond the already known sites, and a duplicated provenance shape across modules.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+[F-001] and [F-002] below. No pattern misuse affecting behaviour.
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A - not detected in stack.
+
+### Findings
+
+#### [F-001] More agent-facing "run `keryx review complete`" wording contradicts the card-only completion rule
+- Severity: minor
+- File: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:134 (also :124, Round plan step 9) and SKILL.detail.md:866; the same text is mirrored in .metaproject/skills/gdskills/review/review-orchestrator/
+- Problem: The diff introduces the rule that an agent completes a round only through the review_complete card, with completion going through completeReviewGated. These sites still tell the agent that `keryx review complete` is the tail it runs ("every managed round finishes them. The verdict is interim: the round is not done until `complete`"; "A refused `review complete` names what is missing: fix that with a command and run it again"; Round plan step 9 lists `complete`). These are sites beyond the known SKILL.md:782 / SKILL.detail.md:386.
+- Impact: The skill is the contract the orchestrating agent follows. Contradicting instructions send it down the terminal path that the new gate treats as non-card, or leave it stuck when it cannot run the command.
+- Fix: Reword each site card-first: complete by raising the review_complete card; mention the CLI only as the operator's terminal fallback. Update the bundled copy and the .metaproject mirror together.
+- Confidence: medium (wording only, no runtime effect)
+
+#### [F-002] Press-provenance shape is re-declared in several modules
+- Severity: info
+- File: src/review/types.ts (CardPress, cardPressFields); parallel inline shapes in src/flow/confirm-token.ts, src/flow/service.ts, src/flow/types.ts, src/learning/decisions.ts, src/harness/external/write-land.ts, src/harness/tool/builtin/interactive-tools.ts
+- Problem: Only the review layer has the shared helper that spreads pressedBy / pressedAt only when the source is a remote card. Other modules repeat the optional fields and the conditional spread, and validation differs (coverage-complete validates pressedBy; others do not).
+- Impact: The invariant "provenance only with remote-card" is enforced per module, so a later change can drift. No current defect was found in the diff.
+- Fix: If the shape is wanted outside review, move CardPress / cardPressFields to a neutral leaf shared by flow, learning, harness and review. Not required for this PR.
+- Confidence: low (opinion, no named violation)
+
+### Suggested Patches
+None.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "summary": "Slice-04 is architecturally sound: both completion paths share completeReviewGated, press provenance travels through typed fields, no dependency-direction or cycle problems. Two low-severity items: extra stale agent-facing `keryx review complete` wording and a duplicated provenance shape.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 134,
+      "quote": "The mutation pass, ledger and `keryx review complete` continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete`",
+      "problem": "Additional agent-facing sites (SKILL.md:134, SKILL.md:124, Round plan step 9, SKILL.detail.md:866, plus the .metaproject mirror) still instruct the agent to run `keryx review complete`, contradicting the new rule that an agent completes only via the review_complete card routed through completeReviewGated.",
+      "impact": "The orchestrating agent gets conflicting instructions about how to finish a round and may take the terminal path or stall.",
+      "suggested_fix": "Reword these sites card-first (raise the review_complete card; the CLI is the operator's terminal fallback) and update the bundled copy and the .metaproject mirror together.",
+      "evidence": "keryx ctx rg 'keryx review complete' over src/gdskills, .metaproject/skills and docs; completeReviewGated callers at src/commands/review.ts:4572 and src/commands/operator-confirm-review.ts:756.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/review/types.ts",
+      "line": 1,
+      "quote": "export type CardPress = { pressedBy?: number | undefined; pressedAt?: string | undefined };",
+      "problem": "The pressedBy / pressedAt shape and its remote-card-only conditional spread are re-declared in src/flow/confirm-token.ts, src/flow/service.ts, src/flow/types.ts, src/learning/decisions.ts, src/harness/external/write-land.ts and src/harness/tool/builtin/interactive-tools.ts; only the review layer has the shared cardPressFields helper and validation differs between modules.",
+      "impact": "The provenance invariant is enforced per module and can drift; no current defect found.",
+      "suggested_fix": "Optionally move CardPress / cardPressFields to a neutral leaf shared by flow, learning, harness and review. Not required for this PR.",
+      "evidence": "Reading slice-04.diff and the files at head; no behavioural mismatch found.",
+      "confidence": "low"
+    }
+  ]
+}
+```

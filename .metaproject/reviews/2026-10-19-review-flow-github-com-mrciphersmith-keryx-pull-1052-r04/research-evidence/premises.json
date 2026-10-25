@@ -1,0 +1,273 @@
+[
+  {
+    "judge": "review-premise",
+    "model": "claude-sonnet-5-5",
+    "premises": [
+      {
+        "finding_id": "E-01",
+        "verdict": "upheld",
+        "reasoning": "SKILL.md:136 and TM-04 section 8 say an agent never runs `keryx review complete` and calls the review_complete card. SKILL.md:782 was last written on 2026-10-16 (0f70964cf), before this PR's rule, so it is not a deliberate exception, and it still tells the agent in keryx shell to 'then run `keryx review complete`'. It contradicts the PR's own rule, and the fix (name the card) makes the sites consistent."
+      },
+      {
+        "finding_id": "E-02",
+        "verdict": "upheld",
+        "reasoning": "The card's inputSchema (operator-confirm-review.ts:707-714) has only `package`, and apply (756) passes no dispositions. SKILL.md:247 and :284-297 still describe `review complete --finding/--disposition/--evidence` as how a fix round is closed, and :297 says that without them every finding reads `unknown`. Agents are barred from the CLI, so the instruction and the rule collide. Both suggested fixes are sound; no intent signal shows the loss was chosen."
+      },
+      {
+        "finding_id": "E-03",
+        "verdict": "upheld",
+        "reasoning": "managed-review-package.schema.json:191-204 declares readiness_waivers items with additionalProperties:false and only item, operator_quote and time. waiveReadiness (readiness.ts:577) writes confirmedVia and the new pressedBy/pressedAt. Nothing shows a deliberate schema exclusion, and the fix (extend the schema, add a test with the real schema file) is what a senior reviewer would ask for."
+      },
+      {
+        "finding_id": "E-04",
+        "verdict": "upheld",
+        "reasoning": "approval-mirror.ts:6-7 and :53 deliberately keep the dock open when the topic leg ends without a press, and that stays correct. That choice concerns the dock, not the card log, which still counts the entry as mirrored and waiting. Showing a card as awaiting a press in Telegram when no leg listens is a display defect that the dock rule does not justify. The fix does not change the dock behaviour."
+      },
+      {
+        "finding_id": "E-05",
+        "verdict": "upheld",
+        "reasoning": "operatorConfirm is optional and its doc (interactive-agent-tools.ts:142-145) says only the interactive shell passes it. The readline roster at shell.ts:4712 omits it. holdReviewGate (agent.ts:3486-3487) skips only subagents and unattended runs, so the new nudge reaches readline sessions and names a tool they lack, while forbidding the CLI. That the roster is deliberately TUI-only shows the nudge should have followed it. A roster-conditional nudge is consistent."
+      },
+      {
+        "finding_id": "E-06",
+        "verdict": "upheld",
+        "reasoning": "apply (operator-confirm-review.ts:741-797, 57 lines) mixes re-read and digest check, gate run, closure inference, record write and output composition. Sibling applies (waiveReadiness 351-359, decisionSpec 437-446) are 7-10 lines, so size is not the house style. The branches are deliberate (061d76b55, report a closed round truthfully), but that does not require one function. Clean Code (small functions, single responsibility) supports the finding. No cited evidence shrinks it."
+      },
+      {
+        "finding_id": "E-07",
+        "verdict": "upheld",
+        "reasoning": "cli-reference.md:4921 lists plain `complete` as needing a terminal. review.ts:4554-4563 checks isTerminal only for --waive-coverage and --waive, and TM-04 section 8 says plain `review complete` has no TTY check. The same paragraph says an unattended run closes through `keryx review complete`, so the sentence contradicts itself and the record. The finding stands, and the fix matches TM-04."
+      },
+      {
+        "finding_id": "E-08",
+        "verdict": "upheld",
+        "reasoning": "remoteApproval and the card lifecycle in mirrorApprovalToTopic (tui-shell.ts:6095-6148) hold the only hop that writes who pressed, the core of AC1. The finding cites tests only for the log class and for raceApproval with a hand-written callback. Cited sites show a source-string pin of the wrapper at tui-shell.test.ts:2963-2969, so tui-shell has no accepted practice of leaving such hops untested. Extraction plus a log-level test is a sound fix; no signal shows the gap was chosen."
+      },
+      {
+        "finding_id": "E-09",
+        "verdict": "upheld",
+        "reasoning": "Minor test gap: the changed strings (waive_coverage result, tool descriptions, review.ts:4558/4562, describeBlockers) are not pinned. Only the readiness result at operator-confirm-review-tools.test.ts:346-347 is. This is the text that sends an agent to a command with no TTY check, so pinning it matches the PR's own intent. No intent signal or practice source against it."
+      },
+      {
+        "finding_id": "E-10",
+        "verdict": "upheld",
+        "reasoning": "The same clause is pasted into three returns at completion-gate.ts:756, 759 and 761, and this PR rewrote it once (ad618cb2f). A constant is ordinary practice (DRY), and the fix adds no inconsistency. No signal of intent."
+      },
+      {
+        "finding_id": "E-11",
+        "verdict": "upheld",
+        "reasoning": "operator-confirm-tools.test.ts:403-410 sends neither pressedBy nor pressedAt, so each half of the check at operator-confirm-tools.ts:214 is unpinned. Commit 8f04b710a shows the author pins the sibling branches one by one, so separate cases match the file's own practice."
+      },
+      {
+        "finding_id": "E-12",
+        "verdict": "upheld",
+        "reasoning": "The test at operator-confirm-review-tools.test.ts:694-700 asserts the schema has no `head` and that the card shows the recorded head, but apply is never invoked with a head. apply names its input `_input` and the framework does not enforce the schema, so forwarding input.head would stay green. The narrow gap is real; the fix (invoke with a bogus head) is sound."
+      },
+      {
+        "finding_id": "E-13",
+        "verdict": "upheld",
+        "reasoning": "TM-04 line 15 says nineteen decisions. OPERATOR_CONFIRM_TOOL_NAMES (unattended.ts:63-83) has 19 names. The section 2 table lacks review_waive_mutation, review_override_reviewers and review_comments_reply. A decision record that disagrees with the registry it summarises is a defect, and either suggested fix is consistent."
+      },
+      {
+        "finding_id": "E-14",
+        "verdict": "upheld",
+        "reasoning": "review-with-a-record.md:893 and :1072 predate the PR (fdd3baace) and still say a shell review ends when `keryx review complete` closes the package, with no mention of the card. The PR adds the rule that an agent closes only through review_complete and updates the same guide elsewhere. Updating these two sentences keeps the guide consistent."
+      },
+      {
+        "finding_id": "E-15",
+        "verdict": "upheld",
+        "reasoning": "The remote-answer rule is written out in several places, which the PR already had to keep in sync (the finding cites an earlier drift). The finding states the maintenance cost. No project rule or practice source says user guides must repeat it, and the fix (state once, link) does not make anything less consistent."
+      },
+      {
+        "finding_id": "E-16",
+        "verdict": "upheld",
+        "reasoning": "description.md:3 says 'Status: draft for operator approval' while the same commit (7bf9c8089, 'freeze flow 464') freezes the flow. No cited signal that this line is a template convention kept after freeze. Without such a signal this minor stands."
+      },
+      {
+        "finding_id": "E-17",
+        "verdict": "upheld",
+        "reasoning": "agent-commands.ts:187 lists five review cards. tui-shell.ts:6100-6120 shows the log takes every card with alwaysAsk and a card text, with no tool-name allow-list, so schedule, learn and review_publish cards also appear. An enumeration of five names for an unfiltered list goes stale and misleads, and the generic wording is consistent with the code."
+      },
+      {
+        "finding_id": "E-18",
+        "verdict": "upheld",
+        "reasoning": "types.ts:173 and confirm-token.ts:24 say the record does not say who ran the step, and cli-reference.md:4401-4403 describes only terminal-token and the old field set. The PR adds pressedBy and pressedAt to the same record. TM-04 section 4 keeps 'nothing identifies the person', so the comments are not wrong about a person, as the reviewer says. The record shape is stale, though, and naming the new fields with the TM-04 limit is a wording fix, not a change of position."
+      },
+      {
+        "finding_id": "E-19",
+        "verdict": "upheld",
+        "reasoning": "TM-04:119 and the PR body say the sidebar Remote row shows pending and answered cards. remote-control-surface.ts:392 passes only waitingCardsText (a count) to the sidebar row, with no age, time left or pressedBy. AC6 requires age and time left only in the pending-confirmation line and the decisions surface, so no AC gap, but the sentence overstates the sidebar. The wording fix is smaller and sound."
+      },
+      {
+        "finding_id": "E-20",
+        "verdict": "upheld",
+        "reasoning": "AC5 says the card message says the Telegram mirror was not delivered, and tests a failing send. tui-shell.ts:6101-6111 puts the note on the card only when the bridge is already known unreachable. In a failing send, onUndelivered (6127-6130) marks the log and prints a transcript line while the open dock keeps its card text. The frozen AC and TM-04:107 therefore cover a case the code does not meet. The reword-the-docs alternative would contradict the frozen AC5, but repainting the card is sound, so the finding stands."
+      },
+      {
+        "finding_id": "E-21",
+        "verdict": "upheld",
+        "reasoning": "operator-confirmations.ts:80-85 applies the one-hour cutoff only when waiting() is called, and the finding reports no timer or interval in the file, so the sidebar count and the 'Xm left' text freeze after expiry until an unrelated repaint. The commit that added the read-time cutoff (100bd83bf) is this PR's own and cannot ratify the choice. A per-card timeout or repaint on the existing tick is a sound fix."
+      },
+      {
+        "finding_id": "E-22",
+        "verdict": "upheld",
+        "reasoning": "The doc comment on parseStoredToken (confirm-token.ts:150-156) says the store's shape is checked before anything in it is trusted, and coverage-complete.ts readCoverageWaiver already checks pressedBy with Number.isSafeInteger. consumeConfirmationToken copies pressedBy/pressedAt unchecked into the signature. TM-04 section 4 admits a same-user process can forge the stores, but this is about a corrupted or hand-edited file giving a wrong record instead of a refusal, so validating at the boundary matches the reader beside it."
+      },
+      {
+        "finding_id": "E-23",
+        "verdict": "upheld",
+        "reasoning": "operator-confirmations.ts:57-60 prunes answered entries by ask order (items order), not answer order, so a card answered last can be dropped first. The reviewer's probe showed Q0, answered last with pressedBy 9, disappearing while Q2-Q6 remain. The finding itself calls it latent while cards are serial, and no cited signal says serial cards are guaranteed. Ordering by answered.at is sound and no signal speaks against it."
+      }
+    ]
+  },
+  {
+    "judge": "review-premise",
+    "model": "claude-sonnet-5-5",
+    "premises": [
+      {
+        "finding_id": "E-24",
+        "verdict": "upheld",
+        "reasoning": "The card parses manifest.json by hand and accepts any non-empty string as the head, while the gate's recordedPackageHead accepts only 7-40 hex. Commit 061d76b55 says the card 'uses the recorded head only', which points to one shared rule, not a deliberate second one. The suggested fix is sound."
+      },
+      {
+        "finding_id": "E-25",
+        "verdict": "upheld",
+        "reasoning": "completion-confirmation.json is written by the command layer after the close. Nothing reads it, it is not listed in the manifest artifacts, and no doc names it. Sibling cards record attribution through review/ functions. Nothing shows the side file was a chosen design. The fix (record it in the manifest, or document the side file) is sound."
+      },
+      {
+        "finding_id": "E-26",
+        "verdict": "upheld",
+        "reasoning": "CardPress and cardPressFields already exist and the review/ modules in the same diff use them. The inline copies in flow/, harness/ and learning/ are the inconsistent sites. Commit 1735646be (the PR's own) introduced them, so it cannot ratify them. A shared neutral module is a sound fix."
+      },
+      {
+        "finding_id": "E-27",
+        "verdict": "upheld",
+        "reasoning": "A 300-character nested conditional spread on an audit record, introduced by the PR's own commit 1735646be. No intent signal and no practice that favours it. A named local is a sound fix."
+      },
+      {
+        "finding_id": "E-28",
+        "verdict": "upheld",
+        "reasoning": "Policy and bookkeeping share one 43-line invoke, and the casts exist only because the 'remote' boolean does not narrow. This was introduced by the PR's own commit 1735646be, with no intent signal. Extracting a helper is sound."
+      },
+      {
+        "finding_id": "E-29",
+        "verdict": "upheld",
+        "reasoning": "The literal 12 appears three times in completeSpec and tests assert the 12-character form. A named constant and helper is the ordinary fix. No signal that the repetition was chosen."
+      },
+      {
+        "finding_id": "E-30",
+        "verdict": "upheld",
+        "reasoning": "Commit 6f47bf35f says it shares one error-text helper, yet the same commit adds a local arrow at line 743, and an inline copy remains at line 675 next to the existing `failed`. The PR's own intent (one helper) is contradicted at the site, so this is not a deliberate choice."
+      },
+      {
+        "finding_id": "E-31",
+        "verdict": "upheld",
+        "reasoning": "The file is 819 lines. The project's review-style skill (SKILL.md:180) flags files over 800 lines as minor, so the rule applies. The growth comes from the PR's own review_complete block, so there is no prior deliberate choice. Moving the spec to a sibling module is sound."
+      },
+      {
+        "finding_id": "E-32",
+        "verdict": "upheld",
+        "reasoning": "confirmedVia and press always travel together. waiveReadiness, recordPlanConfirmation and recordPremiseDecision take them as one object, so the trailing positional pair is the inconsistent form. The PR's own commit introduced it. Folding the pair into one parameter is sound."
+      },
+      {
+        "finding_id": "E-33",
+        "verdict": "upheld",
+        "reasoning": "mapApprovalAnswer already casts 'got' to a typed shape; the new field goes through a second ad-hoc cast of the same object. I read the code and found no reason for it, and the PR's own commit e378eb531 introduced it. Adding the field to the existing cast is trivially sound."
+      },
+      {
+        "finding_id": "E-34",
+        "verdict": "upheld",
+        "reasoning": "The ReadinessWaiver doc comment was already detached on the base, above ConfirmedVia. The PR inserted CardPress and cardPressFields between the comment and its type, which widens the drift. Moving the comment is sound."
+      },
+      {
+        "finding_id": "E-35",
+        "verdict": "upheld",
+        "reasoning": "I read the closure (tui-shell.ts:6095-6148). It mixes card classification, an unmirrored path and a race-and-settle path, and is about 52 lines against a roughly 20-line predecessor. It was built up by the PR's own commits, with no intent signal. Extracting the two paths is sound."
+      },
+      {
+        "finding_id": "E-36",
+        "verdict": "upheld",
+        "reasoning": "I read the three sites. 5555 and 5563 never check card length; 6100 checks length > 0 and excludes user_prompt explicitly. Divergent definitions of 'operator card' are a real consistency gap. A single guard is sound."
+      },
+      {
+        "finding_id": "E-37",
+        "verdict": "upheld",
+        "reasoning": "Two adjacent optional arrays of the same type are swappable without a compile error, and the test already needs an undefined placeholder. The third parameter came from the PR's own commit 8312ab995. With only two callers, an options object is a sound fix."
+      },
+      {
+        "finding_id": "E-38",
+        "verdict": "upheld",
+        "reasoning": "I read age() in operator-confirmations.ts:105-111. It uses floor and 'XhYYm', while the finding describes formatAge in remote-control-surface.ts as using round and 'Xh'. Two conventions for one elapsed time on adjacent surfaces is an inconsistency the PR's own commit created. The fix notes the cycle risk, so it is sound."
+      },
+      {
+        "finding_id": "E-39",
+        "verdict": "upheld",
+        "reasoning": "The alias 'confirmationLines as operatorConfirmationLines' is itself evidence of a name collision between the function and the decisions-surface option. 'withdrawn' sits in a place enum, although answeredConfirmationLine does print it distinctly. The naming issue stands as a low-weight maintenance finding, and no practice source excuses it."
+      },
+      {
+        "finding_id": "E-40",
+        "verdict": "upheld",
+        "reasoning": "I read decisions-surface.ts:436-472. OpenDecisionsOptions is shared and openDecisionsArms destructures and discards confirmationLines. The `_cards` discard shows the option is a known no-op there, not that the type was meant to look supported. Splitting the option type is sound."
+      },
+      {
+        "finding_id": "E-41",
+        "verdict": "upheld",
+        "reasoning": "Only the not-connected return of askApproval is pinned. Dropping the flag at the other three returns, or adding it at the two that must not set it, would keep the suite green. No intent signal; this is a normal test-gap finding with a sound table-driven fix."
+      },
+      {
+        "finding_id": "E-42",
+        "verdict": "challenged",
+        "intent_signals": [
+          {
+            "ref": "src/tui/approval-mirror.test.ts:82",
+            "says": "a 15 ms setTimeout wait already exists in the sibling race test for the same module, from before this PR"
+          },
+          {
+            "ref": "src/remote/approval-mirror.test.ts:103",
+            "says": "a 50 ms setTimeout wait already exists in the remote approval-mirror test, from before this PR"
+          },
+          {
+            "ref": "src/remote/prompt-reminder.test.ts:47",
+            "says": "a 120 ms setTimeout wait already exists in a sibling remote test, from before this PR"
+          }
+        ],
+        "practice_sources": [
+          {
+            "name": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md, section 'Browser and E2E Determinism' (line 175)",
+            "says": "'No fixed sleeps; wait on assertions, events, responses, or polling predicates' is listed under browser and e2e determinism, not under unit tests of an async race"
+          },
+          {
+            "name": "review-testing-practices/SKILL.md, negative assertions (lines 165-167)",
+            "says": "a negative assertion needs one positive artifact proving the path ran; these tests assert the dock result and the told count"
+          }
+        ],
+        "reasoning": "The rule the reviewer cites is scoped to browser and e2e tests. The assertions here are negative ('not aborted', 'told 0') on a race of in-process stubs, and a short yield is the pattern the sibling unit tests in src/remote and src/tui already use. The reviewer concedes the test cannot flake. The suggested setImmediate yield is also a timed yield, so it changes the mechanism more than the determinism.",
+        "question": "The 10 ms yield matches the unit-race tests next to it, and the 'no fixed sleeps' rule is scoped to browser and e2e tests. Keep the yield here, or replace it with a deferred anyway?",
+        "options": [
+          "dismiss - keep the 10 ms yield, as the sibling unit tests do",
+          "uphold - replace the timers with a deferred and a macrotask yield"
+        ]
+      },
+      {
+        "finding_id": "E-43",
+        "verdict": "upheld",
+        "reasoning": "The surface tests call only the pure formatters, so the one-line forwards (getConfirmationLines, getWaitingCards, confirmationLines in openDecisions) can be deleted with every test still passing. Commit cfd839061 deliberately moved the tui-shell tests off source reads, but that is about tui-shell, not these pure modules. A normal test gap; the fix is sound."
+      },
+      {
+        "finding_id": "E-44",
+        "verdict": "upheld",
+        "reasoning": "I read approval-mirror.ts:51-53. onUndelivered is deliberately placed after the settled guard, but no test lets the dock win first and then delivers a late undelivered answer. Moving the line would pass the suite. A normal test gap with a sound deferred-promise fix."
+      },
+      {
+        "finding_id": "E-45",
+        "verdict": "upheld",
+        "reasoning": "I read SKILL.md:136 and autonomous-profile.ts:144/153. The skill says an agent never runs `keryx review complete`, while the autonomous profile says the run is finished only when it has. cli-reference.md (line 4921, from the PR's own commit b1c6da0e6) already states the exception, so the skill bullet is the inconsistent text. Adding the exception to both copies is sound."
+      },
+      {
+        "finding_id": "E-46",
+        "verdict": "upheld",
+        "reasoning": "I read tui-shell.ts:6028-6089. requestApprovalForTelegramTurn asks the topic and records remoteApproval(fingerprint, fromId) but never calls operatorCards.ask or settle. AC6 requires pending and pressedBy to be visible on the TUI surfaces. The comment at 6020-6027 explains why the path is separate, but not why it skips the view log. Sharing the bookkeeping is a sound fix."
+      }
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-08 against head 5444f96e4: the card lifecycle log (OperatorConfirmationLog settle/answer/prune, TTL), the dock/topic race mapping, the card-aware completion gate wording, the press-record threading (pressedBy/pressedAt) and the undelivered marker were traced end to end. The one candidate worth chasing, the `result !== false` / `verdict !== false` dock-outcome mapping, is sound: every dock branch of requestApprovalLocally (confirmOperatorCard returns Promise<boolean>; spawn_subagent, apply_patch and the elicitation branch return a bare boolean; the MCP branch returns mcpDockVerdict, which is false on deny) reports a decline as a bare false, so a decline is never logged as yes. Residual observations (pruning by ask order under concurrent cards, counts going stale at TTL expiry without a timer, press-field invariant not enforced in readers) are display-only and unreachable in practice, so none is reported. No new logic defects beyond the known minors.",
+  "findings": [],
+  "slices": ["slice-08"],
+  "questions": []
+}
+```

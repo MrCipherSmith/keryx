@@ -1,0 +1,29 @@
+STATUS: DONE
+
+## High-Load Review (round r04, wave 1, slice-02)
+
+Scope: PR 1052, head b1c6da0e6992e4df473bae6b2fde78bc94d28776. Load profile not provided (assumes moderate-to-high traffic). Slice-02 holds no runtime code: flow 464 files, the review-orchestrator and review-premise SKILL copies, CHANGELOG, TM-04, cli-reference, commands-by-task, review-with-a-record, limitations, flow-state schema, package.json. I checked every behavioural claim these files make about concurrency, replay and idempotency against the source at head.
+
+Verified against source:
+- TM-04 6a / CHANGELOG "each refusal leaves the token spent" and "a rejected remote answer burns the card": src/commands/operator-confirm-tools.ts:206 deletes the pending entry before the remote checks at 207-221, so a card is single use even when two answers race; apply runs only after the entry is removed.
+- "allowedUserIds, none refuses every remote answer": operator-confirm-tools.ts:213-217 refuses when the list is undefined or lacks the id.
+- "1 hour": REMOTE_CARD_TTL_MS = 3_600_000 at :117, checked at :218 against issuedAt.
+- "pressedAt is the shell's clock": src/tui/tui-shell.ts:573 sets new Date().toISOString().
+- flow-state.schema.json: pressedBy and pressedAt sit inside the `confirmation` object (properties level), beside boundTo; JSON is well formed there.
+
+Stats: blocker 0 | major 0 | minor 0 | info 0
+
+Clean areas: concurrency and races (single-use token verified), resource management, caching, database, queues, retry/timeout, idempotency of the card answer. No new defect in slice-02.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "Slice-02 is documentation, skill text, flow records and a schema change; no runtime code. The concurrency and replay claims it makes (single-use token, allowed-id check, 1-hour TTL, shell clock for pressedAt) match src/commands/operator-confirm-tools.ts and src/tui/tui-shell.ts at head. No high-load finding.",
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0},
+  "slices": ["slice-02"],
+  "findings": [],
+  "prior_dispositions": []
+}
+```

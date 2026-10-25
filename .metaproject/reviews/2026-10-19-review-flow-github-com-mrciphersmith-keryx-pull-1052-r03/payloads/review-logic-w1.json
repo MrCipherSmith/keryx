@@ -1,0 +1,704 @@
+{
+  "reviewer": "review-logic",
+  "scope_mode": "diff",
+  "round": 2,
+  "base_sha": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "review_context": {
+    "request": {
+      "raw": "Final round (r03) of PR https://github.com/MrCipherSmith/keryx/pull/1052 (flow 464), delta d2cb377f5..6f47bf35f over the ingested r01 package. Operator decisions already taken in round 1 and applied in code: C-05 uphold, C-10 uphold, C-25 dismiss. Delta since the previous package (r02 at 672e37687, never ingested): schema fields pressedBy/pressedAt documented in flow-state.schema.json, autonomous-profile wording left on purpose (unattended children are excluded from the card gate), TM-04 TTY claim restated, card head sanitised, completion-gate.ts error-text helper shared.",
+      "mode": "delta"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/flow/confirm-token.test.ts",
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/review/completion-gate.ts",
+        "src/review/types.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts"
+      ]
+    },
+    "git": {
+      "base": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+      "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+      "repo": "MrCipherSmith/keryx",
+      "branch": "docs/flow-helyx-operator-confirm"
+    },
+    "pr": {
+      "number": 1052,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1052",
+      "title": "Operator review confirmations answered in Telegram (flow 464)",
+      "state": "open",
+      "base": "main",
+      "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264"
+    },
+    "memory": {
+      "query": "operator confirmation cards review_complete remote card Telegram pressedBy",
+      "entries": [],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "machine-written gdgraph/wiki data not in diff"
+      ]
+    }
+  },
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "tier_resolution": "session-fallback",
+    "inherit": true,
+    "model_discovery": {}
+  },
+  "budget": {
+    "max_findings": 30
+  },
+  "allowed_tools": "read-only",
+  "metaproject": {
+    "memory": [],
+    "wiki": [],
+    "graph": {
+      "note": "see layers block"
+    }
+  },
+  "slices": [
+    "slice-01"
+  ],
+  "is_fix_round": true,
+  "pr_context": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/pr-context.md",
+  "skill_path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/skills/gdskills/review/review-logic/SKILL.md",
+  "prior_findings": [
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-01",
+        "reviewer": "review-architecture",
+        "severity": "major",
+        "file": "src/commands/operator-confirm-rosters.test.ts",
+        "line": 17,
+        "quote": "expect(NAMES).toHaveLength(18);",
+        "problem": "src/commands/operator-confirm-rosters.test.ts pins 18 card tools but the registry now has 19 (review_complete); the test fails at head.",
+        "impact": "A failing test at head in the file that is the only mechanical check keeping the unattended exclusion list in step with the operator-gate registry. If CI runs it the PR cannot merge; if the failure is waved through, the guard loses its authority. Not executed here, so the failure is inferred from the counts below.",
+        "suggested_fix": "Change the title and assertion in operator-confirm-rosters.test.ts to 19 (or, better, assert `NAMES.length === OPERATOR_CONFIRM_TOOL_NAMES.length` and drop the literal so the next gate does not need an edit here).",
+        "evidence": "src/commands/operator-confirm-rosters.test.ts:16-17 `test(\"there are 18 operator card tools ...\")` / `expect(NAMES).toHaveLength(18)`. Registry count: src/commands/operator-confirm-review.ts:781-793 lists chunksAnswer, publish, waiveCoverage, waiveReadiness, decisionSpec x2, reply, confirmPlan, decidePremise, complete = 10; src/commands/operator-confirm-other.ts:729-740 lists flow_confirm, external_apply, learn_accept, learn_promote, learn_graduate, schedule x4 = 9. src/trigger/unattended.ts OPERATOR_CONFIRM_TOOL_NAMES now has 19 entries (18 at base plus `review_complete`). `git diff --name-only base..HEAD -- src/commands src/trigger` does not list operator-confirm-rosters.test.ts. Also reported by: review-regression-w3:RG-W3-001.",
+        "confidence": "medium",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-rosters.test.ts:17 (toHaveLength(18), registry holds 19)"
+          ],
+          "enumeration_method": "keryx ctx rg for the literal count 'toHaveLength(18)' and for the card-tool roster across src; the registries were counted in src/commands/operator-confirm-review.ts and src/commands/operator-confirm-other.ts and compared with OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts; the stale test was also run (fails at head)"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-03",
+        "reviewer": "review-logic",
+        "severity": "major",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 765,
+        "quote": "        await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\\n`);",
+        "problem": "review_complete.apply closes the round via completeReviewGated first, then writes completion-confirmation.json inside the same try. A failure of the second write (or a crash in the window) leaves a closed review with no press record, the catch says 'nothing was recorded', and a second card for the same package is refused at buildCard because the review is already closed, so the press record cannot be written afterwards (verifier reproduced it with a forced write failure; a CLI retry was not run).",
+        "impact": "The agent and the operator are told the completion was refused and nothing was recorded, when the round is in fact closed. The operator's quote, press identity and the head/evidence/waivers they approved are not written, so the audit record AC4 and AC2 rely on is missing for a closed round. A retry fails with 'already complete'.",
+        "suggested_fix": "Separate the two steps. Run completeReviewGated in its own try and keep 'nothing was recorded' only for a refusal before the close. Write the record in a second try, and if that write fails say 'the round is closed but the confirmation record could not be written: <error>' with isError true. Alternatively write the record first and remove it when the gate refuses. Treat a post-close throw inside completeManagedReview the same way: report the closed state.",
+        "evidence": "src/commands/operator-confirm-review.ts:749-775 (gate call, record write and catch share one try); src/review/managed.ts:950-1066 (manifest is closed by writeFileAtomic before clearActiveReview, recordFinishedRound and writeReviewNotes, with no rollback). Scenario: the disk is full or the package is read-only after the manifest write; the write at line 765 throws; the card path returns the 'nothing was recorded' refusal. The post-close failures inside completeManagedReview alone also exist on the CLI path and are pre-existing; the new part is the record write. Also reported by: review-clean-code-w2:F-001, review-highload-w2:F-001, review-security-code-w2:F-001, review-pr-contract-w2:PC-002, review-architecture-w2:F-002.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review.ts review_complete.apply (completeReviewGated before the completion-confirmation.json write)"
+          ],
+          "enumeration_method": "read of every card apply() in src/commands/operator-confirm-review.ts (chunksAnswer, publish, waiveCoverage, waiveReadiness, decide, reply, confirmPlan, decidePremise, complete) to find the ones that run an irreversible engine step before writing the press record; only review_complete does so"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-05",
+        "reviewer": "review-security-code",
+        "severity": "major",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 669,
+        "quote": "then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic) or run `keryx review complete`.",
+        "problem": "SKILL.detail.md (and its bundled copy) tell the agent it may run `keryx review complete` instead of the review_complete card, while cli-reference.md, TM-04 6a and autonomous-review.md present `complete` as an operator-only terminal step. Plain `complete` has no TTY check and no command-risk floor (only --waive and --waive-coverage do), so the operator's final yes can be bypassed. The CLI behaviour is pre-existing; the new text is what presents it as gated and invites the agent to use it.",
+        "impact": "Attack vector: the agent follows the SKILL (or acts on its own), runs `keryx review complete <package>` through shell_exec in a shell where every waiver is already recorded. The review reaches `completed` with no card, no operator press, no `confirmedVia` and no `pressedBy`. The head, evidence and waiver gates in completeReviewGated still apply, so this bypasses the operator's final yes, not the gates. The brief states the requirement as \"the agent must never be able to record an operator act (confirm-plan, decide-premise, waive, complete) by itself\". Caveat: the CLI behaviour is pre-existing, and an autonomous run closes its package with this same command (autonomous-review.md exit 0, `complete`). The new text is what presents it as gated and, in the SKILL, invites the agent to use it.",
+        "suggested_fix": "Decide which of these is true and make code and text agree. (a) If the card is the operator act, drop \"or run `keryx review complete`\" from both SKILL.detail.md copies and make plain `review complete` ask in command-risk (add it to touchesHumanConfirmation) or refuse without a TTY when the call comes from keryx shell, with the autonomous profile as the explicit exception. (b) If the CLI stays agent-runnable, remove `complete` from the cli-reference \"need a terminal\" list, from the TM-04 6a opening paragraph, and from the autonomous-review.md bullet, and state in TM-04 that the card is a display-and-record step, not a gate on completion.",
+        "evidence": "SKILL.detail.md sentence above (and the identical sentence in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669). cli-reference.md line in the diff at slice-01.diff:758. Code: review.ts:4556 and 4562 test isTerminal only for --waive-coverage and --waive; command-risk.ts:725-740 floors `review complete` only with the waiver flags; `git diff` shows command-risk.ts untouched by the PR. docs/docs/guides/autonomous-review.md says the five review cards stop an autonomous run at the floor, while its own exit-code table has exit 0 meaning the package was closed by `keryx review complete`. Also reported by: review-clean-code-w1:F-001, review-pr-contract-w1:PC-001, review-security-code-w2:F-004.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:669",
+            "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669"
+          ],
+          "enumeration_method": "keryx ctx rg for the literal clause 'or run keryx review complete' across src, docs and .metaproject/skills; the two SKILL.detail.md copies are the only hits; docs/docs/cli-reference.md, docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md and docs/docs/guides/autonomous-review.md carry the opposite statement"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-06",
+        "reviewer": "review-logic",
+        "severity": "major",
+        "file": "src/tui/tui-shell.ts",
+        "line": 6119,
+        "quote": "onUndelivered: () => io.onSystem?.(\"◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\\n\")",
+        "problem": "A card is logged mirrored=true before the topic leg runs. When the topic leg then reports undelivered (POST fails, no approvalId, connection lost), onUndelivered only prints a transcript line: the sidebar, status tab and /decisions keep saying 'waiting ... of the 1-hour token'. AC5/AC6 hold only on the pre-flight not-connected path.",
+        "impact": "AC5: the operator is told by every TUI surface that a card is waiting in Telegram and has a live token, when the question never reached the topic (or can no longer be answered there). It is the false delivery claim AC5 exists to prevent, shown on the surfaces AC6 added. Nobody can press anything in Telegram; the card can only be answered in the shell.",
+        "suggested_fix": "Add OperatorConfirmationLog.markUndelivered(id) that sets mirrored=false (make the field mutable or replace the entry) and notifies. In mirrorApprovalToTopic call it from onUndelivered (pass cardId in), so waiting() drops the card and pendingConfirmationLine appends 'Telegram mirror not delivered, answer in the shell'. Also call it when the topic leg ends without a press while the dock is still open (timeout, dropped stream). Add a test that drives a raceApproval whose topic leg returns {decision:'deny', undelivered:true} and asserts waiting() is empty and the line carries the note.",
+        "evidence": "tui-shell.ts mirrorApprovalToTopic: cardId = operatorCards.ask(..., true); raceApproval({... onUndelivered: () => io.onSystem?.(...)}) - the callback receives nothing and touches no log entry. operator-confirmations.ts: ConfirmationEntry.mirrored is readonly, waiting() filters on item.mirrored, pendingConfirmationLine only adds the note when !entry.mirrored. approval-mirror.ts line 52: `if (answer.undelivered === true) options.onUndelivered?.();` is the only consumer. operator-confirmations.test.ts has no test of the shell wiring, only of ask(.., false). Also reported by: review-architecture-w4:F-002, review-highload-w4:F-002, review-logic-w3:F-001, review-security-code-w4:F-001, review-regression-w4:RG-W4-002, review-testing-practices-w3:F-003.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            "src/tui/tui-shell.ts onUndelivered (transcript line only, card stays waiting)",
+            "src/tui/approval-mirror.ts"
+          ],
+          "enumeration_method": "keryx ctx rg for 'undelivered' across src and docs (src/remote/client.ts, src/remote/shell-bridge.ts, src/tui/approval-mirror.ts, src/tui/tui-shell.ts) to list every consumer of the undelivered signal; only the TUI shell consumer leaves the card in the waiting state"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-13",
+        "reviewer": "review-highload",
+        "severity": "minor",
+        "file": "src/tui/tui-shell.ts",
+        "line": 6104,
+        "quote": "const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });",
+        "problem": "mirrorApprovalToTopic calls operatorCards.ask() before the awaited inner/raceApproval and answer() after it with no try/finally. A rejection leaves an unanswered entry that is never evicted and keeps the sidebar 'N card waiting' for the life of the shell.",
+        "impact": "Failure mode: every approval whose inner call throws (dock render error, bridge rejection other than the handled undelivered path) leaves one permanent unanswered entry in the in-process log and a stale 'open card' in the TUI surface that reads it. Growth is per failure, not per request, so it is slow; in a long unattended session with a persistently failing bridge it is unbounded.",
+        "suggested_fix": "Wrap each branch in try/finally and answer the card in the finally (operatorCards.answer(id, { ... }) with a 'failed' or 'cancelled' outcome), or have OperatorConfirmationLog cap unanswered entries as well.",
+        "evidence": "src/tui/tui-shell.ts lines 6103-6104 (unmirrored branch: operatorCards.ask, then await inner, then operatorCards.answer) and 6116-6117 (mirrored branch: operatorCards.ask, then await raceApproval); src/tui/operator-confirmations.ts trims only answered entries. Also reported by: review-highload-w4:F-001, review-logic-w4:F-003, review-security-code-w4:F-002, review-logic-w3:F-006, review-performance-w4:F-001.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-16",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "docs/docs/guides/autonomous-review.md",
+        "line": 35,
+        "quote": "An autonomous run has nobody to answer them: it stops at the floor and never tells you to run the terminal command.",
+        "problem": "docs/docs/guides/autonomous-review.md says an autonomous run meeting a review card 'stops at the floor', but unattended.ts and the runner record the item as Not run and continue (the card denial text does not match isFloorRefusal, so no floor status or exit 3 is produced).",
+        "impact": "An operator reading the guide expects exit 3 and a stopped run whenever a card would have been needed, but the skill and unattended.ts tell the agent to record Not run and carry on, so the run can end at exit 0 or 2 with items recorded as Not run. The guide misstates what the operator will see.",
+        "suggested_fix": "Rewrite the bullet to match the skill and unattended.ts: the cards are refused to an unattended run by name, the item is recorded as Not run, the run does not tell you to run the terminal command, and the terminal commands remain the fallback when you finish the package yourself. Keep 'floor' for the exit-3 case only.",
+        "evidence": "Diff hunk docs/docs/guides/autonomous-review.md @@ 15: new first bullet under 'What it does where a person would answer'. src/trigger/unattended.ts:59-61 and :71-73 (card tool names listed as interactive-only). Whether a refused card call counts as a floor refusal in the autonomous runner was not traced through src/review/autonomous-run.ts, hence medium confidence. Also reported by: review-highload-w1:F-001, review-pr-contract-w1:PC-002.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-17",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "CHANGELOG.md",
+        "line": 18,
+        "quote": "a replayed, expired, foreign or text-only answer changes nothing",
+        "problem": "CHANGELOG 0.3.124 says a rejected remote answer 'changes nothing'; the code deletes the pending token before the allowed-id and TTL checks, so every refusal (foreign id, expiry, replay) spends the token and the card must be asked again. TM-04 6a also says the press 'carries this question's token' (the token never leaves the shell process) and presents the 1-hour bound as reachable although the Telegram approval waits 15 minutes.",
+        "impact": "An operator or reader of the release notes may expect a mistaken press (wrong account, press after 1 hour) to leave the card answerable. In fact it is dead and the agent must raise a new card. No record is written, so nothing is corrupted; the defect is the wording only.",
+        "suggested_fix": "Reword to 'is refused and records nothing; the card is spent and must be asked again'. Keep TM-04 as the reference wording.",
+        "evidence": "CHANGELOG.md:18; docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:104 ('Each refusal leaves the token spent'); src/commands/operator-confirm-tools.ts: pending.delete(token) precedes the allowedUserIds and REMOTE_CARD_TTL_MS refusals. Also reported by: review-security-code-w1:F-002, review-logic-w1:F-002.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-18",
+        "reviewer": "review-security-code",
+        "severity": "minor",
+        "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "line": 111,
+        "quote": "It cannot make Telegram report a press from an allowed user id, but it can talk to the bot API, so a press is evidence of an allowed account, not of an unreachable channel.",
+        "problem": "TM-04 6a does not say that a bot-token holder (the token is an owner-only file readable by the same-OS-user agent) can edit the text of the mirrored card, so a press proves a press on a card with the real approval id, not that the operator read the text the shell holds.",
+        "impact": "Attack vector: an agent that read the bot-token file edits the Telegram copy of a review_complete card so it shows a different head SHA or no waivers, the operator presses yes on the edited text, and the shell records `remote-card` with a valid `pressedBy` for a card the operator did not read. This needs the same-OS-user agent the section already assumes, so it is a gap in what 6a says the press proves, not a new bypass.",
+        "suggested_fix": "Add to the second \"does not prove\" bullet: a token holder can also edit or replace the text of the mirrored card, so the press proves a press on a card with the real approval id, not that the operator read the text the shell holds. Name the file instead of \"environment or config\". Optionally have the shell re-render the card text from the package when it records the answer, which AC4 already asks for.",
+        "evidence": "TM-04 6a bullets (slice-01.diff:679-681); paths.ts:16 BOT_TOKEN_FILE; config.ts:260-264 (owner-only file, read by the shell).",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-19",
+        "reviewer": "review-highload",
+        "severity": "minor",
+        "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "line": 112,
+        "quote": "- **Message order.** Telegram can drop, delay or reorder messages. A dropped card leaves the shell waiting (the dock stays open); a delayed press can arrive after the question was answered or has aged out, and is refused by the token rules above. Nothing in the answer proves the operator saw the card text last shown, only that this token was pressed.",
+        "problem": "TM-04 does not say that the card token and the TUI's answered-card list live in shell memory only: a shell restart inside the hour drops every open card while the Telegram message still shows buttons.",
+        "impact": "Failure mode: after a crash or restart the operator presses an old card; the press fails closed (nothing is recorded), so there is no integrity problem, but the doc's 'refused by the token rules above' suggests a keryx token check explains it, and the 1-hour window implies the card stays answerable for an hour. The operator gets no reason and may press repeatedly or assume the answer was recorded.",
+        "suggested_fix": "Add one sentence: the token and the TUI card view are process memory; a restart drops pending cards and a later press is refused with no record; ask again. Say that a late press is refused by serve's expiry or resolved state as well as by the token.",
+        "evidence": "src/commands/operator-confirm-tools.ts: tokens are randomUUID keys in an in-process `pending` Map, deleted at first use and never persisted. src/tui/operator-confirmations.ts: in-memory only, ANSWERED_CARDS_KEPT = 5. The flow-299 `confirm-token.json` (10 min TTL) is a separate mechanism and does not carry the card. Late presses after a restart or a serve-side expiry are handled by serve and the waiter map (src/remote/shell-bridge.ts askApproval 958-996, src/remote/client.ts askApproval 439-503), not by keryx token rules.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-20",
+        "reviewer": "review-pr-contract",
+        "severity": "minor",
+        "file": "CHANGELOG.md",
+        "line": 13,
+        "quote": "## [0.3.124] - 2026-10-19",
+        "problem": "CHANGELOG puts the dated '## [0.3.124]' section below the existing '## [Unreleased]' block that still holds two entries this release will ship; heading also lacks the flow/PR suffix the neighbours carry.",
+        "impact": "Someone reading the changelog after the release attributes two shipped fixes to an unreleased future version. The cost is a misleading release record, not runtime behaviour.",
+        "suggested_fix": "Fold the two Unreleased entries under 0.3.124 (or leave Unreleased empty above it), and say in the PR body that the PR bumps the version; if the date is meant to be the release date, set it when AC10 is done.",
+        "evidence": "slice-01 diff, CHANGELOG.md hunk: the two Unreleased entries are context lines above the added `## [0.3.124] - 2026-10-19`; package.json hunk changes `\"version\": \"0.3.123\"` to `\"version\": \"0.3.124\"`. pr-context.md Summary lists no version or changelog change. Whether the repository convention is to date the heading at PR time was not checked. Also reported by: review-style-w1:F-006.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-21",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "line": 136,
+        "quote": "in keryx shell call `review_waive_readiness` (a card, never a terminal), then run `keryx review complete`",
+        "problem": "review-orchestrator SKILL.md contradicts itself and the new card: line 47 and SKILL.detail.md say call the review_complete card, but the Done-when line, the hosts-table 'Operator decision' row, the coverage-waiver paragraph and the output of the review_waive_* tools still tell the agent to run `keryx review complete` or a terminal command.",
+        "impact": "An agent that follows line 136 closes the round through the CLI and never opens the review_complete card, so the operator is never asked to confirm the head SHA, evidence line and waivers. AC5 keeps the CLI working as before, so this is not a gate bypass, but the guidance contradicts AC7 (tell the agent to call the card).",
+        "suggested_fix": "Make line 136 and the waive tool results say: call the review_complete card in keryx shell; the CLI complete is for outside the shell. If the plain CLI complete must also be held in the shell, say so and add a command-risk rule; otherwise record that choice in TM-04.",
+        "evidence": "SKILL.md lines 47 and 136. command-risk.ts:715-748 (parsedCoverageWaiver and touchesCoverageWaiver) return true only for the --waive flag family or an opaque argument after `review complete`. review.ts runComplete (about line 4539) requires a terminal only when --waive or --waive-coverage is given; a plain complete runs, and the card path in operator-confirm-review.ts writes completion-confirmation.json that the plain path does not. The waive tools in operator-confirm-review.ts still return a line telling the agent to run `keryx review complete` (not anchored: the sentence occurs at several sites). Also reported by: review-pr-contract-w3:PC-001, review-logic-w1:F-003, review-clean-code-w2:F-006.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-22",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 678,
+        "quote": "prBound: manifest.target?.kind === \"pr\",",
+        "problem": "The review_complete card re-derives the completion preconditions in the commands layer (completionFacts re-reads manifest.json, report and research with ad-hoc JSON types) instead of asking the review library, and the copy has already drifted from the library's isPrBound; complete-gated.ts holds only part of the gate set.",
+        "impact": "A package whose target.kind is not \"pr\" but whose ref is a pull request URL accepts --head on the CLI and is refused by the card at buildCard time, so the two entry points disagree about the same package. A malformed 'Evidence level:' line is shown on the card as if valid, and the gate then refuses at apply time (fails closed, so no wrong record, but the operator is asked to confirm something that cannot complete). Any later change to the gate has to be mirrored by hand in the card.",
+        "suggested_fix": "Export one read-only preflight from src/review (for example completionPreflight(packageDir, head) returning reviewId, prBound via isPrBound, status, the validated evidence level via parseEvidenceLevel, and the waivers) and have both completeManagedReview and the card use it; the card keeps only the rendering and the digest. Failing that, import isPrBound and parseEvidenceLevel into completionFacts so the predicates cannot diverge.",
+        "evidence": "operator-confirm-review.ts:678 prBound: manifest.target?.kind === \"pr\"; :712 head regex; :717 `head applies to a pull request package` refusal built from facts.prBound; :667 evidenceLevelLine(report). Library side: src/review/managed.ts completeManagedReview throws on `!isPrBound(stored.target)` using src/review/complete-head-gate.ts isPrBound (kind pr OR PR URL in ref), then runs parseEvidenceLevel. The CLI path and the card path both end in completeReviewGated (src/review/complete-gated.ts), so the gates themselves are shared; only the pre-card preflight is duplicated. Also reported by: review-architecture-w3:F-003.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-23",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 673,
+        "quote": "coverage = undefined;",
+        "problem": "completionFacts swallows every error reading research.json (missing, corrupt, wrong shape) as 'no coverage waiver', so the card prints 'waivers: none' for a package whose ledger it could not read.",
+        "impact": "The card is the operator's only view of what they are waiving. A line that says 'none' where the truth is 'unreadable' is a false statement on an approval card. The downstream research gate would most likely refuse such a package, so the damage is a misleading card, not a bypass; confidence is medium because I did not trace every gate that reads research.json.",
+        "suggested_fix": "Catch only the missing-file case as 'none'; for any other failure add a card line such as `waivers: could not read research.json (<reason>)`, or let the error propagate so buildCard returns a refusal.",
+        "evidence": "operator-confirm-review.ts completeSpec, completionFacts (diff hunk @@ 619,798 @@): `try { coverage = readCoverageWaiver(JSON.parse(readFileSync(path.join(dir, \"research.json\"), \"utf8\")).dispatch) } catch { coverage = undefined; }`. The manifest and report reads in the same function are not caught and fail the card, so research.json is treated more leniently than its neighbours.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-24",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "file": "src/tui/tui-shell.ts",
+        "line": 583,
+        "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+        "problem": "remoteApproval was inserted between the long Flow 173 F-003 JSDoc and isToolAvailableToSideWorker, so that block now documents the wrong function. withMirrorNote (pure formatting) lives in tui-shell.ts, the card-log lifecycle is inlined in three places of mirrorApprovalToTopic, and the place/yes derivation is written twice.",
+        "impact": "Misleading documentation on two functions (hover docs and readers); a security-adjacent helper that cannot be tested on its own.",
+        "suggested_fix": "Move remoteApproval above the side-worker JSDoc block (or, better, next to the ApprovalResponse type in commands/agent.ts or in src/remote), export it and test it; keep the JSDoc directly above isToolAvailableToSideWorker.",
+        "evidence": "tui-shell.ts:571-581 JSDoc for isToolAvailableToSideWorker, :582 new `/** Flow 464 ... */`, :583 remoteApproval, :587 isToolAvailableToSideWorker. Also reported by: review-clean-code-w4:F-001, review-style-w4:F-001, review-logic-w4:F-007, review-architecture-w4:F-004, review-clean-code-w4:F-002, review-style-w4:F-004, review-style-w4:F-006.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-26",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 738,
+        "quote": "if (prepared === undefined) return { output: \"review_complete: nothing prepared for this card\", isError: true };",
+        "problem": "completeSpec repeats the head normalisation in buildCard and apply, the refusal text twice, and the unnamed 12-character SHA abbreviation three times; `at` means a title suffix next to confirmation.at (time); the refusal text hard-codes '1 hour' next to the REMOTE_CARD_TTL_MS constant.",
+        "impact": "Two copies of the head normalisation must stay in step: if buildCard's rule changes (for example it stops lower-casing), apply feeds completeReviewGated a different head than the one the card showed, and the digest still matches because it is computed from the same input only on the card side. The duplicated message is the text F-001 shows to be wrong in one of its two places.",
+        "suggested_fix": "Add `headOf(input): string | undefined` (trim, lower-case, empty to undefined) and call it from both methods; add `refused(error)` for the message. Validating the SHA inside headOf also gives apply the same check for free.",
+        "evidence": "Diff hunk @@ 619,798 @@: `const headInput = typeof input[\"head\"] === \"string\" && input[\"head\"].trim() !== \"\" ? input[\"head\"].trim().toLowerCase() : undefined;` appears once in buildCard and once in apply (it is the line after the quoted line). The `— nothing was recorded` template appears at the facts read and at the outer catch in apply. Also reported by: review-clean-code-w2:F-007, review-style-w2:F-001, review-style-w2:F-002, review-style-w2:F-005.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-32",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "src/tui/tui-shell.ts",
+        "line": 583,
+        "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+        "problem": "The wiring that turns a Telegram callback into confirmationVia remote plus pressedBy/pressedAt (remoteApproval), the withMirrorNote branch, every operatorCards.ask/answer call and the /decisions and /remote-control surface wiring are untested: tests build the log and compose helpers by hand.",
+        "impact": "A change that stops passing fromId through (pressedBy becomes undefined, so every remote press is refused) or that stamps the wrong id would not fail any test in the slice. I did not read src/tui/operator-confirmations.test.ts, which may cover part of this.",
+        "suggested_fix": "Add a test at the mirror-wrapper seam that feeds a topic answer with a known fromId through mirrorApprovalToTopic and asserts the ApprovalResponse carries via 'remote' and that same id. Add a shell-level test that the production allowedUserIds binding returns the configured list and returns undefined for a missing or invalid remote config.",
+        "evidence": "tui-shell.ts line 583 defines remoteApproval and it is called at lines 6088 and 6137; shell.ts line 4224 defines the binding; no slice test names either. Also reported by: review-testing-practices-w1:F-006, review-testing-practices-w3:F-001, review-testing-practices-w3:F-002.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-39",
+        "reviewer": "review-security-code",
+        "severity": "info",
+        "file": "src/tui/tui-shell.ts",
+        "line": 584,
+        "quote": "return { approved: true, fingerprint, via: \"remote\", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };",
+        "problem": "pressedAt is the shell clock at delivery of the SSE event, not the time of the Telegram press; the type comment calls it 'ISO time of that press' and the TTL is anchored at card build time.",
+        "impact": "No attack vector: a press delayed by network or by the mirror queue is stamped later than it happened, and an old card cannot be revived because the TTL runs from card build. Worth knowing when reading pressedAt in the audit record as 'time of the operator act'.",
+        "suggested_fix": "Optional: carry the Telegram callback timestamp through ApprovalEvent and prefer it for pressedAt, keeping the shell clock as the fallback. Otherwise document pressedAt as 'delivered at'.",
+        "evidence": "tui-shell.ts:584 (only producer of via:\"remote\"); agent.ts executeCallUnbounded copies response.pressedBy/pressedAt into the invoke ctx only for via === \"remote\"; operator-confirm-tools.ts invoke compares now() - entry.issuedAt with REMOTE_CARD_TTL_MS. Also reported by: review-security-code-w4:F-004.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-41",
+        "reviewer": "review-highload",
+        "severity": "info",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 747,
+        "quote": "The head, the evidence level or the waivers changed after the card was shown",
+        "problem": "TOCTOU: the factsDigest drift check is synchronous and runs before the awaited PR lookup inside completeReviewGated, so the digest covers facts at the start of the gate sequence, not at the close (needs a second writer on the package).",
+        "impact": "If another process edits the package (a new waiver, a moved head) during the GitHub round trip, the close could apply to facts the operator did not see on the card. This needs a second writer on the same package within seconds, so it is not a likely failure at the current load.",
+        "suggested_fix": "Confirm that completeManagedReview re-reads head, evidence and waivers after the PR lookup. If it does not, recompute factsDigest after the lookup inside the gate, or take the package lock around the digest check and the close.",
+        "evidence": "src/commands/operator-confirm-review.ts lines 746-755: digest compare, then `await completeReviewGated(ctx.projectRoot, prepared.dir, { prLookup: ..., prFiles: ..., now: new Date(confirmation.at) })`. I read complete-gated.ts (18 lines) and the call into completeManagedReview but did not trace every re-read inside completeManagedReview, so I cannot say whether the head and evidence gates re-read the package after the lookup. Also reported by: review-security-code-w3:F-004.",
+        "confidence": "low"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-45",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "file": "src/tui/tui-shell.ts",
+        "line": 6131,
+        "quote": "if (cardId !== undefined) operatorCards.answer(cardId, { place: \"telegram\", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });",
+        "problem": "OperatorConfirmationLog is a second, unauthoritative copy of state the gate owns: it writes 'yes, pressed by Telegram user N' from the bridge answer when the topic leg wins, before operatorConfirmTool.invoke has re-checked the allowed list, token and TTL. A press the gate then refuses still reads as an accepted yes in the sidebar and /decisions.",
+        "impact": "/decisions and the status tab can show 'answered yes, pressed by Telegram user 9' for a press the record refused. This is the surface the operator reads to see who pressed. The topic leg is capped at MAX_APPROVAL_TIMEOUT_MS = 60 min (src/remote/protocol.ts:169), equal to the TTL, and issuedAt is stamped earlier than the ask, so a press in the last seconds of the leg is refused by the gate yet logged as accepted. No stored state is corrupted; the display is wrong on a security-relevant surface.",
+        "suggested_fix": "Feed `answered` from the outcome of the gated call, not from the transport event: either have the tool result (applied vs refused) reach the log, or label the line 'answered in Telegram, awaiting the gate' until it does. Take the deadline from the gate (expose the token's issuedAt or a `remoteDeadline` with the card) rather than recomputing it from askedAt, and reword 'token expired, ask again' to say that only the Telegram answer expired and the shell can still answer.",
+        "evidence": "operator-confirm-tools.ts:192 sets issuedAt in confirmation(); :207-221 applies the allowed-list, press-field and TTL refusals in invoke, after requestApproval returned; tui-shell.ts:6131 and :6126/:6105 write the log at answer time with yes derived from `decision`/`!== false`; operator-confirmations.ts pendingConfirmationLine uses `REMOTE_CARD_TTL_MS - elapsed` with elapsed from the log's own askedAt.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    }
+  ],
+  "layers": {
+    "version": 1,
+    "files": [
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "CHANGELOG.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/guides/autonomous-review.md",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/operator-confirm-rosters.test.ts",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/tui/tui-shell.ts"
+    ],
+    "prHead": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+    "graphCommit": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 2,
+      "files": [
+        "fixtures/routing-shell-pty.ts",
+        "src/cli-registry.ts",
+        "src/cli.test.ts",
+        "src/cli.ts",
+        "src/commands/acp.test.ts",
+        "src/commands/acp.ts",
+        "src/commands/agent-permission-mode.test.ts",
+        "src/commands/help-grouped.test.ts",
+        "src/commands/interactive-agent-tools.ts",
+        "src/commands/operator-confirm-other-tools.test.ts",
+        "src/commands/operator-confirm-other.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/operator-confirm-tools.ts",
+        "src/commands/providers.subscription.test.ts",
+        "src/commands/select.test.ts",
+        "src/commands/shell-agent-repl.test.ts",
+        "src/commands/shell-bus.test.ts",
+        "src/commands/shell-chat-preservation.test.ts",
+        "src/commands/shell-cli-validation.test.ts",
+        "src/commands/shell-launch.test.ts",
+        "src/commands/shell-lease.test.ts",
+        "src/commands/shell-preservation-signal.test.ts",
+        "src/commands/shell-slash-registry.test.ts",
+        "src/commands/shell-starting-line.test.ts",
+        "src/commands/shell-subscription-selection.test.ts",
+        "src/commands/shell-task-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/commands/shell.ts",
+        "src/remote/mirror-undelivered.test.ts",
+        "src/review/harness-robustness.test.ts",
+        "src/review/review-system.test.ts",
+        "src/tui/boot-animation.test.ts",
+        "src/tui/chat-shell.test.ts",
+        "src/tui/chat-shell.ts",
+        "src/tui/connect-provider-buttons.test.ts",
+        "src/tui/custom-provider-wizard.test.ts",
+        "src/tui/model-picker-notice.test.ts",
+        "src/tui/model-session-picker-modal.test.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/picker-theme.test.ts",
+        "src/tui/provider-endpoint-retry.test.ts",
+        "src/tui/remote-control-surface.test.ts",
+        "src/tui/session-picker-acp.test.ts",
+        "src/tui/subscription-provider-wizard.test.ts",
+        "src/tui/tui-session-lease.test.ts",
+        "src/tui/tui-shell.test.ts",
+        "src/tui/wizard-modal.test.ts"
+      ]
+    },
+    "symbols": [
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "ReviewConfirmSeams",
+        "kind": "interface",
+        "line": 55,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "trackerPrLookup",
+        "kind": "function",
+        "line": 65,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "packageRef",
+        "kind": "function",
+        "line": 72,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "resolvePackage",
+        "kind": "function",
+        "line": 78,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": [
+          "placeReviewPath (src/lib/review-path-flags.ts:50)",
+          "resolveReviewPackagePath (src/review/managed.ts:2934)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "label",
+        "kind": "function",
+        "line": 85,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "failed",
+        "kind": "function",
+        "line": 87,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "name": "SidebarRepoMetadata",
+        "kind": "interface",
+        "line": 511,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "name": "remoteApproval",
+        "kind": "function",
+        "line": 572,
+        "callers": [
+          "launchTuiAgentShell (src/tui/tui-shell.ts:3785)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "name": "isToolAvailableToSideWorker",
+        "kind": "function",
+        "line": 587,
+        "callers": [
+          "src/tui/tui-shell.test.ts"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "name": "parseGitHubRemote",
+        "kind": "function",
+        "line": 592,
+        "callers": [
+          "resolveSidebarMetadata (src/tui/tui-shell.ts:661)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "name": "runGitText",
+        "kind": "function",
+        "line": 626,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "name": "runGhJson",
+        "kind": "function",
+        "line": 644,
+        "callers": [
+          "resolveSidebarMetadata (src/tui/tui-shell.ts:661)"
+        ],
+        "callees": []
+      }
+    ],
+    "relatedTests": [
+      "src/cli.test.ts",
+      "src/commands/acp.test.ts",
+      "src/commands/agent-permission-mode.test.ts",
+      "src/commands/help-grouped.test.ts",
+      "src/commands/operator-confirm-other-tools.test.ts",
+      "src/commands/operator-confirm-review-tools.test.ts",
+      "src/commands/operator-confirm-rosters.test.ts",
+      "src/commands/operator-confirm-tools.test.ts",
+      "src/commands/providers.subscription.test.ts",
+      "src/commands/select.test.ts",
+      "src/commands/shell-agent-repl.test.ts",
+      "src/commands/shell-bus.test.ts",
+      "src/commands/shell-chat-preservation.test.ts",
+      "src/commands/shell-cli-validation.test.ts",
+      "src/commands/shell-launch.test.ts",
+      "src/commands/shell-lease.test.ts",
+      "src/commands/shell-preservation-signal.test.ts",
+      "src/commands/shell-slash-registry.test.ts",
+      "src/commands/shell-starting-line.test.ts",
+      "src/commands/shell-subscription-selection.test.ts",
+      "src/commands/shell-task-tools.test.ts",
+      "src/commands/shell.test.ts",
+      "src/remote/mirror-undelivered.test.ts",
+      "src/review/harness-robustness.test.ts",
+      "src/review/review-system.test.ts",
+      "src/tui/boot-animation.test.ts",
+      "src/tui/chat-shell.test.ts",
+      "src/tui/connect-provider-buttons.test.ts",
+      "src/tui/custom-provider-wizard.test.ts",
+      "src/tui/model-picker-notice.test.ts",
+      "src/tui/model-session-picker-modal.test.ts",
+      "src/tui/operator-confirmations.test.ts",
+      "src/tui/picker-theme.test.ts",
+      "src/tui/provider-endpoint-retry.test.ts",
+      "src/tui/remote-control-surface.test.ts",
+      "src/tui/session-picker-acp.test.ts",
+      "src/tui/subscription-provider-wizard.test.ts",
+      "src/tui/tui-session-lease.test.ts",
+      "src/tui/tui-shell.test.ts",
+      "src/tui/wizard-modal.test.ts"
+    ],
+    "wiki": [
+      {
+        "page": "components/src-tui.md",
+        "title": "Module src/tui"
+      }
+    ],
+    "memory": [
+      {
+        "path": "lessons/theme-switch-repaint.md",
+        "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+        "status": "accepted",
+        "module": "src/tui"
+      }
+    ],
+    "truncated": [],
+    "unavailable": []
+  }
+}

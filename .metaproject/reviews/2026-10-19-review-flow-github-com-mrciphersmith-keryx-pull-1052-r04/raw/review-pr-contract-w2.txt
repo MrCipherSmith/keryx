@@ -1,0 +1,62 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, PR 1052 (flow 464), round r04, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, wave 2, slice-03 (read in full: agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts, and the test hunks listed by name). Wave 1 findings PC-001..PC-004 not re-filed.
+
+Checklist of PR-body claims against slice-03 and the code at head:
+- "A remote-card answer records pressedBy and pressedAt": agent.ts carries both from the ApprovalResponse into the tool context only when the answer is remote (agent.ts hunk at 5796+); operator-confirm-tools.ts adds them to OperatorConfirmation only for remote-card; operator-confirm-review.ts passes cardPressFields(confirmation) to every store write (chunks answer, publish, coverage waiver, readiness waiver, mutation/override, plan, premise, review_complete record). Matches.
+- "accepted only from an allowed user id, once, for one question, within 1 hour": operator-confirm-tools.ts invoke deletes the token on every path, binds it to the input key, refuses undefined/non-listed allowedUserIds, refuses when now - issuedAt > REMOTE_CARD_TTL_MS (1 h, boundary accepted); shell.ts binds allowedUserIds to loadRemoteConfig (fresh per call). Tests at 2302-2397 of the slice cover each rule. Matches.
+- "New review_complete card (SHA, evidence level, waivers)": completeSpec shows the recorded head, the report's Evidence level line, and readiness, coverage, mutation and reviewer-override waivers; apply re-reads and digests the facts, then runs completeReviewGated (the same function runComplete now calls). Matches. review.ts runComplete dropping its inline run-profile/routing refusals is covered by completeReviewGated tests in the slice (lines 1986, 1992).
+- "review_confirm_plan and review_decide_premise answer through the card too": both specs record the press fields; tests 1705-1783. Matches.
+- "terminal commands stay as fallback": review.ts error texts keep "Outside keryx shell, run this command in a terminal"; the waiver tool texts now say to call review_complete (D-01 fix visible in the slice).
+- "TUI: pending and answered operator cards in the remote status tab, sidebar and /decisions": the slash-command descriptions in this slice are the only part of this claim in slice-03; see PC-005.
+- Test plan boxes: all unticked; CI is passing in pr-context.md; the named test files are in the diff. Not a defect.
+- "flow ac confirm is unchanged": nothing in slice-03 touches it.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-pr-contract",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-03 read in full. The PR body's remote-answer rules (allowed id, once, one question, 1 hour, pressedBy/pressedAt), the review_complete card and the card path for confirm_plan/decide_premise match the code and the tests in the slice. One minor disagreement: the /remote-control and /decisions command descriptions list five review cards, while the surface they describe lists every operator card.",
+  "stats": { "slices_read": 1, "claims_checked": 8, "findings": 1 },
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "PC-005",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "file": "src/commands/agent-commands.ts",
+      "line": 187,
+      "quote": "Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
+      "problem": "The /remote-control description (and the /decisions one at line 304: 'also lists the Telegram review cards waiting or answered (review_confirm_plan, ...)') names five review cards. The PR body says 'pending and answered operator cards', and the code lists every card: tui-shell.ts:6100 sets isCard = meta.alwaysAsk === true && meta.card non-empty && !isUserPromptApprovalCard(tool), and operatorCards.ask(...) at 6103 and 6120 takes the card title with no tool-name filter. So review_publish, review_waive_mutation, review_override_reviewers, review_comments_reply, review_chunks_answer, the schedule and learning cards also appear.",
+      "impact": "A reader of /help or the command list believes only five review cards show up in the status tab and /decisions, and does not expect a schedule or review_publish card to wait there for a press. The named set also goes stale when a card tool is added.",
+      "suggested_fix": "Say 'the operator cards (review gates, schedules, learning) waiting for a press' in both descriptions, or name review_publish and the other review cards too; do not enumerate five names for an unfiltered list.",
+      "evidence": "src/commands/agent-commands.ts lines 187 and 304 at head; src/tui/tui-shell.ts lines 6100-6120 (isCard has no tool allow-list); src/tui/operator-confirmations.ts OperatorConfirmationLog.ask(question, mirrored) stores the card title only. PR body: 'pending and answered operator cards in the remote status tab, sidebar and /decisions'.",
+      "confidence": "medium",
+      "dedupe_key": "pc:slash-description-five-cards",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-02", "disposition": "open" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-04", "disposition": "open" },
+    { "id": "D-05", "disposition": "open" },
+    { "id": "D-06", "disposition": "open" },
+    { "id": "D-07", "disposition": "open" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-09", "disposition": "open" },
+    { "id": "D-10", "disposition": "open" },
+    { "id": "D-11", "disposition": "open" },
+    { "id": "D-12", "disposition": "open" },
+    { "id": "D-13", "disposition": "open" },
+    { "id": "D-14", "disposition": "open" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes on prior_dispositions: D-01 closed (slice-03 shows the waiver tool descriptions and the readiness result now say to call review_complete; the coverage result string at operator-confirm-review.ts:296 also says 'Call review_complete'). D-03 stays partial as wave 1 found (completion-gate.ts describeBlockers, outside this slice). D-08 closed per wave 1. The other items are code or test items outside this lane and left open as agreed.

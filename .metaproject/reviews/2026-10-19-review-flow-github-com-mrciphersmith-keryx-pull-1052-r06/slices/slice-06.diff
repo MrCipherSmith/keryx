@@ -1,0 +1,2667 @@
+--- src/commands/agent-commands.ts
+@@ 167,207 @@
+   },
+   {
+     name: "/review",
+     description: "Show project-wide items needing review (proposals, blocked sessions)",
+     // TUI-only, same reasoning as /workspace: the sidebar badge, mouse
+     // click, and list+detail modal (with its [a]/[y] accept) all need the
+     // OpenTUI surface.
+     modes: AGENT_ONLY,
+   },
+   {
+     // The managed pull request reviews and what the review bot's findings came to. The modal and
+     // the sidebar row need the OpenTUI surface; the readline agent REPL prints the same numbers as text.
+     name: "/reviews",
+     description: "Managed pull request reviews: findings by outcome, precision, resolved before merge",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 376: the Telegram topic for this session. Turning it on is TUI-only (the modal, the
+     // sidebar row); the readline agent REPL prints the status as text.
+     name: "/remote-control",
+-    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default",
++    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default. Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 399: post the session's last messages to the remote-control topic. Needs remote control
+     // on; the readline agent REPL has no topic and says so.
+     name: "/history",
+     description: "Post the last messages of this session to the Telegram topic: /history [N], 1 to 20",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 377: the machine's Telegram connection. Connect needs the hidden token entry of the
+     // full-screen shell; the readline agent REPL prints the state and says where to connect.
+     name: "/channels",
+     description: "Connect, test or disconnect Telegram for this machine: /channels [status]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 403: the GitHub work intake. The full-screen shell opens a modal; the readline REPL prints
+     // the same status as text.
+     name: "/intake",
+
+--- src/commands/agent-commands.ts
+@@ 284,324 @@
+     description: "Autonomous PR review: /autoreview start <URL> [--budget-minutes N] [--budget-tokens N], list, stop, arbiter",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 369 (R4d): calls a remote `keryx serve` turn is waiting on. Allow or deny
+     // is one call, once; the local answer path of the serve approval broker.
+     name: "/approvals",
+     description: "Pending remote approvals: summary, scope, consequence, expiry — allow or deny one call, once",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 396: the saved shell rules an Always answer leaves behind (also from Telegram). Listed and
+     // removed here; never from a chat.
+     name: "/permissions",
+     description: "The saved shell rules (what Always remembered): honoured or not, session grants; remove one",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
+     name: "/decisions",
+-    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer",
++    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer; also lists the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete)",
+     modes: AGENT_ONLY,
+   },
+   {
+     // The installer view under the name that says what it does: it wires this
+     // project into an editor, the TUI half of `keryx integrate`. R700-09:
+     // renamed from `/integrations` — that name sat one letter from the CLI
+     // `integrations` verb (installs hooks/instructions for agent runtimes),
+     // a different command this view does not touch.
+     name: "/integrate",
+     description: "Wire this project into an editor over MCP (keryx integrate; see also keryx integrations)",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 306 (AC12): the list+detail modal over `keryx review ci-triage`'s
+     // advisory flaky/infra/real-regression pipeline. TUI-only, same reasoning
+     // as `/review`: it renders into the transcript of an OpenTUI session.
+     name: "/ci",
+     description: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage",
+     modes: AGENT_ONLY,
+   },
+
+--- src/commands/agent.ts
+@@ 282,324 @@
+  * A bare `boolean` is the historical form and still works. The object form
+  * BINDS the answer to an action: when `fingerprint` is present it must equal the
+  * fingerprint the approver was given, otherwise the driver treats the answer as
+  * a denial. That closes the gap where "the user said yes" and "this is what
+  * runs" are two independent facts that merely happen to line up.
+  * `trustMcpTool` is accepted only for `use_tool`, in trust mode, after that
+  * fingerprint check, and never for a call under the untrusted-content floor;
+  * hosts must offer it only for catalog-resolved MCP tools.
+  */
+ export type ApprovalResponse =
+   | boolean
+   | {
+       approved: boolean;
+       fingerprint?: string;
+       trustMcpTool?: boolean;
+       /**
+        * Flow 456: the answer came from the remote topic, not this shell. A label for the record an
+        * operator-confirmed tool writes (`confirmedVia`); it never changes whether the call runs.
+        */
+       via?: "remote";
++      /** Flow 464: the Telegram user id that pressed the button and the ISO time on this shell's clock when the press arrived, not Telegram's time (remote answers only). */
++      pressedBy?: number;
++      pressedAt?: string;
+     };
+ 
+ /**
+  * Optional marks on an approver. Without them a `false` is a person's refusal. `attended: false` is an approver
+  * with nobody behind it (an unattended run); `current()` is false once the turn that asked has been displaced, so
+  * its `false` is a stale turn's, not an answer. Neither kind of `false` counts as the operator refusing.
+  */
+ export interface ApproverProvenance {
+   attended?: boolean;
+   current?: () => boolean;
+ }
+ 
+ /** Rendering sink for agent mode. Assistant text streams through `write`. */
+ export interface AgentIO {
+   write: (s: string) => void;
+   /**
+    * A durable-history checkpoint is needed. Emitted after every history
+    * mutation, including streamed assistant deltas, so interrupted turns are
+    * recoverable instead of being lost at the end of a model turn. Interactive
+    * recovery defers provisional assistant deltas until a valid model_end.
+
+--- src/commands/agent.ts
+@@ 3481,3521 @@
+   let lastFollowThroughSignature: string | undefined;
+   let reviewGateContinues = 0;
+   let reviewGateStalls = 0;
+   let lastReviewGateSignature: string | undefined;
+   /** True when the managed-review gate refused this stop and queued a nudge: the caller re-enters the round loop. */
+   const holdReviewGate = async (): Promise<boolean> => {
+     if (subagentBudget !== undefined || deps.unattended === true) return false;
+     // One tracker answers both: whether this session ran a review, and what its executed `keryx review` commands named.
+     // It keeps both, and the session's start, across a compaction that rewrites the history in place.
+     const named = sessionReviewNames(history, process.cwd());
+     const runSeen = named.runSeen === true;
+     const open = runSeen
+       ? await findReviewGateState(process.cwd(), named.startedAt ?? sessionStartedAt(history), named).catch(() => null)
+       : null;
+     const gate = decideReviewGate({
+       open,
+       runSeen,
+       continues: reviewGateContinues,
+       stalls: reviewGateStalls,
+       lastSignature: lastReviewGateSignature,
++      cardAvailable: deps.tools.some((tool) => tool.definition.name === "review_complete"),
+     });
+     if (gate.action === "continue") {
+       reviewGateContinues += 1;
+       reviewGateStalls = gate.stalls;
+       lastReviewGateSignature = gate.signature;
+       system(`\n[review-gate] Review not complete (continue ${reviewGateContinues}); \`review complete\` still refuses. Continuing.\n`);
+       history.push({
+         role: "user",
+         content: wrapHarnessNudge(gate.message, controlNonce),
+         provenance: "harness",
+         ts: now(),
+       });
+       io.onHistoryChange?.("tool");
+       return true;
+     }
+     if (gate.action === "stop") {
+       system(`\n[review-gate] ${gate.report}\n`);
+     }
+     return false;
+   };
+
+--- src/commands/agent.ts
+@@ 5797,5838 @@
+       mark("pre-tool-hook");
+       hookResult = await firePreToolUseHook(hooks, call, input, risk, isReadOnly, mode);
+     } catch (err) {
+       // Flow 306 fix (review finding 3): a hook CRASH on PreToolUse — a
+       // gate-capable event — must fail CLOSED, never let the call run
+       // ungated. Only observe-only events (PostToolUse/PostToolUseFailure
+       // below) stay swallowed.
+       return {
+         output: `${call.name} refused: PreToolUse hook crashed (${
+           err instanceof Error ? err.message : String(err)
+         })`,
+         isError: true,
+       };
+     }
+   }
+   const hookInteractive = hooks?.runtime.interactive ?? true;
+   // Flow 295 (F8): set only in the write branch below, after the operator's yes.
+   let confirmationToken: string | undefined;
+   // Flow 456: where the operator answered an operator-confirmed card (`InteractiveToolContext.confirmationVia`).
+   let confirmationVia: "local" | "remote" | undefined;
++  let confirmationPressedBy: number | undefined;
++  let confirmationPressedAt: string | undefined;
+   if (tool.confirmation !== undefined && risk !== "write") {
+     // Flow 295: the operator confirmation lives in the write branch only; any
+     // other risk would skip it, so such a tool is refused rather than run.
+     return { output: `tool "${call.name}" needs operator confirmation but is not a write tool; refused`, isError: true };
+   }
+   if (risk === "shell" || risk === "destructive") {
+     // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
+     // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
+     // missing dimension. Escalation only — it never denies on its own (ADR-0009),
+     // because a "safe" verdict from an incomplete list must never read as a grant.
+     const command = typeof input.command === "string" ? input.command : "";
+     // Flow 451: a direct GitHub review while a bound review package is not READY is refused, not escalated: the
+     // readiness checklist is only a gate if the other road to GitHub is shut.
+     if (command.length > 0) {
+       const publishRefusal = await reviewPublishRefusal(command, tool.workingDirectory ?? process.cwd());
+       if (publishRefusal !== undefined) return { output: publishRefusal, isError: true };
+     }
+     const routineContext = {
+       untrustedContent: untrustedOrigin,
+       ...(tool.workingDirectory === undefined ? {} : { cwd: tool.workingDirectory }),
+
+--- src/commands/agent.ts
+@@ 6101,6146 @@
+               ...(credentials ? { credentials } : {}),
+               ...(card !== undefined ? { alwaysAsk: true, card, ...(cardTitle !== undefined ? { cardTitle } : {}) } : {}),
+               ...(gated.hookAsked ? { hookAsk: true } : {}),
+               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+               cause: classifyApprovalCause({
+                 destructive,
+                 credentials,
+                 confirmation: card !== undefined,
+                 hookAsk: gated.hookAsked,
+                 untrusted: untrustedOrigin,
+               }),
+             });
+       review?.record("manual", call.name, `operator ${isApprovalFor(response, fingerprint) ? "approved" : "refused"}`);
+       if (!isApprovalFor(response, fingerprint)) {
+         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
+         return {
+           output: denialOutput(untrustedOrigin ? untrustedDenial : card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`),
+           isError: true,
+         };
+       }
+-      if (card !== undefined) confirmationVia = typeof response === "object" && response.via === "remote" ? "remote" : "local";
++      if (card !== undefined) {
++        const remote = typeof response === "object" && response.via === "remote" ? response : undefined;
++        confirmationVia = remote !== undefined ? "remote" : "local";
++        confirmationPressedBy = remote?.pressedBy;
++        confirmationPressedAt = remote?.pressedAt;
++      }
+       // Fix round 4, F-001: an interactive operator's approval of a
+       // `keryx.impact-evidence` `ask` IS the acknowledgement W8 strict mode
+       // waits for — without recording it here, every later edit of the same
+       // file re-asks forever (round 4 review). Only recorded for an actual
+       // approval (this line only runs once `isApprovalFor` above has
+       // succeeded) and only when impact-evidence itself was the hook that
+       // asked — `hookAsked` can also be set by an unrelated gate hook's own
+       // `ask`, which has nothing to do with W8's acknowledgement contract.
+       // Unattended runs never reach here (no approver, so `response` above
+       // is `false` and the call already returned) — strict mode + unattended
+       // stays a hard deny by design, not a loosening.
+       if (hookResult?.decisions.some((d) => d.hookId === IMPACT_EVIDENCE_HOOK_ID && d.decision === "ask")) {
+         hooks?.runtime.acknowledgeImpactEvidence?.(extractFilePathsFromToolInput(input));
+       }
+     }
+   } else if (risk === "read") {
+     // Flow 306 (W6 T9): `read` never otherwise gates at all — the implicit
+     // baseline is `"auto"`. A `PreToolUse` hook can still tighten it to
+     // `ask` (forcing a real approval, never a saved allowlist) or `deny`.
+     const gated = composeWithHook(call.name, "auto", hookResult, hookInteractive);
+
+--- src/commands/agent.ts
+@@ 6172,6213 @@
+ 
+   if (!reserveInvocation()) {
+     return toolCallBudgetResult(maxToolCalls ?? 0, maxToolCalls ?? 0);
+   }
+   // `/rewind` seam: after every approval, before the tool can touch the work tree.
+   if (beforeMutation !== undefined && (risk === "write" || risk === "shell" || risk === "destructive" || risk === "delegate")) {
+     try {
+       mark("before-mutation");
+       await beforeMutation();
+     } catch {
+       // A failed snapshot never blocks the tool.
+     }
+   }
+   // The context is passed unconditionally: a tool that ignores it is unaffected,
+   // and making the parameter conditional would hide which calls are abortable.
+   mark("invoke");
+   const result = await tool.invoke(input, {
+     ...(signal !== undefined ? { signal } : {}),
+     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
+     ...(confirmationToken !== undefined && confirmationVia !== undefined ? { confirmationVia } : {}),
++    ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedBy !== undefined ? { confirmationPressedBy } : {}),
++    ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedAt !== undefined ? { confirmationPressedAt } : {}),
+     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
+   });
+   if (review !== undefined && call.name === "shell_exec" && typeof input.command === "string") {
+     review.observe(input.command, result);
+   }
+ 
+   // Flow 306 (W6 T9): PostToolUse/PostToolUseFailure — observe-only, fired
+   // AFTER the tool settles, never altering `result` beyond appending the
+   // PreToolUse hook's own `additionalContext` (below) — and never throwing
+   // into the loop (`fire()` itself is bounded to each observe hook's own
+   // timeout; the try/catch is a defensive floor against a fake runner in
+   // tests, or any future non-conforming implementation).
+   if (hooks !== undefined) {
+     const aliasName = aliasHookToolName(call.name);
+     mark("post-tool-hook");
+     try {
+       await hooks.runtime.fire(
+         result.isError ? "PostToolUseFailure" : "PostToolUse",
+         {
+           sessionId: hooks.sessionId,
+
+--- src/commands/operator-confirm-other.ts
+@@ 89,135 @@
+     error instanceof LearningAcceptError || error instanceof LearningPromoteError || error instanceof LearningGraduateError
+       ? ` [${error.reason}]`
+       : "";
+   return `${errorText(error)}${reason}`;
+ }
+ 
+ function sha256(value: string): string {
+   return createHash("sha256").update(value, "utf8").digest("hex");
+ }
+ 
+ /** Stable digest of a value as it was SHOWN on a card, so `apply` can refuse content that changed after the yes was asked for. */
+ function contentDigest(value: unknown): string {
+   return sha256(JSON.stringify(value ?? null));
+ }
+ 
+ function limited(lines: readonly string[]): string[] {
+   if (lines.length <= MAX_LISTED) return [...lines];
+   return [...lines.slice(0, MAX_LISTED), `  ... and ${lines.length - MAX_LISTED} more`];
+ }
+ 
+-function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string } {
+-  return { confirmedVia: confirmation.confirmedVia, quote: confirmation.quote };
++function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string; pressedBy?: number; pressedAt?: string } {
++  return {
++    confirmedVia: confirmation.confirmedVia,
++    quote: confirmation.quote,
++    ...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy }),
++    ...(confirmation.pressedAt === undefined ? {} : { pressedAt: confirmation.pressedAt }),
++  };
+ }
+ 
+ /** Run `fn` with console output captured, and `process.exitCode` put back. The CLI verbs print; a tool returns text. */
+ async function captureConsole(fn: () => Promise<void>): Promise<{ output: string; failed: boolean; error?: unknown }> {
+   const lines: string[] = [];
+   const saved = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+   const before = process.exitCode;
+   const grab =
+     () =>
+     (...args: unknown[]): void => {
+       lines.push(args.map((a) => (typeof a === "string" ? a : String(a))).join(" "));
+     };
+   console.log = grab();
+   console.error = grab();
+   console.warn = grab();
+   console.info = grab();
+   process.exitCode = 0;
+   let thrown: unknown;
+   let exitCode: typeof process.exitCode;
+   try {
+
+--- src/commands/operator-confirm-other.ts
+@@ 605,645 @@
+ interface SchedulePrepared {
+   readonly name: string;
+ }
+ 
+ const SCHEDULE_DESCRIPTIONS: Readonly<Record<ScheduleVerb, string>> = {
+   resume:
+     "Re-enable a paused schedule and its OS timer (`keryx schedule resume <name>`). The stored entry is re-verified against its " +
+     "signature first; a tampered entry is refused. ",
+   run: "Run one pass of a schedule now (`keryx schedule run <name>`): one unattended agent turn that spends the schedule's budget. ",
+   pause: "Pause a schedule: disable its timer and mark it disabled (`keryx schedule pause <name>`). ",
+   remove: "Remove a schedule: uninstall its timer (only keryx-written files) and delete its entry (`keryx schedule remove <name>`). ",
+ };
+ 
+ /** Per-machine operator decisions on schedules. Under the trigger data dir the unattended floor protects; never inside the signed entry. */
+ export function scheduleDecisionLogPath(projectRoot: string): string {
+   return path.join(triggerDataDir(projectRoot), "operator-decisions.jsonl");
+ }
+ 
+ async function recordScheduleDecision(
+   projectRoot: string,
+-  line: { action: string; name: string; quote: string; confirmedVia: string; at: string },
++  line: { action: string; name: string; quote: string; confirmedVia: string; at: string; pressedBy?: number; pressedAt?: string },
+ ): Promise<void> {
+   const file = scheduleDecisionLogPath(projectRoot);
+   await mkdir(path.dirname(file), { recursive: true });
+   await appendFile(file, `${JSON.stringify(line)}\n`, "utf8");
+ }
+ 
+ function scheduleLines(row: ScheduleSummary): string[] {
+   const a = row.entry.action;
+   const kind = a.digest !== undefined ? "digest (runs inside `keryx serve`)" : a.review !== undefined ? `autonomous review of ${cardSafe(a.review.ref)}` : "agent task";
+   const last = row.last === undefined ? "never ran" : `${row.last.outcome} at ${row.last.at}${row.last.usd !== undefined ? `, $${row.last.usd.toFixed(4)}` : ""}`;
+   return [
+     `schedule: ${cardSafe(row.name)} [${row.enabled ? "enabled" : "paused"}] - ${kind}`,
+     `cadence: cron "${cardSafe(row.cron)}"; next run: ${row.nextRun?.toISOString() ?? "none (paused)"}`,
+     `action: ${a.digest !== undefined ? "GitHub and board digest" : cardSafe(a.prompt)}`,
+     `runner: ${cardSafe(a.dispatch.provider)}/${cardSafe(a.dispatch.model)}, mode ${a.dispatch.permissionMode}, ceiling $${a.dispatch.ceilingUsd}, max ${a.dispatch.maxSeconds}s`,
+     `network: ${a.grants.network}; granted tools: ${a.grants.tools.map(cardSafe).join(", ") || "none"}`,
+     `last run: ${last}`,
+   ];
+ }
+ 
+
+--- src/commands/operator-confirm-review.ts
+@@ 1,70 @@
+ // Operator-confirmed gate tools (review gates) — flow 456. Each spec is registered through operatorConfirmSpecs().
+ //
+ // Four decisions only the operator may take, each asked as a yes/no card in the shell and applied in process through the
+ // SAME library function its CLI counterpart calls (the CLI path needs a TTY, which `shell_exec` does not have):
+ //
+ //   review_chunks_answer    keryx review chunks estimate --answer yes|no --quote   -> answerChunkEstimate
+ //   review_publish          keryx review publish [--partial]                       -> publishReview
+ //   review_waive_coverage   keryx review complete --waive-coverage "<quote>"       -> recordCoverageWaiver
+ //   review_waive_readiness  keryx review complete --waive <item> "<quote>"         -> waiveReadiness
+ //
+ // Flow 457 (T7) adds four more, each with a terminal counterpart that refuses without a TTY:
+ //
+ //   review_waive_mutation      keryx review waive-mutation --package --reason          -> recordOperatorDecision
+ //   review_override_reviewers  keryx review override-reviewers --package --reason      -> recordOperatorDecision
+ //   review_comments_reply      keryx review comments reply --final                     -> commentsReplyPass
+ //   review_confirm_plan        keryx review confirm-plan --package                     -> recordPlanConfirmation
+ //
++// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's
++// evidence level and every waiver the package carries; a yes closes the round through the CLI's own gates.
++//
+ // Flow 459 adds one more: review_decide_premise (keryx review decide-premise --package --finding --answer --reason ->
+ // recordPremiseDecision), the operator's answer to a finding the premise judge held.
+ //
+-// The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
+-// the package and passes the gate; the CLI flags record the waiver and close in one run.
++// The waiver tools record the waiver only. Closing the review is the review_complete card, which finds the waiver in
++// the package and passes the gate; at a terminal the CLI flags record the waiver and close in one run.
+ //
+ // Every card is built from the package on disk, never from the model's input alone, and `apply` refuses when the package
+ // moved between the card and the yes.
+ 
+-import { existsSync, statSync } from "node:fs";
++import { createHash } from "node:crypto";
++import { existsSync, readFileSync, statSync } from "node:fs";
+ import path from "node:path";
+ import { cardSafe } from "../lib/card-safe";
++import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
+ import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
+ import { placeReviewPath } from "../lib/review-path-flags";
+ import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
+ import { readChunkPlan } from "../review/chunks";
+ import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate } from "../review/chunks-estimate";
+-import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
+-import { resolveReviewPackagePath } from "../review/managed";
++import { completeReviewGated } from "../review/complete-gated";
++import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
++import { evidenceLevelLine } from "../review/evidence-level";
++import { writeFileAtomic } from "../lib/fs";
++import { resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
+ import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+-import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
++import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+ import type { PrLookup } from "../review/complete-head-gate";
+ import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
+ import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
+-import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
++import { readOperatorDecisions, recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+ import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
+ import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
+ 
+ /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
+ export interface ReviewConfirmSeams {
+   prLookup?: PrLookup;
+   prFiles?: (ref: string) => Promise<string[] | null>;
+   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+ }
+ 
+ const LISTED_FILES = 15;
+ const BODY_PREVIEW_LINES = 8;
+ const BODY_PREVIEW_CHARS = 140;
+ 
+ async function trackerPrLookup(ref: string): Promise<Awaited<ReturnType<PrLookup>>> {
+   if (!(await githubAdapter.detect())) return null;
+   return githubAdapter.prStatus(ref);
+ }
+ 
+ const packageSchema = { type: "string", description: "The review package: its directory or its review id." } as const;
+
+--- src/commands/operator-confirm-review.ts
+@@ 137,177 @@
+             `estimate: ~${estimate.tokens.input} input + ~${estimate.tokens.output} output tokens, ~$${estimate.costUsd.toFixed(2)}, ~${Math.round(estimate.seconds / 60)} min`,
+             answer === "yes"
+               ? "yes: the run may hand out chunks past the ceiling, for this chunk plan only"
+               : "yes: the run is recorded as declined and no chunk runs",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, planKey: estimate.planKey, answer },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_chunks_answer: nothing prepared for this card", isError: true };
+       const estimate = await estimateChunkRun(prepared.dir, ctx.projectRoot, undefined, { readOnly: true });
+       if (estimate === null || estimate.planKey !== prepared.planKey) {
+         return { output: "The chunk plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+       // The CLI records the estimate before it answers (`chunks estimate`), so a first answer finds a record to extend.
+       await recordChunkEstimate(prepared.dir, estimate, chunkModeOf(prepared.dir));
+-      const record = await answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia);
++      const record = await answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
+       return { output: `chunk run answered ${record.answer?.value ?? prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}); ${estimate.chunks} pass(es) against a ceiling of ${estimate.maxPasses}` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 2. review_publish
+ 
+ type PublishPrepared = { dir: string; body: string; ref: string; event: ReviewEvent; partial: boolean };
+ 
+ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrepared> {
+   const readiness = (): ReadinessOptions => ({ prLookup: seams.prLookup ?? trackerPrLookup, prFiles: seams.prFiles ?? githubPrFiles });
+   const post = (): ((ref: string, event: ReviewEvent, body: string) => Promise<PostResult>) => seams.postReview ?? githubPostReview;
+   return {
+     name: "review_publish",
+     description:
+       "Post a finished review to its pull request on GitHub. Pass the review package, optionally the event (COMMENT, REQUEST_CHANGES, APPROVE; default COMMENT) and partial=true to post a review whose readiness checklist still has failing items (the page then says what is missing). " +
+       "Same effect as `keryx review publish`; the operator sees the target, the verdict and the start of the body first.",
+     inputSchema: {
+       type: "object",
+
+--- src/commands/operator-confirm-review.ts
+@@ 216,332 @@
+             ...preview,
+             "yes: the review is posted to GitHub and cannot be taken back from here",
+           ],
+           subject: `${cardSafe(target)} (package ${name})`,
+           prepared: { dir, body: result.body, ref: target, event: result.event, partial: result.partial },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_publish: nothing prepared for this card", isError: true };
+       let changed = false;
+       const result = await publishReview(prepared.dir, {
+         event: prepared.event,
+         partial: prepared.partial,
+         readiness: readiness(),
+         post: post(),
+         now: () => new Date(confirmation.at),
+         confirmedVia: confirmation.confirmedVia,
++        ...cardPressFields(confirmation),
+         // Only the body, the target and the verdict the operator saw are posted. The event is fixed from `prepared`
+         // above; the target is re-read from the manifest, which a background job may have retargeted.
+         confirm: async (body, targetRef) => {
+           changed = body !== prepared.body || targetRef !== prepared.ref;
+           return !changed;
+         },
+       });
+       if (!result.posted) {
+         return { output: changed ? "The review body or target changed after the card was shown; nothing was posted. Ask again." : "review not published", isError: true };
+       }
+       return { output: `published: ${result.event}${result.partial ? " (partial review)" : ""} (${confirmation.confirmedVia}, ${confirmation.at})` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 3. review_waive_coverage
+ 
+ type CoveragePrepared = { dir: string; files: string[] };
+ 
+ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
+   return {
+     name: "review_waive_coverage",
+     description:
+       "Accept that the in-scope files no review slice or chunk covered stay unreviewed, so `keryx review complete` passes its coverage gate. Pass the review package. " +
+-      "Same effect as `keryx review complete --waive-coverage`: records the waiver (the operator's yes, the time, the files); run `keryx review complete` afterwards to close the review.",
++      "Same effect as `keryx review complete --waive-coverage`: records the waiver (the operator's yes, the time, the files); call review_complete afterwards to close the review.",
+     inputSchema: { type: "object", properties: { package: packageSchema }, required: ["package"], additionalProperties: false },
+     async buildCard(input, ctx): Promise<OperatorCardResult<CoveragePrepared>> {
+       const ref = packageRef(input);
+       if (ref === undefined) return { refusal: "package is required" };
+       try {
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+         const report = await computeCoverage(dir);
+         const files = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
+         if (!report.tracked) return { refusal: "Coverage is not tracked for this package (no slice manifest, no dropped blast-radius files): there is nothing to waive." };
+         if (files.length === 0) return { refusal: "No in-scope file is uncovered: there is nothing to waive." };
+         const name = label(dir, ctx.projectRoot);
+         return {
+           title: `Accept ${files.length} uncovered file(s) as not reviewed in ${name}?`,
+           lines: [
+             `${files.length} of ${report.counts.inScope} in-scope files were not looked at by any slice or chunk:`,
+             ...listFiles(files.map(cardSafe)),
+             "yes: review complete will pass its coverage gate, and the package records that these files were not reviewed",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, files },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_waive_coverage: nothing prepared for this card", isError: true };
+       const now = (await computeCoverage(prepared.dir)).files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
+       if (now.length !== prepared.files.length || now.some((file, index) => file !== prepared.files[index])) {
+         return { output: "The uncovered files changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+-      const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia);
++      const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
+       if (waiver === undefined) return { output: "No coverage waiver was recorded: the package holds no dispatch record or nothing is uncovered.", isError: true };
+-      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Run \`keryx review complete\` to close the review.` };
++      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Call review_complete to close the review.` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 4. review_waive_readiness
+ 
+ type ReadinessPrepared = { dir: string; item: string; evidence: string };
+ 
+ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<ReadinessPrepared> {
+   const readiness = (): ReadinessOptions => ({ prLookup: seams.prLookup ?? trackerPrLookup, prFiles: seams.prFiles ?? githubPrFiles });
+   return {
+     name: "review_waive_readiness",
+     description:
+       "Accept one failing item of the review readiness checklist as it is, so the review can complete or be published as a partial review. Pass the review package and the item (its number or id). " +
+-      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
++      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; call review_complete afterwards to close the review.",
+     inputSchema: {
+       type: "object",
+       properties: { package: packageSchema, item: { type: "string", description: `The readiness item: its number (1-${READINESS_ITEMS.length}) or id, e.g. head, pr-files or quotes-located. Item ${READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number ?? "premise-decisions"} (premise-decisions) is never waived: each held finding is answered with review_decide_premise.` } },
+       required: ["package", "item"],
+       additionalProperties: false,
+     },
+     async buildCard(input, ctx): Promise<OperatorCardResult<ReadinessPrepared>> {
+       const ref = packageRef(input);
+       const selector = input["item"];
+       if (ref === undefined) return { refusal: "package is required" };
+       if (typeof selector !== "string" || selector.trim() === "") return { refusal: "item is required" };
+       try {
+         const id = readinessItemId(selector);
+         if (id === undefined) return { refusal: `"${selector}" is not a readiness item.` };
+         // Refused before the card is drawn (review RG2-003): waiveReadiness refuses it anyway, after the operator's yes.
+         if (id === "premise-decisions") return { refusal: PREMISE_DECISIONS_NOT_WAIVABLE };
+         const dir = await resolvePackage(ref, ctx.projectRoot);
+         const report = await computeReadiness(dir, readiness());
+         const item = report.items.find((entry) => entry.id === id);
+         if (item === undefined) return { refusal: `"${selector}" is not a readiness item.` };
+
+--- src/commands/operator-confirm-review.ts
+@@ 337,378 @@
+           title: `Accept failing readiness item ${item.number} (${item.id}) of ${name} as it is?`,
+           lines: [
+             `item ${item.number} ${item.id}: ${cardSafe(item.title)}`,
+             `failing: ${cardSafe(item.evidence)}`,
+             ...(item.repair === undefined ? [] : [`repair would be: ${cardSafe(item.repair)}`]),
+             "yes: the item is recorded as waived by the operator, in the manifest and at the top of the report",
+           ],
+           subject: `package ${name}, item ${item.id}`,
+           prepared: { dir, item: item.id, evidence: item.evidence },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_waive_readiness: nothing prepared for this card", isError: true };
+       const current = (await computeReadiness(prepared.dir, readiness())).items.find((entry) => entry.id === prepared.item);
+       if (current === undefined || current.status !== "fail" || current.evidence !== prepared.evidence) {
+         return { output: "The readiness item changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+-      const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia });
+-      return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Run \`keryx review complete\` to close the review.` };
++      const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) });
++      return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Call review_complete to close the review.` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 5-6. review_waive_mutation, review_override_reviewers (flow 457)
+ 
+ type DecisionPrepared = { dir: string; reason: string; detail: string; subject: OperatorDecisionSubject };
+ 
+ const reasonOf = (input: Record<string, unknown>): string | undefined => {
+   const value = input["reason"];
+   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+ };
+ 
+ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionPrepared> {
+   const mutation = kind === "mutation-waiver";
+   return {
+     name: mutation ? "review_waive_mutation" : "review_override_reviewers",
+     description: mutation
+       ? "Record the operator's waiver of the mutation pass: the proposed mutants stay unrun and the review records `Not run: mutation pass`. Pass the review package and the reason. " +
+
+--- src/commands/operator-confirm-review.ts
+@@ 424,464 @@
+             `head: ${cardSafe(subject.head ?? "not recorded")}`,
+             selected === undefined ? "selected: not named" : `selected: ${cardSafe(selected.join(", "))}`,
+             `not run: ${cardSafe(missing.slice(0, LISTED_FILES).join(", ") || "none")}${missing.length > LISTED_FILES ? ` … and ${missing.length - LISTED_FILES} more` : ""}`,
+             `reason: ${cardSafe(reason)}`,
+             "yes: the gate accepts leaving out exactly these reviewers at this head; dropping another one or a new head asks again",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, reason, detail: missing.join(","), subject },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: `${mutation ? "review_waive_mutation" : "review_override_reviewers"}: nothing prepared for this card`, isError: true };
+       const selected = Array.isArray(input["selected"]) ? (input["selected"] as unknown[]).filter((v): v is string => typeof v === "string") : undefined;
+       const again = await operatorDecisionSubject(prepared.dir, kind, mutation ? undefined : selected);
+       if (JSON.stringify(again) !== JSON.stringify(prepared.subject)) {
+         return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+-      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, at: confirmation.at, subject: prepared.subject });
++      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at, subject: prepared.subject });
+       return { output: `${mutation ? "mutation pass waived" : "reviewer-set override recorded"} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 7. review_comments_reply (flow 457)
+ 
+ type ReplyPrepared = { argv: string[]; requests: string };
+ 
+ const REPLY_PREVIEW = 6;
+ 
+ function replyArgv(input: Record<string, unknown>): string[] | { refusal: string } {
+   const repo = input["repo"];
+   const pr = input["pr"];
+   const sha = input["sha"];
+   if (typeof repo !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return { refusal: "repo must be <owner>/<repo>" };
+   if (typeof pr !== "number" || !Number.isInteger(pr) || pr <= 0) return { refusal: "pr must be the pull request number" };
+   if (typeof sha !== "string" || !/^[0-9a-f]{7,40}$/i.test(sha)) return { refusal: "sha must be the pull request head commit" };
+   const argv = ["--repo", repo, "--pr", String(pr), "--sha", sha, "--final"];
+
+--- src/commands/operator-confirm-review.ts
+@@ 546,586 @@
+         return {
+           title: `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for ${name}?`,
+           lines: [
+             `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
+             `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
+             `threshold: ${estimate.thresholds.maxDispatches} dispatches or ${estimate.thresholds.maxMinutes} min (${estimate.overReasons.join("; ")})`,
+             ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
+             "yes: this plan may run; a re-cut plan asks again",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, planKey: planKeyOf(estimate) },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_confirm_plan: nothing prepared for this card", isError: true };
+       const estimate = await estimatePlan(prepared.dir);
+       if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+-      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
++      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at });
+       return { output: `plan confirmed by the operator (${record.confirmedVia}, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min` };
+     },
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------------
+ // 9. review_decide_premise (flow 459)
+ 
+ /** `digest` is the shown finding's (see `HeldFinding.digest`): apply records only while the finding still reads the same. */
+ type PremisePrepared = { dir: string; finding: string; answer: "uphold" | "dismiss"; reason: string; digest: string };
+ 
+ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
+   return {
+     name: "review_decide_premise",
+     description:
+       "Record the operator's answer to a finding the premise judge held (verdict challenged or owner-decision): uphold keeps it at its original severity, dismiss records it dismissed-incorrect with the reason as evidence. " +
+       "Pass the review package, the finding (its global_id or id), the answer you are asking for and the reason. Same effect as `keryx review decide-premise` at a terminal. A held finding never goes to a fixer before this is answered.",
+     inputSchema: {
+       type: "object",
+       properties: {
+
+--- src/commands/operator-confirm-review.ts
+@@ 619,654 @@
+               : "yes: the finding is recorded dismissed-incorrect with your reason as the evidence",
+           ],
+           subject: `package ${name}, finding ${cardSafe(found.key)}`,
+           prepared: { dir, finding: found.key, answer, reason, digest: found.digest },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_decide_premise: nothing prepared for this card", isError: true };
+       // Everything the card showed (the problem, the judge's question, an earlier answer, the severity and the verdict),
+       // compared as one digest: a change to any of them after the card was drawn needs the operator again.
+       const again = await findHeldFinding(prepared.dir, prepared.finding);
+       if (!again.ok || again.finding.digest !== prepared.digest) {
+         return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       }
+       const warnings: string[] = [];
+       await answerPremiseQuestion(
+         prepared.dir,
+-        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia },
++        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) },
+         { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
+       );
+       return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };
+     },
+   };
+ }
+ 
++// ---------------------------------------------------------------------------------------------------------------------
++// 10. review_complete (flow 464)
++
++const COMPLETION_FILE = "completion-confirmation.json";
++const WAIVER_QUOTE_CHARS = 300;
++
++type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
++
+
+--- src/commands/operator-confirm-review.ts
+@@ 659,667 @@
++const dispositionsSchema = {
++  type: "array",
++  description:
++    "Optional. How each earlier finding was handled in this fix round, recorded when the round closes (the same as `review complete --finding … --disposition … --evidence …`). The operator sees every entry on the card.",
++  items: {
++    type: "object",
++    properties: {
++      finding: { type: "string", description: "The finding's global id or display id." },
++      disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
+
+--- src/commands/operator-confirm-review.ts
+@@ 669,679 @@
++    },
++    required: ["finding", "disposition"],
++    additionalProperties: false,
++  },
++} as const;
++
++/** The `dispositions` input, checked entry by entry; the first bad entry refuses the card. */
++function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {
++  const raw = input["dispositions"];
++  if (raw === undefined) return [];
++  if (!Array.isArray(raw)) return { refusal: "dispositions must be an array of { finding, disposition, evidence? }" };
+
+--- src/commands/operator-confirm-review.ts
+@@ 681,691 @@
++  const records: FindingDispositionRecord[] = [];
++  for (const [index, entry] of raw.entries()) {
++    const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
++    const finding = typeof item["finding"] === "string" ? item["finding"].trim() : "";
++    const state = item["disposition"];
++    const evidence = item["evidence"];
++    if (finding === "") return { refusal: `dispositions[${index}]: finding is required` };
++    if (typeof state !== "string" || !(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)) {
++      return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
++    }
++    if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
+
+--- src/commands/operator-confirm-review.ts
+@@ 696,701 @@
++    records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === "" ? {} : { evidence: evidence.trim() }) });
++  }
++  return records;
++}
++
++const dispositionLine = (record: FindingDispositionRecord): string =>
+
+--- src/commands/operator-confirm-review.ts
+@@ 703,887 @@
++
++type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
++
++/** What the card shows, read from the package. The same read is repeated in `apply` to see that nothing moved. */
++async function completionFacts(dir: string): Promise<CompletionFacts> {
++  const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as {
++    reviewId?: string;
++    status?: string;
++    target?: { kind?: string; head?: unknown };
++    readiness_waivers?: Array<{ item: string; operator_quote: string }>;
++  };
++  const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
++  const report = readFileSync(path.join(dir, "report.md"), "utf8");
++  const evidenceLine = evidenceLevelLine(report);
++  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${cardSafe(clip(waiver.operator_quote))}"`);
++  let coverage: ReturnType<typeof readCoverageWaiver>;
++  try {
++    coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
++  } catch (error) {
++    // A package with no research.json carries no coverage waiver; one that cannot be read is not "none".
++    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
++      waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);
++    }
++    coverage = undefined;
++  }
++  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${cardSafe(clip(coverage.operatorQuote))}"`);
++  for (const decision of await readOperatorDecisions(dir)) {
++    const items = decision.subject?.items ?? [];
++    const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
++    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${cardSafe(clip(decision.quote))}" (${decision.confirmedVia})`);
++  }
++  return {
++    reviewId: manifest.reviewId ?? path.basename(dir),
++    head: recorded === undefined ? undefined : cardSafe(recorded),
++    evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
++    waivers,
++    status: manifest.status ?? "",
++  };
++}
++
++function clip(text: string): string {
++  return text.length > WAIVER_QUOTE_CHARS ? `${text.slice(0, WAIVER_QUOTE_CHARS)}…` : text;
++}
++
++const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");
++
++function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePrepared> {
++  return {
++    name: "review_complete",
++    description:
++      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries (readiness, coverage, mutation, reviewer override), and says yes before the round is closed. " +
++      "Pass the review package; the round closes against the head the package recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
++      "record the waivers first with review_waive_readiness or review_waive_coverage. A fix round passes `dispositions` (finding, disposition, evidence) for the earlier findings; the card lists each one. A refused gate closes nothing.",
++    inputSchema: {
++      type: "object",
++      properties: {
++        package: packageSchema,
++        dispositions: dispositionsSchema,
++      },
++      required: ["package"],
++      additionalProperties: false,
++    },
++    async buildCard(input, ctx): Promise<OperatorCardResult<CompletePrepared>> {
++      const ref = packageRef(input);
++      if (ref === undefined) return { refusal: "package is required" };
++      const dispositions = completionDispositions(input);
++      if ("refusal" in dispositions) return dispositions;
++      try {
++        const dir = await resolvePackage(ref, ctx.projectRoot);
++        const facts = await completionFacts(dir);
++        if (facts.status === "closed") return { refusal: `${facts.reviewId} is already complete` };
++        const name = label(dir, ctx.projectRoot);
++        const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
++        return {
++          title: `Complete review ${cardSafe(facts.reviewId)}${at}?`,
++          lines: [
++            facts.head === undefined
++              ? "reviewed head: not recorded (the package does not carry a commit)"
++              : `reviewed head: ${facts.head}`,
++            facts.evidence,
++            ...(facts.waivers.length === 0 ? ["waivers: none"] : facts.waivers),
++            ...dispositions.map(dispositionLine),
++            "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
++          ],
++          subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
++          prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions },
++        };
++      } catch (error) {
++        return failed(error);
++      }
++    },
++    async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
++      if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
++      let facts: CompletionFacts;
++      try {
++        facts = await completionFacts(prepared.dir);
++      } catch (error) {
++        return { output: `review_complete refused: ${errorText(error)} — nothing was recorded`, isError: true };
++      }
++      if (factsDigest(facts) !== prepared.digest) {
++        return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
++      }
++      const run = await runCompletionGates(ctx.projectRoot, prepared, confirmation.at, seams);
++      if (!run.closed) return { output: `review_complete refused: ${errorText(run.gateError)} — nothing was recorded`, isError: true };
++      const recordError = await writeCompletionRecord(prepared.dir, {
++        quote: confirmation.quote,
++        confirmedVia: confirmation.confirmedVia,
++        ...cardPressFields(confirmation),
++        at: confirmation.at,
++        head: prepared.head,
++        evidence: facts.evidence,
++        waivers: facts.waivers,
++        dispositions: prepared.dispositions,
++      });
++      return completionOutput(`review ${facts.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`, run, recordError);
++    },
++  };
++}
++
++const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
++
++type CompletionRun = { done: Awaited<ReturnType<typeof completeReviewGated>> | undefined; gateError: unknown; closed: boolean };
++
++/** Runs the gates and the close. The engine closes the manifest before its own bookkeeping, so a throw is not proof that nothing closed. */
++async function runCompletionGates(projectRoot: string, prepared: CompletePrepared, at: string, seams: ReviewConfirmSeams): Promise<CompletionRun> {
++  let done: CompletionRun["done"];
++  let gateError: unknown;
++  try {
++    done = await completeReviewGated(projectRoot, prepared.dir, {
++      dispositions: prepared.dispositions,
++      prLookup: seams.prLookup ?? trackerPrLookup,
++      prFiles: seams.prFiles ?? githubPrFiles,
++      now: new Date(at),
++    });
++  } catch (error) {
++    gateError = error;
++  }
++  const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
++  return { done, gateError, closed };
++}
++
++/** The error when the record could not be written; undefined when it was. */
++async function writeCompletionRecord(dir: string, record: Record<string, unknown>): Promise<unknown> {
++  try {
++    await writeFileAtomic(path.join(dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\n`);
++    return undefined;
++  } catch (error) {
++    return error;
++  }
++}
++
++function completionOutput(closedLine: string, run: CompletionRun, recordError: unknown): OperatorApplyResult {
++  const problems: string[] = [];
++  if (recordError !== undefined) problems.push(`the round is closed but the confirmation record could not be written: ${errorText(recordError)}`);
++  if (run.gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${errorText(run.gateError)}`);
++  return {
++    output: [
++      closedLine,
++      ...problems,
++      ...(run.done?.readiness === undefined ? [] : [readinessLine(run.done.readiness)]),
++      ...(run.done?.warnings ?? []).map((warning) => `warning: ${warning}`),
++    ].join("\n"),
++    ...(problems.length === 0 ? {} : { isError: true }),
++  };
++}
++
+ /** The specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
+ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonly OperatorConfirmSpec[] {
+   return [
+     chunksAnswerSpec(),
+     publishSpec(seams),
+     waiveCoverageSpec(),
+     waiveReadinessSpec(seams),
+     decisionSpec("mutation-waiver"),
+     decisionSpec("reviewer-override"),
+     replySpec(),
+     confirmPlanSpec(),
+     decidePremiseSpec(),
++    completeSpec(seams),
+   ] as readonly OperatorConfirmSpec[];
+ }
+ 
+ export function reviewConfirmSpecs(): readonly OperatorConfirmSpec[] {
+   return buildReviewConfirmSpecs();
+ }
+
+--- src/commands/operator-confirm-tools.ts
+@@ 36,79 @@
+ export type ConfirmedVia = "tui-card" | "remote-card";
+ 
+ /** What the operator is shown. Built from state, never from the model's input alone. */
+ export interface OperatorCard {
+   /** The yes/no question, e.g. `Lift the review pass ceiling to 31 for package X?`. */
+   readonly title: string;
+   /** The decision, one line each: what changes, the exact effect, the numbers. */
+   readonly lines: readonly string[];
+   /** What the decision binds to: a package, flow id, patch hash, schedule name. */
+   readonly subject: string;
+ }
+ 
+ /** The record a gate stores beside its decision. */
+ export interface OperatorConfirmation {
+   /** `"<card title>: yes"`. The card text plus the answer is the operator's quote. */
+   readonly quote: string;
+   readonly answer: "yes";
+   /** ISO time of the answer (when `invoke` ran, right after the yes). */
+   readonly at: string;
+   readonly confirmedVia: ConfirmedVia;
++  /** Flow 464: the Telegram user id that pressed the button. Present only when `confirmedVia` is `"remote-card"`. */
++  readonly pressedBy?: number;
++  /** Flow 464: ISO time of that press. Present only when `confirmedVia` is `"remote-card"`. */
++  readonly pressedAt?: string;
+   readonly subject: string;
+   /** The card exactly as shown, title first. */
+   readonly card: readonly string[];
+ }
+ 
+ /** What a spec is handed. `signal` is present only in `apply`. */
+ export interface OperatorConfirmContext {
+   readonly projectRoot: string;
+   readonly now: () => Date;
+   readonly env: Readonly<Record<string, string | undefined>>;
+   readonly signal?: AbortSignal;
+ }
+ 
+ /** A card, or why there is nothing to confirm. `prepared` is handed to `apply` unchanged. */
+ export type OperatorCardResult<P> = (OperatorCard & { readonly prepared?: P }) | { readonly refusal: string };
+ 
+ /** The result of the effect. `isError` defaults to false. */
+ export interface OperatorApplyResult {
+   readonly output: string;
+   readonly isError?: boolean;
+
+--- src/commands/operator-confirm-tools.ts
+@@ 88,138 @@
+   /** What the model reads. The framework appends that the operator always confirms. */
+   readonly description: string;
+   readonly inputSchema: Record<string, unknown>;
+   buildCard(input: Record<string, unknown>, ctx: OperatorConfirmContext): Promise<OperatorCardResult<P>>;
+   /**
+    * The effect, after the operator's yes. Receives what `buildCard` prepared for exactly this card,
+    * so it applies what was shown and never re-reads a decision the operator did not see.
+    */
+   apply(
+     input: Record<string, unknown>,
+     ctx: OperatorConfirmContext,
+     confirmation: OperatorConfirmation,
+     prepared: P | undefined,
+   ): Promise<OperatorApplyResult>;
+ }
+ 
+ export interface OperatorConfirmBinding {
+   readonly projectRoot: string;
+   readonly now?: () => Date;
+   readonly env?: Readonly<Record<string, string | undefined>>;
++  /**
++   * Flow 464 (AC2): the Telegram user ids allowed to answer a card from the topic (`allowedUserIds` of the remote
++   * config). The hub already drops a press from any other id; this is the second check, at the record. Absent or
++   * returning nothing, no remote answer is accepted.
++   */
++  readonly allowedUserIds?: () => readonly number[] | undefined;
+ }
+ 
++/** Flow 464: a remote card answer counts for one hour after the card was asked. */
++export const REMOTE_CARD_TTL_MS = 60 * 60 * 1000;
++
+ /** Appended to every spec's description, so the model never tells the operator to go to a terminal. */
+ export const OPERATOR_CONFIRM_NOTE =
+   " The operator ALWAYS sees a yes/no card in the shell and must answer it — you cannot confirm it, and you " +
+   "must not ask them to run a command in a terminal instead.";
+ 
+ /**
+  * A keryx started from an agent's `shell_exec` inherits `KERYX_TOOL_CALL=1`, and an agent can type into such a
+  * nested shell through a pseudo-terminal — so no card is ever asked there, whatever answers its prompt. The same
+  * defence `nestedAgentScheduleRefusal` gives schedules, for every gate.
+  */
+ export function nestedAgentCardRefusal(env: Readonly<Record<string, string | undefined>>): string | undefined {
+   if (env["KERYX_TOOL_CALL"] !== "1") return undefined;
+   return (
+     "refused: this keryx was started from an agent's shell (KERYX_TOOL_CALL=1), and an agent can type into it. " +
+     "An operator-confirmed decision is taken only in your own terminal's keryx."
+   );
+ }
+ 
+ /** The card as the approver prints it: title, the decision lines, the subject. */
+ export function renderOperatorCard(card: OperatorCard): readonly string[] {
+
+--- src/commands/operator-confirm-tools.ts
+@@ 139,247 @@
+   return [card.title, ...card.lines, `subject: ${card.subject}`];
+ }
+ 
+ function blank(value: unknown): boolean {
+   return typeof value !== "string" || value.trim().length === 0;
+ }
+ 
+ /** Turn a spec into the tool the driver gates. */
+ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: OperatorConfirmBinding): InteractiveTool {
+   const now = binding.now ?? (() => new Date());
+   const env = binding.env ?? process.env;
+   const context = (signal?: AbortSignal): OperatorConfirmContext => ({
+     projectRoot: binding.projectRoot,
+     now,
+     env,
+     ...(signal !== undefined ? { signal } : {}),
+   });
+   // The card whose yes is pending, keyed by its one-time token. Held only here.
+   const pending = new Map<
+     string,
+-    { readonly input: string; readonly card: OperatorCard; readonly shown: readonly string[]; readonly prepared: P | undefined }
++    {
++      readonly input: string;
++      readonly card: OperatorCard;
++      readonly shown: readonly string[];
++      readonly prepared: P | undefined;
++      readonly issuedAt: number;
++    }
+   >();
+   const key = (input: Record<string, unknown>): string => JSON.stringify(input);
+ 
+   return {
+     definition: {
+       name: spec.name,
+       description: `${spec.description}${OPERATOR_CONFIRM_NOTE}`,
+       inputSchema: spec.inputSchema,
+       risk: "write",
+     },
+     confirmation: async (input) => {
+       const nested = nestedAgentCardRefusal(env);
+       if (nested !== undefined) return { error: nested };
+       let built: OperatorCardResult<P>;
+       try {
+         built = await spec.buildCard(input, context());
+       } catch (error) {
+         return { error: `could not read the state to confirm: ${error instanceof Error ? error.message : String(error)}` };
+       }
+       if ("refusal" in built) return { error: built.refusal };
+       if (blank(built.title) || blank(built.subject)) {
+         return { error: "the card has no title or subject — nothing to confirm" };
+       }
+       const card: OperatorCard = { title: built.title, lines: [...built.lines], subject: built.subject };
+       const shown = renderOperatorCard(card);
+       const token = randomUUID();
+-      pending.set(token, { input: key(input), card, shown, prepared: built.prepared });
++      pending.set(token, { input: key(input), card, shown, prepared: built.prepared, issuedAt: now().getTime() });
+       return { card: shown, title: card.title, token };
+     },
+     confirmationDeclined: (token) => {
+       pending.delete(token);
+     },
+     invoke: async (input, ctx): Promise<InteractiveToolResult> => {
+       const token = ctx?.confirmationToken;
+       const entry = token === undefined ? undefined : pending.get(token);
+-      if (token !== undefined) pending.delete(token);
++      const refuse = (why: string): InteractiveToolResult => ({ output: `${spec.name}: ${why} — nothing was changed`, isError: true });
+       if (entry === undefined || entry.input !== key(input)) {
+-        return { output: `${spec.name}: no operator-confirmed card for this request — nothing was changed`, isError: true };
++        if (token !== undefined) pending.delete(token);
++        return refuse("no operator-confirmed card for this request");
++      }
++      pending.delete(token as string);
++      const remote = ctx?.confirmationVia === "remote";
++      let pressedBy: number | undefined;
++      let pressedAt: string | undefined;
++      if (remote) {
++        pressedBy = ctx?.confirmationPressedBy;
++        pressedAt = ctx?.confirmationPressedAt;
++        const allowed = binding.allowedUserIds?.();
++        if (pressedBy === undefined || pressedAt === undefined) return refuse("the remote answer did not say who pressed it");
++        if (allowed === undefined || !allowed.includes(pressedBy)) {
++          return refuse(`Telegram user ${pressedBy} is not on the allowed list`);
++        }
++        if (now().getTime() - entry.issuedAt > REMOTE_CARD_TTL_MS) {
++          return refuse("the card is older than 1 hour; ask again");
++        }
+       }
+       const confirmation: OperatorConfirmation = {
+         quote: `${entry.card.title}: yes`,
+         answer: "yes",
+         at: now().toISOString(),
+-        confirmedVia: ctx?.confirmationVia === "remote" ? "remote-card" : "tui-card",
++        confirmedVia: remote ? "remote-card" : "tui-card",
++        ...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),
+         subject: entry.card.subject,
+         card: entry.shown,
+       };
+       try {
+         const result = await spec.apply(input, context(ctx?.signal), confirmation, entry.prepared);
+         return { output: result.output, isError: result.isError ?? false };
+       } catch (error) {
+         return { output: `${spec.name} failed after the operator's yes: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+       }
+     },
+   };
+ }
+ 
+ /**
+  * The registry: every operator-confirmed gate the interactive shell offers. A function, not a
+  * constant, so a spec module that imports this file is never read half-built through a cycle.
+  */
+ export function operatorConfirmSpecs(): readonly OperatorConfirmSpec[] {
+   return [...reviewConfirmSpecs(), ...otherConfirmSpecs()];
+ }
+
+--- src/commands/review.ts
+@@ 47,88 @@
+ import { printPlanHelp, runPlan } from "./review-plan";
+ import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
+ import { FIRST_FILES } from "../review/coverage-complete";
+ import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
+ import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
+ // flow 330/332/333: registration only. The command itself, and every helper
+ // it needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
+ // `review-jev-scenarios.ts`/`review-jev-docs.ts`/`review-jev-comments.ts` —
+ // NEW files, so no other flow's concurrent work on this file collides with
+ // any of them.
+ import { runJevRules } from "./review-jev-rules";
+ import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
+ import { RUN_HELP, runReviewRun } from "./review-run";
+ import { runJevRisk } from "./review-jev-risk";
+ import { printLedgerHelp, runLedger } from "./review-ledger";
+ import { resolveProjectRoot } from "../lib/contained-path";
+ import { guardReviewPaths } from "../lib/review-path-flags";
+ import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
+ import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
+ import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
+-import { buildRunProfile, runProfileRefusal, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
+-import { packageRoutingRefusal } from "../review/routing-check";
++import { buildRunProfile, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
++import { completeReviewGated } from "../review/complete-gated";
+ import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
+ import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
+ import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
+ import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
+ import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
+ import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
+ import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
+ import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
+ import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
+ import { shellWord } from "../lib/shell-quote";
+ import { layersSummaryLine } from "../review/layers-view";
+ import { printNextHelp, runNext } from "./review-next";
+ import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
+ import { runJevScenarios } from "./review-jev-scenarios";
+ import { runJevDocs } from "./review-jev-docs";
+ import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
+ // flow 335: one more ADDITIONAL, CLI-driven reviewer — see
+ // `review-jev-contract.ts` for everything past registration.
+ import { runJevContract } from "./review-jev-contract";
+ // flow 340: an advisory, annotate-only triage pass over a review package's
+
+--- src/commands/review.ts
+@@ 4538,4592 @@
+ 
+ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
+   const ref = args[0];
+   if (!ref) {
+     throw new Error("Usage: keryx review complete <review-id-or-path>");
+   }
+   const dispositions = parseDispositions(args);
+   const headFlag = flagTokens(args).find((token) => token.name === "--head");
+   if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
+     throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
+   }
+   const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
+   if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
+     throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
+   }
+   // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
+   // statement, so a person has to be at the terminal that carries it.
+   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+   if (waiver !== undefined && !isTerminal()) {
+-    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then run `keryx review complete`. Outside keryx shell, run this command in a terminal.");
++    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
+   }
+   const readinessWaivers = parseReadinessWaivers(args);
+   if (readinessWaivers.length > 0 && !isTerminal()) {
+-    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then run `keryx review complete`. Outside keryx shell, run this command in a terminal.");
+-  }
+-  // Security review M3: slice routing recorded in the manifest may not be narrower than each slice's content needs.
+-  const completeDir = await resolveReviewPackagePath(process.cwd(), ref);
+-  const profileMissing = runProfileRefusal(completeDir);
+-  if (profileMissing !== undefined) throw new Error(`review complete refused: ${profileMissing}`);
+-  const narrowedRouting = packageRoutingRefusal(completeDir, resolveProjectRoot(process.cwd()), { refuseUnreadable: true });
+-  if (narrowedRouting !== undefined) throw new Error(`review complete refused: ${narrowedRouting}`);
++    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
++  }
++  // completeReviewGated also refuses slice routing narrower than a slice's content needs (security review M3).
+   const {
+     manifest,
+     reviewNotes,
+     dispositions: tally,
+     coverageWaiver,
+     readiness,
+     warnings,
+-  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
++  } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+   for (const warning of warnings) console.error(`warning: ${warning}`);
+   if (coverageWaiver !== undefined) {
+     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
+     console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > FIRST_FILES ? ", …" : ""}`);
+   }
+   console.log(`# managed review complete: ${manifest.reviewId}`);
+   console.log(`status: ${manifest.status}`);
+   if (readiness !== undefined) console.log(readinessLine(readiness));
+   console.log(`dispositions recorded: ${dispositions.length}`);
+   // The price, now that both halves are known. This is the first moment the
+   // round's cost and what survived it are on the same screen, and it is the
+   // number the fan-out has to justify itself with. `not recorded` when nobody
+   // measured — never `0`, which would read as a round that was free.
+   for (const line of renderCostPerFinding(manifest.cost, manifest.filter_stats?.retained ?? 0)) {
+     console.log(line);
+   }
+   // Flow 207 AC5/AC6, on the attended path. A `dismissed-incorrect` whose
+   // evidence names nobody writes no note and says so here, rather than reaching
+   // the learning loop as an unattributed claim that our own reviewer was wrong.
+   for (const note of reviewNotes.written) {
+
+--- src/commands/shell.ts
+@@ 109,149 @@
+ import { buildSettingsRows, formatSettingsTable } from "../tui/settings-model";
+ import { loadSettingsSnapshot } from "../tui/settings-state";
+ import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
+ import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
+ import { launchTuiChatShell } from "../tui/chat-shell";
+ import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
+ import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
+ import { approvalsSlashText } from "./approvals";
+ import { permissionsSlashText } from "./permissions-command";
+ import { remotePolicyText } from "./remote-policy-command";
+ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-diff-modal";
+ import { buildDoctorReport, formatDoctorReport } from "./doctor";
+ import { renderSetupSlash } from "./setup-guide";
+ import { computeBotMetrics } from "../review/bot/metrics";
+ import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+ import { selfAnsweredLine } from "../lib/terminal-safe";
+ import { loadReviewDepth } from "../tui/review-panel";
+ import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
+ import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
+ import { ChannelsClient } from "../remote/channels-client";
++import { loadRemoteConfig } from "../remote/config";
+ import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
+ import { isIntakeCommand, readlineIntakeText } from "../tui/intake-surface";
+ import {
+   buildSessionInfoSnapshot,
+   formatSessionInfoText,
+   isSessionInfoCommand,
+ } from "../tui/session-info";
+ import { loadSessionLimits, startSessionLimits } from "./model-limits";
+ import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
+ import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
+ import { parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
+ import { extractPatchText } from "../lib/patch-risk";
+ import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
+ import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
+ import {
+   DEFAULT_PERMISSION_MODE,
+   isPermissionMode,
+   PERMISSION_MODES,
+   type PermissionMode,
+ } from "./permission-mode";
+
+--- src/commands/shell.ts
+@@ 4201,4248 @@
+             metaprojectPort,
+             searchController: searchProviderController,
+             spawnTool,
+             getSessionDir,
+             jobRegistry,
+             mcp: getMcpRuntime(),
+             ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+             // Flow 274 (agent bus P3, T6/T7 contract); review r1 F2 (AC9): the
+             // wrapper is passed whenever the caller (`tui-shell.ts`) even
+             // attempts to join a bus — side workers pass `undefined` instead
+             // (review r1 F9) — but `buildInteractiveAgentTools` itself now
+             // gates actual INCLUSION on `bus.client() !== undefined` at build
+             // time, so `bus_list`/`bus_send` are absent from the very first
+             // call (before any join has settled) and only appear once
+             // `tui-shell.ts`'s join-success rebuild calls this again with
+             // `busClientRef.client()` finally resolving.
+             ...(bus !== undefined ? { bus } : {}),
+             // Flow 295 (AC7): the TUI's approver renders schedule_create's card.
+             schedules: { projectRoot: cwd, defaults: () => ({ provider: sel.provider, model: sel.model }) },
+             // Flow 456 (AC1): operator decisions as yes/no cards instead of a terminal.
+-            operatorConfirm: { projectRoot: cwd },
++            operatorConfirm: {
++              projectRoot: cwd,
++              // Flow 464: the second check of a remote answer, read fresh so a config edit applies without a restart.
++              allowedUserIds: () => {
++                const loaded = loadRemoteConfig();
++                return loaded.ok ? loaded.value.allowedUserIds : undefined;
++              },
++            },
+           }),
+           // The EXISTING runtime, never a new one. `/mcp` is a read-only
+           // view; opening it must not be the thing that spawns every
+           // configured server, which calling `getMcpRuntime()` here would
+           // do for `--chat` sessions that never build a tool list.
+           mcpRuntime: () => mcpRuntime,
+           // No `maxRounds` here on purpose: the turn resolves its own limit from
+           // the live permission mode (40 in ask, 200 in trust and auto), and an
+           // explicit value would pin it for the whole session.
+           // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+           // per-provider override (`resolvedModelParams.maxOutputTokens`,
+           // resolved above via `resolveProviderModelParamsByName` — an
+           // operator-saved `ShellConfig.modelParams[provider]` override, else
+           // the provider's own `CustomCompatProvider.maxOutputTokens`; absent
+           // for a built-in with no override) > the operator's persisted global
+           // setting > DEFAULT_MAX_OUTPUT_TOKENS. Routed through
+           // `resolvedModelParams` (rather than a second, independent
+           // `providerByName(...).maxOutputTokens` lookup) so there is exactly
+           // one computation of the provider's effective override — see
+           // `resolveAgentMaxOutputTokens`'s doc comment.
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 1,154 @@
+ // Flow 456 (AC2, AC4): the four review gates as operator-confirmed tools. Each is driven the way the agent loop drives it:
+ // `confirmation` builds the card from the package on disk, and `invoke` with the card's token applies the effect in process.
+ // A "no" never reaches `invoke`, so the package must be byte-for-byte what it was.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
++import { validateAgainstSchemaObject } from "../contracts/validator";
+ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
++import { READY_COVERAGE_MD, READY_DISPATCH } from "../review/dispatch.test-helpers";
++import { createManagedReviewPackage } from "../review/managed";
+ import { ensureChunkPlan } from "../review/chunks";
+ import { readChunkEstimate } from "../review/chunks-estimate";
+ import { computeCoverage, readCoverageWaiver } from "../review/coverage-complete";
+ import { heldFinding, heldPremise } from "../review/premise-fixtures";
+ import { computeReadiness } from "../review/readiness";
+ import { computeVerdict } from "../review/verdict";
+ import type { PostResult, ReviewEvent } from "../review/publish";
+ import { buildReviewConfirmSpecs, reviewConfirmSpecs } from "./operator-confirm-review";
+ import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NOW = new Date("2026-10-15T19:00:00.000Z");
+ const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
++const ALLOWED_ID = 446593035;
++const PRESSED_AT = "2026-10-15T19:00:05.000Z";
+ 
+ let root: string;
+ let pkg: string;
+ const posts: Array<{ ref: string; event: ReviewEvent; body: string }> = [];
+ 
+ const post = async (ref: string, event: ReviewEvent, body: string): Promise<PostResult> => {
+   posts.push({ ref, event, body });
+   return { ok: true, detail: "ok" };
+ };
+ 
+-function tool(name: string): InteractiveTool {
+-  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post }).find((entry) => entry.name === name);
++function tool(name: string, seams: Partial<Parameters<typeof buildReviewConfirmSpecs>[0]> = {}): InteractiveTool {
++  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post, ...seams }).find((entry) => entry.name === name);
+   if (spec === undefined) throw new Error(`no spec ${name}`);
+-  return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {} });
++  return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {}, allowedUserIds: () => [ALLOWED_ID] });
+ }
+ 
+ type Asked = { card: readonly string[]; title: string; token: string };
+ 
+ /** Ask for the card. A refusal comes back as `{ error }`. */
+ async function ask(t: InteractiveTool, input: Record<string, unknown>): Promise<Asked | { error: string }> {
+   const result = await t.confirmation!(input);
+   return result as Asked | { error: string };
+ }
+ 
+ const asked = (value: Asked | { error: string }): Asked => {
+   if ("error" in value) throw new Error(`expected a card, got a refusal: ${value.error}`);
+   return value;
+ };
+ 
+-async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote"): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
++async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote", pressedBy: number = ALLOWED_ID): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
+   const card = asked(await ask(t, input));
+-  const result = await t.invoke(input, { confirmationToken: card.token, ...(via === undefined ? {} : { confirmationVia: via }) } as never);
++  const press = via === undefined ? {} : { confirmationVia: via, confirmationPressedBy: pressedBy, confirmationPressedAt: PRESSED_AT };
++  const result = await t.invoke(input, { confirmationToken: card.token, ...press } as never);
+   return { output: result.output, isError: result.isError ?? false, card: card.card };
+ }
+ 
+ const read = (name: string): string => readFileSync(path.join(pkg, name), "utf8");
+ const readJson = (name: string): Record<string, any> => JSON.parse(read(name)) as Record<string, any>;
+ const put = (name: string, value: unknown): void => {
+   mkdirSync(path.dirname(path.join(pkg, name)), { recursive: true });
+   writeFileSync(path.join(pkg, name), typeof value === "string" ? value : JSON.stringify(value, null, 2));
+ };
+ 
+ beforeEach(() => {
+   posts.length = 0;
+   root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-confirm-review-")));
+   mkdirSync(path.join(root, ".git"));
+   mkdirSync(path.join(root, ".metaproject"));
+   pkg = path.join(root, ".metaproject", "reviews", "pr7932-r1");
+   mkdirSync(pkg, { recursive: true });
+ });
+ afterEach(() => {
+   rmSync(root, { recursive: true, force: true });
+ });
+ 
+ test("the review gates are registered and listed for the unattended refusal", () => {
+   const names = reviewConfirmSpecs().map((spec) => spec.name);
+   expect(names).toEqual([
+     "review_chunks_answer",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_readiness",
+     "review_waive_mutation",
+     "review_override_reviewers",
+     "review_comments_reply",
+     "review_confirm_plan",
+     "review_decide_premise",
++    "review_complete",
+   ]);
+   for (const name of names) expect(operatorConfirmToolNames()).toContain(name);
+ });
+ 
+ describe("review_chunks_answer", () => {
+   function dropFiles(count: number): void {
+     const dropped = Array.from({ length: count }, (_, index) => ({ file: `src/d-${String(index).padStart(4, "0")}.ts`, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason: "cap", detail: "over the cap" }));
+     put("blast-radius.json", { schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped });
+   }
+ 
+   test("the card shows the pass count over the ceiling; yes records the answer, the card quote and confirmedVia", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const result = await yes(t, { package: pkg, answer: "yes" });
+     expect(result.card[0]).toBe("Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?");
+     expect(result.card.join("\n")).toContain("passes requested: 28");
+     expect(result.card.join("\n")).toContain("ceiling: 25 passes (1000 files), from the default; 3 over");
+     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1");
+     expect(result.isError).toBe(false);
+     const record = await readChunkEstimate(pkg);
+     expect(record?.answer).toEqual({
+       value: "yes",
+       quote: "Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?: yes",
+       at: NOW.toISOString(),
+       confirmedVia: "tui-card",
+     });
+   });
+ 
+   test("a yes answered in the remote topic is recorded as remote-card; answer=no records a declined run", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const result = await yes(t, { package: pkg, answer: "no" }, "remote");
+     expect(result.card[0]).toContain("Stop the 28-pass chunk run");
+     const answer = (await readChunkEstimate(pkg))?.answer;
+     expect(answer?.value).toBe("no");
+     expect(answer?.confirmedVia).toBe("remote-card");
++    expect(answer?.pressedBy).toBe(ALLOWED_ID);
++    expect(answer?.pressedAt).toBe(PRESSED_AT);
+   });
+ 
+   test("a no changes nothing: the card was built, the tool was never invoked, no estimate is on disk", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const card = asked(await ask(t, { package: pkg, answer: "yes" }));
+     t.confirmationDeclined!(card.token);
+     expect(existsSync(path.join(pkg, "chunk-estimate.json"))).toBe(false);
+     // A declined card's token is dead: replaying it applies nothing.
+     const replay = await t.invoke({ package: pkg, answer: "yes" }, { confirmationToken: card.token } as never);
+     expect(replay.isError).toBe(true);
+     expect(existsSync(path.join(pkg, "chunk-estimate.json"))).toBe(false);
+   });
+ 
+   test("asking never writes chunks.json: no plan yet is a refusal naming the command, and a no leaves the package as it was", async () => {
+     dropFiles(1100);
+     const t = tool("review_chunks_answer");
+     const refused = await ask(t, { package: pkg, answer: "yes" });
+     expect(refused).toEqual({ error: expect.stringContaining("keryx review chunks plan") });
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 327,382 @@
+       target: { kind: "pr", ref: PR },
+       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
+       coverage: [],
+     });
+     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
+     put("report.md", "# Review\n\nRequest changes.\n");
+     put("coverage.md", "# Reviewer Coverage\n\nreviewer: review-logic\nstatus: run\nreason: read the diff\n");
+   }
+ 
+   test("the card names the item and its current failing detail; yes records the waiver with confirmedVia and the report header", async () => {
+     makePackage();
+     const t = tool("review_waive_readiness");
+     const result = await yes(t, { package: pkg, item: "verifier" });
+     const text = result.card.join("\n");
+     expect(result.card[0]).toBe("Accept failing readiness item 4 (verifier) of .metaproject/reviews/pr7932-r1 as it is?");
+     expect(text).toContain("item 4 verifier:");
+     expect(text).toContain("failing: ");
+     expect(text).toContain("repair would be:");
+     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1, item verifier");
+     expect(result.isError).toBe(false);
++    expect(result.output).toContain("Call review_complete to close the review.");
++    expect(result.output).not.toContain("keryx review complete");
+     expect(readJson("manifest.json").readiness_waivers).toEqual([
+       { item: "verifier", operator_quote: "Accept failing readiness item 4 (verifier) of .metaproject/reviews/pr7932-r1 as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
+     ]);
+     expect(read("report.md").startsWith("Partial review: verifier waived by the operator:")).toBe(true);
+   });
+ 
++  test("the manifest schema accepts a readiness waiver a card recorded, tui or remote with the press fields", () => {
++    const schema = JSON.parse(readFileSync(path.resolve(import.meta.dir, "../../docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json"), "utf8")) as { properties: { readiness_waivers: Record<string, unknown> } };
++    const base = { item: "verifier", operator_quote: "Accept it?: yes", time: NOW.toISOString() };
++    const waivers = [{ ...base, confirmedVia: "tui-card" }, { ...base, confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT }, base];
++    expect(validateAgainstSchemaObject(schema.properties.readiness_waivers, waivers).errors).toEqual([]);
++    expect(validateAgainstSchemaObject(schema.properties.readiness_waivers, [{ ...base, confirmedVia: "somewhere" }]).errors).not.toEqual([]);
++  });
++
+   test("a no changes nothing", async () => {
+     makePackage();
+     const manifest = read("manifest.json");
+     const report = read("report.md");
+     const t = tool("review_waive_readiness");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg, item: "4" })).token);
+     expect(read("manifest.json")).toBe(manifest);
+     expect(read("report.md")).toBe(report);
+   });
+ 
+   test("item 11 (premise-decisions) is refused before a card is drawn, naming review_decide_premise (review RG2-003)", async () => {
+     makePackage();
+     put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
+     const t = tool("review_waive_readiness");
+     for (const item of ["premise-decisions", "11"]) {
+       expect(await ask(t, { package: pkg, item })).toEqual({ error: expect.stringContaining("review_decide_premise") });
+     }
+     expect(readJson("manifest.json").readiness_waivers).toBeUndefined();
+   });
+ 
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 417,457 @@
+     expect(result.card[0]).toBe("Dismiss finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 as incorrect?");
+     expect(text).toContain("finding: pr7932-r1#LY-003 (major): timeline pinned LTR");
+     expect(text).toContain("premise judge: challenged: Should the timeline mirror?");
+     expect(text).toContain("reason: platforms do not mirror media controls");
+     expect(result.isError).toBe(false);
+     const decisions = readJson("operator-decisions.json").decisions;
+     expect(decisions).toHaveLength(1);
+     expect(decisions[0]).toMatchObject({ kind: "premise-question", finding: "pr7932-r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: NOW.toISOString(), actor: "operator", confirmedVia: "tui-card" });
+     // The operator's words are the card they said yes to, as for the sibling decisions.
+     expect(decisions[0].quote).toContain(result.card[0]);
+     expect(decisions[0].subject).toMatchObject({ severity: "major", verdict: "challenged" });
+     expect(readJson("findings.json")[0].disposition.state).toBe("dismissed-incorrect");
+     expect((await readiness())?.status).toBe("pass");
+   });
+ 
+   test("uphold keeps the original severity and a remote yes is recorded as remote-card", async () => {
+     makePackage();
+     const t = tool("review_decide_premise");
+     const result = await yes(t, { package: pkg, finding: "pr7932-r1#LY-003", answer: "uphold", reason: "mirror it" }, "remote");
+     expect(result.card[0]).toBe("Uphold finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 at major?");
+-    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card" });
++    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
+     expect((await computeVerdict(pkg)).open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
+   });
+ 
+   test("a no records nothing", async () => {
+     makePackage();
+     const t = tool("review_decide_premise");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" })).token);
+     expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+     expect((await readiness())?.status).toBe("fail");
+   });
+ 
+   test("an unknown finding, a finding that is not held, a missing reason and a bad answer are refusals", async () => {
+     makePackage([held, { ...held, id: "LY-004", global_id: "pr7932-r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
+     const t = tool("review_decide_premise");
+     expect(await ask(t, { package: pkg, finding: "LY-999", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("No finding") });
+     expect(await ask(t, { package: pkg, finding: "LY-004", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("not held") });
+     expect(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss" })).toEqual({ error: expect.stringContaining("reason is required") });
+     expect(await ask(t, { package: pkg, finding: "LY-003", answer: "maybe", reason: "r" })).toEqual({ error: expect.stringContaining("uphold") });
+   });
+ 
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 463,701 @@
+     put("findings.json", [{ ...held, severity: "minor" }]);
+     const result = await t.invoke(input, { confirmationToken: card.token } as never);
+     expect(result.isError).toBe(true);
+     expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+   });
+ 
+   test("a change to the problem or the judge's question after the card was shown also refuses", async () => {
+     const verdictChanged = { ...held, premise: heldPremise({ verdict: "owner-decision", question: "Should the timeline mirror?", options: ["mirror", "keep LTR"] }) };
+     for (const changed of [{ ...held, problem: "a different defect" }, { ...held, premise: heldPremise({ question: "a different question?" }) }, verdictChanged]) {
+       makePackage();
+       const t = tool("review_decide_premise");
+       const input = { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" };
+       const card = asked(await ask(t, input));
+       put("findings.json", [changed]);
+       const result = await t.invoke(input, { confirmationToken: card.token } as never);
+       expect(result.isError).toBe(true);
+       expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+     }
+   });
+ });
++
++// Flow 464 (AC3): the plan and premise cards answer through the remote card, per tool, both paths, "no" included.
++describe("review_confirm_plan and review_decide_premise through the remote card", () => {
++  const held = heldFinding({ global_id: "pr7932-r1#LY-003", premise: heldPremise({ question: "Should the timeline mirror?" }) });
++
++  function overThresholdPackage(): void {
++    put("manifest.json", {
++      schemaVersion: 1,
++      reviewId: "pr7932-r1",
++      mode: "review-flow",
++      status: "draft",
++      target: { kind: "pr", ref: PR },
++      artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
++      coverage: [],
++    });
++    put("findings.json", [held]);
++    writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 1, maxMinutes: 1 } }));
++  }
++
++  const planFile = (): Record<string, any> | undefined => (existsSync(path.join(pkg, "plan-confirmation.json")) ? readJson("plan-confirmation.json") : undefined);
++  const premiseInput = { package: "", finding: "LY-003", answer: "dismiss", reason: "platforms do not mirror" };
++
++  test("confirm_plan: a local yes records tui-card with no press; a remote yes records remote-card, who and when", async () => {
++    overThresholdPackage();
++    const t = tool("review_confirm_plan");
++    expect((await yes(t, { package: pkg })).isError).toBe(false);
++    expect(planFile()).toMatchObject({ confirmedVia: "tui-card" });
++    expect(planFile()?.["pressedBy"]).toBeUndefined();
++    rmSync(path.join(pkg, "plan-confirmation.json"));
++    const remote = await yes(t, { package: pkg }, "remote");
++    expect(remote.isError).toBe(false);
++    expect(planFile()).toMatchObject({ confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
++  });
++
++  test("confirm_plan: a no, local or remote, records nothing", async () => {
++    overThresholdPackage();
++    const t = tool("review_confirm_plan");
++    for (let attempt = 0; attempt < 2; attempt += 1) {
++      t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
++      expect(planFile()).toBeUndefined();
++    }
++  });
++
++  test("confirm_plan: a remote yes from an id outside the allowed list records nothing and says why", async () => {
++    overThresholdPackage();
++    const result = await yes(tool("review_confirm_plan"), { package: pkg }, "remote", 1234);
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("Telegram user 1234 is not on the allowed list");
++    expect(planFile()).toBeUndefined();
++  });
++
++  test("decide_premise: a local yes records tui-card with no press; a remote yes records remote-card, who and when", async () => {
++    overThresholdPackage();
++    const t = tool("review_decide_premise");
++    const input = { ...premiseInput, package: pkg };
++    expect((await yes(t, input)).isError).toBe(false);
++    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ confirmedVia: "tui-card" });
++    expect(readJson("operator-decisions.json").decisions[0].pressedBy).toBeUndefined();
++    expect((await yes(t, { ...input, answer: "uphold" }, "remote")).isError).toBe(false);
++    const decisions = readJson("operator-decisions.json").decisions;
++    expect(decisions.at(-1)).toMatchObject({ answer: "uphold", confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
++  });
++
++  test("decide_premise: a no, local or remote, records nothing", async () => {
++    overThresholdPackage();
++    const t = tool("review_decide_premise");
++    for (let attempt = 0; attempt < 2; attempt += 1) {
++      t.confirmationDeclined!(asked(await ask(t, { ...premiseInput, package: pkg })).token);
++      expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
++    }
++  });
++
++  test("decide_premise: a remote yes from an id outside the allowed list records nothing and says why", async () => {
++    overThresholdPackage();
++    const result = await yes(tool("review_decide_premise"), { ...premiseInput, package: pkg }, "remote", 1234);
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("Telegram user 1234 is not on the allowed list");
++    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
++  });
++});
++
++// Flow 464 (AC4): review_complete, the one card that closes a round.
++describe("review_complete", () => {
++  const HEAD = "0123456789abcdef0123456789abcdef01234567";
++  const EVIDENCE = "Evidence level: static only — did not run: tests";
++
++  async function makeRound(over: { target?: { kind: "pr" | "report"; ref: string; head?: string }; report?: string; id?: string; findings?: Array<Record<string, unknown>> } = {}): Promise<string> {
++    mkdirSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
++    writeFileSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"), `{"type":"object"}`);
++    const created = await createManagedReviewPackage({
++      cwd: root,
++      mode: "ingest",
++      reviewId: over.id ?? "2026-10-15-complete",
++      target: over.target ?? { kind: "report", ref: "review.md" },
++      reportText: over.report ?? `# Round\n\nNo findings.\n${EVIDENCE}\n`,
++      findings: (over.findings ?? []) as never,
++      now: NOW,
++    });
++    pkg = path.join(root, created.path);
++    put("research.json", { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH });
++    put("coverage.md", READY_COVERAGE_MD);
++    if (over.target === undefined) put("manifest.json", { ...readJson("manifest.json"), target: { kind: "pr", ref: PR, head: HEAD } });
++    return pkg;
++  }
++
++  const status = (): string => readJson("manifest.json")["status"] as string;
++
++  test("the card shows the head SHA and the evidence level; with no waiver it says so; yes closes the round and records who pressed", async () => {
++    await makeRound();
++    const result = await yes(tool("review_complete"), { package: pkg }, "remote");
++    const text = result.card.join("\n");
++    expect(result.card[0]).toContain(`Complete review 2026-10-15-complete at ${HEAD.slice(0, 12)}?`);
++    expect(text).toContain(`reviewed head: ${HEAD}`);
++    expect(text).toContain(EVIDENCE);
++    expect(text).toContain("waivers: none");
++    expect(result.output).toContain("complete at 0123456789ab (remote-card");
++    expect(result.isError).toBe(false);
++    expect(status()).toBe("closed");
++    const record = readJson("completion-confirmation.json");
++    expect(record).toMatchObject({ confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT, head: HEAD, waivers: [] });
++  });
++
++  test("a tui yes records no press fields", async () => {
++    await makeRound();
++    await yes(tool("review_complete"), { package: pkg });
++    expect(status()).toBe("closed");
++    const record = readJson("completion-confirmation.json");
++    expect(record["confirmedVia"]).toBe("tui-card");
++    expect(record).not.toHaveProperty("pressedBy");
++  });
++
++  test("the card lists every readiness waiver (item and quote) and the coverage waiver", async () => {
++    await makeRound();
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [
++      { item: "verifier", operator_quote: "Accept failing readiness item 4 (verifier) as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
++      { item: "ledger", operator_quote: "Accept failing readiness item 7 (ledger) as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
++    ];
++    put("manifest.json", manifest);
++    const research = readJson("research.json");
++    research["dispatch"] = { ...(research["dispatch"] ?? {}), coverageWaiver: { operatorQuote: "Waive coverage of 2 files?: yes", time: NOW.toISOString(), files: ["src/a.ts", "src/b.ts"] } };
++    put("research.json", research);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain('waiver: readiness item verifier: "Accept failing readiness item 4 (verifier) as it is?: yes"');
++    expect(card).toContain('waiver: readiness item ledger: "Accept failing readiness item 7 (ledger) as it is?: yes"');
++    expect(card).toContain('waiver: coverage, 2 file(s) not reviewed: "Waive coverage of 2 files?: yes"');
++    expect(card).not.toContain("waivers: none");
++  });
++
++  test("the card lists the mutation waiver and the reviewer override from operator-decisions.json, with item and quote", async () => {
++    await makeRound();
++    put("operator-decisions.json", {
++      schemaVersion: 1,
++      decisions: [
++        { kind: "mutation-waiver", quote: "Waive the mutation pass?: yes", reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1", "m2"] } },
++        { kind: "reviewer-override", quote: "Run a smaller reviewer set?: yes", reason: "small diff", confirmedVia: "remote-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] } },
++      ],
++    });
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain('waiver: mutation pass not run m1, m2: "Waive the mutation pass?: yes" (tui-card)');
++    expect(card).toContain('waiver: reviewer override, left out review-security-code: "Run a smaller reviewer set?: yes" (remote-card)');
++    expect(card).not.toContain("waivers: none");
++  });
++
++  test("an operator decision added between the card and the yes records nothing", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    const card = asked(await ask(t, { package: pkg }));
++    put("operator-decisions.json", {
++      schemaVersion: 1,
++      decisions: [{ kind: "mutation-waiver", quote: "sneaked in", reason: "x", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } }],
++    });
++    const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
++    expect(result.isError).toBe(true);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a research.json that cannot be read is shown as such, not as 'waivers: none'", async () => {
++    await makeRound();
++    writeFileSync(path.join(pkg, "research.json"), "{ not json");
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain("waiver: coverage, could not read research.json");
++    expect(card).not.toContain("waivers: none");
++  });
++
++  const GLOBAL = "2026-10-15-complete#review-logic-w1:F-001";
++  const F1 = { id: "review-logic-w1:F-001", reviewer: "review-logic", severity: "minor", problem: "p", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" };
++
++  test("dispositions: the card lists each one, and yes records them on the findings as the terminal command does", async () => {
++    await makeRound({ findings: [F1] });
++    const input = { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: "closed by 380bf3b0" }] };
++    const result = await yes(tool("review_complete"), input);
++    expect(result.card.join("\n")).toContain(`disposition: ${GLOBAL} → acted-on: "closed by 380bf3b0"`);
++    expect(result.isError).toBe(false);
++    expect(status()).toBe("closed");
++    const findings = readJson("findings.json") as unknown as Array<{ disposition?: { state: string; evidence?: string } }>;
++    expect(findings[0]?.disposition).toMatchObject({ state: "acted-on", evidence: "closed by 380bf3b0" });
++    expect(readJson("completion-confirmation.json")["dispositions"]).toEqual([{ finding: GLOBAL, state: "acted-on", evidence: "closed by 380bf3b0" }]);
++  });
++
++  test("dispositions: a finding the package does not have refuses the close and records nothing", async () => {
++    await makeRound({ findings: [F1] });
++    const before = read("manifest.json");
++    const result = await yes(tool("review_complete"), { package: pkg, dispositions: [{ finding: "F-404", disposition: "acted-on", evidence: "x" }] });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("nothing was recorded");
++    expect(read("manifest.json")).toBe(before);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("dispositions: a malformed entry refuses the card before it is drawn", async () => {
++    await makeRound({ findings: [F1] });
++    const t = tool("review_complete");
++    expect(await ask(t, { package: pkg, dispositions: "acted-on" })).toEqual({ error: expect.stringContaining("must be an array") });
++    expect(await ask(t, { package: pkg, dispositions: [{ disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: finding is required") });
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "done" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: disposition must be one of") });
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "acted-on", evidence: 3 }] })).toEqual({ error: expect.stringContaining("evidence must be text") });
++  });
++
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 722,852 @@
++  test("a no closes nothing", async () => {
++    await makeRound();
++    const before = read("manifest.json");
++    const t = tool("review_complete");
++    t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
++    expect(read("manifest.json")).toBe(before);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a gate that refuses shows the refusal and records nothing (a stamped report with no evidence level)", async () => {
++    await makeRound({ report: "# Round\n\nNo findings.\n" });
++    const manifest = readJson("manifest.json");
++    manifest["report_fields"] = ["evidence-level"];
++    put("manifest.json", manifest);
++    const before = read("manifest.json");
++    const result = await yes(tool("review_complete"), { package: pkg });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("nothing was recorded");
++    expect(read("manifest.json")).toBe(before);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a waiver added between the card and the yes records nothing", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    const card = asked(await ask(t, { package: pkg }));
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "sneaked in", time: NOW.toISOString(), confirmedVia: "tui-card" }];
++    put("manifest.json", manifest);
++    const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("changed after the card was shown");
++    expect(status()).not.toBe("closed");
++  });
++
++  test("the model cannot supply a head: the schema has none, and the gate runs against the recorded head", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    expect(JSON.stringify(t.definition.inputSchema)).not.toContain('"head"');
++    const card = asked(await ask(t, { package: pkg, head: "deadbeefdead" }));
++    expect(card.card.join("\n")).toContain(`reviewed head: ${HEAD}`);
++  });
++
++  test("a recorded head with a line break cannot add a line to the card", async () => {
++    await makeRound();
++    const manifest = readJson("manifest.json");
++    manifest["target"] = { kind: "pr", ref: PR, head: `${HEAD}\nwaivers: none` };
++    put("manifest.json", manifest);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
++    expect(card.every((line) => !line.includes("\n"))).toBe(true);
++    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(1);
++  });
++
++  test("text the package supplies cannot add a line to the card: the evidence line and a waiver quote", async () => {
++    await makeRound({ report: `# Round\n\nNo findings.\nEvidence level: static only — did not run: tests\rwaivers: none\n` });
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "yes\nwaivers: none", time: NOW.toISOString(), confirmedVia: "tui-card" }];
++    put("manifest.json", manifest);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
++    expect(card.every((line) => !/[\r\n]/.test(line))).toBe(true);
++    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(0);
++    expect(card.join("\n")).toContain("yes ⏎ waivers: none");
++  });
++
++  test("a package with no research.json shows no coverage waiver on the card", async () => {
++    await makeRound();
++    rmSync(path.join(pkg, "research.json"));
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).not.toContain("waiver: coverage");
++    expect(card).toContain("waivers: none");
++  });
++
++  test("an already closed round is refused before a card is drawn", async () => {
++    await makeRound();
++    await yes(tool("review_complete"), { package: pkg });
++    expect(await ask(tool("review_complete"), { package: pkg })).toEqual({ error: expect.stringContaining("already complete") });
++  });
++
++  test("a round closed by the gate whose confirmation record cannot be written is reported as closed, not as 'nothing recorded'", async () => {
++    await makeRound();
++    mkdirSync(path.join(pkg, "completion-confirmation.json"));
++    const result = await yes(tool("review_complete"), { package: pkg });
++    expect(status()).toBe("closed");
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("the round is closed but the confirmation record could not be written");
++    expect(result.output).not.toContain("nothing was recorded");
++  });
++
++  // Flow 464 (PR 1052 C-08): the gates `keryx review complete` meets are the same ones the card meets, and a refusal records nothing.
++  describe("the card meets the same gates as the terminal command", () => {
++    const refuses = async (t: InteractiveTool, text: string): Promise<void> => {
++      const before = read("manifest.json");
++      const result = await yes(t, { package: pkg });
++      expect(result.isError).toBe(true);
++      expect(result.output).toContain(text);
++      expect(result.output).toContain("nothing was recorded");
++      expect(read("manifest.json")).toBe(before);
++      expect(status()).not.toBe("closed");
++      expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++    };
++
++    test("a merged pull request is refused", async () => {
++      await makeRound();
++      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "MERGED", headSha: HEAD }) }), "merged");
++    });
++
++    test("a head that moved is refused", async () => {
++      await makeRound();
++      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "OPEN", headSha: "f".repeat(40) }) }), "fffffff");
++    });
++
++    test("a held finding the operator has not answered is refused (the premise rule, never waived through this card)", async () => {
++      await makeRound();
++      put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
++      await refuses(tool("review_complete"), "premise-decisions");
++    });
++
++    test("a package stamped with the operator gate and no run-profile.json is refused", async () => {
++      await makeRound();
++      put("manifest.json", { ...readJson("manifest.json"), operatorGate: 1 });
++      await refuses(tool("review_complete"), "run-profile.json");
++    });
++
++    test("a slice the manifest routes narrower than its content needs is refused", async () => {
++      await makeRound();
++      put("slices/manifest.json", { slices: [{ id: "s1", path: "s1.diff", roles: [], depth: "light" }] });
++      put("slices/s1.diff", "diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n+import { spawn } from \"node:child_process\";\n+spawn(process.argv[2]);\n");
++      await refuses(tool("review_complete"), "slices/manifest.json");
++    });
++  });
++});
+
+--- src/commands/operator-confirm-rosters.test.ts
+@@ 1,37 @@
+ // Flow 456: the operator card tools exist in ONE roster — the interactive TUI shell's. They are absent from
+ // the MCP tool registry, ACP sessions, spawn_subagent child rosters and the readline (non-TUI) shell, so a
+ // second surface never grows a way to put a decision to the operator that it cannot render or protect.
+ 
+ import { expect, test } from "bun:test";
+ import { readFileSync } from "node:fs";
+ import { buildAcpSessionTools } from "../acp/roster";
+ import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+ import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../harness/provider/types";
+ import { buildToolRegistry } from "../mcp/tools";
+ import { OPERATOR_CONFIRM_TOOL_NAMES } from "../trigger/unattended";
+ import { operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NAMES = operatorConfirmToolNames();
+ 
+-test("there are 18 operator card tools to keep out of the other rosters", () => {
+-  expect(NAMES).toHaveLength(18);
++test("there are 19 operator card tools to keep out of the other rosters", () => {
++  expect(NAMES).toHaveLength(19);
+ });
+ 
+ test("the unattended exclusion list names exactly the registered operator card tools", () => {
+   expect([...OPERATOR_CONFIRM_TOOL_NAMES].sort()).toEqual([...NAMES].sort());
+ });
+ 
+ test("the MCP tool registry offers none of them", () => {
+   const names = buildToolRegistry().map((entry) => entry.name);
+   for (const name of NAMES) expect(names).not.toContain(name);
+ });
+ 
+ test("an ACP session roster offers none of them", () => {
+   const names = buildAcpSessionTools({
+     root: "/nonexistent-root",
+     clientCapabilities: undefined,
+     readViaClient: async () => "",
+   }).map((tool) => tool.definition.name);
+   for (const name of NAMES) expect(names).not.toContain(name);
+ });
+ 
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 1,29 @@
+ // Flow 456 (AC1): the operator-confirm framework, driven through the REAL agent loop with a
+ // tiny gate built by the helper. The model is scripted. The card must be asked in every
+ // permission mode (auto included), never answered by review-auto or a session grant, denied
+ // with no approver (an unattended run), and its token must apply the effect at most once.
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+ import { runAgentTurn, type AgentDeps, type AgentIO, type ApprovalMeta, type ApprovalResponse } from "./agent";
+ import {
++  REMOTE_CARD_TTL_MS,
+   operatorConfirmTool,
+   operatorConfirmToolNames,
+   operatorConfirmTools,
+   type OperatorConfirmation,
+   type OperatorConfirmSpec,
+ } from "./operator-confirm-tools";
+ import type { NormalizedEvent, NormalizedMessage, NormalizedRequest, ProviderDescription, ProviderPort, StreamOptions } from "../harness/provider/types";
+ import { reviewAutoGrants, setReviewSystem } from "../review/review-system";
+ import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
+ import { buildUnattendedRoster } from "./trigger-dispatch";
+ import { operatorCardDialog } from "../tui/tui-shell";
+ import { initialChoiceSelection } from "../tui/composer-choice";
+ 
+ const DESCRIPTION: ProviderDescription = {
+   capabilities: {
+     streaming: true,
+     toolCalls: true,
+     parallelToolCalls: false,
+     structuredOutput: false,
+     reasoningMetadata: false,
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 41,236 @@
+     describe: () => DESCRIPTION,
+     stream: (_request: NormalizedRequest, opts: StreamOptions) => {
+       const round: Partial<NormalizedEvent>[] =
+         call === 0
+           ? [
+               { kind: "tool_call_start", toolCallId: "c1", toolName },
+               { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify(input) },
+               { kind: "model_end" },
+             ]
+           : [{ kind: "text_delta", text: "ok" }, { kind: "model_end" }];
+       call += 1;
+       return (async function* (): AsyncGenerator<NormalizedEvent> {
+         let sequence = 0;
+         for (const partial of round) yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
+       })();
+     },
+   };
+ }
+ 
+ const NOW = new Date("2026-10-15T18:30:00.000Z");
++const ALLOWED = [446593035];
++const PRESSED_AT = "2026-10-15T18:30:00.000Z";
+ 
+ /** The test gate: lifts a counter's ceiling. Its card reads "state" the test controls. */
+-function testGate(state: { ceiling: number; refuse?: string }) {
++function testGate(
++  state: { ceiling: number; refuse?: string },
++  binding: { allowedUserIds?: () => readonly number[] | undefined; now?: () => Date } = {},
++) {
+   const applied: { input: Record<string, unknown>; confirmation: OperatorConfirmation; prepared: { ceiling: number } | undefined }[] = [];
+   const spec: OperatorConfirmSpec<{ ceiling: number }> = {
+     name: "test_lift_ceiling",
+     description: "Lift the test ceiling.",
+     inputSchema: {
+       type: "object",
+       properties: { to: { type: "integer" } },
+       required: ["to"],
+       additionalProperties: false,
+     },
+     buildCard: async (input) => {
+       if (state.refuse !== undefined) return { refusal: state.refuse };
+       const to = input["to"] as number;
+       return {
+         title: `Lift the test ceiling from ${state.ceiling} to ${to}?`,
+         lines: [`current ceiling: ${state.ceiling}`, `new ceiling: ${to}`],
+         subject: "package pkg-1",
+         prepared: { ceiling: state.ceiling },
+       };
+     },
+     apply: async (input, _ctx, confirmation, prepared) => {
+       applied.push({ input, confirmation, prepared });
+       return { output: `ceiling lifted to ${String(input["to"])}` };
+     },
+   };
+-  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW }) };
++  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW, ...binding }) };
+ }
+ 
+ const CARD = ["Lift the test ceiling from 25 to 31?", "current ceiling: 25", "new ceiling: 31", "subject: package pkg-1"];
+ 
+ async function turn(options: {
+   mode: "ask" | "trust" | "auto";
+   answer?: (meta: ApprovalMeta | undefined) => ApprovalResponse;
+   /** Leave the approver out: an unattended run. */
+   unattended?: boolean;
+   state?: { ceiling: number; refuse?: string };
+   trustedMcpTools?: Map<string, string>;
++  allowedUserIds?: readonly number[];
+ }) {
+-  const gate = testGate(options.state ?? { ceiling: 25 });
++  const gate = testGate(options.state ?? { ceiling: 25 }, { allowedUserIds: () => options.allowedUserIds ?? ALLOWED });
+   const asked: { tool: string; meta: ApprovalMeta | undefined }[] = [];
+   const autoApproved: string[] = [];
+   const history: NormalizedMessage[] = [];
+   const deps: AgentDeps = {
+     provider: scripted("test_lift_ceiling", { to: 31 }),
+     providerId: "scripted",
+     modelId: "m",
+     tools: [gate.tool],
+     systemInstruction: "test",
+     idSeq: (() => {
+       let n = 0;
+       return () => `id${n++}`;
+     })(),
+   };
+   const io: AgentIO = {
+     write: () => {},
+     permissionMode: () => options.mode,
+     readOnly: () => false,
+     ...(options.unattended === true
+       ? {}
+       : {
+           requestApproval: async (tool: string, _input: string, meta?: ApprovalMeta) => {
+             asked.push({ tool, meta });
+             return options.answer?.(meta) ?? false;
+           },
+         }),
+     onAutoApproved: (tool) => {
+       autoApproved.push(tool);
+     },
+     ...(options.trustedMcpTools !== undefined ? { trustedMcpTools: options.trustedMcpTools } : {}),
+   };
+   await runAgentTurn(io, deps, history, "lift the ceiling to 31");
+   const toolOutput = history.filter((m) => m.role === "tool").map((m) => m.content).join("\n");
+   return { asked, autoApproved, toolOutput, applied: gate.applied };
+ }
+ 
+ const yes = (meta: ApprovalMeta | undefined): ApprovalResponse => ({ approved: true, fingerprint: meta!.fingerprint });
++const remoteYes = (meta: ApprovalMeta | undefined, pressedBy: number = ALLOWED[0]!): ApprovalResponse => ({
++  approved: true,
++  fingerprint: meta!.fingerprint,
++  via: "remote",
++  pressedBy,
++  pressedAt: PRESSED_AT,
++});
+ 
+ afterEach(() => {
+   setReviewSystem("inherit");
+ });
+ 
+ describe("AC1: the driver asks for an operator-confirm card in every mode", () => {
+   for (const mode of ["auto", "trust", "ask"] as const) {
+     test(`under "${mode}" the card is asked, never auto-approved, and "no" applies nothing`, async () => {
+       const result = await turn({ mode, answer: () => false });
+       expect(result.autoApproved).toEqual([]);
+       expect(result.asked).toHaveLength(1);
+       const meta = result.asked[0]!.meta!;
+       expect(meta.alwaysAsk).toBe(true);
+       expect(meta.card).toEqual(CARD);
+       expect(meta.cardTitle).toBe("Lift the test ceiling from 25 to 31?");
+       expect(result.applied).toEqual([]);
+       expect(result.toolOutput).toContain("test_lift_ceiling not confirmed by the operator");
+     });
+   }
+ 
+   test("yes applies the effect once, with the confirmation record and what the card prepared", async () => {
+     const result = await turn({ mode: "auto", answer: yes });
+     expect(result.applied).toHaveLength(1);
+     const applied = result.applied[0]!;
+     expect(applied.input).toEqual({ to: 31 });
+     expect(applied.prepared).toEqual({ ceiling: 25 });
+     expect(applied.confirmation).toEqual({
+       quote: "Lift the test ceiling from 25 to 31?: yes",
+       answer: "yes",
+       at: NOW.toISOString(),
+       confirmedVia: "tui-card",
+       subject: "package pkg-1",
+       card: CARD,
+     });
+     expect(result.toolOutput).toContain("ceiling lifted to 31");
+   });
+ 
+-  test("a yes answered in the remote topic is recorded as remote-card", async () => {
+-    const result = await turn({ mode: "ask", answer: (meta) => ({ approved: true, fingerprint: meta!.fingerprint, via: "remote" }) });
++  test("a yes answered in the remote topic is recorded as remote-card, with who pressed and when", async () => {
++    const result = await turn({ mode: "ask", answer: remoteYes });
+     expect(result.applied).toHaveLength(1);
+-    expect(result.applied[0]!.confirmation.confirmedVia).toBe("remote-card");
++    const confirmation = result.applied[0]!.confirmation;
++    expect(confirmation.confirmedVia).toBe("remote-card");
++    expect(confirmation.pressedBy).toBe(ALLOWED[0]);
++    expect(confirmation.pressedAt).toBe(PRESSED_AT);
++  });
++
++  test("a yes pressed in this shell records neither pressedBy nor pressedAt", async () => {
++    const result = await turn({ mode: "ask", answer: yes });
++    const confirmation = result.applied[0]!.confirmation;
++    expect(confirmation.confirmedVia).toBe("tui-card");
++    expect("pressedBy" in confirmation).toBe(false);
++    expect("pressedAt" in confirmation).toBe(false);
++  });
++
++  test("a remote yes from an id outside the allowed list applies nothing and says why", async () => {
++    const result = await turn({ mode: "ask", answer: (meta) => remoteYes(meta, 1234), allowedUserIds: ALLOWED });
++    expect(result.applied).toEqual([]);
++    expect(result.toolOutput).toContain("Telegram user 1234 is not on the allowed list — nothing was changed");
++  });
++
++  test("a remote yes with no allowed list bound applies nothing", async () => {
++    const result = await turn({ mode: "ask", answer: remoteYes, allowedUserIds: [] });
++    expect(result.applied).toEqual([]);
++    expect(result.toolOutput).toContain("not on the allowed list");
+   });
+ 
+   test("a yes for a different call (fingerprint mismatch) is a no", async () => {
+     const result = await turn({ mode: "auto", answer: () => ({ approved: true, fingerprint: "someone-else" }) });
+     expect(result.applied).toEqual([]);
+     expect(result.toolOutput).toContain("not confirmed by the operator");
+   });
+ 
+   test("a card that cannot be built refuses without asking", async () => {
+     const result = await turn({ mode: "auto", answer: yes, state: { ceiling: 25, refuse: "the package has no estimate yet" } });
+     expect(result.asked).toEqual([]);
+     expect(result.applied).toEqual([]);
+     expect(result.toolOutput).toContain("test_lift_ceiling refused: the package has no estimate yet");
+   });
+ });
+ 
+ describe("AC1: nothing but the operator answers the card", () => {
+   test("review-auto never grants it: the human is still asked", async () => {
+     setReviewSystem("review-auto");
+     const result = await turn({ mode: "auto", answer: yes });
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 297,441 @@
+     expect((await gate.tool.invoke({ to: 31 }, { confirmationToken: confirmation.token! })).isError).toBe(true);
+     expect(gate.applied).toEqual([]);
+   });
+ 
+   test("a declined card's token is dropped", async () => {
+     const gate = testGate({ ceiling: 25 });
+     const confirmation = await gate.tool.confirmation!({ to: 31 });
+     if ("error" in confirmation) throw new Error(confirmation.error);
+     gate.tool.confirmationDeclined!(confirmation.token!);
+     expect((await gate.tool.invoke({ to: 31 }, { confirmationToken: confirmation.token! })).isError).toBe(true);
+     expect(gate.applied).toEqual([]);
+   });
+ 
+   test("the tool is write-risk and tells the model it cannot confirm", () => {
+     const gate = testGate({ ceiling: 25 });
+     expect(gate.tool.definition.risk).toBe("write");
+     expect(gate.tool.definition.description).toContain("you cannot confirm it");
+   });
+ });
+ 
++describe("AC2: a remote answer is accepted only for this question, once, within an hour", () => {
++  const remote = (token: string, extra: { pressedBy?: number } = {}) => ({
++    confirmationToken: token,
++    confirmationVia: "remote" as const,
++    confirmationPressedBy: extra.pressedBy ?? ALLOWED[0]!,
++    confirmationPressedAt: PRESSED_AT,
++  });
++  const issue = async (gate: ReturnType<typeof testGate>, to = 31) => {
++    const confirmation = await gate.tool.confirmation!({ to });
++    if ("error" in confirmation) throw new Error(confirmation.error);
++    return confirmation.token!;
++  };
++
++  test("an allowed id, this question's token, unused, inside the hour is accepted", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
++    expect(result.isError).toBe(false);
++    expect(gate.applied).toHaveLength(1);
++  });
++
++  test("an id that is not allowed is refused, says why, and changes nothing", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate), { pressedBy: 777 }));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("Telegram user 777 is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++
++  test("with no allowed-id list to check (the provider returns undefined) a remote answer is refused and the token is spent", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => undefined });
++    const token = await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).output).toContain("no operator-confirmed card");
++  });
++
++  test("with no allowed-id provider bound at all a remote answer is refused", async () => {
++    const gate = testGate({ ceiling: 25 });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++
++  test("another question's token is refused, changes nothing, and is spent", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const token = await issue(gate, 31);
++    const result = await gate.tool.invoke({ to: 99 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
++  });
++
++  test("a replay of a used token is refused", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const token = await issue(gate);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
++    const replay = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(replay.isError).toBe(true);
++    expect(replay.output).toContain("nothing was changed");
++    expect(gate.applied).toHaveLength(1);
++  });
++
++  test("a token older than one hour is refused, says why, and is spent", async () => {
++    let clock = NOW.getTime();
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED, now: () => new Date(clock) });
++    const token = await issue(gate);
++    clock += REMOTE_CARD_TTL_MS + 1;
++    const result = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("older than 1 hour");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
++  });
++
++  test("a token exactly at the hour is still accepted", async () => {
++    let clock = NOW.getTime();
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED, now: () => new Date(clock) });
++    const token = await issue(gate);
++    clock += REMOTE_CARD_TTL_MS;
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
++  });
++
++  test("a remote answer that does not say who pressed it is refused", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const token = await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, { confirmationToken: token, confirmationVia: "remote" });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("did not say who pressed it");
++    expect(gate.applied).toEqual([]);
++  });
++
++  test("an answer that did not come through the bridge (tool-result text, no token) applies nothing", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, { confirmationVia: "remote", confirmationPressedBy: ALLOWED[0]!, confirmationPressedAt: PRESSED_AT });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++});
++
+ describe("nested shell defence", () => {
+   test("every card is refused when this keryx runs with KERYX_TOOL_CALL=1", async () => {
+     const gate = testGate({ ceiling: 25 });
+     const nested = operatorConfirmTool(gate.spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: { KERYX_TOOL_CALL: "1" } });
+     const result = await nested.confirmation!({ to: 31 });
+     expect("error" in result && result.error).toContain("KERYX_TOOL_CALL=1");
+     expect((await nested.invoke({ to: 31 }, { confirmationToken: "anything" })).isError).toBe(true);
+     expect(gate.applied).toEqual([]);
+   });
+   test("a shell outside an agent's shell_exec still asks", async () => {
+     const gate = testGate({ ceiling: 25 });
+     const plain = operatorConfirmTool(gate.spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: {} });
+     expect("card" in (await plain.confirmation!({ to: 31 }))).toBe(true);
+   });
+ });
+ describe("AC1: the TUI dialog wording", () => {
+   test("No is the default selection, so an Enter typed as the dock opens declines", () => {
+     const dialog = operatorCardDialog("Lift the test ceiling from 25 to 31?");
+     expect(initialChoiceSelection([dialog.yes, dialog.no])).toBe(1);
+     expect(initialChoiceSelection([dialog.yes, dialog.no])).toBe([dialog.yes, dialog.no].findIndex((o) => o.id === dialog.no.id));
+
+--- src/commands/shell.test.ts
+@@ 860,900 @@
+     "graph_path",
+     "graph_query",
+     "graph_symbol",
+     "health_status",
+     // Flow 393: working-memory recall (read-only) and the Notes writer.
+     "history_search",
+     "learn_accept",
+     "learn_graduate",
+     "learn_promote",
+     "list_dir",
+     "memory_search",
+     "plan_get",
+     "plan_set",
+     "plan_update",
+     "read_file",
+     "read_wiki",
+     "recall_step",
+     "repomap",
+     "review_chunks_answer",
+     "review_comments_reply",
++    "review_complete",
+     "review_confirm_plan",
+     "review_decide_premise",
+     "review_override_reviewers",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_mutation",
+     "review_waive_readiness",
+     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
+     // the card; schedule_list is read-only. TUI roster only.
+     "schedule_create",
+     "schedule_list",
+     "schedule_pause",
+     "schedule_remove",
+     "schedule_resume",
+     "schedule_run",
+     "search_code",
+     // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
+     // servers the operator has connected — if a qualified name like
+     // `linear__create_issue` ever appears in this list, the package's whole
+     // premise has been reversed.
+
+--- src/flow/confirm-token.test.ts
+@@ 468,510 @@
+   await expect(
+     service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: "pr:https://github.com/acme/app/pull/999" } }),
+   ).rejects.toThrow(/completion target changed after the confirmation card/);
+   await expect(readFile(confirmTokenPath(ROOT, dir), "utf8")).rejects.toThrow();
+   const ok = await service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: `pr:${PR}` } });
+   expect(ok.token.length).toBeGreaterThan(0);
+ });
+ 
+ test("456: a card-minted token is spent with a card mechanism in the signature", async () => {
+   const service = await fresh();
+   const { id, dir } = await readyFlow(service);
+   const minted = await service.confirmMint({ cwd: ROOT, id, confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes" } });
+   clock = new Date(clock.getTime() + 60_000);
+   const result = await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+   expect(result.passed).toBe(true);
+   const flow = await onDisk(dir);
+   expect(flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation?.mechanism).toBe("remote-card-token");
+   expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
+ });
+ 
++test("464: a remote-card token carries who pressed the card and when into the signature", async () => {
++  const service = await fresh();
++  const { id, dir } = await readyFlow(service);
++  const minted = await service.confirmMint({
++    cwd: ROOT,
++    id,
++    confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" },
++  });
++  clock = new Date(clock.getTime() + 60_000);
++  await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
++  const flow = await onDisk(dir);
++  const confirmation = flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation;
++  expect(confirmation).toMatchObject({ mechanism: "remote-card-token", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" });
++  expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
++});
++
+ test("456: the refusal text names the flow_confirm tool in keryx shell and the terminal outside it", () => {
+   for (const reason of ["token_required", "token_not_minted", "token_expired", "token_target_mismatch"] as const) {
+     const text = describeConfirmationFailure(reason, "42");
+     expect(text).toContain("`flow_confirm` tool inside keryx shell");
+     expect(text).toContain("from a terminal outside it: `keryx flow confirm 42`");
+   }
+ });
