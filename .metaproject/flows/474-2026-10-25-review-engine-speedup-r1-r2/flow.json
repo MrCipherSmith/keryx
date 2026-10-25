@@ -9,9 +9,9 @@
   "id": "474",
   "slug": "review-engine-speedup-r1-r2",
   "title": "Review engine speedup, step 1: no stop between waves (R1) and wave-events journal (R2)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-25T10:47:38.750Z",
-  "updatedAt": "2026-10-25T13:01:24.610Z",
+  "updatedAt": "2026-10-25T17:18:28.725Z",
   "source": {
     "type": "description",
     "ref": null
@@ -88,7 +88,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1083"
   },
   "baseBranch": "main",
   "owner": {
@@ -286,6 +286,11 @@
       "at": "2026-10-25T13:01:24.610Z",
       "event": "ac-confirmed",
       "detail": "AC17: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T17:18:28.725Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1083 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
