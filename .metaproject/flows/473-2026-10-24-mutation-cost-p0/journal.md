@@ -1,0 +1,25 @@
+# Flow Journal
+
+- 2026-10-24T05:16:37.889Z - flow created
+- 2026-10-24T05:19:37.860Z - task-added: T5: Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG
+- 2026-10-24T05:19:38.088Z - task-added: T6: Replay sample with and without --bail, write replay-bail.md
+- 2026-10-24T05:19:38.316Z - frozen: 12 criteria; checksum recorded
+- 2026-10-24T05:19:41.431Z - started
+- 2026-10-24T05:19:41.707Z - task-done: T1: Collect remaining context
+- 2026-10-24T05:27:53.642Z - task-done: T2: Implement per plan
+- 2026-10-24T05:27:53.877Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-24T05:28:55.017Z - task-done: T5: Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG
+- 2026-10-25T07:27:55.666Z - task-done: T6: Replay sample with and without --bail, write replay-bail.md
+- 2026-10-25T07:41:34.214Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-25T07:42:19.069Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1081
+- 2026-10-25T07:42:19.655Z - ac-confirmed: AC1: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:20.275Z - ac-confirmed: AC2: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:20.909Z - ac-confirmed: AC3: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:21.432Z - ac-confirmed: AC4: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:22.048Z - ac-confirmed: AC5: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:22.685Z - ac-confirmed: AC6: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:23.319Z - ac-confirmed: AC7: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:23.856Z - ac-confirmed: AC8: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:24.372Z - ac-confirmed: AC10: AC10 command passes: copies identical, --no-bail in skill, cli-reference, CHANGELOG (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:24.916Z - ac-confirmed: AC11: typecheck + 342 tests in 9 files, 0 fail (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T07:42:25.495Z - ac-confirmed: AC12: draft PR #1081, no AI authorship line, checks not run are stated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])

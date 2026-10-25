@@ -576,7 +576,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-cov
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--no-bail", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
@@ -3442,12 +3442,14 @@ async function runMutate(args: string[]): Promise<void> {
   const scratchArg = optionValue(args, "--scratch");
   if (scratchArg !== undefined && !SCRATCH_MODES.includes(scratchArg as ScratchMode)) throw new Error(`--scratch must be one of ${SCRATCH_MODES.join(", ")}`);
   const scratch = scratchArg as ScratchMode | undefined;
+  const noBail = flagTokens(args).find((token) => token.name === "--no-bail");
+  if (noBail?.value !== undefined) throw new Error(`--no-bail takes no value (got "${noBail.value}"); pass it alone to run the mutants without --bail`);
   const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
   // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
   const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
   let record;
   try {
-    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch });
+    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch, bail: noBail === undefined });
   } catch (error) {
     // A red baseline still leaves evidence: the command, its cwd and the output tail say why no mutant ran.
     if (error instanceof BaselineError) {
@@ -4883,10 +4885,11 @@ ${GRAPH_TIMEOUT_HELP}`);
 
 function printMutateHelp(): void {
   console.log(`keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>]
-                    [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
+                    [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--no-bail] [--json]
 
 Runs the reviewers' proposed mutants (default spec: <review-dir>/research-evidence/mutants.json) in a scratch copy of
 the worktree; the worktree is never written. The baseline must pass first. --cap bounds the mutants run.
+A plain "bun test <paths>" command runs each mutant with --bail (the baseline runs in full); --no-bail turns that off.
 Writes mutation-<n>.json and .md to research-evidence/.`);
 }
 
@@ -4971,7 +4974,7 @@ Usage:
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
   keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
-                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--json]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--no-bail] [--json]
                         Runs the reviewers' proposed mutants (default spec:
                         <review-dir>/research-evidence/mutants.json) in a scratch
                         copy of the worktree; the worktree is never written. The
@@ -4979,7 +4982,9 @@ Usage:
                         (--scratch repo, default, so ancestor node_modules still
                         resolve) or in the OS temp dir (--scratch tmp). The
                         baseline must pass first; a red one exits non-zero and
-                        prints the command, its cwd and the last 60 output lines. A survivor means no assertion
+                        prints the command, its cwd and the last 60 output lines.
+                        A plain "bun test <paths>" command runs each mutant with
+                        --bail (baseline in full); --no-bail turns that off. A survivor means no assertion
                         pins that behaviour; it raises a finding only where no
                         mutant in the same file was killed. Writes mutation-<n>.json and .md to
                         research-evidence/.

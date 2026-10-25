@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "473",
+  "slug": "mutation-cost-p0",
+  "title": "Cheaper mutation pass: early exit on red, run provenance, timing in the record",
+  "status": "implemented",
+  "createdAt": "2026-10-24T05:16:37.889Z",
+  "updatedAt": "2026-10-25T07:42:25.495Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-25T07:42:19.655Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC2": {
+      "at": "2026-10-25T07:42:20.274Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC3": {
+      "at": "2026-10-25T07:42:20.908Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC4": {
+      "at": "2026-10-25T07:42:21.431Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC5": {
+      "at": "2026-10-25T07:42:22.048Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC6": {
+      "at": "2026-10-25T07:42:22.685Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC7": {
+      "at": "2026-10-25T07:42:23.319Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC8": {
+      "at": "2026-10-25T07:42:23.856Z",
+      "note": "bun test src/review/mutate.test.ts, 37 pass, 2026-10-25"
+    },
+    "AC10": {
+      "at": "2026-10-25T07:42:24.372Z",
+      "note": "AC10 command passes: copies identical, --no-bail in skill, cli-reference, CHANGELOG"
+    },
+    "AC11": {
+      "at": "2026-10-25T07:42:24.916Z",
+      "note": "typecheck + 342 tests in 9 files, 0 fail"
+    },
+    "AC12": {
+      "at": "2026-10-25T07:42:25.494Z",
+      "note": "draft PR #1081, no AI authorship line, checks not run are stated"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1081"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "origin": {
+    "kind": "human-request",
+    "quote": "максимально оптимизировать",
+    "source": "operator helyx 221734 and 221759 (fragment as quoted in arena/ideas/keryx-mutation-cost/README.md; the full message was not re-read)"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Replay sample with and without --bail, write replay-bail.md",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T2",
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-24T05:16:37.889Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-24T05:19:37.860Z",
+      "event": "task-added",
+      "detail": "T5: Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG"
+    },
+    {
+      "at": "2026-10-24T05:19:38.088Z",
+      "event": "task-added",
+      "detail": "T6: Replay sample with and without --bail, write replay-bail.md"
+    },
+    {
+      "at": "2026-10-24T05:19:38.316Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-24T05:19:41.431Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-24T05:19:41.707Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-24T05:27:53.642Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-24T05:27:53.877Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-24T05:28:55.017Z",
+      "event": "task-done",
+      "detail": "T5: Docs: SKILL.detail.md (both copies), cli-reference, CHANGELOG"
+    },
+    {
+      "at": "2026-10-25T07:27:55.666Z",
+      "event": "task-done",
+      "detail": "T6: Replay sample with and without --bail, write replay-bail.md"
+    },
+    {
+      "at": "2026-10-25T07:41:34.214Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-25T07:42:19.069Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1081"
+    },
+    {
+      "at": "2026-10-25T07:42:19.655Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:20.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:20.909Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:21.432Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:22.048Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:22.685Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:23.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:23.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun test src/review/mutate.test.ts, 37 pass, 2026-10-25 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:24.372Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: AC10 command passes: copies identical, --no-bail in skill, cli-reference, CHANGELOG (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:24.916Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: typecheck + 342 tests in 9 files, 0 fail (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T07:42:25.495Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: draft PR #1081, no AI authorship line, checks not run are stated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"withBail\""
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"bail applied\""
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"bail status parity\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"no-bail\""
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"provenance\""
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"treeHash\""
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"legacy record\""
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts -t \"renderMutationTable\""
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "sh -c 'cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md && grep -q -e \"--no-bail\" src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md && grep -q -e \"--no-bail\" docs/docs/cli-reference.md && grep -q -e \"--no-bail\" CHANGELOG.md'"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "sh -c 'bun run typecheck && bun test src/review/mutate.test.ts src/review/mutate-not-reached.test.ts src/review/severity-audit.test.ts src/review/ledger.test.ts src/review/pr-replay.test.ts src/commands/review-ledger.test.ts'"
+    },
+    "AC12": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-25T07:42:19.655Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:20.274Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:20.908Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:21.431Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:22.048Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:22.685Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:23.319Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:23.856Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:24.372Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:24.916Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    },
+    {
+      "at": "2026-10-25T07:42:25.494Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:d5909ef983ffd8c57b383a1a3991c4e0c15f6b85426c2c9f9de9fed38b492e3e"
+    }
+  ]
+}
