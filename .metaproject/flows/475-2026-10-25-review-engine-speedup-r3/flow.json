@@ -1,0 +1,423 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "475",
+  "slug": "review-engine-speedup-r3",
+  "title": "Review engine speedup, step 2: count every reply of a reviewer (R3, E4.1-E4.4)",
+  "status": "in-progress",
+  "createdAt": "2026-10-25T13:07:09.204Z",
+  "updatedAt": "2026-10-25T14:57:16.884Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-25T14:33:16.593Z",
+      "note": "bun test review-next.test.ts -t 'wave order': 3 pass; #8174 copy 8->3 dispatches, spurious [missing] gone"
+    },
+    "AC2": {
+      "at": "2026-10-25T14:33:16.816Z",
+      "note": "-t idempotent pass; read-only repeats identical on four copies (verification.md)"
+    },
+    "AC3": {
+      "at": "2026-10-25T14:33:17.035Z",
+      "note": "-t 'prev files' pass; #8174 has 13 prev files of 67, none chosen"
+    },
+    "AC4": {
+      "at": "2026-10-25T14:33:17.257Z",
+      "note": "retry-plan/retry-eval/ledger -t needs_context: 6 pass across 3 files"
+    },
+    "AC5": {
+      "at": "2026-10-25T14:33:17.478Z",
+      "note": "-t 'without slices': 3 pass; rejected in text and --json"
+    },
+    "AC6": {
+      "at": "2026-10-25T14:33:17.699Z",
+      "note": "-t 'escalations from every reply' pass"
+    },
+    "AC7": {
+      "at": "2026-10-25T14:33:17.931Z",
+      "note": "-t 'old-format state' pass; four copies carry no notRun"
+    },
+    "AC10": {
+      "at": "2026-10-25T14:33:18.167Z",
+      "note": "AC10 command passes: cmp on both skill pairs, rejected in cli-reference, prev in CHANGELOG"
+    },
+    "AC11": {
+      "at": "2026-10-25T14:33:18.389Z",
+      "note": "parity.test.ts + review-panel.test.ts: 23 pass; no new TUI surface"
+    },
+    "AC12": {
+      "at": "2026-10-25T14:33:18.609Z",
+      "note": "typecheck clean; 170 tests pass in the four existing files; src/commands/review-next.test.ts does not exist on this branch (comes with PR 1083), treated as filter"
+    },
+    "AC8": {
+      "at": "2026-10-25T14:57:16.657Z",
+      "note": "Operator poll 301: confirmed with caveats from verification.md (3 dispatches on #8174, two open for real needs_context; first --apply call differs from the next)"
+    },
+    "AC9": {
+      "at": "2026-10-25T14:57:16.884Z",
+      "note": "Operator poll 301: confirmed; #8111/#8158/#8086 identical to baseline, originals fingerprint-identical, discrepancies in verification.md"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "/home/altsay/arena/ideas/pr-review-management/23_KERYX_IMPLEMENTATION_PROMPT.md",
+    "source": "Helyx 226364, 2026-10-25; R3 order: poll 293; start after the R1+R2 draft PR: poll 299"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-25T13:07:09.204Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-25T14:16:28.091Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-25T14:16:28.620Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-25T14:31:09.971Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-25T14:31:10.206Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-25T14:31:10.432Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-25T14:33:16.593Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test review-next.test.ts -t 'wave order': 3 pass; #8174 copy 8->3 dispatches, spurious [missing] gone (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:16.816Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: -t idempotent pass; read-only repeats identical on four copies (verification.md) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:17.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: -t 'prev files' pass; #8174 has 13 prev files of 67, none chosen (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:17.257Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: retry-plan/retry-eval/ledger -t needs_context: 6 pass across 3 files (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:17.478Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: -t 'without slices': 3 pass; rejected in text and --json (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:17.699Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: -t 'escalations from every reply' pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:17.931Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: -t 'old-format state' pass; four copies carry no notRun (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:18.167Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: AC10 command passes: cmp on both skill pairs, rejected in cli-reference, prev in CHANGELOG (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:18.389Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: parity.test.ts + review-panel.test.ts: 23 pass; no new TUI surface (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:33:18.609Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: typecheck clean; 170 tests pass in the four existing files; src/commands/review-next.test.ts does not exist on this branch (comes with PR 1083), treated as filter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T14:57:16.657Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Operator poll 301: confirmed with caveats from verification.md (3 dispatches on #8174, two open for real needs_context; first --apply call differs from the next) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-25T14:57:16.884Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Operator poll 301: confirmed; #8111/#8158/#8086 identical to baseline, originals fingerprint-identical, discrepancies in verification.md (signed: MrCipherSmith [stated])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"wave order\""
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"idempotent\""
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"prev files\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/retry-plan.test.ts src/review/retry-eval.test.ts src/review/ledger.test.ts -t \"needs_context\""
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"without slices\""
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"escalations from every reply\""
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"old-format state\""
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "sh -c 'cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md && cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md && grep -q rejected docs/docs/cli-reference.md && grep -q \"prev\" CHANGELOG.md'"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/review/parity.test.ts src/tui/review-panel.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "sh -c 'bun run typecheck && bun test src/review/review-next.test.ts src/review/retry-plan.test.ts src/review/retry-eval.test.ts src/review/ledger.test.ts src/commands/review-next.test.ts'"
+    },
+    "AC13": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-25T14:33:16.593Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:16.816Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:17.035Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:17.257Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:17.478Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:17.699Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:17.931Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:18.167Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:18.389Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:33:18.609Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:57:16.657Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    },
+    {
+      "at": "2026-10-25T14:57:16.884Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:b0752a7d2d63197961704bd126c3ad605e9698b8b960200e22958196089f3ba7"
+    }
+  ]
+}

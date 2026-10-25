@@ -6,7 +6,7 @@ import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { INGEST_SCREENED_FILE, type IngestScreened, packageCoverageErrors, researchErrors } from "./research";
 import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
-import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
+import { needsContextQuestions, readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
@@ -475,7 +475,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const dispositionsBy = new Map<string, Map<string, string>>();
   for (const raw of [...attributed].sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))) {
     const result = raw.result!;
-    const open = Array.isArray(result.needs_context) && result.needs_context.filter(text).length > 0;
+    const open = needsContextQuestions(result.needs_context).length > 0;
     const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
     if (!FINISHED.has(String(result.status ?? "").toUpperCase()) || open || (typeof stamped === "string" && stamped !== fingerprintNow)) continue;
     const mine = dispositionsBy.get(result.reviewer!) ?? new Map<string, string>();
@@ -524,7 +524,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     }
     const result = latest.result!;
     const status = String(result.status ?? "").toUpperCase();
-    const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
+    const asked = needsContextQuestions(result.needs_context);
     const unreadable = unreadableInputClaim(result);
     const finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined;
     const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };

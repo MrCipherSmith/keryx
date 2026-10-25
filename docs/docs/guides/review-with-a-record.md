@@ -137,6 +137,12 @@ removes findings. For `--all` and a full review a wave holds at most 10 reviewer
 honoured, at most 300 seconds; after two halvings the round stops with
 `STATUS: BLOCKED rate_limited`, naming the reviewers still queued.
 
+After a timeout or a resumed session, `keryx review next --package <dir>` says which
+reviewers still owe slices. It counts every reply a reviewer left, in wave order, so
+slices covered in an earlier wave are not asked for again; saved `*.prev*.txt` copies are
+ignored; and a finished reply that does not list the slices it covered is shown as
+`rejected` and the reviewer is asked again. Asking twice gives the same answer.
+
 What the skill does not do: it does not run as a subagent of another orchestrator
 by default, it does not fix code, and it does not shrink the reviewer set to fit a
 budget.
