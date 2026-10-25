@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { HELD_FINDING, followUpObligation, writeMutationLeftovers } from "../review/parity.test-helpers";
+import { waveEventsPath } from "../review/wave-events";
 import { formatReviewDepthLines, loadReviewDepth, renderReviewDepthText, renderReviewParityText } from "./review-panel";
 import { isReviewParityCommand, projectReviewsParityLines } from "./reviews-inspector";
 
@@ -80,5 +81,30 @@ describe("the sidebar", () => {
   test("paints nothing for a clean review or before the reviews are read", async () => {
     expect(projectReviewsParityLines(await loadReviewDepth(await project({ leftovers: false })), 40)).toEqual([]);
     expect(projectReviewsParityLines(undefined, 40)).toEqual([]);
+  });
+});
+
+describe("gaps without a launch (wave-events.jsonl)", () => {
+  const LINE = "Gaps without a launch after the plan was authorized: 2, longest 58 min (waits for operator cards are possible)";
+
+  async function withGaps(): Promise<string> {
+    const root = await project({ leftovers: false });
+    const file = waveEventsPath(path.join(root, PKG));
+    await mkdir(path.dirname(file), { recursive: true });
+    const idle = (kind: string, minutes: number): string => JSON.stringify({ time: "2026-10-25T10:00:00.000Z", event: "idle", kind, gapMs: minutes * 60_000, since: "2026-10-25T09:00:00.000Z" });
+    await writeFile(file, `${idle("A", 58)}\n${idle("B", 16)}\n`, "utf8");
+    return root;
+  }
+
+  test("the depth tab, /review parity and the sidebar carry the gaps line from the same view", async () => {
+    const rows = await loadReviewDepth(await withGaps());
+    expect(formatReviewDepthLines(rows).join("\n")).toContain(`  ${LINE}`);
+    expect(renderReviewParityText(rows)).toContain(`  ${LINE}`);
+    expect(projectReviewsParityLines(rows, 40)).toEqual(["gaps 2"]);
+  });
+
+  test("a review with no journal paints no gaps line", async () => {
+    const rows = await loadReviewDepth(await project({ leftovers: false }));
+    expect(formatReviewDepthLines(rows).join("\n")).not.toContain("Gaps without a launch");
   });
 });

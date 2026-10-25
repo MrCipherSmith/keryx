@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { type DriverFile } from "./driver-read";
+import { packagePlanGate } from "./estimate";
 import { evaluateRetry, withProcessed } from "./retry-eval";
 import { writeFileAtomic } from "../lib/fs";
 import { parseReviewResult, sha, type ParsedResult } from "./ledger";
@@ -57,6 +58,13 @@ export type NextResult = {
   /** Light slices a finding re-opened deep in this call. */
   escalated: Array<{ slice: string; finding: string; by: string }>;
   applied: boolean;
+  /**
+   * Whether the operator's plan covers what is dispatched now: `packagePlanGate(...).refusal === undefined` over the plan with this call's
+   * escalations applied. `null` when the gate could not be evaluated; it never changes what is dispatched.
+   */
+  planAuthorized: boolean | null;
+  /** True when the plan is authorized and there is something to dispatch: the orchestrator goes on without asking. */
+  continue: boolean;
 };
 
 type Latest = { name: string; hash: string; body: string; mtimeMs: number; result: ParsedResult };
@@ -154,6 +162,7 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
     await writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
     for (const dispatch of dispatches) if (dispatch.needsApply === true) delete dispatch.needsApply;
   }
+  const planAuthorized = await planAuthorization(packageDir, manifest);
   return {
     done: dispatches.length === 0 && blocked.length === 0,
     package: packageDir,
@@ -162,7 +171,17 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
     blocked,
     escalated: escalations.map((entry) => ({ slice: entry.slice, finding: entry.finding, by: entry.by })),
     applied: input.apply === true,
+    planAuthorized,
+    continue: planAuthorized === true && dispatches.length > 0,
   };
+}
+
+async function planAuthorization(packageDir: string, manifest: SliceManifest): Promise<boolean | null> {
+  try {
+    return (await packagePlanGate(packageDir, { manifestValue: manifest })).refusal === undefined;
+  } catch {
+    return null;
+  }
 }
 
 type DriverView = { reviewer: string; file: string; wave?: number; slices: string[]; result?: string; model?: string };
@@ -223,6 +242,8 @@ function describeDispatch(input: {
 }
 
 /** The text a `review next` run prints. */
+export const CONTINUE_LINE = "plan authorized; continue the loop without asking the operator; stop only for the card list, for plan growth, or on done / Not run";
+
 export function renderNext(result: NextResult, relativeTo: string = process.cwd()): string {
   const rel = (file: string): string => path.relative(relativeTo, file) || file;
   const lines: string[] = [];
@@ -232,6 +253,7 @@ export function renderNext(result: NextResult, relativeTo: string = process.cwd(
     const reviewers = new Set(result.dispatches.map((entry) => entry.reviewer)).size;
     lines.push(`review next: ${result.dispatches.length} dispatch(es) for ${reviewers} reviewer(s); dispatch them in one batch, save each reply under its result path, then run \`keryx review next --package ${rel(result.package)}\` again.`);
   }
+  if (result.continue) lines.push(CONTINUE_LINE);
   for (const entry of result.dispatches) {
     lines.push(`- ${entry.reviewer} wave ${entry.wave} (${entry.wavesLeft} left) [${entry.reason}] ${entry.slices.join(", ")} (${entry.bytes} bytes) model: ${entry.model ?? "model not recorded"}`);
     lines.push(`    result: ${entry.result}${entry.driver === undefined ? "" : `  driver: ${entry.driver}`}`);
@@ -242,6 +264,6 @@ export function renderNext(result: NextResult, relativeTo: string = process.cwd(
   for (const item of result.escalated) lines.push(`- escalate ${item.slice}: finding ${item.finding} from ${item.by} on a light slice; it is re-opened deep and every core role now owns it`);
   for (const item of result.notRun) lines.push(`- **Not run:** ${item.reviewer} — ${item.reason}; never counted as a clean pass`);
   for (const item of result.blocked) lines.push(`- blocked ${item.reviewer}: ${item.message}`);
-  if (!result.applied && result.dispatches.some((entry) => entry.needsApply === true)) lines.push("(read-only: nothing was written)");
+  if (!result.applied && result.dispatches.some((entry) => entry.needsApply === true)) lines.push("(--apply not given: the re-cut slices, the manifest and the retry state were not written)");
   return lines.join("\n");
 }

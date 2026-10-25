@@ -6,7 +6,9 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { renderNext, reviewNext } from "./review-next";
+import { CONTINUE_LINE, renderNext, reviewNext } from "./review-next";
+import { estimatePackage, planConfirmationFor, writePlanConfirmation } from "./estimate";
+import { buildRunProfile, writeRunProfile } from "./run-profile";
 
 const ORIGINAL_CWD = process.cwd();
 const realError = console.error;
@@ -196,4 +198,96 @@ test("the command prints JSON, refuses a package without slices, and a reply it 
   const out = JSON.parse(logs.join("\n"));
   expect(out).toMatchObject({ done: false, applied: false });
   expect(out.dispatches[0]).toMatchObject({ reviewer: "review-logic", reason: "missing" });
+});
+
+/** Stamps the package as gated (flow 457) and lowers the plan threshold so any plan is over it. */
+async function gatePackage(maxDispatches = 1): Promise<void> {
+  await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ operatorGate: 1 }), "utf8");
+  await writeRunProfile(pkg, buildRunProfile({ host: "claude-code" }));
+  await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches } }), "utf8");
+}
+
+async function confirmPlan(): Promise<void> {
+  await writePlanConfirmation(pkg, planConfirmationFor(await estimatePackage(pkg), "go ahead", "terminal"));
+}
+
+test("planAuthorized follows packagePlanGate: confirmed, over the threshold without a card, under it, and a package the gate does not cover", async () => {
+  await slicePackage({ "src/m/a.ts": 40 });
+  expect(await reviewNext({ packageDir: pkg })).toMatchObject({ planAuthorized: true, continue: true });
+
+  await gatePackage();
+  const refused = await reviewNext({ packageDir: pkg });
+  expect(refused).toMatchObject({ planAuthorized: false, continue: false });
+  expect(refused.dispatches.length).toBeGreaterThan(0);
+
+  await confirmPlan();
+  expect(await reviewNext({ packageDir: pkg })).toMatchObject({ planAuthorized: true, continue: true });
+
+  await gatePackage(10_000);
+  await rm(path.join(pkg, "plan-confirmation.json"));
+  expect(await reviewNext({ packageDir: pkg })).toMatchObject({ planAuthorized: true, continue: true });
+});
+
+test("continue needs something to dispatch: a finished package is authorized but does not continue", async () => {
+  const ids = await slicePackage({ "src/m/a.ts": 40 });
+  const reviewers = ["review-logic"];
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "DONE", slices: ids }));
+  const next = await reviewNext({ packageDir: pkg, reviewers });
+  expect(next).toMatchObject({ done: true, planAuthorized: true, continue: false });
+  expect(renderNext(next)).not.toContain(CONTINUE_LINE);
+});
+
+test("continuation line: printed right after the first line only while the plan is authorized and slices are open", async () => {
+  await slicePackage({ "src/m/a.ts": 40 });
+  const open = renderNext(await reviewNext({ packageDir: pkg })).split("\n");
+  expect(open[0]).toStartWith("review next:");
+  expect(open[1]).toBe(CONTINUE_LINE);
+
+  await gatePackage();
+  expect(renderNext(await reviewNext({ packageDir: pkg }))).not.toContain(CONTINUE_LINE);
+  await confirmPlan();
+  expect(renderNext(await reviewNext({ packageDir: pkg })).split("\n")[1]).toBe(CONTINUE_LINE);
+});
+
+test("continuation line: --json carries the fields and keeps every existing one", async () => {
+  await slicePackage({ "src/m/a.ts": 40 });
+  await reviewCommand(["next", "--package", pkg, "--reviewers", "review-logic", "--json"]);
+  const out = JSON.parse(logs.join("\n"));
+  expect(out).toMatchObject({ planAuthorized: true, continue: true, done: false, applied: false, package: pkg });
+  for (const key of ["dispatches", "notRun", "blocked", "escalated"]) expect(Array.isArray(out[key])).toBe(true);
+  expect(logs.join("\n")).not.toContain(CONTINUE_LINE);
+});
+
+test("planAuthorized: plan growth after a major finding on a light slice is not covered by the earlier confirmation", async () => {
+  const ids = await slicePackage({ "docs/guide.md": 30 });
+  await gatePackage(2);
+  await confirmPlan();
+  const before = await reviewNext({ packageDir: pkg, reviewers: ["review-logic", "review-architecture"] });
+  expect(before.planAuthorized).toBe(true);
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "DONE", slices: ids, findings: [{ id: "F-1", severity: "major", file: "docs/guide.md" }] }));
+  await writeFile(path.join(pkg, "raw", "review-architecture-w1.txt"), reply({ reviewer: "review-architecture", status: "DONE", slices: [] }));
+  const grown = await reviewNext({ packageDir: pkg, reviewers: ["review-logic", "review-architecture"] });
+  expect(grown.escalated).toHaveLength(1);
+  expect(grown).toMatchObject({ planAuthorized: false, continue: false });
+});
+
+test("gate failure: a gate that cannot be evaluated gives planAuthorized null and does not throw; a malformed confirmation does not fail next", async () => {
+  await slicePackage({ "src/m/a.ts": 40 });
+  const clean = await reviewNext({ packageDir: pkg });
+  await gatePackage();
+  await writeFile(path.join(pkg, "plan-confirmation.json"), "{ not json", "utf8");
+  const malformed = await reviewNext({ packageDir: pkg });
+  expect(malformed.planAuthorized).toBe(false);
+  expect(malformed.dispatches).toEqual(clean.dispatches);
+
+  // A manifest the estimate refuses (no wave budget) throws inside the gate: unknown, not refused. The dispatches are decided before the gate runs.
+  await rm(path.join(pkg, "plan-confirmation.json"));
+  const manifestPath = path.join(pkg, "slices", "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  const { maxBytes: _max, waveBytes: _wave, ...withoutBudget } = manifest;
+  await writeFile(manifestPath, JSON.stringify(withoutBudget), "utf8");
+  const broken = await reviewNext({ packageDir: pkg });
+  expect(broken.planAuthorized).toBeNull();
+  expect(broken.continue).toBe(false);
+  expect(broken.package).toBe(pkg);
 });

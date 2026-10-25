@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { auditSeverity } from "./severity-audit";
+import { waveEventsPath } from "./wave-events";
 import { parityIsEmpty, parityLines, paritySummary, parityWarnings, readReviewParity, renderParityReport } from "./parity";
 import { FOLLOW_UP_TEXT, HELD_FINDING, MUTATION_RECORD, followUpObligation, writeMutationLeftovers } from "./parity.test-helpers";
 
@@ -93,5 +94,44 @@ describe("parityWarnings", () => {
     const warnings = parityWarnings(view, "Not run: 2 candidates (cap 1)\n");
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("severity note(s)");
+  });
+});
+
+describe("gaps without a launch (wave-events.jsonl)", () => {
+  const idle = (kind: "A" | "B", minutes: number): string => JSON.stringify({ time: "2026-10-25T10:00:00.000Z", event: "idle", kind, gapMs: minutes * 60_000, since: "2026-10-25T09:00:00.000Z" });
+  const next = JSON.stringify({ time: "2026-10-25T10:00:00.000Z", event: "next", package: "p", planAuthorized: true, dispatches: 1, wave: 1, wavesLeft: 0, reasons: { missing: 1, retry: 0, stalled: 0, escalated: 0 }, notRun: 0, blocked: 0, done: false, sincePrevMs: null, sinceConfirmMs: null });
+
+  async function journal(dir: string, rows: string[]): Promise<void> {
+    await mkdir(path.dirname(waveEventsPath(dir)), { recursive: true });
+    await writeFile(waveEventsPath(dir), `${rows.join("\n")}\n`, "utf8");
+  }
+
+  test("the view counts the idle events and names the longest in whole minutes", async () => {
+    const dir = await pkg();
+    await journal(dir, [next, idle("A", 58), "not json", idle("B", 16), next]);
+    const view = await readReviewParity(dir);
+    expect(view.gaps).toEqual({ count: 2, maxMinutes: 58 });
+    expect(parityIsEmpty(view)).toBe(false);
+    const line = "Gaps without a launch after the plan was authorized: 2, longest 58 min (waits for operator cards are possible)";
+    expect(parityLines(view)).toContain(line);
+    expect(paritySummary(view)).toContain("gaps 2");
+    expect(renderParityReport(view)).toContain(line);
+  });
+
+  test("no line without the file, or with a journal that holds no idle event", async () => {
+    const none = await readReviewParity(await pkg());
+    expect(none.gaps).toBeUndefined();
+    const dir = await pkg();
+    await journal(dir, [next, next]);
+    const quiet = await readReviewParity(dir);
+    expect(quiet.gaps).toBeUndefined();
+    expect(parityIsEmpty(quiet)).toBe(true);
+    expect(parityLines(quiet).join("\n")).not.toContain("Gaps without a launch");
+  });
+
+  test("gaps never become a parity warning", async () => {
+    const dir = await pkg();
+    await journal(dir, [idle("A", 58)]);
+    expect(parityWarnings(await readReviewParity(dir), "# Round\n")).toEqual([]);
   });
 });

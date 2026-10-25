@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { HELD_FINDING, followUpObligation, writeMutationLeftovers } from "../review/parity.test-helpers";
+import { waveEventsPath } from "../review/wave-events";
 import { readyResearchFixture } from "../review/research.test-helpers";
 import { reviewCommand } from "./review";
 
@@ -109,6 +110,31 @@ describe("keryx review report-parity", () => {
     await reviewCommand(["report-parity"]);
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("Usage: keryx review report-parity");
+  });
+});
+
+describe("gaps without a launch", () => {
+  const IDLE = JSON.stringify({ time: "2026-10-25T10:00:00.000Z", event: "idle", kind: "A", gapMs: 58 * 60_000, since: "2026-10-25T09:02:00.000Z" });
+  const LINE = "Gaps without a launch after the plan was authorized: 1, longest 58 min (waits for operator cards are possible)";
+
+  test("status and report-parity show the line, and the round still closes", async () => {
+    const pkg = await ingest("parity-gaps");
+    await mkdir(path.dirname(waveEventsPath(pkg)), { recursive: true });
+    await writeFile(waveEventsPath(pkg), `${IDLE}\n`, "utf8");
+    logs = [];
+    await reviewCommand(["status", "parity-gaps"]);
+    expect(logs.join("\n")).toContain(LINE);
+    logs = [];
+    await reviewCommand(["report-parity", "parity-gaps"]);
+    expect(logs.join("\n")).toContain(LINE);
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("no line when the journal is absent", async () => {
+    await ingest("parity-nogaps");
+    logs = [];
+    await reviewCommand(["status", "parity-nogaps"]);
+    expect(logs.join("\n")).not.toContain("Gaps without a launch");
   });
 });
 

@@ -675,7 +675,11 @@ What a round leaves behind that no finding count shows is printed under the same
 header: `Not run: N candidates`, `held: F-003 stays minor (mutant m2)`, and
 `follow-up open: <reviewer>:fu1 …`. `keryx review report-parity <review>` prints the
 same as Markdown to paste into `report.md`; `/review parity` in the shell and the
-sidebar show it too. `review complete` warns, and does not refuse, when the report
+sidebar show it too. Between waves, `keryx review next` journals each call in
+`<package>/tool-calls/wave-events.jsonl`, and a pause with open slices under an
+authorized plan adds `Gaps without a launch after the plan was authorized: N, longest
+M min (waits for operator cards are possible)` to the same place; it is a number to
+read, never a warning. `review complete` warns, and does not refuse, when the report
 names none of a kind of leftover. A package built before this existed shows no such
 lines, and a package whose ledger predates `review-pr-contract` is not refused for
 lacking it; `review complete` warns `review-pr-contract not run (package predates
