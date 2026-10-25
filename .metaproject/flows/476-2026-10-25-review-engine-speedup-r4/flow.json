@@ -9,9 +9,9 @@
   "id": "476",
   "slug": "review-engine-speedup-r4",
   "title": "Review engine speedup, step 3: chunk-pass findings reach the round (R4, E3.7.1-E3.7.4)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-25T15:05:30.943Z",
-  "updatedAt": "2026-10-25T16:03:43.478Z",
+  "updatedAt": "2026-10-25T16:27:37.428Z",
   "source": {
     "type": "description",
     "ref": null
@@ -72,7 +72,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1085"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -249,6 +249,11 @@
       "at": "2026-10-25T16:03:43.478Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-25T16:27:37.428Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1085 (base: main)"
     }
   ],
   "acKinds": {
@@ -440,5 +445,6 @@
       "criterion": "AC13",
       "acChecksum": "sha256:422d03346544c7877c95e963cabeaf9f1889217c4ea6679bee2a64cc8179b771"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
