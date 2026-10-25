@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`keryx review next` says whether the round may go on, and keeps a journal of its calls.** The result gains `planAuthorized` (the plan needs no confirmation, or one is recorded for it; `null` when it could not be evaluated) and `continue`; in text mode an authorized plan with something to dispatch prints a continuation line after the first line. Every call appends an event to `<package>/tool-calls/wave-events.jsonl`, and a gap with open slices under an authorized plan (10 minutes after the last reply, 15 for the next one; `routing.config.json` `reviewWaves` changes them) adds a warning and an `idle` event. `keryx review status` and `report-parity` (and the TUI through the same view) show how many gaps there were and the longest. Without `--apply`, `next` now changes that one file and says so; the engine function itself still writes nothing. The `review-orchestrator` skill gains the rule for hosts without the shell's closing gate: while the plan is authorized, no "continue?" and no end of turn between waves, with a closed list of stops. Flow 474 (R1 + R2 of the review-engine-speedup package).
+
 ## [0.3.132] - 2026-10-25
 
 ### Changed

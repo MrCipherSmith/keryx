@@ -5662,10 +5662,39 @@ these slices), `retry` (an unfinished result, or questions to answer), `stalled`
 new was covered, so the open slices are re-cut at half the size), `escalated` (a
 major-or-worse finding re-opened a light slice deep and the reviewer now owns it). It
 prints `done` when nothing is left; a reviewer that is `not-run` is listed, never counted
-as a clean pass. It is read-only unless `--apply` is given (re-cut slice files, the
-escalated manifest, the retry state), and a reply it already counted is remembered by hash,
-so asking again spends no attempt. `--reviewers a,b` limits the answer; `--json` prints the
-whole result.
+as a clean pass. Without `--apply` it changes one file only, `tool-calls/wave-events.jsonl`
+(below); `--apply` writes what it decided (re-cut slice files, the escalated manifest, the
+retry state). A reply it already counted is remembered by hash, so asking again spends no
+attempt. `--reviewers a,b` limits the answer; `--json` prints the whole result.
+
+When the plan covers what is dispatched (`keryx review estimate` asks for no confirmation, or
+a confirmation is recorded for this plan) and there is something to dispatch, `next` adds a
+line right after the first one: `plan authorized; continue the loop without asking the
+operator; stop only for the card list, for plan growth, or on done / Not run`. `--json`
+carries the same as `planAuthorized` (`true`, `false` when the plan needs a confirmation it
+does not have, `null` when the plan could not be evaluated; it never fails `next`) and
+`continue` (`true` only when `planAuthorized` is `true` and `dispatches` is not empty). The
+rule that goes with it, for hosts without the shell's closing gate, is in the
+`review-orchestrator` skill ("One batch", `SKILL.detail.md` § "Between waves"): while the plan
+is authorized the orchestrator asks no "continue?" and does not end its turn between waves.
+
+Every call from the command line appends one JSON line to
+`<review-dir>/tool-calls/wave-events.jsonl`: `time`, `event: "next"`, `package`,
+`planAuthorized`, `dispatches`, `wave`, `wavesLeft`, `reasons` (`missing`, `retry`, `stalled`,
+`escalated`), `notRun`, `blocked`, `done`, `sincePrevMs` and `sinceConfirmMs`. With slices open
+under an authorized plan it also measures two gaps and, above a threshold, prints
+`gap N min without a launch after the plan was authorized (A|B)` (stderr under `--json`) and
+appends `{time, event: "idle", kind, gapMs, since}`: **A** is the time since the newest reply
+in `raw/`, **B** the time the first reply after the previous `next` took to arrive. The
+thresholds are 10 and 15 minutes; `routing.config.json` `reviewWaves.idleAfterWaveMinutes` and
+`reviewWaves.idleWaveReplyMinutes` change them. A gap does not say why the round waited: an
+operator card looks the same. The journal holds numbers, flags, reviewer names and the package
+path, never diff text or findings; it is evidence for the round summary and is never read to
+decide anything, so deleting it breaks nothing. A failed write prints one warning and changes
+neither the output nor the exit code. `keryx review status` and `report-parity` print
+`Gaps without a launch after the plan was authorized: N, longest M min (waits for operator
+cards are possible)` from the `idle` events, and the TUI review panel and sidebar show the
+same line; it is never a parity warning and never blocks `complete`.
 
 Replies are read leniently where the strict rules found nothing: a fenced ```` ```json ````
 block, a bare object with prose before or after it, a JSON array of one reviewer's results
