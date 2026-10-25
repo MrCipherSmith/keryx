@@ -40,6 +40,7 @@ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/co
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
+import { optInRolesFromArgs, optionalRolesLine, packageEnabledRoles, recordEnabledRoles } from "../review/role-switches";
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
@@ -364,6 +365,9 @@ export const CREATE_FLAGS = [
   "--prior",
   // The base the round's merge-base is read from, ahead of origin/main (a merged PR's merge-base with origin/main is its head).
   "--base",
+  // R5: `start` records the optional roles the round asks for (`--style`: review-clean-code and review-style; `--with-role <name>`: one more) in <package>/round-roles.json. Refused on attach and ingest.
+  "--style",
+  "--with-role",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -579,7 +583,7 @@ const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"
 const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--no-bail", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
+export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--style", "--with-role", "--package", "--json"] as const;
 export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
@@ -1047,6 +1051,10 @@ export async function refreshCreatedPackageLayers(
 
 async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
   rejectUnknownFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
+  if (mode !== "review-flow" && (args.includes("--style") || flagTokens(args).some((token) => token.name === "--with-role"))) {
+    throw new Error(`--style and --with-role belong to \`keryx review start\`, which records the roles a round runs; \`${mode === "ingest" ? "ingest" : "attach"}\` takes a round already run. Refused rather than ignored.`);
+  }
+  const optIn = optInRolesFromArgs(args);
   const targetKind = targetKindFromArgs(mode, args);
   const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
   if (!targetRef) {
@@ -1118,6 +1126,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
     await writeRunProfile(result.path, profile, { stampManifest: true });
     await startOrchestratorLog(cwd, result.reviewId, result.path, profile.callerToken);
+    if (mode === "review-flow") {
+      await recordEnabledRoles(result.path, optIn);
+      const roster = await requiredReviewers(cwd, "all", input.scope?.files === undefined ? undefined : [...input.scope.files], { enabledRoles: optIn });
+      for (const warning of roster.warnings ?? []) console.error(`warning: ${warning}`);
+      if (roster.rolesOff !== undefined && roster.rolesOff.length > 0) console.log(`roles off: ${roster.rolesOff.join(", ")} (--style or --with-role <role> at \`keryx review start|required\`, or reviewRoles in routing.config.json, brings them back)`);
+    }
     console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
     console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
     for (const line of renderSkillDrift(reviewSkillDrift({ projectRoot: resolveProjectRoot(cwd), bundledRoot: defaultBundledReviewRoot() }))) console.error(line);
@@ -3365,7 +3379,10 @@ async function runRequired(args: string[]): Promise<void> {
   const files = scope?.files !== undefined ? [...scope.files] : packageFiles;
   const forceFull = args.includes("--all") ? "--all" : args.includes("--gating") ? "--gating" : undefined;
   const decision = await decideRoundDepth(process.cwd(), depthArg, { files, changedLines, forceFull });
+  // The opt-in is the flags plus what the package recorded (`start --style`), so a later `required --package` cannot drop it.
+  const optIn = [...new Set([...optInRolesFromArgs(args), ...(packageDir === undefined ? [] : await packageEnabledRoles(packageDir))])];
   const baseSet = await requiredReviewers(process.cwd(), mode, files, {
+    enabledRoles: optIn,
     blastRadius:
       radiusFile !== undefined
         ? await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))
@@ -3385,9 +3402,14 @@ async function runRequired(args: string[]): Promise<void> {
     // The decision is tied to the head, file list and line count it was made for; `ledger build` drops it when any of them moved.
     const basis = await packageDepthBasis(packageDir);
     await writeFileAtomic(path.join(packageDir, ROUND_DEPTH_FILE), `${JSON.stringify({ ...decision, head: basis.head, files: files === undefined ? undefined : [...files].sort(), changedLines }, null, 2)}\n`);
+    await recordEnabledRoles(packageDir, optInRolesFromArgs(args));
   }
+  // `--all` and `--gating` widen the depth, not the roster: the switched-off roles stay off, and the output says so.
+  const warnings = [...(set.warnings ?? [])];
+  if (forceFull !== undefined && set.rolesOff !== undefined && set.rolesOff.length > 0) warnings.push(`${forceFull} does not bring back ${set.rolesOff.join(", ")}: they are switched off; pass --style (or --with-role <role>) to run them`);
+  const shown = { ...set, ...(warnings.length === 0 ? {} : { warnings }) };
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...set, ...(fixRoles.length === 0 ? {} : { fixRoles }), depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
+    console.log(JSON.stringify({ ...shown, ...(fixRoles.length === 0 ? {} : { fixRoles }), depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
     return;
   }
   console.log(`depth: ${set.depth} (${decision.reason})`);
@@ -3395,6 +3417,7 @@ async function runRequired(args: string[]): Promise<void> {
   console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
   if (fixRoles.length > 0) console.log(`fix slices add: ${fixRoles.join(", ")} (they authored findings a fix slice answers)`);
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+  for (const warning of warnings) console.log(`warning: ${warning}`);
 }
 
 async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<void> {
@@ -4577,6 +4600,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     dispositions: tally,
     coverageWaiver,
     readiness,
+    rolesNotRun,
     warnings,
   } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
@@ -4587,6 +4611,8 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   if (readiness !== undefined) console.log(readinessLine(readiness));
+  const rolesLine = optionalRolesLine(rolesNotRun ?? []);
+  if (rolesLine !== undefined) console.log(rolesLine);
   console.log(`dispositions recorded: ${dispositions.length}`);
   // The price, now that both halves are known. This is the first moment the
   // round's cost and what survived it are on the same screen, and it is the
@@ -4860,7 +4886,12 @@ function printStartHelp(): void {
   console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                    [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
-                   [--no-prior-round | --prior <package|reviewId>]
+                   [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]
+
+--style turns on the readability roles (review-clean-code, review-style), which are off by default; --with-role <role>
+turns on any one role that is off (repeatable). The choice is kept in <package>/round-roles.json for the later
+\`review required --package\` calls. Roles can also be switched off or on for the project with reviewRoles.disabled and
+reviewRoles.enabled in routing.config.json. Refused on attach and ingest.
 
 The previous round of the same target is found in the local packages, the packages in git history (any branch), the
 keryx round block on the pull request, other PR comments (prior findings with no head) and the flow's rounds; the newest
@@ -4933,9 +4964,12 @@ function printStatusHelp(): void {
 function printRequiredHelp(): void {
   console.log(`keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"]
                       [--blast-radius <file>] [--pr-context <file>] [--depth auto|light|full] [--diff-lines <n>]
-                      [--all] [--gating] [--package <review-dir>] [--json]
+                      [--all] [--gating] [--style] [--with-role <role>] [--package <review-dir>] [--json]
 
-The reviewer set a round must dispatch. --depth auto (default) picks a light round (logic, testing, the stack's conventions
+The reviewer set a round must dispatch. review-clean-code and review-style are off by default and listed under excluded
+with the reason; --style or --with-role <role> turns them (or any role that is off) on, and with --package the choice is
+kept in round-roles.json. reviewRoles.disabled in routing.config.json switches off any built-in role (a core role cannot
+be switched off; an unknown name is a warning). --all, --gating and --depth light do not bring a switched-off role back. --depth auto (default) picks a light round (logic, testing, the stack's conventions
 reviewer) for at most 5 files and 300 changed lines outside the risk class; --all, --gating and --depth full keep the full set.
 --depth light is honoured only when those same checks pass; otherwise the round is full and the reason is printed.
 Changed lines: --diff-lines, else --scope's changedLinesRetained, else the count start/ingest stored in the package
@@ -4958,7 +4992,7 @@ Usage:
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
-                     [--no-prior-round | --prior <package|reviewId>]  (writes <package>/round.json)
+                     [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]  (writes <package>/round.json)
   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
   keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
   keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
@@ -5023,7 +5057,10 @@ Usage:
   keryx review required [--mode all|diff] [--scope <scope.json>]
                         [--operator-quote "<words>"] [--blast-radius <blast-radius.json>]
                         [--depth auto|light|full] [--diff-lines <n>] [--all] [--gating]
-                        [--package <review-dir>] [--json]
+                        [--style] [--with-role <role>] [--package <review-dir>] [--json]
+                        review-clean-code and review-style are off by default (--style or
+                        --with-role <role> turns a role on; reviewRoles in routing.config.json
+                        switches roles off or on for the project).
                         --depth auto (default) runs a light round (logic, testing and
                         the stack's conventions reviewer; no mandatory mutation pass)
                         for a diff of at most 5 files and 300 changed lines outside

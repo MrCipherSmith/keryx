@@ -1002,8 +1002,8 @@ Review Plan Preview must include an `Optional legacy/profile reviewers` group (e
 | `--architecture` | `review-architecture` |
 | `--security` | `review-security-code` |
 | `--performance` | `review-performance` |
-| `--style` | `review-style` |
-| `--clean-code` | `review-clean-code` |
+| `--style` | `review-style` (asked for by name; the set `keryx review required` prints leaves it, and `review-clean-code`, out unless the round started with `keryx review start --style`) |
+| `--clean-code` | `review-clean-code` (same rule as `--style`) |
 | `--highload` | `review-highload` |
 | `--project-conventions` | all generic convention reviewers: `review-frontend-conventions` + `review-testing-practices` + `review-core-boundaries` + `review-flow-graph` |
 | `--frontend-conventions` | `review-frontend-conventions` |
@@ -1012,7 +1012,7 @@ Review Plan Preview must include an `Optional legacy/profile reviewers` group (e
 | `--flow-graph` | `review-flow-graph` |
 | `--layout` | `review-layout` |
 | `--pr-contract` | `review-pr-contract` |
-| `--all` | all reviewers above (including `review-clean-code`, `review-highload`, and project convention reviewers when local convention docs exist); never the legacy/profile reviewers, which stay flag-only |
+| `--all` | all reviewers above (including `review-highload` and project convention reviewers when local convention docs exist; `review-clean-code` and `review-style` only when the round started with `--style`, and nothing a project lists under `reviewRoles.disabled` in `routing.config.json`); never the legacy/profile reviewers, which stay flag-only |
 | `--verify` | `review-verifier`, started on the first blocker or major and re-run for each later one (`SKILL.detail.md` § "Early verifier"); checks the findings by running something. Delete-only. |
 | (always, Wave D) | `review-premise` after the verifier, over the canonical findings of severity ≥ minor; judges whether each is a defect at all; lowers or holds, never adds. Not a fan-out flag |
 | (auto) | detected from diff file extensions — see Auto-detection table |

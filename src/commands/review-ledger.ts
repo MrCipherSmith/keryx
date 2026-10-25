@@ -6,6 +6,7 @@ import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
+import { packageEnabledRoles } from "../review/role-switches";
 import { readToolLog } from "../review/layers-usage";
 import { packageHasMutationRecord } from "../review/mutate";
 import { hashedDisplayIdMessage, hashedDisplayIds } from "../review/display-id";
@@ -291,7 +292,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const recordedDepth = await packageRoundDepth(packageDir);
   if (recordedDepth?.stale !== undefined) console.error(`round-depth.json ignored (${recordedDepth.stale}); building the full round. Re-run \`keryx review required --package\` to decide again.`);
   const depth = recordedDepth?.depth;
-  const required = await requiredReviewers(root, mode, files, { blastRadius, prContext: packageHasPrContext(packageDir), depth });
+  const required = await requiredReviewers(root, mode, files, { blastRadius, prContext: packageHasPrContext(packageDir), depth, enabledRoles: await packageEnabledRoles(packageDir) });
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, models, assignments, replies, dropped } = await readDrivers(inputDir, root);
   // A delta round's fix slices are read by their own roster (flow 458): the reviewers that authored the findings they answer
   // join the round even when no changed path asks for them, and each slice kind is held to its own roster below.

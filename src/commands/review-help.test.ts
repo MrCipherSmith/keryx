@@ -92,7 +92,7 @@ test("--outcomes is shown as required for reply, as the parser requires it", () 
 });
 test("required and estimate list every flag their parsers accept, in both helps", () => {
   for (const help of [GROUP(), helpFor(["required"])]) {
-    for (const flag of ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"]) expect(help).toContain(flag);
+    for (const flag of ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--style", "--with-role", "--package", "--json"]) expect(help).toContain(flag);
   }
   const own = helpFor(["estimate"]);
   expect(own).toContain("--package");
@@ -106,7 +106,7 @@ test("required and estimate list every flag their parsers accept, in both helps"
 const SUBCOMMAND_FLAGS: Record<string, readonly string[]> = {
   start: CREATE_FLAGS,
   ingest: CREATE_FLAGS,
-  required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"],
+  required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--style", "--with-role", "--package", "--json"],
   mutate: ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"],
   "blast-radius": ["--ref", "--base", "--changed", "--depth", "--max-files", "--no-related-tests", "--final", "--previous", "--json", "--brief", "--out", "--package"],
   complete: ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive"],
