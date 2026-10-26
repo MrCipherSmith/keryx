@@ -73,7 +73,6 @@
     "README.md",
     "package.json"
   ],
-  "dependencies": {},
   "overrides": {
     "fast-uri": "^3.1.9",
     "body-parser": "^2.4.0",
@@ -85,6 +84,7 @@
     "protobufjs": "7.6.6",
     "sharp": "0.35.5"
   },
+  "dependencies": {},
   "optionalDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@opentui/core": "^0.4.5",

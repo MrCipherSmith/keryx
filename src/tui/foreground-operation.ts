@@ -57,11 +57,20 @@ export class ForegroundOperationOwner {
     return token;
   }
 
-  cancel(reason?: unknown): void {
+  /**
+   * Abort the operation in flight, if there is one. The return value is the
+   * honest answer to "did that interrupt anything": `false` means nothing was
+   * active (the shell can still be busy with detached work) or an earlier press
+   * already aborted it. A caller that paints an "interrupted" line to the
+   * operator must use it rather than assume the abort happened.
+   */
+  cancel(reason?: unknown): boolean {
     const controller = this.active?.controller;
-    if (controller !== undefined && !controller.signal.aborted) {
-      controller.abort(reason);
+    if (controller === undefined || controller.signal.aborted) {
+      return false;
     }
+    controller.abort(reason);
+    return true;
   }
 
   /** Revoke session-bound callbacks immediately, retain busy ownership until settlement. */
@@ -102,6 +111,13 @@ export function createForegroundOperationOwner(): ForegroundOperationOwner {
 export class ForegroundForceHandoff<T> {
   private readonly pending: T[] = [];
   private awaitingSettlement = false;
+  private handoffGeneration = 0;
+
+  /** Changes when the parked batch is cleared or returned to the queue. */
+  get generation(): number {
+    return this.handoffGeneration;
+  }
+
 
   enqueue(item: T): boolean {
     this.pending.push(item);
@@ -111,8 +127,31 @@ export class ForegroundForceHandoff<T> {
   }
 
   clear(): void {
+    this.handoffGeneration += 1;
     this.pending.length = 0;
     this.awaitingSettlement = false;
+  }
+
+  /**
+   * Stop waiting for a settlement without losing what is parked here. The drain
+   * sites refuse to work while `isAwaitingSettlement` is true, so a handoff that
+   * never settles would stall the queue for the rest of the shell's life.
+   */
+  releaseAwaitingSettlement(): void {
+    this.awaitingSettlement = false;
+  }
+
+  /**
+   * Take every parked item back — the outcome that loses nothing. A forced line
+   * has already been removed from the visible queue, so dropping it from here
+   * deletes the operator's message outright; a session switch must re-queue.
+   */
+  drainPending(): T[] {
+    this.handoffGeneration += 1;
+    const items = [...this.pending];
+    this.pending.length = 0;
+    this.awaitingSettlement = false;
+    return items;
   }
 
   get isAwaitingSettlement(): boolean {
@@ -161,16 +200,22 @@ export function finalizeWikiForegroundOperation(
 /**
  * Waits for the current operation once and only dispatches follow-up work when
  * the shell remains live. This is the queue Force handoff boundary.
+ *
+ * Returns whether `action` ran: `false` means the shell was disposed or the
+ * session changed while the waiter waited, so nothing was dispatched and work
+ * held for that moment must be handed back rather than assumed in flight.
  */
 export async function runAfterForegroundSettlement(
   owner: ForegroundOperationOwner,
   action: () => void,
-): Promise<void> {
+): Promise<boolean> {
   const generation = owner.generation;
   await owner.settled();
   if (!owner.isDisposed && owner.generation === generation) {
     action();
+    return true;
   }
+  return false;
 }
 
 /**
@@ -195,11 +240,26 @@ export async function forceForegroundQueueItem<T>(
   owner: ForegroundOperationOwner,
   handoff: ForegroundForceHandoff<T>,
   item: T,
-  deps: { readonly announce?: () => void; readonly run: (item: T) => void; readonly cancelReason?: unknown },
+  deps: {
+    readonly announce?: (interrupted: boolean) => void;
+    readonly run: (item: T) => void;
+    readonly cancelReason?: unknown;
+    /** Whether the shell is busy in a way `run` cannot turn into the main turn. */
+    readonly isBusy?: () => boolean;
+    /** Nudge the drain sites after a line was handed back to the queue. */
+    readonly resume?: () => void;
+    /** Give lines back to the operator queue — the only outcome that loses nothing. */
+    readonly requeue?: (items: readonly T[]) => void;
+  },
 ): Promise<void> {
   const ownsSettlement = handoff.enqueue(item);
-  owner.cancel(deps.cancelReason ?? "queue item forced");
-  deps.announce?.();
+  const handoffGeneration = handoff.generation;
+  // Only claim an interruption the owner performed. `cancel` answers "did that
+  // abort anything": with no operation active it is a no-op, and the old
+  // unconditional message told the operator the main turn was interrupted when
+  // nothing had been.
+  const interrupted = owner.cancel(deps.cancelReason ?? "queue item forced");
+  deps.announce?.(interrupted);
   // Only the press that owns the handoff waits. A later press has already put
   // its item in the queue and returns: the settlement handler drains in FIFO
   // order, and a second waiter would dispatch into an operation the first has
@@ -207,12 +267,26 @@ export async function forceForegroundQueueItem<T>(
   if (!ownsSettlement) {
     return;
   }
-  await runAfterForegroundSettlement(owner, () => {
+  const settlementActionRan = await runAfterForegroundSettlement(owner, () => {
+    // The operation settled, but something else still owns the busy state (wiki
+    // work, detached jobs): `run` would be diverted by the busy branch instead of
+    // becoming the main turn. Keep the line queued, unblock the drain sites, and
+    // let the next settle dispatch it.
+    if (deps.isBusy?.() === true) {
+      handoff.releaseAwaitingSettlement();
+      deps.resume?.();
+      return;
+    }
     const next = handoff.takeAfterSettlement();
     if (next !== undefined) {
       deps.run(next);
     }
   });
+  if (!settlementActionRan && handoff.generation === handoffGeneration) {
+    // Disposed, or the session changed under us: `takeAfterSettlement` never ran,
+    // so return only the batch this waiter owned, never a replacement batch.
+    deps.requeue?.(handoff.drainPending());
+  }
 }
 
 /**
