@@ -9,9 +9,9 @@
   "id": "477",
   "slug": "review-engine-speedup-r6",
   "title": "Review engine speedup, step 4: plan estimate against actual time in the round report (R6, E8.1)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-25T17:29:37.758Z",
-  "updatedAt": "2026-10-25T17:57:51.476Z",
+  "updatedAt": "2026-10-26T05:27:16.612Z",
   "source": {
     "type": "description",
     "ref": null
@@ -64,7 +64,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1087"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -230,6 +230,11 @@
       "at": "2026-10-25T17:57:51.476Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-26T05:27:16.612Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1087 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -394,5 +399,6 @@
       "criterion": "AC11",
       "acChecksum": "sha256:c3a41c341676dd18b48d84f76f978d53ea3a897fb09b28d6138532f77b974281"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
