@@ -1042,7 +1042,7 @@ export async function completeManagedReview(
   let coverageWaiver: CoverageWaiver | undefined;
   let readiness: ReadinessReport | undefined;
   let updated: ManagedReviewManifest;
-  let notRun: string[] = [];
+  let notRun: string[];
   const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
   try {
     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
