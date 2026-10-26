@@ -277,3 +277,26 @@ describe("layers in the review depth", () => {
     expect(layersDepthLines(row?.layersView).join("\n")).toContain("keryx review layers refresh --package");
   });
 });
+
+describe("plan estimate against the actual time", () => {
+  const plan = { dispatches: 54, minutes: { min: 28, max: 70 } };
+  const raws = (count: number): Record<string, string> => Object.fromEntries(Array.from({ length: count }, (_, i) => [`${PKG}/raw/r${i}.txt`, "x"]));
+
+  test("a closed review shows the line and an open one shows so far", async () => {
+    const closed = await project({ [`${PKG}/manifest.json`]: { ...manifest, status: "closed" }, [`${PKG}/plan.json`]: plan, ...raws(2) });
+    const open = await project({ [`${PKG}/manifest.json`]: { ...manifest, status: "in_progress" }, [`${PKG}/plan.json`]: plan, ...raws(2) });
+    const [closedRow] = await loadReviewDepth(closed);
+    const [openRow] = await loadReviewDepth(open);
+    expect(closedRow?.timing).toContain("Plan estimate vs actual: plan 28-70 min (54 dispatches)");
+    expect(closedRow?.timing).not.toContain("so far");
+    expect(openRow?.timing).toContain("so far");
+    expect(formatReviewDepthLines(closedRow ? [closedRow] : []).join("\n")).toContain("  Plan estimate vs actual:");
+  });
+
+  test("a row without a plan and without raw replies is unchanged", async () => {
+    const root = await project({ [`${PKG}/manifest.json`]: manifest });
+    const [row] = await loadReviewDepth(root);
+    expect(row?.timing).toBeUndefined();
+    expect(formatReviewDepthLines(row ? [row] : []).join("\n")).not.toContain("Plan estimate");
+  });
+});
