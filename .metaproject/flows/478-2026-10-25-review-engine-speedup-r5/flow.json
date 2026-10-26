@@ -9,9 +9,9 @@
   "id": "478",
   "slug": "review-engine-speedup-r5",
   "title": "Review engine speedup, step 5: optional review roles by flag and project config (R5, G1-G4)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-25T18:03:52.492Z",
-  "updatedAt": "2026-10-25T19:16:48.856Z",
+  "updatedAt": "2026-10-26T05:27:19.204Z",
   "source": {
     "type": "description",
     "ref": null
@@ -68,7 +68,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1088"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -279,6 +279,11 @@
       "at": "2026-10-25T19:16:48.856Z",
       "event": "ac-confirmed",
       "detail": "AC12: оператор дал слово на коммит/push/draft PR (опрос 308); сканирование диффа и файлов флоу на AI-подпись: 0 совпадений; автор MrCipherSmith (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-26T05:27:19.204Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1088 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -534,5 +539,6 @@
       "criterion": "AC12",
       "acChecksum": "sha256:4e44bdf3b7df991c28cea6b819c846743a49536cbe5000befca040c56a1b57ac"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }

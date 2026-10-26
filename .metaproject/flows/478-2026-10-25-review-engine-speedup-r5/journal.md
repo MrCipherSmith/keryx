@@ -27,3 +27,4 @@
 - 2026-10-25T19:16:26.522Z - ac-confirmed: AC10: отпечатки до/после совпали: 22fb0c4fd574 (107), 177cf8df20ef (19), 885570e002e9 (25); см. verification.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-25T19:16:26.809Z - ac-confirmed: AC11: verification.md: доказательства G1-G4, расхождения (required.json, номера cli.js против src, BUNDLED_OVERLAP_GROUPS/ROLE_RULES в slice-routing.ts), не измерено и не проверено (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-25T19:16:48.856Z - ac-confirmed: AC12: оператор дал слово на коммит/push/draft PR (опрос 308); сканирование диффа и файлов флоу на AI-подпись: 0 совпадений; автор MrCipherSmith (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-26T05:27:19.204Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1088 (warning: PR is not a draft) (base: main)
