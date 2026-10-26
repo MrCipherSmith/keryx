@@ -119,6 +119,8 @@ export function fakeHost(captured: CapturedModal) {
         input.onClose?.();
       },
       setTab: () => {},
+      addTab: () => {},
+      removeTab: () => {},
       activeTab: () => "tic-tac-toe",
     };
   };

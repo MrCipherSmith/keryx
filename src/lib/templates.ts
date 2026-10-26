@@ -2207,8 +2207,12 @@ export function renderSecurityPrePushHook(): string {
   # HEAD-only heuristic under-scanned a first push). Fall back to the tracked
   # push/upstream range only when stdin yields nothing usable.
   changed_files=""
+  saw_ref=0
+  destination_remote="$1"
+  remote_tips="$(git for-each-ref --format='%(objectname)' "refs/remotes/$destination_remote/" 2>/dev/null)"
   while read -r local_ref local_sha remote_ref remote_sha; do
     [ -z "$local_ref" ] && continue
+    saw_ref=1
     # Skip deleted refs (local sha all-zero): there is nothing to scan.
     case "$local_sha" in
       *[!0]*) : ;;
@@ -2223,7 +2227,10 @@ export function renderSecurityPrePushHook(): string {
         # New ref: scan all commits unique to this push. Use the merge-base with
         # any existing remote as the base, falling back to the empty tree when
         # the branch shares no history with a remote (truly first push).
-        remotes="$(git for-each-ref --format='%(objectname)' refs/remotes 2>/dev/null | tr '\\n' ' ')"
+        remotes=""
+        if [ -n "$destination_remote" ]; then
+          remotes="$(printf '%s\\n' "$remote_tips" | tr '\\n' ' ')"
+        fi
         base=""
         if [ -n "$remotes" ]; then
           base="$(git merge-base "$local_sha" $remotes 2>/dev/null || true)"
@@ -2234,6 +2241,23 @@ export function renderSecurityPrePushHook(): string {
         range_files="$(git diff --name-only --diff-filter=ACMR "$base".."$local_sha" 2>/dev/null || true)"
         ;;
     esac
+    # Avoid rescanning content identical to a known tip on the destination.
+    # Keep locally modified inherited files and never trust unrelated remotes.
+    # Failed comparisons retain the candidates (conservative fallback).
+    if [ -n "$destination_remote" ] && [ -n "$range_files" ]; then
+      range_files="$(printf '%s\\n' "$range_files" | LC_ALL=C sort -u)"
+      for published_tip in $remote_tips; do
+        if unpublished="$(git diff --name-only --no-renames "$published_tip" "$local_sha" 2>/dev/null)" &&
+           worktree_changes="$(git diff --name-only --no-renames "$local_sha" -- 2>/dev/null)"; then
+          differences="$(printf '%s\\n%s\\n' "$unpublished" "$worktree_changes" | LC_ALL=C sort -u)"
+          range_files="$(printf '%s\\n' "$range_files" | while IFS= read -r candidate; do
+            if printf '%s\\n' "$differences" | grep -Fqx -- "$candidate"; then
+              printf '%s\\n' "$candidate"
+            fi
+          done)"
+        fi
+      done
+    fi
     if [ -n "$range_files" ]; then
       changed_files="$changed_files
 $range_files"
@@ -2242,7 +2266,7 @@ $range_files"
 
   # Fall back to the tracked push/upstream range (then HEAD) when stdin was empty
   # (e.g. the hook was invoked manually without ref lines).
-  if [ -z "$(printf '%s' "$changed_files" | tr -d '[:space:]')" ]; then
+  if [ "$saw_ref" -eq 0 ]; then
     range="HEAD"
     push_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{push}' 2>/dev/null || true)"
     if [ -n "$push_ref" ]; then
@@ -2298,7 +2322,7 @@ $range_files"
   return 0
 }
 
-keryx_security_pre_push || exit $?
+keryx_security_pre_push "$@" || exit $?
 `;
 }
 

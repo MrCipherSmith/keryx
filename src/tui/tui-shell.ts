@@ -426,6 +426,7 @@ import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
 import { collectRenderableText, mountSidebarCards, openSidebarCard, type SidebarSnapshot } from "./sidebar-cards";
+import { workSidebarSnapshot, renderWorkInspector } from "./sidebar-work";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -5507,8 +5508,12 @@ export async function launchTuiAgentShell(opts: {
         if (text !== "") sections[section] = text;
       }
       const hold = leaseView()?.banner();
+      const work = workSidebarSnapshot(sessions.list(), jobs.list());
+      delete sections.subagents;
+      delete sections.jobs;
       return {
-        sections,
+        sections: { ...sections, ...work.sections },
+        items: work.items,
         approvalsPending: liveApprovals?.pending() ?? 0,
         ...(hold !== undefined ? { hold } : {}),
         ...(updateAvailableVersion !== undefined ? { updateAvailable: updateAvailableVersion } : {}),
@@ -5522,7 +5527,20 @@ export async function launchTuiAgentShell(opts: {
       snapshot: () => cardSnapshot,
       onOpenCard: (cardId) => {
         // A fresh read, not the last tick's: the modal shows the value as of the click.
-        openSidebarCard(otui, chrome, cardId, { snapshot: sidebarSnapshot, runCommand: (command) => runLine(command) });
+        openSidebarCard(otui, chrome, cardId, {
+          snapshot: sidebarSnapshot, runCommand: (command) => runLine(command),
+          subscribe: (refresh) => {
+            const offAgents = sessions.subscribe(refresh);
+            const offJobs = jobs.subscribe(refresh);
+            return () => { offAgents(); offJobs(); };
+          },
+          renderItem: (section, item, body) => renderWorkInspector(otui, chrome, body, section, item.id, {
+            agents: sessions, jobs,
+            registry: { kill: (id) => deps.jobRegistry !== undefined
+              ? deps.jobRegistry.kill(id)
+              : Promise.resolve({ ok: false, error: "Job registry is unavailable." }) },
+          }),
+        });
       },
     });
     const tickSidebarCards = (): void => {
