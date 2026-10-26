@@ -9,6 +9,7 @@ import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
 import { listReviewPackages, type ListedReview } from "../review/bot/packages";
 import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type RequiredSet, type ReviewMode } from "../review/coverage";
+import { packageEnabledRoles } from "../review/role-switches";
 import { computeChunkPass, hasChunkPlan, type ChunkPass } from "../review/chunks";
 import { computeCoverage, coverageLine, readCoverageWaiver, type CoverageWaiver } from "../review/coverage-complete";
 import { readLayers, type LayersFile } from "../review/layers";
@@ -56,6 +57,8 @@ export type ReviewDepthRow = {
   /** Reviewers the mode requires for this package; empty when the mode is unrecorded. */
   required: string[];
   excluded: RequiredSet["excluded"];
+  /** Roles switched off for the review (default-off roles, `reviewRoles.disabled`); absent when none. */
+  rolesOff?: string[];
   /** Required reviewers the dispatch record does not name. */
   missing: string[];
   filesKnown: boolean;
@@ -133,9 +136,9 @@ export async function loadReviewDepth(cwd: string, listed?: readonly ListedRevie
       rows.push({ ...base, mode: "unrecorded", required: [], excluded: [], missing: [], filesKnown: false });
       continue;
     }
-    const need = await requiredReviewers(cwd, mode, await packageScopeFiles(review.dir), { blastRadius: await packageHasBlastRadius(review.dir), prContext: packageHasPrContext(review.dir) });
+    const need = await requiredReviewers(cwd, mode, await packageScopeFiles(review.dir), { blastRadius: await packageHasBlastRadius(review.dir), prContext: packageHasPrContext(review.dir), enabledRoles: await packageEnabledRoles(review.dir) });
     const named = new Set(selected);
-    rows.push({ ...base, mode, required: need.required, excluded: need.excluded, missing: need.required.filter((r) => !named.has(r)), filesKnown: need.filesKnown });
+    rows.push({ ...base, mode, required: need.required, excluded: need.excluded, missing: need.required.filter((r) => !named.has(r)), filesKnown: need.filesKnown, ...(need.rolesOff === undefined ? {} : { rolesOff: need.rolesOff }) });
   }
   return rows;
 }
@@ -193,6 +196,7 @@ export function formatReviewDepthRowLines(row: ReviewDepthRow): string[] {
   const covered = row.required.length - row.missing.length;
   lines.push(`  reviewers: ${covered} of ${row.required.length} required were dispatched${row.filesKnown ? "" : " (no scope file list, path gates not applied)"}`);
   if (row.missing.length > 0) lines.push(`  missing: ${row.missing.join(", ")}`);
+  if (row.rolesOff !== undefined && row.rolesOff.length > 0) lines.push(`  roles off: ${row.rolesOff.join(", ")} (--style or --with-role <role> at \`keryx review start|required\`, or reviewRoles in routing.config.json, brings them back)`);
   for (const e of row.excluded) lines.push(`  excluded ${e.reviewer}: ${e.reason}`);
   lines.push(`  ${mutationLine(row.mutation, row.mutationWaived)}`, ...layers);
   return lines;

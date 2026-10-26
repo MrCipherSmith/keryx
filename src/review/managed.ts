@@ -3,7 +3,8 @@ import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
-import { packageCoverageWarnings } from "./coverage";
+import { packageCoverageWarnings, packageRolesNotRun } from "./coverage";
+import { optionalRolesLine, upsertOptionalRolesLine } from "./role-switches";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
@@ -964,6 +965,8 @@ export type CompleteManagedReviewResult = {
   coverageWaiver?: CoverageWaiver;
   /** The readiness checklist this close passed, with any items the operator waived. */
   readiness?: ReadinessReport;
+  /** Roles switched off for the round that did not run; also written into report.md as one line. Absent when none. */
+  rolesNotRun?: string[];
   /** Things the close let through that a current package would have been refused for. */
   warnings: string[];
   /** The plan-against-actual line this close wrote into report.md; absent when the package holds neither a plan nor a raw reply. */
@@ -1042,6 +1045,7 @@ export async function completeManagedReview(
   let coverageWaiver: CoverageWaiver | undefined;
   let readiness: ReadinessReport | undefined;
   let updated: ManagedReviewManifest;
+  let notRun: string[];
   let estimateLine: string | undefined;
   const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
   try {
@@ -1074,9 +1078,10 @@ export async function completeManagedReview(
     await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
     // Before the round is recorded as finished, because the registry hashes the package.
     estimateLine = await packageEstimateLine(packageDir, { open: false });
+    notRun = await packageRolesNotRun(packageDir).catch(() => []);
     // Read again: a readiness waiver above may have put the partial-review header at the top since `reportText` was read.
     const current = await readFile(path.join(packageDir, "report.md"), "utf8");
-    const marked = upsertEstimateLine(upsertMissingSection(current, passMissing), estimateLine);
+    const marked = upsertEstimateLine(upsertOptionalRolesLine(upsertMissingSection(current, passMissing), optionalRolesLine(notRun)), estimateLine);
     if (marked !== current) await writeFileAtomic(path.join(packageDir, "report.md"), marked);
   } catch (error) {
     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
@@ -1112,7 +1117,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(estimateLine === undefined ? {} : { estimateLine }), ...(coverageWaiver === undefined ? {} : { coverageWaiver }), ...(readiness === undefined ? {} : { readiness }) };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(estimateLine === undefined ? {} : { estimateLine }), ...(coverageWaiver === undefined ? {} : { coverageWaiver }), ...(readiness === undefined ? {} : { readiness }), ...(notRun.length === 0 ? {} : { rolesNotRun: notRun }) };
 }
 
 export async function validateManagedReviewManifest(

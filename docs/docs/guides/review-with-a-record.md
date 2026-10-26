@@ -18,6 +18,8 @@ keryx review start  --target branch --ref feature/example --reviewers a,b
 keryx review attach --flow 001 --target pull-request --ref 42
 ```
 
+A round runs the core reviewers and the ones the stack and the change call for. `review-clean-code` and `review-style` are off by default: `keryx review required` lists them as excluded with the reason, and `report.md` ends up with the line `опциональные роли не запускались: …`. Add `--style` to `review start` (or `review required`) to run both, or `--with-role <role>` for one; the choice is kept in the package's `round-roles.json`. A project switches any role off, or always on, under `reviewRoles` in `routing.config.json` (`disabled`, `enabled`). `--all` does not bring a switched-off role back.
+
 The full surface:
 
 ```console

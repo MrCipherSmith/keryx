@@ -18,6 +18,8 @@ async function round(options: { plan: boolean; raws: number[] }): Promise<{ pkg:
   const pkg = path.resolve(dir, result.path);
   await writeFile(path.join(pkg, "research.json"), JSON.stringify(ready));
   await writeFile(path.join(pkg, "coverage.md"), READY_COVERAGE_MD);
+  // The round asked for the optional roles, so the report carries no "roles not run" line and only the estimate line is under test.
+  await writeFile(path.join(pkg, "round-roles.json"), JSON.stringify({ enabled: ["review-clean-code", "review-style"] }));
   if (options.plan) {
     const file = path.join(pkg, "plan.json");
     await writeFile(file, JSON.stringify({ dispatches: 54, minutes: { min: 28, max: 70 } }));
@@ -46,6 +48,14 @@ test("complete writes the line into report.md after the evidence level, returns 
   await completeManagedReview(dir, ref);
   const again = await readFile(path.join(pkg, "report.md"), "utf8");
   expect(again.match(/^Plan estimate vs actual:/gm)?.length).toBe(1);
+});
+
+test("with the optional roles off too, the estimate line stays right after the evidence level and the roles line follows it", async () => {
+  const { pkg, ref } = await round({ plan: true, raws: [0, 9, 18, 27, 35, 43] });
+  await rm(path.join(pkg, "round-roles.json"));
+  await completeManagedReview(dir, ref);
+  const report = await readFile(path.join(pkg, "report.md"), "utf8");
+  expect(report).toMatch(/Evidence level: ran — bun test\nPlan estimate vs actual: [^\n]*\nопциональные роли не запускались: review-clean-code, review-style/);
 });
 
 test("a package with neither a plan nor a raw reply gets no line and its report is untouched", async () => {

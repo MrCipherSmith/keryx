@@ -53,6 +53,19 @@ describe("loadReviewDepth", () => {
     expect(text).toContain("missing: ");
   });
 
+  test("names the optional roles that are off, and stops once the package asked for them", async () => {
+    const files = { [`${PKG}/manifest.json`]: manifest, [`${PKG}/research.json`]: { dispatch: { version: 1, mode: "all", selected: [] } } };
+    const root = await project(files);
+    const [row] = await loadReviewDepth(root);
+    expect(row?.rolesOff).toEqual(["review-clean-code", "review-style"]);
+    expect(formatReviewDepthLines(row ? [row] : []).join("\n")).toContain("roles off: review-clean-code, review-style");
+
+    const asked = await project({ ...files, [`${PKG}/round-roles.json`]: { enabled: ["review-clean-code", "review-style"] } });
+    const [back] = await loadReviewDepth(asked);
+    expect(back?.rolesOff ?? []).toEqual([]);
+    expect(formatReviewDepthLines(back ? [back] : []).join("\n")).not.toContain("roles off:");
+  });
+
   test("a blast-radius record turns the regression reviewer from excluded to required", async () => {
     const root = await project({
       [`${PKG}/manifest.json`]: manifest,

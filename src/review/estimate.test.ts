@@ -71,6 +71,9 @@ test("estimatePackage reads the manifest and the recorded depth from a package",
     await writeFile(path.join(pkg, "slices", "manifest.json"), JSON.stringify(manifest(4, 100, 1000)));
     await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ version: 1, files: ["src/a.ts"], changedLines: 10 }));
     await writeFile(path.join(pkg, "round-depth.json"), JSON.stringify({ requested: "auto", depth: "light", reason: "auto: small", files: ["src/a.ts"], changedLines: 10 }));
+    const withoutStyle = await estimatePackage(pkg);
+    expect(withoutStyle.roles).toBe(2);
+    await writeFile(path.join(pkg, "round-roles.json"), JSON.stringify({ enabled: ["review-clean-code", "review-style"] }));
     const e = await estimatePackage(pkg);
     expect(e.manifest).toBe(path.join(".metaproject", "reviews", "r1", "slices", "manifest.json"));
     expect(renderEstimate(e)).toContain("manifest: .metaproject/reviews/r1/slices/manifest.json");

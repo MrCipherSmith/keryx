@@ -2,7 +2,7 @@
 // pr-context.md, so the operator does not have to pass them. An explicit flag still wins.
 
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createLayersFixture, type LayersFixture } from "../review/layers.test-helpers";
 import { reviewCommand } from "./review";
@@ -104,4 +104,58 @@ test("--package outside the project root is refused", async () => {
   await reviewCommand(["required", "--package", "/tmp/not-in-the-project"]);
   expect(process.exitCode).toBe(1);
   expect(errors.join("\n")).toContain("keryx review required --package");
+});
+
+// Flow 478: review-clean-code and review-style are off unless the round asks for them.
+async function installRoles(names: string[]): Promise<void> {
+  for (const name of names) {
+    const dir = path.join(fixture.root, ".metaproject", "skills", "gdskills", "review", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`, "utf8");
+  }
+}
+
+const READABILITY = ["review-clean-code", "review-style"];
+
+test("R5: required leaves the readability roles out with the reason; --style brings them back and the package remembers", async () => {
+  await installRoles(["review-logic", "review-architecture", ...READABILITY]);
+  const plain = await requiredJson(["--package", fixture.packageDir]);
+  expect(plain.required).not.toContain("review-clean-code");
+  expect(plain.required).not.toContain("review-style");
+  expect(plain.excluded.find((item) => item.reviewer === "review-style")?.reason).toContain("--style");
+
+  const styled = await requiredJson(["--package", fixture.packageDir, "--style"]);
+  expect(styled.required).toEqual(expect.arrayContaining(READABILITY));
+  expect(JSON.parse(await Bun.file(path.join(fixture.packageDir, "round-roles.json")).text())).toEqual({ enabled: READABILITY });
+
+  const later = await requiredJson(["--package", fixture.packageDir]);
+  expect(later.required).toEqual(expect.arrayContaining(READABILITY));
+});
+
+test("R5: --all and --gating widen the depth, not the roster, and say so", async () => {
+  await installRoles(["review-logic", "review-architecture", ...READABILITY]);
+  for (const flag of ["--all", "--gating"]) {
+    const result = (await requiredJson([flag])) as { required: string[]; warnings?: string[] };
+    expect(result.required).not.toContain("review-clean-code");
+    expect(result.warnings?.join("\n")).toContain(`${flag} does not bring back review-clean-code, review-style`);
+  }
+});
+
+test("R5: --with-role turns on one role and nothing else", async () => {
+  await installRoles(["review-logic", "review-architecture", ...READABILITY]);
+  const result = await requiredJson(["--with-role", "review-style"]);
+  expect(result.required).toContain("review-style");
+  expect(result.required).not.toContain("review-clean-code");
+});
+
+test("R5: attach and ingest refuse --style and --with-role rather than ignoring them", async () => {
+  for (const sub of ["attach", "ingest"]) {
+    for (const flag of [["--style"], ["--with-role", "review-style"]]) {
+      process.exitCode = 0;
+      errors.length = 0;
+      await reviewCommand([sub, "--target", "path", "--ref", "src", ...flag]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain("belong to `keryx review start`");
+    }
+  }
 });

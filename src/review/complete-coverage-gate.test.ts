@@ -186,10 +186,11 @@ describe("flow 460: the complete gate on a project with reviewers installed", ()
     let dir: string;
 
     beforeEach(async () => {
-      const required = (await requiredReviewers(root, "all", two)).required;
+      const required = (await requiredReviewers(root, "all", two, { enabledRoles: ["review-clean-code", "review-style"] })).required;
       selected = required.filter((name) => name !== "review-style" && name !== "review-architecture");
       expect(required.length - selected.length).toBe(2);
       dir = packageOf(root, { head: HEAD }, selected);
+      writeFileSync(path.join(dir, "round-roles.json"), JSON.stringify({ enabled: ["review-clean-code", "review-style"] }));
       await writeRunProfile(dir, buildRunProfile({ env: {}, now: new Date("2026-10-17T00:00:00Z") }));
     });
 

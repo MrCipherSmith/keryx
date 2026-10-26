@@ -33,7 +33,7 @@ export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> 
   chunks: ["--chunk", "--status", "--mode", "--answer", "--quote", "--json", "--help", "-h"],
   coverage: ["--json", "--help", "-h"],
   // `required` also reads --scope, --blast-radius and --pr-context; those are read-only inputs that were never confined and stay as they were.
-  required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--json"],
+  required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--style", "--with-role", "--json"],
   estimate: ["--json", "--confirm", "--quote"],
   verdict: ["--json"],
 };

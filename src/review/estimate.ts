@@ -8,6 +8,7 @@ import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, type RoundDepth } from "./coverage";
+import { packageEnabledRoles } from "./role-switches";
 import { operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, type SliceManifest } from "./slice";
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
@@ -296,6 +297,7 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
     blastRadius: await packageHasBlastRadius(packageDir),
     prContext: packageHasPrContext(packageDir),
     depth: recorded?.depth,
+    enabledRoles: await packageEnabledRoles(packageDir),
   });
   const read = await readManifest(options.manifest === undefined ? manifestCandidates(packageDir, root) : [options.manifest]);
   // A caller that already holds the manifest (the ledger, after applying escalations in a dry run) estimates that one.
