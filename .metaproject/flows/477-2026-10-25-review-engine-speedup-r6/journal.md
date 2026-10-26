@@ -1,0 +1,20 @@
+# Flow Journal
+
+- 2026-10-25T17:29:37.758Z - flow created
+- 2026-10-25T17:38:45.970Z - frozen: 11 criteria; checksum recorded
+- 2026-10-25T17:38:46.474Z - started
+- 2026-10-25T17:55:10.337Z - task-done: T1: Collect remaining context
+- 2026-10-25T17:55:10.578Z - task-done: T2: Implement per plan
+- 2026-10-25T17:55:10.811Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-25T17:55:11.043Z - ac-confirmed: AC1: keryx review status on the #8174 copy prints plan 28-70 (54 dispatches), actual 43 min (67 replies), 0 pauses; verification.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:11.282Z - ac-confirmed: AC2: #8086 copy: 44-110 (88), 106 min, one pause of 59 min, 46 min without; verification.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:11.522Z - ac-confirmed: AC3: estimate-actual.test.ts + estimate-actual-complete.test.ts pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:11.749Z - ac-confirmed: AC4: estimate-actual.test.ts unusable-marks cases pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:11.970Z - ac-confirmed: AC5: estimate.test.ts pin passes; src/review/estimate.ts not in the diff (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:12.198Z - ac-confirmed: AC6: review-panel.test.ts and review-inspector.test.ts pass (timing row, open and closed) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:12.424Z - ac-confirmed: AC7: cli-reference, guide section The plan against the clock, review complete/status help, CHANGELOG (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:12.659Z - ac-confirmed: AC8: bun run typecheck clean; src/review src/tui src/commands/review tests green except two pre-existing ci-triage failures also failing off main (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:12.885Z - ac-confirmed: AC9: cp -a copies; originals fingerprint identical before and after (verification.md) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:55:13.118Z - ac-confirmed: AC10: verification.md written (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:57:50.966Z - ac-confirmed: AC11: Committed and pushed on the operator's word (poll 306); draft PR #1087; no AI attribution in files, commit or PR text. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:57:51.476Z - task-done: T4: Self-review and prepare draft PR

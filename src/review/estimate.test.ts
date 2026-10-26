@@ -257,3 +257,11 @@ describe("plan confirmation", () => {
     }
   });
 });
+
+test("the estimate parameters keep their values (flow 477: the plan is reported against the actual time, not retuned)", () => {
+  expect(TYPICAL_DISPATCH_MINUTES).toBe(2);
+  expect(CHILD_DEADLINE_MINUTES).toBe(5);
+  expect(ASSUMED_PARALLEL_DISPATCHES).toBe(4);
+  expect(DEFAULT_MAX_DISPATCHES).toBe(40);
+  expect(DEFAULT_MAX_MINUTES).toBe(90);
+});

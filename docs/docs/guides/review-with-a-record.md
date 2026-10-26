@@ -726,6 +726,25 @@ keryx review ingest --report round7.md --ref round7 --refuted refuted.json
 Closing with no dispositions is allowed. It leaves every finding reading
 `unknown`, which means "nobody wrote down what happened".
 
+### The plan against the clock
+
+`review complete` writes one more line into `report.md` (after the `Evidence level:` line) and prints it:
+
+```text
+Plan estimate vs actual: plan 44-110 min (88 dispatches); actual 106 min from first to last raw reply (132 replies); pauses over 10 min: 1 (59 min), 46 min without them
+```
+
+The plan is read as recorded: `plan.json` (written by `review plan`), else `plan-confirmation.json`; a package with neither
+says `no recorded plan estimate`. The actual time is the first to the last file in `raw/`, by file time, so rounds older
+than the wave journal have it too. A gap longer than **10 minutes** between two neighbouring raw replies is counted as a
+pause and shown with the time left without it, so a round the operator walked away from is not read as a wrong estimate. The
+line does not cover what happens after the last raw reply (verifier, ingest, publication). If the raw files were copied or
+restored (every reply older than `plan.json`, or five or more replies within a minute of each other) the line says
+`actual not shown` rather than print a duration that is not the round's. A later close replaces the line, never repeats it;
+`review status` and the review panel (`/reviews`) show the same line, with `so far` while the round is open. The estimate
+itself is not changed by this: `TYPICAL_DISPATCH_MINUTES`, `CHILD_DEADLINE_MINUTES`, `ASSUMED_PARALLEL_DISPATCHES` and the
+confirmation thresholds keep their values.
+
 ### Completed means ready — the checklist
 
 A package cannot be marked `completed` while a file nobody read, a reviewer

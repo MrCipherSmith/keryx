@@ -18,6 +18,7 @@ import { layersDetailLines, layersSummaryLine } from "../review/layers-view";
 import { LAYER_NAMES, summarizeLayersUsage, type LayersUsageSummary } from "../review/layers-usage";
 import { EVIDENCE_DIR, pendingMutants, type MutantStatus, type MutationRecord } from "../review/mutate";
 import { computeReadiness, readinessDepthLines, renderReadiness, type ReadinessReport } from "../review/readiness";
+import { packageEstimateLine } from "../review/estimate-actual";
 import { parityIsEmpty, parityLines, readReviewParity, type ReviewParityView } from "../review/parity";
 
 export const REVIEW_DEPTH_EMPTY = "No managed review has recorded a dispatch yet.";
@@ -69,6 +70,8 @@ export type ReviewDepthRow = {
   parity?: ReviewParityView;
   /** The readiness checklist, from the same projection `keryx review readiness` prints; absent when the package could not be read. */
   readiness?: ReadinessReport | undefined;
+  /** The plan estimate against the time of the raw replies; absent when the package holds neither. */
+  timing?: string | undefined;
 };
 
 const ZERO: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
@@ -127,7 +130,8 @@ export async function loadReviewDepth(cwd: string, listed?: readonly ListedRevie
     const waiver = dispatch?.mutationWaiver;
     const mutationWaived = waiver !== null && typeof waiver === "object" && typeof (waiver as { operatorQuote?: unknown }).operatorQuote === "string";
     const parity = await readReviewParity(review.dir);
-    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch), readiness: await computeReadiness(review.dir).catch(() => undefined), ...(parityIsEmpty(parity) ? {} : { parity }) };
+    const timing = await packageEstimateLine(review.dir, { open: review.manifest.status !== "closed" });
+    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch), readiness: await computeReadiness(review.dir).catch(() => undefined), ...(parityIsEmpty(parity) ? {} : { parity }), ...(timing === undefined ? {} : { timing }) };
     if (mode === undefined) {
       rows.push({ ...base, mode: "unrecorded", required: [], excluded: [], missing: [], filesKnown: false });
       continue;
@@ -184,7 +188,7 @@ export function layersDepthLines(view: ReviewLayersView | undefined): string[] {
 export function formatReviewDepthRowLines(row: ReviewDepthRow): string[] {
   const head = `${row.pull}  ${row.reviewId}  mode ${row.mode}`;
   const lines = [head];
-  const layers = [...readinessDepthLines(row.readiness), ...layersDepthLines(row.layersView), ...parityLines(row.parity)].map((line) => `  ${line}`);
+  const layers = [...readinessDepthLines(row.readiness), ...layersDepthLines(row.layersView), ...parityLines(row.parity), ...(row.timing === undefined ? [] : [row.timing])].map((line) => `  ${line}`);
   if (row.mode === "unrecorded") {
     lines.push("  no dispatch record: the reviewer set is not known", `  ${mutationLine(row.mutation, row.mutationWaived)}`, ...layers);
     return lines;

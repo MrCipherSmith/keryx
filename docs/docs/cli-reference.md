@@ -7046,6 +7046,8 @@ retained findings: 6
 per retained finding: 92,084 tokens
 ```
 
+`review complete` also writes, and prints, one line `Plan estimate vs actual: plan <min>-<max> min (<n> dispatches); actual <m> min from first to last raw reply (<k> replies); pauses over 10 min: <count> (<total> min), <active> min without them`. The plan is read from `plan.json`, else `plan-confirmation.json` (not recomputed); the actual time is the file times of `raw/*.txt`; a gap longer than 10 minutes between neighbouring raw replies is a pause. The line goes after the `Evidence level:` line of `report.md`, is replaced by a later close, and is left out when the package holds neither a plan nor a raw reply. When the raw files cannot be the round's (every reply older than `plan.json`, or five or more within a minute of each other) it says `actual not shown`. `review status` and the review panel print the same line, `so far` for a round that is not closed.
+
 This is the first moment both halves are known, which is why it is printed here.
 A round nobody reported a cost for prints `cost: not recorded` and says that is
 not zero. A round that retained nothing prints the bill rather than a

@@ -41,6 +41,7 @@ import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, wri
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
 import { optInRolesFromArgs, optionalRolesLine, packageEnabledRoles, recordEnabledRoles } from "../review/role-switches";
+import { packageEstimateLine } from "../review/estimate-actual";
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
@@ -4379,6 +4380,9 @@ async function runStatus(args: string[]): Promise<void> {
   // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
   for (const line of parityLines(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
   for (const line of readinessDepthLines(await computeReadiness(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
+  // The plan against the time the raw replies show, read-only; a round that is not closed says "so far".
+  const timing = await packageEstimateLine(await resolveReviewPackagePath(process.cwd(), ref), { open: manifest.status !== "closed" }).catch(() => undefined);
+  if (timing !== undefined) console.log(timing);
 
   // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
   // manifest on disk, by a different invocation from the one that wrote it — and
@@ -4602,6 +4606,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     readiness,
     rolesNotRun,
     warnings,
+    estimateLine,
   } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
@@ -4611,6 +4616,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   if (readiness !== undefined) console.log(readinessLine(readiness));
+  if (estimateLine !== undefined) console.log(estimateLine);
   const rolesLine = optionalRolesLine(rolesNotRun ?? []);
   if (rolesLine !== undefined) console.log(rolesLine);
   console.log(`dispositions recorded: ${dispositions.length}`);
@@ -4954,11 +4960,16 @@ function printCompleteHelp(): void {
 Marks the review complete once scope, raw reconciliation, dispatch evidence and coverage hold. --finding, --disposition
 and --evidence record one finding's disposition (repeatable); --waive-coverage and --waive record an operator waiver;
 --head is the pull request head the round must match. A chunk-pass finding that findings.json does not hold is a warning, in the
-output and in report.md, never a refusal: "keryx review ingest --review-id <id>" brings it in.`);
+output and in report.md, never a refusal: "keryx review ingest --review-id <id>" brings it in.
+
+It also writes one line, "Plan estimate vs actual:", into report.md and prints it: the plan range from plan.json (else
+plan-confirmation.json), the time from the first to the last file in raw/, and the pauses longer than 10 minutes between
+neighbouring raw replies. The line is replaced, never repeated, by a later close; it does not measure the time after the
+last raw reply, and it says "actual not shown" when the raw files' times cannot be the round's (copied or restored).`);
 }
 
 function printStatusHelp(): void {
-  console.log("keryx review status <review-id-or-path>\n\nPrints the package's mode, status, target, head, flow, coverage and what the round left open. Takes no flags.");
+  console.log("keryx review status <review-id-or-path>\n\nPrints the package's mode, status, target, head, flow, coverage, what the round left open and the plan estimate against the time of the raw replies. Takes no flags.");
 }
 
 function printRequiredHelp(): void {
