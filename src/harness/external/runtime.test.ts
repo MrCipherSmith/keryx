@@ -352,7 +352,7 @@ describe("a successful run", () => {
   test("runs in the worktree, with the stripped environment and the depth marker", async () => {
     const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
     await runExternalChild(
-      baseInput({ parentEnv: { PATH: "/usr/bin", ANTHROPIC_API_KEY: "sk-secret", KERYX_SESSION_ID: "s1" }, depth: 1 }),
+      baseInput({ parentEnv: { PATH: "/usr/bin", ANTHROPIC_API_KEY: "dummy", KERYX_SESSION_ID: "s1" }, depth: 1 }),
       baseDeps({ spawn: sp.port }),
     );
     const opts = sp.calls[0]?.opts;
