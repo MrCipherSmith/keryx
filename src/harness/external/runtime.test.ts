@@ -245,6 +245,10 @@ describe("flow 371 — a codex write run is gated on the version whose confineme
     ["older", "codex-cli 0.158.9", "found 0.158.9"],
     ["the old floor", "codex-cli 0.159.0", "found 0.159.0"],
     ["newer (unverified)", "codex-cli 0.160.0", "not yet verified"],
+    ["in the unverified gap", "codex-cli 0.163.9", "not yet verified"],
+    ["an unverified patch", "codex-cli 0.164.1", "not yet verified"],
+    ["an unverified minor", "codex-cli 0.165.0", "not yet verified"],
+    ["a pre-release of the measured version", "codex-cli 0.164.0-rc.1", "a pre-release"],
     ["a pre-release of the floor", "codex-cli 0.159.2-alpha.3", "a pre-release"],
     ["unreadable", "no version here", "could not be read"],
   ])("a %s codex is Denied before any worktree or spawn, naming found and required", async (_label, detectOutput, expectedText) => {
@@ -272,7 +276,7 @@ describe("flow 371 — a codex write run is gated on the version whose confineme
     expect(wt.created).toHaveLength(0);
   });
 
-  test.each(["codex-cli 0.159.2", "codex-cli 0.159.9"])("%s passes the gate and spawns with the confinement argv", async (detectOutput) => {
+  test.each(["codex-cli 0.159.2", "codex-cli 0.159.9", "codex-cli 0.164.0"])("%s passes the gate and spawns with the confinement argv", async (detectOutput) => {
     const wt = fakeWorktree();
     const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
     const result = await runExternalChild(

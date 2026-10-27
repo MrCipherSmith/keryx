@@ -118,6 +118,22 @@ describe("parseAgentVersion", () => {
     expect(parseAgentVersion(CODEX, "codex-cli 0.159.2-alpha.3")).toBe("0.159.2-alpha.3");
   });
 
+  test.each([
+    "codex-cli 0.164.0+custom",
+    "codex-cli 0.164.0.1",
+    "codex-cli 0.164.0-",
+    "codex-cli 0.164.0/custom",
+    "not-codex-cli 0.164.0",
+    "codex-cli 0.164.0\ncodex-cli 0.165.0",
+  ])("does not truncate an ambiguous or nonstandard Codex banner: %s", (banner) => {
+    expect(parseAgentVersion(CODEX, banner)).toBeUndefined();
+  });
+
+  test("accepts the measured release with normal trailing CLI whitespace", () => {
+    expect(parseAgentVersion(CODEX, "codex-cli 0.164.0\n")).toBe("0.164.0");
+    expect(parseAgentVersion(CODEX, "codex-cli 0.164.0\r\n")).toBe("0.164.0");
+  });
+
   test("extracts claude's version from its real banner", () => {
     expect(parseAgentVersion(CLAUDE, "2.1.220 (Claude Code)")).toBe("2.1.220");
   });

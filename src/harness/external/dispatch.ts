@@ -97,8 +97,11 @@ export const CODEC_WRITE_AGENT_IDS: readonly string[] = ["claude-cli", "codex-cl
  * that renamed a confinement key would silently run unconfined. An older, newer, pre-release or
  * unreadable version is refused before anything spawns (flow 371).
  */
-export const CODEC_WRITE_VERIFIED_VERSIONS: Readonly<Record<string, { readonly min: string; readonly before: string }>> = {
-  "codex-cli": { min: "0.159.2", before: "0.160.0" },
+export const CODEC_WRITE_VERIFIED_VERSIONS: Readonly<Record<string, { readonly min: string; readonly before: string; readonly exact?: readonly string[] }>> = {
+  // 0.164.0 was measured separately on macOS with the codec's exec and resume argv.
+  // Workspace writable; home, tmp, sibling, symlink escape, .git and TCP denied.
+  // Evidence: .metaproject/data/security/codex-0.164.0-exec-probe.json.
+  "codex-cli": { min: "0.159.2", before: "0.160.0", exact: ["0.164.0"] },
 };
 
 /** Why a write run must not start on this detected version, or undefined when the version is verified. */
@@ -106,9 +109,11 @@ export function codecWriteVersionRefusal(entry: ExternalAgentEntry, version: str
   const verified = CODEC_WRITE_VERIFIED_VERSIONS[entry.id];
   if (verified === undefined) return undefined;
   const range = `\`${entry.binary}\` ${verified.min} up to, but not including, ${verified.before}`;
-  const prefix = `${entry.label} write mode needs ${range}, the versions whose sandbox confinement was measured; `;
+  const exact = verified.exact?.length ? `, or exactly ${verified.exact.join(", ")}` : "";
+  const prefix = `${entry.label} write mode needs ${range}${exact}, the versions whose sandbox confinement was measured; `;
   if (version === undefined) return `${prefix}the installed version could not be read`;
   if (!/^\d+\.\d+\.\d+$/.test(version)) return `${prefix}found ${version}, a pre-release`;
+  if (verified.exact?.includes(version)) return undefined;
   if (compareVersions(version, verified.min) < 0) return `${prefix}found ${version}, which is older`;
   if (compareVersions(version, verified.before) >= 0) {
     return `${prefix}found ${version}, which is newer and not yet verified: update keryx, or use \`--task\` without \`--write\``;
