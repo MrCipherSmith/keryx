@@ -543,6 +543,10 @@ describe("runExternalWriteChild", () => {
       ["an older major", "codex-cli 0.147.0", "found 0.147.0"],
       ["the old floor", "codex-cli 0.159.0", "found 0.159.0"],
       ["newer than verified", "codex-cli 0.160.1", "found 0.160.1"],
+      ["in the unverified gap", "codex-cli 0.163.9", "found 0.163.9"],
+      ["an unverified patch", "codex-cli 0.164.1", "found 0.164.1"],
+      ["an unverified minor", "codex-cli 0.165.0", "found 0.165.0"],
+      ["a measured-version pre-release", "codex-cli 0.164.0-rc.1", "a pre-release"],
       ["a pre-release", "codex-cli 0.159.2-rc.1", "a pre-release"],
     ])("a %s codex is refused before any spawn or worktree, naming the found and required versions", async (_name, output, found) => {
       const child = spawned();
@@ -570,7 +574,7 @@ describe("runExternalWriteChild", () => {
       expectNoWorktreeLeft();
     });
 
-    test.each(["codex-cli 0.159.2", "codex-cli 0.159.7"])(
+    test.each(["codex-cli 0.159.2", "codex-cli 0.159.7", "codex-cli 0.164.0"])(
       "%s captures the diff through the same pipeline as claude and removes the worktree",
       async (output) => {
         const child = spawned();
