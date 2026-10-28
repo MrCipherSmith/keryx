@@ -4,12 +4,13 @@ import type { SessionHostOperation, SessionHostReceipt } from "../host-types";
 import { createCommandCatalogue } from "./catalogue";
 import { rewindCommands } from "./rewind";
 import type { NativeCommandContribution } from "./handlers";
-import { createTerminalSessionAdapter, type TerminalAuthority } from "./terminal-adapter";
+import { createTerminalSessionAdapter, type TerminalAuthority, type TerminalSessionReads } from "./terminal-adapter";
+import { lifecycleCommands } from "../host-lifecycle";
 
 const digest = "a".repeat(64);
 const adHoc: Control["FlowAssociation"] = { mode: "ad-hoc", profileConsentVersion: 1 };
 type Results = Partial<Record<string, Control["BoundedJson"]>>;
-function recordingHost(options: { results?: Results; queue?: Control["QueueItem"][]; authority?: Partial<TerminalAuthority>; contributions?: NativeCommandContribution[] } = {}) {
+function recordingHost(options: { results?: Results; queue?: Control["QueueItem"][]; authority?: Partial<TerminalAuthority>; contributions?: NativeCommandContribution[]; reads?: Partial<TerminalSessionReads> } = {}) {
   const record: Control["SessionRecord"] = { sessionId: "session-test", projectId: "project-test", machineId: "machine-test", checkoutId: "checkout-test", agentProfileId: "native",
     version: 3, historyVersion: 1, state: "idle", title: "Adapter fixture",
     config: { configVersion: 2, baselineCandidateId: "scripted:m", reasoningEffort: "none", routing: { enabled: false, profileId: "local", candidateIds: ["scripted:m"], fallbackCandidateId: "scripted:m" }, policyDigest: digest, capabilityDigest: digest },
@@ -30,6 +31,7 @@ function recordingHost(options: { results?: Results; queue?: Control["QueueItem"
       return { operationId: operation.operationId, sessionId: record.sessionId, commandName: operation.request.commandName, status: "applied", sessionVersion: record.version,
         result: options.results?.[operation.request.commandName] ?? null, confirmationId: null, errorCode: null, confirmation: null, runId: null, turnId: null };
     },
+    ...options.reads,
   };
   return { host, sent, operations, catalogue, adapter: createTerminalSessionAdapter(host, { actorId: "human", controllerLeaseId: "controller", controllerVersion: 1, ...options.authority }) };
 }
@@ -62,6 +64,23 @@ test("TUI subcommands map to the dotted handler the catalogue advertises", async
     const sent = await sends(line);
     expect(sent.request).toMatchObject({ commandName, arguments: args });
     expect(sent.schemaValid).toBe(true);
+  }
+});
+
+test("/compact <focus> carries the TUI's focus text as the typed compact focus; /mode ask is the typed approval restriction", async () => {
+  for (const [line, commandName, args] of [
+    ["/compact", "compact", {}], ["/compact keep the API notes", "compact", { focus: "keep the API notes" }], ["/compact   keep   the API notes  ", "compact", { focus: "keep the API notes" }],
+    ["/mode", "mode", {}], ["/mode ask", "mode.ask", {}],
+  ] as const) {
+    const sent = await sends(line);
+    expect(sent.request).toMatchObject({ commandName, arguments: args });
+    expect(sent.schemaValid).toBe(true);
+  }
+  // The typed focus is bounded; widening the permission mode stays a dedicated local-security workflow.
+  for (const line of [`/compact ${"x".repeat(201)}`, "/mode trust", "/mode auto", "/mode ask save", "/mode clear", "/mode sideways"]) {
+    const refused = await sends(line);
+    expect({ line, sent: refused.sent.length }).toEqual({ line, sent: 0 });
+    expect(refused.receipt).toMatchObject({ status: "rejected", errorCode: "invalid-arguments" });
   }
 });
 
@@ -164,4 +183,32 @@ test("/rewind N [mode] previews against the current history version; /rewind con
   await fixture.adapter.execute("/rewind 1 history"); await fixture.adapter.execute("/status");
   expect(await fixture.adapter.execute("/rewind confirm")).toMatchObject({ status: "rejected", errorCode: "invalid-arguments", commandName: "rewind.apply" });
   expect(fixture.sent.filter((request) => request.commandName === "rewind.apply")).toHaveLength(1);
+});
+
+test("/sessions open|resume|fork send the typed lifecycle selection with every pin read fresh, and refuse what they cannot pin", async () => {
+  const previous: Control["SessionRecord"] = { ...(await recordingHost().host.inspect()), sessionId: "previous", version: 7, historyVersion: 4, state: "closed", workspaceBaseline: "b".repeat(64),
+    controller: { controllerLeaseId: "previous-lease", sessionId: "previous", version: 3, actorId: "human", actorKind: "human-operator", expiresAt: new Date(Date.now() + 60_000).toISOString(), state: "held" } };
+  const reads: TerminalSessionReads = {
+    readSession: async (sessionId) => { if (sessionId === "previous") return structuredClone(previous); if (sessionId === "unclaimed") return { ...structuredClone(previous), sessionId, controller: null }; throw new Error("not-found"); },
+    readInventory: async () => ({ inventoryVersion: 5, checkouts: [{ checkoutId: "checkout-test", headSha: "1".repeat(40) }, { checkoutId: "checkout-2", headSha: "2".repeat(40) }] }),
+  };
+  const options = { contributions: lifecycleCommands(true), reads };
+  for (const [line, commandName, args] of [
+    ["/sessions", "sessions", {}],
+    ["/sessions open previous", "sessions.open", { sessionId: "previous", expectedSessionVersion: 7 }],
+    ["/sessions resume previous", "sessions.resume", { sessionId: "previous", expectedSessionVersion: 7, controller: { controllerLeaseId: "previous-lease", expectedControllerVersion: 3 }, expectedHistoryVersion: 4, expectedWorkspaceBaseline: "b".repeat(64) }],
+    // A fork copies this session's whole current history onto another mapped checkout, under the title the operator typed.
+    ["/sessions fork checkout-2 Fork of   the fixture", "sessions.fork", { throughHistoryCursor: 0, expectedHistoryVersion: 1, targetCheckoutId: "checkout-2", expectedInventoryVersion: 5, expectedHeadSha: "2".repeat(40), title: "Fork of   the fixture" }],
+  ] as const) {
+    const sent = await sends(line, options);
+    expect({ line, sent: sent.sent.map((request) => ({ commandName: request.commandName, arguments: request.arguments })) }).toEqual({ line, sent: [{ commandName, arguments: args }] });
+    expect({ line, valid: sent.schemaValid }).toEqual({ line, valid: true });
+  }
+  // Malformed text is refused as the usage; a pin that cannot be read fresh is refused before anything reaches the host.
+  for (const [line, errorCode, withReads] of [["/sessions open", "invalid-arguments", true], ["/sessions resume a b", "invalid-arguments", true], ["/sessions fork checkout-2", "invalid-arguments", true], ["/sessions frobnicate", "invalid-arguments", true],
+    ["/sessions open missing", "forbidden", true], ["/sessions resume unclaimed", "forbidden", true], ["/sessions fork checkout-9 Fork", "forbidden", true],
+    ["/sessions open previous", "forbidden", false], ["/sessions fork checkout-2 Fork", "forbidden", false]] as const) {
+    const refused = await sends(line, withReads ? options : { contributions: lifecycleCommands(true) });
+    expect({ line, sent: refused.sent.length, receipt: refused.receipt }).toMatchObject({ line, sent: 0, receipt: { status: "rejected", errorCode } });
+  }
 });

@@ -4,8 +4,7 @@ import { resolveRemoteProfile } from '../../harness/policy/profiles';
 import { detectSandboxLauncher } from '../../harness/process/sandbox/detect';
 import { loadShellConfig } from '../shell-config';
 import { canonicalDigest, type Control } from '../../remote-control/protocol';
-import { createCommandCatalogue } from '../../session/commands/catalogue';
-import { lifecycleCommands } from '../../session/host-lifecycle';
+import { createHostCommandCatalogue } from '../../session/commands/catalogue';
 import type { NativeCommandContribution } from '../../session/commands/handlers';
 import { wireModelIdentity } from '../../session/model-identity';
 import { assembleNativeSessionRuntime } from '../../session/native-runtime-production';
@@ -45,7 +44,9 @@ export async function resolveProductionMachineProfile(mapping: CheckoutMapping, 
         return fail('local-policy');
     const policyDigest = canonicalDigest(policy);
     const capabilityDigest = canonicalDigest({ adapter: 'keryx-native-v1', profileId: mapping.profileId, candidateId, tools: ['read_file', 'search_code', 'list_dir', 'hub_context', 'hub_flows', 'hub_flow', 'apply_patch', 'shell_exec'], maxToolCalls: 64, maxRounds: 16 });
-    const catalogue = createMachineCommandCatalogue(capabilityDigest);
+    // Hub validates every CommandInvoke against this catalogue and the host against its own, so they must be one catalogue: the production
+    // assembly always spawns owned Git (native-runtime-production.ts) and the bridge always gives its hosts the owned rewind workspace (bridge.ts).
+    const catalogue = createMachineCommandCatalogue(capabilityDigest, [], { ownedRewind: true });
     // A partial registry must remain visible as a release/setup gap, never silently executable.
     if (catalogueImplementationGaps(catalogue).length > 0)
         return fail('adapter-unsupported');
@@ -63,4 +64,10 @@ export function createLocalMachineRouting(providerId: string, modelId: string, p
     const wire = wireModelIdentity(providerId, modelId);
     return { version: 1, policyDigest, capabilityDigest, profileIds: ['local'], candidates: [{ candidateId: canonicalDigest([providerId, modelId]), ...wire, reasoningEfforts: ['none', 'low', 'medium', 'high'], available: true, reason: 'none', privacyClass: 'approved-egress', costClass: 'metered' }] };
 }
-export function createMachineCommandCatalogue(capabilityDigest: string, contributions: readonly NativeCommandContribution[] = []): Control['CommandCatalogue'] { return createCommandCatalogue(capabilityDigest, [...lifecycleCommands(true), ...contributions]); }
+/**
+ * The catalogue a bridge-hosted native session enforces (host.ts): the runtime's contributions with the default native drivers its
+ * services attach, the bridge's lifecycle port, and the owned rewind port when the runtime spawns owned Git. Published to Hub as is.
+ */
+export function createMachineCommandCatalogue(capabilityDigest: string, contributions: readonly NativeCommandContribution[] = [], options: { ownedRewind?: boolean } = {}): Control['CommandCatalogue'] {
+    return createHostCommandCatalogue(capabilityDigest, { contributions, lifecycle: true, rewind: options.ownedRewind === true });
+}

@@ -20,8 +20,10 @@ type Json = Control["BoundedJson"];
 type Args = { [key: string]: Json };
 /** `before`: terminal lines the operator typed first in the same terminal (the shipped two-step forms, e.g. a rewind preview before its confirm). */
 /** `operation`: the headless typed form is that frozen protocol operation (its body in `arguments`), not a CommandInvoke. */
+/** `bridge-*` scenarios run on real enrolled machines behind Hub v2 (scripts/native-lifecycle-parity.ts): the bridge applies a lifecycle command only when Hub delivers it. */
 export interface ParityCase { line: string; arguments: Args | null; before?: string[]; operation?: "remove-queue" | "edit-queue";
-  scenario?: "active-turn" | "background-task" | "foreground-task" | "approval-waiter" | "question-waiter" | "bus-peer" | "rewind-checkpoint" | "queued-message" }
+  scenario?: "active-turn" | "background-task" | "foreground-task" | "approval-waiter" | "question-waiter" | "bus-peer" | "rewind-checkpoint" | "queued-message"
+    | "bridge-session" | "bridge-previous-session" | "bridge-fork-target" }
 export interface ParityOutcome { variantId: string; handlerName: string | null; local: NativeNormalizedOutcome; headless: NativeNormalizedOutcome | null }
 export interface ParityRun { catalogue: Control["CommandCatalogue"]; outcomes: ParityOutcome[] }
 export const INVENTORY_PATH = "output/hub-remote-sessions/native-command-coverage.json";
@@ -46,15 +48,17 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "search-provider.list": { line: "/search-provider", arguments: {} },
   "search-connect.list": { line: "/search-connect", arguments: {} },
   "search-connect.select": { line: "/search-connect select", arguments: null },
-  "new.default": { line: "/new", arguments: {} },
+  "new.default": { line: "/new", arguments: {}, scenario: "bridge-session" },
   "goal.-workspace": { line: "/goal Ship the fixture --workspace ws", arguments: { text: "Ship the fixture", workspaceId: "ws" } },
   "goal.-auto": { line: "/goal Ship the fixture --auto 3", arguments: { text: "Ship the fixture", autoRounds: 3 } },
   "goal.auto-rounds": { line: "/goal Ship the fixture --auto 2", arguments: { text: "Ship the fixture", autoRounds: 2 } },
-  "resume.picker": { line: "/resume", arguments: {} },
-  "sessions.picker": { line: "/sessions", arguments: {} },
-  "sessions.open": { line: "/sessions open other-session", arguments: { sessionId: "other-session", expectedSessionVersion: 1 } },
-  "sessions.resume": { line: "/sessions resume other-session", arguments: { sessionId: "other-session", expectedSessionVersion: 1, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, expectedHistoryVersion: 1, expectedWorkspaceBaseline: "0".repeat(64) } },
-  "sessions.fork": { line: "/sessions fork", arguments: { throughHistoryCursor: 0, expectedHistoryVersion: 1, targetCheckoutId: "checkout", expectedInventoryVersion: 1, expectedHeadSha: "0".repeat(40), title: "Fork" } },
+  "resume.picker": { line: "/resume", arguments: {}, scenario: "bridge-session" },
+  "sessions.picker": { line: "/sessions", arguments: {}, scenario: "bridge-session" },
+  // The session a real `/new` closed, selected by its Hub identity and exact pins; a fork targets the machine's second clean mapped checkout.
+  "sessions.open": { line: "/sessions open {previousSession}", arguments: { sessionId: "{previousSession}", expectedSessionVersion: "{#previousVersion}" }, scenario: "bridge-previous-session" },
+  "sessions.resume": { line: "/sessions resume {previousSession}", arguments: { sessionId: "{previousSession}", expectedSessionVersion: "{#previousVersion}", controller: { controllerLeaseId: "{previousLease}", expectedControllerVersion: "{#previousLeaseVersion}" },
+    expectedHistoryVersion: "{#previousHistoryVersion}", expectedWorkspaceBaseline: "{previousBaseline}" }, scenario: "bridge-previous-session" },
+  "sessions.fork": { line: "/sessions fork checkout-2 Fork", arguments: { throughHistoryCursor: "{#historyCursor}", expectedHistoryVersion: "{#historyVersion}", targetCheckoutId: "checkout-2", expectedInventoryVersion: "{#inventoryVersion}", expectedHeadSha: "{forkHead}", title: "Fork" }, scenario: "bridge-fork-target" },
   "status.default": { line: "/status", arguments: {} },
   "status.questions-list": { line: "/questions.list", arguments: {} },
   "status.questions-answer": { line: "/questions.answer {questionId} yes", arguments: { questionId: "{questionId}", runId: "held-run", turnId: "held-turn", fingerprint: "{fingerprint}", answers: { kind: "option", choice: "yes" } }, scenario: "question-waiter" },
@@ -161,7 +165,7 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "mcp.trust-revoke-fqn": { line: "/mcp trust revoke fixture__tool", arguments: { fqn: "fixture__tool" } },
   "mcp.trust-revoke-all": { line: "/mcp trust revoke all", arguments: {} },
   "compact.default": { line: "/compact", arguments: {} },
-  "compact.focus": { line: "/compact keep the API notes", arguments: null },
+  "compact.focus": { line: "/compact keep the API notes", arguments: { focus: "keep the API notes" } },
   "rewind.picker": { line: "/rewind", arguments: {} },
   "rewind.files": { line: "/rewind 1 files", arguments: { seq: 1, mode: "files", expectedHistoryVersion: "{#historyVersion}" }, scenario: "rewind-checkpoint" },
   "rewind.history": { line: "/rewind 1 history", arguments: { seq: 1, mode: "history", expectedHistoryVersion: "{#historyVersion}" }, scenario: "rewind-checkpoint" },
@@ -170,7 +174,7 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "rewind.apply": { line: "/rewind confirm", before: ["/rewind 1 files"], arguments: { seq: 1, mode: "files", expectedHistoryVersion: "{#historyVersion}", previewDigest: "{previewDigest}", workspaceBaseline: "{workspaceBaseline}" }, scenario: "rewind-checkpoint" },
   "settings.read": { line: "/settings", arguments: {} },
   "mode.show": { line: "/mode", arguments: {} },
-  "mode.ask": { line: "/mode ask", arguments: null },
+  "mode.ask": { line: "/mode ask", arguments: {} },
   "reasoning.show": { line: "/reasoning", arguments: {} },
   "reasoning.off": { line: "/reasoning off", arguments: { effort: "none" } },
   "reasoning.minimal": { line: "/reasoning minimal", arguments: { effort: "minimal" } },
@@ -183,7 +187,7 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "plan.on": { line: "/plan on", arguments: { enabled: true } },
   "plan.off": { line: "/plan off", arguments: { enabled: false } },
   "plan.set": { line: "/plan on", arguments: { enabled: true } },
-  "clear.default": { line: "/clear", arguments: {} },
+  "clear.default": { line: "/clear", arguments: {}, scenario: "bridge-session" },
   "interrupt.default": { line: "/interrupt", arguments: {}, scenario: "active-turn" },
   "queue.list": { line: "/queue", arguments: {} },
   "queue.remove-N": { line: "/queue remove 1", operation: "remove-queue", arguments: { expectedSessionVersion: "{#sessionVersion}", controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, queueItemId: "{queueItemId}", expectedQueueVersion: "{#queueVersion}", expectedItemVersion: "{#itemVersion}" }, scenario: "queued-message" },
@@ -248,6 +252,7 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
   const { MachineError } = await import("../src/lib/hub-machine/errors");
   const { renderMetaprojectGitignoreBlock } = await import("../src/lib/metaproject-gitignore");
   const { WorkspaceService, localWorkspaceAuthorizationServer } = await import("../src/sac/workspace-service");
+  const { createLifecycleParity, hubDeliveryOnlyLifecycle } = await import("./native-lifecycle-parity");
   const root = await mkdtemp(join(tmpdir(), "native-parity-"));
   const held = new Set<() => void>();
   // A first-round model request for a marked turn streams one real tool call; every other model request is held open until its owner aborts it.
@@ -328,14 +333,17 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       return cwd;
     };
     let serial = 0;
+    /** The one production runtime assembly of this run: every non-bridge host and every bridge-hosted session gets exactly it. */
+    const assemble = (cwd: string, sessionId: string, allowedTools: readonly string[] = ["read_file"], peerInstances: readonly string[] = []) => assembleNativeSessionRuntime({ cwd, configDir, sessionId, profile,
+      providerId: "fixture-local", modelId: "fixture-model", availability: structuredClone(availability), allowedTools, maxToolCalls: 5, maxRounds: 5,
+      locallyApprovedBus: { allowedCheckoutPaths: [cwd], allowedPeerSessionIds: [PEER_SESSION], allowedControlInstanceIds: () => peerInstances } });
     const host = async (allowedTools: readonly string[] = ["read_file"]) => {
       const name = `h${++serial}`;
       const cwd = await checkout(name);
       const lease = acquireCheckoutLease(cwd, { hubId: "native-parity", runId: `parity-${name}`, daemonId: "native-parity" });
       const workspace = createOwnedWorkspace(cwd, () => lease.assertOwnership());
       const peerInstances: string[] = [];
-      const assembled = await assembleNativeSessionRuntime({ cwd, configDir, sessionId: `parity-${name}`, profile, providerId: "fixture-local", modelId: "fixture-model", availability: structuredClone(availability), allowedTools, maxToolCalls: 5, maxRounds: 5,
-        locallyApprovedBus: { allowedCheckoutPaths: [cwd], allowedPeerSessionIds: [PEER_SESSION], allowedControlInstanceIds: () => peerInstances } });
+      const assembled = await assemble(cwd, `parity-${name}`, allowedTools, peerInstances);
       if (!assembled.ok) throw new Error(`native assembly refused: ${assembled.error.code}`);
       const record: Control["SessionRecord"] = { sessionId: "parity-session", projectId: project.id, machineId: machine.machineId, checkoutId: "checkout", agentProfileId: "native", title: "Parity", version: 1, historyVersion: 1, state: "idle",
         config: { configVersion: 1, baselineCandidateId: CANDIDATE, reasoningEffort: "none", routing: { enabled: false, profileId: "local", candidateIds: [CANDIDATE], fallbackCandidateId: CANDIDATE }, policyDigest: digest, capabilityDigest: digest },
@@ -343,7 +351,8 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
         activeRunId: null, activeTurnId: null, nextTurnOrdinal: 1, historyCursor: 0, sessionEventCursor: 0, queueVersion: 0, workspaceBaseline: workspace.baseline().digest, forkedFromSessionId: null,
         capabilities: { literalText: true, attachments: false, attachmentReason: "typed-artifact-contract-required", commandCatalogue: true, modelRouting: true } };
       const dataDir = join(root, `state-${name}`);
-      const value = await createSessionHost({ cwd, dataDir, configDir, record, runtime: assembled.value, inspectionMode: "hub-remote",
+      // As on a machine, the session carries a lifecycle port; one the Hub never delivered to refuses like the bridge's own.
+      const value = await createSessionHost({ cwd, dataDir, configDir, record, runtime: assembled.value, inspectionMode: "hub-remote", lifecycle: hubDeliveryOnlyLifecycle,
         projectContext: { source: "hub-canonical", listFlows: () => readScopedHubFlows({ hubUrl: origin, secret: machine.secret, projectId: project.id }), readFlow: (flowId) => readScopedHubFlows({ hubUrl: origin, secret: machine.secret, projectId: project.id, flowId }) },
         workspace: { ...workspace, rewind: {
           ownership: () => { lease.assertOwnership(); const baseline = workspace.baseline(); const head = currentCheckoutHead(cwd); if (head !== baseline.head) throw new MachineError("workspace-conflict"); return { nonce: lease.nonce, gitHead: head, paths: Object.keys(baseline.files) }; },
@@ -456,8 +465,19 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       : Array.isArray(value) ? value.map((item) => bind(item, slots)) : value !== null && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, bind(item, slots)])) : value;
     let catalogue: Control["CommandCatalogue"] | undefined;
     const outcomes: ParityOutcome[] = [];
+    let lifecycle: ReturnType<typeof createLifecycleParity> | undefined;
+    /** Bridge-hosted machines advertise the run's one subject catalogue; a run whose first case is bridge-hosted takes it from a host first. */
+    const lifecycleParity = async () => {
+      if (lifecycle !== undefined) return lifecycle;
+      let subject = catalogue;
+      if (subject === undefined) { const probe = await host(); try { subject = await probe.host.catalogue(); } finally { await probe.host.dispose("native-parity"); } }
+      catalogue = subject;
+      lifecycle = createLifecycleParity({ origin, cookie, projectId: project.id, root, catalogue: subject, digest, availability, checkout, assemble: (cwd, sessionId) => assemble(cwd, sessionId), outcome: outcomeOf, bind });
+      return lifecycle;
+    };
     for (const item of input.cases) {
-      const tools = item.case.scenario === "approval-waiter" || item.case.scenario === "rewind-checkpoint" ? ["read_file", "apply_patch"] : item.case.scenario === "question-waiter" ? ["read_file", "ask_user"] : undefined;
+      if (item.case.scenario !== undefined && item.case.scenario.startsWith("bridge-")) { outcomes.push(await (await lifecycleParity()).run(item)); continue; }
+      const tools =item.case.scenario === "approval-waiter" || item.case.scenario === "rewind-checkpoint" ? ["read_file", "apply_patch"] : item.case.scenario === "question-waiter" ? ["read_file", "ask_user"] : undefined;
       const [local, headless] = await Promise.all([host(tools), host(tools)]);
       try {
         const subject = await headless.host.catalogue();
@@ -519,7 +539,9 @@ export async function collectParityRun(root: string, inventory: NativeCoverageIn
     const input = join(work, "cases.json"); const output = join(work, "outcomes.json");
     await writeFile(input, JSON.stringify({ cases: rows.map((row) => ({ variantId: row.id, handlerName: row.handlerName, case: parityCaseFor(row) })) }));
     const child = Bun.spawn([process.execPath, "--no-env-file", join(root, "scripts/verify-native-coverage.ts"), "--harness", input, output], { cwd: root, stdout: "pipe", stderr: "pipe",
-      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, XDG_DATA_HOME: xdg, XDG_CONFIG_HOME: join(work, "xdg-config"), KERYX_DATA_DIR: join(work, "data"), TMPDIR: work, LANG: "C.UTF-8" } });
+      // Product git calls (checkout baselines, leases, the bridge's mapping checks) see no developer or system git configuration either.
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, XDG_DATA_HOME: xdg, XDG_CONFIG_HOME: join(work, "xdg-config"), KERYX_DATA_DIR: join(work, "data"), TMPDIR: work, LANG: "C.UTF-8",
+        GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } });
     const [code, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
     if (code !== 0) throw new NativeCoverageGateError("parity-harness-failed", stderr.slice(-2000));
     return JSON.parse(await readFile(output, "utf8")) as ParityRun;

@@ -2,21 +2,25 @@ import path from 'node:path';
 import {readContext} from '../../hub/context-sync';
 import{HubConnector,type HubBinding}from'../../hub/connector';
 import{MachineError}from'./errors';import type{CheckoutMapping}from'./config';
+/**
+ * The machine's sync of one project's shared context into its own keryx-managed cache. It never writes the checkout: a hosted session
+ * reads canonical context through hub_context from this cache, and a rewritten tracked index would dirty the owned baseline.
+ */
 class ExplicitMachineConnector extends HubConnector{
- constructor(private readonly local:CheckoutMapping,private readonly url:string,token:string,cacheRoot:string){super({cwd:local.cwd,token,cacheRoot});}
+ constructor(private readonly local:CheckoutMapping,private readonly url:string,token:string,cacheRoot:string){super({cwd:local.cwd,token,cacheRoot,checkoutIndex:false});}
  override async binding():Promise<HubBinding>{return {url:this.url,projectId:this.local.projectId,checkoutId:this.local.checkoutId,tokenEnv:'KERYX_MACHINE_NOT_AN_ENV_TOKEN'};}
  override async status(){return {ok:true as const,connection:{url:this.url,projectId:this.local.projectId,checkoutId:this.local.checkoutId}};}
 }
-/** One event-driven coordinator per Hub/project, sharing the existing validated incremental sync. */
+/** One event-driven coordinator per Hub/project, sharing the existing validated incremental sync: every mapped checkout of a project reads the one cache. */
 export class MachineContextSync{
- private readonly projects=new Map<string,{connectors:ExplicitMachineConnector[];revision:number;target:number;cacheDir?:string;running?:Promise<void>}>();
+ private readonly projects=new Map<string,{connector:ExplicitMachineConnector;revision:number;target:number;cacheDir?:string;running?:Promise<void>}>();
  constructor(options:{hubUrl:string;token:string;cacheRoot:string;mappings:readonly CheckoutMapping[]}){
-  for(const mapping of options.mappings){let project=this.projects.get(mapping.projectId);if(!project){project={connectors:[],revision:-1,target:-1};this.projects.set(mapping.projectId,project);}project.connectors.push(new ExplicitMachineConnector(mapping,options.hubUrl,options.token,options.cacheRoot));}
+  for(const mapping of options.mappings)if(!this.projects.has(mapping.projectId))this.projects.set(mapping.projectId,{connector:new ExplicitMachineConnector(mapping,options.hubUrl,options.token,options.cacheRoot),revision:-1,target:-1});
  }
  async invalidate(projectId:string,revision:number):Promise<void>{
   const project=this.projects.get(projectId);if(!project)throw new MachineError('scope-denied');if(!Number.isSafeInteger(revision)||revision<0)throw new MachineError('invalid-frame');project.target=Math.max(project.target,revision);
   if(project.running)return project.running;if(project.revision>=project.target)return;
-  const work=(async()=>{while(project.revision<project.target){const result=await project.connectors[0]!.sync();project.revision=result.revision;project.cacheDir=result.cacheDir;await Promise.all(project.connectors.slice(1).map(c=>c.refreshContextIndex()));if(project.revision<project.target)throw new MachineError('stale-reference');}})();
+  const work=(async()=>{while(project.revision<project.target){const result=await project.connector.sync();project.revision=result.revision;project.cacheDir=result.cacheDir;if(project.revision<project.target)throw new MachineError('stale-reference');}})();
   project.running=work;try{await work;}finally{delete project.running;}
  }
  async read(projectId:string,documentId?:string):Promise<unknown>{

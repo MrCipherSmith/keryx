@@ -1,5 +1,5 @@
-import{expect,test}from'bun:test';import{lstatSync,readFileSync,rmSync}from'node:fs';import path from'node:path';
-import{startMachineTrial,SERVE_ENTRY,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
+import{expect,test}from'bun:test';import{existsSync,lstatSync,readFileSync,readdirSync,rmSync}from'node:fs';import path from'node:path';
+import{startMachineTrial,SERVE_ENTRY,TRIAL_CONTEXT,TRIAL_INDEX,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
 import{canonicalDigest,type Control,type FrameOf}from'../../remote-control/protocol';import{createMachineCommandCatalogue}from'./production';import{localControlPath}from'./local-control';import{resolveRemoteProfile}from'../../harness/policy/profiles';
 type Trial=Awaited<ReturnType<typeof startMachineTrial>>;type RunEvent=FrameOf<'run-event'>['payload'];
 type Inventory={connected:boolean;inventory:{inventoryVersion:number;checkouts:{checkoutId:string;headSha:string;agentProfiles:{profileId:string;adapter:string;readiness:string;reason:string;capabilityDigest:string;policyDigest:string}[]}[]}|null};
@@ -17,6 +17,13 @@ function hubClient(trial:Trial){
 const processCommand=(pid:number)=>Bun.spawnSync(['ps','-o','command=','-p',String(pid)]).stdout.toString().trim();
 const processesWith=(marker:string)=>Bun.spawnSync(['ps','-axo','pid=,command=']).stdout.toString().split('\n').filter(line=>line.includes(marker));
 const notices=(target:TrialTarget)=>target.serve.stdout.flatMap(line=>{const m=/Hub machine: ([a-z0-9-]+)/.exec(line);return m?[m[1]!]:[];});
+/** The developer-visible checkout: its tracked index bytes and git's porcelain status (the trial's .metaproject/ local state is ignored). */
+const checkoutState=(target:TrialTarget)=>({index:readFileSync(path.join(target.cwd,'.metaproject','index.md'),'utf8'),status:Bun.spawnSync(['git','-C',target.cwd,'status','--porcelain=v1','--untracked-files=all'],{env:{...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'}}).stdout.toString()});
+/** The shared context the serve machine synced on connect, read from its own keryx-managed cache. */
+function syncedContext(target:TrialTarget):{revision:number;documents:{path:string;content:string}[]}{
+ const caches=existsSync(target.contextRoot)?readdirSync(target.contextRoot).map(dir=>path.join(target.contextRoot,dir,'context.json')).filter(file=>existsSync(file)):[];
+ expect(caches).toHaveLength(1);return JSON.parse(readFileSync(caches[0]!,'utf8')) as {revision:number;documents:{path:string;content:string}[]};
+}
 
 test('two keryx serve processes start their machine bridges through the shipped startup path and production profile resolution',async()=>{
  const trial=await startMachineTrial();try{
@@ -38,6 +45,8 @@ test('two keryx serve processes start their machine bridges through the shipped 
    // A Hub session is refused end to end: nothing starts on a checkout production resolution did not make ready.
    const profile=checkout.agentProfiles[0]!;expect(await hub.raw(`/hub/v2/projects/${trial.projectId}/sessions`,{machineId:target.machineId,checkoutId:target.checkoutId,agentProfileId:TRIAL_PROFILE,expectedInventoryVersion:machine.inventory!.inventoryVersion,expectedHeadSha:checkout.headSha,capabilityDigest:profile.capabilityDigest,policyDigest:profile.policyDigest,title:'Refused on an unready profile'})).toMatchObject({status:409,data:{error:{code:'stale-reference'}}});
   }else expect(checkout.agentProfiles[0]).toMatchObject({profileId:TRIAL_PROFILE,adapter:'keryx-native-v1',readiness:'ready',reason:'none',policyDigest:canonicalDigest(resolveRemoteProfile(TRIAL_PROFILE))});
+  // The project's shared Hub context synced on connect into the machine's own managed cache; the developer's checkout stayed untouched and clean.
+  expect(syncedContext(target).documents.map(d=>({path:d.path,content:d.content}))).toContainEqual(TRIAL_CONTEXT);expect(checkoutState(target)).toEqual({index:TRIAL_INDEX,status:''});
   expect(notices(target)).toEqual([]);
  }
  if(catalogueGaps.length>0)expect(trial.provider.calls).toEqual([]);
@@ -59,6 +68,13 @@ test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and
   const idle=()=>hub.wait(()=>hub.call<Control['SessionRecord']>(base),s=>s.state==='idle');
   const initial=await idle();const claim=await hub.call<Control['ControllerReceipt']>(`${base}/controller/claim`,{expectedSessionVersion:initial.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'});
   await hub.wait(()=>hub.call<Control['SessionRecord']>(base),s=>s.controller?.controllerLeaseId===claim.lease.controllerLeaseId&&s.sessionEventCursor>=initial.sessionEventCursor+2);const controller={controllerLeaseId:claim.lease.controllerLeaseId,expectedControllerVersion:claim.lease.version};
+  // The checkout synced its project's shared Hub context on connect and still hosts this session, its tracked index untouched.
+  expect(syncedContext(target).documents.map(d=>({path:d.path,content:d.content}))).toContainEqual(TRIAL_CONTEXT);expect(checkoutState(target)).toEqual({index:TRIAL_INDEX,status:''});
+  // A slash command exactly as the Hub web client sends it: the catalogue Hub publishes for this session, delivered to and applied by this serve child.
+  const published=await hub.call<Control['CommandCatalogue']>(`${base}/commands`);const ready=await idle();
+  const invoked=await hub.call<Control['CommandOutcome']>(`${base}/commands/invoke`,{expectedSessionVersion:ready.version,controller,expectedConfigVersion:ready.config.configVersion,catalogueDigest:published.catalogueDigest,commandName:'status',arguments:{},busyPolicy:'reject'});
+  const applied=await hub.wait(()=>hub.call<Control['CommandOutcome']>(`${base}/operations/${invoked.operationId}`),o=>o.status!=='queued');
+  expect({commandName:applied.commandName,status:applied.status,errorCode:applied.errorCode}).toEqual({commandName:'status',status:'applied',errorCode:null});
   const send=async(ordinal:number,text:string)=>{const session=await idle();const receipt=await hub.call<Control['TurnReceipt']>(`${base}/messages`,{expectedSessionVersion:session.version,expectedConfigVersion:session.config.configVersion,controller,text:trialTurn(ordinal,text),interpretation:'literal-message',busyPolicy:'enqueue',association:{mode:'ad-hoc',profileConsentVersion:1}});expect(receipt.status).toBe('admitted');if(receipt.runId===null)throw new Error('trial-turn-without-run');return{runId:receipt.runId};};
   const events=(runId:string)=>hub.call<{events:RunEvent[]}>(`${runs}/${runId}/events`);
   const approveOnce=async(runId:string)=>{const page=await hub.wait(()=>events(runId),p=>p.events.some(e=>e.kind==='approval-request'));const question=page.events.find((e):e is Extract<RunEvent,{kind:'approval-request'}>=>e.kind==='approval-request')!;const current=await hub.wait(()=>hub.call<{version:number;state:string}>(`${runs}/${runId}`),r=>r.state==='waiting-approval');const session=await hub.call<Control['SessionRecord']>(base);

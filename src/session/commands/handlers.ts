@@ -12,7 +12,7 @@ import type { TasksApprovalPort, TasksIntegrationsPort } from "./tasks-integrati
 import type { OwnedControlCommand } from "../../remote-control/owned-controls";
 import { questionCommands, type SessionQuestionPort } from "./questions";
 
-import { planCommands, type SessionRestriction } from "./plan";
+import { approvalModeCommands, planCommands, type SessionRestriction } from "./plan";
 import { sessionSettingsCommands } from "./session-settings";
 import { goalCommands } from "./goal";
 import { sessionControlCommands } from "./session-control";
@@ -47,7 +47,8 @@ export interface SessionCommandContext {
   history(): NormalizedMessage[];
   publicHistory?(): Control["SessionMessage"][];
   contributions?: readonly NativeCommandContribution[];
-  compact(): { removed: number; noop: boolean };
+  /** Host-owned compaction of the active context; `focus` is carried into the compaction summary, as the TUI `/compact <focus>` does. */
+  compact(options?: { focus?: string }): { removed: number; noop: boolean };
 }
 export interface NativeCommandContribution {
   entry: Control["CommandCatalogueEntry"];
@@ -59,7 +60,7 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
   const entry = context.catalogue.entries.find((item) => item.commandName === request.commandName);
   let errorCode: Control["CommandOutcome"]["errorCode"] = null;
   let result: unknown = null;
-  const contribution = [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...settingsInspectionCommands(), ...(context.contributions ?? [])].reverse().find((item) => item.entry.commandName === request.commandName);
+  const contribution = [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...approvalModeCommands(), ...settingsInspectionCommands(), ...(context.contributions ?? [])].reverse().find((item) => item.entry.commandName === request.commandName);
   if (request.catalogueDigest !== context.catalogue.catalogueDigest) errorCode = "stale-catalogue";
   else if (request.expectedConfigVersion !== context.record.config.configVersion) errorCode = "policy-changed";
   else if (entry === undefined) errorCode = "unknown-command";
@@ -86,7 +87,7 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
         else result = args.effort;
       }
     }
-  } else if (request.arguments === null || typeof request.arguments !== "object" || Array.isArray(request.arguments) || (request.commandName !== "history" && Object.keys(request.arguments).length !== 0)) errorCode = "invalid-arguments";
+  } else if (request.arguments === null || typeof request.arguments !== "object" || Array.isArray(request.arguments) || (!["history", "compact"].includes(request.commandName) && Object.keys(request.arguments).length !== 0)) errorCode = "invalid-arguments";
   else {
     const handlers: Record<string, () => unknown> = {
       help: () => context.catalogue,
@@ -95,7 +96,7 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
       routing: () => context.record.config.routing,
       history: () => { const all = context.publicHistory?.() ?? []; const count = (request.arguments as { count?: number }).count; return count === undefined ? all : all.slice(-count); },
       tasks: () => context.runtime.jobs.list().map((item) => ({ taskId: item.jobId, status: item.status, description: item.description ?? "" })),
-      compact: context.compact,
+      compact: () => { const focus = (request.arguments as { focus?: string }).focus; return context.compact(focus === undefined ? undefined : { focus }); },
       queue: () => ({ status: context.record.state, queueVersion: context.record.queueVersion }),
     };
     result = handlers[request.commandName]?.() ?? null;

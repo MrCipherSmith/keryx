@@ -23,6 +23,11 @@ type Options = {
     token?: string;
     tokenEnv?: string;
     cacheRoot?: string;
+    /**
+     * Whether a sync also maintains the checkout's `.metaproject/index.md` pointer to the shared cache (default true: standalone
+     * `keryx hub sync`/watch). False keeps the synced context in the cache alone and never writes the checkout.
+     */
+    checkoutIndex?: boolean;
 };
 const digest = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 async function atomic(path: string, value: unknown) {
@@ -278,10 +283,12 @@ export class HubConnector {
             const changed = bytes !== prior.bytes;
             if (changed) await replaceContextFile(cacheFile, bytes, signal);
             revision = context.revision;
-            try { await this.updateContextIndex(binding, cacheDir, signal); }
-            catch (_error) {
-                signal?.throwIfAborted();
-                throw new HubSyncError("index-update-failed", revision);
+            if (this.options.checkoutIndex !== false) {
+                try { await this.updateContextIndex(binding, cacheDir, signal); }
+                catch (_error) {
+                    signal?.throwIfAborted();
+                    throw new HubSyncError("index-update-failed", revision);
+                }
             }
             return { cacheDir, revision, changed };
         } catch (error) {
@@ -299,7 +306,7 @@ export class HubConnector {
         if (!cached.value) throw new HubSyncError("invalid-cache");
         options.signal?.throwIfAborted();
         await this.validateMetaIndex();
-        await this.updateContextIndex(binding, cacheDir, options.signal);
+        if (this.options.checkoutIndex !== false) await this.updateContextIndex(binding, cacheDir, options.signal);
     }
     private async updateContextIndex(binding: HubBinding, cacheDir: string, signal?: AbortSignal): Promise<void> {
         const index = join(this.cwd, ".metaproject", "index.md");

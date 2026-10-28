@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { canonicalDigest } from "../src/remote-control/protocol";
-import { receiptParity, type NativeCoverageDescriptor } from "../src/session/commands/coverage";
+import { checkNativeCommandCoverage, receiptParity, registeredNativeCommandNames, type NativeCoverageDescriptor, type NativeNormalizedOutcome } from "../src/session/commands/coverage";
 import { checkEmbeddedDescriptor, collectParityRun, DESCRIPTOR_PATH, INVENTORY_PATH, judgeNativeCoverage, readInventory, receiptsFor, sourceHashes } from "./verify-native-coverage";
 
 const root = resolve(import.meta.dir, "..");
@@ -40,6 +40,24 @@ test("receipts come from executing the same variant through the real terminal ad
   for (const receipt of receipts) expect(receipt.sources.every((source) => /^[a-f0-9]{64}$/.test(source.sha256))).toBe(true);
 }, 120_000);
 
+test("lifecycle variants run bridge-hosted: both paths reach a real enrolled MachineBridge only through Hub v2, and outcomes are the final operation receipts", async () => {
+  const inventory = await readInventory(root);
+  const lifecycle = ["new.default", "clear.default", "resume.picker", "sessions.picker", "sessions.open", "sessions.resume", "sessions.fork"];
+  const run = await collectParityRun(root, inventory, ["status.default", ...lifecycle]);
+  const receipts = receiptsFor(inventory, run, await sourceHashes(root, inventory));
+  const parity = Object.fromEntries(receipts.map((receipt) => [receipt.variantId, { ...receiptParity(receipt), receipt }]));
+  // The subject is the machine-hosted catalogue: the bridge's authenticated lifecycle port is advertised, and the non-bridge hosts agree on it.
+  for (const name of ["new", "clear", "resume", "sessions", "sessions.open", "sessions.resume", "sessions.fork"]) expect(run.catalogue.entries.find((entry) => entry.commandName === name)).toMatchObject({ availability: "available", reason: "authenticated-machine-lifecycle-port" });
+  expect(parity["status.default"]).toMatchObject({ matched: true, admitted: true });
+  // Hub first answers pending/queued; the receipt holds the machine's final applied outcome on both paths.
+  for (const id of ["new.default", "clear.default"]) expect(parity[id]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "applied", errorCode: null } }, headless: { outcome: { status: "applied", errorCode: null } } } });
+  for (const id of ["resume.picker", "sessions.picker"]) expect(parity[id]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "applied" } }, headless: { arguments: {}, outcome: { status: "applied" } } } });
+  // The typed selection forms apply through the Hub against real prior sessions and a second mapped checkout, from the terminal text form
+  // (`/sessions open|resume <id>`, `/sessions fork <checkout> <title>`) as from the typed request: every pin is read fresh from Hub.
+  expect(parity["sessions.fork"]).toMatchObject({ receipt: { local: { line: "/sessions fork checkout-2 Fork" } } });
+  for (const id of ["sessions.open", "sessions.resume", "sessions.fork"]) expect(parity[id]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "applied", errorCode: null } }, headless: { outcome: { status: "applied", errorCode: null } } } });
+}, 180_000);
+
 test("release guard re-executes the committed inventory: the embedded descriptor is current, not release-ready, and stale/tampered/missing evidence fails closed", async () => {
   const inventory = await readInventory(root);
   const hashes = await sourceHashes(root, inventory);
@@ -50,12 +68,31 @@ test("release guard re-executes the committed inventory: the embedded descriptor
   // Required gaps stay open and visible, so the release guard refuses.
   expect(checkEmbeddedDescriptor(verification, descriptor, true)).toEqual({ ok: false, code: "not-release-ready" });
   const gaps = descriptor.requiredGaps.map((gap) => gap.variantId);
-  for (const id of ["new.default", "compact.focus", "risk.working-diff", "conform.run", "rewind.apply", "queue.force"]) expect(gaps).toContain(id);
+  for (const id of ["risk.working-diff", "conform.run", "queue.force"]) expect(gaps).toContain(id);
   // Telegram remote control is a cited spec-3.1 capability boundary, neither earned nor a hidden gap.
   for (const id of ["remote-control.on", "remote-control.name", "remote-control.off", "remote-control.status"]) { expect(descriptor.boundaries).toContain(id); expect(gaps).not.toContain(id); }
   expect(descriptor.releaseReady).toBe(false);
   expect(descriptor.earned).toEqual(expect.arrayContaining(["status.default", "help.default", "interrupt.default", "settings.read", "tasks.kill", "demote.task-id", "flows.list", "ac.cached", "rewind.picker", "mcp.status", "bus.modal", "mode.show",
-    "model.select", "connect.select", "connect.test", "autoreview.start", "autoreview.stop", "bus.send", "goal.-workspace", "approvals.allow-once", "queue.remove-N", "reasoning.show"]));
+    "model.select", "connect.select", "connect.test", "autoreview.start", "autoreview.stop", "bus.send", "goal.-workspace", "approvals.allow-once", "queue.remove-N", "reasoning.show",
+    "new.default", "clear.default", "resume.picker", "sessions.picker", "sessions.open", "sessions.resume", "sessions.fork", "compact.focus", "mode.ask"]));
+  // A lifecycle receipt binds the bridge and Hub lifecycle sources it ran through: a changed bridge makes it stale.
+  const bridgeStale = structuredClone(inventory);
+  const created = bridgeStale.commands.find((command) => command.commandName === "new")!;
+  const pin = created.sources.findIndex((source) => source.path === "src/lib/hub-machine/bridge.ts");
+  expect(pin).toBeGreaterThanOrEqual(0);
+  created.sources[pin] = { ...created.sources[pin]!, sha256: "0".repeat(64) };
+  expect((await judgeNativeCoverage(root, bridgeStale, run, hashes, false)).result.blockers.map((row) => `${row.code}:${row.subject}`))
+    .toEqual(expect.arrayContaining(["source-drift:new:src/lib/hub-machine/bridge.ts", "stale-receipt:new.default"]));
+  // A Hub acknowledgement the machine never settled is recorded as such and never earns, even when both paths agree on it.
+  const unsettled: NativeNormalizedOutcome = { status: "unsettled", errorCode: "no-final-receipt", confirmation: false, resultDigest: null };
+  const neverSettled = await judgeNativeCoverage(root, inventory, { ...run, outcomes: run.outcomes.map((outcome) => outcome.variantId === "new.default" ? { ...outcome, local: unsettled, headless: unsettled } : outcome) }, hashes, false);
+  expect(neverSettled.result.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: "required-behaviour-refused", subject: "new.default" })]));
+  // A forged lifecycle receipt (an outcome edited without re-deriving its digest) and an omitted one are refused.
+  const subject = { cwd: root, registryNames: registeredNativeCommandNames(), catalogue: run.catalogue, inventory };
+  const forged = verification.receipts.map((receipt) => receipt.variantId === "clear.default" ? { ...receipt, local: { ...receipt.local, outcome: { ...receipt.local.outcome, resultDigest: "f".repeat(64) } } } : receipt);
+  expect((await checkNativeCommandCoverage({ ...subject, receipts: forged })).blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: "tampered-receipt", subject: "clear.default" })]));
+  expect((await checkNativeCommandCoverage({ ...subject, receipts: verification.receipts.filter((receipt) => receipt.variantId !== "sessions.picker") })).blockers)
+    .toEqual(expect.arrayContaining([expect.objectContaining({ code: "missing-current-evidence", subject: "sessions.picker" })]));
   // A changed source the audit was pinned to: receipts bind the actual bytes, so the committed audit is stale.
   const stale = structuredClone(inventory);
   const status = stale.commands.find((command) => command.commandName === "status")!;
@@ -84,7 +121,7 @@ test("shipped readiness validates only the embedded descriptor and fails closed 
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: (line) => lines.push(line) })).rejects.toThrow("native-coverage-not-ready");
     const report = JSON.parse(lines[0]!) as { descriptorValid: boolean; releaseReady: boolean; descriptorDigest: string; requiredGaps: string[] };
     expect(report).toMatchObject({ descriptorValid: true, releaseReady: false, descriptorDigest: (await embedded()).descriptorDigest });
-    expect(report.requiredGaps).toContain("new.default");
+    expect(report.requiredGaps).toContain("queue.force");
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: () => {}, nativeCoverageDescriptor: null })).rejects.toThrow("native-coverage-descriptor-missing");
     const forged = { ...structuredClone(await embedded()), releaseReady: true, requiredGaps: [], otherBlockers: [] };
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: () => {}, nativeCoverageDescriptor: forged })).rejects.toThrow("native-coverage-descriptor-tampered");

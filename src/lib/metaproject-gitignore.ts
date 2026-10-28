@@ -396,6 +396,9 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/security/raw/**
 .metaproject/data/security/artifacts/latest.md
 .metaproject/data/security/artifacts/latest.json
+# The impact-evidence gate's per-session touch state and event log, written on a
+# session's first edit of each file: per-machine runtime state.
+.metaproject/data/security/impact-evidence/
 # Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
 # gdctx write path on every call, not a project artifact. These lines were added
 # to this repository's .gitignore by hand INSIDE the managed block, where the

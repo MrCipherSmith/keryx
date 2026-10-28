@@ -3,7 +3,7 @@ import { createNativeRewindPort, rewindCommands, type RewindEffectInput, type Na
 import { createNativeOwnedGit } from "./native-owned-git";
 import { activeArchiveIndices, type NativeContextReset } from "./host-context";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalDigest, LIMITS, validateArguments, validateControl, type Control } from "../remote-control/protocol";
 import { keryxConfigDir } from "../lib/config-dir";
@@ -11,11 +11,11 @@ import { redactSensitiveText } from "../security/redact";
 import { openLeasedSession, releaseSessionLease } from "./lease";
 import { persistHistory, forkSession, loadArchive, loadContext } from "./store";
 import { compactMessages } from "./compact";
-import { createCommandCatalogue } from "./commands/catalogue";
+import { createHostCommandCatalogue } from "./commands/catalogue";
 import { executeSessionCommand } from "./commands/handlers";
 import type { SessionCommandContext } from "./commands/handlers";
 import type { SessionCommandEffect, SessionCommandInspection } from "./commands/effects";
-import { executePlanCommand, type SessionRestriction } from "./commands/plan";
+import { executePlanCommand, sessionRestrictionDigest, type SessionRestriction } from "./commands/plan";
 import { sessionConfigProposal, sessionConfigCommandResult } from "./commands/session-settings";
 import { requestSessionInterrupt } from "./commands/session-control";
 import { executeReasoningCommand } from "./commands/reasoning";
@@ -124,9 +124,10 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       controllerClaims.set(value.commandId, { commandDigest: value.commandDigest, receipt: checked("ControllerReceipt", value.receipt) });
     }
     if (Array.isArray(saved.restrictions)) for (const value of saved.restrictions) {
-      if (!object(value) || typeof value.enabled !== "boolean" || !Number.isSafeInteger(value.configVersion) || !Number.isSafeInteger(value.effectiveFromTurnOrdinal)
-        || value.restrictionDigest !== canonicalDigest({ enabled: value.enabled, policyDigest: record.config.policyDigest })) throw new SessionHostError("invalid-local-session-restriction");
-      restrictions.set(Number(value.configVersion), { enabled: value.enabled, configVersion: Number(value.configVersion), effectiveFromTurnOrdinal: Number(value.effectiveFromTurnOrdinal), restrictionDigest: String(value.restrictionDigest) });
+      if (!object(value) || typeof value.enabled !== "boolean" || !Number.isSafeInteger(value.configVersion) || !Number.isSafeInteger(value.effectiveFromTurnOrdinal) || (value.approvalMode !== undefined && value.approvalMode !== "ask")
+        || value.restrictionDigest !== sessionRestrictionDigest({ enabled: value.enabled, ...(value.approvalMode === "ask" ? { approvalMode: "ask" } : {}) }, record.config.policyDigest)) throw new SessionHostError("invalid-local-session-restriction");
+      restrictions.set(Number(value.configVersion), { enabled: value.enabled, configVersion: Number(value.configVersion), effectiveFromTurnOrdinal: Number(value.effectiveFromTurnOrdinal), restrictionDigest: String(value.restrictionDigest),
+        ...(value.approvalMode === "ask" ? { approvalMode: "ask" as const } : {}) });
     }
     if (Array.isArray(saved.configCommandNames)) for (const value of saved.configCommandNames) {
       if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== "string" || !["reasoning", "model", "connect.select", "route.set", "routing.configure"].includes(value[1])) throw new SessionHostError("invalid-local-config-command");
@@ -162,10 +163,13 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   if (!restrictions.has(record.config.configVersion)) {
     if (hadLocalState) record.state = "recovery-required";
     const initial = hadLocalState ? undefined : options.initialRestriction;
-    if (initial !== undefined && (initial.configVersion !== record.config.configVersion || initial.restrictionDigest !== canonicalDigest({ enabled: initial.enabled, policyDigest: record.config.policyDigest }))) throw new SessionHostError("invalid-initial-session-restriction");
+    if (initial !== undefined && (initial.configVersion !== record.config.configVersion || (initial.approvalMode !== undefined && initial.approvalMode !== "ask")
+      || initial.restrictionDigest !== sessionRestrictionDigest(initial, record.config.policyDigest))) throw new SessionHostError("invalid-initial-session-restriction");
+    // A restriction lost from local state comes back at its narrowest.
     const enabled = hadLocalState || initial?.enabled === true;
+    const approvalMode = hadLocalState || initial?.approvalMode === "ask" ? "ask" as const : undefined;
     restrictions.set(record.config.configVersion, { enabled, configVersion: record.config.configVersion, effectiveFromTurnOrdinal: initial?.effectiveFromTurnOrdinal ?? 1,
-      restrictionDigest: canonicalDigest({ enabled, policyDigest: record.config.policyDigest }) });
+      ...(approvalMode === undefined ? {} : { approvalMode }), restrictionDigest: sessionRestrictionDigest({ enabled, approvalMode }, record.config.policyDigest) });
   }
   let opened = openLeasedSession({ cwd: options.cwd, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }), ...(nativeId === undefined ? {} : { resumeId: nativeId }) });
   // A handle another runtime of this process left unproven stays fenced: this host can neither run on it nor release it.
@@ -181,7 +185,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const scopedRewind = <T>(scope: RewindScope, invoke: () => Promise<T>): Promise<T> => { const task = rewindSerial.then(async () => { scope.signal.throwIfAborted(); rewindScope = scope; try { return await invoke(); } finally { rewindScope = undefined; } }); rewindSerial = task.catch(() => undefined); return task; };
   let archiveCursor = history.length;
   options.runtime.bindSessionDir(handle.dir);
-  options.runtime.bindRestrictions((version) => restriction(version).enabled);
+  options.runtime.bindRestrictions((version) => restriction(version).enabled, (version) => restriction(version).approvalMode === "ask");
   options.runtime.bindWorkspace(options.workspace);
   options.runtime.bindProjectContext(options.projectContext, options.inspectionMode ?? "hub-remote");
   const routing = options.runtime.routing(record.config);
@@ -371,7 +375,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
             const before = await options.workspace.verify(record.workspaceBaseline); if (!before.ok) throw new SessionHostError("workspace-conflict");
             if (recorder !== undefined) { try { await scopedRewind({ kind: "run", signal: abort.signal, beforeAction: (toolName) => io.beforeAction!({ kind: "tool", toolName, signal: abort.signal }) }, () => recorder!.beforeMutation()); }
               catch (cause) { if (abort.signal.aborted) throw cause; if (options.runtime.jobs.list().some(task => task.visibility === "private" && task.status === "running")) { record.state = "recovery-required"; state(); throw new SessionHostError("checkpoint-stop-unconfirmed"); }
-                publishMessage("system-receipt", "A complete checkpoint is unavailable for this turn; ordinary coding continues within its existing policy.", operation.runId, operation.turnId); }
+                // Only a code-shaped cause is shown: a raw Git message can carry local paths.
+                const unavailable = cause instanceof Error && /^[a-z0-9-]{1,64}$/.test(cause.message) ? cause.message : "checkpoint-capture-failed";
+                publishMessage("system-receipt", `A complete checkpoint is unavailable for this turn (${unavailable}); ordinary coding continues within its existing policy.`, operation.runId, operation.turnId); }
             } const verified = await options.workspace.verify(record.workspaceBaseline); if (!verified.ok) throw new SessionHostError("workspace-conflict"); },
           onToolCall: (toolName) => observe({ kind: "progress", text: `Tool: ${toolName}`, toolName }),
           onToolResult: (toolName, result) => { const refusal = result.isError ? /^workspace-refused:([a-z0-9-]{1,64})$/.exec(result.output)?.[1] : undefined;
@@ -667,12 +673,13 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     record.queueVersion++; return item;
   };
   const contributions = () => [...options.runtime.commandContributions(), ...lifecycleCommands(options.lifecycle !== undefined), ...rewindCommands(rewindPort !== undefined)];
-  const catalogue = () => createCommandCatalogue(record.config.capabilityDigest, contributions());
+  const catalogue = () => createHostCommandCatalogue(record.config.capabilityDigest, { contributions: options.runtime.commandContributions(), lifecycle: options.lifecycle !== undefined, rewind: rewindPort !== undefined });
   const commandContext = (operationId: string, effect?: SessionCommandEffect, inspection?: SessionCommandInspection): SessionCommandContext => ({ cwd: options.cwd, nativeSessionDir: handle.dir,
     inspectionMode: options.inspectionMode ?? "hub-remote", ...(options.projectContext === undefined ? {} : { projectContext: options.projectContext }),
     ...((options.configDir ?? options.dataDir) === undefined ? {} : { configDir: options.configDir ?? options.dataDir }), ...(effect === undefined ? {} : { effect, runId: effect.runId, turnId: effect.turnId }),
     operationId, questions, restriction, ...(rewindPort === undefined ? {} : { rewind: rewindPort }), close: closeForCommand, record, catalogue: catalogue(), runtime: options.runtime, contributions: contributions(), ...(inspection === undefined ? {} : { inspection }),
-    history: () => history, publicHistory: () => structuredClone(publicHistory), compact: () => { const result = compactMessages(history); history.splice(0, history.length, ...result.context); archiveCursor = history.length; syncHistory(); return { removed: result.removed, noop: result.noop }; },
+    history: () => history, publicHistory: () => structuredClone(publicHistory), compact: (compaction) => { const result = compactMessages(history, compaction?.focus === undefined ? {} : { focus: compaction.focus });
+      history.splice(0, history.length, ...result.context); archiveCursor = history.length; syncHistory(); return { removed: result.removed, noop: result.noop }; },
   });
   const inspectCommand = (operation: Extract<SessionHostOperation, { kind: "command" }>) => {
     const abort = new AbortController(); let finish!: () => void;
@@ -812,13 +819,32 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       pendingPlans.set(card.confirmationId, { operation, enabled, confirmation: card });
     } else if (restriction().enabled !== enabled) {
       const applied = executePlanCommand(enabled ? "on" : "off", { current: restriction().enabled, commit() {} }); if (!applied.ok) throw new SessionHostError("invalid-plan-operation");
+      // Plan toggles only readonly; an approval narrowing already in force carries over unchanged.
+      const { approvalMode } = restriction();
       record.config = { ...record.config, configVersion: record.config.configVersion + 1 }; record.version++;
       restrictions.set(record.config.configVersion, { enabled: applied.enabled, configVersion: record.config.configVersion, effectiveFromTurnOrdinal: record.nextTurnOrdinal,
-        restrictionDigest: canonicalDigest({ enabled: applied.enabled, policyDigest: record.config.policyDigest }) });
+        ...(approvalMode === undefined ? {} : { approvalMode }), restrictionDigest: sessionRestrictionDigest({ enabled: applied.enabled, approvalMode }, record.config.policyDigest) });
       pendingConfigurations.clear(); pendingExecutions.clear(); pendingPlans.clear();
     }
     const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: "plan.set", status, sessionVersion: record.version,
       result: status === "applied" ? restriction() : null, confirmationId: card?.confirmationId ?? null, errorCode: status === "rejected" ? "busy" : null, confirmation: card, runId: null, turnId: null });
+    remember(operation, outcome); emit({ kind: "command-outcome", outcome }); emit({ kind: "session-state", session: structuredClone(record) }); return outcome;
+  };
+  /**
+   * `/mode ask`: the host-owned approval narrowing. Like plan readonly it is a new config version applied at an idle boundary, effective
+   * from the next turn; unlike plan it is one-way: repeating it changes nothing, and no native command, config change or lifecycle child lifts it.
+   */
+  const applyApprovalMode = (operation: Extract<SessionHostOperation, { kind: "command" }>): Control["CommandOutcome"] => {
+    const busy = active !== undefined || pendingQueueCount() > 0;
+    if (!busy && restriction().approvalMode !== "ask") {
+      const { enabled } = restriction();
+      record.config = { ...record.config, configVersion: record.config.configVersion + 1 }; record.version++;
+      restrictions.set(record.config.configVersion, { enabled, configVersion: record.config.configVersion, effectiveFromTurnOrdinal: record.nextTurnOrdinal, approvalMode: "ask",
+        restrictionDigest: sessionRestrictionDigest({ enabled, approvalMode: "ask" }, record.config.policyDigest) });
+      pendingConfigurations.clear(); pendingExecutions.clear(); pendingPlans.clear();
+    }
+    const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: "mode.ask", status: busy ? "rejected" : "applied", sessionVersion: record.version,
+      result: busy ? null : restriction(), confirmationId: null, errorCode: busy ? "busy" : null, confirmation: null, runId: null, turnId: null });
     remember(operation, outcome); emit({ kind: "command-outcome", outcome }); emit({ kind: "session-state", session: structuredClone(record) }); return outcome;
   };
   const closeOwnedIdleSession = async (): Promise<{ status: "closed" | "recovery-required" }> => {
@@ -1063,6 +1089,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       }
       if (request.commandName === "plan.set" && entry?.availability === "available" && request.catalogueDigest === catalogue().catalogueDigest && request.expectedConfigVersion === record.config.configVersion
         && canonicalDigest(request) === operation.payloadDigest && validateArguments(entry.inputSchema, request.arguments).ok) return applyPlan(operation, (request.arguments as { enabled: boolean }).enabled);
+      if (request.commandName === "mode.ask" && entry?.availability === "available" && request.catalogueDigest === catalogue().catalogueDigest && request.expectedConfigVersion === record.config.configVersion
+        && canonicalDigest(request) === operation.payloadDigest && validateArguments(entry.inputSchema, request.arguments).ok) return applyApprovalMode(operation);
       const proposedConfig = sessionConfigProposal(request, record.config);
       if ((request.commandName === "reasoning" || proposedConfig !== undefined) && entry?.availability === "available" && request.catalogueDigest === catalogue().catalogueDigest
         && request.expectedConfigVersion === record.config.configVersion && validateArguments(entry.inputSchema, request.arguments).ok) {
@@ -1163,7 +1191,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     const ownership = () => { assertOwner(); const held = owner.ownership(); return { sessionId: record.sessionId, nativeSessionId: handle.summary.id, checkoutId: record.checkoutId, nonce: held.nonce, gitHead: held.gitHead, workspaceBaseline: record.workspaceBaseline, historyVersion: rewindScope?.historyVersion ?? record.historyVersion }; };
     const ownedGit = createNativeOwnedGit({ cwd: options.cwd, sessionDir: handle.dir, jobs: options.runtime.jobs, assertOwnership: assertOwner, spawn: spawnOwnedGit,
       authorize: async request => { if (rewindScope === undefined || rewindScope.signal.aborted || rewindScope.kind === "inspection" && !request.readOnly) throw new SessionHostError("rewind-authority-required"); await rewindScope.beforeAction(request.readOnly ? "rewind:private-read" : "rewind:private-preparation"); } });
-    recorder = createRewindRecorder({ workTree: options.cwd, dir: () => join(handle.dir, "rewind"), enabled: () => true,
+    // The owned Git boundary admits only the canonical shadow repository, so the recorder names it by the same resolved session dir.
+    recorder = createRewindRecorder({ workTree: options.cwd, dir: () => join(realpathSync(handle.dir), "rewind"), enabled: () => true,
       native: { runGit: request => ownedGit.run(request), signal: () => { if (rewindScope === undefined) throw new SessionHostError("rewind-authority-required"); return rewindScope.signal; }, assertOwnership: assertOwner, validatePaths: owner.validatePaths,
         currentPaths: () => owner.ownership().paths, ownership } });
     const actual = createNativeRewindPort({ cwd: options.cwd, recorder, history, archive: activeArchive, ownership,

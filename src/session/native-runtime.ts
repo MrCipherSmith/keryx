@@ -166,6 +166,7 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
   let sessionAskUser: AskUserFn | undefined;
   let liveAction: AgentIO["beforeAction"];
   let restrictionForVersion: (version: number) => boolean = () => false;
+  let approvalForVersion: (version: number) => boolean = () => false;
   const children = new Map<Promise<unknown>, JobOwner | undefined>();
   const spawn = createSpawnSubagentTool({ cwd: options.cwd, nativeOnly: true,
     childTools: (cwd) => {
@@ -251,7 +252,8 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       const result = await services.close(); if (result.stopped) { detachServiceTools(); services = undefined; }
       return result;
     },
-    bindRestrictions(readOnly: (version: number) => boolean) { restrictionForVersion = readOnly; },
+    /** The host's versioned restrictions: readonly, and the approval narrowing under which every mutating tool call asks. */
+    bindRestrictions(readOnly: (version: number) => boolean, askApproval?: (version: number) => boolean) { restrictionForVersion = readOnly; if (askApproval !== undefined) approvalForVersion = askApproval; },
     bindAskUser(ask: AskUserFn) { sessionAskUser = ask; },
     bindSessionDir(dir: string) { sessionDir = dir; slateSession = { dir, cwd: options.cwd, opened: false }; },
     bindProjectContext(port: SessionProjectReadPort | undefined, mode: "hub-remote" | "local-native" = "hub-remote") { projectContext = port; inspectionMode = mode; },
@@ -332,7 +334,9 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       };
       let result: RunAgentTurnResult = {};
       const readOnly = restrictionForVersion(snapshot.config.configVersion) || (io.readOnly?.() ?? false);
-      const scopedIo = { ...io, readOnly: () => readOnly, beforeAction: liveAction, requestApproval: approve };
+      // Under the approval narrowing no caller-supplied mode may auto-approve: the engine's "ask" gate prompts for every non-read call.
+      const askApproval = approvalForVersion(snapshot.config.configVersion);
+      const scopedIo: AgentIO = { ...io, readOnly: () => readOnly, ...(askApproval ? { permissionMode: () => "ask" as const } : {}), beforeAction: liveAction, requestApproval: approve };
       const nativeOptions = { ...turnOptions, origin: turnOptions.origin ?? "operator", ...(slateSession === undefined ? {} : { slateSession }),
         ...(onContextCompaction === undefined ? {} : { pruneArchive: true }) };
       if (turnOptions.nativeGoal === undefined) result = await runAgentTurn(scopedIo, deps, history, text, nativeOptions);

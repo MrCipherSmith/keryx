@@ -5,7 +5,8 @@ import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ContainedWriteError } from "../lib/contained-write";
-import { appendLogRecord, impactEvidenceDataRoot, loadSessionState, saveSessionState } from "./state";
+import { isMetaprojectManagedPath } from "../lib/metaproject-gitignore";
+import { appendLogRecord, impactEvidenceDataRoot, loadSessionState, logPath, saveSessionState } from "./state";
 
 describe("impact-evidence session state", () => {
   let root = "";
@@ -51,6 +52,14 @@ describe("impact-evidence session state", () => {
     await saveSessionState(root, "session-ack", { touched: [], denials: {}, pendingAck: ["src/x.ts"] });
     const state = await loadSessionState(root, "session-ack");
     expect(state.pendingAck).toEqual(["src/x.ts"]);
+  });
+
+  test("every file the gate writes during a session is keryx-managed runtime data, never an owned workspace change", async () => {
+    await saveSessionState(root, "native-session", { touched: ["src/x.ts"], denials: {} });
+    await appendLogRecord(root, { sessionId: "native-session", event: "injected", files: ["src/x.ts"] });
+    const written = [logPath(root), ...(await readdir(path.join(impactEvidenceDataRoot(root), "sessions"))).map((name) => path.join(impactEvidenceDataRoot(root), "sessions", name))];
+    expect(written).toHaveLength(2);
+    for (const file of written) expect(isMetaprojectManagedPath(path.relative(root, file).split(path.sep).join("/"))).toBe(true);
   });
 });
 

@@ -4,16 +4,16 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
   "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
-  "contractDigest": "df0ff4e9b286a07aac422279dab1fe261c809f191da178918141815759c801d4",
-  "subjectCatalogueDigest": "2f1c5b9272b094959bcff57afc7004c89323918892f3b18dfe7bbd4f8e555cf1",
-  "inventoryDigest": "f1887d9f8b4f28f5811b981e840e3df747b959dc225a9bfe18857acfcec2c92e",
+  "contractDigest": "15091f70a82204cd27b424f7d738a3be7d9b5c0ca49fc92f9a5e1c12bbe19c4d",
+  "subjectCatalogueDigest": "a07d6244fe6aa8f7049dc08c9d3c67629419a737c0272e638c95927babad9690",
+  "inventoryDigest": "ef30b19cc6e84432c7a9b3a5106b8e6f71574cdcf3ae5df800f953c88be49a72",
   "releaseReady": false,
   "counts": {
     "registeredCommands": 74,
     "variants": 261,
     "required": 169,
-    "earned": 121,
-    "requiredGaps": 48,
+    "earned": 135,
+    "requiredGaps": 34,
     "boundaries": 92,
     "otherBlockers": 0
   },
@@ -40,7 +40,9 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "bus.send",
     "channels.status",
     "ci.list",
+    "clear.default",
     "compact.default",
+    "compact.focus",
     "conform.setup",
     "connect.list",
     "connect.select",
@@ -76,9 +78,11 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "mcp.trust-list",
     "mcp.trust-revoke-all",
     "mcp.trust-revoke-fqn",
+    "mode.ask",
     "mode.show",
     "model.list",
     "model.select",
+    "new.default",
     "notes.key",
     "permissions.list",
     "plan.off",
@@ -102,13 +106,19 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "reasoning.off",
     "reasoning.show",
     "reasoning.xhigh",
+    "resume.picker",
     "review.catch-up",
     "review.layers",
     "review.parity",
     "review.readiness",
     "reviews.depth",
     "reviews.metrics",
+    "rewind.apply",
+    "rewind.both",
+    "rewind.files",
+    "rewind.history",
     "rewind.picker",
+    "rewind.preview",
     "route.inspection",
     "route.off",
     "route.on",
@@ -118,6 +128,10 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "schedules.list",
     "search-connect.list",
     "search-provider.list",
+    "sessions.fork",
+    "sessions.open",
+    "sessions.picker",
+    "sessions.resume",
     "settings.read",
     "setup.init",
     "setup.refresh",
@@ -160,16 +174,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "variantId": "ci.triage",
       "code": "required-implementation-gap",
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
-    },
-    {
-      "variantId": "clear.default",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "compact.focus",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
       "variantId": "conform.clause-detail",
@@ -247,16 +251,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
     },
     {
-      "variantId": "mode.ask",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "new.default",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
       "variantId": "opencomments.repo-pr",
       "code": "required-implementation-gap",
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless not sent."
@@ -287,36 +281,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "resume.picker",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "rewind.apply",
-      "code": "required-implementation-gap",
-      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
-    },
-    {
-      "variantId": "rewind.both",
-      "code": "required-implementation-gap",
-      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
-    },
-    {
-      "variantId": "rewind.files",
-      "code": "required-implementation-gap",
-      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
-    },
-    {
-      "variantId": "rewind.history",
-      "code": "required-implementation-gap",
-      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
-    },
-    {
-      "variantId": "rewind.preview",
-      "code": "required-implementation-gap",
-      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
-    },
-    {
       "variantId": "risk.working-diff",
       "code": "required-implementation-gap",
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
@@ -335,26 +299,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "variantId": "search-connect.select",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "sessions.fork",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
-    },
-    {
-      "variantId": "sessions.open",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
-    },
-    {
-      "variantId": "sessions.picker",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "sessions.resume",
-      "code": "required-implementation-gap",
-      "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
     },
     {
       "variantId": "staledocs.working-diff",
@@ -477,5 +421,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "bfc56e575b9acba0cc19f69a209b3c095ed7cc920e6931ef1ea8dfcc5bdd0a42"
+  "descriptorDigest": "0c2db9d66538bb40733b068f7227fb84702205729e8739693e95f21745102147"
 };

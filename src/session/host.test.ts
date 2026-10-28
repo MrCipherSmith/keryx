@@ -974,6 +974,89 @@ test("plan narrows the next immutable turn before approvals and restores only th
   } finally { await host.dispose(); }
 });
 
+test("compact with a focus keeps the operator's focus in the compaction summary the next turn's model reads", async () => {
+  const { host, provider } = await fixture([okReply, okReply, okReply, okReply, okReply]);
+  const invoke = async (args: Control["BoundedJson"], id: string) => { const row = await host.inspect(); const cat = await host.catalogue(); const request: Control["CommandInvoke"] = { commandName: "compact", arguments: args,
+    catalogueDigest: cat.catalogueDigest, expectedSessionVersion: row.version, expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, busyPolicy: "reject" };
+    return host.apply({ kind: "command", operationId: id, payloadDigest: canonicalDigest(request), actorId: "human", request }); };
+  try {
+    for (const turn of ["one", "two", "three", "four"]) { await message(host, `turn-${turn}`, `Operator turn ${turn}`); await idle(host); }
+    expect((await invoke({ focus: "x".repeat(201) }, "compact-too-long")).status).toBe("rejected");
+    const compacted = await invoke({ focus: "keep the API notes" }, "compact-focus");
+    expect(compacted.status).toBe("applied");
+    expect("result" in compacted && typeof compacted.result === "string" ? JSON.parse(compacted.result) : null).toEqual({ removed: 2, noop: false });
+    await message(host, "turn-five", "Operator turn five"); await idle(host);
+    const summary = provider.requests.at(-1)?.messages.find((entry) => entry.role === "user" && entry.content.includes("Removed 2 messages"));
+    expect(summary?.content).toContain("Focus: keep the API notes");
+    expect((await invoke({}, "compact-again")).status).toBe("applied");
+  } finally { await host.dispose(); }
+});
+
+test("mode ask is a versioned host restriction applied at an idle boundary that survives config, plan, restart and lifecycle and that no command widens", async () => {
+  const first = await fixture([okReply]); const { host, cwd, root } = first;
+  const invoke = async (target: Awaited<ReturnType<typeof createSessionHost>>, commandName: string, args: Control["BoundedJson"], id: string) => { const row = await target.inspect(); const cat = await target.catalogue(); const request: Control["CommandInvoke"] = { commandName, arguments: args,
+    catalogueDigest: cat.catalogueDigest, expectedSessionVersion: row.version, expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, busyPolicy: "reject" };
+    return target.apply({ kind: "command", operationId: id, payloadDigest: canonicalDigest(request), actorId: "human", request }); };
+  const restriction = async (target: Awaited<ReturnType<typeof createSessionHost>>, id: string) => { const view = await invoke(target, "plan", {}, id); return "result" in view ? view.result as Record<string, unknown> : undefined; };
+  const entry = (await host.catalogue()).entries.find((item) => item.commandName === "mode.ask");
+  expect(entry).toMatchObject({ availability: "available", mutationClass: "session", busyPolicy: "reject", confirmation: "none" });
+  const asked = await invoke(host, "mode.ask", {}, "mode-ask");
+  expect(asked.status).toBe("applied");
+  expect("result" in asked && asked.result).toMatchObject({ enabled: false, approvalMode: "ask", configVersion: 2, effectiveFromTurnOrdinal: 1 });
+  // Repeating it is a no-op on the same version, not a new restriction.
+  expect((await invoke(host, "mode.ask", {}, "mode-ask-again")).status).toBe("applied");
+  expect(await restriction(host, "after-repeat")).toMatchObject({ approvalMode: "ask", configVersion: 2 });
+  // A plan toggle and a config change carry the approval restriction forward; turning plan back off restores only the floor beneath it.
+  expect((await invoke(host, "plan.set", { enabled: true }, "plan-on")).status).toBe("applied");
+  expect(await restriction(host, "plan-on-view")).toMatchObject({ enabled: true, approvalMode: "ask", configVersion: 3 });
+  let row = await host.inspect(); const config: Control["ConfigChange"] = { expectedSessionVersion: row.version, expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 },
+    baselineCandidateId: row.config.baselineCandidateId, reasoningEffort: row.config.reasoningEffort, routing: row.config.routing, busyPolicy: "reject" };
+  expect((await host.apply({ kind: "config", operationId: "config-after-ask", payloadDigest: canonicalDigest(config), actorId: "human", request: config })).status).toBe("applied");
+  expect(await restriction(host, "config-view")).toMatchObject({ enabled: true, approvalMode: "ask", configVersion: 4 });
+  // No chat command widens it: other permission modes are not native commands, and the mode read changes nothing.
+  for (const name of ["mode.trust", "mode.auto"]) expect((await invoke(host, name, {}, `widen-${name}`)).status).toBe("rejected");
+  expect((await invoke(host, "mode.ask", { approvalMode: "trust" }, "mode-ask-argument")).status).toBe("rejected");
+  expect(await restriction(host, "after-widen")).toMatchObject({ approvalMode: "ask", configVersion: 4 });
+  await host.dispose();
+  // Restart keeps it; a lifecycle child built from the source restriction inherits it with its digest, and a stripped copy is refused.
+  row = record(); const reopened = await createSessionHost({ cwd, dataDir: join(root, "state"), record: row, runtime: createNativeSessionRuntime({ cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m" }), workspace: first.workspace, authorizeAction: async () => true });
+  try {
+    expect(await restriction(reopened, "restart-view")).toMatchObject({ enabled: true, approvalMode: "ask", configVersion: 4 });
+    const source = await restriction(reopened, "lifecycle-source") as unknown as import("./commands/plan").SessionRestriction;
+    const child = await fixtureFromRestriction({ ...source, configVersion: 1, effectiveFromTurnOrdinal: 1 });
+    try { expect(await restriction(child.host, "child-view")).toMatchObject({ enabled: true, approvalMode: "ask", configVersion: 1 }); } finally { await child.host.dispose(); }
+    const { approvalMode: _dropped, ...stripped } = { ...source, configVersion: 1, effectiveFromTurnOrdinal: 1 };
+    await expect(fixtureFromRestriction(stripped)).rejects.toThrow("invalid-initial-session-restriction");
+  } finally { await reopened.dispose(); }
+});
+
+/** A new host that starts from an inherited restriction, as a lifecycle child does. */
+async function fixtureFromRestriction(initialRestriction: import("./commands/plan").SessionRestriction) {
+  const root = await mkdtemp(join(tmpdir(), "keryx-native-host-child-")); roots.push(root); const cwd = join(root, "checkout");
+  expect(await Bun.spawn(["git", "init", cwd], { stdout: "ignore", stderr: "pipe" }).exited).toBe(0);
+  const host = await createSessionHost({ cwd, dataDir: join(root, "state"), record: record(), runtime: createNativeSessionRuntime({ cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m" }),
+    workspace: { verify: async () => ({ ok: true, baseline: digest }), checkpoint: async () => ({ ok: true, baseline: digest }) }, authorizeController: async () => true, authorizeAction: async () => true, initialRestriction });
+  return { host };
+}
+
+test("mode ask is refused while a turn runs and applies only at the idle boundary", async () => {
+  let release!: () => void; const held = new Promise<void>((resolve) => { release = resolve; });
+  // The running turn waits at its first action boundary until released.
+  const { host } = await fixture([okReply], true, false, undefined, async () => { await held; return true; });
+  const invoke = async (id: string) => { const row = await host.inspect(); const cat = await host.catalogue(); const request: Control["CommandInvoke"] = { commandName: "mode.ask", arguments: {},
+    catalogueDigest: cat.catalogueDigest, expectedSessionVersion: row.version, expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, busyPolicy: "reject" };
+    return host.apply({ kind: "command", operationId: id, payloadDigest: canonicalDigest(request), actorId: "human", request }); };
+  try {
+    expect((await message(host, "running", "A turn that is running")).status).toBe("admitted");
+    expect((await host.inspect()).state).toBe("busy");
+    expect(await invoke("mode-ask-busy")).toMatchObject({ status: "rejected", errorCode: "busy" });
+    expect((await host.inspect()).config.configVersion).toBe(1);
+    release(); await idle(host);
+    expect((await invoke("mode-ask-idle")).status).toBe("applied");
+    expect((await host.inspect()).config.configVersion).toBe(2);
+  } finally { release(); await host.dispose(); }
+});
+
 test("readonly restriction persists by config version across restart and stale restoration cards cannot widen it", async () => {
   const first = await fixture(); const { host, cwd, root } = first;
   const invoke = async (commandName: string, args: Control["BoundedJson"], id: string) => { const row = await host.inspect(); const cat = await host.catalogue(); const request: Control["CommandInvoke"] = { commandName, arguments: args,

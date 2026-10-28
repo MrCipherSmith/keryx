@@ -16,7 +16,7 @@ import { parseProjectContextCommand } from "../../tui/project-context-inspector"
 import { parseDecisionsCommand } from "../../tui/decisions-surface";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand } from "../../tui/reviews-inspector";
 import { parseTasksArgs } from "../../tui/tasks-command";
-import { parseAcText, parseApprovalsText, parseConnectText, parseFlowOriginText, parseFlowsText, parseHistoryText, parseInspectorDetail, parseMcpText, parseModelText, parseProjectContextTab, parseQueueText, parseQuestionAnswerText, parseReviewsText, parseRewindText, parseRoutingText, parseTriggersText, parseWorkspaceText,
+import { parseAcText, parseApprovalsText, parseConnectText, parseFlowOriginText, parseFlowsText, parseHistoryText, parseInspectorDetail, parseMcpText, parseModelText, parseProjectContextTab, parseQueueText, parseQuestionAnswerText, parseReviewsText, parseRewindText, parseRoutingText, parseSessionsText, parseTriggersText, parseWorkspaceText,
   refuse, typed, type TerminalCommandParse, type TerminalQueueAction } from "./terminal-grammar";
 
 type Args = { [key: string]: Control["BoundedJson"] };
@@ -72,6 +72,15 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
     const parsed = executePlanCommand(rest, { current: false, commit: (value) => { enabled = value; } });
     return parsed.ok && enabled !== undefined ? typed("plan.set", { enabled }) : refuse("plan", "Usage: /plan [on|off]");
   },
+  // The TUI joins the words after `/compact` into its focus; the typed focus is bounded, so a longer one is refused rather than cut.
+  compact: (rest) => {
+    const focus = rest.split(/\s+/).filter((word) => word.length > 0).join(" ");
+    if (focus.length === 0) return typed("compact");
+    return focus.length <= 200 ? typed("compact", { focus }) : refuse("compact", "A compact focus is at most 200 characters. Usage: /compact [focus]");
+  },
+  // Only the narrowing has a native form; trust, auto and saving a project default stay the dedicated local-security workflow.
+  mode: (rest) => rest.length === 0 ? typed("mode") : rest === "ask" ? typed("mode.ask")
+    : refuse("mode", "Only /mode ask narrows a native session; trust, auto and a saved default are changed locally. Usage: /mode [ask]"),
   route: (rest) => {
     const arg = rest.toLowerCase();
     if (arg.length === 0) return typed("route");
@@ -91,6 +100,7 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
   flow: (rest) => parseFlowOriginText(rest),
   reviews: (rest) => parseReviewsText(rest),
   rewind: (rest) => parseRewindText(rest),
+  sessions: (rest) => parseSessionsText(rest),
   queue: (rest) => parseQueueText(rest),
   editguard: (rest) => parseInspectorDetail("editguard", rest) ?? noArguments("editguard", rest, "/editguard on|off writes project configuration; it has no typed native request. Usage: /editguard [status]"),
   jevprofile: (rest) => parseInspectorDetail("jevprofile", rest) ?? noArguments("jevprofile", rest, "Toggling a review.jev key writes project configuration; it has no typed native request. Usage: /jevprofile [entries]"),
@@ -165,7 +175,15 @@ export function parseTerminalCommand(line: string): TerminalCommandParse {
   return noArguments(token, rest, `/${token} takes no typed arguments in the terminal adapter.`);
 }
 
-type TerminalHost = Pick<SessionHostPort, "inspect" | "catalogue" | "apply" | "queue">;
+/**
+ * Reads the operator's Hub client already has (a session record, this machine's inventory): the pins a session selection names that
+ * this session's own record does not carry. A host without them refuses `/sessions open|resume|fork` instead of guessing a pin.
+ */
+export interface TerminalSessionReads {
+  readSession(sessionId: string): Promise<Control["SessionRecord"]>;
+  readInventory(): Promise<{ inventoryVersion: number; checkouts: readonly { checkoutId: string; headSha: string }[] }>;
+}
+type TerminalHost = Pick<SessionHostPort, "inspect" | "catalogue" | "apply" | "queue"> & Partial<TerminalSessionReads>;
 /**
  * The local terminal owner's authority. `work` is the operator's explicit work mode (spec 3.1: ad-hoc coding needs an explicit
  * operator work mode; Flow work pins its Flow): a workspace-class command runs as one new local run of this session under it,
@@ -202,11 +220,34 @@ export function createTerminalSessionAdapter(host: TerminalHost, authority: Term
       expectedConfigVersion: current.config.configVersion, catalogueDigest: catalogue.catalogueDigest, commandName, arguments: args, busyPolicy: "reject" };
     return host.apply({ kind: "command", operationId: randomUUID(), payloadDigest: canonicalDigest(request), actorId: authority.actorId, request, ...extra });
   };
+  type Pinned = { ok: true; args: Args } | { ok: false; refusal: Refusal };
+  /** The selected session's exact current pins, read as the Hub client reads them: its version, and for a resume its held controller, history and baseline. */
+  const sessionPins = async (commandName: string, sessionId: string): Promise<Pinned> => {
+    if (host.readSession === undefined) return { ok: false, refusal: { reason: `/${commandName} needs a typed read of the selected session, which this terminal does not have.`, errorCode: "forbidden" } };
+    let target: Control["SessionRecord"];
+    try { target = await host.readSession(sessionId); } catch { return { ok: false, refusal: { reason: `Session ${sessionId} cannot be read in this project.`, errorCode: "forbidden" } }; }
+    if (commandName === "sessions.open") return { ok: true, args: { sessionId, expectedSessionVersion: target.version } };
+    if (target.controller === null) return { ok: false, refusal: { reason: `Session ${sessionId} has no controller lease to resume under; claim its controller first.`, errorCode: "forbidden" } };
+    return { ok: true, args: { sessionId, expectedSessionVersion: target.version, controller: { controllerLeaseId: target.controller.controllerLeaseId, expectedControllerVersion: target.controller.version },
+      expectedHistoryVersion: target.historyVersion, expectedWorkspaceBaseline: target.workspaceBaseline } };
+  };
+  /** A fork of this session's whole current history: its own history pins and the named checkout's current inventory pins. */
+  const forkPins = async (targetCheckoutId: string, args: Args): Promise<Pinned> => {
+    if (host.readInventory === undefined) return { ok: false, refusal: { reason: "/sessions fork needs a typed read of this machine's inventory, which this terminal does not have.", errorCode: "forbidden" } };
+    let inventory: Awaited<ReturnType<TerminalSessionReads["readInventory"]>>;
+    try { inventory = await host.readInventory(); } catch { return { ok: false, refusal: { reason: "This machine's checkout inventory cannot be read.", errorCode: "forbidden" } }; }
+    const checkout = inventory.checkouts.find((item) => item.checkoutId === targetCheckoutId);
+    if (checkout === undefined) return { ok: false, refusal: { reason: `Checkout ${targetCheckoutId} is not mapped on this machine.`, errorCode: "forbidden" } };
+    const current = await host.inspect();
+    return { ok: true, args: { ...args, throughHistoryCursor: current.historyCursor, expectedHistoryVersion: current.historyVersion, expectedInventoryVersion: inventory.inventoryVersion, expectedHeadSha: checkout.headSha } };
+  };
   /** The exact pins of the pending card the operator named, read through the same typed list a headless client reads. */
   const resolvePins = async (parsed: Extract<TerminalCommandParse, { ok: true }>, pending: Args | undefined): Promise<{ ok: true; args: Args } | { ok: false; refusal: Refusal }> => {
     const pins = parsed.pins; if (pins === undefined) return { ok: true, args: parsed.arguments };
     if (pins.kind === "history-version") return { ok: true, args: { ...parsed.arguments, expectedHistoryVersion: (await host.inspect()).historyVersion } };
     if (pins.kind === "rewind-confirm") return pending === undefined ? { ok: false, refusal: { reason: "Nothing to confirm. Pick a snapshot first: /rewind N [files|history|both]", errorCode: "invalid-arguments" } } : { ok: true, args: pending };
+    if (pins.kind === "session-target") return sessionPins(parsed.commandName, pins.sessionId);
+    if (pins.kind === "fork-source") return forkPins(pins.targetCheckoutId, parsed.arguments);
     const listed = await invoke(pins.kind === "approval" ? "approvals" : "questions.list", {});
     const rows = "result" in listed ? pendingRows(listed.result) : [];
     if (pins.kind === "approval") {

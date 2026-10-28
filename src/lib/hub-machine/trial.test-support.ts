@@ -21,6 +21,10 @@ export const TRIAL_PROFILE='remote-restricted';
 /** A configured local provider: `ollama` carries the explicit loopback grant, and the saved baseUrl points it at the trial endpoint. */
 export const TRIAL_PROVIDER='ollama',TRIAL_MODEL='keryx-trial-deterministic';
 export const TRIAL_REPLY='Deterministic native trial completed. No vendor model was called.';
+/** The tracked Keryx index of every trial checkout, committed as a developer's Keryx project commits it. */
+export const TRIAL_INDEX='# Deterministic serve trial checkout\n';
+/** Shared context the trial project holds on Hub before any machine connects, so every connect syncs a real canonical document. */
+export const TRIAL_CONTEXT={path:'wiki/trial-context.md',content:'# Trial shared context\n\nCanonical Hub context the serve machines sync on connect.\n'};
 /** An operator turn in this trial starts with this prefix; anything else the harness adds as a user message is not the operator's. */
 const OPERATOR_TURN=/^keryx-trial-turn-(\d+): /;
 export const trialTurn=(ordinal:number,text:string)=>`keryx-trial-turn-${ordinal}: ${text}`;
@@ -81,7 +85,8 @@ async function stopServeChild(child:ServeChild):Promise<number>{
  const forced=setTimeout(()=>{try{process.kill(child.pid,'SIGKILL');}catch{/* already exited */}},15000);
  try{return await child.exited;}finally{clearTimeout(forced);}
 }
-export interface TrialTarget{machine:string;machineId:string;checkoutId:string;cwd:string;configDir:string;machineRoot:string;hookLog:string;machinePolicyDigest:string;serve:ServeChild}
+/** `contextRoot`: the machine's own keryx-managed Hub context cache (never inside the checkout). */
+export interface TrialTarget{machine:string;machineId:string;checkoutId:string;cwd:string;configDir:string;machineRoot:string;hookLog:string;contextRoot:string;machinePolicyDigest:string;serve:ServeChild}
 export async function startMachineTrial(options:{port?:number;root?:string}={}){
  // A darwin owner socket path must stay under 104 bytes, so the trial root is short and real (startup.test.ts does the same).
  const root=options.root??mkdtempSync(process.platform==='darwin'?'/private/tmp/keryx-serve-trial-':path.join(realpathSync(tmpdir()),'keryx-serve-trial-'));mkdirSync(root,{recursive:true,mode:0o700});const operatorToken=`trial-operator-${randomBytes(32).toString('base64url')}`;const reviewerToken=`trial-reviewer-${randomBytes(32).toString('base64url')}`;const agentToken=`trial-agent-${randomBytes(32).toString('base64url')}`;
@@ -94,15 +99,17 @@ export async function startMachineTrial(options:{port?:number;root?:string}={}){
  const restoreGit=()=>{for(const[key,value]of[['GIT_CONFIG_GLOBAL',previousGit.global],['GIT_CONFIG_NOSYSTEM',previousGit.system]] as const){if(value===undefined)delete process.env[key];else process.env[key]=value;}};
  const stopAll=async()=>{const codes=await Promise.all(targets.map(t=>stopServeChild(t.serve)));await hub.stop(true);await provider.stop();restoreGit();return codes;};
  try{
-  const login=await request('/hub/v1/session',{token:operatorToken});const cookie=login.response.headers.get('set-cookie')!.split(';')[0]!;const project=(await request('/hub/v1/projects',{name:'Deterministic two-process serve trial'},cookie)).value as {id:string};
+  const login=await request('/hub/v1/session',{token:operatorToken});const cookie=login.response.headers.get('set-cookie')!.split(';')[0]!;const project=(await request('/hub/v1/projects',{name:'Deterministic two-process serve trial'},cookie)).value as {id:string;version:number};
+  await request(`/hub/v1/projects/${project.id}/import`,{expectedVersion:project.version,sourceRevision:'deterministic-trial',documents:[{path:TRIAL_CONTEXT.path,kind:'wiki',content:TRIAL_CONTEXT.content}]},cookie);
   for(let i=1;i<=2;i++){
    // The hook log sits in the checkout's ignored .metaproject/: under the shipped untrusted profile a hook runs isolated and may write only there.
    const machine=`m${i}`,machineRoot=path.join(root,machine),cwd=path.join(machineRoot,'checkout'),env=scrubbedEnv(machineRoot),configDir=path.join(env.XDG_DATA_HOME!,'keryx'),hookLog=path.join(cwd,'.metaproject','trial-hook-events.jsonl');
    for(const dir of [cwd,env.HOME!,configDir,env.XDG_CONFIG_HOME!,env.XDG_CACHE_HOME!,env.XDG_STATE_HOME!,env.TMPDIR!])mkdirSync(dir,{recursive:true,mode:0o700});
    const git=(args:string[])=>{const r=Bun.spawnSync(['git','-C',cwd,'-c','user.name=Trial','-c','user.email=trial@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null',...args],{env:gitEnv});if(r.exitCode!==0)throw new Error(`trial-git-failed: ${r.stderr.toString()}`);};
-   git(['init','-q']);writeFileSync(path.join(cwd,'seed.txt'),'deterministic native trial seed\n');writeFileSync(path.join(cwd,'.gitignore'),'.metaproject/\n');git(['add','.']);git(['commit','-qm','trial baseline']);
-   // Production resolution requires a Keryx project checkout; the index is local and ignored so session bookkeeping never dirties the baseline.
-   mkdirSync(path.join(cwd,'.metaproject'),{recursive:true});writeFileSync(path.join(cwd,'.metaproject','index.md'),'# Deterministic serve trial checkout\n');
+   // Production resolution requires a Keryx project checkout. Its index is tracked, as in a developer's project, so anything that rewrites it
+   // (a context sync on connect) dirties the checkout; the rest of .metaproject/ is ignored local state (the hook log below).
+   mkdirSync(path.join(cwd,'.metaproject'),{recursive:true});writeFileSync(path.join(cwd,'.metaproject','index.md'),TRIAL_INDEX);
+   git(['init','-q']);writeFileSync(path.join(cwd,'seed.txt'),'deterministic native trial seed\n');writeFileSync(path.join(cwd,'.gitignore'),'.metaproject/*\n!.metaproject/index.md\n');git(['add','.']);git(['commit','-qm','trial baseline']);
    const hubId=hubIdentity(origin);const ledger=new MachineLedger(path.join(machineStateDir(configDir,hubId),'control.sqlite'));const pairing=(await request('/hub/v2/machines/pairings',{displayName:`Deterministic serve machine ${i}`,projectIds:[project.id]},cookie)).value as {code:string};const enrolled=await enrollMachine(origin,{code:pairing.code,agentVersion:'explicit-deterministic-trial',ledgerId:ledger.ledgerId});ledger.close();saveEnrollment(configDir,{hubUrl:origin,...enrolled});const checkoutId=`trial-checkout-${i}`;allowCheckout(configDir,{projectId:project.id,checkoutId,cwd,profileId:TRIAL_PROFILE});
    const candidateId=canonicalDigest([TRIAL_PROVIDER,TRIAL_MODEL]);
    const policy:Control['LocalMachinePolicy']={version:2,hubId,enabled:true,maxConcurrentRuns:2,checkouts:[{projectId:project.id,checkoutId,localBindingId:canonicalDigest([hubId,checkoutId]),path:realpathSync(cwd),profileIds:[TRIAL_PROFILE]}],allowAdHocSessions:true,allowedCandidateIds:[candidateId],profiles:[{profileId:TRIAL_PROFILE,allowAdHocTurns:true,consentVersion:1,allowedCandidateIds:[candidateId]}]};writeMachinePolicy(configDir,policy);
@@ -111,7 +118,7 @@ export async function startMachineTrial(options:{port?:number;root?:string}={}){
    // A user-scope observe hook: proof that the shipped hook runtime is on in the serve child, without changing any decision.
    mkdirSync(path.join(env.HOME!,'.keryx'),{recursive:true,mode:0o700});writeFileSync(path.join(env.HOME!,'.keryx','hooks.json'),JSON.stringify({schemaVersion:'1.0.0',hooks:{PreToolUse:[{id:'trial-observer',matcher:'.*',class:'observe',command:{argv:['/bin/sh','-c','/bin/cat >> "$KERYX_PROJECT_ROOT/.metaproject/trial-hook-events.jsonl"; echo >> "$KERYX_PROJECT_ROOT/.metaproject/trial-hook-events.jsonl"']}}]}}));
    const serve=await startServeChild(machineRoot);serve.serveToken=issued.token;
-   targets.push({machine,machineId:enrolled.machineId,checkoutId,cwd:realpathSync(cwd),configDir,machineRoot,hookLog,machinePolicyDigest:canonicalDigest(policy),serve});
+   targets.push({machine,machineId:enrolled.machineId,checkoutId,cwd:realpathSync(cwd),configDir,machineRoot,hookLog,contextRoot:path.join(machineStateDir(configDir,hubId),'context'),machinePolicyDigest:canonicalDigest(policy),serve});
   }
   const credentialsFile=path.join(root,'operator-token');protectedWrite(credentialsFile,operatorToken,true);
   let stopped:Promise<number[]>|undefined;

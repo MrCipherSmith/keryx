@@ -4,7 +4,7 @@ import { rewindCommands } from "./rewind";
 import { commandsForMode } from "../../commands/agent-commands";
 import { catalogueDigest, type Control } from "../../remote-control/protocol";
 import { projectInspectionCommands } from "./project-inspection";
-import { planCommands } from "./plan";
+import { approvalModeCommands, planCommands } from "./plan";
 import { sessionSettingsCommands } from "./session-settings";
 import { goalCommands } from "./goal";
 import { sessionControlCommands } from "./session-control";
@@ -25,6 +25,8 @@ const localSetup = new Set(["connect", "search-connect", "setup", "permissions",
 const empty: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: {}, required: [] };
 /** `/history [N]` (src/remote/history.ts): no number reads the whole ordered history, N (1-20) its last N messages. */
 export const historyInputSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { count: { type: "integer", minimum: 1, maximum: 20 } }, required: [] };
+/** `/compact [focus]` (the TUI joins the words after the command): the optional focus the compaction summary carries. */
+export const compactInputSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { focus: { type: "string", maxLength: 200 } }, required: [] };
 export function createCommandCatalogue(capabilityDigest: string, contributions: readonly NativeCommandContribution[] = []): Control["CommandCatalogue"] {
   const entries: Control["CommandCatalogueEntry"][] = commandsForMode("agent").map((command) => {
     const commandName = command.name.slice(1);
@@ -32,7 +34,7 @@ export function createCommandCatalogue(capabilityDigest: string, contributions: 
     return {
       commandName, summary: command.description, handlerId: `native.${commandName}`,
       inputSchema: commandName === "reasoning" ? { type: "object", additionalProperties: false,
-        properties: { effort: { type: "string", maxLength: 16, enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] } }, required: ["effort"] } : commandName === "history" ? historyInputSchema : empty,
+        properties: { effort: { type: "string", maxLength: 16, enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] } }, required: ["effort"] } : commandName === "history" ? historyInputSchema : commandName === "compact" ? compactInputSchema : empty,
       resultSchema: { type: "string", maxLength: 32768 },
       mutationClass: localSetup.has(commandName) ? "sensitive-setup" : ["reasoning", "compact"].includes(commandName) ? "session" : "read",
       states: ["idle", "busy", "paused"], busyPolicy: ["reasoning", "compact"].includes(commandName) ? "reject" : "read-only",
@@ -41,10 +43,18 @@ export function createCommandCatalogue(capabilityDigest: string, contributions: 
       reason: available ? "shared-native-handler" : presentation.has(commandName) ? "client-presentation" : externalVendor.has(commandName) ? "external-vendor-execution-not-admitted" : localSetup.has(commandName) ? "dedicated-local-security-workflow" : "required-domain-handler-extraction-pending",
     };
   });
-  for (const contribution of [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...lifecycleCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...rewindCommands(), ...settingsInspectionCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.settings }), ...analysisCommands(NATIVE_DEFAULT_SERVICE_READINESS.analysis), ...tasksIntegrationsCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.integrations }), ...contributions]) {
+  for (const contribution of [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...lifecycleCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...approvalModeCommands(), ...rewindCommands(), ...settingsInspectionCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.settings }), ...analysisCommands(NATIVE_DEFAULT_SERVICE_READINESS.analysis), ...tasksIntegrationsCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.integrations }), ...contributions]) {
     const index = entries.findIndex((entry) => entry.commandName === contribution.entry.commandName);
     if (index >= 0) entries[index] = contribution.entry;
     else entries.push(contribution.entry);
   }
   return { catalogueVersion: 1, catalogueDigest: catalogueDigest(entries), capabilityDigest, entries };
+}
+/**
+ * The catalogue a native session host enforces: the shared entries, its runtime's contributions, and the lifecycle and owned rewind
+ * ports the host was given. A machine profile publishes exactly this to Hub (hub-machine/production.ts), so every Hub-delivered
+ * CommandInvoke carries the digest its host validates against.
+ */
+export function createHostCommandCatalogue(capabilityDigest: string, input: { contributions: readonly NativeCommandContribution[]; lifecycle: boolean; rewind: boolean }): Control["CommandCatalogue"] {
+  return createCommandCatalogue(capabilityDigest, [...input.contributions, ...lifecycleCommands(input.lifecycle), ...rewindCommands(input.rewind)]);
 }

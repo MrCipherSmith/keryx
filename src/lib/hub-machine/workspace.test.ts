@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createOwnedWorkspace} from './workspace';
 import {renderMetaprojectGitignoreBlock} from '../metaproject-gitignore';
+import {impactEvidenceDataRoot,logPath} from '../../impact-evidence/state';
 function fixture(){const cwd=mkdtempSync(path.join(tmpdir(),'machine-owned-'));Bun.spawnSync(['git','init','-q',cwd]);writeFileSync(path.join(cwd,'a'),'initial');Bun.spawnSync(['git','-C',cwd,'add','.']);Bun.spawnSync(['git','-C',cwd,'-c','user.name=Fixture','-c','user.email=test@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null','commit','-qm','fixture']);return cwd;}
 test('only exact successful patch target deltas become the next owned baseline',async()=>{
  const cwd=fixture();try{const workspace=createOwnedWorkspace(cwd);const first=await workspace.checkpoint();expect(first.ok).toBe(true);if(!first.ok)return;
@@ -39,6 +40,8 @@ test('rewind rejects stale previews and partial unlisted edits without launderin
 const git=(cwd:string,...args:string[])=>expect(Bun.spawnSync(['git','-C',cwd,'-c','user.name=Fixture','-c','user.email=test@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null',...args],{env:{PATH:process.env.PATH??'',HOME:cwd,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'}}).exitCode).toBe(0);
 /** What the production hook runtime writes into the project at turn start. */
 function writeRuntimeData(cwd:string){for(const dir of ['.metaproject/data/learning/observations','.metaproject/data/security/raw'])mkdirSync(path.join(cwd,dir),{recursive:true});
+ // The impact-evidence gate's per-session state and log, at the paths its own writer uses.
+ mkdirSync(path.join(impactEvidenceDataRoot(cwd),'sessions'),{recursive:true});appendFileSync(logPath(cwd),'{"event":"disabled-config"}\n');writeFileSync(path.join(impactEvidenceDataRoot(cwd),'sessions','native-0000.json'),'{}');
  appendFileSync(path.join(cwd,'.metaproject/data/learning/observations/2026-10-28.jsonl'),'{"event":"prompt"}\n');writeFileSync(path.join(cwd,'.metaproject/data/security/raw/hmac.key'),'k');writeFileSync(path.join(cwd,'.metaproject/data/security/raw/state.json'),'{}');}
 const newFile=(file:string)=>`diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1 @@\n+owned\n`;
 test('a plain checkout already holding keryx runtime data is a clean owned admission',async()=>{

@@ -1,5 +1,6 @@
 import {expect,test} from 'bun:test';
-import {mkdtemp,mkdir,rm,writeFile,readFile} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,writeFile,readFile,symlink} from 'node:fs/promises';
+import {realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createSessionHost,type SessionHostOptions} from './host';
@@ -30,4 +31,31 @@ test('actual host rewind restores owned files and active context while executed 
  const nativeId=listSessions(cwd,dataDir)[0]!.id;expect(JSON.stringify(loadArchive(cwd,nativeId,dataDir))).toContain('SECOND turn');expect(JSON.stringify(loadContext(cwd,nativeId,dataDir))).not.toContain('SECOND turn');await text('Continue from restored first turn');expect(JSON.stringify(provider.requests.at(-1)?.messages)).not.toContain('SECOND turn');expect((await host.inspect()).state).toBe('idle');
  const beforeRestart=await host.inspect();const transcriptBeforeRestart=await host.history();await host.dispose();runtime=makeRuntime();host=await createSessionHost({...hostOptions,runtime,record:beforeRestart});expect(await host.history()).toEqual(transcriptBeforeRestart);expect((await host.inspect()).historyVersion).toBe(beforeRestart.historyVersion);await text('After restart retain only the restored active window');expect(JSON.stringify(provider.requests.at(-1)?.messages)).not.toContain('SECOND turn');expect(JSON.stringify(loadArchive(cwd,nativeId,dataDir))).toContain('SECOND turn');
  }finally{await host.dispose();lease.release(lease.nonce);await rm(root,{recursive:true,force:true});}
+});
+/** One owned native turn with a single approved patch; the native data dir may be reached through a symlink, and owned Git may be refused. */
+async function ownedPatchTurn(options:{symlinkedDataDir:boolean;spawnRefused?:boolean}){
+ const root=realpathSync(await mkdtemp(join(tmpdir(),'native-host-checkpoint-')));const cwd=join(root,'checkout');await mkdir(cwd);Bun.spawnSync(['git','init','-q',cwd]);await writeFile(join(cwd,'note.txt'),'before\n');Bun.spawnSync(['git','-C',cwd,'add','.']);expect(Bun.spawnSync(['git','-C',cwd,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null','commit','-qm','initial']).exitCode).toBe(0);
+ let dataDir=join(root,'state');if(options.symlinkedDataDir){await mkdir(join(root,'state-real'));await symlink(join(root,'state-real'),join(root,'state-link'));dataDir=join(root,'state-link');}
+ const lease=acquireCheckoutLease(cwd,{hubId:'hub',runId:'checkpoint-session',daemonId:'daemon'});const workspace=createOwnedWorkspace(cwd,()=>lease.assertOwnership());const provider=scriptedProvider([patch('before','after'),okReply]);
+ const runtime=createNativeSessionRuntime({cwd,provider:provider.provider,providerId:'scripted',modelId:'m',approve:async(_tool,_input,meta)=>({approved:true,fingerprint:meta!.fingerprint}),spawnOwnedGit:request=>{
+  if(options.spawnRefused)throw new Error('containment-refused');
+  const child=Bun.spawn(['git','-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false','-c','gc.auto=0','--git-dir',request.repo.gitDir,'--work-tree',request.repo.workTree,...request.args],{cwd,env:{PATH:process.env.PATH??'',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'},stdout:'pipe',stderr:'pipe',stdin:request.stdin===undefined?'ignore':new Blob([request.stdin]),detached:true});return superviseSpawnedProcess(child,{kill(signal){try{process.kill(-child.pid,signal);}catch(cause){if(!(cause instanceof Error&&'code'in cause&&cause.code==='ESRCH'))throw cause;}}});
+ }});
+ const record=row(workspace.baseline().digest);
+ const host=await createSessionHost({cwd,dataDir,record,runtime,workspace:{...workspace,rewind:{ownership:()=>{lease.assertOwnership();return{nonce:lease.nonce,gitHead:workspace.baseline().head,paths:Object.keys(workspace.baseline().files)};},validatePaths:async(paths,signal)=>{signal.throwIfAborted();lease.assertOwnership();validateOwnedEffectPaths(cwd,paths);}}},authorizeAction:async()=>true,authorizeInspection:async()=>true});
+ try{const current=await host.inspect();const request:Control['StartTurnRequest']={sessionId:current.sessionId,expectedSessionVersion:current.version,expectedConfigVersion:1,expectedHistoryVersion:current.historyVersion,expectedWorkspaceBaseline:current.workspaceBaseline,controller:{controllerLeaseId:'controller',expectedControllerVersion:1},messageId:'edit',text:'Change the note',association:{mode:'ad-hoc',profileConsentVersion:1}};
+  expect((await host.apply({kind:'message',operationId:'edit',payloadDigest:canonicalDigest(request),actorId:'human',runId:'run-edit',turnId:'turn-edit',request})).status).toBe('admitted');const ended=await idle(host);
+  const after=await host.inspect();const list:Control['CommandInvoke']={commandName:'rewind',arguments:{},catalogueDigest:(await host.catalogue()).catalogueDigest,expectedSessionVersion:after.version,expectedConfigVersion:1,controller:{controllerLeaseId:'controller',expectedControllerVersion:1},busyPolicy:'reject'};
+  const listed=await host.apply({kind:'command',operationId:'list',payloadDigest:canonicalDigest(list),actorId:'human',request:list});const checkpoints='result'in listed&&typeof listed.result==='string'?JSON.parse(listed.result).data:undefined;
+  return{state:ended.state,note:await readFile(join(cwd,'note.txt'),'utf8'),checkpoints:Array.isArray(checkpoints)?checkpoints.length:0,receipts:(await host.history()).messages.filter(message=>message.role==='system-receipt').map(message=>message.text)};
+ }finally{await host.dispose();lease.release(lease.nonce);await rm(root,{recursive:true,force:true});}
+}
+test('a native data dir reached through a symlink still records the owned pre-mutation checkpoint',async()=>{
+ const observed=await ownedPatchTurn({symlinkedDataDir:true});
+ expect(observed).toMatchObject({state:'idle',note:'after\n',checkpoints:1});expect(observed.receipts).toEqual([]);
+});
+test('an unavailable checkpoint names its bounded cause while ordinary coding continues',async()=>{
+ const observed=await ownedPatchTurn({symlinkedDataDir:false,spawnRefused:true});
+ expect(observed).toMatchObject({state:'idle',note:'after\n',checkpoints:0});
+ expect(observed.receipts).toEqual(['A complete checkpoint is unavailable for this turn (native-shadow-start-failed); ordinary coding continues within its existing policy.']);
 });

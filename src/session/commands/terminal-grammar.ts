@@ -1,5 +1,5 @@
 // Terminal text forms for native operations the TUI reaches only through a modal (model/provider picker,
-// MCP consumer view, routing inspector, approval and question cards). Pure parsing: each form produces the
+// MCP consumer view, routing inspector, approval and question cards, session picker). Pure parsing: each form produces the
 // exact closed typed request of the catalogue handler the modal's action calls, or a refusal with its usage.
 // Nothing here defaults a field the typed schema requires.
 import type { Control } from "../../remote-control/protocol";
@@ -13,7 +13,11 @@ export type TerminalPins = { kind: "approval"; approvalId: string } | { kind: "q
   /** The session's current history version, the pin a rewind preview is taken against. */
   | { kind: "history-version" }
   /** The exact pins of this terminal's last rewind preview (`/rewind confirm`). */
-  | { kind: "rewind-confirm" };
+  | { kind: "rewind-confirm" }
+  /** The selected session's current record pins (version; for a resume also its held controller, history version and baseline). */
+  | { kind: "session-target"; sessionId: string }
+  /** This session's history pins and the target checkout's inventory pins a fork names. */
+  | { kind: "fork-source"; targetCheckoutId: string };
 /** A queued item the operator named by its qN position; the terminal applies the frozen QueueRemove/QueueEdit operation to it. */
 export interface TerminalQueueAction { action: "remove" | "edit"; position: number; text?: string }
 /** A typed request for the shared handler, or the TUI's own refusal. Never a positional argument list. */
@@ -159,6 +163,26 @@ export function parseRewindText(rest: string): TerminalCommandParse {
   const mode = parts[1] ?? "files";
   if (parts.length > 2 || !/^[1-9]\d{0,14}$/.test(parts[0]!) || !["files", "history", "both"].includes(mode)) return refuse("rewind", REWIND_USAGE);
   return { ok: true, commandName: "rewind.preview", arguments: { seq: Number(parts[0]), mode }, pins: { kind: "history-version" } };
+}
+
+export const SESSIONS_USAGE = "Usage: /sessions [open <sessionId> | resume <sessionId> | fork <checkoutId> <title>]";
+/**
+ * `/sessions` lists (the picker); its selection actions are the typed lifecycle operations Hub delivers: `open` attaches a session as a
+ * read-only reader, `resume` continues a closed one, `fork` copies this session's whole history into a new session on another mapped
+ * checkout. Every version, controller, baseline and inventory pin comes from a fresh read; the title is never defaulted.
+ */
+export function parseSessionsText(rest: string): TerminalCommandParse {
+  const parts = words(rest);
+  if (parts.length === 0) return typed("sessions");
+  const [action, target] = parts;
+  if ((action === "open" || action === "resume") && parts.length === 2 && ID.test(target!))
+    return { ok: true, commandName: `sessions.${action}`, arguments: { sessionId: target! }, pins: { kind: "session-target", sessionId: target! } };
+  if (action === "fork" && parts.length >= 3 && ID.test(target!)) {
+    // The title keeps its own spacing: only the action and checkout tokens are removed.
+    const title = rest.trim().replace(/^\S+\s+\S+\s+/, "").trim();
+    if (title.length > 0 && title.length <= 200) return { ok: true, commandName: "sessions.fork", arguments: { targetCheckoutId: target!, title }, pins: { kind: "fork-source", targetCheckoutId: target! } };
+  }
+  return refuse("sessions", SESSIONS_USAGE);
 }
 
 /** `/editguard status` and `/jevprofile entries`: the modals' detail view (threshold and recent flags; every review.jev key). `undefined`: the shipped grammar decides. */

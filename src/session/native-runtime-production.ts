@@ -1,13 +1,15 @@
 import { createNativeRoutingClassifier } from "./native-classifier";
 import { wireModelIdentity, type NativeModelBinding } from "./model-identity";
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
+import { resolve, sep } from "node:path";
 import { buildShellHookRuntime } from "../commands/agent-hooks";
 import { makeProvider } from "../harness/provider/make-provider";
 import { resolveProviderModelParamsByName } from "../commands/providers";
 import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { resolveProjectRoot } from "./paths";
-import { detectSandboxLauncher, sandboxProfileFromPolicy, wrapWithSandbox } from "../harness/process/sandbox";
+import { detectSandboxLauncher, sandboxProfileFromPolicy, wrapWithSandbox, type SandboxProfile } from "../harness/process/sandbox";
 import { resolveShellEnv } from "../harness/process/shell-spawn";
 import { superviseSpawnedProcess, type BackgroundSpawner } from "../harness/tool/builtin/background-job-registry";
 import type { PolicyProfile } from "../harness/policy/types";
@@ -49,6 +51,20 @@ export function locallyApprovedHttpMcp(cwd: string, configDir: string | undefine
     try { url = new URL(server.url!); } catch { return []; }
     return ["http:", "https:"].includes(url.protocol) && url.username === "" && url.password === "" && url.hash === "" ? [{ name: server.name, url: url.href }] : [];
   });
+}
+/**
+ * The contained profile of the owned shadow-Git process. Its private repository lives in the native session data dir, which the
+ * session profile neither lets a process write nor, by default (`~/.local/share/keryx`), read. So: writes go only to that
+ * repository and to the owned checkout it restores into (none for a read-only profile, never the session tmp), the one secret
+ * read-deny entry that contains the repository is dropped and every other one kept, and there is no network.
+ * Seatbelt matches resolved paths, so every root is the canonical one.
+ */
+export function ownedGitSandboxProfile(base: SandboxProfile, input: { cwd: string; gitDir: string }): SandboxProfile {
+  const canonical = (target: string): string => { try { return realpathSync(target); } catch { return resolve(target); } };
+  const gitDir = canonical(input.gitDir);
+  const contains = (parent: string): boolean => gitDir === parent || gitDir.startsWith(`${parent}${sep}`);
+  return { mode: base.mode === "danger-full-access" ? base.mode : "workspace-write", network: "off", allowedDomains: [], required: base.required,
+    writableRoots: [...(base.mode === "read-only" ? [] : [canonical(input.cwd)]), gitDir], readDenyList: base.readDenyList.filter((entry) => !contains(canonical(entry))) };
 }
 /** Session-owned MCP/bus owners are bound only from local approval; with none, the plain services report setup-required. */
 async function productionSessionServices(options: ProductionNativeRuntimeOptions, context: NativeSessionServicesOptions) {
@@ -123,7 +139,7 @@ export async function assembleNativeSessionRuntime(options: ProductionNativeRunt
         GIT_DIR: request.repo.gitDir, GIT_WORK_TREE: request.repo.workTree, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" };
       const argv = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", ...request.args];
       let command = ["git", ...argv]; const currentLauncher = detectSandboxLauncher();
-      const sandbox = sandboxProfileFromPolicy({ policy: options.profile, cwd: options.cwd, tmpDir: tmpdir(), home: homedir() });
+      const sandbox = ownedGitSandboxProfile(sandboxProfileFromPolicy({ policy: options.profile, cwd: options.cwd, tmpDir: tmpdir(), home: homedir() }), { cwd: options.cwd, gitDir: request.repo.gitDir });
       if (sandbox.required || currentLauncher.available) {
         if (!currentLauncher.available) throw new NativeRuntimeError("containment-unavailable");
         const wrapped = wrapWithSandbox({ path: "git", argv: ["git", ...argv], cwd: options.cwd, env: privateEnv }, sandbox,
