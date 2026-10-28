@@ -383,7 +383,10 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
   if (carriedClass !== undefined) {
     finding.degradation_class = carriedClass;
   }
-  const carriedKind = canonical.evidence_kind ?? (canonical.evidence_screen !== undefined ? undefined : others.find((member) => member.evidence_kind !== undefined)?.evidence_kind);
+  let carriedKind = canonical.evidence_kind;
+  if (carriedKind === undefined && canonical.evidence_screen === undefined) {
+    carriedKind = others.find((member) => member.evidence_kind !== undefined)?.evidence_kind;
+  }
   if (carriedKind !== undefined) {
     finding.evidence_kind = carriedKind;
   }

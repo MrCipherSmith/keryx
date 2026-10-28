@@ -79,7 +79,8 @@ function omitEvidenceKind<T extends Partial<StructuredReviewFinding>>(finding: T
  * The downgrade also clears `blocking_merge`: a finding at `info` that still blocked the merge would be
  * the unproven claim holding a gate the evidence rule exists to keep it away from. The severity the
  * reviewer asked for is kept on the finding as `evidence_screen.original_severity`, so the downgrade is
- * visible to every later reader and reversible by a human.
+ * visible to every later reader and reversible by a human. A screened finding whose `evidence_kind` is not in the
+ * closed list has that field removed, whatever its severity.
  */
 export function screenDegradationFindings<T extends Partial<StructuredReviewFinding>>(
   findings: readonly T[],
@@ -136,6 +137,7 @@ export function degradationScreenRecord<T extends Partial<StructuredReviewFindin
   };
 }
 
+/** One plain line that is safe inside a markdown table cell: escapes and control characters are removed, markdown is escaped. */
 export function escapeCell(value: string): string {
   return safeText(value)
     .replace(/[\\|`]/g, (ch) => `\\${ch}`)

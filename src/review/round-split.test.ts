@@ -12,7 +12,7 @@ import { computeCoverage } from "./coverage-complete";
 import { estimateRound } from "./estimate";
 import { buildLedger, type LedgerInputs, type RawFile } from "./ledger";
 import { type PriorFinding, type RoundRecord } from "./round-record";
-import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, fixSliceRoster, isDeltaRound, manifestRosterRoles, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
+import { classifyDeltaSlices, effectiveSliceRoles, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, fixSliceRoster, isDeltaRound, manifestRosterRoles, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
 import { narrowedSlices } from "./routing-check";
 import type { ScopedRegion } from "./scope";
 import { buildSlices, parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
@@ -37,6 +37,8 @@ const round = (over: Partial<RoundRecord> = {}): RoundRecord => ({
 });
 
 const region = (file: string, start: number, end: number, body = "+const x = 1;"): string => `--- ${file}\n@@ ${start},${end} @@\n${body}\n`;
+
+const installedIn = (of: { slices: readonly SliceEntry[] }): Set<string> => new Set(of.slices.flatMap((slice) => slice.roles ?? []));
 
 describe("fix roster", () => {
   test("logic, regression and the authors of the attached findings, nothing else; a missing id adds no one", () => {
@@ -75,22 +77,26 @@ describe("fix slice content roles (flow 458 M3, restored in 460 round 2)", () =>
   test("a fix whose own lines spawn a process or build a git argv brings review-security-code; plain fix lines bring nothing", () => {
     expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"))).toContain("review-security-code");
     expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  await runGit(cwd, [\"diff\", ref]);"))).toContain("review-security-code");
-    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual([]);
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual(["review-degradation"]);
     // Content roles only, not the deep roster of the file: no backend, frontend or style reviewer.
     const roles = fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"));
     expect(roles.some((role) => ["review-backend", "review-frontend", "review-style"].includes(role))).toBe(false);
   });
 });
 
-describe("fix slice routes the degradation reviewer only on a shared symbol (flow 479 AC6)", () => {
-  test("a fix that changes an exported symbol brings review-degradation; a fix inside a function body does not", () => {
+describe("fix slice routes the degradation reviewer on a source-code change (flow 479 AC6)", () => {
+  test("a fix of an exported symbol, and a body-only edit of an exported function, bring review-degradation; a test, a doc or a data file does not", () => {
     expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+export const LABEL = 'n/a';"))).toContain("review-degradation");
-    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).not.toContain("review-degradation");
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toContain("review-degradation");
+    expect(fixContentRoles(region("src/a/a.test.ts", 10, 10, "+  return total + 1;"))).not.toContain("review-degradation");
+    expect(fixContentRoles(region("docs/guide.md", 10, 10, "+Totals are summed."))).not.toContain("review-degradation");
+    expect(fixContentRoles(region("src/a/a.json", 10, 10, "+  \"total\": 1,"))).not.toContain("review-degradation");
   });
 
   test("the roster of a fix slice is the finding roster united with it, and the base roster never carries it", () => {
     expect(fixRosterRoles(["F2"], PRIOR)).not.toContain("review-degradation");
-    expect(fixSliceRoster(["F2"], PRIOR, region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual(["review-architecture", "review-logic", "review-regression"]);
+    expect(fixSliceRoster(["F2"], PRIOR, region("docs/guide.md", 10, 10, "+Totals are summed."))).not.toContain("review-degradation");
+    expect(fixSliceRoster(["F2"], PRIOR, region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual(["review-architecture", "review-degradation", "review-logic", "review-regression"]);
     expect(fixSliceRoster(["F2"], PRIOR, region("src/a/a.ts", 10, 10, "+export const LABEL = 'n/a';"))).toEqual(["review-architecture", "review-degradation", "review-logic", "review-regression"]);
   });
 });
@@ -194,7 +200,7 @@ describe("classifyDeltaSlices", () => {
     ];
     const [fix, fresh] = classifyDeltaSlices(slices, round(), PRIOR);
     // Flow 460 L6: no union with the slice's round-1 routing — style and performance do not ride along on a fix slice.
-    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-logic", "review-regression", "review-security-code"], depth: "deep" });
+    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-degradation", "review-logic", "review-regression", "review-security-code"], depth: "deep" });
     expect(fresh).toMatchObject({ kind: "new", roles: ["review-logic", "review-style", "review-performance"], depth: "light" });
     expect(fresh?.findingIds).toBeUndefined();
   });
@@ -242,7 +248,7 @@ describe("fix slices in the manifest", () => {
   });
 
   test("fix-slice roles join the round, and the counts split the two kinds", () => {
-    expect(fixSliceRoles(m)).toEqual(["my-project-reviewer", "review-logic", "review-regression", "review-security-code"]);
+    expect(fixSliceRoles(m, installedIn(m))).toEqual(["my-project-reviewer", "review-logic", "review-regression", "review-security-code"]);
     expect(splitCounts(m)).toEqual({ fix: 1, new: 1 });
     expect(splitCounts(manifest([plain(newSlice)]))).toBeUndefined();
   });
@@ -251,18 +257,19 @@ describe("fix slices in the manifest", () => {
     // A light round's required set is path-only: a new slice that spawns a process is routed to review-security-code by
     // its content, and the roster (drivers, plan.json, ledger) must dispatch it.
     const light = manifest([{ ...plain(newSlice), roles: ["review-logic", "review-security-code", "review-backend"] }]);
-    expect(manifestRosterRoles(light)).toEqual(["review-security-code"]);
-    expect(estimateRound(["review-logic", ...manifestRosterRoles(light)], light).perRole.find((r) => r.role === "review-security-code")?.waves).toBe(1);
+    expect(manifestRosterRoles(light, installedIn(light))).toEqual(["review-security-code"]);
+    expect(estimateRound(["review-logic", ...manifestRosterRoles(light, installedIn(light))], light).perRole.find((r) => r.role === "review-security-code")?.waves).toBe(1);
     // A retry piece adds nothing of its own; the fix roster is still part of it.
-    expect(manifestRosterRoles(manifest([{ ...plain(newSlice), id: "r1", roles: ["review-security-code"], retryOf: ["slice-02"] }]))).toEqual([]);
-    expect(manifestRosterRoles(m)).toEqual(fixSliceRoles(m));
+    const retry = manifest([{ ...plain(newSlice), id: "r1", roles: ["review-security-code"], retryOf: ["slice-02"] }]);
+    expect(manifestRosterRoles(retry, installedIn(retry))).toEqual([]);
+    expect(manifestRosterRoles(m, installedIn(m))).toEqual(fixSliceRoles(m, installedIn(m)));
   });
 
   test("roster roles a project does not have are dropped when the installed names are given (flow 479 REG-1)", () => {
     const withDegradation = manifest([{ ...fixSlice, roles: ["review-logic", "review-degradation"] }]);
-    expect(manifestRosterRoles(withDegradation)).toEqual(["review-degradation", "review-logic"]);
     expect(manifestRosterRoles(withDegradation, new Set(["review-logic"]))).toEqual(["review-logic"]);
     expect(manifestRosterRoles(withDegradation, new Set(["review-logic", "review-degradation"]))).toEqual(["review-degradation", "review-logic"]);
+    expect(effectiveSliceRoles(withDegradation.slices[0]!, new Set(["review-logic"]))).toEqual(["review-logic"]);
   });
 
   test("estimate counts both kinds: a dispatch carries one kind, and the split is reported", () => {
@@ -311,7 +318,7 @@ describe("a #1045-shaped fix delta (flow 460 L6)", () => {
     const contentRoles = new Set(routeSlices(built.slices, { head: "h" }).flatMap((s) => s.roles ?? []));
     expect(contentRoles.has("review-backend") || contentRoles.has("review-frontend")).toBe(true);
     const manifest: SliceManifest = { ...built.manifest, slices: classified.map(({ text: _text, ...entry }) => entry) };
-    const roster = [...new Set([...ROUND1_ROSTER, ...fixSliceRoles(manifest)])].sort();
+    const roster = [...new Set([...ROUND1_ROSTER, ...fixSliceRoles(manifest, installedIn(manifest))])].sort();
     expect(roster).not.toContain("review-backend");
     expect(roster).not.toContain("review-frontend");
     const estimate = estimateRound(roster, manifest);
@@ -330,7 +337,7 @@ describe("routing check accepts fix rosters", () => {
   const read = () => text;
 
   const contentRoles = routeSliceRegions("slice-01", parseScopedDiff(text), { changedFiles: ["src/a/a.ts"] }).roles;
-  const FIX_ROSTER = ["review-architecture", "review-logic", "review-regression", "review-security-code"];
+  const FIX_ROSTER = ["review-architecture", "review-degradation", "review-logic", "review-regression", "review-security-code"];
 
   test("a backed fix slice is held to the fix roster plus its content roles (flow 460 L6, 458 M3): the deep round-1 roster is not owed", () => {
     expect(expectedFixRoles({ findingIds: ["F1", "F2"] }, context, text)).toEqual(FIX_ROSTER);
@@ -347,7 +354,7 @@ describe("routing check accepts fix rosters", () => {
     const ctx = { round: round({ fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F2"] }] }), prior: PRIOR };
     const entryOf = (roles: string[]): SliceEntry => ({ id: "slice-01", path: "slice-01.diff", bytes: 100, files: ["src/a/a.ts"], domain: "src/a", split: "domain", kind: "fix", findingIds: ["F2"], roles, depth: "deep" });
     expect(expectedFixRoles({ findingIds: ["F2"] }, ctx, spawnText)).toContain("review-security-code");
-    expect(narrowedSlices({ slices: [entryOf(["review-architecture", "review-logic", "review-regression"])] }, () => spawnText, ctx).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
+    expect(narrowedSlices({ slices: [entryOf(["review-architecture", "review-degradation", "review-logic", "review-regression"])] }, () => spawnText, ctx).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
     expect(narrowedSlices({ slices: [entryOf(expectedFixRoles({ findingIds: ["F2"] }, ctx, spawnText))] }, () => spawnText, ctx).narrowed).toEqual([]);
   });
 
@@ -355,7 +362,7 @@ describe("routing check accepts fix rosters", () => {
     const fix = slice({ roles: FIX_ROSTER.filter((role) => role !== "review-security-code"), depth: "deep" });
     expect(narrowedSlices({ slices: [fix] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
     // F2 dropped from the manifest: the text still touches F2's hunk, so its author is still owed.
-    const dropped = slice({ findingIds: ["F1"], roles: ["review-logic", "review-regression", "review-security-code"], depth: "deep" });
+    const dropped = slice({ findingIds: ["F1"], roles: ["review-degradation", "review-logic", "review-regression", "review-security-code"], depth: "deep" });
     expect(narrowedSlices({ slices: [dropped] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-architecture"] }]);
   });
 
@@ -472,10 +479,34 @@ describe("ledger: a split round", () => {
     expect([...parsed]).toEqual([["A", "open"], ["B", "regressed"]]);
     const read = new Map([["review-logic", new Set(["slice-01"])], ["review-regression", new Set(["slice-01"])]]);
     const given = new Map([["review-logic", new Map([["F1", "closed"], ["F2", "open"]])]]);
-    expect(fixSliceCoverage({ slices: [fix] }, read, given).covered).toEqual(["slice-01"]);
-    expect(fixSliceCoverage({ slices: [{ ...fix, findingIds: [] }] }, read, given).covered).toEqual([]);
+    const everyone = new Set(["review-logic", "review-regression"]);
+    expect(fixSliceCoverage({ slices: [fix] }, read, given, new Set(), everyone).covered).toEqual(["slice-01"]);
+    expect(fixSliceCoverage({ slices: [{ ...fix, findingIds: [] }] }, read, given, new Set(), everyone).covered).toEqual([]);
     // A reviewer the operator confirmed skipping does not hold the slice open.
-    expect(fixSliceCoverage({ slices: [fix] }, new Map([["review-logic", new Set(["slice-01"])]]), given, new Set(["review-regression"])).covered).toEqual(["slice-01"]);
+    expect(fixSliceCoverage({ slices: [fix] }, new Map([["review-logic", new Set(["slice-01"])]]), given, new Set(["review-regression"]), everyone).covered).toEqual(["slice-01"]);
+  });
+
+  test("a fix slice routed to a reviewer the project does not have leaves no gap, and shows the gap once it is installed (flow 479 AR2-W1-001)", () => {
+    const routed: SliceEntry = { ...fix, roles: ["review-logic", "review-degradation"], findingIds: ["F1"] };
+    const read = new Map([["review-logic", new Set(["slice-01"])]]);
+    const given = new Map([["review-logic", new Map([["F1", "closed"]])]]);
+    const without = fixSliceCoverage({ slices: [routed] }, read, given, new Set(), new Set(["review-logic"]));
+    expect(without.gaps).toEqual([]);
+    expect(without.covered).toEqual(["slice-01"]);
+    const withIt = fixSliceCoverage({ slices: [routed] }, read, given, new Set(), new Set(["review-logic", "review-degradation"]));
+    expect(withIt.covered).toEqual([]);
+    expect(withIt.gaps[0]?.detail).toContain("not read by review-degradation");
+  });
+
+  test("the ledger agrees: a fix slice routed to an uninstalled reviewer lets the round close, an installed one still holds it open", () => {
+    const routed: SliceEntry = { ...fix, roles: ["review-logic", "review-degradation"], findingIds: ["F1"] };
+    const withRoute = { ...manifest, slices: [routed, fresh] } as SliceManifest;
+    const raws = (): RawFile[] => [claims("review-logic", ["slice-01", "slice-02"], { prior_dispositions: [{ id: "F1", disposition: "closed" }] }), claims("review-style", ["slice-02"])];
+    const closed = build(raws(), { manifest: withRoute, selected: ["review-logic", "review-style"], installed: new Set(["review-logic", "review-style"]) });
+    expect(closed.gaps).toEqual([]);
+    expect(closed.ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
+    const held = build(raws(), { manifest: withRoute, selected: ["review-degradation", "review-logic", "review-style"], installed: new Set(["review-logic", "review-style", "review-degradation"]) });
+    expect(held.gaps.some((g) => g.detail.startsWith("fix slice slice-01: not read by review-degradation"))).toBe(true);
   });
 });
 

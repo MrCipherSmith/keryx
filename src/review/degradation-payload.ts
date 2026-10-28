@@ -50,7 +50,7 @@ export type DegradationConsumers = {
   total: number;
   /** Changed shared modules the walk started from. */
   changedExports: ChangedExport[];
-  /** Changed modules the graph has no node for: their consumers are unknown, not none. */
+  /** Changed modules, and barrels the symbol walk passed through, that the graph has no node for: their consumers are unknown, not none. */
   unresolved: string[];
   /** One sentence for the summary: whether the cap dropped consumers, and how many. */
   summary: string;
@@ -106,7 +106,7 @@ export function buildDegradationConsumers(input: {
     changedExports: input.changedExports.map((entry) => ({ file: entry.file, names: entry.names })),
     unresolved: [...new Set(unresolved)].sort(),
     summary: capped
-      ? `the cap of ${cap} dropped ${dropped.length} of ${ranked.length} consumers; the dropped ones are listed and were NOT traced`
+      ? `the cap of ${cap} dropped ${dropped.length} of ${ranked.length} consumers; the first ${NOT_TRACED_LISTED} dropped ones are listed, the rest are counted, and none were traced`
       : `the cap of ${cap} dropped no consumer (${ranked.length} found)`,
   };
 }
@@ -131,11 +131,6 @@ export function changedExportsOf(radius: Pick<BlastRadius, "reach" | "changedFil
 /** The barrels the symbol walk passed a changed export through; empty in `file` mode. */
 export function barrelsOf(radius: Pick<BlastRadius, "reach">): string[] {
   return radius.reach?.mode === "symbol" ? [...new Set(radius.reach.barrels)].sort() : [];
-}
-
-/** True when the diff changes at least one shared symbol, which is what a delta round routes on. */
-export function touchesSharedSymbol(changedExports: readonly ChangedExport[]): boolean {
-  return changedExports.length > 0;
 }
 
 /**
@@ -177,10 +172,14 @@ export function renderDegradationPayloadBrief(payload: DegradationConsumers): st
   return lines.join("\n");
 }
 
-/** A path or name is graph data, not prose: a control character in it must not forge a brief line or drive a terminal. */
+/**
+ * A path or name is graph data, not prose: a control character in it must not forge a brief line or drive a terminal.
+ * It escapes (a reversible \uXXXX) where `safeText` in lib/live-render.ts flattens to a space, so the reviewer sees the real
+ * name; the character class must stay in step with that file's CONTROL_RE.
+ */
 function safe(text: string): string {
   return text.replace(CONTROL_CHARACTERS, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 
 // Built from a string so the line and paragraph separators stay escapes in the source.
-const CONTROL_CHARACTERS = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]", "g");
+const CONTROL_CHARACTERS = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]", "g");

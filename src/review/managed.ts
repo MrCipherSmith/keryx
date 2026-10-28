@@ -2380,14 +2380,17 @@ function parseLegacyReport(
       finding.line = location.line;
     }
     // Flow 479: the template of `review-degradation` is markdown with `Class` and `Evidence kind` lines. Read only
-    // when the value is exactly one member of the closed list; a pasted `a | b | c` template line stays unread.
-    const degradationClass = closedListValue(block, ["class", "degradation class", "degradation_class"], REVIEW_DEGRADATION_CLASSES);
-    if (degradationClass !== undefined) {
-      finding.degradation_class = degradationClass;
-    }
-    const evidenceKind = closedListValue(block, ["evidence kind", "evidence_kind"], REVIEW_EVIDENCE_KINDS);
-    if (evidenceKind !== undefined) {
-      finding.evidence_kind = evidenceKind;
+    // for that reviewer (another reviewer's `Class:` line means something else), and only when the value is exactly
+    // one member of the closed list; a pasted `a | b | c` template line stays unread.
+    if (finding.reviewer === "review-degradation") {
+      const degradationClass = closedListValue(block, ["class", "degradation class", "degradation_class"], REVIEW_DEGRADATION_CLASSES);
+      if (degradationClass !== undefined) {
+        finding.degradation_class = degradationClass;
+      }
+      const evidenceKind = closedListValue(block, ["evidence kind", "evidence_kind"], REVIEW_EVIDENCE_KINDS);
+      if (evidenceKind !== undefined) {
+        finding.evidence_kind = evidenceKind;
+      }
     }
     findings.push(finding);
   }
@@ -2395,7 +2398,8 @@ function parseLegacyReport(
 }
 
 function closedListValue<V extends string>(block: string, labels: readonly string[], allowed: readonly V[]): V | undefined {
-  const value = labelledField(block, labels)?.trim().toLowerCase();
+  // A value written `**debt**`, `\`debt\`` or `_debt_` is the same word; only the emphasis around it comes off.
+  const value = labelledField(block, labels)?.trim().replace(/^[*_`]+|[*_`]+$/g, "").trim().toLowerCase();
   return allowed.find((candidate) => candidate === value);
 }
 

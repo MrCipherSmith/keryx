@@ -270,15 +270,11 @@ bound the round.
 Two channels, and both work:
 
 - `--blast-radius <file>` — always correct, and the one to use.
-- `.metaproject/reviews/blast-radius.json` (or
-  `.metaproject/flows/<flow>/reviews/blast-radius.json` for a flow-attached
-  round) — the handoff slot, read when no flag is passed. The ingest **consumes**
-  it: it is copied into the package it screened and removed from the slot, so a
-  later round cannot be screened against a set nobody recomputed.
+- `.metaproject/reviews/blast-radius.json` (or `.metaproject/flows/<flow>/reviews/blast-radius.json` for a flow-attached round) — the handoff slot, read when no flag is passed. The ingest **consumes** it: copied into the package it screened and removed from the slot, so a later round cannot be screened against a set nobody recomputed.
 
 Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
 
-`review-degradation` (profile `full`, deep tier) asks what the regression screen does not: is the code worse than on the base, and can that be shown? It reads the diff plus the importers of the module that holds each changed shared export (and of a barrel that re-exports it), which `keryx review blast-radius --degradation [--degradation-cap <n>]` prints from the code graph under one cap shared by all exports; the model never picks the set. It has no severity floor and needs no `--blast-radius` record. A `major` or `blocker` of its with no `evidence_kind` is lowered to `info` at ingest and listed in `scope.md` under `## Degradation evidence screen`. A light round does not dispatch it. A delta round dispatches it on a fix slice whose changed lines add, remove or edit an `export` declaration, and on every new deep slice; a body-only edit of an exported function does not route it (the payload still lists its importers).
+`review-degradation` (profile `full`, deep tier) asks what the regression screen does not: is the code worse than on the base, and can that be shown? It reads the diff plus the importers of the module that holds each changed shared export (and of a barrel that re-exports it), which `keryx review blast-radius --degradation [--degradation-cap <n>]` prints from the code graph under one cap shared by all exports; the model never picks the set. It has no severity floor and needs no `--blast-radius` record. A `major` or `blocker` of its with no `evidence_kind` is lowered to `info` at ingest and listed in `scope.md` under `## Degradation evidence screen`. A light round does not dispatch it. A delta round dispatches it on a fix slice that changes a source-code file (not a test, a document or a data file) and on every new deep slice; a fix slice's lines cannot tell whether they sit inside an exported function, so the payload settles it.
 
 `--refuted` takes the findings this round **raised and then dismissed**, in the
 same finding shape, each carrying `disposition: {state, evidence}` with one of
@@ -776,6 +772,8 @@ sites**? The orchestrator refuses, in code, a finding that is `outside-set`, bel
 (`non-regression-severity`), or names nothing the change touched (`no-link-to-change`) — pass
 `--brief` verbatim so no reviewer spends the round on findings that will be refused. `class_scope`
 names the caller that breaks.
+
+`review-degradation` is told its consumers by the graph, not by its own search: before each dispatch of it (a deep slice, or a delta round's fix or new deep slice), run `keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --degradation` from the worktree root and hand its stdout to the reviewer verbatim as its payload section. It needs no `--blast-radius` record; without the payload the reviewer has no consumers to read.
 
 Recompute scope B on rounds 2..N only when the changed-file set moved, and always on the final round:
 

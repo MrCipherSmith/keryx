@@ -136,3 +136,7 @@ test("safeText leaves one plain line: no escape sequence, no control, no line se
   expect(safeText("a\u0085b\u009bc\u007fd")).toBe("a b c d");
   expect(safeText("  \u001b  ")).toBe("");
 });
+test("safeText collapses a run of whitespace and controls to one space and drops bidirectional overrides", () => {
+  expect(safeText("a \t \n  b")).toBe("a b");
+  expect(safeText("a\u202eb\u2066c\u200fd")).toBe("a b c d");
+});

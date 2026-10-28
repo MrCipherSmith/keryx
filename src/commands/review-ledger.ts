@@ -296,7 +296,8 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, models, assignments, replies, dropped } = await readDrivers(inputDir, root);
   // A delta round's fix slices are read by their own roster (flow 458): the reviewers that authored the findings they answer
   // join the round even when no changed path asks for them, and each slice kind is held to its own roster below.
-  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : manifestRosterRoles(manifest, await installedReviewerNames(root)))])].sort();
+  const installed = await installedReviewerNames(root);
+  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : manifestRosterRoles(manifest, installed))])].sort();
   // M5: skipping a reviewer the round requires is a smaller reviewer set, the operator's decision (card or terminal), never
   // the agent's flag alone. A skip of a reviewer the round does not require changes nothing and is only recorded.
   const skipped = parseSkips(rest).map((skip) => (selected.includes(skip.reviewer) ? skip : { ...skip, reason: `${skip.reason} (not required this round)` }));
@@ -344,6 +345,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     manifestPath: path.relative(process.cwd(), manifestPath),
     mutationRecorded: await packageHasMutationRecord(packageDir),
     skipped,
+    installed,
     superseded: required.excluded.filter((entry) => entry.reason.startsWith("superseded by ") || entry.reason.startsWith("overlap group ")),
     supersedeNotes: required.notes,
     screened,

@@ -27,6 +27,11 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
     expect(readFileSync(BUNDLED_COPY, "utf8")).toBe(skill);
   });
 
+  test("the orchestrator hands the reviewer the --degradation payload before dispatch", () => {
+    const orchestrator = readFileSync(path.join(ROOT, ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md"), "utf8");
+    expect(orchestrator).toMatch(/review blast-radius [^\n]*--degradation[^\n]*\n?[^\n]*hand its stdout to the reviewer verbatim/);
+  });
+
   test("the first screen says how it differs from review-regression", () => {
     const screen = firstScreen(skill);
     expect(screen).toContain("review-regression");

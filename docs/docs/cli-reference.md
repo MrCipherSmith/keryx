@@ -5575,7 +5575,7 @@ a depth and a file cap, closest first.
 | `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
 | `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |
 | `--brief` | The dispatch text a scope-B reviewer is given. |
-| `--degradation` | Print the `review-degradation` payload instead of the record: the one-hop importers of the module that holds each changed shared export (and of a barrel that re-exports it), from the code graph, with the cap and the files it dropped stated (the first 20 by name, the rest as a count). A changed file the graph has no node for is listed as unresolved, not as clean. |
+| `--degradation` | Print the `review-degradation` payload instead of the record: the one-hop importers of the module that holds each changed shared export (and of a barrel that re-exports it), from the code graph, with the cap and the files it dropped stated (the first 20 by name, the rest as a count). A changed file the graph has no node for is listed as unresolved, not as clean. It recomputes from the graph also with `--previous`, never rewrites the package's record, and cannot be combined with `--json`, `--brief` or `--out`. |
 | `--degradation-cap <n>` | Cap on the consumers `--degradation` lists: one budget shared by all changed exports, not one per export. Default **40**. |
 | `--out <file>` | Write the record. A `.json` path writes the JSON; anything else upserts a `## Blast radius` block. |
 

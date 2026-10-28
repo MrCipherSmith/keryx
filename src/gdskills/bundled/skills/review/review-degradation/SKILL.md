@@ -5,7 +5,7 @@ description: |
   Use when: asking whether the code is WORSE after a change than on the base branch
   (behaviour, defaults, speed or structure) and the answer can be shown. Dispatched
   by review-orchestrator in a deep round at profile `full`, over the diff plus the
-  graph-listed dependents of each shared symbol the diff changed.
+  graph-listed importers of the module that holds each shared export the diff changed.
   NOT for: the dependents-only regression check (that is review-regression), and NOT
   for style, naming or architecture of code the change did not touch.
 triggers:
@@ -27,7 +27,7 @@ How this differs from `review-regression`, before anything else:
 
 | | `review-regression` | `review-degradation` |
 |---|---|---|
-| Looks at | dependents of the change only | the diff itself plus every consumer of each changed shared symbol |
+| Looks at | dependents of the change only | the diff itself plus the importers of each changed shared export's module |
 | Floor | `major`; below it the ingest screen refuses the finding | none: `blocker`, `major`, `minor`, `info` |
 | Set | the blast-radius files, refused in code if outside them | the consumers `keryx gdgraph affected` lists, never chosen by you |
 | Question | does the change break something that worked | is the code worse than on the base, and can you show it |
@@ -59,8 +59,8 @@ Every finding carries exactly one `degradation_class`:
 
 ## Evidence
 
-A finding is a claim; evidence is what makes it one. Every finding carries one
-`evidence_kind`, and `evidence` says what you ran or read:
+A finding is a claim; evidence is what makes it one. Every non-pre-existing
+minor, major or blocker carries one `evidence_kind`, and `evidence` says what you ran or read:
 
 | Kind | What it is |
 |---|---|

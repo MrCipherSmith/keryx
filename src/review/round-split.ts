@@ -14,7 +14,7 @@
 
 import type { ScopedRegion } from "./scope";
 import { parseScopedDiff, type SliceEntry } from "./slice";
-import { ALWAYS_ROLE, REGRESSION_ROLE, collapseOverlapGroups, contentRolesOf } from "./slice-routing";
+import { ALWAYS_ROLE, DEGRADATION_ROLE, REGRESSION_ROLE, changesSharedCodeCandidate, collapseOverlapGroups, contentRolesOf } from "./slice-routing";
 import { isPriorDisposition, readPriorFindings, readRoundRecord, type FixHunk, type PriorDisposition, type PriorFinding, type RoundHunk, type RoundRecord } from "./round-record";
 
 /** Roles every fix slice gets; the authors of its findings join them. */
@@ -59,12 +59,16 @@ export function fixRosterRoles(findingIds: readonly string[], prior: readonly Pr
 
 /**
  * The content roles of a slice's own changed lines (flow 458 M3): every content/path rule of slice routing that its
- * regions hit — a fix that spawns a process, builds a git argv or touches an auth path brings review-security-code — and
- * not the deep roster a round-1 slice of the same files would get. Overlap groups collapse as in routing.
+ * regions hit — a fix that spawns a process, builds a git argv or touches an auth path brings review-security-code — plus
+ * review-degradation for any source-code change ({@link changesSharedCodeCandidate}), and not the deep roster a round-1
+ * slice of the same files would get. Overlap groups collapse as in routing.
  */
 export function fixContentRoles(text: string): string[] {
   const roles = new Set<string>();
-  for (const region of parseScopedDiff(text)) for (const hit of contentRolesOf(region)) roles.add(hit.role);
+  for (const region of parseScopedDiff(text)) {
+    for (const hit of contentRolesOf(region)) roles.add(hit.role);
+    if (changesSharedCodeCandidate(region)) roles.add(DEGRADATION_ROLE);
+  }
   return collapseOverlapGroups(roles).sort();
 }
 
@@ -346,9 +350,18 @@ export function secondLookClaimBacked(entry: Pick<SliceEntry, "kind" | "files">,
   return everyChangedLine(text, (file, walked) => inSecondLookHunk(hunks, file, walked));
 }
 
+/**
+ * The roles that can actually read a slice: its routed roles that the project has installed. Slice routing can name
+ * `review-degradation` for a project installed below profile `full`; a role nobody can run is owed no read, joins no
+ * required set and leaves no coverage gap. The one place every roster consumer (estimate, drivers, ledger, coverage) filters.
+ */
+export function effectiveSliceRoles(slice: Pick<SliceEntry, "roles">, installed: ReadonlySet<string>): string[] {
+  return (slice.roles ?? []).filter((role) => installed.has(role));
+}
+
 /** Roles that own at least one original fix or second-look slice of the manifest (they join the round's required set). */
-export function fixSliceRoles(manifest: { slices: readonly SliceEntry[] }): string[] {
-  return [...new Set(manifest.slices.filter((slice) => slice.retryOf === undefined && (slice.kind === "fix" || slice.kind === "second-look")).flatMap((slice) => slice.roles ?? []))].sort();
+export function fixSliceRoles(manifest: { slices: readonly SliceEntry[] }, installed: ReadonlySet<string>): string[] {
+  return [...new Set(manifest.slices.filter((slice) => slice.retryOf === undefined && (slice.kind === "fix" || slice.kind === "second-look")).flatMap((slice) => effectiveSliceRoles(slice, installed)))].sort();
 }
 
 /**
@@ -363,14 +376,12 @@ export const ALWAYS_DISPATCHED_ROUTED_ROLES: ReadonlySet<string> = new Set(["rev
  * The roles a slice manifest adds to the round's required set: the roles of its fix and second-look slices
  * ({@link fixSliceRoles}), and each {@link ALWAYS_DISPATCHED_ROUTED_ROLES} role that slice routing gave any original
  * slice. The one roster extension the estimate (plan.json), the drivers, `review required` and `ledger build` share.
- * With `installed` (the reviewer names the project's review tree holds) a role the project does not have is dropped:
- * routing can name `review-degradation` for a project installed below profile `full`, and a role nobody can run must not
- * become a required reviewer with no result.
+ * `installed` is the reviewer names the project's review tree holds ({@link effectiveSliceRoles}); callers with a root use
+ * `installedRosterRoles` in coverage.ts.
  */
-export function manifestRosterRoles(manifest: { slices: readonly SliceEntry[] }, installed?: ReadonlySet<string>): string[] {
-  const routed = manifest.slices.filter((slice) => slice.retryOf === undefined).flatMap((slice) => (slice.roles ?? []).filter((role) => ALWAYS_DISPATCHED_ROUTED_ROLES.has(role)));
-  const roles = [...new Set([...fixSliceRoles(manifest), ...routed])].sort();
-  return installed === undefined ? roles : roles.filter((role) => installed.has(role));
+export function manifestRosterRoles(manifest: { slices: readonly SliceEntry[] }, installed: ReadonlySet<string>): string[] {
+  const routed = manifest.slices.filter((slice) => slice.retryOf === undefined).flatMap((slice) => effectiveSliceRoles(slice, installed).filter((role) => ALWAYS_DISPATCHED_ROUTED_ROLES.has(role)));
+  return [...new Set([...fixSliceRoles(manifest, installed), ...routed])].sort();
 }
 
 export type SplitCounts = { fix: number; new: number; secondLook?: number };
@@ -406,19 +417,21 @@ export function priorDispositionsOf(result: { prior_dispositions?: unknown } | u
  * slices each finished run accounted for) — a reviewer the operator confirmed skipping excepted — and every finding
  * attached to it has a disposition from a reviewer ON THAT ROSTER (`dispositionsBy`: reviewer → finding id →
  * disposition, from finished results of this scope only). Another reviewer's word, or a carried record, covers nothing:
- * a fix slice with no attached finding never counts, since nothing says what it answered.
+ * a fix slice with no attached finding never counts, since nothing says what it answered. A routed role the project has
+ * not installed is not on the roster ({@link effectiveSliceRoles}): nobody could read the slice as that role.
  */
 export function fixSliceCoverage(
   manifest: { slices: readonly SliceEntry[] },
   readBy: ReadonlyMap<string, ReadonlySet<string>>,
   dispositionsBy: ReadonlyMap<string, ReadonlyMap<string, string>>,
-  skipped: ReadonlySet<string> = new Set(),
+  skipped: ReadonlySet<string>,
+  installed: ReadonlySet<string>,
 ): { covered: string[]; gaps: Array<{ detail: string; next: string }> } {
   const covered: string[] = [];
   const gaps: Array<{ detail: string; next: string }> = [];
   for (const slice of manifest.slices) {
     if (slice.retryOf !== undefined || slice.kind !== "fix") continue;
-    const roster = (slice.roles ?? []).filter((role) => !skipped.has(role));
+    const roster = effectiveSliceRoles(slice, installed).filter((role) => !skipped.has(role));
     const ids = slice.findingIds ?? [];
     const unread = roster.filter((role) => readBy.get(role)?.has(slice.id) !== true);
     const undisposed = ids.filter((id) => !roster.some((role) => dispositionsBy.get(role)?.has(id) === true));

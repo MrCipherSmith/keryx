@@ -331,8 +331,10 @@ describe("mergeDuplicates keeps the degradation fields (flow 479)", () => {
 
   test("the canonical's own class and kind win over an absorbed member's", () => {
     const own = degradation({ id: "D-002", severity: "blocker", degradation_class: "debt", evidence_kind: "red-test" });
-    const result = mergeDuplicates([own, degradation({ severity: "major" })]);
+    const absorbed = finding({ id: "L-002", reviewer: "review-logic", severity: "major", degradation_class: "behaviour-delta", evidence_kind: "probe" });
+    const result = mergeDuplicates([absorbed, own]);
 
+    expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ id: "D-002", degradation_class: "debt", evidence_kind: "red-test" });
   });
 

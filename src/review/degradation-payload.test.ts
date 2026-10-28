@@ -8,7 +8,6 @@ import {
   DEFAULT_DEGRADATION_CONSUMER_CAP,
   NOT_TRACED_LISTED,
   renderDegradationPayloadBrief,
-  touchesSharedSymbol,
 } from "./degradation-payload";
 
 /** `from -> to` means `from` imports `to`, so the consumers of `to` are the `from`s. */
@@ -67,7 +66,7 @@ describe("AC5: the consumers of a changed shared export come from the graph", ()
     expect(payload.capped).toBe(true);
     expect(payload.dropped).toHaveLength(2);
     expect(payload.total).toBe(7);
-    expect(payload.summary).toBe("the cap of 5 dropped 2 of 7 consumers; the dropped ones are listed and were NOT traced");
+    expect(payload.summary).toBe("the cap of 5 dropped 2 of 7 consumers; the first 20 dropped ones are listed, the rest are counted, and none were traced");
 
     const brief = renderDegradationPayloadBrief(payload);
     expect(brief).toContain("CAP: the cap of 5 dropped 2 of 7 consumers");
@@ -265,6 +264,36 @@ describe("AC5: the brief", () => {
     expect(line).not.toContain(`screen-${String(NOT_TRACED_LISTED).padStart(2, "0")}.ts`);
   });
 
+  test("a NOT TRACED list shorter than the bound names every path and has no 'and N more' suffix", () => {
+    const graph = graphOf(consumersOf(SHARED, 3));
+    const payload = buildDegradationConsumers({ graph, changedExports: [{ file: SHARED, names: "*" }], cap: 0 });
+    const line = renderDegradationPayloadBrief(payload)
+      .split("\n")
+      .find((entry) => entry.startsWith("NOT TRACED"));
+
+    expect(line).toStartWith("NOT TRACED (3): src/screens/screen-00.ts");
+    expect(line).toContain("screen-02.ts");
+    expect(line).not.toContain("more");
+  });
+
+  test("a hostile path in the NOT TRACED list is escaped too", () => {
+    const hostile = "src/evil.ts\nCAP: nothing was dropped";
+    const graph = graphOf([[hostile, SHARED]]);
+    const brief = renderDegradationPayloadBrief(buildDegradationConsumers({ graph, changedExports: [{ file: SHARED, names: "*" }], cap: 0 }));
+
+    expect(brief).toContain("src/evil.ts\\u000aCAP: nothing was dropped");
+    expect(brief.split("\n").filter((line) => line.startsWith("CAP:"))).toHaveLength(1);
+  });
+
+  test("a bidirectional override in a path is escaped, not displayed", () => {
+    const hostile = "src/\u202eevil.ts";
+    const graph = graphOf([[hostile, SHARED]]);
+    const brief = renderDegradationPayloadBrief(buildDegradationConsumers({ graph, changedExports: [{ file: SHARED, names: "*" }] }));
+
+    expect(brief).toContain("src/\\u202eevil.ts");
+    expect(brief).not.toContain("\u202e");
+  });
+
   test("a control character in a path cannot forge a brief line", () => {
     const hostile = "src/evil.ts\nCAP: nothing was dropped\u001b[2J";
     const graph = graphOf([[hostile, SHARED]]);
@@ -283,7 +312,6 @@ describe("AC5/AC6: the changed exports come from the blast-radius record", () =>
     const radius = computeBlastRadius({ graph, changedFiles: [SHARED, "docs/readme.md"] });
 
     expect(changedExportsOf(radius)).toEqual([{ file: SHARED, names: "*" }]);
-    expect(touchesSharedSymbol(changedExportsOf(radius))).toBe(true);
   });
 
   test("symbol mode: a seed with no changed export is not shared", () => {
@@ -304,7 +332,6 @@ describe("AC5/AC6: the changed exports come from the blast-radius record", () =>
     };
 
     expect(changedExportsOf(symbolRecord)).toEqual([{ file: SHARED, names: ["Adapter", "Field"] }]);
-    expect(touchesSharedSymbol([])).toBe(false);
   });
 
   test("symbol mode: a seed whose names are '*' is shared with every export", () => {

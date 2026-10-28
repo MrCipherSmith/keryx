@@ -39,13 +39,13 @@ import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, installedReviewerNames, type DepthRequest } from "../review/coverage";
+import { installedRosterRoles } from "../review/roster";
+import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
 import { optInRolesFromArgs, optionalRolesLine, packageEnabledRoles, recordEnabledRoles } from "../review/role-switches";
 import { packageEstimateLine } from "../review/estimate-actual";
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
-import { manifestRosterRoles } from "../review/round-split";
 import { printPlanHelp, runPlan } from "./review-plan";
 import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -3410,7 +3410,7 @@ async function runRequired(args: string[]): Promise<void> {
   });
   // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
   const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
-  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? manifestRosterRoles(sliceManifest, await installedReviewerNames(process.cwd())).filter((role) => !baseSet.required.includes(role)) : [];
+  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? (await installedRosterRoles(process.cwd(), sliceManifest)).filter((role) => !baseSet.required.includes(role)) : [];
   const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
     // The one write: `ledger build` reads the round's depth back from the package.
@@ -4007,9 +4007,10 @@ async function runBlastRadius(args: string[]): Promise<void> {
   if (wantsDegradation) {
     const clash = ["--json", "--brief", "--out"].find((flag) => (flag === "--out" ? optionValue(args, flag) !== undefined : args.includes(flag)));
     if (clash !== undefined) throw new Error(`--degradation prints the review-degradation payload to stdout and cannot be combined with ${clash}; run blast-radius again for that output.`);
-  } else if (optionValue(args, "--degradation-cap") !== undefined) {
+  } else if (args.some((arg) => arg === "--degradation-cap")) {
     throw new Error("--degradation-cap only applies together with --degradation.");
   }
+  const degradationCap = wantsDegradation ? parseNonNegativeInteger(optionValue(args, "--degradation-cap"), "--degradation-cap") : undefined;
 
   const explicit = optionValue(args, "--changed");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
@@ -4057,7 +4058,9 @@ async function runBlastRadius(args: string[]): Promise<void> {
   const reuse = !decision.recompute && previous !== undefined;
   // The degradation payload is built from the code graph, which a reused record does not carry.
   const recomputeForDegradation = reuse && wantsDegradation;
-  console.error(`recompute: ${decision.recompute || recomputeForDegradation ? "yes" : "no"} — ${recomputeForDegradation ? "the degradation payload needs the graph" : decision.reason}`);
+  const recompute = decision.recompute || recomputeForDegradation;
+  const recomputeReason = recomputeForDegradation ? "the degradation payload needs the graph" : decision.reason;
+  console.error(`recompute: ${recompute ? "yes" : "no"} — ${recomputeReason}`);
   if (reuse && !wantsDegradation) {
     await emitBlastRadius(previous, args);
     return;
@@ -4127,7 +4130,7 @@ async function runBlastRadius(args: string[]): Promise<void> {
           changedExports: changedExportsOf(radius),
           changedFiles: radius.changedFiles,
           barrels: barrelsOf(radius),
-          cap: parseNonNegativeInteger(optionValue(args, "--degradation-cap"), "--degradation-cap"),
+          cap: degradationCap,
         }),
       )
     : undefined;
@@ -4150,7 +4153,8 @@ async function runBlastRadius(args: string[]): Promise<void> {
       `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
         `Cut blast radius: run the waves — keryx review chunks plan --package ${packageOption ?? "<review>"}`,
     );
-    if (packageOption !== undefined) {
+    // The degradation payload is read-only: it must not overwrite the package's own record or re-cut its chunks.
+    if (packageOption !== undefined && !wantsDegradation) {
       const planned = await recordRadiusAndPlan(resolvePackageDir(args, cwd), resolveProjectRoot(cwd), radius, packageOption);
       console.error(planned);
     }
@@ -4990,10 +4994,11 @@ high fan-in hub, are omitted with a reason instead of reviewed; --reach file wal
 Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
 --no-text-links. With --package the changed files are base...head at the package's pinned head.
 --package stores the record in the package; --previous/--final carry the dropped files across rounds.
---degradation prints the review-degradation payload instead: the one-hop consumers of each changed shared export from the
-code graph, capped at --degradation-cap (default 40), with the files the cap dropped listed and the cap stated.
-It always recomputes from the graph, also with --previous, and is refused together with --json, --brief or --out;
---degradation-cap is refused without --degradation.`);
+--degradation prints the review-degradation payload instead: the one-hop importers of the module that holds each changed
+shared export (and of a barrel that re-exports it), from the code graph, under one cap shared by all of them
+(--degradation-cap, default 40), with the cap stated and the files it dropped named (the first 20, then a count).
+It always recomputes from the graph, also with --previous, never rewrites the package's record, and is refused together
+with --json, --brief or --out; --degradation-cap is refused without --degradation.`);
 }
 
 function printCompleteHelp(): void {

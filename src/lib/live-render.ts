@@ -26,7 +26,7 @@ export function stripAnsi(text: string): string {
 // eslint-disable-next-line no-control-regex
 const OSC_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g;
 // eslint-disable-next-line no-control-regex
-const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g;
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g;
 
 /** Text written by someone else, made safe for a one-line terminal or table cell: no escapes, no control characters, one line. */
 export function safeText(text: string): string {

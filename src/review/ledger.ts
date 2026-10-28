@@ -117,6 +117,8 @@ export type LedgerInputs = {
    * `selected`, and are written to `dispatch.skipped` and as `Not run: <reviewer> — <reason>` lines to `dispatch.notRun`.
    */
   skipped?: readonly ReviewerSkip[] | undefined;
+  /** Reviewer names the project's review tree holds; a fix slice's routed roles outside it are owed no read. Absent: every routed role counts as installed. */
+  installed?: ReadonlySet<string> | undefined;
   /** Reviewers the required set dropped by `supersedes` or an overlap group, and the notes of the ones it refused to drop (M6). */
   superseded?: ReadonlyArray<{ reviewer: string; reason: string }> | undefined;
   supersedeNotes?: readonly string[] | undefined;
@@ -582,7 +584,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 
   // A fix slice is covered only when every reviewer on its roster (but a skip the operator confirmed) read it AND every
   // finding attached to it has a disposition from a reviewer on that roster (M4).
-  const fix = manifest === undefined ? { covered: [], gaps: [] } : fixSliceCoverage(manifest, readBy, dispositionsBy, skippedNames);
+  const fix = manifest === undefined ? { covered: [], gaps: [] } : fixSliceCoverage(manifest, readBy, dispositionsBy, skippedNames, input.installed ?? new Set(manifest.slices.flatMap((slice) => slice.roles ?? [])));
   const fixCovered = new Set(fix.covered);
   gaps.push(...fix.gaps);
 
