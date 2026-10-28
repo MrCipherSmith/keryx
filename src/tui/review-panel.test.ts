@@ -375,6 +375,7 @@ describe("degradation findings in the review panel", () => {
       { id: "F-1\u001b[2J\u2028X", severity: "major", degradationClass: "debt", evidenceKind: "probe", unproven: false, originalSeverity: undefined, file: "a\rb\u2029c.ts" },
     ]);
     expect(lines[1]).toBe("  F-1 X major debt, evidence probe a b c.ts");
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point of this check
     expect(lines.join("\n")).not.toMatch(new RegExp("[\\u001b\\r\\u2028\\u2029]"));
   });
 

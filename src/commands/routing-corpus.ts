@@ -218,11 +218,14 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Flow 335 added `review-jev-contract` with four positives, all ranking
  * first: 328/330 + 4 = 332/334.
  *
+ * Flow 479 added `review-degradation` with four positives, all ranking
+ * first: 338/341 + 4 = 342/345.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 338;
-export const RANK1_TOTAL = 341;
+export const RANK1_FIRST = 342;
+export const RANK1_TOTAL = 345;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -641,6 +644,19 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
       { prompt: "are there any bugs in this function", owner: "review-logic" },
+    ],
+  },
+  {
+    skill: "review-degradation",
+    positives: [
+      "check this change for degradation",
+      "has this change made the code worse than the base branch",
+      "did the change degrade anything compared with the base branch",
+      "did this change leave the code slower or structurally worse than it was on the base branch",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "does this change break anything else", owner: "review-regression" },
     ],
   },
   {

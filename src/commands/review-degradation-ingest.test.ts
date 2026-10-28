@@ -8,6 +8,7 @@ import path from "node:path";
 import { reviewCommand } from "./review";
 import { readyResearchFixture } from "../review/research.test-helpers";
 
+// eslint-disable-next-line no-control-regex -- matching control characters is the point of this check
 const CONTROL = new RegExp("[\\u001b\\u2028\\u2029]");
 const ORIGINAL_CWD = process.cwd();
 const realLog = console.log;

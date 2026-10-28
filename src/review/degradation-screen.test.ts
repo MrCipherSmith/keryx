@@ -117,6 +117,7 @@ test("AC4: a round with no degradation finding still writes the block, and says 
   expect(renderDegradationScreenLines(record)).toEqual([]);
 });
 
+// eslint-disable-next-line no-control-regex -- matching control characters is the point of this check
 const CONTROL = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]");
 
 test("SEC-001: escapeCell leaves one plain line whatever the reviewer wrote", () => {
@@ -141,6 +142,7 @@ test("SEC-001: the markdown row and the terminal line carry no control character
   expect(row?.split("|").length).toBeGreaterThan(6);
   const lines = renderDegradationScreenLines(record);
   expect(lines).toHaveLength(2);
+  // eslint-disable-next-line no-control-regex -- matching control characters is the point of this check
   expect(lines.join("\n")).not.toMatch(new RegExp("[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f\\u2028\\u2029]"));
   expect(lines[1]).toContain("downgraded D-001 |x major -> info");
 });
