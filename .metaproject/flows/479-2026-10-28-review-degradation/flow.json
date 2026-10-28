@@ -9,9 +9,9 @@
   "id": "479",
   "slug": "review-degradation",
   "title": "review-degradation: a reviewer that checks whether the code got worse than on the base branch",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-28T07:16:04.631Z",
-  "updatedAt": "2026-10-28T07:50:32.685Z",
+  "updatedAt": "2026-10-28T11:19:51.917Z",
   "source": {
     "type": "description",
     "ref": null
@@ -60,7 +60,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1092"
   },
   "baseBranch": "main",
   "owner": {
@@ -128,7 +128,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -136,7 +136,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -217,6 +218,16 @@
       "at": "2026-10-28T07:50:32.685Z",
       "event": "ac-confirmed",
       "detail": "AC11: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T08:31:59.965Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-28T11:19:51.917Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1092"
     }
   ],
   "acKinds": {
