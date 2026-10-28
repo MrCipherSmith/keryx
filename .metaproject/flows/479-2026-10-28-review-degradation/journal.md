@@ -16,3 +16,5 @@
 - 2026-10-28T07:50:32.249Z - ac-confirmed: AC8: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-28T07:50:32.469Z - ac-confirmed: AC9: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-28T07:50:32.685Z - ac-confirmed: AC11: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-28T08:31:59.965Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-28T11:19:51.917Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1092
