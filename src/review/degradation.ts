@@ -1,3 +1,4 @@
+import { safeText } from "../lib/live-render";
 import { isBlastRadiusScopedFinding } from "./blast-radius";
 import {
   REVIEW_EVIDENCE_KINDS,
@@ -57,9 +58,19 @@ export type DegradationScreenRecord = {
   }>;
 };
 
+/** Whether a finding was filed by `review-degradation`, by the same containment rule the ingest screen uses. */
+export function isDegradationReviewer(reviewer: unknown): boolean {
+  return typeof reviewer === "string" && isBlastRadiusScopedFinding({ reviewer }, [DEGRADATION_REVIEWER]);
+}
+
 function hasEvidenceKind(finding: Partial<StructuredReviewFinding>): boolean {
   const kind = finding.evidence_kind;
   return typeof kind === "string" && (REVIEW_EVIDENCE_KINDS as readonly string[]).includes(kind);
+}
+
+function omitEvidenceKind<T extends Partial<StructuredReviewFinding>>(finding: T): T {
+  const { evidence_kind: _dropped, ...rest } = finding;
+  return rest as T;
 }
 
 /**
@@ -77,19 +88,23 @@ export function screenDegradationFindings<T extends Partial<StructuredReviewFind
   const downgraded: DegradationDowngrade<T>[] = [];
   let screened = 0;
   for (const finding of findings) {
-    if (!isBlastRadiusScopedFinding(finding, [DEGRADATION_REVIEWER])) {
+    if (!isDegradationReviewer(finding.reviewer)) {
       retained.push(finding);
       continue;
     }
     screened += 1;
-    const severity = finding.severity;
-    if (severity === undefined || !SCREENED_SEVERITIES.includes(severity) || hasEvidenceKind(finding)) {
-      retained.push(finding);
+    // A kind outside the closed list is no kind. It is removed from the record, so the contract gate that
+    // follows the screen does not refuse the whole ingest over a value the screen already judged as absent.
+    const outOfList = finding.evidence_kind !== undefined && !hasEvidenceKind(finding);
+    const clean: T = outOfList ? omitEvidenceKind(finding) : finding;
+    const severity = clean.severity;
+    if (severity === undefined || !SCREENED_SEVERITIES.includes(severity) || hasEvidenceKind(clean)) {
+      retained.push(clean);
       continue;
     }
     const from = severity as "blocker" | "major";
     const marker: ReviewEvidenceScreen = { rule: DEGRADATION_NO_EVIDENCE_RULE, original_severity: from };
-    const lowered: T = { ...finding, severity: "info", evidence_screen: marker };
+    const lowered: T = { ...clean, severity: "info", evidence_screen: marker };
     if (lowered.blocking_merge === true) {
       lowered.blocking_merge = false;
     }
@@ -121,8 +136,11 @@ export function degradationScreenRecord<T extends Partial<StructuredReviewFindin
   };
 }
 
-function escapeCell(value: string): string {
-  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+export function escapeCell(value: string): string {
+  return safeText(value)
+    .replace(/[\\|`]/g, (ch) => `\\${ch}`)
+    .replace(/\[/g, "\\[")
+    .replace(/</g, "&lt;");
 }
 
 /**
@@ -172,7 +190,7 @@ export function renderDegradationScreenLines(record: DegradationScreenRecord): s
   }
   const lines = [`degradation screen: screened=${record.screened} downgraded=${record.downgraded.length}`];
   for (const entry of record.downgraded) {
-    lines.push(`  downgraded ${entry.id} ${entry.from} -> ${entry.to} [${entry.rule}]: ${entry.detail}`);
+    lines.push(`  downgraded ${safeText(entry.id)} ${entry.from} -> ${entry.to} [${entry.rule}]: ${safeText(entry.detail)}`);
   }
   return lines;
 }

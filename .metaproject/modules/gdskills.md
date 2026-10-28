@@ -96,6 +96,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-backend`: Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries.
 - `review-clean-code`: Review function and class maintainability, SOLID issues, cohesion, naming, and complexity.
 - `review-core-boundaries`: Review shared/core module coupling, public API stability, and dependency minimization.
+- `review-degradation`: Ask whether the code is worse after a change than on the base branch (behaviour, defaults, speed, structure) and whether that can be shown, over the diff plus every consumer of each changed shared symbol.
 - `review-flow-graph`: Review graph or flow UI abstractions, graph surfaces, layout lifecycle, and large-graph behavior.
 - `review-frontend`: Review frontend components, state boundaries, rendering behavior, and UI integration patterns.
 - `review-frontend-conventions`: Review frontend code against repository-local frontend conventions and agent entrypoints.
@@ -113,7 +114,6 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-pr-contract`: Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale.
 - `review-pr-feedback`: Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer.
 - `review-premise`: Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only.
-- `review-degradation`: Ask whether the code is worse after a change than on the base branch (behaviour, defaults, speed, structure) and whether that can be shown, over the diff plus every consumer of each changed shared symbol.
 - `review-regression`: Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round.
 - `review-security-code`: Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.
 - `review-style`: Review naming, readability, duplication, dead code, and maintainability.

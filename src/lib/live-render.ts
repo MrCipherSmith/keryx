@@ -23,6 +23,16 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, "");
 }
 
+// eslint-disable-next-line no-control-regex
+const OSC_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g;
+// eslint-disable-next-line no-control-regex
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g;
+
+/** Text written by someone else, made safe for a one-line terminal or table cell: no escapes, no control characters, one line. */
+export function safeText(text: string): string {
+  return stripAnsi(text.replace(OSC_RE, "")).replace(CONTROL_RE, " ").replace(/ {2,}/g, " ").trim();
+}
+
 // Best-effort "double-width" ranges (CJK, Hangul, kana, fullwidth forms, and the
 // common emoji planes). Not a full Unicode width table — enough to keep row
 // accounting correct for the scripts and symbols that actually reach the terminal

@@ -17,6 +17,7 @@ metadata:
   version: "1.0.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
+  origin: "authored"
 license: "MIT"
 ---
 
@@ -69,6 +70,10 @@ A finding is a claim; evidence is what makes it one. Every finding carries one
 | `red-test` | you wrote or named a test that fails on the head and passes on the base |
 | `base-diff` | you read the same path on base and on head and quote both |
 
+`probe`, `red-test` and `merge-trace` run code, so they need `allowed_tools` to include
+`run-tests` and run in its sandbox. Without it, use `consumer-trace` or `base-diff`,
+or file a question.
+
 This is enforced, not requested. `keryx review ingest` lowers a `major` or
 `blocker` of this reviewer that has no `evidence_kind` to `info`, marks it unproven
 and lists it in `scope.md` under `## Degradation evidence screen` with the rule
@@ -79,8 +84,9 @@ Without a way to show it, file `info`, or a question.
 ## What you are given
 
 - the diff, and the PR description when there is one;
-- the consumers of each changed shared export, from the code graph, with the cap
-  and what it dropped. The set is the graph's, not yours: trace those. If the cap
+- the importers of the module that holds each changed shared export (and of a barrel
+  that re-exports it), from the code graph, under one cap shared by all exports, with
+  what it dropped. The set is the graph's, not yours: trace those. If the cap
   dropped consumers, say so in your summary; do not imply a complete sweep;
 - the flow's frozen acceptance criteria, and the previous round's findings.
 

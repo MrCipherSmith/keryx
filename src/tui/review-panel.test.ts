@@ -361,6 +361,23 @@ describe("degradation findings in the review panel", () => {
     expect(degradationLines(undefined)).toEqual([]);
   });
 
+  test("TP-006: either side of the OR is enough to be read as a degradation finding", async () => {
+    const byName = { id: "F-010", reviewer: "Review_Degradation (deep)", severity: "minor" };
+    const byField = { id: "F-011", reviewer: "review-logic", severity: "major", degradation_class: "debt" };
+    const neither = { id: "F-012", reviewer: "review-regression", severity: "major" };
+    const root = await project({ [`${PKG}/manifest.json`]: manifest, [`${PKG}/findings.json`]: [byName, byField, neither] });
+    const [row] = await loadReviewDepth(root);
+    expect(row?.degradation?.map((f) => f.id)).toEqual(["F-010", "F-011"]);
+  });
+
+  test("SEC-001: a hostile id or file reaches the panel as one plain line", () => {
+    const lines = degradationLines([
+      { id: "F-1\u001b[2J\u2028X", severity: "major", degradationClass: "debt", evidenceKind: "probe", unproven: false, originalSeverity: undefined, file: "a\rb\u2029c.ts" },
+    ]);
+    expect(lines[1]).toBe("  F-1 X major debt, evidence probe a b c.ts");
+    expect(lines.join("\n")).not.toMatch(new RegExp("[\\u001b\\r\\u2028\\u2029]"));
+  });
+
   test("the depth tab and the readline text print the same lines", async () => {
     const root = await project({ [`${PKG}/manifest.json`]: manifest, [`${PKG}/findings.json`]: FINDINGS });
     const [row] = await loadReviewDepth(root);

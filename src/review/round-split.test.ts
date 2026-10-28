@@ -258,6 +258,13 @@ describe("fix slices in the manifest", () => {
     expect(manifestRosterRoles(m)).toEqual(fixSliceRoles(m));
   });
 
+  test("roster roles a project does not have are dropped when the installed names are given (flow 479 REG-1)", () => {
+    const withDegradation = manifest([{ ...fixSlice, roles: ["review-logic", "review-degradation"] }]);
+    expect(manifestRosterRoles(withDegradation)).toEqual(["review-degradation", "review-logic"]);
+    expect(manifestRosterRoles(withDegradation, new Set(["review-logic"]))).toEqual(["review-logic"]);
+    expect(manifestRosterRoles(withDegradation, new Set(["review-logic", "review-degradation"]))).toEqual(["review-degradation", "review-logic"]);
+  });
+
   test("estimate counts both kinds: a dispatch carries one kind, and the split is reported", () => {
     const estimate = estimateRound(["review-logic", "review-regression", "review-security-code", "review-style"], m);
     expect(estimate.split).toEqual({ fix: { slices: 1, dispatches: 3 }, new: { slices: 1, dispatches: 2 } });

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { LiveMarkdownBlock, computeRepaint, displayWidth, physicalRows, stripAnsi } from "./live-render";
+import { LiveMarkdownBlock, computeRepaint, displayWidth, physicalRows, safeText, stripAnsi } from "./live-render";
 
 const ESC = "\x1b";
 
@@ -123,4 +123,16 @@ test("LiveMarkdownBlock: sync markers wrap live repaints", () => {
   block.append("hi");
   block.flush();
   expect(writes[0]).toBe(`${ESC}[?2026hhi${ESC}[?2026l`);
+});
+
+// --- safeText ---
+
+test("safeText leaves one plain line: no escape sequence, no control, no line separator", () => {
+  expect(safeText("plain text")).toBe("plain text");
+  expect(safeText("a\u001b[31mred\u001b[0m b")).toBe("ared b");
+  expect(safeText("a\u001b]0;title\u0007b")).toBe("ab");
+  expect(safeText("a\rb\nc\r\nd")).toBe("a b c d");
+  expect(safeText("a\u2028b\u2029c")).toBe("a b c");
+  expect(safeText("a\u0085b\u009bc\u007fd")).toBe("a b c d");
+  expect(safeText("  \u001b  ")).toBe("");
 });

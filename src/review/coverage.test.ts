@@ -102,12 +102,13 @@ describe("requiredReviewers", () => {
 });
 
 describe("review-degradation is a roster reviewer of a deep round (flow 479 AC6)", () => {
-  test("installed (profile full), it is required in both modes' deep rounds and never needs a blast radius", async () => {
+  test("installed (profile full), it is required in a mode all round without a blast radius, and mode diff narrows it out", async () => {
     await install("review-degradation");
     const all = await requiredReviewers(root, "all", frontendFiles);
     expect(all.required).toContain("review-degradation");
     expect(all.excluded.find((e) => e.reviewer === "review-degradation")).toBeUndefined();
     const diff = await requiredReviewers(root, "diff", frontendFiles, { blastRadius: false });
+    expect(diff.required).not.toContain("review-degradation");
     expect(diff.required).not.toContain("review-regression");
   });
 

@@ -6,7 +6,9 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { safeText } from "../lib/live-render";
 import { shellWord } from "../lib/shell-quote";
+import { isDegradationReviewer } from "../review/degradation";
 import { listReviewPackages, type ListedReview } from "../review/bot/packages";
 import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type RequiredSet, type ReviewMode } from "../review/coverage";
 import { packageEnabledRoles } from "../review/role-switches";
@@ -144,7 +146,7 @@ export async function readDegradationFindings(packageDir: string): Promise<Revie
     const f = raw as Record<string, unknown>;
     const screen = f.evidence_screen !== null && typeof f.evidence_screen === "object" ? (f.evidence_screen as Record<string, unknown>) : undefined;
     const hasField = f.degradation_class !== undefined || f.evidence_kind !== undefined || screen !== undefined;
-    if (f.reviewer !== "review-degradation" && !hasField) continue;
+    if (!isDegradationReviewer(f.reviewer) && !hasField) continue;
     out.push({
       id: str(f.id) ?? "?",
       severity: str(f.severity) ?? "?",
@@ -170,7 +172,7 @@ export function degradationLines(findings: readonly ReviewDegradationFinding[] |
     head,
     ...findings.map((f) => {
       const proof = f.unproven ? `UNPROVEN${f.originalSeverity === undefined ? "" : ` (was ${f.originalSeverity})`}` : `evidence ${f.evidenceKind ?? "none"}`;
-      return `  ${f.id} ${f.severity} ${f.degradationClass ?? "no class"}, ${proof}${f.file === undefined ? "" : ` ${f.file}`}`;
+      return `  ${safeText(`${f.id} ${f.severity} ${f.degradationClass ?? "no class"}, ${proof}${f.file === undefined ? "" : ` ${f.file}`}`)}`;
     }),
   ];
 }

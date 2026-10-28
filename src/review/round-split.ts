@@ -363,10 +363,14 @@ export const ALWAYS_DISPATCHED_ROUTED_ROLES: ReadonlySet<string> = new Set(["rev
  * The roles a slice manifest adds to the round's required set: the roles of its fix and second-look slices
  * ({@link fixSliceRoles}), and each {@link ALWAYS_DISPATCHED_ROUTED_ROLES} role that slice routing gave any original
  * slice. The one roster extension the estimate (plan.json), the drivers, `review required` and `ledger build` share.
+ * With `installed` (the reviewer names the project's review tree holds) a role the project does not have is dropped:
+ * routing can name `review-degradation` for a project installed below profile `full`, and a role nobody can run must not
+ * become a required reviewer with no result.
  */
-export function manifestRosterRoles(manifest: { slices: readonly SliceEntry[] }): string[] {
+export function manifestRosterRoles(manifest: { slices: readonly SliceEntry[] }, installed?: ReadonlySet<string>): string[] {
   const routed = manifest.slices.filter((slice) => slice.retryOf === undefined).flatMap((slice) => (slice.roles ?? []).filter((role) => ALWAYS_DISPATCHED_ROUTED_ROLES.has(role)));
-  return [...new Set([...fixSliceRoles(manifest), ...routed])].sort();
+  const roles = [...new Set([...fixSliceRoles(manifest), ...routed])].sort();
+  return installed === undefined ? roles : roles.filter((role) => installed.has(role));
 }
 
 export type SplitCounts = { fix: number; new: number; secondLook?: number };

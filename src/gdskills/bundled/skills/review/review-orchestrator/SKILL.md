@@ -267,8 +267,6 @@ round is not recordable until the set is supplied. Pass the `--json` output of
 `keryx review blast-radius` — the same record you computed at dispatch time to
 bound the round.
 
-`review-degradation` (profile `full`, deep tier) asks what the regression screen does not: is the code worse than on the base, and can that be shown? It reads the diff plus the dependents of each changed shared export, which `keryx review blast-radius --degradation [--degradation-cap <n>]` prints from the code graph; the model never picks the set. It has no severity floor and needs no `--blast-radius` record. A `major` or `blocker` of its with no `evidence_kind` is lowered to `info` at ingest and listed in `scope.md` under `## Degradation evidence screen`. A light round does not dispatch it; a delta round dispatches it when a slice changes an exported symbol.
-
 Two channels, and both work:
 
 - `--blast-radius <file>` — always correct, and the one to use.
@@ -279,6 +277,8 @@ Two channels, and both work:
   later round cannot be screened against a set nobody recomputed.
 
 Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
+
+`review-degradation` (profile `full`, deep tier) asks what the regression screen does not: is the code worse than on the base, and can that be shown? It reads the diff plus the importers of the module that holds each changed shared export (and of a barrel that re-exports it), which `keryx review blast-radius --degradation [--degradation-cap <n>]` prints from the code graph under one cap shared by all exports; the model never picks the set. It has no severity floor and needs no `--blast-radius` record. A `major` or `blocker` of its with no `evidence_kind` is lowered to `info` at ingest and listed in `scope.md` under `## Degradation evidence screen`. A light round does not dispatch it. A delta round dispatches it on a fix slice whose changed lines add, remove or edit an `export` declaration, and on every new deep slice; a body-only edit of an exported function does not route it (the payload still lists its importers).
 
 `--refuted` takes the findings this round **raised and then dismissed**, in the
 same finding shape, each carrying `disposition: {state, evidence}` with one of

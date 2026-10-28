@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { type DriverFile, readDrivers } from "./driver-read";
 import { writeFileAtomic } from "../lib/fs";
-import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, installedReviewerNames } from "./coverage";
 import { manifestRosterRoles } from "./round-split";
 import { packageEnabledRoles } from "./role-switches";
 import type { SliceManifest } from "./slice";
@@ -32,7 +32,7 @@ export async function packageReviewers(packageDir: string, manifest: SliceManife
     // Not swallowed: a reviewer set computed without the project's rules would silently drop the reviewers they require.
     throw new Error(`the required reviewers of ${packageDir} could not be read (${error instanceof Error ? error.message : String(error)}); fix the reviewer rules and re-run`, { cause: error });
   }
-  if (manifest !== undefined) for (const reviewer of manifestRosterRoles(manifest)) names.add(reviewer);
+  if (manifest !== undefined) for (const reviewer of manifestRosterRoles(manifest, await installedReviewerNames(root))) names.add(reviewer);
   if (options.withDrivers === true) for (const reviewer of (await readDrivers(packageDir, root)).replies.reviewers) names.add(reviewer);
   return [...names].sort();
 }

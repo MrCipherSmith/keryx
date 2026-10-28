@@ -159,10 +159,14 @@ package, and `review-pr-contract` (the reviewer that reads the diff against the
 pull request's own stated contract: title, description, linked issue, CI) only when
 `pr-context.md` is in the package. `review-degradation` (profile `full`, deep tier)
 is the reviewer for the question *is the code worse than on the base branch, and
-can that be shown?* It reads the diff and the dependents of each changed shared
-export, a set `keryx review blast-radius --degradation` takes from the code graph
-rather than from the model; it has no severity floor, and a light round leaves it
-out. Each of its findings carries a `degradation_class` (`behaviour-delta`,
+can that be shown?* It reads the diff and the importers of the module that holds
+each changed shared export (and of a barrel that re-exports it), a set
+`keryx review blast-radius --degradation` takes from the code graph rather than from
+the model under one cap shared by all exports; it has no severity floor, and a light
+round leaves it out. A delta round dispatches it on a fix slice whose changed lines
+add, remove or edit an `export` declaration, and on every new deep slice; a body-only
+edit of an exported function does not route it, though the payload still lists its
+importers. Each of its findings carries a `degradation_class` (`behaviour-delta`,
 `default-change`, `diff-vs-description`, `debt`, `performance`, `cross-pr`,
 `blind-test`) and an `evidence_kind` (`probe`, `consumer-trace`, `merge-trace`,
 `red-test`, `base-diff`). `keryx review ingest` lowers a `major` or `blocker` with no

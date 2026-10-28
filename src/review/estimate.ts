@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
-import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, type RoundDepth } from "./coverage";
+import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, installedReviewerNames, type RoundDepth } from "./coverage";
 import { packageEnabledRoles } from "./role-switches";
 import { operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, type SliceManifest } from "./slice";
@@ -308,7 +308,7 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
   const thresholds = await readPlanThresholds(root);
   // A delta round's fix slices add the roles that authored the findings they answer (flow 458), and a slice routed to the
   // security reviewer adds it in a light round too (manifestRosterRoles).
-  const roles = [...new Set([...set.required, ...(found === undefined ? [] : manifestRosterRoles(found.manifest))])].sort();
+  const roles = [...new Set([...set.required, ...(found === undefined ? [] : manifestRosterRoles(found.manifest, await installedReviewerNames(root)))])].sort();
   return { ...estimateRound(roles, found?.manifest, recorded?.depth ?? "unrecorded", thresholds), manifest: found === undefined ? undefined : path.relative(root, found.file) };
 }
 

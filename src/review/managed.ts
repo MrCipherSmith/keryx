@@ -75,6 +75,8 @@ import {
   FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
+  REVIEW_DEGRADATION_CLASSES,
+  REVIEW_EVIDENCE_KINDS,
   REVIEW_FINDING_CONFIDENCES,
   REVIEW_PACKAGE_STATUSES,
   REVIEW_TARGET_KINDS,
@@ -2377,9 +2379,24 @@ function parseLegacyReport(
     if (location.line !== undefined) {
       finding.line = location.line;
     }
+    // Flow 479: the template of `review-degradation` is markdown with `Class` and `Evidence kind` lines. Read only
+    // when the value is exactly one member of the closed list; a pasted `a | b | c` template line stays unread.
+    const degradationClass = closedListValue(block, ["class", "degradation class", "degradation_class"], REVIEW_DEGRADATION_CLASSES);
+    if (degradationClass !== undefined) {
+      finding.degradation_class = degradationClass;
+    }
+    const evidenceKind = closedListValue(block, ["evidence kind", "evidence_kind"], REVIEW_EVIDENCE_KINDS);
+    if (evidenceKind !== undefined) {
+      finding.evidence_kind = evidenceKind;
+    }
     findings.push(finding);
   }
   return findings;
+}
+
+function closedListValue<V extends string>(block: string, labels: readonly string[], allowed: readonly V[]): V | undefined {
+  const value = labelledField(block, labels)?.trim().toLowerCase();
+  return allowed.find((candidate) => candidate === value);
 }
 
 const SEVERITY_PREFIX = /^\s*(?:\*\*|__)?(?:blocker|major|minor|info)(?:\*\*|__)?\s*[:—–-]\s*/i;

@@ -51,7 +51,7 @@ const LEGACY_ZERO_FINDING_RULES = [
  * over all 72 bundled skills.
  */
 const LEGACY_LINT_RATCHET: Readonly<Record<string, number>> = {
-  "metadata-origin": 73,
+  "metadata-origin": 72,
   "body-length": 9,
   "description-use-when": 1,
   "name-reserved-word": 1,

@@ -315,3 +315,54 @@ describe("ingest", () => {
     expect(await knownFindingsForWave(path.join(ROOT, "nope"))).toEqual([]);
   });
 });
+
+describe("mergeDuplicates keeps the degradation fields (flow 479)", () => {
+  const degradation = (over: Partial<StructuredReviewFinding> = {}) =>
+    finding({ id: "D-001", reviewer: "review-degradation", degradation_class: "behaviour-delta", evidence_kind: "probe", ...over });
+
+  test("a higher-severity duplicate from another reviewer keeps the class and the evidence kind of the absorbed member", () => {
+    const logic = finding({ id: "L-001", severity: "blocker", blocking_merge: true });
+    const result = mergeDuplicates([logic, degradation({ severity: "major" })]);
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({ id: "L-001", severity: "blocker", degradation_class: "behaviour-delta", evidence_kind: "probe" });
+    expect(result.findings[0]?.evidence_screen).toBeUndefined();
+  });
+
+  test("the canonical's own class and kind win over an absorbed member's", () => {
+    const own = degradation({ id: "D-002", severity: "blocker", degradation_class: "debt", evidence_kind: "red-test" });
+    const result = mergeDuplicates([own, degradation({ severity: "major" })]);
+
+    expect(result.findings[0]).toMatchObject({ id: "D-002", degradation_class: "debt", evidence_kind: "red-test" });
+  });
+
+  test("L-04: an unproven info from the degradation reviewer does not win and its screen marker is not carried onto the other reviewer's blocker", () => {
+    const unproven = degradation({
+      severity: "info",
+      evidence_kind: undefined,
+      evidence_screen: { rule: "degradation-no-evidence", original_severity: "major" },
+    });
+    const logic = finding({ id: "L-001", severity: "blocker", blocking_merge: true });
+    const result = mergeDuplicates([unproven, logic]);
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({ id: "L-001", severity: "blocker", blocking_merge: true, degradation_class: "behaviour-delta" });
+    expect(result.findings[0]?.evidence_screen).toBeUndefined();
+    expect(result.findings[0]?.evidence_kind).toBeUndefined();
+    expect(result.merges[0]?.severity).toBe("blocker");
+  });
+
+  test("a survivor that carries the screen marker itself keeps it, and takes no evidence kind from a member", () => {
+    const unproven = degradation({
+      severity: "info",
+      evidence_kind: undefined,
+      evidence_screen: { rule: "degradation-no-evidence", original_severity: "major" },
+    });
+    const proven = degradation({ id: "D-009", reviewer: "review-logic", severity: "info", evidence_kind: "probe" });
+    const result = mergeDuplicates([unproven, proven]);
+
+    const survivor = result.findings[0];
+    expect(survivor?.evidence_screen).toEqual({ rule: "degradation-no-evidence", original_severity: "major" });
+    expect(survivor?.evidence_kind).toBeUndefined();
+  });
+});

@@ -375,6 +375,19 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     }
   }
 
+  // Flow 479: the degradation class and evidence kind of an absorbed member stay on the survivor when the canonical has
+  // none, so a duplicate that another reviewer filed at a higher severity does not erase what the degradation reviewer
+  // showed. `evidence_screen` is NOT carried: it records that this finding's own severity was lowered, and the survivor's
+  // was not unless it carries the marker itself (the spread above).
+  const carriedClass = canonical.degradation_class ?? others.find((member) => member.degradation_class !== undefined)?.degradation_class;
+  if (carriedClass !== undefined) {
+    finding.degradation_class = carriedClass;
+  }
+  const carriedKind = canonical.evidence_kind ?? (canonical.evidence_screen !== undefined ? undefined : others.find((member) => member.evidence_kind !== undefined)?.evidence_kind);
+  if (carriedKind !== undefined) {
+    finding.evidence_kind = carriedKind;
+  }
+
   const higher = severityRule === "max" ? [] : others.filter((member) => !decides(member) && rank(member.severity) > rank(canonical.severity));
   const top = higher.length === 0 ? undefined : bestOf(higher);
   return {

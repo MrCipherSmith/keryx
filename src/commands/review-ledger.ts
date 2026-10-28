@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, installedReviewerNames, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { packageEnabledRoles } from "../review/role-switches";
 import { readToolLog } from "../review/layers-usage";
@@ -296,7 +296,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, models, assignments, replies, dropped } = await readDrivers(inputDir, root);
   // A delta round's fix slices are read by their own roster (flow 458): the reviewers that authored the findings they answer
   // join the round even when no changed path asks for them, and each slice kind is held to its own roster below.
-  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : manifestRosterRoles(manifest))])].sort();
+  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : manifestRosterRoles(manifest, await installedReviewerNames(root)))])].sort();
   // M5: skipping a reviewer the round requires is a smaller reviewer set, the operator's decision (card or terminal), never
   // the agent's flag alone. A skip of a reviewer the round does not require changes nothing and is only recorded.
   const skipped = parseSkips(rest).map((skip) => (selected.includes(skip.reviewer) ? skip : { ...skip, reason: `${skip.reason} (not required this round)` }));

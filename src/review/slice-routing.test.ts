@@ -89,6 +89,27 @@ describe("review-degradation routing (flow 479 AC6)", () => {
     }
   });
 
+  test("every declaration form of the exported-symbol pattern routes it (flow 479 TP-005)", () => {
+    const forms = [
+      "+export declare const VERSION: string;",
+      "+export declare function parse(input: string): number;",
+      "+export abstract class Base {}",
+      "+export enum Level { Low, High }",
+      "+export let counter = 0;",
+      "-export var legacy = 1;",
+      "+export async function load() {}",
+      "+export interface Shape { size: number }",
+      "+export class Field {}",
+      "-export default class Field {}",
+    ];
+    for (const line of forms) expect(contentRolesOf({ path: "src/ui/field.ts", text: line }).map((hit) => hit.role)).toContain("review-degradation");
+  });
+
+  test("an `export` inside a comment, a string or an unchanged line is not a changed declaration (flow 479 TP-005)", () => {
+    const lines = ["+// export const LABEL = 'n/a';", "+const doc = \"export const LABEL = 1\";", "+  * export function render() {}", " export const LABEL = 'n/a';", "+exports.LABEL = 1;"];
+    for (const line of lines) expect(contentRolesOf({ path: "src/ui/field.ts", text: line }).map((hit) => hit.role)).not.toContain("review-degradation");
+  });
+
   test("a change that touches no shared symbol does not route it", () => {
     for (const text of ["+  return total + 1;", "+const local = 1;", "+function helper() { return 1; }", " export const untouched = 1;"]) {
       expect(contentRolesOf({ path: "src/ui/field.ts", text }).map((hit) => hit.role)).not.toContain("review-degradation");

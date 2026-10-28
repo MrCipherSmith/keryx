@@ -15,8 +15,14 @@ import type { BlastRadius } from "./blast-radius";
  * what "changed" means.
  */
 
-/** Direct consumers kept in the payload. Above this the rest are listed as dropped, not silently cut. */
+/**
+ * Consumers kept in the payload, one budget shared by every changed export (not per export). Above this the rest
+ * are listed as dropped, not silently cut.
+ */
 export const DEFAULT_DEGRADATION_CONSUMER_CAP = 40;
+
+/** Dropped consumers named in the brief; the full count stays in the CAP line and the record. */
+export const NOT_TRACED_LISTED = 20;
 
 /** A changed shared module, and the exported names that changed (`*` = every export, or the names are unknown). */
 export type ChangedExport = {
@@ -26,7 +32,7 @@ export type ChangedExport = {
 
 export type DegradationConsumer = {
   file: string;
-  /** The changed module this file imports. */
+  /** The changed module, or the barrel re-exporting a changed export, that this file imports. */
   via: string;
   /** How many files import this consumer, so the reader knows which consumers are hubs. */
   fanIn: number;
@@ -55,6 +61,11 @@ export function buildDegradationConsumers(input: {
   changedExports: readonly ChangedExport[];
   /** Every changed file; a consumer that is itself in the diff is the diff's business and is not repeated. */
   changedFiles?: readonly string[] | undefined;
+  /**
+   * Pure re-export files the symbol walk passed through ({@link barrelsOf}). Their importers consume the changed
+   * export without importing the changed module, so they are traced too, `via` the barrel.
+   */
+  barrels?: readonly string[] | undefined;
   cap?: number | undefined;
 }): DegradationConsumers {
   const cap = input.cap === undefined || !Number.isFinite(input.cap) ? DEFAULT_DEGRADATION_CONSUMER_CAP : Math.max(0, Math.trunc(input.cap));
@@ -63,24 +74,22 @@ export function buildDegradationConsumers(input: {
   const best = new Map<string, DegradationConsumer>();
   const unresolved: string[] = [];
 
-  for (const entry of input.changedExports) {
-    if (!nodePaths.has(entry.file)) {
-      unresolved.push(entry.file);
+  const barrels = new Set(input.barrels ?? []);
+  const targets = [...new Set([...input.changedExports.map((entry) => entry.file), ...barrels])];
+
+  for (const target of targets) {
+    if (!nodePaths.has(target)) {
+      unresolved.push(target);
       continue;
     }
-    let result;
-    try {
-      result = computeAffected(input.graph, entry.file, { depth: 1, ranked: true });
-    } catch {
-      // An ambiguous target is a module we cannot resolve; recorded as unresolved, not as "no consumers".
-      unresolved.push(entry.file);
-      continue;
-    }
+    // An exact node path always resolves, so the ambiguous-suffix refusal of `resolveGraphTarget` cannot fire here.
+    const result = computeAffected(input.graph, target, { depth: 1, ranked: true });
     for (const dependent of result.ranked) {
-      if (inDiff.has(dependent.path) || best.has(dependent.path)) {
+      // A barrel is a pass-through: its own importers are the consumers, the barrel itself carries no behaviour.
+      if (inDiff.has(dependent.path) || barrels.has(dependent.path) || best.has(dependent.path)) {
         continue;
       }
-      best.set(dependent.path, { file: dependent.path, via: entry.file, fanIn: dependent.fanIn });
+      best.set(dependent.path, { file: dependent.path, via: target, fanIn: dependent.fanIn });
     }
   }
 
@@ -119,6 +128,11 @@ export function changedExportsOf(radius: Pick<BlastRadius, "reach" | "changedFil
   return radius.changedFiles.filter((file) => !unresolved.has(file)).map((file) => ({ file, names: "*" as const }));
 }
 
+/** The barrels the symbol walk passed a changed export through; empty in `file` mode. */
+export function barrelsOf(radius: Pick<BlastRadius, "reach">): string[] {
+  return radius.reach?.mode === "symbol" ? [...new Set(radius.reach.barrels)].sort() : [];
+}
+
 /** True when the diff changes at least one shared symbol, which is what a delta round routes on. */
 export function touchesSharedSymbol(changedExports: readonly ChangedExport[]): boolean {
   return changedExports.length > 0;
@@ -138,23 +152,35 @@ export function renderDegradationPayloadBrief(payload: DegradationConsumers): st
   lines.push("");
   lines.push(`CHANGED SHARED EXPORTS (${payload.changedExports.length}):`);
   for (const entry of payload.changedExports) {
-    lines.push(`  - ${entry.file}  ${entry.names === "*" ? "(every export)" : entry.names.join(", ")}`);
+    lines.push(`  - ${safe(entry.file)}  ${entry.names === "*" ? "(every export)" : entry.names.map(safe).join(", ")}`);
   }
   lines.push("");
-  lines.push(`CONSUMERS (${payload.consumers.length} of ${payload.total}, most imported first, cap ${payload.cap}):`);
+  lines.push(
+    `CONSUMERS (${payload.consumers.length} of ${payload.total}; the files that import the module holding each changed export, or a barrel re-exporting it; most imported first, cap ${payload.cap}):`,
+  );
   for (const consumer of payload.consumers) {
-    lines.push(`  - ${consumer.file}  imports ${consumer.via}  [fan-in ${consumer.fanIn}]`);
+    lines.push(`  - ${safe(consumer.file)}  imports ${safe(consumer.via)}  [fan-in ${consumer.fanIn}]`);
   }
   lines.push("");
-  lines.push(`CAP: ${payload.summary}.`);
+  lines.push(`CAP: ${payload.summary}. The cap is one budget shared by all changed exports, not one per export.`);
   if (payload.dropped.length > 0) {
-    lines.push(`NOT TRACED (${payload.dropped.length}): ${payload.dropped.map((consumer) => consumer.file).join(", ")}`);
+    const listed = payload.dropped.slice(0, NOT_TRACED_LISTED).map((consumer) => safe(consumer.file));
+    const more = payload.dropped.length - listed.length;
+    lines.push(`NOT TRACED (${payload.dropped.length}): ${listed.join(", ")}${more > 0 ? `, and ${more} more` : ""}`);
   }
   if (payload.unresolved.length > 0) {
     lines.push(
-      `NOT ANSWERABLE (${payload.unresolved.length}): ${payload.unresolved.join(", ")} absent from the code graph. Their consumers are unknown, not none.`,
+      `NOT ANSWERABLE (${payload.unresolved.length}): ${payload.unresolved.map(safe).join(", ")} absent from the code graph. Their consumers are unknown, not none.`,
     );
   }
   lines.push("");
   return lines.join("\n");
 }
+
+/** A path or name is graph data, not prose: a control character in it must not forge a brief line or drive a terminal. */
+function safe(text: string): string {
+  return text.replace(CONTROL_CHARACTERS, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+// Built from a string so the line and paragraph separators stay escapes in the source.
+const CONTROL_CHARACTERS = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]", "g");

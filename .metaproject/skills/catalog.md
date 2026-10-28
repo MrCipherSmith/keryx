@@ -93,6 +93,7 @@ Resolution order:
 | review-backend | review | Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries. | gdskills/review/review-backend/SKILL.md |
 | review-clean-code | review | Review function and class maintainability, SOLID issues, cohesion, naming, and complexity. | gdskills/review/review-clean-code/SKILL.md |
 | review-core-boundaries | review | Review shared/core module coupling, public API stability, and dependency minimization. | gdskills/review/review-core-boundaries/SKILL.md |
+| review-degradation | review | Ask whether the code is worse after a change than on the base branch (behaviour, defaults, speed, structure) and whether that can be shown, over the diff plus every consumer of each changed shared symbol. | gdskills/review/review-degradation/SKILL.md |
 | review-flow-graph | review | Review graph or flow UI abstractions, graph surfaces, layout lifecycle, and large-graph behavior. | gdskills/review/review-flow-graph/SKILL.md |
 | review-frontend | review | Review frontend components, state boundaries, rendering behavior, and UI integration patterns. | gdskills/review/review-frontend/SKILL.md |
 | review-frontend-conventions | review | Review frontend code against repository-local frontend conventions and agent entrypoints. | gdskills/review/review-frontend-conventions/SKILL.md |
@@ -110,7 +111,6 @@ Resolution order:
 | review-pr-contract | review | Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale. | gdskills/review/review-pr-contract/SKILL.md |
 | review-pr-feedback | review | Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer. | gdskills/review/review-pr-feedback/SKILL.md |
 | review-premise | review | Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only. | gdskills/review/review-premise/SKILL.md |
-| review-degradation | review | Ask whether the code is worse after a change than on the base branch (behaviour, defaults, speed, structure) and whether that can be shown, over the diff plus every consumer of each changed shared symbol. | gdskills/review/review-degradation/SKILL.md |
 | review-regression | review | Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round. | gdskills/review/review-regression/SKILL.md |
 | review-security-code | review | Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure. | gdskills/review/review-security-code/SKILL.md |
 | review-style | review | Review naming, readability, duplication, dead code, and maintainability. | gdskills/review/review-style/SKILL.md |

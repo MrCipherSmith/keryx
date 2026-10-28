@@ -26,7 +26,11 @@ import { type SliceDepth, type SliceEntry, parseScopedDiff } from "./slice";
 /** On every slice: one reviewer reads every changed line for correctness. */
 export const ALWAYS_ROLE = "review-logic";
 export const REGRESSION_ROLE = "review-regression";
-/** The generic degradation reviewer (flow 479): profile `full`, routed by a changed exported symbol, not by depth alone. */
+/**
+ * The generic degradation reviewer (flow 479): profile `full`. A new deep slice (round 1, or a new slice of a delta round)
+ * gets it with the rest of the deep roster ({@link deepRosterRoles}); a delta round's fix slice gets it only when its
+ * changed lines add, remove or edit an `export` declaration ({@link SHARED_SYMBOL_CHANGE}).
+ */
 export const DEGRADATION_ROLE = "review-degradation";
 /** A deep slice is read by the core set the round would never skip (jev-select's mandatory ids), plus the regression reviewer. */
 export const DEEP_ROLES: readonly string[] = [...CORE_MANDATORY_REVIEWER_IDS, REGRESSION_ROLE];
@@ -92,7 +96,11 @@ export function deepReasonOfFile(file: string): string | undefined {
   return undefined;
 }
 
-/** A changed line that adds, removes or edits an exported symbol, a re-export or a default export. */
+/**
+ * A changed line that adds, removes or edits an exported symbol, a re-export or a default export. It matches the
+ * declaration line only: a body-only edit of an exported function is not routed by this rule, on purpose (the payload
+ * `review blast-radius --degradation` builds covers the consumers of a changed file's exports).
+ */
 const SHARED_SYMBOL_CHANGE = /^[+-]\s*export\s+(\*|\{|default\b|declare\b|abstract\b|(async\s+)?(function|class|interface|type|const|let|var|enum)\b)/m;
 
 const ENTRY_FILE =/(^|\/)(index|mod|main)\.[cm]?[jt]sx?$/;
@@ -117,8 +125,9 @@ const ROLE_RULES: readonly RoleRule[] = [
   { role: "review-architecture", why: "agent instructions (skill, rule, AGENTS/CLAUDE file, prompt)", path: (f) => AGENT_INSTRUCTION_FILE.test(f) },
   { role: "review-architecture", why: "contract or schema", path: (f) => CONTRACT_FILE.test(f) },
   { role: "review-architecture", why: "exported signature or contract type changed", content: /^[+-]\s*export\s+(declare\s+)?(type|interface|abstract\s+class|enum)\b|^[+-]\s*export\s+(async\s+)?function\s+\w+\s*[<(]/m },
-  // Flow 479: a changed exported symbol has consumers whose assumptions the change may move. A delta round (FIX slice)
-  // gets the degradation reviewer only through this rule, so it is dispatched when the slice touches a shared symbol.
+  // Flow 479: a changed exported symbol has consumers whose assumptions the change may move. A delta round's FIX slice
+  // gets the degradation reviewer only through this rule; a deep slice (round 1, or new in a delta round) also gets it
+  // from deepRosterRoles, since this role has no path gate.
   { role: DEGRADATION_ROLE, why: "shared (exported) symbol changed", content: SHARED_SYMBOL_CHANGE, codeOnly: true },
   // Process and argv construction, git invocations, input-derived paths, env, network: where injection and traversal live.
   { role: "review-security-code", why: "process, argv, git, input-derived path, env or network", content: SECURITY_PRINCIPLE, codeOnly: true },

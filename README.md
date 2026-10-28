@@ -648,7 +648,8 @@ Grouped by what you are trying to do, not by internal module layout.
   profile `full` a deep round adds `review-degradation`, which asks whether the code is
   worse than on the base branch and wants it shown: a `major` or `blocker` with no
   evidence is lowered to `info` and marked unproven (`keryx review blast-radius
-  --degradation` prints the graph's consumers of each changed shared export for it).
+  --degradation` prints the graph's importers of each changed shared export's module
+  for it, under one cap).
 
 **Operate agents**
 
