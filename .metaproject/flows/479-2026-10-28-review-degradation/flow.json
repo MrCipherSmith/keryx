@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "479",
+  "slug": "review-degradation",
+  "title": "review-degradation: a reviewer that checks whether the code got worse than on the base branch",
+  "status": "in-progress",
+  "createdAt": "2026-10-28T07:16:04.631Z",
+  "updatedAt": "2026-10-28T07:50:32.685Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-28T07:50:30.708Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC2": {
+      "at": "2026-10-28T07:50:30.926Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC3": {
+      "at": "2026-10-28T07:50:31.148Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC4": {
+      "at": "2026-10-28T07:50:31.362Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC5": {
+      "at": "2026-10-28T07:50:31.580Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC6": {
+      "at": "2026-10-28T07:50:31.809Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC7": {
+      "at": "2026-10-28T07:50:32.030Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC8": {
+      "at": "2026-10-28T07:50:32.249Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC9": {
+      "at": "2026-10-28T07:50:32.469Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    },
+    "AC11": {
+      "at": "2026-10-28T07:50:32.685Z",
+      "note": "bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28)"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "мне нужно, чтобы ты понял, нашел или предложил работать дополнительный скилл-ревьюер, который бы чекал именно подобные проблемы с регрессией, с ухудшением кода.",
+    "source": "helyx chat -1003908750902, voice message 230791, 2026-10-28"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-28T07:16:04.631Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-28T07:16:44.963Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-28T07:16:54.918Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-28T07:48:06.233Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-28T07:48:06.474Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-28T07:48:06.693Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-28T07:50:30.708Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:30.926Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:31.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:31.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:31.581Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:31.809Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:32.030Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:32.249Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:32.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-28T07:50:32.685Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: bun test src/gdskills src/contracts src/review src/tui/{review-panel,reviews-inspector}: 13446 pass 0 fail; docs:check green (2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-degradation-skill.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/contracts/ src/review/"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/degradation-screen.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/degradation-payload.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/coverage.test.ts src/review/dispatch.test.ts src/review/slice-routing.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun run docs:check"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-degradation-skill.test.ts"
+    },
+    "AC12": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-28T07:50:30.708Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:30.926Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:31.148Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:31.362Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:31.580Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:31.809Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:32.030Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:32.249Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:32.469Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    },
+    {
+      "at": "2026-10-28T07:50:32.685Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:489be2a43fd263de681c01d2943c86b631cb70abf776b2200dd9f95ecec9a821"
+    }
+  ]
+}

@@ -47,6 +47,19 @@ export type ReviewLayersView = {
   waiver: CoverageWaiver | undefined;
 };
 
+/** One finding of the degradation reviewer (flow 479): its class, its evidence kind, and whether ingest lowered it as unproven. */
+export type ReviewDegradationFinding = {
+  id: string;
+  severity: string;
+  degradationClass: string | undefined;
+  evidenceKind: string | undefined;
+  /** True when the ingest evidence screen lowered the finding: it carries `evidence_screen`. */
+  unproven: boolean;
+  /** The severity the reviewer filed before the screen lowered it; set only when `unproven`. */
+  originalSeverity: string | undefined;
+  file: string | undefined;
+};
+
 export type ReviewDepthRow = {
   reviewId: string;
   pull: string;
@@ -68,6 +81,8 @@ export type ReviewDepthRow = {
   layersView?: ReviewLayersView;
   /** Not run candidates, held severity notes and open follow-ups; absent when the package has none. */
   parity?: ReviewParityView;
+  /** Findings of `review-degradation`; absent when the package holds none. */
+  degradation?: ReviewDegradationFinding[];
   /** The readiness checklist, from the same projection `keryx review readiness` prints; absent when the package could not be read. */
   readiness?: ReadinessReport | undefined;
   /** The plan estimate against the time of the raw replies; absent when the package holds neither. */
@@ -114,6 +129,52 @@ async function layersViewOf(dir: string, dispatch: Record<string, unknown> | und
   };
 }
 
+const str = (value: unknown): string | undefined => (typeof value === "string" && value !== "" ? value : undefined);
+
+/**
+ * The findings of the degradation reviewer in the package's `findings.json`: those it filed, or any that carry a
+ * degradation class, an evidence kind or the evidence-screen marker. Absent or unreadable `findings.json` reads as none.
+ */
+export async function readDegradationFindings(packageDir: string): Promise<ReviewDegradationFinding[]> {
+  const parsed = await readJson(path.join(packageDir, "findings.json"));
+  if (!Array.isArray(parsed)) return [];
+  const out: ReviewDegradationFinding[] = [];
+  for (const raw of parsed) {
+    if (raw === null || typeof raw !== "object") continue;
+    const f = raw as Record<string, unknown>;
+    const screen = f.evidence_screen !== null && typeof f.evidence_screen === "object" ? (f.evidence_screen as Record<string, unknown>) : undefined;
+    const hasField = f.degradation_class !== undefined || f.evidence_kind !== undefined || screen !== undefined;
+    if (f.reviewer !== "review-degradation" && !hasField) continue;
+    out.push({
+      id: str(f.id) ?? "?",
+      severity: str(f.severity) ?? "?",
+      degradationClass: str(f.degradation_class),
+      evidenceKind: str(f.evidence_kind),
+      unproven: screen !== undefined,
+      originalSeverity: str(screen?.original_severity),
+      file: str(f.file),
+    });
+  }
+  return out;
+}
+
+/**
+ * `degradation: ...` lines: one per finding with its class and evidence kind. A finding the evidence screen lowered
+ * reads `UNPROVEN (was major)` where the evidence kind would be, so it is never mistaken for a shown one.
+ */
+export function degradationLines(findings: readonly ReviewDegradationFinding[] | undefined): string[] {
+  if (findings === undefined || findings.length === 0) return [];
+  const unproven = findings.filter((f) => f.unproven).length;
+  const head = `degradation: ${findings.length} finding(s)${unproven > 0 ? `, ${unproven} unproven` : ""}`;
+  return [
+    head,
+    ...findings.map((f) => {
+      const proof = f.unproven ? `UNPROVEN${f.originalSeverity === undefined ? "" : ` (was ${f.originalSeverity})`}` : `evidence ${f.evidenceKind ?? "none"}`;
+      return `  ${f.id} ${f.severity} ${f.degradationClass ?? "no class"}, ${proof}${f.file === undefined ? "" : ` ${f.file}`}`;
+    }),
+  ];
+}
+
 function pullLabel(review: ListedReview): string {
   if (review.repo !== null && review.number !== null) return `${review.repo}#${review.number}`;
   return review.manifest.target?.ref ?? review.reviewId;
@@ -130,8 +191,9 @@ export async function loadReviewDepth(cwd: string, listed?: readonly ListedRevie
     const waiver = dispatch?.mutationWaiver;
     const mutationWaived = waiver !== null && typeof waiver === "object" && typeof (waiver as { operatorQuote?: unknown }).operatorQuote === "string";
     const parity = await readReviewParity(review.dir);
+    const degradation = await readDegradationFindings(review.dir);
     const timing = await packageEstimateLine(review.dir, { open: review.manifest.status !== "closed" });
-    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch), readiness: await computeReadiness(review.dir).catch(() => undefined), ...(parityIsEmpty(parity) ? {} : { parity }), ...(timing === undefined ? {} : { timing }) };
+    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch), readiness: await computeReadiness(review.dir).catch(() => undefined), ...(parityIsEmpty(parity) ? {} : { parity }), ...(degradation.length === 0 ? {} : { degradation }), ...(timing === undefined ? {} : { timing }) };
     if (mode === undefined) {
       rows.push({ ...base, mode: "unrecorded", required: [], excluded: [], missing: [], filesKnown: false });
       continue;
@@ -188,7 +250,7 @@ export function layersDepthLines(view: ReviewLayersView | undefined): string[] {
 export function formatReviewDepthRowLines(row: ReviewDepthRow): string[] {
   const head = `${row.pull}  ${row.reviewId}  mode ${row.mode}`;
   const lines = [head];
-  const layers = [...readinessDepthLines(row.readiness), ...layersDepthLines(row.layersView), ...parityLines(row.parity), ...(row.timing === undefined ? [] : [row.timing])].map((line) => `  ${line}`);
+  const layers = [...readinessDepthLines(row.readiness), ...layersDepthLines(row.layersView), ...parityLines(row.parity), ...degradationLines(row.degradation), ...(row.timing === undefined ? [] : [row.timing])].map((line) => `  ${line}`);
   if (row.mode === "unrecorded") {
     lines.push("  no dispatch record: the reviewer set is not known", `  ${mutationLine(row.mutation, row.mutationWaived)}`, ...layers);
     return lines;
@@ -225,6 +287,12 @@ export function renderReviewParityText(rows: readonly ReviewDepthRow[]): string 
   if (rows.length === 0) return `${REVIEW_DEPTH_EMPTY}\n`;
   const blocks = rows.filter((row) => row.parity !== undefined).map((row) => [`${row.pull}  ${row.reviewId}`, ...parityLines(row.parity).map((line) => `  ${line}`)].join("\n"));
   return `Review parity\n${blocks.length === 0 ? "No Not run candidates, held severity notes or open follow-ups." : blocks.join("\n\n")}\n`;
+}
+
+/** The degradation findings of every review that has any, one block per review. */
+export function renderReviewDegradationText(rows: readonly ReviewDepthRow[]): string {
+  const blocks = rows.filter((row) => row.degradation !== undefined).map((row) => [`${row.pull}  ${row.reviewId}`, ...degradationLines(row.degradation).map((line) => `  ${line}`)].join("\n"));
+  return `Review degradation\n${blocks.length === 0 ? "No degradation findings." : blocks.join("\n\n")}\n`;
 }
 
 /** `/review readiness` and the readline text: the whole checklist of every managed review, as `keryx review readiness` prints it. */

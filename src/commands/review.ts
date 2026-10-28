@@ -156,6 +156,12 @@ import {
   type BlastRadius,
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
+import { renderDegradationScreenLines } from "../review/degradation";
+import {
+  buildDegradationConsumers,
+  changedExportsOf,
+  renderDegradationPayloadBrief,
+} from "../review/degradation-payload";
 import { loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
@@ -556,6 +562,8 @@ const BLAST_RADIUS_FLAGS = [
   "--package",
   "--reach",
   "--no-text-links",
+  "--degradation",
+  "--degradation-cap",
 ] as const;
 
 const TIER_FLAGS = [
@@ -1269,6 +1277,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
         `  exempted ${exemption.finding.id ?? "<unidentified>"} [${exemption.rule} not applied]: ${exemption.detail}`,
       );
     }
+  }
+  // Flow 479: the degradation evidence screen, on the terminal as well as in scope.md. A downgrade nobody sees
+  // reads as a reviewer that found less than it did.
+  for (const line of renderDegradationScreenLines(result.degradationScreen)) {
+    console.log(line);
   }
   // A chunk pass that raised findings is part of the round once ingested; say how many came in, so the count is not a silence.
   const chunkPass = result.chunkPass;
@@ -4094,7 +4107,19 @@ async function runBlastRadius(args: string[]): Promise<void> {
     textLinks,
     testCommand: detectTestCommand(projectRoot),
   });
-  await emitBlastRadius(radius, args);
+  // Flow 479 AC5: `--degradation` swaps the stdout brief for the `review-degradation` payload, whose consumers are the
+  // graph's one-hop answer for each changed shared export, with the cap and what it dropped recorded.
+  const degradationBrief = args.includes("--degradation")
+    ? renderDegradationPayloadBrief(
+        buildDegradationConsumers({
+          graph,
+          changedExports: changedExportsOf(radius),
+          changedFiles: radius.changedFiles,
+          cap: parseNonNegativeInteger(optionValue(args, "--degradation-cap"), "--degradation-cap"),
+        }),
+      )
+    : undefined;
+  await emitBlastRadius(radius, args, degradationBrief);
   const reasoned =
     (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0) + (radius.counts.droppedTestConsumer ?? 0);
   if (reasoned > 0) {
@@ -4125,8 +4150,10 @@ async function runBlastRadius(args: string[]): Promise<void> {
   }
 }
 
-async function emitBlastRadius(radius: BlastRadius, args: string[]): Promise<void> {
-  if (args.includes("--json")) {
+async function emitBlastRadius(radius: BlastRadius, args: string[], degradationBrief?: string): Promise<void> {
+  if (degradationBrief !== undefined) {
+    console.log(degradationBrief);
+  } else if (args.includes("--json")) {
     console.log(JSON.stringify(radius, null, 2));
   } else if (args.includes("--brief")) {
     console.log(renderBlastRadiusDispatchBrief(radius));
@@ -4943,14 +4970,16 @@ Writes mutation-<n>.json and .md to research-evidence/.`);
 function printBlastRadiusHelp(): void {
   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief] [--out <file>]
+                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief | --degradation [--degradation-cap <n>]] [--out <file>]
 
 The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
 --reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
 high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
 Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
 --no-text-links. With --package the changed files are base...head at the package's pinned head.
---package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
+--package stores the record in the package; --previous/--final carry the dropped files across rounds.
+--degradation prints the review-degradation payload instead: the one-hop consumers of each changed shared export from the
+code graph, capped at --degradation-cap (default 40), with the files the cap dropped listed and the cap stated.`);
 }
 
 function printCompleteHelp(): void {

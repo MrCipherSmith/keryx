@@ -131,6 +131,18 @@
             "enum": ["finding", "question", "omit"],
             "description": "How an info finding is shown. question renders under Questions. omit stays in the keryx:findings block and is not published as a finding. Absent means finding. Never changes severity."
           },
+          "degradation_class": {
+            "title": "Which way the change made the code worse than the base branch",
+            "type": "string",
+            "enum": ["behaviour-delta", "default-change", "diff-vs-description", "debt", "performance", "cross-pr", "blind-test"],
+            "description": "Optional, set by `review-degradation`. Closed list: `behaviour-delta` (the diff behaves differently from base), `default-change` (a default or normalisation moved), `diff-vs-description` (the description and the diff disagree), `debt` (structure the change adds), `performance` (a slower path), `cross-pr` (two changes that conflict on merge), `blind-test` (a test that cannot see the regression)."
+          },
+          "evidence_kind": {
+            "title": "What proves a degradation finding",
+            "type": "string",
+            "enum": ["probe", "consumer-trace", "merge-trace", "red-test", "base-diff"],
+            "description": "Optional. Closed list: `probe` (a run that shows the difference), `consumer-trace` (a consumer of the changed symbol followed to its effect), `merge-trace` (the merged result of two heads), `red-test` (a test that fails on the head), `base-diff` (the same path read on base and on head). A `major` or `blocker` from `review-degradation` without it is downgraded to `info` at ingest, not rejected."
+          },
           "class_scope": {
             "title": "Every site of this shape, and how the set was derived",
             "description": "A finding anchored to one file:line is a claim about one site. Repeatedly, a fix repaired that site and left its siblings — one writer of five, one operator instruction of four, six readers of eight — and the next review round found them. Required for blocker and major; optional below, because enumerating the class for every info finding is theatre. Kept identical to src/gdskills/contracts/review-finding.schema.json, which is stricter (additionalProperties: false) and would reject this property if it were declared only here.",

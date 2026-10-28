@@ -12,7 +12,7 @@ import { computeCoverage } from "./coverage-complete";
 import { estimateRound } from "./estimate";
 import { buildLedger, type LedgerInputs, type RawFile } from "./ledger";
 import { type PriorFinding, type RoundRecord } from "./round-record";
-import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, manifestRosterRoles, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
+import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, fixSliceRoster, isDeltaRound, manifestRosterRoles, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
 import { narrowedSlices } from "./routing-check";
 import type { ScopedRegion } from "./scope";
 import { buildSlices, parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
@@ -79,6 +79,19 @@ describe("fix slice content roles (flow 458 M3, restored in 460 round 2)", () =>
     // Content roles only, not the deep roster of the file: no backend, frontend or style reviewer.
     const roles = fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"));
     expect(roles.some((role) => ["review-backend", "review-frontend", "review-style"].includes(role))).toBe(false);
+  });
+});
+
+describe("fix slice routes the degradation reviewer only on a shared symbol (flow 479 AC6)", () => {
+  test("a fix that changes an exported symbol brings review-degradation; a fix inside a function body does not", () => {
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+export const LABEL = 'n/a';"))).toContain("review-degradation");
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).not.toContain("review-degradation");
+  });
+
+  test("the roster of a fix slice is the finding roster united with it, and the base roster never carries it", () => {
+    expect(fixRosterRoles(["F2"], PRIOR)).not.toContain("review-degradation");
+    expect(fixSliceRoster(["F2"], PRIOR, region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual(["review-architecture", "review-logic", "review-regression"]);
+    expect(fixSliceRoster(["F2"], PRIOR, region("src/a/a.ts", 10, 10, "+export const LABEL = 'n/a';"))).toEqual(["review-architecture", "review-degradation", "review-logic", "review-regression"]);
   });
 });
 
@@ -564,8 +577,8 @@ describe("review slice in a delta round", () => {
     const fixes = slices.filter((s) => s.kind === "fix");
     expect(fixes).toHaveLength(1);
     // The fix roster: logic, regression, F2's author; the fix line's own content (an export) routes architecture, F2's
-    // author already. The deep round-1 roster of the file does not ride along.
-    expect(fixes[0]).toMatchObject({ files: ["src/a/a.ts"], findingIds: ["F2"], depth: "deep", roles: ["review-architecture", "review-logic", "review-regression"] });
+    // author already, and the degradation reviewer (a shared symbol changed; flow 479 AC6). The deep round-1 roster of the file does not ride along.
+    expect(fixes[0]).toMatchObject({ files: ["src/a/a.ts"], findingIds: ["F2"], depth: "deep", roles: ["review-architecture", "review-degradation", "review-logic", "review-regression"] });
     const fixText = await readFile(path.join(pkg, "slices", fixes[0]!.path), "utf8");
     expect(fixText).toContain("a9 = 99");
     expect(fixText).not.toContain("Bun.spawn");

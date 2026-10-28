@@ -26,6 +26,8 @@ import { type SliceDepth, type SliceEntry, parseScopedDiff } from "./slice";
 /** On every slice: one reviewer reads every changed line for correctness. */
 export const ALWAYS_ROLE = "review-logic";
 export const REGRESSION_ROLE = "review-regression";
+/** The generic degradation reviewer (flow 479): profile `full`, routed by a changed exported symbol, not by depth alone. */
+export const DEGRADATION_ROLE = "review-degradation";
 /** A deep slice is read by the core set the round would never skip (jev-select's mandatory ids), plus the regression reviewer. */
 export const DEEP_ROLES: readonly string[] = [...CORE_MANDATORY_REVIEWER_IDS, REGRESSION_ROLE];
 /** Risk classes of `computeHunkRiskFacts` that send a slice deep. `public API`, `config`, `IO` and `concurrency` fire on most code, so they only raise the score. */
@@ -90,6 +92,9 @@ export function deepReasonOfFile(file: string): string | undefined {
   return undefined;
 }
 
+/** A changed line that adds, removes or edits an exported symbol, a re-export or a default export. */
+const SHARED_SYMBOL_CHANGE = /^[+-]\s*export\s+(\*|\{|default\b|declare\b|abstract\b|(async\s+)?(function|class|interface|type|const|let|var|enum)\b)/m;
+
 const ENTRY_FILE =/(^|\/)(index|mod|main)\.[cm]?[jt]sx?$/;
 
 /**
@@ -112,6 +117,9 @@ const ROLE_RULES: readonly RoleRule[] = [
   { role: "review-architecture", why: "agent instructions (skill, rule, AGENTS/CLAUDE file, prompt)", path: (f) => AGENT_INSTRUCTION_FILE.test(f) },
   { role: "review-architecture", why: "contract or schema", path: (f) => CONTRACT_FILE.test(f) },
   { role: "review-architecture", why: "exported signature or contract type changed", content: /^[+-]\s*export\s+(declare\s+)?(type|interface|abstract\s+class|enum)\b|^[+-]\s*export\s+(async\s+)?function\s+\w+\s*[<(]/m },
+  // Flow 479: a changed exported symbol has consumers whose assumptions the change may move. A delta round (FIX slice)
+  // gets the degradation reviewer only through this rule, so it is dispatched when the slice touches a shared symbol.
+  { role: DEGRADATION_ROLE, why: "shared (exported) symbol changed", content: SHARED_SYMBOL_CHANGE, codeOnly: true },
   // Process and argv construction, git invocations, input-derived paths, env, network: where injection and traversal live.
   { role: "review-security-code", why: "process, argv, git, input-derived path, env or network", content: SECURITY_PRINCIPLE, codeOnly: true },
   { role: "review-security-code", why: "process, filesystem write or trust-sensitive code", content: /\b(exec|execSync|execFile|spawn|spawnSync|Bun\.spawn|child_process|eval|new Function|innerHTML|dangerouslySetInnerHTML|password|passwd|secret|token|credential|api[_-]?key|sanitiz\w*|escape\w*|redact\w*|untrusted|trust\w*|permission\w*|allow-?list|deny-?list|sandbox\w*|cookie|cors|csrf|jwt|writeFile\w*|rm|unlink|rmdir|chmod|symlink\w*|realpath)\b/i, codeOnly: true },

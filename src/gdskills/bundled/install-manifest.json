@@ -455,7 +455,7 @@
     },
     "review-core-skills": {
       "kind": "skill",
-      "description": "Generic (non-stack-specific) review skills: orchestrator, logic, architecture, security, performance, clean-code, highload, regression, core-boundaries, flow-graph, layout, style, testing-practices, verifier, premise, pr-feedback, and the legacy AI/learned/style review profiles.",
+      "description": "Generic review skills: orchestrator, logic, architecture, security, performance, clean-code, highload, regression, degradation, core-boundaries, flow-graph, layout, style, testing-practices, verifier, premise, pr-feedback, and legacy AI/learned/style profiles.",
       "paths": [
         "src/gdskills/bundled/skills/review/review-orchestrator/**",
         "src/gdskills/bundled/skills/review/review-logic/**",
@@ -465,6 +465,7 @@
         "src/gdskills/bundled/skills/review/review-clean-code/**",
         "src/gdskills/bundled/skills/review/review-highload/**",
         "src/gdskills/bundled/skills/review/review-regression/**",
+        "src/gdskills/bundled/skills/review/review-degradation/**",
         "src/gdskills/bundled/skills/review/review-pr-contract/**",
         "src/gdskills/bundled/skills/review/review-core-boundaries/**",
         "src/gdskills/bundled/skills/review/review-flow-graph/**",

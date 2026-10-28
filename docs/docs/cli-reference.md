@@ -4975,7 +4975,7 @@ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--json|--brief] [--out <file>]
+                          [--package <review-dir>] [--json|--brief|--degradation [--degradation-cap <n>]] [--out <file>]
 keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
 keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
 keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
@@ -5575,6 +5575,8 @@ a depth and a file cap, closest first.
 | `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
 | `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |
 | `--brief` | The dispatch text a scope-B reviewer is given. |
+| `--degradation` | Print the `review-degradation` payload instead of the record: the one-hop consumers of each changed shared export, from the code graph, with the cap and the files it dropped stated. A changed file the graph has no node for is listed as unresolved, not as clean. |
+| `--degradation-cap <n>` | Cap on the consumers `--degradation` lists. Default **40**. |
 | `--out <file>` | Write the record. A `.json` path writes the JSON; anything else upserts a `## Blast radius` block. |
 
 The bounds are not a guess. Measured over 80 commits of this repository against a

@@ -75,6 +75,39 @@ describe("roles come from the slice's content", () => {
   });
 });
 
+describe("review-degradation routing (flow 479 AC6)", () => {
+  const exported = "+export function render(value: string) { return value; }";
+
+  test("a changed exported symbol routes the degradation reviewer, with the reason", () => {
+    const hits = contentRolesOf({ path: "src/ui/field.ts", text: exported });
+    expect(hits).toContainEqual({ role: "review-degradation", why: "shared (exported) symbol changed: src/ui/field.ts" });
+  });
+
+  test("a removed export counts as much as an added one, and a re-export or a default export counts", () => {
+    for (const line of ["-export const DEFAULT_LABEL = 'n/a';", "+export * from './field';", "+export { Field } from './field';", "+export default function Field() {}", "+export type Label = string;"]) {
+      expect(contentRolesOf({ path: "src/ui/field.ts", text: line }).map((hit) => hit.role)).toContain("review-degradation");
+    }
+  });
+
+  test("a change that touches no shared symbol does not route it", () => {
+    for (const text of ["+  return total + 1;", "+const local = 1;", "+function helper() { return 1; }", " export const untouched = 1;"]) {
+      expect(contentRolesOf({ path: "src/ui/field.ts", text }).map((hit) => hit.role)).not.toContain("review-degradation");
+    }
+  });
+
+  test("an export in a test, a doc or a non-code file is not a shared symbol", () => {
+    for (const file of ["src/ui/field.test.ts", "docs/guide.md", "data/export.json"]) {
+      expect(contentRolesOf({ path: file, text: exported }).map((hit) => hit.role)).not.toContain("review-degradation");
+    }
+  });
+
+  test("it is a routable role, so a deep slice's roster carries it", () => {
+    expect(deepRosterRoles(["src/ui/field.ts"])).toContain("review-degradation");
+    const [slice] = routeSlices(sliced([["src/ui/field.ts", ["export const LABEL = 'n/a';"]]]), { head: "h", auditRate: 0 });
+    expect(slice!.roles).toContain("review-degradation");
+  });
+});
+
 describe("depth follows risk", () => {
   test("a deterministic risk class (auth path) sends the slice deep with the full core set", () => {
     const [slice] = routeSlices(sliced([["src/auth/login.ts", ["const retries = 3;"]]]), { head: "h", auditRate: 0 });

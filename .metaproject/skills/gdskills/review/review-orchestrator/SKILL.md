@@ -267,6 +267,8 @@ round is not recordable until the set is supplied. Pass the `--json` output of
 `keryx review blast-radius` — the same record you computed at dispatch time to
 bound the round.
 
+`review-degradation` (profile `full`, deep tier) asks what the regression screen does not: is the code worse than on the base, and can that be shown? It reads the diff plus the dependents of each changed shared export, which `keryx review blast-radius --degradation [--degradation-cap <n>]` prints from the code graph; the model never picks the set. It has no severity floor and needs no `--blast-radius` record. A `major` or `blocker` of its with no `evidence_kind` is lowered to `info` at ingest and listed in `scope.md` under `## Degradation evidence screen`. A light round does not dispatch it; a delta round dispatches it when a slice changes an exported symbol.
+
 Two channels, and both work:
 
 - `--blast-radius <file>` — always correct, and the one to use.
