@@ -87,6 +87,9 @@ const SKIP_PATHS = [
   "docs/requirements/keryx-shell-benchmark/harness/runs/",
   "docs/requirements/keryx-shell-benchmark/harness/logs/",
   ".benchmark-runs/",
+  // CI tees the whole test run into artifacts/ac8/full.log while this guard runs;
+  // that log holds the NUL of a test named for one, so the guard failed on its own run.
+  "artifacts/",
 ];
 
 /**
@@ -242,11 +245,13 @@ describe("every source file can be found by a text search", () => {
     // down for the new entries.
     expect(isSkipped("docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/x.patch")).toBe(true);
     expect(isSkipped(".benchmark-runs/keryx-2026-09-05/transcript.jsonl")).toBe(true);
+    expect(isSkipped("artifacts/ac8/full.log")).toBe(true);
 
     // The same names anywhere else are still scanned.
     expect(isSkipped("src/lib/runs/thing.ts")).toBe(false);
     expect(isSkipped("src/benchmark-runs/thing.ts")).toBe(false);
     expect(isSkipped("scripts/logs/thing.ts")).toBe(false);
+    expect(isSkipped("src/artifacts/thing.ts")).toBe(false);
     expect(isSkipped("docs/requirements/keryx-shell-benchmark/harness/README.md")).toBe(false);
   });
 
