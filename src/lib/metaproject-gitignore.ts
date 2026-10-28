@@ -423,3 +423,37 @@ export function renderMetaprojectGitignoreBlock(): string {
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/**
+ * The managed block's path patterns: what `keryx init` ignores is exactly what an
+ * owned native workspace treats as keryx's own runtime data, with or without the
+ * block in the checkout's `.gitignore`.
+ */
+export function metaprojectManagedIgnorePatterns(): readonly string[] {
+  return renderMetaprojectGitignoreBlock().split("\n").map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith("#"));
+}
+
+/** Gitignore semantics for the block's own shape: root-anchored, `*`, `**`, and a trailing `/` for a directory. */
+function managedPatternRegExp(pattern: string): RegExp {
+  // Every managed pattern is anchored under `.metaproject/` and none negates; any other shape would need full gitignore semantics.
+  if (pattern.startsWith("!") || !pattern.startsWith(".metaproject/")) throw new Error(`unsupported managed ignore pattern: ${pattern}`);
+  const directory = pattern.endsWith("/");
+  const body = directory ? pattern.slice(0, -1) : pattern;
+  let source = "";
+  for (let index = 0; index < body.length; index++) {
+    const char = body[index]!;
+    if (char === "*" && body[index + 1] === "*") {
+      if (body[index + 2] === "/") { source += "(?:.*/)?"; index += 2; } else { source += ".*"; index += 1; }
+    } else if (char === "*") source += "[^/]*";
+    else if (char === "?") source += "[^/]";
+    else source += escapeRegExp(char);
+  }
+  return new RegExp(`^${source}${directory ? "/" : "(?:/|$)"}`);
+}
+
+let managedMatchers: readonly RegExp[] | undefined;
+/** True for a checkout-relative path the managed block ignores (keryx runtime data and generated internals). */
+export function isMetaprojectManagedPath(relative: string): boolean {
+  managedMatchers ??= metaprojectManagedIgnorePatterns().map(managedPatternRegExp);
+  return managedMatchers.some((matcher) => matcher.test(relative));
+}

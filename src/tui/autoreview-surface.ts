@@ -12,7 +12,7 @@
 // to the pid in the lock.
 
 import { spawn as nodeSpawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { findAgentCommand } from "../commands/agent-commands";
 import { ARBITER_LOG_NAME, describeArbiterRecord, readArbiterLog, type ArbiterLogRecord } from "../review/arbiter-log";
@@ -133,8 +133,19 @@ export function autoReviewRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "data", "review-autonomous");
 }
 
+/** A run's own arbiter log: a regular file inside its run directory, never a link out of the project or a directory. */
+function readRunArbiterLog(dir: string): ArbiterLogRecord[] {
+  const file = path.join(dir, ARBITER_LOG_NAME);
+  try {
+    if (!lstatSync(file).isFile()) return [];
+  } catch {
+    return [];
+  }
+  return readArbiterLog(file);
+}
+
 function arbiterCounts(dir: string): { arbiter?: { asked: number; escalated: number } } {
-  const records = readArbiterLog(path.join(dir, ARBITER_LOG_NAME));
+  const records = readRunArbiterLog(dir);
   if (records.length === 0) return {};
   return { arbiter: { asked: records.length, escalated: records.filter((record) => record.verdict === "escalate").length } };
 }
@@ -297,7 +308,31 @@ function defaultStart(spec: AutoReviewStartSpec): number | undefined {
 }
 
 function defaultReadArbiter(cwd: string, run: AutoReviewRun): ArbiterLogRecord[] {
-  return readArbiterLog(path.join(autoReviewRoot(cwd), run.slug, ARBITER_LOG_NAME));
+  return readRunArbiterLog(path.join(autoReviewRoot(cwd), run.slug));
+}
+
+/** `/autoreview arbiter [selector]` as one value: the terminal prints `text`, a headless session returns the whole outcome. */
+export type AutoReviewArbiterOutcome =
+  | { readonly outcome: "log"; readonly label: string; readonly asked: number; readonly escalated: number; readonly text: string }
+  | { readonly outcome: "no-runs" | "ambiguous" | "no-match"; readonly candidates: readonly string[]; readonly text: string };
+
+/** Which run's arbiter log, and what it says. A read only: no process, no lock pid, no start or stop. */
+export function selectAutoReviewArbiter(runs: readonly AutoReviewRun[], selector: string | undefined, readArbiter: (run: AutoReviewRun) => readonly ArbiterLogRecord[]): AutoReviewArbiterOutcome {
+  const live = runs.filter((run) => run.live);
+  // no selector: the run in progress, else the newest one
+  const chosen = selector === undefined ? (live.length === 1 ? live[0] : live.length === 0 ? runs[0] : undefined) : runs.find((run) => matches(run, selector));
+  if (chosen === undefined) {
+    if (runs.length === 0) return { outcome: "no-runs", candidates: [], text: "/autoreview: no autonomous review yet, so there is no arbiter log.\n" };
+    if (selector === undefined) return { outcome: "ambiguous", candidates: live.map((run) => run.label), text: `/autoreview: say which one: ${live.map((run) => run.label).join(", ")}.\n` };
+    return { outcome: "no-match", candidates: runs.map((run) => run.label), text: `/autoreview: no review matches "${selector}": ${runs.map((run) => run.label).join(", ")}.\n` };
+  }
+  const records = readArbiter(chosen);
+  return { outcome: "log", label: chosen.label, asked: records.length, escalated: records.filter((record) => record.verdict === "escalate").length, text: arbiterLogText(chosen, records) };
+}
+
+/** The shared read a headless session uses: this checkout's own run files only, through the same selection and text. */
+export function readAutoReviewArbiter(cwd: string, selector?: string): AutoReviewArbiterOutcome {
+  return selectAutoReviewArbiter(readAutoReviewRuns(cwd), selector, (run) => defaultReadArbiter(cwd, run));
 }
 
 const defaultStop = (pid: number): void => {
@@ -333,21 +368,7 @@ export function createAutoReviewController(deps: AutoReviewDeps): AutoReviewCont
         return true;
       }
       if (command.kind === "arbiter") {
-        const runs = read(deps.cwd);
-        const live = runs.filter((run) => run.live);
-        // no selector: the run in progress, else the newest one
-        const chosen = command.selector === undefined ? (live.length === 1 ? live[0] : live.length === 0 ? runs[0] : undefined) : runs.find((run) => matches(run, command.selector!));
-        if (chosen === undefined) {
-          say(
-            runs.length === 0
-              ? "/autoreview: no autonomous review yet, so there is no arbiter log."
-              : command.selector === undefined
-                ? `/autoreview: say which one: ${live.map((run) => run.label).join(", ")}.`
-                : `/autoreview: no review matches "${command.selector}": ${runs.map((run) => run.label).join(", ")}.`,
-          );
-          return true;
-        }
-        say(arbiterLogText(chosen, readArbiter(deps.cwd, chosen)));
+        say(selectAutoReviewArbiter(read(deps.cwd), command.selector, (run) => readArbiter(deps.cwd, run)).text);
         return true;
       }
       if (command.kind === "start") {

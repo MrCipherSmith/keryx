@@ -62,7 +62,11 @@ export type BackgroundSpawner = (
 export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit" | "hold-timeout";
 
 /** Public, session-visible snapshot of a tracked task. */
+export interface JobOwner { kind: "run" | "inspection" | "session"; identity: string }
 export interface BackgroundJobInfo {
+  owner?: JobOwner;
+  /** Trusted local infrastructure task; never admissible as user check evidence or model task control. */
+  visibility?: "private";
   jobId: string;
   pid: number;
   command: string;
@@ -206,6 +210,12 @@ export type BackgroundJobEvent =
 
 /** Options for a single {@link JobRegistry.start}. */
 export interface StartTaskOptions {
+  /** Trusted local scope, never decoded from tool/Hub input. */
+  owner?: JobOwner;
+  /** Trusted local constructor callback for fixed argv/stdin operations. Never deserialize from tool or remote input. */
+  localSpawn?: BackgroundSpawner;
+  /** Local infrastructure classification, never decoded from tool input. */
+  visibility?: "private";
   /** Defaults to `"background"`, preserving flow-173 semantics for direct callers. */
   phase?: "foreground" | "background";
   description?: string;
@@ -620,6 +630,7 @@ export function createJobRegistry(options?: {
   cwd?: string;
   maxConcurrent?: number;
   spawn?: BackgroundSpawner;
+  owner?: () => JobOwner | undefined;
   killGraceMs?: number;
   initialBufferMs?: number;
   onEvent?: (event: BackgroundJobEvent) => void;
@@ -808,9 +819,10 @@ export function createJobRegistry(options?: {
         }
       }
 
+      const owner = opts?.owner ?? options?.owner?.();
       let handle: BackgroundProcessHandle;
       try {
-        handle = await spawn(command, cwd);
+        handle = await (opts?.localSpawn ?? spawn)(command, cwd);
       } catch (cause) {
         return {
           ok: false,
@@ -828,6 +840,8 @@ export function createJobRegistry(options?: {
           jobId,
           pid: handle.pid,
           command,
+          ...(opts?.visibility === undefined ? {} : { visibility: opts.visibility }),
+          ...(owner === undefined ? {} : { owner: { ...owner } }),
           status: "running",
           phase,
           // Stored AS GIVEN — clamping belongs to the caller (see

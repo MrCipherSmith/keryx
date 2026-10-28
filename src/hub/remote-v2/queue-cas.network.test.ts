@@ -1,0 +1,24 @@
+import { afterEach, expect, test } from "bun:test";
+import { fixture, admittedSession, appliedController, success, type Fixture } from "./fixture.test-support";
+import type { Control } from "../../remote-control/protocol";
+let f: Fixture;
+afterEach(async () => { if (f) await f.close(); });
+test("queue edit and remove keep the native applied item/version until actual accepted event", async () => {
+  f = await fixture(); const s = await admittedSession(f); const c = await appliedController(f, s); const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
+  const first = await success<Control["TurnReceipt"]>(await f.call(`${s.path}/messages`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: 2, controller, expectedConfigVersion: 1, text: "first", interpretation: "literal-message", association: { mode: "ad-hoc", profileConsentVersion: 1 }, busyPolicy: "reject" } })); await s.peer.next("command");
+  const emit = async (seq: number, event: object) => { s.peer.send("session-event", { sessionId: s.session.sessionId, projectId: f.project.id, checkoutId: "checkout", sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next("session-event-ack"); };
+  await emit(4, { kind: "session-state", session: { ...s.session, version: 3, state: "busy", activeRunId: first.runId, activeTurnId: first.turnId, sessionEventCursor: 4 } });
+  const submitted = await success<Control["TurnReceipt"]>(await f.call(`${s.path}/messages`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: 3, controller, expectedConfigVersion: 1, text: "before edit", interpretation: "literal-message", association: { mode: "ad-hoc", profileConsentVersion: 1 }, busyPolicy: "enqueue" } })); await s.peer.next("session-command");
+  const item: Control["QueueItem"] = { queueItemId: "native-edit-item", operationId: submitted.operationId, version: 1, kind: "message", state: "queued", position: 0, text: "before edit", commandName: null, expectedConfigVersion: 1, replacesOperationId: null };
+  await emit(5, { kind: "queue-changed", queueVersion: 1, item }); await emit(6, { kind: "session-state", session: { ...s.session, version: 4, state: "busy", activeRunId: first.runId, activeTurnId: first.turnId, queueVersion: 1, sessionEventCursor: 6 } });
+  const receipt = await success<Control["SessionOperationReceipt"]>(await f.call(`${s.path}/queue/${item.queueItemId}`, { method: "PATCH", cookie: f.cookie, body: { expectedSessionVersion: 4, controller, expectedQueueVersion: 1, expectedItemVersion: 1, queueItemId: item.queueItemId, text: "after edit" } }));
+  expect(receipt.status).toBe("pending");
+  const before = await success<Control["QueuePage"]>(await f.call(`${s.path}/queue`, { cookie: f.cookie })); expect(before.items[0]!.text).toBe("before edit"); expect(before.queueVersion).toBe(1);
+  const delivery = await s.peer.next("session-command"); expect((delivery.payload as { target: { expectedSessionVersion: number } }).target.expectedSessionVersion).toBe(4);
+  await emit(7, { kind: "queue-changed", queueVersion: 2, item: { ...item, version: 2, text: "after edit" } }); await emit(8, { kind: "session-state", session: { ...s.session, version: 5, state: "busy", activeRunId: first.runId, activeTurnId: first.turnId, queueVersion: 2, sessionEventCursor: 8 } });
+  const after = await success<Control["QueuePage"]>(await f.call(`${s.path}/queue`, { cookie: f.cookie })); expect(after.items[0]!.text).toBe("after edit"); expect(after.queueVersion).toBe(2);
+  const edit=delivery.payload as import('../../remote-control/protocol').FrameOf<'session-command'>['payload'];s.peer.send('session-command-receipt',{commandId:edit.commandId,hubSequence:edit.hubSequence,sessionId:s.session.sessionId,observedSessionVersion:5,status:'applied',receiptId:receipt.receiptId,errorCode:null});s.peer.send('heartbeat',{daemonId:'daemon-1'});await s.peer.next('heartbeat-ack');
+  await success(await f.call(`${s.path}/controller/release`, {method:"POST",cookie:f.cookie,body:{expectedSessionVersion:5,controller}}));
+  const proposedReleaseQueue = await success<Control["QueuePage"]>(await f.call(`${s.path}/queue`,{cookie:f.cookie}));
+  expect(proposedReleaseQueue.items[0]!.state).toBe("queued"); expect(proposedReleaseQueue.items[0]!.version).toBe(2); expect(proposedReleaseQueue.queueVersion).toBe(2);
+});

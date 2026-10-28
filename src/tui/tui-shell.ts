@@ -1,8 +1,12 @@
+import { executePlanCommand } from "../session/commands/plan";
+import { applyRuntimeSwitchToSlate } from "../session/runtime-switch";
+import { requestSessionInterrupt } from "../session/commands/session-control";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 import { resetOperatorDenials } from "../review/review-system";
+import { executeReasoningCommand } from "../session/commands/reasoning";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
@@ -61,10 +65,8 @@ import {
   closeSlateSession,
   detachSlateSession,
   mintTimestampAttemptId,
-  recordSlateSessionTouch,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { anchorsAnnouncement } from "../session/anchors-announce";
 import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
 import { join as joinPath } from "node:path";
@@ -1929,29 +1931,7 @@ export async function pickShellApproval(
  * `"tool"` matches the `kind` used at the sibling harness-written-history-
  * push call sites in `agent.ts`.
  */
-export async function applyRuntimeSwitchToSlate(params: {
-  slateSession: SlateSessionRef | undefined;
-  runtime: { provider: string; model: string };
-  history: NormalizedMessage[];
-  onHistoryChange?: ((kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void) | undefined;
-}): Promise<boolean> {
-  if (params.slateSession === undefined || !params.slateSession.opened) {
-    return false;
-  }
-  const result = await recordSlateSessionTouch(params.slateSession, [], { runtime: params.runtime });
-  if (result === undefined || !result.changed) {
-    return false;
-  }
-  // Flow 387 T9: a runtime switch is a delta (`runtime:` line) once the model
-  // has seen a full block; the full block only when history holds none.
-  const announcement = anchorsAnnouncement(params.history, result.slate.anchors);
-  if (announcement === undefined) {
-    return false;
-  }
-  params.history.push(announcement);
-  params.onHistoryChange?.("tool");
-  return true;
-}
+export { applyRuntimeSwitchToSlate } from "../session/runtime-switch";
 
 /**
  * The slate ref for a session the TUI has just switched to: that session's
@@ -8758,13 +8738,13 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       if (wanted === "on") {
-        readOnly = true;
+        executePlanCommand("on", { current: readOnly, commit: (enabled) => { readOnly = enabled; } });
         paintModeRow();
         chrome.showToast("Read-only mode: on");
         return;
       }
       if (wanted === "off") {
-        readOnly = false;
+        executePlanCommand("off", { current: readOnly, commit: (enabled) => { readOnly = enabled; } });
         paintModeRow();
         chrome.showToast(`Read-only mode: off (permission mode stays: ${permissionMode})`);
         return;
@@ -8811,10 +8791,12 @@ export async function launchTuiAgentShell(opts: {
       } else if (!isReasoningEffortLevel(wanted)) {
         io.onSystem?.(`Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`);
       } else {
-        reasoningOverride = wanted;
-        opts.setReasoningOverride?.(wanted);
-        deps.reasoningEffort = wanted;
-        saveShellConfig({ reasoningEffort: wanted });
+        executeReasoningCommand(wanted, { current: deps.reasoningEffort, commit: (effort) => {
+          reasoningOverride = effort;
+          opts.setReasoningOverride?.(effort);
+          deps.reasoningEffort = effort;
+          saveShellConfig({ reasoningEffort: effort });
+        } });
         io.onSystem?.(`Reasoning effort: ${wanted}\n`);
         const compatProvider = providerByName(currentSel.provider);
         if (currentSel.provider !== "openai" && compatProvider !== undefined && compatProvider.reasoning === undefined) {
@@ -9468,8 +9450,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "interrupt": {
-            if (foregroundOperation.isActive) {
-              foregroundOperation.cancel("interrupted by user");
+            if (requestSessionInterrupt(foregroundOperation)) {
               io.onSystem?.("◇ main turn interrupted.\n");
               return;
             }

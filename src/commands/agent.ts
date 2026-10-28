@@ -317,6 +317,10 @@ export interface ApproverProvenance {
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
   write: (s: string) => void;
+  /** Awaited before every provider request and tool invocation, including reads and wrap-ups.
+   * A transport host uses this to pause at a safe boundary after losing authenticated control.
+   * Local renderers omit it. The gate must honor abort while paused. */
+  beforeAction?: (action: { kind: "model" | "tool"; toolName?: string; signal?: AbortSignal }) => Promise<void>;
   /**
    * A durable-history checkpoint is needed. Emitted after every history
    * mutation, including streamed assistant deltas, so interrupted turns are
@@ -484,6 +488,8 @@ export interface AgentIO {
 
 /** Injected dependencies keeping `runAgentTurn` deterministic + offline. */
 export interface AgentDeps {
+  /** Explicit session workspace for hosts serving multiple checkouts in one process. */
+  cwd?: string;
   provider: ProviderPort;
   providerId: string;
   modelId: string;
@@ -2327,6 +2333,29 @@ export async function runAgentTurn(
     controlNonce,
     systemInstruction: `${deps.systemInstruction}${memoryContract}\n\n${buildControlMarkerInstruction(controlNonce)}`,
   };
+  // Wrap the two effect ports once, so retry, parallel and wrap-up paths cannot bypass
+  // the host's control boundary. beforeMutation remains the separate rewind checkpoint.
+  if (io.beforeAction !== undefined) {
+    const beforeAction = io.beforeAction;
+    turnDeps.provider = {
+      ...deps.provider,
+      describe: () => deps.provider.describe(),
+      stream: (request, streamOptions) => (async function* () {
+        await beforeAction({ kind: "model", ...(options.signal === undefined ? {} : { signal: options.signal }) });
+        options.signal?.throwIfAborted();
+        yield* deps.provider.stream(request, streamOptions);
+      })(),
+    };
+    turnDeps.tools = deps.tools.map((tool) => ({
+      ...tool,
+      invoke: async (input, context) => {
+        const signal = context?.signal ?? options.signal;
+        await beforeAction({ kind: "tool", toolName: tool.definition.name, ...(signal === undefined ? {} : { signal }) });
+        signal?.throwIfAborted();
+        return tool.invoke(input, context);
+      },
+    }));
+  }
   // Flow 354 review r1 (item 1): same "don't touch the core's many internal
   // `return`s" posture as SLATE-5's `finally` below — a fresh sink per turn,
   // threaded into `runAgentTurnCore` (and from there into
@@ -2334,7 +2363,7 @@ export async function runAgentTurn(
   // regardless of which internal `return` fired.
   const caughtToolErrors: CaughtToolError[] = [];
   const automaticReview = asksForAutomaticReview(deps, options, userLine);
-  const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(process.cwd())) : undefined;
+  const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(deps.cwd ?? process.cwd())) : undefined;
   const turnOptions: RunAgentTurnOptions =
     reviewRun === undefined ? options : { ...options, automaticReview, automaticReviewRun: reviewRun };
   if (reviewRun !== undefined) {
@@ -3034,7 +3063,7 @@ async function runAgentTurnCore(
   const explicitMaxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0);
   const currentPermissionMode = (): PermissionMode => io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
   const automaticReview = asksForAutomaticReview(deps, options, userLine);
-  const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(process.cwd())) : undefined;
+  const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(deps.cwd ?? process.cwd())) : undefined;
   const maxRounds = explicitMaxRounds ?? resolveAgentMaxRounds(process.env, currentPermissionMode(), automaticReview);
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   // Flow 347 T7: a subagent's advisory call target (warning threshold only).
@@ -3487,10 +3516,10 @@ async function runAgentTurnCore(
     if (subagentBudget !== undefined || deps.unattended === true) return false;
     // One tracker answers both: whether this session ran a review, and what its executed `keryx review` commands named.
     // It keeps both, and the session's start, across a compaction that rewrites the history in place.
-    const named = sessionReviewNames(history, process.cwd());
+    const named = sessionReviewNames(history, deps.cwd ?? process.cwd());
     const runSeen = named.runSeen === true;
     const open = runSeen
-      ? await findReviewGateState(process.cwd(), named.startedAt ?? sessionStartedAt(history), named).catch(() => null)
+      ? await findReviewGateState(deps.cwd ?? process.cwd(), named.startedAt ?? sessionStartedAt(history), named).catch(() => null)
       : null;
     const gate = decideReviewGate({
       open,

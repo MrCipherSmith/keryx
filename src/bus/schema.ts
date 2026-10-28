@@ -38,7 +38,7 @@ export const BUS_EVENT_KINDS = [
   "ack",
   "lease-expired",
 ] as const;
-export const PRESENCE_SURFACES = ["tui", "readline"] as const;
+export const PRESENCE_SURFACES = ["tui", "readline", "headless"] as const;
 export const PRESENCE_STATUSES = ["idle", "working", "blocked", "held"] as const;
 export const LEASE_SCOPES = ["turns", "git-publish", "advisory"] as const;
 export const LEASE_HOLDER_ORIGINS = ["agent", "operator", "cli"] as const;

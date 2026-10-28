@@ -1,7 +1,7 @@
-import { loadManifest, saveManifest, type RewindEntry, type RewindManifest } from "./manifest";
-import { restoreTree, type RestoreResult } from "./restore";
+import { loadManifest, saveManifest, signNativeRewindEntry, verifyNativeRewindEntry, type NativeRewindCapture, type RewindEntry, type RewindManifest } from "./manifest";
+import { previewRestoreTree, restoreTree, type RewindRestorePlan, type RestoreResult } from "./restore";
 import { enforceRetention, REWIND_MAX_SNAPSHOTS } from "./retention";
-import { initShadow, shadowRepo, type ShadowRepo } from "./shadow";
+import { initShadow, shadowRepo, type ShadowNativeBoundary, type ShadowRepo } from "./shadow";
 import { captureTree, changedFiles, writeSnapshotRef } from "./snapshot";
 
 const PROMPT_LIMIT = 200;
@@ -14,6 +14,7 @@ export interface RewindRecorderOptions {
   maxSnapshots?: number;
   now?: () => Date;
   onError?: (message: string) => void;
+  native?: ShadowNativeBoundary & { ownership(): NativeRewindCapture };
 }
 
 export interface RewindListing {
@@ -36,7 +37,8 @@ export interface RewindRecorder {
   snapshotCount(): number;
   entries(): RewindEntry[];
   describe(): Promise<RewindListing[]>;
-  restoreFiles(seq: number): Promise<RewindFilesOutcome>;
+  restoreFiles(seq: number, options?: { signal?: AbortSignal; expectedPlanDigest?: string }): Promise<RewindFilesOutcome>;
+  previewRestore?(seq: number, signal: AbortSignal): Promise<RewindRestorePlan>;
   /** After the conversation is cut at `seq`, later snapshots no longer point at a real message: keep them as file-only restore points. */
   detachHistoryAfter(seq: number): Promise<void>;
   enabled(): boolean;
@@ -62,6 +64,7 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
   let reported = false;
   const ready = new Set<string>();
   const diffCache = new Map<string, string[]>();
+  let serialDepth = 0;
 
   const report = (error: unknown): void => {
     if (reported) return;
@@ -69,7 +72,8 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
     options.onError?.(`rewind: ${error instanceof Error ? error.message : String(error)}`);
   };
   const serial = <T>(work: () => Promise<T>): Promise<T> => {
-    const next = queue.then(work, work);
+    const wrapped = async () => { serialDepth++; try { return await work(); } finally { serialDepth--; } };
+    const next = queue.then(wrapped, wrapped);
     queue = next.catch(() => undefined);
     return next;
   };
@@ -77,8 +81,8 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
     if (cache?.dir !== dir) cache = { dir, manifest: loadManifest(dir) };
     return cache.manifest;
   };
-  const repoFor = async (dir: string): Promise<ShadowRepo> => {
-    const repo = shadowRepo(dir, options.workTree);
+  const repoFor = async (dir: string, native = options.native): Promise<ShadowRepo> => {
+    const repo: ShadowRepo = { ...shadowRepo(dir, options.workTree), ...(native === undefined ? {} : { native }) };
     if (!ready.has(repo.gitDir)) {
       await initShadow(repo);
       ready.add(repo.gitDir);
@@ -90,8 +94,8 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
     manifest.entries = (await enforceRetention(repo, manifest.entries, max)).keep;
     await saveManifest(dir, manifest);
   };
-  const record = async (dir: string, kind: RewindEntry["kind"], archiveIndex: number | null, prompt: string, prune = true): Promise<RewindEntry> => {
-    const repo = await repoFor(dir);
+  const record = async (dir: string, kind: RewindEntry["kind"], archiveIndex: number | null, prompt: string, prune = true, native = options.native): Promise<RewindEntry> => {
+    const repo = await repoFor(dir, native);
     const manifest = manifestFor(dir);
     const captured = await captureTree(repo);
     const entry: RewindEntry = {
@@ -103,6 +107,7 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
       prompt: prompt.replace(/\s+/g, " ").trim().slice(0, PROMPT_LIMIT),
       skipped: captured.skipped,
     };
+    if (native) { native.assertOwnership(); native.signal().throwIfAborted(); entry.native = signNativeRewindEntry(entry, native.ownership()); }
     await writeSnapshotRef(repo, entry.seq, entry.tree);
     manifest.nextSeq += 1;
     manifest.entries.push(entry);
@@ -125,6 +130,7 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
       const done = serial(() => record(dir, "turn", current.archiveIndex, current.prompt)).then(
         () => undefined,
         (error: unknown) => {
+          if (options.native) throw error;
           report(error);
         },
       );
@@ -139,6 +145,7 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
     entries() {
       const dir = options.dir();
       if (dir === undefined) return [];
+      if (options.native && serialDepth === 0) cache = undefined;
       return [...manifestFor(dir).entries];
     },
     async describe() {
@@ -175,22 +182,42 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
       let changed = false;
       for (const entry of manifest.entries) {
         if (entry.seq > seq && entry.archiveIndex !== null) {
+          if (options.native && !verifyNativeRewindEntry(entry, options.native.ownership())) continue;
           entry.archiveIndex = null;
+          if (options.native) entry.native = signNativeRewindEntry(entry, options.native.ownership());
           changed = true;
         }
       }
       if (changed) await serial(() => saveManifest(dir, manifest));
     },
-    async restoreFiles(seq) {
+    async previewRestore(seq, signal) {
+      const dir = options.dir();
+      if (!options.native || dir === undefined) throw new Error("setup-required");
+      options.native.assertOwnership(); signal.throwIfAborted();
+      if (serialDepth === 0) cache = undefined;
+      const target = manifestFor(dir).entries.find(entry => entry.seq === seq);
+      if (!target || target.skipped.length || !verifyNativeRewindEntry(target, options.native.ownership())) throw new Error("unsupported-snapshot");
+      const repo: ShadowRepo = { ...shadowRepo(dir, options.workTree), native: { ...options.native, signal: () => signal } };
+      return previewRestoreTree(repo, target.tree);
+    },
+    async restoreFiles(seq, restoreOptions = {}) {
       const dir = options.dir();
       if (!enabled() || dir === undefined) return { ok: false, reason: "File snapshots are not recorded for this session." };
       const target = manifestFor(dir).entries.find((entry) => entry.seq === seq);
       if (target === undefined) return { ok: false, reason: `Snapshot ${seq} no longer exists.` };
       try {
+        restoreOptions.signal?.throwIfAborted();
+        const native = options.native === undefined ? undefined : { ...options.native, signal: () => restoreOptions.signal ?? options.native!.signal() };
         return await serial(async () => {
-          const before = await record(dir, "pre-rewind", null, `Before rewind to snapshot ${seq}`, false);
-          const repo = await repoFor(dir);
-          const result = await restoreTree(repo, target.tree);
+          restoreOptions.signal?.throwIfAborted();
+          if (native) {
+            if (target.skipped.length || !verifyNativeRewindEntry(target, native.ownership())) throw new Error("unsupported-snapshot");
+            const proof = await previewRestoreTree({ ...shadowRepo(dir, options.workTree), native }, target.tree);
+            if (restoreOptions.expectedPlanDigest !== undefined && proof.digest !== restoreOptions.expectedPlanDigest) throw new Error("stale-preview");
+          }
+          const before = await record(dir, "pre-rewind", null, `Before rewind to snapshot ${seq}`, false, native);
+          const repo = await repoFor(dir, native);
+          const result = await restoreTree(repo, target.tree, restoreOptions.expectedPlanDigest === undefined ? {} : { expectedPlanDigest: restoreOptions.expectedPlanDigest });
           await applyRetention(dir, repo);
           return { ok: true as const, preRewindSeq: before.seq, ...result };
         });

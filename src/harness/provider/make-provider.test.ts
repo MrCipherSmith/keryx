@@ -576,3 +576,17 @@ describe("the built-in deepseek provider gets the reasoning_content replay prese
     expect(assistantMsg?.content).toBe("plain reply, no reasoning");
   });
 });
+
+describe("makeProvider: a custom provider resolves from the configDir it is given", () => {
+  const priorXdg = process.env.XDG_DATA_HOME;
+  afterEach(() => { if (priorXdg === undefined) delete process.env.XDG_DATA_HOME; else process.env.XDG_DATA_HOME = priorXdg; });
+  test("reads llm-providers.json from opts.configDir, never from the default user config directory", async () => {
+    // The default user directory is an empty isolated one, so a lookup there (the old behaviour) finds nothing and falls back offline.
+    process.env.XDG_DATA_HOME = mkdtempSync(path.join(tmpdir(), "keryx-make-provider-default-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "keryx-make-provider-config-"));
+    await Bun.write(path.join(configDir, "llm-providers.json"), JSON.stringify({ schemaVersion: 1, providers: { local: { name: "configdir-custom", label: "ConfigDir custom", baseUrl: "http://127.0.0.1:9", requiresApiKey: false, models: ["m"] } } }));
+    const provider = makeProvider("configdir-custom", "m", { fetch: globalThis.fetch, env: {}, configDir });
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    expect(provider).not.toBeInstanceOf(FakeProvider);
+  });
+});

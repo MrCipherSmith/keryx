@@ -266,6 +266,10 @@ async function runServe(args: string[]): Promise<void> {
   }
 
   const { listener } = outcome;
+  const { startConfiguredMachineBridges } = await import("../lib/hub-machine/startup");
+  const machineBridges = await startConfiguredMachineBridges({
+    onNotice: (code) => console.log(`  ${style.yellow(symbols.bullet)} Hub machine: ${sanitizeForDisplay(code)}`),
+  });
   // Machine-parseable, and the only way a caller that passed `--port 0` learns
   // which port the OS chose.
   //
@@ -317,7 +321,7 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void Promise.all([digestTicker.stop(), intake.stop(), researchSync.stop()])
+      void Promise.all([digestTicker.stop(), intake.stop(), researchSync.stop(), machineBridges.stop()])
         .then(() => listener.drain())
         .then(() => remoteService.stop())
         .then(() => {

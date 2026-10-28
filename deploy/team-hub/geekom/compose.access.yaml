@@ -1,0 +1,17 @@
+# Optional overlay: copy to the release root as compose.access.yaml to enable SSO.
+# The containing directory is mounted so atomic roles.json replacements are visible.
+services:
+  hub:
+    image: keryx-team-hub-hub:${KERYX_HUB_RELEASE_TAG:?Use hubctl or set a unique release tag}
+    environment:
+      KERYX_HUB_ACCESS_ENABLED: "true"
+      KERYX_HUB_ACCESS_ISSUER: https://example-team.cloudflareaccess.com
+      KERYX_HUB_ACCESS_AUDIENCE: <CLOUDFLARE_ACCESS_AUD>
+      KERYX_HUB_ACCESS_ROLES_FILE: /run/keryx-access/roles.json
+    volumes:
+      - type: bind
+        source: ../../secrets/access
+        target: /run/keryx-access
+        read_only: true
+        bind:
+          create_host_path: false

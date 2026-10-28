@@ -1,6 +1,8 @@
+import { executePlanCommand } from "../session/commands/plan";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
+import { executeReasoningCommand } from "../session/commands/reasoning";
 // Interactive `keryx` shell REPL (flow 021, T6 / AC1-AC4).
 //
 // `runShell(io, deps)` is the injectable, deterministic REPL core: it reaches NO
@@ -3102,13 +3104,15 @@ export async function runAgentRepl(
             `Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`,
           );
         } else {
-          reasoningSessionOverride = wanted;
+          executeReasoningCommand(wanted, { current: deps.reasoningEffort, commit: (effort) => {
+          reasoningSessionOverride = effort;
           // `deps` (this function's own `AgentDeps` parameter) is the SAME
           // object every turn below reads — readline agent mode never
           // rebuilds it (no `/model`-style deps swap), so mutating this one
           // field takes effect starting with the very next turn.
-          deps.reasoningEffort = wanted;
-          saveShellConfig({ reasoningEffort: wanted }, configDir);
+          deps.reasoningEffort = effort;
+          saveShellConfig({ reasoningEffort: effort }, configDir);
+          } });
           agentIo.onSystem?.(`Reasoning effort: ${wanted}\n`);
           const compatProvider = providerByName(deps.providerId);
           if (compatProvider !== undefined && compatProvider.reasoning === undefined) {
@@ -3130,10 +3134,10 @@ export async function runAgentRepl(
           // Going read-only is the safe direction — no confirmation needed
           // (unlike `/mode auto`, which can skip confirmation for destructive
           // actions).
-          readOnly = true;
+          executePlanCommand("on", { current: readOnly, commit: (enabled) => { readOnly = enabled; } });
           agentIo.onSystem?.("Read-only mode: on\n");
         } else if (wanted === "off") {
-          readOnly = false;
+          executePlanCommand("off", { current: readOnly, commit: (enabled) => { readOnly = enabled; } });
           agentIo.onSystem?.(`Read-only mode: off (permission mode stays: ${permissionMode})\n`);
         } else {
           agentIo.onSystem?.("Usage: /plan [on|off]\n");

@@ -641,6 +641,11 @@ export function subagentFleetDetail(status: ReturnType<typeof subagentStatusForF
 }
 
 export interface SpawnSubagentToolDeps {
+  /** Headless native hosts intersect children with their already permitted tool set and live action authority. */
+  nativeOnly?: boolean;
+  childTools?: (cwd: string) => InteractiveTool[];
+  beforeAction?: NonNullable<AgentIO["beforeAction"]>;
+  onNativeTurn?: (turn: Promise<RunAgentTurnResult>) => void;
   /**
    * The PARENT's working directory. Parent-scoped on purpose: the routing
    * config location (`routing.config.json`), the external-runtime settings
@@ -1227,6 +1232,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       risk: "delegate",
     },
     invoke: async (input, toolCtx): Promise<StructuredSubagentResult> => {
+      if (deps.nativeOnly === true && readExternalRuntimeRequest(input) !== undefined) return { status: "Denied", isError: true, output: "external-runtime-not-authorized: this host supports native children only" };
       const taskText = typeof input.task === "string" ? input.task.trim() : "";
       if (taskText.length === 0) {
         // Local input-validation failure — the child never spawns, so this is
@@ -1764,7 +1770,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // Flow 454: a child's memory calls are recorded under its own id, and its keryx subprocesses carry
       // `KERYX_REVIEW_CALLER` — the child has no shell, so that runner is its whole "command environment".
       const reviewCaller = reviewerCallerId(labelRaw, workerId);
-      const tools =
+      const tools = deps.childTools !== undefined ? deps.childTools(cwd) :
         mode === "read_only"
           ? [
               ...builtinReadOnlyTools(cwd),
@@ -2000,6 +2006,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const internalAbort = new AbortController();
       const composed = composeAbortSignals(toolCtx?.signal, internalAbort.signal);
       const io: AgentIO = {
+        ...(deps.beforeAction === undefined ? {} : { beforeAction: deps.beforeAction }),
         write: (s) => {
           assistant += s;
         },
@@ -2304,6 +2311,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           "back to a different tool rather than repeating a failed call.\n\n" +
           "Return a concise summary of findings and any recommended next steps for the parent agent.";
         const turn = runAgentTurn(io, childDeps, history, userLine, { signal: composed.signal });
+        deps.onNativeTurn?.(turn);
         // D2b (flow 171, Phase D): the child's OWN `finishReason` (D2a,
         // `commands/agent.ts`) is only meaningful once `turn` has actually
         // settled on the "done" (not timed-out) path below — captured into

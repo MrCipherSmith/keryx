@@ -7721,3 +7721,37 @@ the agent's reader. Kill stops the supervised process group without a model
 turn. These commands operate only on tasks tracked by this session.
 In the TUI, unknown slash commands display a collapsible available-command
 list with an eight-line preview (Ctrl+O, then Enter to expand).
+
+## hub
+
+Team Hub prototype for canonical project context, immutable code snapshots and human-gated publication. It is separate from local `flow` state and from `keryx serve`. Run `keryx hub --help` for the exact supported arguments.
+
+```bash
+keryx hub serve
+keryx hub status
+keryx hub mcp --url https://hub.example.com/mcp [--token-env NAME]
+keryx hub connect --url http://127.0.0.1:7331 --project <id> [--token-env NAME]
+keryx hub import [--token-env NAME]
+keryx hub sync [--token-env NAME]
+keryx hub submit --message <text> [--token-env NAME]
+keryx hub pull [--revision <id>] [--apply] [--token-env NAME]
+keryx hub fetch --delivery <id> [--token-env NAME]
+```
+
+`serve` uses the `KERYX_HUB_*` server environment. Client credentials use `KERYX_HUB_TOKEN` or the named environment variable; they are never saved in the checkout. `connect` explicitly binds each checkout with a distinct identity and records the authoritative binding in permission-restricted user configuration outside the repository. HTTPS is required for non-loopback URLs.
+
+`status` reads only this checkout's authoritative local binding and prints `url`, `projectId` and `checkoutId`. It requires no token, makes no HTTP requests and does not change project/configuration files or Git state. An unconnected checkout prints a clear message; a malformed or unreadable binding fails with a sanitized error. The repository mirror is never used as a fallback.
+
+`mcp` is a local stdio bridge to the shared Hub MCP endpoint. It needs no checkout or local binding. The agent key comes from `KERYX_HUB_TOKEN` or `--token-env NAME`; optional Cloudflare Service Auth uses both `KERYX_CF_ACCESS_CLIENT_ID` and `KERYX_CF_ACCESS_CLIENT_SECRET`. Credentials are never accepted as raw flags. Remote URLs require HTTPS; loopback HTTP is allowed for local testing. Redirects are refused, stdout contains only MCP messages, and network failures do not automatically retry writes. See [Hub MCP clients](../requirements/hub-mcp/clients.md) for configuration and compatibility limits.
+
+`import` reads bounded OpenSpec/wiki Markdown without executing OpenSpec, and batches larger imports; imported content does not grant approval. `sync` refreshes shared project context under XDG cache and preserves existing index/wiki content, adding only a managed index block and backup.
+
+`submit` sends tracked regular file bytes/modes and subsequent updates/deletions. Symlinks, submodules and unsafe/over-quota snapshots are refused. `pull` previews selected or named revision changes; `--apply` requires safe local state, refuses staged/local/untracked collisions and active Git operations, and records original bytes in a recovery checkpoint before writes. HEAD/index remain unchanged. An unchanged previously applied Hub snapshot can receive another selected revision; subsequent local edits are refused.
+
+`fetch` fetches a published managed branch into a dedicated reference, verifies its receipt and selected delta, and previews the delivered tree. It preserves local edits and leaves reanchoring to normal Git. No PR/merge or dirty reset is performed. A failed command exits nonzero with a visible error.
+
+An older globally installed CLI may not have `hub`; use the prototype source/release standalone client with the same arguments after the entry filename, omitting `hub`:
+
+```bash
+bun --no-env-file --config=/dev/null /absolute/path/to/keryx/src/hub/client-main.ts --help
+```

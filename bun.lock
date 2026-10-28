@@ -14,7 +14,7 @@
         "typescript-eslint": "^8.69.0",
       },
       "optionalDependencies": {
-        "@modelcontextprotocol/sdk": "^1.32.1",
+        "@modelcontextprotocol/sdk": "1.32.1",
         "@opentui/core": "^0.4.5",
         "web-tree-sitter": "^0.22.6",
       },

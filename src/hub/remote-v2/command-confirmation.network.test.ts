@@ -1,0 +1,23 @@
+import { afterEach, expect, test } from "bun:test";
+import { fixture, admittedSession, appliedController, success, D, type Fixture } from "./fixture.test-support";
+import { canonicalDigest, catalogueDigest, type Control } from "../../remote-control/protocol";
+let f: Fixture;
+afterEach(async () => { if (f) await f.close(); });
+test("command confirmation projects native card and delivers explicit Deny with distinct operation identity", async () => {
+  const entries: Control["CommandCatalogueEntry"][] = [{ commandName: "inspect", summary: "Inspection", handlerId: "native.inspect", inputSchema: { type: "object", additionalProperties: false, properties: {}, required: [] }, resultSchema: { type: "object", additionalProperties: false, properties: {}, required: [] }, mutationClass: "session", states: ["idle"], busyPolicy: "reject", confirmation: "human", availability: "available", reason: "" }];
+  f = await fixture(); const s = await admittedSession(f, entries); const c = await appliedController(f, s);
+  const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
+  const request: Control["CommandInvoke"] = { expectedSessionVersion: 2, controller, expectedConfigVersion: 1, catalogueDigest: catalogueDigest(entries), commandName: "inspect", arguments: {}, busyPolicy: "reject" };
+  const pending = await success<Control["CommandOutcome"]>(await f.call(`${s.path}/commands/invoke`, { method: "POST", cookie: f.cookie, body: request })); const delivery = await s.peer.next("session-command");
+  const card: Control["CommandConfirmationRequest"] = { confirmationId: "native-command-card", sessionId: s.session.sessionId, operationId: (delivery.payload as {commandId:string}).commandId, operationDigest: canonicalDigest(request), policyDigest: D, expectedConfigVersion: 1, proposedConfigDigest: D, controller, actorId: c.lease.actorId, expiresAt: new Date(Date.now() + 60000).toISOString(), summary: "Inspection consent", costEffect: "None", privacyEffect: "Inspection" };
+  const emit = async (seq: number, event: object) => { s.peer.send("session-event", { sessionId: s.session.sessionId, projectId: f.project.id, checkoutId: "checkout", sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next("session-event-ack"); };
+  await emit(4, { kind: "command-outcome", outcome: { ...pending, operationId: card.operationId, status: "confirmation-required", confirmationId: card.confirmationId, confirmation: card } });
+  await emit(5, { kind: "session-state", session: { ...s.session, sessionEventCursor: 5 } });
+  const confirmed = await success<Control["CommandOutcome"]>(await f.call(`${s.path}/commands/confirm`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: 2, controller, confirmationId: card.confirmationId, operationDigest: card.operationDigest, policyDigest: D, decision: "deny" } }));
+  expect(confirmed.status).toBe("queued"); expect(confirmed.operationId).toBe(pending.operationId);
+  const deny = await s.peer.next("session-command"); expect(deny.payload).toMatchObject({ kind: "confirm-command", body: { decision: "deny" } });
+  expect((deny.payload as {commandId:string}).commandId).not.toBe(card.operationId);
+  const before = await success<Control["CommandOutcome"]>(await f.call(`${s.path}/operations/${pending.operationId}`, { cookie: f.cookie })); expect(before.status).toBe("confirmation-required");
+  await emit(6, { kind: "command-outcome", outcome: { ...pending, operationId: card.operationId, status: "rejected", errorCode: "forbidden" } });
+  expect((await success<Control["CommandOutcome"]>(await f.call(`${s.path}/operations/${pending.operationId}`, { cookie: f.cookie }))).status).toBe("rejected");
+});

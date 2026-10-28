@@ -40,7 +40,7 @@
   },
   "scripts": {
     "keryx": "bun ./src/cli.ts",
-    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/core.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
+    "build": "bun scripts/build-hub-web.ts --check && bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/core.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
     "prepare": "bun run build",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --project tsconfig.scripts.json --noEmit",
@@ -59,7 +59,9 @@
     "check:retired-spellings": "bun scripts/check-retired-cli-spellings.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
     "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:hub-web": "bun scripts/build-hub-web.ts",
+    "check:hub-web": "bun run --cwd apps/hub-web typecheck && bun run --cwd apps/hub-web lint && bun run --cwd apps/hub-web test && bun scripts/build-hub-web.ts --check"
   },
   "files": [
     "dist",
@@ -86,7 +88,7 @@
     "sharp": "0.35.5"
   },
   "optionalDependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@opentui/core": "^0.4.5",
     "web-tree-sitter": "^0.22.6"
   },

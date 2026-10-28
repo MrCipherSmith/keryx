@@ -104,6 +104,9 @@ async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
 }
 
 export interface JevContractRunOptions {
+  /** Optional local execution boundary; omitted values retain the CLI defaults. */
+  readonly signal?: AbortSignal;
+  readonly dir?: string;
   readonly cwd: string;
   readonly description: string;
   readonly diffText: string;
@@ -138,6 +141,7 @@ export interface JevContractComputedResult extends JevContractRunResult {
  * score.
  */
 export async function computeJevContractResult(options: JevContractRunOptions): Promise<JevContractComputedResult> {
+  options.signal?.throwIfAborted();
   const { description, diffText, targetLabel } = options;
   const maxCalls = options.maxCalls ?? DEFAULT_MAX_JEV_CONTRACT_CALLS;
   const threshold = options.threshold ?? DEFAULT_JEV_CONTRACT_THRESHOLD;
@@ -165,7 +169,7 @@ export async function computeJevContractResult(options: JevContractRunOptions): 
     // throws — the caller decides what a failure means (degrade, or retry).
     const attemptBatch = async (batch: ContractClaimBatch): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> => {
       try {
-        const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env });
+        const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}), ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(options.signal !== undefined ? { signal: options.signal } : {}) });
         jevCalls += 1;
         if (result.usage.input_tokens !== undefined) {
           inputTokens += result.usage.input_tokens;

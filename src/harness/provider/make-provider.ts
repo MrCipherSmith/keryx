@@ -139,7 +139,8 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
   // Cerebras, Groq, Moonshot, …, Rapid-MLX) — reuse the OpenAI-compat adapter
   // with a bearer credential read from its `envKey` when required by the
   // provider definition. Keyless entries (e.g. rapid-mlx) are still accepted.
-  const compat = providerByName(name);
+  // Custom entries live in the caller's config dir (`llm-providers.json`); the default user dir is only the fallback when none is given.
+  const compat = providerByName(name, opts.configDir);
   if (compat !== undefined) {
     const needsKey = compat.requiresApiKey !== false;
     const apiKey = compat.apiKey ?? (compat.envKey === undefined ? undefined : env[compat.envKey]);

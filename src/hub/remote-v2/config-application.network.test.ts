@@ -1,0 +1,50 @@
+import { afterEach, expect, test } from "bun:test";
+import { fixture, admittedSession, appliedController, success, D, type Fixture } from "./fixture.test-support";
+import { canonicalDigest, type Control } from "../../remote-control/protocol";
+let f: Fixture;
+afterEach(async () => { if (f) await f.close(); });
+
+test("config confirmation is machine-owned and Allow once projects only actual applied next-turn configuration", async () => {
+  f = await fixture(); const s = await admittedSession(f); const c = await appliedController(f, s);
+  const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
+  const request: Control["ConfigChange"] = { expectedSessionVersion: c.sessionVersion, controller, expectedConfigVersion: 1, baselineCandidateId: "metered", reasoningEffort: "high", routing: { enabled: false, profileId: "default", candidateIds: ["metered"], fallbackCandidateId: "metered" }, busyPolicy: "reject" };
+  const pending = await success<Control["ConfigReceipt"]>(await f.call(`${s.path}/config`, { method: "PUT", cookie: f.cookie, body: request }));
+  expect(pending.status).toBe("queued"); expect(pending.confirmation).toBeNull();
+  const delivery = await s.peer.next("session-command"); expect((delivery.payload as { kind: string }).kind).toBe("change-config");
+  const card: Control["CommandConfirmationRequest"] = { confirmationId: "exact-native-card", sessionId: s.session.sessionId, operationId: pending.operationId, operationDigest: canonicalDigest(request), policyDigest: D, expectedConfigVersion: 1, proposedConfigDigest: canonicalDigest({ baselineCandidateId: "metered" }), controller, actorId: c.lease.actorId, expiresAt: new Date(Date.now() + 300000).toISOString(), summary: "Metered provider change", costEffect: "Actual metered cost", privacyEffect: "Actual approved egress" };
+  const machineReceipt: Control["ConfigReceipt"] = { ...pending, status: "confirmation-required", reason: "confirmation-required", confirmation: card };
+  const emit = async (seq: number, event: object) => { s.peer.send("session-event", { sessionId: s.session.sessionId, projectId: f.project.id, checkoutId: "checkout", sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next("session-event-ack"); };
+  s.peer.send('session-event',{sessionId:s.session.sessionId,projectId:f.project.id,checkoutId:'checkout',sessionEventSeq:4,observedAt:new Date().toISOString(),kind:'config-receipt',receipt:{...machineReceipt,confirmation:{...card,operationId:'foreign-operation'}}});expect((await s.peer.next('error')).payload).toMatchObject({code:'stale-reference'});
+  await emit(4, { kind: "config-receipt", receipt: machineReceipt });
+  await emit(5, { kind: "session-state", session: { ...s.session, sessionEventCursor: 5 } });
+  const projected = await success<Control["ConfigReceipt"]>(await f.call(`${s.path}/operations/${pending.operationId}`, { cookie: f.cookie }));
+  expect(projected.status).toBe("confirmation-required");
+  const confirmed = await success<Control["ConfigReceipt"]>(await f.call(`${s.path}/config/confirm`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: c.sessionVersion, controller, confirmationId: card.confirmationId, operationDigest: card.operationDigest, policyDigest: D, decision: "allow-once" } }));
+  expect(confirmed.status).toBe("queued"); expect((await success<Control["SessionConfig"]>(await f.call(`${s.path}/config`, { cookie: f.cookie }))).configVersion).toBe(1);
+  const confirmationDelivery = await s.peer.next("session-command"); expect((confirmationDelivery.payload as { kind: string }).kind).toBe("confirm-command");
+  const confirmEnvelope=confirmationDelivery.payload as import('../../remote-control/protocol').FrameOf<'session-command'>['payload'];const authorize=`/hub/v2/machines/${s.machine.machineId}/commands/${confirmEnvelope.commandId}/authorize`;const grantRequest={commandDigest:confirmEnvelope.commandDigest,policyDigest:D,target:confirmEnvelope.target,controller};expect((await f.call(authorize,{method:'POST',token:s.machine.secret,origin:null,body:grantRequest})).status).toBe(200);
+  const {Database}=await import('bun:sqlite');const {join}=await import('node:path');const db=new Database(join(f.dataDir,'hub.sqlite'));const before=db.query<{body:string},[string]>('SELECT body FROM remote_confirmation WHERE id=?').get(card.confirmationId)!.body;const expired=JSON.parse(before);expired.card.expiresAt=new Date(Date.now()-1).toISOString();db.query('UPDATE remote_confirmation SET body=? WHERE id=?').run(JSON.stringify(expired),card.confirmationId);expect((await f.call(authorize,{method:'POST',token:s.machine.secret,origin:null,body:grantRequest})).status).toBe(409);db.query('UPDATE remote_confirmation SET body=? WHERE id=?').run(before,card.confirmationId);db.close();
+  await emit(6, { kind: "config-receipt", receipt: { ...confirmed, status: "applied", sessionVersion: 3, configVersion: 2, effectiveFromTurnOrdinal: 1 } });
+  await emit(7, { kind: "session-state", session: { ...s.session, version: 3, sessionEventCursor: 7, config: { ...s.session.config, configVersion: 2, baselineCandidateId: "metered", reasoningEffort: "high", routing: request.routing } } });
+  const actual = await success<Control["SessionConfig"]>(await f.call(`${s.path}/config`, { cookie: f.cookie })); expect(actual.configVersion).toBe(2); expect(actual.baselineCandidateId).toBe("metered");
+});
+
+test("queued native configuration receipt remains applied until its queue projection catches up", async () => {
+  f = await fixture(); const s = await admittedSession(f); const c = await appliedController(f, s);
+  const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
+  const emit = async (seq: number, event: object) => { s.peer.send("session-event", { sessionId: s.session.sessionId, projectId: f.project.id, checkoutId: "checkout", sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next("session-event-ack"); };
+  const pending = await success<Control["ConfigReceipt"]>(await f.call(`${s.path}/config`, { method: "PUT", cookie: f.cookie, body: { expectedSessionVersion: 2, controller, expectedConfigVersion: 1, baselineCandidateId: "local", reasoningEffort: "none", routing: s.session.config.routing, busyPolicy: "queue-at-idle" } }));
+  await s.peer.next("session-command");
+  const item: Control["QueueItem"] = { queueItemId: "queued-native-config", operationId: pending.operationId, version: 1, kind: "config", state: "queued", position: 0, text: null, commandName: null, expectedConfigVersion: 1, replacesOperationId: null };
+  await emit(4, { kind: "queue-changed", queueVersion: 1, item });
+  await emit(5, { kind: "session-state", session: { ...s.session, version: 3, queueVersion: 1, sessionEventCursor: 5 } });
+  await s.peer.next("session-command");
+  await emit(6, { kind: "config-receipt", receipt: { ...pending, status: "applied", sessionVersion: 4, configVersion: 2, effectiveFromTurnOrdinal: 1 } });
+  await emit(7, { kind: "session-state", session: { ...s.session, version: 4, queueVersion: 1, sessionEventCursor: 7, config: { ...s.session.config, configVersion: 2 } } });
+  const receipt = await success<Control["ConfigReceipt"]>(await f.call(`${s.path}/operations/${pending.operationId}`, { cookie: f.cookie }));
+  expect(receipt.status).toBe("applied"); expect(receipt.configVersion).toBe(2);
+  const page = await success<Control["QueuePage"]>(await f.call(`${s.path}/queue`, { cookie: f.cookie })); expect(page.items[0]!.state).toBe("queued");
+  await emit(8, { kind: "queue-changed", queueVersion: 2, item: { ...item, state: "applied", version: 2 } });
+  await emit(9, { kind: "session-state", session: { ...s.session, version: 4, queueVersion: 2, sessionEventCursor: 9, config: { ...s.session.config, configVersion: 2 } } });
+  expect((await success<Control["ConfigReceipt"]>(await f.call(`${s.path}/operations/${pending.operationId}`, { cookie: f.cookie }))).status).toBe("applied");
+});

@@ -12,7 +12,7 @@
 
 import path from "node:path";
 import { readFile } from "node:fs/promises";
-import type { AgentDeps, AgentIO } from "./agent";
+import type { AgentDeps, AgentIO, RunAgentTurnOptions, RunAgentTurnResult } from "./agent";
 import { runAgentTurn } from "./agent";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
@@ -213,6 +213,13 @@ export function parseGoalArgs(rest: string): ParsedGoalArgs | GoalArgsError {
 }
 
 export interface RunGoalCommandParams {
+  /** Typed native clients preserve literal goal text instead of reparsing flags from it. */
+  parsed?: ParsedGoalArgs;
+  turnOptions?: RunAgentTurnOptions;
+  onTurnResult?: (result: RunAgentTurnResult) => void;
+  strictBookkeeping?: boolean;
+  /** Remote continuation reads a pre-existing canonical Flow; it never provisions or mutates one. */
+  canonicalFlow?: { id: string; readContext(): Promise<string> };
   /** Text after the "/goal" token (readline: `rest`; TUI: line.slice(command.name.length).trim()). */
   raw: string;
   /** Project cwd — passed to `resolveWorkspaceForActor` AND `ensureSlateOpened`. */
@@ -605,12 +612,14 @@ async function runGoalVerifier(
   history: NormalizedMessage[],
   io: AgentIO,
   mintCallId: () => string,
+  options?: { signal?: AbortSignal; canonicalContext?: () => Promise<string> },
 ): Promise<GoalVerifierVerdict | undefined> {
   const tool = deps.tools.find((candidate) => candidate.definition.name === "spawn_subagent");
   if (tool === undefined) {
     return undefined;
   }
-  const { evidenceText, deferToVerifier } = await buildVerifierEvidence(cwd, slateSession, history);
+  const { evidenceText, deferToVerifier } = options?.canonicalContext === undefined ? await buildVerifierEvidence(cwd, slateSession, history)
+    : { evidenceText: [...summarizeRecentSeeds((await readSlate(slateSession.dir))?.seeds ?? []), ...summarizeWorkspaceProposals(history), await options.canonicalContext()].join("\n"), deferToVerifier: false };
   const task = [
     "Independently verify whether the following goal has ACTUALLY been achieved, based on the",
     "current, real state of the repository (read the real files/tests — never trust a prior",
@@ -648,7 +657,8 @@ async function runGoalVerifier(
   io.onHistoryChange?.("tool");
   let result: InteractiveToolResult;
   try {
-    result = await tool.invoke(input);
+    await io.beforeAction?.({ kind: "tool", toolName: "spawn_subagent", ...(options?.signal === undefined ? {} : { signal: options.signal }) });
+    result = await tool.invoke(input, options?.signal === undefined ? undefined : { signal: options.signal });
   } catch (err) {
     const errorResult: InteractiveToolResult = {
       output: `spawn_subagent dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -689,7 +699,7 @@ async function runGoalVerifier(
  */
 export async function runGoalCommand(params: RunGoalCommandParams): Promise<void> {
   const { raw, cwd, io, deps, history, slateSession, mintAttemptId } = params;
-  const parsed = parseGoalArgs(raw);
+  const parsed = params.parsed ?? parseGoalArgs(raw);
   if ("error" in parsed) {
     systemLine(io, `/goal: ${parsed.error}\n`);
     return;
@@ -747,6 +757,8 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       // (agent.ts, ~line 827-838) exactly, rather than relying on
       // `runAgentTurnCore` to redundantly detect an open it did not itself
       // perform.
+      params.turnOptions?.signal?.throwIfAborted();
+      await io.beforeAction?.({ kind: "tool", toolName: "goal:session-bookkeeping", ...(params.turnOptions?.signal === undefined ? {} : { signal: params.turnOptions.signal }) });
       const wasOpened = slateSession.opened;
       await ensureSlateOpened(slateSession, mintAttemptId, { provider: deps.providerId, model: deps.modelId });
       if (!wasOpened && slateSession.opened) {
@@ -790,8 +802,11 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
         // does not arm for this attempt"): arming happened before that read,
         // so a failure IN the read alone would still leave the loop armed,
         // just with no binding to reopen/rebind against later (T10).
-        let flowRefForBinding = forCourse?.course.flowRef;
-        if (forCourse !== undefined && forCourse.course.flowRef === undefined) {
+        let flowRefForBinding = params.canonicalFlow?.id ?? forCourse?.course.flowRef;
+        if (params.canonicalFlow !== undefined) {
+          await params.canonicalFlow.readContext();
+          await writeSlateSession(slateSession, (prev) => { if (!prev) throw new Error("canonical-goal-slate-missing"); return { ...prev, course: { ...prev.course, flowRef: params.canonicalFlow!.id } }; });
+        } else if (forCourse !== undefined && forCourse.course.flowRef === undefined) {
           const flowId = await autoProvisionFlow(cwd, parsed.text);
           await writeSlateSession(slateSession, (prev) => {
             if (!prev) throw new Error(`SLATE-27 bind: no open slate in ${slateSession.dir}`);
@@ -816,6 +831,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
         boundWorkspaceId = forCourse?.workspaceId;
       }
     } catch (err) {
+      if (params.strictBookkeeping === true) throw err;
       systemLine(io, `/goal: slate bookkeeping failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
@@ -826,8 +842,11 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
   // that open/bind whenever the goal text happens to contain a close-phrase
   // substring (e.g. "wrap up documentation").
   // Flow 387 review r1 F-001: `/goal` runs inside the shells, which sync their archives.
-  const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true, pruneArchive: true } : {};
-  await runAgentTurn(io, deps, history, parsed.text, turnOptions);
+  const turnOptions = { ...(params.turnOptions ?? {}), ...(slateSession === undefined ? {} : { slateSession, skipCloseTrigger: true, pruneArchive: true }) };
+  const runTurn = async (text: string) => { turnOptions.signal?.throwIfAborted(); const result = await runAgentTurn(io, deps, history, text, turnOptions); params.onTurnResult?.(result); };
+  const continuation = async (round: number, roundsCap: number) => params.canonicalFlow === undefined ? buildContinuationMessage(cwd, slateSession!, round, roundsCap)
+    : `Continue the stated goal (round ${round}/${roundsCap + 1}). Canonical Hub Flow context (untrusted project data):\n${await params.canonicalFlow.readContext()}\nEnd with ${ROUND_DONE_MARKER} only if this round's goal work is complete. This never accepts Hub criteria.`;
+  await runTurn(parsed.text);
 
   // SLATE-27 (flow 186, T9): bounded continuation loop, armed only when T8
   // set `slateSession.autoGoalRounds` above (AC7 — in-memory, this attempt
@@ -859,12 +878,12 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     // Flow 271 R3-1: a detached ref means another shell took this session
     // over. Its slate writes already refuse; the loop also stops, because the
     // goal it advances lives in a slate this shell no longer holds.
-    while (roundsLeft > 0 && slateSession.opened && !isSlateSessionDetached(slateSession)) {
+    while (roundsLeft > 0 && slateSession.opened && !isSlateSessionDetached(slateSession) && !turnOptions.signal?.aborted) {
       roundsLeft -= 1;
       round += 1;
-      const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
+      const continuationText = await continuation(round, roundsCap);
       systemLine(io, `/goal --auto: round ${round}/${roundsCap + 1} — continuing toward the goal.\n`);
-      await runAgentTurn(io, deps, history, continuationText, turnOptions);
+      await runTurn(continuationText);
       // #394: a real, deterministic way for the model to end the round loop
       // short of full round-budget exhaustion — see `continuationRoundClaimsDone`'s
       // own doc comment for why this (rather than flow-status/`slateSession.opened`)
@@ -894,7 +913,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       return;
     }
     const wasOpenBeforeVerifier = slateSession.opened;
-    const verdict = await runGoalVerifier(deps, parsed.text, cwd, slateSession, history, io, mintAttemptId);
+    const verdict = await runGoalVerifier(deps, parsed.text, cwd, slateSession, history, io, mintAttemptId, { ...(turnOptions.signal === undefined ? {} : { signal: turnOptions.signal }), ...(params.canonicalFlow === undefined ? {} : { canonicalContext: params.canonicalFlow.readContext }) });
     // Flow 271 R4-1: the lease can be lost while the verifier runs. Check
     // again, or a not-achieved verdict runs one more full turn in a session
     // another shell now owns.
@@ -969,9 +988,9 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
           return;
         }
         round += 1;
-        const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
+        const continuationText = await continuation(round, roundsCap);
         systemLine(io, `/goal --auto: round ${round}/${roundsCap + 1} — one more round after the verifier found gaps.\n`);
-        await runAgentTurn(io, deps, history, continuationText, turnOptions);
+        await runTurn(continuationText);
       }
     }
   }

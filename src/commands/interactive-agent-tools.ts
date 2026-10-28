@@ -32,10 +32,13 @@ import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { journaledAskUser } from "../tui/ask-user-bridge";
+import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CALLER_ORCHESTRATOR, withOrchestratorLog } from "../review/orchestrator-log";
 import { buildProjectTools } from "./project-tools";
 
 export type InteractiveAgentToolsInput = {
+  /** Session-owned question service. Headless sessions never register a process-global TUI host. */
+  askUser?: AskUserFn;
   cwd: string;
   metaprojectPort: MetaprojectPort;
   searchController: SearchProviderController;
@@ -247,7 +250,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     workspaceShowTool(input.cwd),
     workspaceProposeTool(input.cwd, getSessionDir),
     // Flow 392: the same picker, with the recommendation journal around it.
-    createAskUserTool(journaledAskUser(input.cwd)),
+    createAskUserTool(input.askUser ?? journaledAskUser(input.cwd)),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
     // Flow 393: working-memory tools. Offered to the model only by hosts that keep working

@@ -25,7 +25,7 @@
 //     same `ConformPrPort` `review-jev-rules`/`review-jev-docs` already use.
 
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { hunkRegionsFromDiff } from "../review/conform-state";
@@ -305,6 +305,10 @@ function repliesFor(comment: SeenComment, allSeen: readonly SeenComment[]): Comm
 }
 
 export interface JevCommentsRunOptions {
+  readonly mutate?: <T>(paths: readonly string[], write: () => Promise<T>) => Promise<T>;
+  readonly signal?: AbortSignal;
+  readonly dir?: string;
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly cwd: string;
   readonly repo: string;
   readonly number: number;
@@ -323,6 +327,7 @@ export interface JevCommentsRunOptions {
  * (`jevCommentsGateRefusal`).
  */
 export async function computeJevCommentsResult(options: JevCommentsRunOptions): Promise<JevCommentsComputedResult> {
+  options.signal?.throwIfAborted();
   const { cwd, repo, number, prPort, factsPort } = options;
   const model = options.model ?? DEFAULT_JEV_MODEL;
   const fetchFn = options.fetchFn ?? globalThis.fetch;
@@ -361,7 +366,7 @@ export async function computeJevCommentsResult(options: JevCommentsRunOptions): 
   const computedAt = new Date().toISOString();
 
   for (const batch of batches) {
-    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: process.env });
+    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env, cwd, ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(options.signal !== undefined ? { signal: options.signal } : {}) });
     jevCalls += 1;
     if (result.usage.input_tokens !== undefined) {
       inputTokens += result.usage.input_tokens;
@@ -385,7 +390,9 @@ export async function computeJevCommentsResult(options: JevCommentsRunOptions): 
     }
   }
 
-  await writeCommentAdvisoryLabels(cwd, repo, number, labels).catch(() => {});
+  const writeLabels = () => writeCommentAdvisoryLabels(cwd, repo, number, labels);
+  if (options.mutate === undefined) await writeLabels().catch(() => {});
+  else await options.mutate([relative(cwd, advisoryLabelsPath(cwd, repo, number))], writeLabels);
 
   const stats = commentsFindingStats(findings);
   const status = findings.length > 0 ? "DONE_WITH_CONCERNS" : "DONE";

@@ -30,6 +30,7 @@
 import { runModelTurn } from "./harness/provider/single-turn";
 import { setModelTurnPort } from "./sac/model-turn-port";
 import { initCommand } from "./commands/init";
+import { hubCommand, printHubHelp } from "./commands/hub";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
 import { wikiCommand } from "./commands/wiki";
@@ -118,6 +119,7 @@ export const VERSION = packageJson.version;
  */
 export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void> = {
   init: initCommand,
+  hub: hubCommand,
   // Flow 303 (AC10): grouped command help by task. `--help`/`-h`/bare `keryx`
   // keep printing the flat USAGE_BODY below (AC5) — this is a SEPARATE verb.
   //
@@ -252,6 +254,7 @@ export function groupsWithKnownSubcommands(): readonly string[] {
  * actually read.
  */
 export const USAGE_BODY = `Usage:
+  keryx hub <serve|connect|import|sync|submit|pull|fetch> Team Hub prototype (--help for arguments)
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness
@@ -630,6 +633,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   string,
   (rest: readonly string[]) => void
 >([
+  ["hub", () => printHubHelp()],
   ["flow", () => printFlowHelp()],
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],
