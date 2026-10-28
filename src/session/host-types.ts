@@ -91,6 +91,8 @@ export interface SessionHostOptions {
   runtime: NativeSessionRuntime;
   workspace: SessionWorkspacePort;
   now?: () => number;
+  /** How long a native approval or confirmation card stays answerable. Defaults to the frozen 120 s; a composition may only shorten it, never extend it. */
+  decisionTtlMs?: number;
   /** Local machine bridge verifies the fresh Hub grant, immutable command context and receipt binding.
    * Absent means controller projection mutations are denied, never implicitly trusted. */
   authorizeController?: (receipt: Control["ControllerReceipt"], authority: ControllerAuthority) => Promise<boolean>;

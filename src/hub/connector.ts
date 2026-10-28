@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve, relative } from "node:path";
+import { revisionOperand } from "../lib/git-revision";
 import { hasControls, hubGit, safeHubPath, validateHubRemote } from "./git-delivery";
 import type { CodeRevision, Delivery, ImportResponse, Project, RevisionChange, RevisionFile } from "./contracts";
 import { acquireContextLock, HubSyncCancelled, HubSyncError, mergeContext, readContext, replaceContextFile, requestContext } from "./context-sync";
@@ -372,9 +373,10 @@ export class HubConnector {
         if (!/^codex\/hub-[a-f0-9]+-[a-f0-9]+$/.test(delivery.branch) || !/^[a-f0-9]{40,64}$/.test(delivery.commitSha) || !/^[a-f0-9]{40,64}$/.test(delivery.treeSha))
             throw Error("Invalid managed delivery receipt");
         const ref = `refs/keryx-hub/${digest(delivery.id)}`;
-        await hubGit(this.cwd, ["fetch", "--no-tags", delivery.remoteUrl, `refs/heads/${delivery.branch}:${ref}`]);
-        const actual = String(await hubGit(this.cwd, ["rev-parse", ref])).trim();
-        const tree = String(await hubGit(this.cwd, ["rev-parse", `${ref}^{tree}`])).trim();
+        // The receipt and the revision are the Hub's: `--end-of-options` keeps each URL and revision an operand.
+        await hubGit(this.cwd, ["fetch", "--no-tags", "--end-of-options", delivery.remoteUrl, `refs/heads/${delivery.branch}:${ref}`]);
+        const actual = String(await hubGit(this.cwd, ["rev-parse", "--verify", ...revisionOperand(ref)])).trim();
+        const tree = String(await hubGit(this.cwd, ["rev-parse", "--verify", ...revisionOperand(`${ref}^{tree}`)])).trim();
         if (actual !== delivery.commitSha || tree !== delivery.treeSha)
             throw Error("Remote branch differs from delivery receipt; automatic reanchor refused");
         const parseTree = (data: Buffer) => new Map(String(data).split("\0").filter(Boolean).map(entry => {
@@ -382,8 +384,8 @@ export class HubConnector {
             const [mode, , oid] = entry.slice(0, tab).split(" ");
             return [entry.slice(tab + 1), { mode, oid }] as const;
         }));
-        const delivered = parseTree(await hubGit(this.cwd, ["ls-tree", "-r", "-z", actual]));
-        const base = parseTree(await hubGit(this.cwd, ["ls-tree", "-r", "-z", revision.gitBaseSha]));
+        const delivered = parseTree(await hubGit(this.cwd, ["ls-tree", "-r", "-z", ...revisionOperand(actual)]));
+        const base = parseTree(await hubGit(this.cwd, ["ls-tree", "-r", "-z", ...revisionOperand(revision.gitBaseSha)]));
         const blobOid = (bytes: Buffer) => createHash(revision.gitBaseSha.length === 64 ? "sha256" : "sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
         // Verify only the selected delta. Untouched baseline files may legitimately contain independent remote edits.
         const selected = new Set(revision.files.map(file => file.path));

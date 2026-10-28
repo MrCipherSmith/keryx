@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile, rename, rm, lstat } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { revisionOperand } from "../lib/git-revision";
 import type { GitDeliveryAdapter, GitDeliveryResult } from "./contracts";
 export function hasControls(value: string, space = false): boolean {
     return [...value].some(char => char.charCodeAt(0) < (space ? 33 : 32) || char.charCodeAt(0) === 127);
@@ -10,6 +11,7 @@ export function safeHubPath(path: string): void {
     if (!path || path.startsWith("-") || path.includes("\\") || hasControls(path) || path.split("/").some(p => !p || p === "." || p === ".." || p.toLowerCase() === ".git") || path.startsWith("/"))
         throw Error("Unsafe file path");
 }
+export type HubGitRunner = (cwd: string, args: string[], input?: Buffer | string) => Promise<Buffer>;
 /** Deliberately excludes caller-controlled Git configuration, hooks and shell commands. */
 export async function hubGit(cwd: string, args: string[], input?: Buffer | string): Promise<Buffer> {
     const env: NodeJS.ProcessEnv = {
@@ -40,7 +42,8 @@ async function saveReceipt(path: string, value: unknown): Promise<void> {
     await rename(tmp, path);
 }
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
-export const deliverRevision: GitDeliveryAdapter = async (request) => {
+/** The delivery over a git runner: production runs hubGit; a test wraps it to see each argv or answer for the remote. */
+export const createGitDelivery = (git: HubGitRunner): GitDeliveryAdapter => async (request) => {
     let workspace: string | undefined;
     let lock: string | undefined;
     try {
@@ -76,10 +79,11 @@ export const deliverRevision: GitDeliveryAdapter = async (request) => {
             await lstat(cache);
         }
         catch {
-            await hubGit(directory, ["init", "--bare", cache]);
+            await git(directory, ["init", "--bare", cache]);
         }
-        await hubGit(cache, ["fetch", "--no-tags", remoteUrl, `+refs/heads/${baseBranch}:refs/remotes/hub/base`]);
-        const remote = String(await hubGit(cache, ["ls-remote", remoteUrl, `refs/heads/${branch}`])).trim().split(/\s/)[0];
+        // `--end-of-options` before every remote URL and revision: git reads them as operands even if a check above is loosened.
+        await git(cache, ["fetch", "--no-tags", "--end-of-options", remoteUrl, `+refs/heads/${baseBranch}:refs/remotes/hub/base`]);
+        const remote = String(await git(cache, ["ls-remote", "--end-of-options", remoteUrl, `refs/heads/${branch}`])).trim().split(/\s/)[0];
         if (previous?.result.status === "published") {
             if (remote !== previous.result.commitSha)
                 throw Error("Published branch changed or disappeared");
@@ -87,21 +91,21 @@ export const deliverRevision: GitDeliveryAdapter = async (request) => {
         }
         // Remote recovery after push succeeded but the caller lost the response: inspect the immutable operation marker.
         if (remote) {
-            await hubGit(cache, ["fetch", "--no-tags", remoteUrl, `refs/heads/${branch}`]);
-            const marker = String(await hubGit(cache, ["show", "-s", "--format=%B", remote]));
+            await git(cache, ["fetch", "--no-tags", "--end-of-options", remoteUrl, `refs/heads/${branch}`]);
+            const marker = String(await git(cache, ["show", "-s", "--format=%B", ...revisionOperand(remote)]));
             if (!marker.includes(`Hub-Operation: ${fingerprint}`))
                 throw Error("Managed branch collision");
             const result: GitDeliveryResult = {
-                status: "published", branch, commitSha: remote, treeSha: String(await hubGit(cache, ["rev-parse", `${remote}^{tree}`])).trim()
+                status: "published", branch, commitSha: remote, treeSha: String(await git(cache, ["rev-parse", "--verify", ...revisionOperand(`${remote}^{tree}`)])).trim()
             };
             await saveReceipt(receiptPath, { fingerprint, result });
             return result;
         }
-        await hubGit(cache, ["cat-file", "-e", `${revision.gitBaseSha}^{commit}`]);
+        await git(cache, ["cat-file", "-e", ...revisionOperand(`${revision.gitBaseSha}^{commit}`)]);
         workspace = await mkdtemp(join(directory, "operation-"));
-        await hubGit(workspace, ["clone", "--no-checkout", cache, "work"]);
+        await git(workspace, ["clone", "--no-checkout", cache, "work"]);
         const work = join(workspace, "work");
-        await hubGit(work, ["checkout", "--detach", revision.gitBaseSha]);
+        await git(work, ["checkout", "--detach", ...revisionOperand(revision.gitBaseSha)]);
         const seen = new Set<string>();
         let size = 0;
         for (const f of revision.files) {
@@ -114,25 +118,27 @@ export const deliverRevision: GitDeliveryAdapter = async (request) => {
         if (size > 20 * 1024 * 1024 || seen.size > 5000)
             throw Error("Snapshot quota exceeded");
         // Build the exact selected tree in the index, including deletions; no filesystem path traversal or filters.
-        await hubGit(work, ["read-tree", "--empty"]);
+        await git(work, ["read-tree", "--empty"]);
         for (const file of revision.files) {
-            const blob = String(await hubGit(work, ["hash-object", "-w", "--stdin"], Buffer.from(file.contentBase64, "base64"))).trim();
-            await hubGit(work, ["update-index", "--add", "--cacheinfo", file.mode, blob, file.path]);
+            const blob = String(await git(work, ["hash-object", "-w", "--stdin"], Buffer.from(file.contentBase64, "base64"))).trim();
+            await git(work, ["update-index", "--add", "--cacheinfo", file.mode, blob, file.path]);
         }
-        const tree = String(await hubGit(work, ["write-tree"])).trim();
-        const candidate = String(await hubGit(work, ["commit-tree", tree, "-p", revision.gitBaseSha], "Hub selected snapshot\n")).trim();
-        await hubGit(work, ["fetch", "origin", "refs/remotes/hub/base"]);
-        await hubGit(work, ["checkout", "--force", "--detach", "FETCH_HEAD"]);
+        const tree = String(await git(work, ["write-tree"])).trim();
+        const candidate = String(await git(work, ["commit-tree", tree, "-p", revision.gitBaseSha], "Hub selected snapshot\n")).trim();
+        await git(work, ["fetch", "origin", "refs/remotes/hub/base"]);
+        await git(work, ["checkout", "--force", "--detach", "FETCH_HEAD"]);
+        // Built before the try, so a refused operand fails the delivery instead of reading as a conflict.
+        const pick = ["cherry-pick", "--no-commit", ...revisionOperand(candidate)];
         try {
-            await hubGit(work, ["cherry-pick", "--no-commit", candidate]);
+            await git(work, pick);
         }
         catch {
             return { status: "conflict", error: "Selected revision conflicts with current remote base; no branch pushed" };
         }
-        const mergedTree = String(await hubGit(work, ["write-tree"])).trim();
-        const parent = String(await hubGit(work, ["rev-parse", "HEAD"])).trim();
-        const commitSha = String(await hubGit(work, ["commit-tree", mergedTree, "-p", parent], `${revision.message}\n\nHub-Operation: ${fingerprint}\n`)).trim();
-        await hubGit(work, ["push", remoteUrl, `${commitSha}:refs/heads/${branch}`]);
+        const mergedTree = String(await git(work, ["write-tree"])).trim();
+        const parent = String(await git(work, ["rev-parse", "HEAD"])).trim();
+        const commitSha = String(await git(work, ["commit-tree", mergedTree, "-p", parent], `${revision.message}\n\nHub-Operation: ${fingerprint}\n`)).trim();
+        await git(work, ["push", "--end-of-options", remoteUrl, `${commitSha}:refs/heads/${branch}`]);
         const result: GitDeliveryResult = {
             status: "published", branch, commitSha, treeSha: mergedTree
         };
@@ -149,3 +155,4 @@ export const deliverRevision: GitDeliveryAdapter = async (request) => {
             await rm(lock, { recursive: true, force: true });
     }
 };
+export const deliverRevision: GitDeliveryAdapter = createGitDelivery(hubGit);

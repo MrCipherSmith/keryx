@@ -65,6 +65,7 @@ import { DEFAULT_AUTO_GOAL_ROUNDS, ROUND_DONE_MARKER, parseGoalArgs, parseVerifi
 import type { GoalArgsError, GoalVerifierVerdict, ParsedGoalArgs } from "./goal-command";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import { slateNoteTool } from "../harness/tool/builtin/slate-memory-tools";
 import { withTurnScopedIo } from "../tui/foreground-operation";
 import { detachSlateSession, type SlateSessionRef } from "../session/slate-lifecycle";
 import { appendSeed, readSlate } from "../session/slate";
@@ -1854,6 +1855,53 @@ test("#394: a deterministic done-signal from the model ends the round loop befor
   expect(calls).toBe(3);
   expect(system.some((line) => line.includes("model signaled this round's work is complete"))).toBe(true);
   expect(system.some((line) => line.includes("missed the edge case"))).toBe(true);
+});
+
+// Flow 387 review r1 F-001: /goal runs inside the shells, which keep an archive, so every one of its turns prunes.
+// The working-memory tools are offered only to a turn given `pruneArchive: true` and the slate, so each request's
+// roster shows whether that turn got them — the first turn, a continuation round and the verifier's extra round.
+test("F-001: every /goal turn — first, continuation round and the verifier's extra round — runs with pruneArchive and the slate", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const offered: string[][] = [];
+  const provider: AgentDeps["provider"] = {
+    describe: () => textOnlyProvider("").provider.describe(),
+    stream: (request, opts) => {
+      offered.push((request.tools ?? []).map((tool) => tool.name));
+      const text = offered.length === 2 ? `All done here. ${ROUND_DONE_MARKER}` : "still working";
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })();
+    },
+  };
+  const spawnSubagent = fakeSpawnSubagentTool(async () => ({
+    output: '{"achieved": false, "gaps": ["missed the edge case"]}',
+    isError: false,
+  }));
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent, slateNoteTool(() => dir, () => "t")],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    onContextCompaction: () => {},
+  };
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 5",
+    cwd,
+    io: collectingIo().io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(offered).toHaveLength(3);
+  for (const names of offered) expect(names).toContain("slate_note");
 });
 
 test("#394: with no done-signal, the round loop still runs the full --auto budget exactly as before (no regression)", async () => {

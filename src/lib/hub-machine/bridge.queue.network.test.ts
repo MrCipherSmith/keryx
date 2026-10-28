@@ -69,8 +69,16 @@ test('R2.3 an answer after the controller changed is refused for the old and the
  expect((await confirm(s,first,shown!,m.digest)).status).toBe(409);
  await Bun.sleep(300);expect((await s.read()).config.configVersion).toBe(1);expect((await s.read()).config.baselineCandidateId).toBe('scripted:m');expect((await s.operation<Control['ConfigReceipt']>(pending.operationId)).status).not.toBe('applied');
 });
-test.todo('R2.3 an answer after the confirmation card expired is not applied',async()=>{
- // Not run by default: native confirmation cards expire after a fixed 120 s (host.ts) and the bridge composition exposes no shorter expiry.
- const m=await h.machine({candidates:[localCandidate,metered],scripts:[okReply]});const s=m.session;const lease=(await s.claim()).lease;const {card:shown}=await card(s,lease);
- await Bun.sleep(Math.max(0,Date.parse(shown!.confirmation!.expiresAt)-Date.now()+500));expect((await confirm(s,lease,shown!,m.digest)).status).toBe(409);expect((await s.read()).config.configVersion).toBe(1);
+test('R2.3 an answer after the confirmation card naturally expired is refused and the card never applies',async()=>{
+ // A shortened native decision window: the host computes the card deadline, and Hub refuses the late answer on its own clock.
+ const m=await h.machine({decisionTtlMs:3000,candidates:[localCandidate,metered],scripts:[okReply]});const s=m.session;const lease=(await s.claim()).lease;const {pending,card:shown}=await card(s,lease);
+ const deadline=Date.parse(shown!.confirmation!.expiresAt);expect(deadline-Date.now()).toBeLessThanOrEqual(3000);
+ await Bun.sleep(Math.max(0,deadline-Date.now()+300));
+ const late=await confirm(s,lease,shown!,m.digest);expect(late.status).toBe(409);expect(await late.json()).toMatchObject({error:{code:'approval-expired'}});
+ await Bun.sleep(300);const after=await s.read();expect(after.config.configVersion).toBe(1);expect(after.config.baselineCandidateId).toBe('scripted:m');
+ expect((await s.operation<Control['ConfigReceipt']>(pending.operationId)).status).not.toBe('applied');expect((await h.hubCommands()).filter(c=>c.envelope.kind==='confirm-command')).toEqual([]);
+});
+test('R2.3 without a composition override a native confirmation card stays answerable for the frozen 120 s',async()=>{
+ const m=await h.machine({candidates:[localCandidate,metered],scripts:[okReply]});const s=m.session;const lease=(await s.claim()).lease;const before=Date.now();const {card:shown}=await card(s,lease);
+ const window=Date.parse(shown!.confirmation!.expiresAt)-before;expect(window).toBeGreaterThan(115_000);expect(window).toBeLessThanOrEqual(120_000+5_000);
 });

@@ -1,7 +1,7 @@
 import {expect,test} from 'bun:test';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {bridgeHarness,wait,allowAll,newFilePatch} from './bridge.test-support';
+import {bridgeHarness,wait,allowAll,newFilePatch,gated} from './bridge.test-support';
 import {okReply,callRound} from '../../commands/agent.test-helpers';
 import {success} from '../../hub/remote-v2/fixture.test-support';
 import type {Control} from '../../remote-control/protocol';
@@ -55,15 +55,25 @@ test('R1.3 cancel-and-close while busy settles only after measured cessation, se
  expect(m.provider.requests).toHaveLength(2);expect(JSON.stringify(m.provider.requests[1])).toContain('Queued before the close');
  expect((await reauthorize()).status).toBe(409);await Bun.sleep(300);expect(m.provider.requests).toHaveLength(2);
 },40000);
-test.todo('R1.3 close when-idle while busy stays pending, seals the queue and closes only after the current run ends',async()=>{
- // Open defect: the native host refuses a when-idle close while a turn is active (host.ts close-session: busy), so Hub drops the close and the queued work runs.
- const m=await h.machine({approve:allowAll,scripts:[callRound('busy-sleep','shell_exec',JSON.stringify({command:'sleep 3'})),okReply]});const s=m.session;
- const lease=(await s.claim()).lease;const turn=await s.turn(lease,'Busy with a supervised sleep');await s.waitRun(turn.runId!,v=>v.state==='running');
- const queued=await s.turn(lease,'Queued before the close');await wait(s.queue,v=>v.items.some(i=>i.operationId===queued.operationId&&i.state==='queued'));
- const close=await success<Control['SessionOperationReceipt']>(await settled(async()=>{const current=await s.read();return s.post('/close',{expectedSessionVersion:current.version,controller:s.binding(lease),mode:'when-idle'});}));expect(close.status).toBe('pending');
- await s.waitRun(turn.runId!,v=>v.state==='succeeded');const closed=await wait(s.read,v=>v.state==='closed');expect(closed.activeRunId).toBeNull();
- expect((await s.operation<Control['SessionOperationReceipt']>(close.operationId)).status).toBe('applied');expect(m.provider.requests).toHaveLength(2);
- expect((await s.queue()).items.find(i=>i.operationId===queued.operationId)?.state).toBe('suspended');
+const closeCommand=async()=>(await h.hubCommands()).find(c=>c.envelope.kind==='close-session');
+test('R1.3 close when-idle while busy is recorded pending, seals the queue and closes at the turn boundary before any queued work is admitted',async()=>{
+ const m=await h.machine({scripts:[okReply,okReply]});const s=m.session;const release=gated(m.provider);
+ const lease=(await s.claim()).lease;const turn=await s.turn(lease,'Busy until the test releases it');await s.waitRun(turn.runId!,v=>v.state==='running');
+ const queued=await s.turn(lease,'Queued before the close');expect(queued.status).toBe('queued');await wait(s.queue,v=>v.items.some(i=>i.operationId===queued.operationId&&i.state==='queued'));
+ try{
+  const close=await success<Control['SessionOperationReceipt']>(await settled(async()=>{const current=await s.read();return s.post('/close',{expectedSessionVersion:current.version,controller:s.binding(lease),mode:'when-idle'});}));expect(close.status).toBe('pending');
+  // The machine records the close as admitted while the turn still runs: it is neither refused nor reported applied early.
+  expect((await wait(closeCommand,v=>v?.receipt!==undefined))!.receipt!.status).toBe('admitted');
+  await Bun.sleep(300);expect((await s.run(turn.runId!)).state).toBe('running');expect((await s.operation<Control['SessionOperationReceipt']>(close.operationId)).status).toBe('pending');
+  expect((await s.read()).state).toBe('busy');expect((await s.message(lease,'After the close request')).status).toBe(409);
+  expect((await s.queue()).items.find(i=>i.operationId===queued.operationId)?.state).toBe('queued');
+  release();
+  await s.waitRun(turn.runId!,v=>v.state==='succeeded');const closed=await wait(s.read,v=>v.state==='closed');expect(closed.activeRunId).toBeNull();
+  expect((await wait(()=>s.operation<Control['SessionOperationReceipt']>(close.operationId),v=>v.status!=='pending')).status).toBe('applied');expect((await closeCommand())!.status).toBe('applied');
+  // The queued item was never admitted: it is suspended for an explicit later reauthorization and the model saw only the first turn.
+  expect((await wait(s.queue,v=>v.items.some(i=>i.operationId===queued.operationId&&i.state==='suspended'))).items.filter(i=>i.state==='queued'||i.state==='admitted')).toEqual([]);
+  await Bun.sleep(300);expect(m.provider.requests).toHaveLength(1);expect((await h.hubCommands()).filter(c=>c.envelope.kind==='start-turn')).toHaveLength(1);
+ }finally{release();}
 });
 test('R10.3 a supervised shell write to a tracked file fences the session visibly, publishes no misattributed result and refuses the next turn',async()=>{
  const m=await h.machine({approve:allowAll,scripts:[callRound('patch','apply_patch',newFilePatch('owned.txt','owned')),callRound('shell-write','shell_exec',JSON.stringify({command:'printf shell-change > seed.txt'})),okReply,okReply]});const s=m.session;

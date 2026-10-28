@@ -48,6 +48,8 @@ const fencedLeases = new WeakSet<object>();
 const SETTLE_BOUND_MS = 2000;
 /** Above the production per-connection MCP close bound (5 s), so a hung close reads as unproven rather than hanging. */
 const SERVICE_CLOSE_BOUND_MS = 6000;
+/** The frozen native decision window: an approval or confirmation card stays answerable for 120 s. */
+const DECISION_TTL_MS = 120_000;
 async function within<T>(task: Promise<T>, fallback: T, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([task, new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), ms); })]); }
@@ -57,6 +59,8 @@ async function within<T>(task: Promise<T>, fallback: T, ms: number): Promise<T> 
 /** Long-lived application owner. No terminal input, renderer, HTTP or WebSocket dependencies. */
 export async function createSessionHost(options: SessionHostOptions): Promise<SessionHostPort> {
   const now = options.now ?? Date.now;
+  const decisionTtlMs = options.decisionTtlMs ?? DECISION_TTL_MS;
+  if (!Number.isSafeInteger(decisionTtlMs) || decisionTtlMs <= 0 || decisionTtlMs > DECISION_TTL_MS) throw new SessionHostError("invalid-decision-ttl");
   const dir = join(options.controlDir ?? options.dataDir ?? keryxConfigDir(), "remote-sessions"); mkdirSync(dir, { recursive: true, mode: 0o700 });
   const statePath = join(dir, `${options.record.sessionId}.json`);
   let record = checked("SessionRecord", options.record);
@@ -191,11 +195,13 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   };
   let active: { runId: string; turnId: string; historyVersionAtAdmission: number; abort: AbortController; done: Promise<void> } | undefined;
   let selecting: { operationId: string; payloadDigest: string; runId: string; turnId: string; abort: AbortController; done: Promise<SessionHostReceipt> } | undefined;
+  /** An admitted when-idle close: new work is sealed and the close applies at the current turn's boundary (protocol "close when-idle", D15). */
+  let pendingClose: Extract<SessionHostOperation, { kind: "close-session" }> | undefined;
   const reconnectWaiters = new Set<() => void>();
   const inspections = new Map<AbortController, Promise<void>>();
   const approvalOutcomeListeners = new Set<(outcome: SessionApprovalOutcome) => void>();
   const approvalListeners = new Set<(question: SessionApprovalQuestion) => void>();
-  const approvals = createSessionApprovalService({ dir: join(handle.dir, "remote-control"), sessionId: record.sessionId,
+  const approvals = createSessionApprovalService({ dir: join(handle.dir, "remote-control"), sessionId: record.sessionId, expirySeconds: decisionTtlMs / 1000,
     connected: () => connected && !disposed,
     onOutcome(outcome) { for (const sink of approvalOutcomeListeners) { try { sink(structuredClone(outcome)); } catch { approvalOutcomeListeners.delete(sink); } } },
     deliver(question) {
@@ -473,6 +479,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         // Hub may automatically mint a fresh immutable command/grant at this idle boundary.
         // Retained queued input is never itself continuing execution authority.
         persist();
+        // A pending when-idle close owns this boundary: it is the next serialized step, and every admission stays sealed until it settles.
+        if (pendingClose !== undefined) void serialized(settlePendingClose);
       }
     }));
     active = { runId: operation.runId, turnId: operation.turnId, historyVersionAtAdmission, abort, done };
@@ -605,7 +613,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       confirmation = checked("CommandConfirmationRequest", { confirmationId: randomUUID(), sessionId: record.sessionId, operationId: operation.operationId,
         operationDigest: operation.payloadDigest, policyDigest: record.config.policyDigest, expectedConfigVersion: record.config.configVersion,
         proposedConfigDigest: canonicalDigest(config), controller: request.controller, actorId: operation.actorId,
-        expiresAt: new Date(now() + 120_000).toISOString(), summary: "Change the session model, reasoning effort or routing for subsequent turns" + (config.routing.enabled && options.runtime.routingPolicy().configured ? ". Native routing adds at most one permitted classifier request: 16 output tokens and a 2000-character classifier preview; 2.5 s service plus at most 0.5 s cleanup (3 s total), within the original work grant. The original user input remains complete. Jev classification is disabled by this local profile." : ""),
+        expiresAt: new Date(now() + decisionTtlMs).toISOString(), summary: "Change the session model, reasoning effort or routing for subsequent turns" + (config.routing.enabled && options.runtime.routingPolicy().configured ? ". Native routing adds at most one permitted classifier request: 16 output tokens and a 2000-character classifier preview; 2.5 s service plus at most 0.5 s cleanup (3 s total), within the original work grant. The original user input remains complete. Jev classification is disabled by this local profile." : ""),
         costEffect: "Subsequent admitted turns may use the selected locally permitted metered candidates", privacyEffect: "Subsequent admitted turns may send context to the selected locally permitted providers" });
       pendingConfigurations.set(confirmation.confirmationId, { operation, confirmation });
     }
@@ -737,7 +745,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const executionConfirmation = (operation: Extract<SessionHostOperation, { kind: "command" }>) => {
     const confirmation = checked("CommandConfirmationRequest", { confirmationId: randomUUID(), sessionId: record.sessionId, operationId: operation.operationId,
       operationDigest: operation.payloadDigest, policyDigest: record.config.policyDigest, expectedConfigVersion: record.config.configVersion,
-      proposedConfigDigest: canonicalDigest(record.config), controller: operation.request.controller, actorId: operation.actorId, expiresAt: new Date(now() + 120_000).toISOString(),
+      proposedConfigDigest: canonicalDigest(record.config), controller: operation.request.controller, actorId: operation.actorId, expiresAt: new Date(now() + decisionTtlMs).toISOString(),
       summary: `Execute /${operation.request.commandName} with the current local policy and run association`, costEffect: "This command may consume the explicitly configured local analysis budget",
       privacyEffect: "The selected locally permitted service may receive bounded project context" });
     pendingExecutions.set(confirmation.confirmationId, { operation, confirmation });
@@ -787,7 +795,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       status = "confirmation-required";
       card = checked("CommandConfirmationRequest", { confirmationId: randomUUID(), sessionId: record.sessionId, operationId: operation.operationId, operationDigest: operation.payloadDigest,
         policyDigest: record.config.policyDigest, expectedConfigVersion: record.config.configVersion, proposedConfigDigest: canonicalDigest({ ...record.config, configVersion: record.config.configVersion + 1 }),
-        controller: operation.request.controller, actorId: operation.actorId, expiresAt: new Date(now() + 120000).toISOString(), summary: "Disable the session readonly restriction; restore only the original local permission floor",
+        controller: operation.request.controller, actorId: operation.actorId, expiresAt: new Date(now() + decisionTtlMs).toISOString(), summary: "Disable the session readonly restriction; restore only the original local permission floor",
         costEffect: "The original locally permitted tools may be used on later turns", privacyEffect: "No provider, trust, budget or local permission floor is widened" });
       pendingPlans.set(card.confirmationId, { operation, enabled, confirmation: card });
     } else if (restriction().enabled !== enabled) {
@@ -814,6 +822,32 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     if (record.state !== "closed") { record.state = "closed"; state(); }
     return { status: "closed" };
   };
+  /** The SessionOperationReceipt of a close; `pending` is an admitted when-idle close still waiting for its turn boundary. */
+  const closeReceipt = (operation: Extract<SessionHostOperation, { kind: "close-session" }>, status: "pending" | "applied" | "recovery-required") => checked("SessionOperationReceipt", {
+    receiptId: randomUUID(), operationId: operation.operationId, sessionId: record.sessionId, kind: "close-session", status, observedSessionVersion: record.version,
+    session: structuredClone(record), reason: status === "recovery-required" ? "recovery-required" : "none" });
+  /**
+   * Applies an admitted when-idle close at the boundary of the turn it waited for, before any queued admission.
+   * A boundary without proven cessation never becomes a closed receipt: the close resolves recovery-required and the session stays fenced.
+   */
+  const settlePendingClose = async (): Promise<void> => {
+    const operation = pendingClose; if (operation === undefined || active !== undefined || selecting !== undefined || disposed) return;
+    pendingClose = undefined;
+    let closed = false;
+    if (record.state !== "recovery-required") { try { closed = (await closeOwnedIdleSession()).status === "closed"; } catch { closed = false; } }
+    if (!closed && record.state !== "recovery-required") { record.state = "recovery-required"; state(); fenceLease(); }
+    emit({ kind: "operation-receipt", receipt: remember(operation, closeReceipt(operation, closed ? "applied" : "recovery-required")) });
+  };
+  /** New work a pending when-idle close seals; renewal, cancellation, owned-resource controls, denials, queue edits and reads stay possible. */
+  const sealedByPendingClose = (operation: SessionHostOperation): boolean => {
+    if (pendingClose === undefined) return false;
+    if (operation.kind === "message" || operation.kind === "submit-message" || operation.kind === "config" || operation.kind === "reauthorize-queue") return true;
+    // Allowing a pending card would admit its execution or configuration; a denial only settles it.
+    if (operation.kind === "confirm-command") return operation.request.decision !== "deny";
+    if (operation.kind !== "command") return false;
+    const entry = catalogue().entries.find((item) => item.commandName === operation.request.commandName);
+    return entry?.mutationClass !== "read" && !ownedControlNames.has(operation.request.commandName);
+  };
   /** The shared `exit` handler only reports a proven close; an unproven one is a typed refusal and the session stays fenced. */
   const closeForCommand = async (): Promise<{ status: "closed" }> => { const closed = await closeOwnedIdleSession(); if (closed.status !== "closed") throw new SessionHostError("recovery-required"); return { status: "closed" }; };
   const apply = async (operation: SessionHostOperation, releaseMutation: () => void = () => {}): Promise<SessionHostReceipt> => {
@@ -826,8 +860,10 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     if (record.state === "recovery-required") return remember(operation, opReceipt(operation, "recovery-required", "recovery-required"));
     if (operation.kind === "close-session") {
       const request = checked("SessionClose", operation.request);
+      if (pendingClose !== undefined) return remember(operation, opReceipt(operation, "rejected", "busy"));
       if (active !== undefined) {
-        if (request.mode === "when-idle") return remember(operation, opReceipt(operation, "rejected", "busy"));
+        // Recorded, never dropped: the queue is sealed now and the close applies when the current admitted turn ends.
+        if (request.mode === "when-idle") { pendingClose = operation; return remember(operation, closeReceipt(operation, "pending")); }
         const stopped = await stopCurrentTurn();
         if (stopped !== "stopped") return remember(operation, opReceipt(operation, "recovery-required", "recovery-required"));
       }
@@ -843,6 +879,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     }
 
     if (record.state === "closed" && !(operation.kind === "command" && operation.request.commandName === "sessions.resume")) return remember(operation, opReceipt(operation, "rejected", "forbidden"));
+    if (sealedByPendingClose(operation)) return remember(operation, opReceipt(operation, "rejected", "busy"));
     if (operation.kind === "submit-message") {
       const request = checked("MessageSubmit", operation.request);
       if (request.expectedConfigVersion !== record.config.configVersion || (active !== undefined && request.busyPolicy === "reject")) return remember(operation, opReceipt(operation, "rejected", active === undefined ? "stale-version" : "busy"));
@@ -1077,7 +1114,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     if (prior === undefined || prior.digest !== payloadDigest || original === undefined || item === undefined) return rejected();
     const replacementAwaitingAdmission = item.state === "queued" && "kind" in prior.receipt && prior.receipt.kind === "reauthorize-queue" && prior.receipt.status === "applied";
     if (prior.receipt.status !== "queued" && !replacementAwaitingAdmission) return structuredClone(prior.receipt);
-    if (item.state !== "queued" || active !== undefined || selecting !== undefined || queueItems.filter((entry) => entry.state === "queued" || entry.state === "suspended").sort((left, right) => left.position - right.position)[0] !== item
+    if (item.state !== "queued" || pendingClose !== undefined || active !== undefined || selecting !== undefined || queueItems.filter((entry) => entry.state === "queued" || entry.state === "suspended").sort((left, right) => left.position - right.position)[0] !== item
       || authority.expectedSessionVersion !== record.version || authority.expectedConfigVersion !== record.config.configVersion || item.expectedConfigVersion !== record.config.configVersion
       || canonicalDigest(original.controller) !== canonicalDigest(authority.controller) || !authorized({ actorId: authority.actorId, expiresAt: authority.expiresAt,
         request: { expectedSessionVersion: authority.expectedSessionVersion, controller: authority.controller } })

@@ -1,14 +1,14 @@
 import {expect,test} from 'bun:test';
 import path from 'node:path';
-import {bridgeHarness,wait,newFilePatch,type Session,type ApprovalRequest} from './bridge.test-support';
+import {bridgeHarness,wait,newFilePatch,gated,type Session,type ApprovalRequest,type MachineOptions} from './bridge.test-support';
 import {okReply,callRound} from '../../commands/agent.test-helpers';
 import {success,reviewerToken} from '../../hub/remote-v2/fixture.test-support';
 
 const h=bridgeHarness();
 const TERMINAL=['succeeded','failed','cancelled','rejected','lost','unknown'];
 /** A turn whose first model round asks to create `file` through apply_patch; the native waiter goes to Hub. */
-async function waiter(file:string,extra:Array<ReturnType<typeof callRound>>=[]){
- const m=await h.machine({scripts:[callRound(`patch-${file}`,'apply_patch',newFilePatch(file,'approved')),okReply,...extra]});const s=m.session;const lease=(await s.claim()).lease;
+async function waiter(file:string,extra:Array<ReturnType<typeof callRound>>=[],options:MachineOptions={}){
+ const m=await h.machine({...options,scripts:[callRound(`patch-${file}`,'apply_patch',newFilePatch(file,'approved')),okReply,...extra]});const s=m.session;const lease=(await s.claim()).lease;
  const turn=await s.turn(lease,`Create ${file} after approval`);const question=await s.approval(turn.runId!);return {m,s,lease,turn,runId:turn.runId!,question,file:path.join(m.state.cwd,file)};
 }
 const outcomes=async(s:Session,runId:string,question:ApprovalRequest)=>(await s.events(runId)).filter((e):e is Extract<typeof e,{kind:'approval-outcome'}>=>e.kind==='approval-outcome'&&e.approvalId===question.approvalId);
@@ -16,6 +16,8 @@ const projection=(h2:typeof h,approvalId:string)=>h2.hubState(db=>{const row=db.
 
 test('R5.1 stale bindings, an observer and a signed-out actor are refused, and a duplicate answer applies exactly once',async()=>{
  const {m,s,lease,runId,question,file}=await waiter('approved.txt');
+ // Without a composition override the native decision window is the frozen 120 s.
+ const window=Date.parse(question.expiresAt)-Date.parse(question.observedAt);expect(window).toBeGreaterThan(115_000);expect(window).toBeLessThanOrEqual(120_000);
  for(const pins of [{actionFingerprint:'f'.repeat(64)},{policyDigest:'e'.repeat(64)}]){const stale=await s.answer(lease,runId,question,'allow-once',pins);expect(stale.status).toBe(409);expect(await stale.json()).toMatchObject({error:{code:'approval-expired'}});}
  const body=async()=>{const r=await s.run(runId);const current=await s.read();return {expectedRunVersion:r.version,expectedSessionVersion:current.version,controller:s.binding(lease),actionFingerprint:question.actionFingerprint,policyDigest:question.policyDigest,decision:'allow-once'};};
  const answerPath=`/hub/v2/projects/${s.projectId}/runs/${runId}/approvals/${question.approvalId}/answer`;
@@ -50,17 +52,18 @@ test('R5.1 an answer while the machine is disconnected is only recorded and appl
  await wait(async()=>m.bridge.connected,v=>v);await s.waitRun(runId,v=>v.state==='succeeded');
  expect(await Bun.file(file).text()).toBe('approved\n');expect((await outcomes(s,runId,question)).map(o=>o.application)).toEqual(['applied']);expect(m.provider.requests).toHaveLength(2);
 },40000);
-test.todo('R5.1 an approval left unanswered past its expiry denies and the tool never runs',async()=>{
- // Not run by default: the native approval broker expires after a fixed 120 s (question-service.ts expirySeconds) and the bridge composition exposes no shorter expiry.
- const {m,s,runId,question,file}=await waiter('expired.txt');
- await Bun.sleep(Math.max(0,Date.parse(question.expiresAt)-Date.now()+500));
- await s.waitRun(runId,v=>TERMINAL.includes(v.state));expect(await Bun.file(file).exists()).toBe(false);expect((await outcomes(s,runId,question)).map(o=>o.decision)).toEqual(['deny']);expect(m.provider.requests).toHaveLength(2);
+test('R5.1 an approval left unanswered past its natural expiry denies, the tool never runs and a late answer is refused',async()=>{
+ // A shortened native decision window: the broker's own deadline expires the waiter, no test-side timer resolves it.
+ const {m,s,lease,runId,question,file}=await waiter('expired.txt',[],{decisionTtlMs:3000});
+ expect(Date.parse(question.expiresAt)-Date.parse(question.observedAt)).toBeLessThanOrEqual(3000);expect((await projection(h,question.approvalId))?.status).toBe('waiting');
+ const run=await s.waitRun(runId,v=>TERMINAL.includes(v.state));expect(run.state).toBe('succeeded');expect(Date.now()).toBeGreaterThanOrEqual(Date.parse(question.expiresAt));
+ expect(await Bun.file(file).exists()).toBe(false);expect((await outcomes(s,runId,question)).map(o=>o.decision)).toEqual(['deny']);expect(m.provider.requests).toHaveLength(2);
+ const late=await s.answer(lease,runId,question,'allow-once');expect(late.status).toBe(409);expect(await late.json()).toMatchObject({error:{code:'approval-expired'}});
+ await Bun.sleep(200);expect(await Bun.file(file).exists()).toBe(false);expect(await outcomes(s,runId,question)).toHaveLength(1);
 });
 import {allowAll} from './bridge.test-support';
 import {tmpdir} from 'node:os';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
-/** Blocks every model round until released: the test decides when the turn may finish. */
-function gated(m:Awaited<ReturnType<typeof h.machine>>){let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});const original=m.provider.provider.stream;m.provider.provider.stream=(request,options)=>(async function*(){await gate;yield* original(request,options);})();return release;}
 const cancelReceipts=async()=>(await h.hubCommands()).filter(c=>c.envelope.kind==='cancel-run').map(c=>({status:c.status,errorCode:c.receipt?.errorCode??null}));
 test('R5.2 a natural terminal result observed before cancel wins: Hub reports cancel-too-late and nothing is cancelled',async()=>{
  const m=await h.machine({scripts:[okReply]});const s=m.session;const lease=(await s.claim()).lease;
@@ -69,7 +72,7 @@ test('R5.2 a natural terminal result observed before cancel wins: Hub reports ca
  expect((await s.run(turn.runId!)).state).toBe('succeeded');expect(await cancelReceipts()).toEqual([]);
 });
 test('R5.2 a run that finishes after the cancel grant but before its stop applies stays succeeded and the cancel is a known non-application',async()=>{
- const m=await h.machine({scripts:[okReply]});const s=m.session;const release=gated(m);const lease=(await s.claim()).lease;
+ const m=await h.machine({scripts:[okReply]});const s=m.session;const release=gated(m.provider);const lease=(await s.claim()).lease;
  const turn=await s.turn(lease,'Finishes as the cancel arrives');await s.waitRun(turn.runId!,v=>v.state==='running');
  // The machine holds the cancel's fresh grant; the turn ends before the host applies the stop.
  const fetchActual=globalThis.fetch;let armed=true;

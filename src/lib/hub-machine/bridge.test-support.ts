@@ -31,10 +31,14 @@ export const localCandidate:Control['RoutingAvailability']['candidates'][number]
 const ledgerPath=(configDir:string,hubId:string)=>path.join(machineStateDir(configDir,hubId),'control.sqlite');
 // Real processes and sockets under a loaded parallel run can take seconds to settle. Every wait expects success, so the budget is time-based and generous; a passing wait returns on the first matching read.
 export async function wait<T>(read:()=>Promise<T>,done:(value:T)=>boolean,attempts=150):Promise<T>{const deadline=Date.now()+Math.max(attempts*10,10_000);for(;;){const value=await read();if(done(value))return value;if(Date.now()>=deadline)throw new Error('bridge observation timeout');await Bun.sleep(10);}}
+/** Blocks every model round of `provider` until the returned release is called: the test decides when a running turn may finish. */
+export function gated(provider:{provider:Provider['provider']}):()=>void{let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});const original=provider.provider.stream;provider.provider.stream=(request,options)=>(async function*(){await gate;yield* original(request,options);})();return release;}
 
 export interface MachineOptions{
  scripts?:Script[];provider?:Provider;approve?:NativeRuntimeOptions['approve'];contributions?:NativeCommandContribution[];spawner?:NativeRuntimeOptions['spawner'];
- candidates?:Control['RoutingAvailability']['candidates'];runLogByteLimit?:number;base?:string;checkouts?:number;maxConcurrentRuns?:number;bridge?:Partial<Pick<MachineBridgeOptions,'runLogByteLimit'>>;
+ candidates?:Control['RoutingAvailability']['candidates'];runLogByteLimit?:number;decisionTtlMs?:number;base?:string;checkouts?:number;maxConcurrentRuns?:number;bridge?:Partial<Pick<MachineBridgeOptions,'runLogByteLimit'>>;
+ /** Extra committed content of every checkout, written before its fixture commit (for example a .gitignore or a tracked symlink). */
+ seed?:(cwd:string)=>void;
 }
 /** One test file's harness: registers cleanup and the default time budget, and owns every Hub, bridge, owner socket and temp root it creates. */
 export function bridgeHarness(){
@@ -48,10 +52,10 @@ export function bridgeHarness(){
  const get=async<T>(url:string)=>success<T>(await hub().call(url,{cookie:hub().cookie}));
  const post=(url:string,body:unknown,key?:string,method='POST')=>hub().call(url,{method,cookie:hub().cookie,body,...(key?{key}:{})});
  /** Enrolls one machine with `checkouts` clean committed checkouts, each mapped to the fixture profile. */
- async function local(options:{base?:string;checkouts?:number;maxConcurrentRuns?:number}={}){
+ async function local(options:{base?:string;checkouts?:number;maxConcurrentRuns?:number;seed?:(cwd:string)=>void}={}){
   f=await fixture();const root=mkdtempSync(path.join(options.base??tmpdir(),'machine-bridge-'));roots.push(root);const configDir=path.join(root,'config');const hubId=hubIdentity(f.origin);
   const ids=Array.from({length:options.checkouts??1},(_,n)=>n===0?'checkout':`checkout-${n+1}`);const cwds=ids.map(id=>path.join(root,id));
-  for(const cwd of cwds){expect(Bun.spawnSync(['git','init','-q',cwd],{env:gitEnv}).exitCode).toBe(0);writeFileSync(path.join(cwd,'seed.txt'),'seed');git(cwd,'add','.');expect(git(cwd,'commit','-qm','fixture').exitCode).toBe(0);}
+  for(const cwd of cwds){expect(Bun.spawnSync(['git','init','-q',cwd],{env:gitEnv}).exitCode).toBe(0);writeFileSync(path.join(cwd,'seed.txt'),'seed');options.seed?.(cwd);git(cwd,'add','.');expect(git(cwd,'commit','-qm','fixture').exitCode).toBe(0);}
   const ledger=new MachineLedger(ledgerPath(configDir,hubId));
   const pair=await success<{code:string}>(await f.call('/hub/v2/machines/pairings',{method:'POST',cookie:f.cookie,body:{displayName:'Native machine',projectIds:[f.project.id]}}));const machine=await enrollMachine(f.origin,{code:pair.code,agentVersion:'test-native',ledgerId:ledger.ledgerId});ledger.close();saveEnrollment(configDir,{hubUrl:f.origin,...machine});
   ids.forEach((checkoutId,n)=>allowCheckout(configDir,{projectId:f!.project.id,checkoutId,cwd:cwds[n]!,profileId:'fixture'}));
@@ -63,7 +67,7 @@ export function bridgeHarness(){
  async function startBridge(state:Local,options:MachineOptions,provider:Provider){
   const digest=canonicalDigest(state.policy);const routing:Control['RoutingAvailability']={version:1,policyDigest:digest,capabilityDigest:digest,profileIds:['local'],candidates:options.candidates??[localCandidate]};const runtimes:NativeSessionRuntime[]=[];
   const catalogue=createMachineCommandCatalogue(digest,options.contributions??[]);
-  const bridge=new MachineBridge({...(options.runLogByteLimit!==undefined?{runLogByteLimit:options.runLogByteLimit}:{}),onNotice:recordNotice,configDir:state.configDir,enrollment:loadEnrollment(state.configDir)!,policy:state.policy,resolveProfile:async mapping=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue,routing,createRuntime:async()=>{const runtime=createNativeSessionRuntime({cwd:mapping.cwd,provider:provider.provider,providerId:'scripted',modelId:'m',availability:routing,...(options.approve?{approve:options.approve}:{}),...(options.spawner?{spawner:options.spawner}:{}),...(options.contributions?{commandContributions:options.contributions}:{})});runtimes.push(runtime);return {ok:true,value:runtime};}}})});
+  const bridge=new MachineBridge({...(options.runLogByteLimit!==undefined?{runLogByteLimit:options.runLogByteLimit}:{}),...(options.decisionTtlMs!==undefined?{decisionTtlMs:options.decisionTtlMs}:{}),onNotice:recordNotice,configDir:state.configDir,enrollment:loadEnrollment(state.configDir)!,policy:state.policy,resolveProfile:async mapping=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue,routing,createRuntime:async()=>{const runtime=createNativeSessionRuntime({cwd:mapping.cwd,provider:provider.provider,providerId:'scripted',modelId:'m',availability:routing,...(options.approve?{approve:options.approve}:{}),...(options.spawner?{spawner:options.spawner}:{}),...(options.contributions?{commandContributions:options.contributions}:{})});runtimes.push(runtime);return {ok:true,value:runtime};}}})});
   bridges.push(bridge);await bridge.start();return {bridge,digest,routing,runtimes,catalogue};
  }
  /** Machine + bridge + one idle native session per checkout. */
@@ -86,7 +90,7 @@ export function bridgeHarness(){
   const invoke=async(lease:Control['ControllerLease'],commandName:string,args:Record<string,unknown>={},options:{association?:Control['FlowAssociation'];busyPolicy?:'reject'|'queue-at-idle';current?:Control['SessionRecord']}={})=>{const current=options.current??await read();return post(`${sessionPath}/commands/invoke`,{expectedSessionVersion:current.version,expectedConfigVersion:current.config.configVersion,controller:binding(lease),catalogueDigest,commandName,arguments:args,busyPolicy:options.busyPolicy??'reject',...(options.association?{association:options.association}:{})});};
   const operation=<T=Record<string,unknown>>(operationId:string)=>get<T>(`${sessionPath}/operations/${operationId}`);
   const queue=()=>get<Control['QueuePage']>(`${sessionPath}/queue`);
-  const run=(runId:string)=>get<{state:string;version:number;result?:Control['ResultReceipt'];lastLocalSeq?:number}>(`/hub/v2/projects/${projectId}/runs/${runId}`);
+  const run=(runId:string)=>get<{state:string;version:number;result?:Control['ResultReceipt'];lastLocalSeq?:number;partial?:boolean;association?:Control['FlowAssociation'];pinDrift?:string[]}>(`/hub/v2/projects/${projectId}/runs/${runId}`);
   const events=async(runId:string,after=0)=>(await get<{events:RunEvent[]}>(`/hub/v2/projects/${projectId}/runs/${runId}/events${after?`?after=${after}`:''}`)).events;
   const approval=async(runId:string)=>(await wait(()=>events(runId),v=>v.some(e=>e.kind==='approval-request'))).find((e):e is ApprovalRequest=>e.kind==='approval-request')!;
   const answer=async(lease:Control['ControllerLease'],runId:string,question:ApprovalRequest,decision:'allow-once'|'deny',pins:{actionFingerprint?:string;policyDigest?:string;key?:string}={})=>{const r=await run(runId);const current=await read();return post(`/hub/v2/projects/${projectId}/runs/${runId}/approvals/${question.approvalId}/answer`,{expectedRunVersion:r.version,expectedSessionVersion:current.version,controller:binding(lease),actionFingerprint:pins.actionFingerprint??question.actionFingerprint,policyDigest:pins.policyDigest??question.policyDigest,decision},pins.key);};

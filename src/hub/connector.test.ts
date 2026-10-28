@@ -44,6 +44,56 @@ async function git(cwd: string, ...args: string[]) {
     if (await p.exited)
         throw Error(await new Response(p.stderr).text());
 }
+// The receipt and the revision come from the Hub, so a hostile Hub picks every operand fetchDelivery hands to git.
+test("fetchDelivery refuses a dash-leading base revision or remote from the Hub before git reads it as an option", async () => {
+    const root = await mkdtemp(join(tmpdir(), "hub-delivery-operand-"));
+    const marker = join(root, "upload-pack-ran");
+    const origin = join(root, "origin");
+    const branch = "codex/hub-a1-b2";
+    let gitBaseSha = "";
+    let remoteUrl = origin;
+    const shas = { commit: "", tree: "" };
+    const server = Bun.serve({ port: 0, fetch(request) {
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/revisions/rev"))
+            return Response.json({ id: "rev", projectId: "p", baseRevisionId: null, gitBaseSha, message: "selected", files: [] });
+        if (path.endsWith("/deliveries"))
+            return Response.json({ deliveries: [{ id: "delivery", revisionId: "rev", status: "published", branch, commitSha: shas.commit, treeSha: shas.tree, remoteUrl }] });
+        return Response.json({ id: "p", version: 1 });
+    } });
+    const commit = ["-c", "core.hooksPath=/dev/null", "-c", "user.name=Hub Test", "-c", "user.email=hub@example.test", "-c", "commit.gpgsign=false", "commit", "-q", "-m"];
+    try {
+        await git(root, "init", "-q", "origin");
+        await writeFile(join(origin, "a"), "delivered\n");
+        await git(origin, "add", "a");
+        await git(origin, ...commit, "delivered");
+        await git(origin, "branch", branch);
+        shas.commit = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: origin }).stdout.toString().trim();
+        shas.tree = Bun.spawnSync(["git", "rev-parse", "HEAD^{tree}"], { cwd: origin }).stdout.toString().trim();
+        const work = join(root, "work");
+        await git(root, "init", "-q", "work");
+        await writeFile(join(work, "keep.txt"), "local\n");
+        await git(work, "add", "keep.txt");
+        await git(work, ...commit, "base");
+        const connector = new HubConnector({ cwd: work, token: "agent", cacheRoot: join(root, "cache") });
+        await connector.connect(server.url.toString(), "p");
+        for (const hostile of [`--upload-pack=touch ${marker}`, `-cprotocol.ext.allow=always`]) {
+            gitBaseSha = hostile;
+            await expect(connector.fetchDelivery("delivery")).rejects.toThrow(`Refusing the revision "${hostile}"`);
+        }
+        gitBaseSha = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: work }).stdout.toString().trim();
+        remoteUrl = `--upload-pack=touch ${marker}`;
+        await expect(connector.fetchDelivery("delivery")).rejects.toThrow("Unsupported remote URL");
+        expect(await Bun.file(marker).exists()).toBe(false);
+        remoteUrl = origin;
+        const fetched = await connector.fetchDelivery("delivery");
+        expect(fetched).toMatchObject({ commitSha: shas.commit, treeSha: shas.tree, reanchor: "manual" });
+        expect(fetched.preview).toEqual(expect.arrayContaining([{ path: "a", change: "added" }, { path: "keep.txt", change: "deleted" }]));
+    } finally {
+        server.stop(true);
+        await rm(root, { recursive: true, force: true });
+    }
+});
 test("snapshot includes executable/binary tracked changes and rejects symlinks", async () => {
     const root = await mkdtemp(join(tmpdir(), "hub-client-"));
     try {

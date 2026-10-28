@@ -64,6 +64,8 @@ export interface MachineBridgeOptions {
     resolveProfile?: (mapping: CheckoutMapping) => Promise<MachineResult<MachineProfile>>;
     onNotice?: (code: string) => void;
     runLogByteLimit?: number;
+    /** Shortens how long hosted approvals and confirmation cards stay answerable; absent keeps the frozen 120 s. */
+    decisionTtlMs?: number;
 }
 /** Outbound transport/application composition. Local factories and mapping paths never come from frames. */
 export class MachineBridge {
@@ -750,7 +752,9 @@ export class MachineBridge {
                 await this.releaseRefusedAttempt(hosted, command.target.runId, command.target.turnId, applied.value);
             const actual = await hosted.host.inspect();
             const rejected = applied.value.status === 'rejected' || applied.value.status === 'recovery-required';
-            const response: FrameOf<'session-command-receipt'>['payload'] = { commandId: command.commandId, hubSequence: command.hubSequence, sessionId, observedSessionVersion: actual.version, status: rejected ? 'not-applied' : 'applied', receiptId: 'receiptId' in applied.value ? applied.value.receiptId : randomUUID(), errorCode: rejected ? knownRefusal(command, applied.value) : null };
+            // An admitted when-idle close is still pending its turn boundary: it is accepted, not yet applied.
+            const pending = 'kind' in applied.value && applied.value.status === 'pending';
+            const response: FrameOf<'session-command-receipt'>['payload'] = { commandId: command.commandId, hubSequence: command.hubSequence, sessionId, observedSessionVersion: actual.version, status: rejected ? 'not-applied' : pending ? 'admitted' : 'applied', receiptId: 'receiptId' in applied.value ? applied.value.receiptId : randomUUID(), errorCode: rejected ? knownRefusal(command, applied.value) : null };
             this.ledger!.finish(e.hubId, command.commandId, rejected ? 'rejected' : 'applied', response);
             this.send(this.envelope('session-command-receipt', response));
             return;
@@ -922,7 +926,7 @@ export class MachineBridge {
         runtime.value.observeOwnedProcesses(event => this.ownedProcess(event, mapping.checkoutId, r.sessionId));
         if (!guard())
             throw new MachineError('authorization-not-applied');
-        const host = await createSessionHost({ cwd: mapping.cwd, dataDir: process.env.KERYX_DATA_DIR !== undefined && process.env.KERYX_DATA_DIR.length > 0 ? process.env.KERYX_DATA_DIR : this.options.configDir, controlDir: machineStateDir(this.options.configDir, this.options.enrollment.hubId), configDir: this.options.configDir, record: r, runtime: runtime.value,
+        const host = await createSessionHost({ cwd: mapping.cwd, dataDir: process.env.KERYX_DATA_DIR !== undefined && process.env.KERYX_DATA_DIR.length > 0 ? process.env.KERYX_DATA_DIR : this.options.configDir, controlDir: machineStateDir(this.options.configDir, this.options.enrollment.hubId), configDir: this.options.configDir, record: r, runtime: runtime.value, ...(this.options.decisionTtlMs === undefined ? {} : { decisionTtlMs: this.options.decisionTtlMs }),
             inspectionMode: 'hub-remote', ...initial, ...(nativeSessionId ? { nativeSessionId } : {}), lifecycle: { apply: input => this.applyLifecycle(input), list: input => this.listLifecycle(input), open: input => this.openLifecycle(input) },
             projectContext: { source: 'hub-canonical', listFlows: () => readScopedHubFlows({ hubUrl: this.options.enrollment.hubUrl, secret: readMachineSecret(this.options.enrollment), projectId: mapping.projectId }), readFlow: flowId => readScopedHubFlows({ hubUrl: this.options.enrollment.hubUrl, secret: readMachineSecret(this.options.enrollment), projectId: mapping.projectId, flowId }), readContext: documentId => this.context?.read(mapping.projectId, documentId) ?? Promise.reject(new MachineError('context-setup-required')) },
             authorizeSelection: action => { try {
@@ -986,7 +990,8 @@ export class MachineBridge {
             if (!run)
                 throw new MachineError('recovery-required');
             this.runEvent(outcome.runId, { kind: 'approval-outcome', approvalId: outcome.approvalId, decision: outcome.decision, application: outcome.application });
-            if (outcome.application === 'applied' && run.nativeIdentity && !run.terminal && !run.cancelling)
+            // Every outcome is a durably resolved waiter and the native turn resumes, also after an expiry or a denial that no human answer caused.
+            if (run.nativeIdentity && !run.terminal && !run.cancelling)
                 this.runEvent(outcome.runId, { kind: 'state', state: 'running', reasonCode: 'none', nativeIdentity: run.nativeIdentity });
         }
         catch (cause) {

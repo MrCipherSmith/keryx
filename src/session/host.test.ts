@@ -1287,3 +1287,62 @@ test("an unreadable fork transcript leaves no orphaned fork session and holds no
   expect(readdirSync(join(sessionDir(cwd,sourceId,join(root,'state')),'..')).filter(name=>!name.startsWith('.'))).toEqual([sourceId]);
  }finally{void mock.module('./store',()=>original);await host.dispose();}
 });
+/** A fixture whose every model round waits until the returned release: the test decides when the busy turn ends. */
+async function gatedFixture() {
+  const fixtured = await fixture(); let release!: () => void; const gate = new Promise<void>((resolve) => { release = resolve; }); const original = fixtured.provider.provider.stream;
+  fixtured.provider.provider.stream = (request, options) => (async function* () { await gate; yield* original(request, options); })();
+  return { ...fixtured, release };
+}
+const closeController = { controllerLeaseId: "controller", expectedControllerVersion: 1 };
+async function closeWhenIdle(host: Awaited<ReturnType<typeof createSessionHost>>, operationId: string) {
+  const close: Control["SessionClose"] = { expectedSessionVersion: (await host.inspect()).version, controller: closeController, mode: "when-idle" };
+  return host.apply({ kind: "close-session", operationId, payloadDigest: canonicalDigest(close), actorId: "human", request: close });
+}
+async function submit(host: Awaited<ReturnType<typeof createSessionHost>>, operationId: string, text: string) {
+  const input: Control["MessageSubmit"] = { expectedSessionVersion: (await host.inspect()).version, controller: closeController, expectedConfigVersion: 1, text, interpretation: "literal-message", busyPolicy: "enqueue", association: { mode: "ad-hoc", profileConsentVersion: 1 } };
+  return host.apply({ kind: "submit-message", operationId, payloadDigest: canonicalDigest(input), actorId: "human", request: input });
+}
+async function settledState(host: Awaited<ReturnType<typeof createSessionHost>>, states: string[]) {
+  for (let n = 0; n < 400; n++) { const current = await host.inspect(); if (states.includes(current.state)) return current; await Bun.sleep(5); }
+  throw new Error("native host did not settle");
+}
+const closeReceipts = async (host: Awaited<ReturnType<typeof createSessionHost>>, operationId: string) => (await host.events()).events.flatMap((event) => event.kind === "operation-receipt" && event.receipt.operationId === operationId ? [event.receipt.status] : []);
+
+test("a when-idle close during a turn is recorded pending, seals new submissions and closes at the turn boundary with earlier queued input suspended", async () => {
+  const { host, provider, release } = await gatedFixture();
+  try {
+    await message(host, "busy-before-close", "Busy turn");
+    expect((await submit(host, "queued-before-close", "Queued before the close")).status).toBe("queued");
+    const pending = await closeWhenIdle(host, "close-when-idle"); expect(pending.status).toBe("pending"); expect((await host.inspect()).state).toBe("busy");
+    expect(await closeReceipts(host, "close-when-idle")).toEqual(["pending"]);
+    // Sealed: a later submission is refused and nothing new joins the queue; a second close is refused while the first is pending.
+    expect((await submit(host, "after-close", "After the close")).status).toBe("rejected");
+    expect((await closeWhenIdle(host, "second-close")).status).toBe("rejected");
+    expect((await host.queue()).items.map((item) => [item.operationId, item.state])).toEqual([["queued-before-close", "queued"]]);
+    release();
+    const closed = await settledState(host, ["closed", "recovery-required"]); expect(closed.state).toBe("closed"); expect(closed.activeRunId).toBeNull();
+    expect(await closeReceipts(host, "close-when-idle")).toEqual(["pending", "applied"]);
+    expect((await host.queue()).items.map((item) => [item.operationId, item.state])).toEqual([["queued-before-close", "suspended"]]);
+    expect(provider.requests).toHaveLength(1);
+  } finally { release(); await host.dispose(); }
+});
+
+test("a when-idle close whose turn ends without a measured baseline resolves recovery-required and never reports closed", async () => {
+  const { host, workspace, release } = await gatedFixture();
+  try {
+    await message(host, "unproven-before-close", "Busy turn");
+    expect((await closeWhenIdle(host, "close-unproven")).status).toBe("pending");
+    workspace.checkpoint = async () => ({ ok: false, error: { code: "workspace-conflict", message: "baseline unavailable" } });
+    release();
+    expect((await settledState(host, ["closed", "recovery-required"])).state).toBe("recovery-required");
+    for (let n = 0; n < 200 && (await closeReceipts(host, "close-unproven")).length < 2; n++) await Bun.sleep(5);
+    expect(await closeReceipts(host, "close-unproven")).toEqual(["pending", "recovery-required"]); expect((await host.inspect()).state).toBe("recovery-required");
+  } finally { release(); await host.dispose(); }
+});
+
+test("the native decision window may only be shortened: a longer, empty or fractional window is refused before any effect", async () => {
+  const { host, runtime, workspace, cwd, root } = await fixture();
+  try {
+    for (const decisionTtlMs of [120_001, 0, 1.5]) await expect(createSessionHost({ cwd, dataDir: join(root, "state"), record: { ...record(), sessionId: "session-decision-window" }, runtime, workspace, decisionTtlMs })).rejects.toMatchObject({ code: "invalid-decision-ttl" });
+  } finally { await host.dispose(); }
+});
