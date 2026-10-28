@@ -26,6 +26,12 @@ import { type SliceDepth, type SliceEntry, parseScopedDiff } from "./slice";
 /** On every slice: one reviewer reads every changed line for correctness. */
 export const ALWAYS_ROLE = "review-logic";
 export const REGRESSION_ROLE = "review-regression";
+/**
+ * The generic degradation reviewer (flow 479): profile `full`. A new deep slice (round 1, or a new slice of a delta round)
+ * gets it with the rest of the deep roster ({@link deepRosterRoles}); a delta round's fix slice gets it when it changes a
+ * source-code file ({@link changesSharedCodeCandidate}), because its lines cannot tell whether they sit inside an exported symbol.
+ */
+export const DEGRADATION_ROLE = "review-degradation";
 /** A deep slice is read by the core set the round would never skip (jev-select's mandatory ids), plus the regression reviewer. */
 export const DEEP_ROLES: readonly string[] = [...CORE_MANDATORY_REVIEWER_IDS, REGRESSION_ROLE];
 /** Risk classes of `computeHunkRiskFacts` that send a slice deep. `public API`, `config`, `IO` and `concurrency` fire on most code, so they only raise the score. */
@@ -90,6 +96,13 @@ export function deepReasonOfFile(file: string): string | undefined {
   return undefined;
 }
 
+/**
+ * A changed line that adds, removes or edits an exported symbol, a re-export or a default export. It matches the
+ * declaration line only, so it routes a round-1 light slice; a delta round's fix slice is routed by
+ * {@link changesSharedCodeCandidate} instead, which also covers a body-only edit of an exported function.
+ */
+const SHARED_SYMBOL_CHANGE = /^[+-]\s*export\s+(\*|\{|default\b|declare\b|abstract\b|(async\s+)?(function|class|interface|type|const|let|var|enum)\b)/m;
+
 const ENTRY_FILE =/(^|\/)(index|mod|main)\.[cm]?[jt]sx?$/;
 
 /**
@@ -112,6 +125,10 @@ const ROLE_RULES: readonly RoleRule[] = [
   { role: "review-architecture", why: "agent instructions (skill, rule, AGENTS/CLAUDE file, prompt)", path: (f) => AGENT_INSTRUCTION_FILE.test(f) },
   { role: "review-architecture", why: "contract or schema", path: (f) => CONTRACT_FILE.test(f) },
   { role: "review-architecture", why: "exported signature or contract type changed", content: /^[+-]\s*export\s+(declare\s+)?(type|interface|abstract\s+class|enum)\b|^[+-]\s*export\s+(async\s+)?function\s+\w+\s*[<(]/m },
+  // Flow 479: a changed exported symbol has consumers whose assumptions the change may move. A light slice gets the
+  // degradation reviewer only through this rule; a deep slice also gets it from deepRosterRoles, and a delta round's fix
+  // slice from changesSharedCodeCandidate (which also covers a body-only edit).
+  { role: DEGRADATION_ROLE, why: "shared (exported) symbol changed", content: SHARED_SYMBOL_CHANGE, codeOnly: true },
   // Process and argv construction, git invocations, input-derived paths, env, network: where injection and traversal live.
   { role: "review-security-code", why: "process, argv, git, input-derived path, env or network", content: SECURITY_PRINCIPLE, codeOnly: true },
   { role: "review-security-code", why: "process, filesystem write or trust-sensitive code", content: /\b(exec|execSync|execFile|spawn|spawnSync|Bun\.spawn|child_process|eval|new Function|innerHTML|dangerouslySetInnerHTML|password|passwd|secret|token|credential|api[_-]?key|sanitiz\w*|escape\w*|redact\w*|untrusted|trust\w*|permission\w*|allow-?list|deny-?list|sandbox\w*|cookie|cors|csrf|jwt|writeFile\w*|rm|unlink|rmdir|chmod|symlink\w*|realpath)\b/i, codeOnly: true },
@@ -195,6 +212,15 @@ export type RoutingOptions = {
 export type SliceRouting = { roles: string[]; depth: SliceDepth; risk: { score: number; why: string[] }; audit?: boolean };
 
 const changedLinesOf = (text: string): string => text.split("\n").filter((line) => line.startsWith("+") || line.startsWith("-")).join("\n");
+
+/**
+ * Whether a region changes product source code (not a test, a document or data). A fix slice holds only the lines of its
+ * fix hunks, so it cannot tell whether they sit inside an exported function; any such change is a candidate for a
+ * shared-symbol change, and the `review blast-radius --degradation` payload (empty for a file-private edit) settles it.
+ */
+export function changesSharedCodeCandidate(region: Pick<ScopedRegion, "path">): boolean {
+  return deepReasonOfFile(region.path) === "source code";
+}
 
 /** Content roles of one region: the rules whose path or changed-line pattern matches, with the reason. */
 export function contentRolesOf(region: Pick<ScopedRegion, "path" | "text">): Array<{ role: string; why: string }> {

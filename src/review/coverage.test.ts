@@ -101,6 +101,39 @@ describe("requiredReviewers", () => {
   });
 });
 
+describe("review-degradation is a roster reviewer of a deep round (flow 479 AC6)", () => {
+  test("installed (profile full), it is required in a mode all round without a blast radius, and mode diff narrows it out", async () => {
+    await install("review-degradation");
+    const all = await requiredReviewers(root, "all", frontendFiles);
+    expect(all.required).toContain("review-degradation");
+    expect(all.excluded.find((e) => e.reviewer === "review-degradation")).toBeUndefined();
+    const diff = await requiredReviewers(root, "diff", frontendFiles, { blastRadius: false });
+    expect(diff.required).not.toContain("review-degradation");
+    expect(diff.required).not.toContain("review-regression");
+  });
+
+  test("not installed (the recommended profile), nothing requires it", async () => {
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).not.toContain("review-degradation");
+    expect(need.excluded.find((e) => e.reviewer === "review-degradation")).toBeUndefined();
+  });
+
+  test("a light round leaves it out, with the light-round reason", async () => {
+    await install("review-degradation");
+    const light = await requiredReviewers(root, "all", frontendFiles, { depth: "light" });
+    expect(light.required).not.toContain("review-degradation");
+    expect(light.excluded.find((e) => e.reviewer === "review-degradation")?.reason).toContain("light round");
+  });
+
+  test("a dispatch that skips it is refused when it is installed", async () => {
+    await install("review-degradation");
+    const all = (await requiredReviewers(root, "all", frontendFiles)).required;
+    const without = all.filter((name) => name !== "review-degradation");
+    expect(await coverageErrors({ mode: "all", selected: without }, { root, files: frontendFiles })).toEqual([expect.stringContaining("missing: review-degradation")]);
+    expect(await coverageErrors({ mode: "all", selected: all }, { root, files: frontendFiles })).toEqual([]);
+  });
+});
+
 describe("review-regression and the blast radius", () => {
   const withRadius = async (name: string, body: unknown): Promise<string> => {
     const dir = path.join(root, ".metaproject", "reviews", name);

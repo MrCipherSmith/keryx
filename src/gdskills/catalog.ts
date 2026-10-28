@@ -248,6 +248,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Anchor class_scope on the callers that break, never on the changed line.",
     "Say when the radius could not answer — a non-code change has an empty one.",
   ]),
+  skill("review-degradation", "review", ["full"], "Ask whether the code is worse after a change than on the base branch (behaviour, defaults, speed, structure) and whether that can be shown, over the diff plus every consumer of each changed shared symbol.", [
+    "Read the diff against the description before reading any consumer.",
+    "Trace the consumers the code graph lists for each changed shared export; the set is the graph's, not yours.",
+    "Name one degradation class and one evidence kind per finding; a major or blocker without evidence is lowered to info at ingest.",
+    "Say what was traced when nothing was found, and say when the consumer cap dropped any.",
+  ]),
   skill("review-pr-contract", "review", ["recommended", "full"], "Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale.", [
     "Work every checklist box in pr-context.md as a row: quoted box, state, quoted diff line, expectation.",
     "File a finding only where a quoted box or claim disagrees with a quoted diff or document line.",

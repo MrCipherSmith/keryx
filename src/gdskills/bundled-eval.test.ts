@@ -117,7 +117,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Plus `review-pr-contract` (flow 446): one more, an LLM reviewer.
     // Plus `review-premise` (flow 459): a delete-only judge of findings' premises.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(80);
+    expect(files.length).toBe(81);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);

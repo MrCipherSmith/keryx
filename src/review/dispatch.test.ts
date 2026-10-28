@@ -109,3 +109,15 @@ test("review-regression is required exactly when a blast radius was computed, an
     expect(await coverageErrors({ mode: "all", selected: without }, { root, files: FILES, blastRadius: false })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("review-degradation joins a deep round's set when installed, and its absence from a dispatch is refused (flow 479 AC6)", async () => {
+  const root = await reviewRoot([...SET, "review-degradation"]);
+  try {
+    const all = await requiredReviewers(root, "all", FILES);
+    expect(all.required).toContain("review-degradation");
+    const without = all.required.filter((name) => name !== "review-degradation");
+    expect((await coverageErrors({ mode: "all", selected: without }, { root, files: FILES })).join(" ")).toContain("missing: review-degradation");
+    const light = await requiredReviewers(root, "all", FILES, { depth: "light" });
+    expect(light.required).not.toContain("review-degradation");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

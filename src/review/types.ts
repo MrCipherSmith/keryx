@@ -636,6 +636,37 @@ export type StructuredReviewFinding = {
   source?: ReviewFindingSource | undefined;
   /** Required when `source` is `external`, meaningless otherwise. */
   external_ref?: ExternalCommentRef | undefined;
+  /** Flow 479: which way a `review-degradation` finding says the change made the code worse than the base branch. */
+  degradation_class?: ReviewDegradationClass | undefined;
+  /** Flow 479: what proves a `review-degradation` finding. A major or blocker without it is downgraded to `info` at ingest. */
+  evidence_kind?: ReviewEvidenceKind | undefined;
+  /**
+   * Flow 479: written by ingest, never by a reviewer, when it downgraded a finding for missing evidence.
+   * The marker the TUI reads to show the finding as unproven; the original severity is kept so the downgrade is visible.
+   */
+  evidence_screen?: ReviewEvidenceScreen | undefined;
+};
+
+/** The closed list of `review-degradation` finding classes, in the order the schema declares them. */
+export const REVIEW_DEGRADATION_CLASSES = [
+  "behaviour-delta",
+  "default-change",
+  "diff-vs-description",
+  "debt",
+  "performance",
+  "cross-pr",
+  "blind-test",
+] as const;
+export type ReviewDegradationClass = (typeof REVIEW_DEGRADATION_CLASSES)[number];
+
+/** The closed list of evidence kinds a `review-degradation` finding may carry. */
+export const REVIEW_EVIDENCE_KINDS = ["probe", "consumer-trace", "merge-trace", "red-test", "base-diff"] as const;
+export type ReviewEvidenceKind = (typeof REVIEW_EVIDENCE_KINDS)[number];
+
+/** The record of an ingest downgrade: the rule that fired and the severity the reviewer asked for. */
+export type ReviewEvidenceScreen = {
+  rule: "degradation-no-evidence";
+  original_severity: "blocker" | "major";
 };
 
 /**

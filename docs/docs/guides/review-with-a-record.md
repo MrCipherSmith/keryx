@@ -157,7 +157,23 @@ stack rules out and the ones whose path triggers no changed file matches.
 `review-regression` joins the set only when a blast radius was computed for the
 package, and `review-pr-contract` (the reviewer that reads the diff against the
 pull request's own stated contract: title, description, linked issue, CI) only when
-`pr-context.md` is in the package. `keryx review required --pr-context <file>`
+`pr-context.md` is in the package. `review-degradation` (profile `full`, deep tier)
+is the reviewer for the question *is the code worse than on the base branch, and
+can that be shown?* It reads the diff and the importers of the module that holds
+each changed shared export (and of a barrel that re-exports it), a set
+`keryx review blast-radius --degradation` takes from the code graph rather than from
+the model under one cap shared by all exports; it has no severity floor, and a light
+round leaves it out. A delta round dispatches it on a fix slice that changes a
+source-code file (not a test, a document or a data file) and on every new deep slice;
+a fix slice's lines cannot tell whether they sit inside an exported function, so the
+payload settles it. Each of its findings carries a `degradation_class` (`behaviour-delta`,
+`default-change`, `diff-vs-description`, `debt`, `performance`, `cross-pr`,
+`blind-test`) and an `evidence_kind` (`probe`, `consumer-trace`, `merge-trace`,
+`red-test`, `base-diff`). `keryx review ingest` lowers a `major` or `blocker` with no
+evidence kind to `info`, marks it unproven and lists it in `scope.md` under
+`## Degradation evidence screen`; it is not rejected. The review panel and `/reviews`
+show the class, the evidence kind and an `UNPROVEN (was major)` marker.
+`keryx review required --pr-context <file>`
 prints the set, and prints each excluded reviewer
 with its reason. A narrower set (`mode: diff`, the roles derived from the changed
 files) is the operator's call and the dispatch records their own words as

@@ -872,6 +872,43 @@ test("`review blast-radius` refuses an absent graph rather than reporting an emp
   expect(errors.join("\n")).toContain("keryx gdgraph build");
 });
 
+test("`review blast-radius --previous … --degradation` recomputes from the graph and prints the degradation payload (flow 479 ARCH-001)", async () => {
+  await repoWithGraph();
+  await reviewCommand(["blast-radius", "--changed", "src/core.ts", "--json", "--out", "prev.json"]);
+  expect(process.exitCode).toBe(0);
+  logs = [];
+  errors = [];
+
+  await reviewCommand(["blast-radius", "--changed", "src/core.ts", "--previous", "prev.json", "--degradation"]);
+
+  expect(process.exitCode).toBe(0);
+  expect(errors.join("\n")).toContain("recompute: yes — the degradation payload needs the graph");
+  expect(logs.join("\n").startsWith("SCOPE: degradation")).toBe(true);
+  expect(logs.join("\n")).not.toContain("scope: blast-radius");
+});
+
+test("`review blast-radius --degradation` is refused with --json, --brief or --out, and --degradation-cap needs --degradation; nothing is written", async () => {
+  await repoWithGraph();
+  for (const clash of [["--json"], ["--brief"], ["--out", "radius.json"]]) {
+    process.exitCode = 0;
+    errors = [];
+    logs = [];
+    await reviewCommand(["blast-radius", "--changed", "src/core.ts", "--degradation", ...clash]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain(`cannot be combined with ${clash[0]}`);
+    expect(logs).toEqual([]);
+  }
+  expect(await readFile(path.join(ROOT, "radius.json"), "utf8").catch(() => "absent")).toBe("absent");
+
+  process.exitCode = 0;
+  errors = [];
+  logs = [];
+  await reviewCommand(["blast-radius", "--changed", "src/core.ts", "--degradation-cap", "5"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--degradation-cap only applies together with --degradation");
+  expect(logs).toEqual([]);
+});
+
 // ---------------------------------------------------------------------------
 // `keryx review tier` — the model block, computed rather than reasoned about
 // ---------------------------------------------------------------------------

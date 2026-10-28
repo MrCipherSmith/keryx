@@ -384,6 +384,12 @@ function lightConventionsReviewer(roster: readonly string[], inventory: Pick<Rev
   return group?.find((member) => roster.includes(member)) ?? pick;
 }
 
+/** Names of the reviewers the project's review tree holds (bundled and project), the inventory `requiredReviewers` builds its roster from. */
+export async function installedReviewerNames(root: string): Promise<ReadonlySet<string>> {
+  const inventory = await collectReviewers(root);
+  return new Set([...inventory.bundled, ...inventory.project].map((reviewer) => reviewer.name));
+}
+
 export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
   const stack = await detectProjectStack(root);
