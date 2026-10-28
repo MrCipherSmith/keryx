@@ -2,7 +2,7 @@ import {observeClosureReceipt,settleClosure} from './closure';
 import {applicationObserved} from './application-proof';
 import {releaseQueuedAttempt} from './queue-retry';
 import {observeLocalCessation,type ReleasedControllerRow} from "./controller-recovery";
-import { canonicalDigest, parseMachineFrame, runCommandDigest, sessionCommandDigest, validateControl, validateArguments, type FrameOf, type Control } from "../../remote-control/protocol";
+import { LIMITS, canonicalDigest, parseMachineFrame, runCommandDigest, sessionCommandDigest, validateControl, validateArguments, type FrameOf, type Control } from "../../remote-control/protocol";
 import { fail } from "../domain";
 import type { RemoteRepository } from "./storage";
 import type { ApprovalRow, MachineRecord, OperationRecord, Projection, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
@@ -157,7 +157,8 @@ const terminal = new Set(["succeeded", "failed", "cancelled", "rejected", "lost"
 const transitions: Record<RunRow["state"], Set<RunRow["state"]>> = {
   dispatching: new Set(["received", "rejected", "unknown"]), received: new Set(["starting", "rejected", "unknown"]), starting: new Set(["running", "failed", "unknown"]), running: new Set(["waiting-approval", "paused", "cancelling", "succeeded", "failed", "unknown"]), "waiting-approval": new Set(["running", "paused", "cancelling", "failed", "unknown"]), paused: new Set(["running", "cancelling", "failed", "unknown"]), cancelling: new Set(["cancelled", "succeeded", "failed", "unknown"]), unknown: new Set(), succeeded: new Set(), failed: new Set(), cancelled: new Set(), rejected: new Set(), lost: new Set(),
 };
-export type StoredRunEvent = { event: FrameOf<"run-event">["payload"]; payloadDigest: string; retained: boolean };
+/** `logBytes` is a log chunk's size as the machine sent and counted it; Hub's own ingestion mask may change the stored text's size. */
+export type StoredRunEvent = { event: FrameOf<"run-event">["payload"]; payloadDigest: string; retained: boolean; logBytes?: number };
 export function storedRunEvent(record: StoredRunEvent | FrameOf<"run-event">["payload"]): FrameOf<"run-event">["payload"] { return "event" in record ? record.event : record; }
 export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: FrameOf<"run-event">["payload"]): number | {error:"recovery-required"} {
   const run = repo.get<RunRow>("remote_run", raw.runId);
@@ -170,7 +171,7 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
     const known = repo.all<StoredRunEvent | FrameOf<"run-event">["payload"]>("remote_event", { runId: run.runId }).map(storedRunEvent);
     if (known.some((event) => event.localSeq >= raw.fromSeq && event.localSeq <= raw.toSeq && event.kind !== "log")) fail(409, "replay-gap", "Critical events cannot be covered by a log gap");
   } else if (raw.localSeq !== run.lastLocalSeq + 1) fail(409, "replay-gap", "Contiguous durable event replay required");
-  const event = structuredClone(raw);
+  const event = structuredClone(raw); let logBytes: number | undefined;
   if (event.kind === "state") {
     if (terminal.has(run.state) && event.state !== run.state) return terminalConflict(repo,m,run,raw);
     if (event.state !== run.state && !transitions[run.state].has(event.state)) fail(409, "stale-reference", "Run transition needs actual lifecycle evidence");
@@ -183,19 +184,25 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
       // SessionRecord is updated only by its separate actual native projection.
     }
   } else if (event.kind === "log") {
-    if (Buffer.byteLength(event.text) > 8192) fail(413, "quota-exceeded", "Log chunk exceeds quota");
-    const bytes = repo.runLogBytes(run.runId);
-    if (bytes + Buffer.byteLength(event.text) > 10485760) fail(413, "quota-exceeded", "Run log storage full; explicit log gap required");
+    // The machine's per-run quota counts the bytes it sends; Hub counts the same bytes, so both agree at the exact boundary whatever the mask below does.
+    logBytes = Buffer.byteLength(event.text);
+    if (logBytes > LIMITS.logChunkBytes) fail(413, "quota-exceeded", "Log chunk exceeds quota");
+    if (repo.runLogBytes(run.runId) + logBytes > LIMITS.runLogBytes) fail(413, "quota-exceeded", "Run log storage full; explicit log gap required");
     event.text = redact(event.text);
   } else if (event.kind === "approval-request") {
-    if (Date.parse(event.expiresAt) > Date.now() + 300000 || Date.parse(event.expiresAt) <= Date.now()) fail(400, "approval-expired", "Approval deadline invalid");
-    event.summary = redact(event.summary); repo.put("remote_approval_projection", event.approvalId, { ...event, status: "waiting" }, { runId: run.runId, sessionId: run.sessionId, projectId: run.projectId, machineId: m.machineId });
+    const deadline = Date.parse(event.expiresAt);
+    if (!Number.isFinite(deadline) || deadline > Date.now() + 300000) fail(400, "approval-expired", "Approval deadline invalid");
+    // A question the machine recorded while disconnected can arrive after its own deadline: it is kept, already expired and never answerable,
+    // because refusing a critical event would wedge the run's replay.
+    event.summary = redact(event.summary); repo.put("remote_approval_projection", event.approvalId, { ...event, status: deadline <= Date.now() ? "expired" : "waiting" }, { runId: run.runId, sessionId: run.sessionId, projectId: run.projectId, machineId: m.machineId });
   } else if (event.kind === "approval-outcome") {
-    const pending = repo.get<FrameOf<"run-event">["payload"] & { status: string }>("remote_approval_projection", event.approvalId);
+    const pending = repo.get<FrameOf<"run-event">["payload"] & { status: string; expiresAt: string }>("remote_approval_projection", event.approvalId);
     if (!pending || pending.runId !== run.runId) fail(409, "stale-reference", "Approval waiter missing");
-    repo.put("remote_approval_projection", event.approvalId, { ...pending, status: event.application, decision: event.decision }, { runId: run.runId, sessionId: run.sessionId, projectId: run.projectId, machineId: m.machineId });
+    // An unanswered question denied at or after its deadline resolved by expiry, which the projection says rather than a bare non-application.
+    const expired = (pending.status === "waiting" || pending.status === "expired") && event.decision === "deny" && event.application === "not-applied" && Date.parse(pending.expiresAt) <= Date.parse(event.observedAt);
+    repo.put("remote_approval_projection", event.approvalId, { ...pending, status: expired ? "expired" : event.application, decision: event.decision }, { runId: run.runId, sessionId: run.sessionId, projectId: run.projectId, machineId: m.machineId });
   }
-  repo.put("remote_event", key, { event, payloadDigest: canonicalDigest(raw), retained: true } satisfies StoredRunEvent, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId, seq: event.localSeq }); run.lastLocalSeq = event.localSeq; run.notificationVersion = (run.notificationVersion ?? 0) + 1; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId }); return event.localSeq;
+  repo.put("remote_event", key, { event, payloadDigest: canonicalDigest(raw), retained: true, ...(logBytes === undefined ? {} : { logBytes }) } satisfies StoredRunEvent, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId, seq: event.localSeq }); run.lastLocalSeq = event.localSeq; run.notificationVersion = (run.notificationVersion ?? 0) + 1; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId }); return event.localSeq;
 }
 export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, frame: FrameOf<"command-receipt"> | FrameOf<"session-command-receipt">,authorityValid?:(authority:StoredCommand["authority"],projectId:string)=>boolean): void {
   const p = frame.payload; const command = repo.get<StoredCommand>("remote_command", p.commandId);

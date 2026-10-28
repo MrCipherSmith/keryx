@@ -61,6 +61,38 @@ test('R5.1 an approval left unanswered past its natural expiry denies, the tool 
  const late=await s.answer(lease,runId,question,'allow-once');expect(late.status).toBe(409);expect(await late.json()).toMatchObject({error:{code:'approval-expired'}});
  await Bun.sleep(200);expect(await Bun.file(file).exists()).toBe(false);expect(await outcomes(s,runId,question)).toHaveLength(1);
 });
+/** A turn whose first model round yields its apply_patch call only once Hub is down: the approval is needed while the machine is disconnected. */
+async function offlineWaiter(file:string,options:MachineOptions={}){
+ const m=await h.machine({...options,scripts:[callRound(`patch-${file}`,'apply_patch',newFilePatch(file,'approved')),okReply]});const s=m.session;const lease=(await s.claim()).lease;
+ let reached!:()=>void;const streaming=new Promise<void>(resolve=>{reached=resolve;});let resume!:()=>void;const resumed=new Promise<void>(resolve=>{resume=resolve;});
+ const original=m.provider.provider.stream;let round=0;m.provider.provider.stream=(request,streamOptions)=>{const current=++round;const events=original(request,streamOptions);return (async function*(){if(current===1){reached();await resumed;}yield* events;})();};
+ const turn=await s.turn(lease,`Create ${file} after approval`);const runId=turn.runId!;
+ await streaming;await h.stopHub();await wait(async()=>m.bridge.connected,v=>!v);resume();
+ const local=()=>h.sqlite(h.ledgerFile(m.state),db=>db.query<{kind:string},[string]>("SELECT json_extract(payload,'$.kind') kind FROM machine_events WHERE stream=? ORDER BY seq").all(`run:${runId}`).map(row=>row.kind));
+ return {m,s,lease,runId,local,file:path.join(m.state.cwd,file)};
+}
+test('AC8 an approval needed while the machine is disconnected waits without auto-denying and applies after reconnection',async()=>{
+ const {m,s,lease,runId,local,file}=await offlineWaiter('offline-needed.txt');
+ // The question is recorded durably for delivery; the native turn holds before the tool: no denial, no write, no further model round.
+ await wait(local,v=>v.includes('approval-request'));await Bun.sleep(500);
+ expect((await local()).filter(kind=>kind==='approval-outcome')).toEqual([]);expect(await Bun.file(file).exists()).toBe(false);expect(m.provider.requests).toHaveLength(1);
+ await h.restartHub();await wait(async()=>m.bridge.connected,v=>v);
+ const question=await s.approval(runId);expect(Date.parse(question.expiresAt)).toBeGreaterThan(Date.now());expect((await projection(h,question.approvalId))?.status).toBe('waiting');
+ expect((await success<{status:string}>(await s.answer(lease,runId,question,'allow-once'))).status).toBe('recorded');
+ await s.waitRun(runId,v=>v.state==='succeeded');expect(await Bun.file(file).text()).toBe('approved\n');
+ expect((await outcomes(s,runId,question)).map(o=>[o.decision,o.application])).toEqual([['allow-once','applied']]);expect(m.provider.requests).toHaveLength(2);
+},40000);
+test('AC8 an approval needed while disconnected whose deadline passes before reconnection resolves expired: the tool never runs and Hub records it expired',async()=>{
+ const {m,s,lease,runId,local,file}=await offlineWaiter('offline-expired.txt',{decisionTtlMs:2000});
+ // Only the question's own deadline resolves it, still offline: a denial, never an allow.
+ await wait(local,v=>v.includes('approval-outcome'));expect(await Bun.file(file).exists()).toBe(false);
+ await h.restartHub();await wait(async()=>m.bridge.connected,v=>v);
+ const run=await s.waitRun(runId,v=>TERMINAL.includes(v.state));expect(run.state).toBe('succeeded');expect(await Bun.file(file).exists()).toBe(false);
+ const question=(await s.events(runId)).find((e):e is ApprovalRequest=>e.kind==='approval-request')!;expect(Date.parse(question.expiresAt)).toBeLessThanOrEqual(Date.now());
+ expect((await outcomes(s,runId,question)).map(o=>[o.decision,o.application])).toEqual([['deny','not-applied']]);expect((await projection(h,question.approvalId))?.status).toBe('expired');
+ const late=await s.answer(lease,runId,question,'allow-once');expect(late.status).toBe(409);expect(await late.json()).toMatchObject({error:{code:'approval-expired'}});
+ await Bun.sleep(200);expect(await Bun.file(file).exists()).toBe(false);expect(m.provider.requests).toHaveLength(2);
+},40000);
 import {allowAll} from './bridge.test-support';
 import {tmpdir} from 'node:os';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';

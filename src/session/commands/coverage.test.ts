@@ -63,3 +63,12 @@ test("Telegram remote control is a capability boundary only with the frozen spec
  f.inventory.variants[0]={...boundary,scopeReference:{path:"docs/requirements/hub-remote-sessions/specification.md",sha256:"7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",anchor:"unimplemented vendor adapters are explicit capability boundaries"}};
  expect(await checkNativeCommandCoverage({...f,registryNames:["remote-control"]})).toMatchObject({ready:true,blockers:[]});
 });
+
+test("a receipt whose headless form is a frozen queue operation binds that operation into its digest",async()=>{
+ const f=await fixture();const {receiptDigest:_digest,...body}=f.receipts[0]!;
+ const queue=receipt({...body,headless:{arguments:{queueItemId:"q1"},outcome:applied,operation:"remove-queue"}});
+ expect(await checkNativeCommandCoverage({...f,receipts:[queue],registryNames:["example"]})).toMatchObject({ready:true,blockers:[]});
+ // Relabelling the operation (or dropping it) without re-deriving the receipt is tampering.
+ for(const forged of [{...queue,headless:{...queue.headless,operation:"edit-queue" as const}},{...queue,headless:{arguments:queue.headless.arguments,outcome:queue.headless.outcome}}])
+  expect((await checkNativeCommandCoverage({...f,receipts:[forged],registryNames:["example"]})).blockers.map(row=>row.code)).toEqual(["tampered-receipt"]);
+});

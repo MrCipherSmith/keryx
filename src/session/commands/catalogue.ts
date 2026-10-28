@@ -14,6 +14,7 @@ import { conversationCommands } from "./conversation";
 import type { NativeCommandContribution } from "./handlers";
 import { analysisCommands } from "./analysis";
 import { tasksIntegrationsCommands } from "./tasks-integrations";
+import { reasoningCommands } from "./reasoning";
 
 export const sharedCommandIds = new Set(["help", "status", "models", "routing", "reasoning", "history", "compact", "tasks", "queue"]);
 /** specification.md 3.1: "Pure terminal display functions are client concerns." `/think` only chooses how reasoning blocks are shown. */
@@ -22,6 +23,8 @@ const presentation = new Set(["theme", "copy", "expand", "rendering", "game", "t
 const externalVendor = new Set(["delegate", "external-diff"]);
 const localSetup = new Set(["connect", "search-connect", "setup", "permissions", "mode", "remote-policy", "remote-control"]);
 const empty: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: {}, required: [] };
+/** `/history [N]` (src/remote/history.ts): no number reads the whole ordered history, N (1-20) its last N messages. */
+export const historyInputSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { count: { type: "integer", minimum: 1, maximum: 20 } }, required: [] };
 export function createCommandCatalogue(capabilityDigest: string, contributions: readonly NativeCommandContribution[] = []): Control["CommandCatalogue"] {
   const entries: Control["CommandCatalogueEntry"][] = commandsForMode("agent").map((command) => {
     const commandName = command.name.slice(1);
@@ -29,7 +32,7 @@ export function createCommandCatalogue(capabilityDigest: string, contributions: 
     return {
       commandName, summary: command.description, handlerId: `native.${commandName}`,
       inputSchema: commandName === "reasoning" ? { type: "object", additionalProperties: false,
-        properties: { effort: { type: "string", maxLength: 16, enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] } }, required: ["effort"] } : empty,
+        properties: { effort: { type: "string", maxLength: 16, enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] } }, required: ["effort"] } : commandName === "history" ? historyInputSchema : empty,
       resultSchema: { type: "string", maxLength: 32768 },
       mutationClass: localSetup.has(commandName) ? "sensitive-setup" : ["reasoning", "compact"].includes(commandName) ? "session" : "read",
       states: ["idle", "busy", "paused"], busyPolicy: ["reasoning", "compact"].includes(commandName) ? "reject" : "read-only",
@@ -38,7 +41,7 @@ export function createCommandCatalogue(capabilityDigest: string, contributions: 
       reason: available ? "shared-native-handler" : presentation.has(commandName) ? "client-presentation" : externalVendor.has(commandName) ? "external-vendor-execution-not-admitted" : localSetup.has(commandName) ? "dedicated-local-security-workflow" : "required-domain-handler-extraction-pending",
     };
   });
-  for (const contribution of [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...lifecycleCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...planCommands(), ...rewindCommands(), ...settingsInspectionCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.settings }), ...analysisCommands(NATIVE_DEFAULT_SERVICE_READINESS.analysis), ...tasksIntegrationsCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.integrations }), ...contributions]) {
+  for (const contribution of [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...lifecycleCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...rewindCommands(), ...settingsInspectionCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.settings }), ...analysisCommands(NATIVE_DEFAULT_SERVICE_READINESS.analysis), ...tasksIntegrationsCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.integrations }), ...contributions]) {
     const index = entries.findIndex((entry) => entry.commandName === contribution.entry.commandName);
     if (index >= 0) entries[index] = contribution.entry;
     else entries.push(contribution.entry);

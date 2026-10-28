@@ -16,12 +16,11 @@ import { parseProjectContextCommand } from "../../tui/project-context-inspector"
 import { parseDecisionsCommand } from "../../tui/decisions-surface";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand } from "../../tui/reviews-inspector";
 import { parseTasksArgs } from "../../tui/tasks-command";
+import { parseAcText, parseApprovalsText, parseConnectText, parseFlowOriginText, parseFlowsText, parseHistoryText, parseInspectorDetail, parseMcpText, parseModelText, parseProjectContextTab, parseQueueText, parseQuestionAnswerText, parseReviewsText, parseRewindText, parseRoutingText, parseTriggersText, parseWorkspaceText,
+  refuse, typed, type TerminalCommandParse, type TerminalQueueAction } from "./terminal-grammar";
 
 type Args = { [key: string]: Control["BoundedJson"] };
-/** A typed request for the shared handler, or the TUI's own refusal. Never a positional argument list. */
-export type TerminalCommandParse = { ok: true; commandName: string; arguments: Args } | { ok: false; commandName: string; reason: string };
-const refuse = (commandName: string, reason: string): TerminalCommandParse => ({ ok: false, commandName, reason });
-const typed = (commandName: string, args: Args = {}): TerminalCommandParse => ({ ok: true, commandName, arguments: args });
+export type { TerminalCommandParse } from "./terminal-grammar";
 const noArguments = (name: string, rest: string, why: string): TerminalCommandParse => rest.length === 0 ? typed(name) : refuse(name, why);
 function parseTrail(rest: string): TerminalCommandParse {
   const parsed = parseTrailArgs(rest);
@@ -63,7 +62,7 @@ function parseBus(line: string): TerminalCommandParse {
 /** Each entry reuses the shipped TUI/readline grammar of its command, then names the catalogue handler that serves that parsed action. */
 const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalCommandParse>> = {
   reasoning: (rest) => {
-    if (rest.length === 0) return refuse("reasoning", "Showing the effort has no typed native request; read it with /status or /settings.");
+    if (rest.length === 0) return typed("reasoning.show");
     if (!isReasoningEffortLevel(rest)) return refuse("reasoning", `Unknown reasoning effort '${rest}'.`);
     return typed("reasoning", { effort: rest === "off" ? "none" : rest });
   },
@@ -78,8 +77,25 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
     if (arg.length === 0) return typed("route");
     return arg === "on" || arg === "off" ? typed("route.set", { enabled: arg === "on" }) : refuse("route", `Unknown /route argument '${arg}'. Usage: /route [on|off]`);
   },
-  model: (rest) => noArguments("model", rest, "/model selects through the interactive picker; it has no typed argument syntax."),
-  connect: (rest) => noArguments("connect", rest, "/connect manages providers through its dialog; it has no typed argument syntax."),
+  model: (rest) => parseModelText(rest),
+  connect: (rest) => parseConnectText(rest),
+  mcp: (rest) => parseMcpText(rest),
+  routing: (rest) => parseRoutingText(rest),
+  approvals: (rest) => parseApprovalsText(rest),
+  "questions.answer": (rest) => parseQuestionAnswerText(rest),
+  history: (rest) => parseHistoryText(rest),
+  flows: (rest) => parseFlowsText(rest),
+  ac: (rest) => parseAcText(rest),
+  workspace: (rest) => parseWorkspaceText(rest),
+  triggers: (rest) => parseTriggersText(rest),
+  flow: (rest) => parseFlowOriginText(rest),
+  reviews: (rest) => parseReviewsText(rest),
+  rewind: (rest) => parseRewindText(rest),
+  queue: (rest) => parseQueueText(rest),
+  editguard: (rest) => parseInspectorDetail("editguard", rest) ?? noArguments("editguard", rest, "/editguard on|off writes project configuration; it has no typed native request. Usage: /editguard [status]"),
+  jevprofile: (rest) => parseInspectorDetail("jevprofile", rest) ?? noArguments("jevprofile", rest, "Toggling a review.jev key writes project configuration; it has no typed native request. Usage: /jevprofile [entries]"),
+  // The dotted native name takes only the preview form of the same grammar.
+  "rewind.preview": (rest) => { const parsed = parseRewindText(rest); return parsed.ok && parsed.commandName === "rewind.preview" ? parsed : refuse("rewind.preview", "Usage: /rewind.preview N [files|history|both]"); },
   setup: (rest) => {
     const request = parseSetupArgs([rest]);
     if (request.kind === "error") return refuse("setup", request.message);
@@ -117,7 +133,8 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
     if (parsed.action === "off") return typed("remote-control.off");
     return typed("remote-control.name", parsed.name === undefined ? {} : { name: parsed.name });
   },
-  projectctx: (_rest, line) => {
+  projectctx: (rest, line) => {
+    const tab = parseProjectContextTab(rest); if (tab !== undefined) return tab;
     const parsed = parseProjectContextCommand(line);
     if (parsed.kind === "invalid") return refuse("projectctx", parsed.message);
     if (parsed.kind === "set") return refuse("projectctx", `Setting enforcement to ${parsed.mode} writes project configuration; it has no typed native request.`);
@@ -148,24 +165,98 @@ export function parseTerminalCommand(line: string): TerminalCommandParse {
   return noArguments(token, rest, `/${token} takes no typed arguments in the terminal adapter.`);
 }
 
+type TerminalHost = Pick<SessionHostPort, "inspect" | "catalogue" | "apply" | "queue">;
+/**
+ * The local terminal owner's authority. `work` is the operator's explicit work mode (spec 3.1: ad-hoc coding needs an explicit
+ * operator work mode; Flow work pins its Flow): a workspace-class command runs as one new local run of this session under it,
+ * and without it such a command is refused here rather than given an invented association.
+ */
+export interface TerminalAuthority { actorId: string; controllerLeaseId: string; controllerVersion: number; work?: Control["FlowAssociation"] }
+type Refusal = { reason: string; errorCode: "invalid-arguments" | "forbidden" };
+function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
+/** The pending rows a typed list read returned: structured results directly, string results as the integrations envelope. */
+function pendingRows(result: unknown): Record<string, unknown>[] {
+  let value = result;
+  if (typeof value === "string") { try { value = JSON.parse(value) as unknown; } catch { return []; } }
+  if (record(value) && value.ok === true) value = value.data;
+  return Array.isArray(value) ? value.filter(record) : [];
+}
+
+/** The apply pins of an applied rewind preview: exactly the snapshot, mode, history version, preview digest and baseline it showed. */
+function rewindPins(result: unknown): Args | undefined {
+  let value = result;
+  if (typeof value === "string") { try { value = JSON.parse(value) as unknown; } catch { return undefined; } }
+  const data = record(value) && value.ok === true && value.status === "preview" && record(value.data) ? value.data : undefined;
+  if (data === undefined || typeof data.seq !== "number" || typeof data.mode !== "string" || typeof data.historyVersion !== "number" || typeof data.previewDigest !== "string" || typeof data.workspaceBaseline !== "string") return undefined;
+  return { seq: data.seq, mode: data.mode, expectedHistoryVersion: data.historyVersion, previewDigest: data.previewDigest, workspaceBaseline: data.workspaceBaseline };
+}
+
 /** Terminal slash input is parsed into the same typed handler, never a model or OS shell. */
-export function createTerminalSessionAdapter(host: Pick<SessionHostPort, "inspect" | "catalogue" | "apply">, authority: { actorId: string; controllerLeaseId: string; controllerVersion: number }) {
+export function createTerminalSessionAdapter(host: TerminalHost, authority: TerminalAuthority) {
+  /** The last successful rewind preview; like the readline `/rewind`, any other terminal input withdraws it. */
+  let pendingRewind: Args | undefined;
+  const invoke = async (commandName: string, args: Args, extra: { runId: string; turnId: string; association: Control["FlowAssociation"] } | Record<string, never> = {}) => {
+    const current = await host.inspect(); const catalogue = await host.catalogue();
+    const request: Control["CommandInvoke"] = { expectedSessionVersion: current.version,
+      controller: { controllerLeaseId: authority.controllerLeaseId, expectedControllerVersion: authority.controllerVersion },
+      expectedConfigVersion: current.config.configVersion, catalogueDigest: catalogue.catalogueDigest, commandName, arguments: args, busyPolicy: "reject" };
+    return host.apply({ kind: "command", operationId: randomUUID(), payloadDigest: canonicalDigest(request), actorId: authority.actorId, request, ...extra });
+  };
+  /** The exact pins of the pending card the operator named, read through the same typed list a headless client reads. */
+  const resolvePins = async (parsed: Extract<TerminalCommandParse, { ok: true }>, pending: Args | undefined): Promise<{ ok: true; args: Args } | { ok: false; refusal: Refusal }> => {
+    const pins = parsed.pins; if (pins === undefined) return { ok: true, args: parsed.arguments };
+    if (pins.kind === "history-version") return { ok: true, args: { ...parsed.arguments, expectedHistoryVersion: (await host.inspect()).historyVersion } };
+    if (pins.kind === "rewind-confirm") return pending === undefined ? { ok: false, refusal: { reason: "Nothing to confirm. Pick a snapshot first: /rewind N [files|history|both]", errorCode: "invalid-arguments" } } : { ok: true, args: pending };
+    const listed = await invoke(pins.kind === "approval" ? "approvals" : "questions.list", {});
+    const rows = "result" in listed ? pendingRows(listed.result) : [];
+    if (pins.kind === "approval") {
+      const row = rows.find((item) => item.approvalId === pins.approvalId);
+      if (row === undefined) return { ok: false, refusal: { reason: `No approval ${pins.approvalId} is pending in this session.`, errorCode: "forbidden" } };
+      return { ok: true, args: { approvalId: pins.approvalId, runId: String(row.runId), turnId: String(row.turnId), fingerprint: String(row.fingerprint), policyDigest: String(row.policyDigest) } };
+    }
+    const row = rows.find((item) => item.questionId === pins.questionId);
+    if (row === undefined) return { ok: false, refusal: { reason: `No question ${pins.questionId} is pending in this session.`, errorCode: "forbidden" } };
+    return { ok: true, args: { ...parsed.arguments, runId: String(row.runId), turnId: String(row.turnId), fingerprint: String(row.fingerprint) } };
+  };
+  /** The named qN item of this session's pending queue, edited or removed through the frozen queue operation under its exact versions. */
+  const applyQueue = async (action: TerminalQueueAction) => {
+    const current = await host.inspect(); const page = await host.queue();
+    const item = page.items.filter((entry) => entry.state === "queued").sort((left, right) => left.position - right.position)[action.position - 1];
+    if (item === undefined) return (await refused("queue", { reason: `No queued item q${action.position} is pending in this session.`, errorCode: "forbidden" }))!;
+    const base = { expectedSessionVersion: current.version, controller: { controllerLeaseId: authority.controllerLeaseId, expectedControllerVersion: authority.controllerVersion },
+      queueItemId: item.queueItemId, expectedQueueVersion: page.queueVersion, expectedItemVersion: item.version };
+    if (action.action === "remove") return host.apply({ kind: "remove-queue", operationId: randomUUID(), payloadDigest: canonicalDigest(base), actorId: authority.actorId, request: base });
+    const request = { ...base, text: action.text ?? "" };
+    return host.apply({ kind: "edit-queue", operationId: randomUUID(), payloadDigest: canonicalDigest(request), actorId: authority.actorId, request });
+  };
+  const refused = async (commandName: string, refusal: Refusal) => {
+    const current = await host.inspect();
+    const outcome = validateControl("CommandOutcome", { operationId: randomUUID(), sessionId: current.sessionId, commandName, status: "rejected", sessionVersion: current.version,
+      result: JSON.stringify({ error: refusal.reason }).slice(0, 32768), confirmationId: null, errorCode: refusal.errorCode, confirmation: null, runId: null, turnId: null });
+    return outcome.ok ? outcome.value : undefined;
+  };
   return {
     async execute(line: string) {
       const parsed = parseTerminalCommand(line);
-      const record = await host.inspect();
+      const pending = pendingRewind; pendingRewind = undefined;
       if (!parsed.ok) {
-        const refused = validateControl("CommandOutcome", { operationId: randomUUID(), sessionId: record.sessionId, commandName: parsed.commandName, status: "rejected", sessionVersion: record.version,
-          result: JSON.stringify({ error: parsed.reason }).slice(0, 32768), confirmationId: null, errorCode: "invalid-arguments", confirmation: null, runId: null, turnId: null });
-        if (refused.ok) return refused.value;
-      }
-      const catalogue = await host.catalogue();
-      const request: Control["CommandInvoke"] = { expectedSessionVersion: record.version,
-        controller: { controllerLeaseId: authority.controllerLeaseId, expectedControllerVersion: authority.controllerVersion },
-        expectedConfigVersion: record.config.configVersion, catalogueDigest: catalogue.catalogueDigest, commandName: parsed.commandName,
+        const outcome = await refused(parsed.commandName, { reason: parsed.reason, errorCode: "invalid-arguments" });
         // A refusal the wire cannot name (an invalid command token) reaches the host as that unknown command with no arguments.
-        arguments: parsed.ok ? parsed.arguments : {}, busyPolicy: "reject" };
-      return host.apply({ kind: "command", operationId: randomUUID(), payloadDigest: canonicalDigest(request), actorId: authority.actorId, request });
+        return outcome ?? invoke(parsed.commandName, {});
+      }
+      if (parsed.queue !== undefined) return applyQueue(parsed.queue);
+      const entry = (await host.catalogue()).entries.find((item) => item.commandName === parsed.commandName);
+      // A workspace-class command is one new local run of this session; it never runs without the operator's explicit work mode.
+      let run: { runId: string; turnId: string; association: Control["FlowAssociation"] } | Record<string, never> = {};
+      if (entry?.mutationClass === "workspace" && entry.availability === "available") {
+        if (authority.work === undefined) return (await refused(parsed.commandName, { reason: `/${parsed.commandName} runs as a new local run and needs an explicit operator work mode (a Flow or ad-hoc).`, errorCode: "forbidden" }))!;
+        run = { runId: randomUUID(), turnId: randomUUID(), association: authority.work };
+      }
+      const resolved = await resolvePins(parsed, pending);
+      if (!resolved.ok) return (await refused(parsed.commandName, resolved.refusal))!;
+      const outcome = await invoke(parsed.commandName, resolved.args, run);
+      if (parsed.commandName === "rewind.preview" && outcome.status === "applied" && "result" in outcome) pendingRewind = rewindPins(outcome.result);
+      return outcome;
     },
   };
 }

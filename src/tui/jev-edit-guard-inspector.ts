@@ -12,6 +12,8 @@ import { openModal, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk } from "./theme-text";
+import { readJevEditGuardConfig } from "../review/jev-edit-guard-config";
+import { editGuardTodayStats, readEditGuardLogRecords, recentEditGuardFlags } from "../review/jev-edit-guard-log";
 
 type OpenTui = typeof import("@opentui/core");
 
@@ -42,6 +44,16 @@ export interface EditGuardStatusSnapshot {
   readonly maxCalls: number;
   readonly today: { readonly calls: number; readonly flagged: number; readonly costUsd: number };
   readonly recentFlags: readonly EditGuardRecentFlag[];
+}
+
+/** The snapshot the modal shows, read from the project's own config and flag log; the TUI and the native session read it the same way. */
+export async function loadEditGuardStatus(projectDir: string): Promise<EditGuardStatusSnapshot> {
+  const cfg = await readJevEditGuardConfig(projectDir);
+  const records = await readEditGuardLogRecords(projectDir);
+  const recentFlags = recentEditGuardFlags(records, 10).map((flag) => ({
+    file: flag.file, line: flag.line, ruleId: flag.ruleId, clauseId: flag.clauseId, probability: flag.probability, at: flag.at,
+  }));
+  return { enabled: cfg.enabled, threshold: cfg.threshold, maxCalls: cfg.maxCalls, today: editGuardTodayStats(records), recentFlags };
 }
 
 /** Pure text lines the modal (and a plain-text fallback) render — no OpenTUI types, so this has its own render test with no renderer involved. */

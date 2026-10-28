@@ -77,3 +77,11 @@ test("domain errors stay sanitized and bounded; direct contribution execution va
   const entries = projectInspectionCommands(); expect(entries).toHaveLength(13);
   expect(entries.map((entry) => entry.entry.commandName)).toContain("doctor");
 });
+
+test("/reviews depth reads the same per-review depth the reviews panel shows, without the bot metrics", async () => {
+  const c = await context();
+  const { loadReviewDepth } = await import("../../tui/review-panel");
+  const depth = await executeProjectInspection(c, "reviews", { section: "depth" });
+  expect(depth).toEqual({ ok: true, source: "local-native", data: { section: "depth", depth: JSON.parse(JSON.stringify(await loadReviewDepth(c.cwd))) } });
+  expect(await executeProjectInspection(c, "reviews", { section: "everything" })).toMatchObject({ ok: false, error: { code: "invalid-arguments" } });
+});

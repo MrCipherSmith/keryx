@@ -50,6 +50,8 @@ const SETTLE_BOUND_MS = 2000;
 const SERVICE_CLOSE_BOUND_MS = 6000;
 /** The frozen native decision window: an approval or confirmation card stays answerable for 120 s. */
 const DECISION_TTL_MS = 120_000;
+/** The human step after a turn stopped for a changed pinned Flow (frozen spec: drift is visible and the original pins stay). */
+const FLOW_DRIFT_RECEIPT = "The pinned Flow changed during this turn, so it stopped before its next action. Review the change and start a new turn with the current Flow.";
 async function within<T>(task: Promise<T>, fallback: T, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([task, new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), ms); })]); }
@@ -202,7 +204,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const approvalOutcomeListeners = new Set<(outcome: SessionApprovalOutcome) => void>();
   const approvalListeners = new Set<(question: SessionApprovalQuestion) => void>();
   const approvals = createSessionApprovalService({ dir: join(handle.dir, "remote-control"), sessionId: record.sessionId, expirySeconds: decisionTtlMs / 1000,
-    connected: () => connected && !disposed,
+    // Answers need the live control channel. A question raised during a disconnect still reaches the durable outbox: the turn holds at
+    // this pre-tool boundary until reconnection, and the question's own deadline, never the disconnect, denies it.
+    connected: () => connected && !disposed, deliverable: () => !disposed,
     onOutcome(outcome) { for (const sink of approvalOutcomeListeners) { try { sink(structuredClone(outcome)); } catch { approvalOutcomeListeners.delete(sink); } } },
     deliver(question) {
       const safe = { ...question, input: redactSensitiveText(question.input).slice(0, 8192), summary: redactSensitiveText(question.summary) };
@@ -290,7 +294,11 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         const current = active; const version = record.version;
         const allowed = await options.authorizeAction({ session: structuredClone(record), runId: current.runId, turnId: current.turnId, ...action }).catch(() => false);
         signal?.throwIfAborted();
-        if (allowed && connected && controllerUsable() && active === current && record.version === version) break;
+        if (typeof allowed === "object" && active === current) {
+          // The turn's pinned Flow changed: it stops at this boundary, before any further action, and ends with the drift visible instead of pausing for good.
+          current.abort.abort(new SessionHostError("flow-association-stale")); throw new SessionHostError("flow-association-stale");
+        }
+        if (allowed === true && connected && controllerUsable() && active === current && record.version === version) break;
       }
       if (record.state !== "paused") { options.runtime.invalidateApprovals(); record.state = "paused"; state(); }
       await new Promise<void>((resolve, reject) => {
@@ -366,7 +374,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
                 publishMessage("system-receipt", "A complete checkpoint is unavailable for this turn; ordinary coding continues within its existing policy.", operation.runId, operation.turnId); }
             } const verified = await options.workspace.verify(record.workspaceBaseline); if (!verified.ok) throw new SessionHostError("workspace-conflict"); },
           onToolCall: (toolName) => observe({ kind: "progress", text: `Tool: ${toolName}`, toolName }),
-          onToolResult: (toolName, result) => { const summary = `${toolName}: ${result.isError ? "failed" : "completed"}`;
+          onToolResult: (toolName, result) => { const refusal = result.isError ? /^workspace-refused:([a-z0-9-]{1,64})$/.exec(result.output)?.[1] : undefined;
+            const summary = `${toolName}: ${refusal !== undefined ? `refused (${refusal})` : result.isError ? "failed" : "completed"}`;
             observe({ kind: "progress", text: summary, toolName }); publishMessage("tool-summary", summary, operation.runId, operation.turnId); },
           onUsage: (usage) => observe({ kind: "usage", usage, source: "agent", candidateId: snapshot.effectiveCandidateId }),
           requestApproval: (toolName, input, meta) => meta === undefined ? Promise.resolve(false) : approvals.request({ runId: operation.runId, turnId: operation.turnId,
@@ -445,8 +454,11 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
           terminal = { outcome: commandOwnershipUnknown ? "unknown" : outcome.status === "applied" ? "succeeded" : "failed", reason: commandOwnershipUnknown ? "workspace-conflict" : outcome.errorCode ?? "command-completed" };
         }
         if (abort.signal.aborted) {
-          const stopped = await options.runtime.stop({ kind: "run", identity: operation.runId }); terminal.outcome = stopped.status === "stopped" ? "cancelled" : "unknown";
-          terminal.reason = stopped.status === "stopped" ? "owned-runtime-stopped" : "process-ownership-unconfirmed";
+          // A stop for a drifted Flow is not a cancellation: once the run's own work provably stopped it ends failed, with the human step named.
+          const drifted = abort.signal.reason instanceof SessionHostError && abort.signal.reason.code === "flow-association-stale";
+          const stopped = await options.runtime.stop({ kind: "run", identity: operation.runId }); terminal.outcome = stopped.status === "stopped" ? drifted ? "failed" : "cancelled" : "unknown";
+          terminal.reason = stopped.status === "stopped" ? drifted ? "flow-association-stale" : "owned-runtime-stopped" : "process-ownership-unconfirmed";
+          if (drifted) publishMessage("system-receipt", FLOW_DRIFT_RECEIPT, operation.runId, operation.turnId);
         }
         syncHistory();
         if (terminal.outcome === "unknown") record.state = "recovery-required";

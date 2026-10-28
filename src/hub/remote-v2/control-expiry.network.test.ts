@@ -11,3 +11,11 @@ test('expired received cancellation remains unconfirmed and allows a fresh expli
  const current=await success<{version:number;state:string;cancelRequested:boolean}>(await f.call(`/hub/v2/projects/${f.project.id}/runs/${turn.runId}`,{cookie:f.cookie}));expect(current.state).not.toBe('cancelled');expect(current.cancelRequested).toBe(true);
  expect((await f.call(path,{method:'POST',cookie:f.cookie,body:{expectedRunVersion:current.version,expectedSessionVersion:2,controller,reason:'Fresh explicit stop'}})).status).toBe(200);const fresh=(await s.peer.next('command')).payload as FrameOf<'command'>['payload'];expect(fresh.commandId).not.toBe(cancel.commandId);
 });
+test('a delivered close the machine only received and never admitted still expires visibly unconfirmed after its delivery TTL',async()=>{
+ f=await fixture();const s=await admittedSession(f);const c=await appliedController(f,s);const controller={controllerLeaseId:c.lease.controllerLeaseId,expectedControllerVersion:c.lease.version};
+ const close=await success<Control['SessionOperationReceipt']>(await f.call(`${s.path}/close`,{method:'POST',cookie:f.cookie,body:{expectedSessionVersion:s.session.version,controller,mode:'when-idle'}}));expect(close.status).toBe('pending');
+ const command=(await s.peer.next('session-command')).payload as FrameOf<'session-command'>['payload'];expect(command.kind).toBe('close-session');
+ s.peer.send('session-command-receipt',{commandId:command.commandId,hubSequence:command.hubSequence,sessionId:s.session.sessionId,observedSessionVersion:s.session.version,status:'received',receiptId:'close-received',errorCode:null});s.peer.send('heartbeat',{daemonId:'daemon-1'});await s.peer.next('heartbeat-ack');
+ const store=openHubStore(f.dataDir);store.writeTransaction((_state,repo)=>expirePendingCommands(repo,Date.parse(command.expiresAt)+1));expect(store.remote.get<{status:string}>('remote_command',command.commandId)?.status).toBe('expired-unconfirmed');store.close();
+ const operation=await f.call(`${s.path}/operations/${close.operationId}`,{cookie:f.cookie});expect(operation.status).toBe(409);expect(await operation.json()).toMatchObject({error:{code:'command-expired'}});
+});

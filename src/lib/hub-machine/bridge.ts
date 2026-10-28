@@ -216,7 +216,8 @@ export class MachineBridge {
             const current = await hosted.host.inspect();
             if (current.activeRunId && current.activeTurnId) {
                 const allowed = await readSessionActionAuthority({ hubUrl: e.hubUrl, secret: readMachineSecret(e), action: { session: current, runId: current.activeRunId, turnId: current.activeTurnId, kind: 'model' } });
-                hosted.host.setConnected(allowed);
+                // A drifted Flow still reconnects the host: its next action boundary ends the turn visibly instead of leaving it paused for good.
+                hosted.host.setConnected(allowed !== false);
             }
             else
                 hosted.host.setConnected(true);
@@ -1084,6 +1085,9 @@ export class MachineBridge {
                     this.runEvent(observation.runId, { kind: 'state', state: 'cancelling', reasonCode: 'none', ...(run.nativeIdentity ? { nativeIdentity: run.nativeIdentity } : {}) });
                 }
                 run.terminal = observation;
+                const drifted = observation.outcome === 'failed' && observation.reason === 'flow-association-stale';
+                if (drifted)
+                    this.runEvent(observation.runId, { kind: 'log', stream: 'diagnostic', text: 'Run stopped before its next action: its pinned Flow changed during execution. The original pins and any partial result stay; start a new turn with the current Flow.' });
                 if (observation.outcome !== 'unknown' && run.poolNonce) {
                     this.pool!.release(this.options.enrollment.hubId, observation.runId, run.poolNonce);
                     delete run.poolNonce;
@@ -1104,7 +1108,7 @@ export class MachineBridge {
                         return []; return [{ checkId: check.taskId, command: redactSensitiveText(check.command), exitCode: check.exitCode, output: redactSensitiveText(check.output).slice(0, 1048576) }]; });
                     this.ledger!.stageResultDraft(observation.runId, { sessionId: observation.sessionId, turnId: observation.turnId, association: run.command.association, gitBaseSha: hosted.workspace.baseline().head, workspaceBaseline: observation.workspaceBaseline, outcome: observation.outcome, partial: observation.partial, changes, checks });
                 }
-                run.terminalSeq = this.runEvent(observation.runId, { kind: 'state', state: observation.outcome, reasonCode: observation.outcome === 'unknown' ? 'recovery-required' : observation.outcome === 'failed' ? 'native-failure' : 'none', ...(run.nativeIdentity ? { nativeIdentity: run.nativeIdentity } : {}) });
+                run.terminalSeq = this.runEvent(observation.runId, { kind: 'state', state: observation.outcome, reasonCode: observation.outcome === 'unknown' ? 'recovery-required' : drifted ? 'stale-reference' : observation.outcome === 'failed' ? 'native-failure' : 'none', ...(run.nativeIdentity ? { nativeIdentity: run.nativeIdentity } : {}) });
             }
         }
         catch (cause) {

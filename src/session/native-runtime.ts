@@ -204,6 +204,8 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
         workspaceConflict = true; throw new NativeRuntimeError("incomplete-workspace-provenance-port");
       }
       const begun = await workspace.beforeEffect(tool.definition.name, input);
+      // A refusal proven to have written nothing ends only this call, visibly; any other refusal leaves ownership uncertain and fences the turn.
+      if (!begun.ok && "wroteNothing" in begun) return { output: `workspace-refused:${begun.error.code}`, isError: true };
       if (!begun.ok) { workspaceConflict = true; throw new NativeRuntimeError("workspace-conflict"); }
       let result: Awaited<ReturnType<typeof tool.invoke>>;
       try {

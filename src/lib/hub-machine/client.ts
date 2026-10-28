@@ -273,12 +273,12 @@ export function createGrantApplication(grant: Control['AuthorizationGrant'], exp
             return { ok: false, error: machineFailure(cause, 'application-uncertain') };
         } } };
 }
-/** Read-only current authority check; never renews an old start or authorizes replay. */
+/** Read-only current authority check; never renews an old start or authorizes replay. Hub's explicit stale-association refusal is the one final answer. */
 export async function readSessionActionAuthority(options: {
     hubUrl: string;
     secret: string;
     action: import('../../session/host-types').SessionActionAuthority;
-}): Promise<boolean> {
+}): Promise<import('../../session/host-types').SessionActionAuthorityResult> {
     const { action } = options;
     const expected = action.session;
     const controller = expected.controller;
@@ -292,7 +292,7 @@ export async function readSessionActionAuthority(options: {
             const response = await fetch(`${trustedHubUrl(options.hubUrl)}/hub/v2/projects/${encodeURIComponent(expected.projectId)}/sessions/${encodeURIComponent(expected.sessionId)}`, { headers: { Authorization: `Bearer ${options.secret}` }, cache: 'no-store', redirect: 'error', signal });
             if (!response.ok) {
                 await response.body?.cancel();
-                return false;
+                return response.status === 409 && response.headers.get('X-Keryx-Action-Authority') === 'association-stale' && !signal.aborted ? { status: 'stale-subject' } : false;
             }
             const parsed = parseClosedJson(await readBoundedResponse(response, 65536));
             if (!parsed.ok)

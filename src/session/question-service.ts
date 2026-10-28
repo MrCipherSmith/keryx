@@ -36,16 +36,21 @@ export interface SessionApprovalAnswer {
 export interface SessionApprovalOutcome { approvalId: string; runId: string; turnId: string; decision: "allow-once" | "deny"; application: "applied" | "not-applied" }
 export type AppliedApprovalAnswer = { status: "applied" | "rejected" | "not-pending"; reason: string };
 
-/** Adapts the durable native broker; only live waiters can consume an answer after a restart. */
-export function createSessionApprovalService(options: { dir: string; sessionId: string; connected(): boolean; deliver(question: SessionApprovalQuestion): void; expirySeconds?: number; onOutcome?: (outcome: SessionApprovalOutcome) => void }) {
+/**
+ * Adapts the durable native broker; only live waiters can consume an answer after a restart.
+ * `connected` gates answers. `deliverable` (default `connected`) says whether a new question can still reach a durable outbox: while it
+ * can, a question raised during a disconnect is recorded with its normal deadline and waits, and only that deadline denies it.
+ */
+export function createSessionApprovalService(options: { dir: string; sessionId: string; connected(): boolean; deliverable?(): boolean; deliver(question: SessionApprovalQuestion): void; expirySeconds?: number; onOutcome?: (outcome: SessionApprovalOutcome) => void }) {
   const pending = new Map<string, { request: SessionApprovalRequest; applied: Promise<ResolvedState>; answer?: SessionApprovalAnswer; finish(state: ResolvedState): void }>();
+  const deliverable = options.deliverable ?? options.connected;
   // Each host supplies a separate owner-only approval root, so reconciliation cannot deny another host's waiters.
   reconcileApprovals(options.dir, { isTurnLive: () => false });
   const broker = createApprovalBroker({ dir: options.dir, expirySeconds: options.expirySeconds ?? 120, maxPending: 32,
-    requireConsumer: true, hasConsumer: options.connected, pollMs: 10, summaryMaxBytes: 8192 });
+    requireConsumer: true, hasConsumer: deliverable, pollMs: 10, summaryMaxBytes: 8192 });
   const service = {
     async request(request: SessionApprovalRequest): Promise<ApprovalResponse> {
-      if (!options.connected() || request.signal?.aborted) return { approved: false, fingerprint: request.fingerprint };
+      if (!deliverable() || request.signal?.aborted) return { approved: false, fingerprint: request.fingerprint };
       const summary = reviewableAction(request.toolName, request.input);
       if (summary === undefined) return { approved: false, fingerprint: request.fingerprint };
       let approvalId: string | undefined;

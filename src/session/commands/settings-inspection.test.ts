@@ -39,3 +39,19 @@ test("/mode reads the actual permission mode as a required session-settings read
  expect(await executeSettingsInspection({cwd:"/fixture",config},port,"mode",{})).toEqual({ok:true,data:{observed:{permissionMode:"ask",projectPermissionMode:"trust"},source:"actual-local-settings-snapshot"}});
  expect(await executeSettingsInspection({cwd:"/fixture",config},port,"mode",{mode:"auto"})).toMatchObject({ok:false,error:{code:"invalid-arguments"}});
 });
+
+test("the /projectctx Last resolve and References tabs, /editguard detail and /jevprofile entries read the project files the TUI reads, with no settings port",async()=>{
+ const cwd=await mkdtemp(path.join(tmpdir(),"native-drill-"));roots.push(cwd);await mkdir(path.join(cwd,".metaproject"),{recursive:true});
+ await writeFile(path.join(cwd,".metaproject/tasks.config.json"),JSON.stringify({review:{jev:{edit_guard:true,edit_guard_threshold:0.8,edit_guard_max_calls:3}}}));
+ const {loadEditGuardStatus}=await import("../../tui/jev-edit-guard-inspector");const {readJevProfileForShell}=await import("../../commands/review-jev-profile");
+ expect(await executeSettingsInspection({cwd,config},undefined,"editguard.status",{})).toEqual({ok:true,data:JSON.parse(JSON.stringify(await loadEditGuardStatus(cwd)))});
+ expect(await executeSettingsInspection({cwd,config},undefined,"jevprofile.entries",{})).toEqual({ok:true,data:{entries:JSON.parse(JSON.stringify(await readJevProfileForShell(cwd)))}});
+ expect(await executeSettingsInspection({cwd,config},undefined,"projectctx.last",{})).toEqual({ok:true,data:{state:"absent"}});
+ expect(await executeSettingsInspection({cwd,config},undefined,"projectctx.references",{})).toEqual({ok:true,data:{state:"absent"}});
+ await mkdir(path.join(cwd,".metaproject/rules/project"),{recursive:true});await writeFile(path.join(cwd,".metaproject/rules/project/references.json"),"not json");
+ expect(await executeSettingsInspection({cwd,config},undefined,"projectctx.references",{})).toMatchObject({ok:true,data:{state:"invalid"}});
+ for(const name of ["projectctx.last","projectctx.references","editguard.status","jevprofile.entries"]){
+  expect(settingsInspectionCommands().find(row=>row.entry.commandName===name)?.entry).toMatchObject({mutationClass:"read",busyPolicy:"read-only",availability:"available"});
+  expect(await executeSettingsInspection({cwd,config},undefined,name,{threshold:1})).toMatchObject({ok:false,error:{code:"invalid-arguments"}});
+ }
+});

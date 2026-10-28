@@ -26,7 +26,7 @@ const schemas: Record<string, Control["ArgumentSchema"]> = {
   doctor: object({}), setup: object({ scenario: choice("init", "refresh", "repair") }),
   flows: object({ flowId: text }), flow: object({ flowId: text }), ac: object({ flowId: text }),
   workspace: object({ workspaceId: text }), review: object({}),
-  reviews: object({ section: choice("overview", "layers", "parity", "readiness") }),
+  reviews: object({ section: choice("overview", "layers", "parity", "readiness", "depth") }),
   product: object({}), governance: object({}), triggers: object({ name: text }),
   decisions: object({ section: choice("show", "arms") }), integrate: object({}),
 };

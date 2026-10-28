@@ -27,8 +27,9 @@ export interface NativeParityReceipt {
   schema: 1; id: string; variantId: string; commandName: string; handlerName: string | null;
   catalogueDigest: string; sources: NativeCoverageSource[];
   local: { line: string; outcome: NativeNormalizedOutcome };
-  /** `arguments: null` means no typed native request expresses this parsed action; nothing was sent headlessly. */
-  headless: { arguments: { [key: string]: Control["BoundedJson"] } | null; outcome: NativeNormalizedOutcome | null };
+  /** `arguments: null` means no typed native request expresses this parsed action; nothing was sent headlessly.
+   * `operation` names the frozen protocol operation sent instead of a CommandInvoke (queue edit/remove are QueueEdit/QueueRemove, not catalogue commands). */
+  headless: { arguments: { [key: string]: Control["BoundedJson"] } | null; outcome: NativeNormalizedOutcome | null; operation?: "remove-queue" | "edit-queue" };
   receiptDigest: string;
 }
 export interface NativeCoverageBlocker { code: string; subject: string; detail: string }

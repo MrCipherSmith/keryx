@@ -6,9 +6,10 @@ import { parsePatchTargets } from '../patch-risk';
 import { safeHubPath } from '../../hub/git-delivery';
 import { canonicalDigest, type Control, type ProtocolResult } from '../../remote-control/protocol';
 import { redactSensitiveText } from '../../security/redact';
-import { captureBaseline, verifyBaseline, type WorkspaceBaseline } from './checkout-lease';
+import { SNAPSHOT_QUOTA, captureBaseline, verifyBaseline, type WorkspaceBaseline } from './checkout-lease';
 import { MachineError, machineFailure } from './errors';
 import { isMetaprojectManagedPath } from '../metaproject-gitignore';
+import type { EffectRefusal } from '../../session/host-types';
 function safeEffectPath(cwd: string, relative: string): void {
     let current = realpathSync(cwd);
     const parts = relative.split('/');
@@ -24,6 +25,27 @@ function safeEffectPath(cwd: string, relative: string): void {
                 throw cause;
         }
     }
+}
+/**
+ * An upper bound on how many bytes a text patch can add to the checkout: every added line with its newline, minus the content of
+ * every removed line. Hunk headers bound each hunk, so header-like content lines are counted as content. Undefined when the patch
+ * carries binary hunks, whose size its text does not bound.
+ */
+function patchGrowthBound(patch: string): number | undefined {
+    let growth = 0, oldLeft = 0, newLeft = 0;
+    for (const line of patch.split('\n')) {
+        if (oldLeft > 0 || newLeft > 0) {
+            if (line.startsWith('+')) { newLeft--; growth += Buffer.byteLength(line); }
+            else if (line.startsWith('-')) { oldLeft--; growth -= Buffer.byteLength(line) - 1; }
+            else if (!line.startsWith('\\')) { oldLeft--; newLeft--; }
+            continue;
+        }
+        if (line.startsWith('GIT binary patch') || line.startsWith('Binary files '))
+            return undefined;
+        const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line);
+        if (hunk) { oldLeft = hunk[1] === undefined ? 1 : Number(hunk[1]); newLeft = hunk[2] === undefined ? 1 : Number(hunk[2]); }
+    }
+    return growth;
 }
 function visiblePatchPath(cwd: string, relative: string): void { if (isMetaprojectManagedPath(relative))
     throw new MachineError('unsupported-ignored-path'); const ignored = Bun.spawnSync(['git', '-C', cwd, 'check-ignore', '--quiet', '--', relative], { env: withoutGitDiscoveryOverrides(process.env) }); if (ignored.exitCode === 0)
@@ -48,8 +70,12 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
         toolName: string;
     }>();
     const failed = (cause: unknown): ProtocolResult<never> => { conflict = true; const error = machineFailure(cause, 'workspace-conflict'); return { ok: false, error: { code: error.code, message: error.code } }; };
-    const live = () => { assertOwnership(); if (conflict || !verifyBaseline(cwd, owned))
-        throw new MachineError('workspace-conflict'); };
+    /** A refusal before the tool ran, against a just-verified owned checkout: nothing was written, so ownership stays intact. */
+    const refused = (cause: unknown): EffectRefusal => { const error = machineFailure(cause, 'unsafe-workspace-path'); return { ok: false, error: { code: error.code, message: error.code }, wroteNothing: true }; };
+    /** The verified current capture: exactly the owned baseline, with its measured snapshot usage. */
+    const live = (): WorkspaceBaseline => { assertOwnership(); if (conflict)
+        throw new MachineError('workspace-conflict'); const actual = captureBaseline(cwd, { requireClean: false }); if (actual.head !== owned.head || actual.digest !== owned.digest)
+        throw new MachineError('workspace-conflict'); return actual; };
     return {
         baseline: () => owned,
         beginTurn() { live(); start = owned; },
@@ -75,16 +101,24 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
         } },
         async beforeEffect(toolName: string, input: Record<string, unknown>): Promise<ProtocolResult<{
             effectId: string;
-        }>> {
+        }> | EffectRefusal> {
+            let current: WorkspaceBaseline;
             try {
-                live();
+                current = live();
                 if (effects.size)
                     throw new MachineError('workspace-conflict');
+            }
+            catch (cause) {
+                return failed(cause);
+            }
+            // From here the checkout is exactly the owned baseline and the tool has not run: every refusal provably wrote nothing.
+            try {
                 const paths = new Set<string>();
                 if (toolName === 'apply_patch') {
                     if (typeof input.patch !== 'string')
                         throw new MachineError('invalid-arguments');
-                    for (const target of parsePatchTargets(input.patch)) {
+                    const targets = parsePatchTargets(input.patch);
+                    for (const target of targets) {
                         safeHubPath(target.path);
                         if (!/^[A-Za-z0-9_./-]+$/.test(target.path))
                             throw new MachineError('workspace-conflict');
@@ -94,6 +128,10 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
                     }
                     if (!paths.size)
                         throw new MachineError('invalid-arguments');
+                    // A patch that could take the snapshot over its quota is refused now; afterwards its write could not be measured.
+                    const growth = patchGrowthBound(input.patch), usage = current.usage;
+                    if (growth !== undefined && usage !== undefined && (usage.bytes + growth > SNAPSHOT_QUOTA.bytes || usage.entries + targets.filter(target => !(target.path in current.files)).length > SNAPSHOT_QUOTA.entries))
+                        throw new MachineError('quota-exceeded');
                 }
                 if (toolName === 'rewind_restore') {
                     if (input.workspaceBaseline !== owned.digest || typeof input.previewDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.previewDigest) || !Number.isSafeInteger(input.snapshotSeq) || Number(input.snapshotSeq) < 0 || !Array.isArray(input.paths) || input.paths.length < 1 || input.paths.length > 5000)
@@ -119,7 +157,7 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
                 return { ok: true, value: { effectId } };
             }
             catch (cause) {
-                return failed(cause);
+                return refused(cause);
             }
         },
         async afterEffect(effectId: string, result: {

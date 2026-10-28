@@ -5,6 +5,8 @@ import {bridgeHarness,wait,allowAll,newFilePatch,gated} from './bridge.test-supp
 import {okReply,callRound} from '../../commands/agent.test-helpers';
 import {success} from '../../hub/remote-v2/fixture.test-support';
 import type {Control} from '../../remote-control/protocol';
+import {openHubStore} from '../../hub/store';
+import {expirePendingCommands} from '../../hub/remote-v2/delivery';
 
 const h=bridgeHarness();
 /** The owner socket path must stay short on macOS. */
@@ -73,6 +75,23 @@ test('R1.3 close when-idle while busy is recorded pending, seals the queue and c
   // The queued item was never admitted: it is suspended for an explicit later reauthorization and the model saw only the first turn.
   expect((await wait(s.queue,v=>v.items.some(i=>i.operationId===queued.operationId&&i.state==='suspended'))).items.filter(i=>i.state==='queued'||i.state==='admitted')).toEqual([]);
   await Bun.sleep(300);expect(m.provider.requests).toHaveLength(1);expect((await h.hubCommands()).filter(c=>c.envelope.kind==='start-turn')).toHaveLength(1);
+ }finally{release();}
+});
+test('R1.3 an admitted when-idle close outlives the 60 s delivery TTL: the expiry sweep leaves it pending and the turn-boundary receipt settles it applied',async()=>{
+ const m=await h.machine({scripts:[okReply]});const s=m.session;const release=gated(m.provider);
+ const lease=(await s.claim()).lease;const turn=await s.turn(lease,'Busy past the close delivery TTL');await s.waitRun(turn.runId!,v=>v.state==='running');
+ try{
+  const close=await success<Control['SessionOperationReceipt']>(await settled(async()=>{const current=await s.read();return s.post('/close',{expectedSessionVersion:current.version,controller:s.binding(lease),mode:'when-idle'});}));expect(close.status).toBe('pending');
+  expect((await wait(closeCommand,v=>v?.receipt!==undefined))!.receipt!.status).toBe('admitted');
+  // Hub's own expiry sweep runs after the close delivery deadline while the turn still holds the session.
+  const commandId=(await closeCommand())!.envelope.commandId;
+  const expiresAt=await h.hubState(db=>(JSON.parse(db.query<{body:string},[string]>('SELECT body FROM remote_command WHERE id=?').get(commandId)!.body) as {envelope:{expiresAt:string}}).envelope.expiresAt);
+  const store=openHubStore(h.hub().dataDir);try{store.writeTransaction((_state,repo)=>expirePendingCommands(repo,Date.parse(expiresAt)+1));}finally{store.close();}
+  expect((await closeCommand())!.status).toBe('admitted');expect((await s.operation<Control['SessionOperationReceipt']>(close.operationId)).status).toBe('pending');
+  expect((await s.run(turn.runId!)).state).toBe('running');
+  release();
+  await s.waitRun(turn.runId!,v=>v.state==='succeeded');expect((await wait(s.read,v=>v.state==='closed')).activeRunId).toBeNull();
+  expect((await wait(()=>s.operation<Control['SessionOperationReceipt']>(close.operationId),v=>v.status!=='pending')).status).toBe('applied');expect((await closeCommand())!.status).toBe('applied');
  }finally{release();}
 });
 test('R10.3 a supervised shell write to a tracked file fences the session visibly, publishes no misattributed result and refuses the next turn',async()=>{

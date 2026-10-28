@@ -79,3 +79,19 @@ test('R4.4 the machine run-log quota and Hub run-log storage agree at the exact 
  expect(events.filter(e=>e.kind==='state'&&e.state==='succeeded')).toHaveLength(1);expect(h.notices.filter(code=>code==='quota-exceeded')).toEqual([]);
  await wait(()=>h.sqlite(h.ledgerFile(m.state),db=>db.query<{n:number},[string]>('SELECT count(*) n FROM machine_events WHERE stream=? AND acked=0').get(`run:${runId}`)!.n),v=>v===0);
 },90000);
+test('R4.4 Hub counts each run-log chunk by the bytes the machine sent and retained, so its own ingestion mask growing a chunk never refuses a retained chunk at the 10 MiB boundary',async()=>{
+ const QUOTA=10*1024*1024,CHUNK=8192,FILL=QUOTA/CHUNK,EXTRA=3;
+ // The machine keeps this text as is; Hub's ingestion mask stores every short bearer token as "Bearer [REDACTED]", about twice the bytes sent.
+ const text=`${'Bearer x '.repeat(910)}zz`;expect(Buffer.byteLength(text)).toBe(CHUNK);
+ const filler:NativeCommandContribution={entry:{commandName:'risk',summary:'Masked quota flood fixture',handlerId:'native.fixture.risk',inputSchema:{type:'object',additionalProperties:false,properties:{},required:[]},resultSchema:{type:'string',maxLength:32768},mutationClass:'workspace',states:['idle'],busyPolicy:'reject',confirmation:'none',availability:'available',reason:'explicit-test-fixture'},
+  async execute(context){for(let n=0;n<FILL+EXTRA;n++)context.effect!.progress(text);return {actual:true};}};
+ const m=await h.machine({contributions:[filler]});const s=m.session;const lease=(await s.claim()).lease;
+ const invoked=await success<Control['CommandOutcome']>(await s.invoke(lease,'risk',{},{association:{mode:'ad-hoc',profileConsentVersion:1}}));const runId=invoked.runId!;
+ const run=await s.waitRun(runId,v=>v.state==='succeeded'&&v.result!==undefined,3000);
+ const events=await contiguous(s,runId,run.lastLocalSeq!);const logs=events.filter((e):e is Extract<RunEvent,{kind:'log'}>=>e.kind==='log');
+ // Hub stored every chunk the machine retained, masked, and the one gap covers exactly the chunks the machine discarded at its own quota.
+ expect(logs).toHaveLength(FILL);expect(logs.every(e=>e.text.startsWith('Bearer [REDACTED] '))).toBe(true);
+ const gaps=events.filter((e):e is Extract<RunEvent,{kind:'log-gap'}>=>e.kind==='log-gap');expect(gaps.map(g=>g.toSeq-g.fromSeq+1)).toEqual([EXTRA]);
+ expect(events.filter(e=>e.kind==='state'&&e.state==='succeeded')).toHaveLength(1);expect(h.notices.filter(code=>code==='quota-exceeded')).toEqual([]);
+ await wait(()=>h.sqlite(h.ledgerFile(m.state),db=>db.query<{n:number},[string]>('SELECT count(*) n FROM machine_events WHERE stream=? AND acked=0').get(`run:${runId}`)!.n),v=>v===0);
+},90000);

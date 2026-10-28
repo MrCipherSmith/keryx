@@ -1,4 +1,4 @@
-import type { Control, ProtocolResult } from "../remote-control/protocol";
+import type { Control, ProtocolError, ProtocolResult } from "../remote-control/protocol";
 import type { NativeSessionRuntime } from "./native-runtime";
 import type { AppliedApprovalAnswer, SessionApprovalQuestion, SessionApprovalOutcome } from "./question-service";
 import type { RunAgentTurnResult } from "../commands/agent";
@@ -46,6 +46,8 @@ export interface SessionActionAuthority {
   toolName?: string;
   signal?: AbortSignal;
 }
+/** `stale-subject`: Hub refused the action because the turn's pinned Flow is no longer current work; the turn ends instead of pausing. */
+export type SessionActionAuthorityResult = boolean | { status: "stale-subject" };
 export type SessionSelectionAuthorityResult = { status: "valid" | "temporarily-unavailable" | "revoked-or-forbidden" | "stale-subject" | "expired-work" | "unknown" };
 export interface SessionSelectionAuthority {
   session: Control["SessionRecord"]; operationId: string; actorId: string; payloadDigest: string;
@@ -69,12 +71,15 @@ export type SessionOwnedResource =
   | { kind: "turn"; runId: string; turnId: string; action: "interrupt" };
 export interface SessionOwnedControlAuthority extends SessionInspectionAuthority { payloadDigest: string; resource: SessionOwnedResource }
 
+/** An effect the owner refused before the tool ran: nothing was written and the owned baseline still holds, so only that call fails. */
+export interface EffectRefusal { ok: false; error: ProtocolError; wroteNothing: true }
 export interface SessionWorkspacePort {
   /** Trusted held checkout ownership; never serialized to Hub. */
   rewind?: { ownership(): { nonce: string; gitHead: string; paths: string[] }; validatePaths(paths: readonly string[], signal: AbortSignal): Promise<void> };
   verify(expectedBaseline: string): Promise<ProtocolResult<{ baseline: string }> | { ok: true; baseline: string }>;
   checkpoint(): Promise<ProtocolResult<{ baseline: string }> | { ok: true; baseline: string }>;
-  beforeEffect?: (toolName: string, input: Record<string, unknown>) => Promise<ProtocolResult<{ effectId: string }>>;
+  /** A plain refusal is uncertain and fences the session; only an {@link EffectRefusal} proves nothing was written. */
+  beforeEffect?: (toolName: string, input: Record<string, unknown>) => Promise<ProtocolResult<{ effectId: string }> | EffectRefusal>;
   afterEffect?: (effectId: string, result: { isError: boolean }) => Promise<ProtocolResult<{ baseline: string }>>;
 }
 export interface SessionHostOptions {
@@ -100,7 +105,7 @@ export interface SessionHostOptions {
   projectContext?: SessionProjectReadPort;
   inspectionMode?: "hub-remote" | "local-native";
   /** Current-role/control read for an already admitted live run. Never renews a start command. */
-  authorizeAction?: (action: SessionActionAuthority) => Promise<boolean>;
+  authorizeAction?: (action: SessionActionAuthority) => Promise<SessionActionAuthorityResult>;
   authorizeSelection?: (action: SessionSelectionAuthority) => Promise<boolean | SessionSelectionAuthorityResult>;
   authorizeInspection?: (action: SessionInspectionAuthority) => Promise<boolean>;
   authorizeOwnedControl?: (action: SessionOwnedControlAuthority) => Promise<boolean>;

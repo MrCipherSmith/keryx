@@ -5,6 +5,8 @@ import { buildSettingsRows, type SettingsSnapshot } from "../../tui/settings-mod
 import type { PermissionsView } from "../../commands/permissions-command";
 import type { NativeCommandContribution } from "./handlers";
 import { redactSensitiveText } from "../../security/service";
+import { loadEditGuardStatus } from "../../tui/jev-edit-guard-inspector";
+import { readJevProfileForShell } from "../../commands/review-jev-profile";
 import type { SearchProviderController } from "../../harness/search";
 import type { SessionRestriction } from "./plan";
 
@@ -17,7 +19,7 @@ export interface SettingsInspectionPort {
 }
 export interface SettingsInspectionContext { cwd: string; config: Control["SessionConfig"]; restriction?: () => SessionRestriction }
 export type SettingsInspectionResult = { ok: true; data: unknown } | { ok: false; error: { code: "invalid-arguments" | "setup-required" | "read-failed" | "quota-exceeded"; message: string } };
-const names = ["settings", "mode", "guard", "route", "editguard", "projectctx", "projectctx.refs", "external", "external-agents", "jevprofile", "permissions", "search-provider", "search-connect"] as const;
+const names = ["settings", "mode", "guard", "route", "editguard", "projectctx", "projectctx.refs", "projectctx.last", "projectctx.references", "editguard.status", "jevprofile.entries", "external", "external-agents", "jevprofile", "permissions", "search-provider", "search-connect"] as const;
 const empty: Control["ArgumentSchema"] = { type: "object", properties: {}, required: [], additionalProperties: false };
 function failure(code: Extract<SettingsInspectionResult, { ok: false }>["error"]["code"], message: string): SettingsInspectionResult { return { ok: false, error: { code, message } }; }
 function bounded(context: SettingsInspectionContext, data: unknown): SettingsInspectionResult {
@@ -45,6 +47,16 @@ function safeSnapshot(snapshot: SettingsSnapshot) {
 export async function executeSettingsInspection(context: SettingsInspectionContext, port: SettingsInspectionPort | undefined, command: string, input: unknown): Promise<SettingsInspectionResult> {
   if (!(names as readonly string[]).includes(command) || !validateArguments(empty, input).ok) return failure("invalid-arguments", "This read command accepts no mutation fields.");
   try {
+    // The /editguard and /jevprofile modals' detail: read from the project's own config and flag log, exactly as the TUI reads them.
+    if (command === "editguard.status") return bounded(context, await loadEditGuardStatus(context.cwd));
+    if (command === "jevprofile.entries") return bounded(context, { entries: await readJevProfileForShell(context.cwd) });
+    if (command === "projectctx.last" || command === "projectctx.references") {
+      // The inspector's Last resolve and References tabs in full: the same status object the TUI tabs render.
+      const actual = await loadProjectContextStatus(context.cwd);
+      if (command === "projectctx.last") return bounded(context, actual.lastError !== undefined ? { state: "invalid", error: actual.lastError }
+        : actual.last === undefined ? { state: "absent" } : { state: "recorded", recordedAt: actual.last.recordedAt, result: actual.last.result });
+      return bounded(context, actual.references === undefined ? { state: "absent" } : actual.references);
+    }
     if (command === "projectctx" || command === "projectctx.refs") {
       const actual = await loadProjectContextStatus(context.cwd);
       return bounded(context, {
@@ -94,7 +106,7 @@ export function settingsInspectionCommands(options: { port?: SettingsInspectionP
   return names.map(commandName => ({
     entry: { commandName, summary: "Inspect actual saved/live settings without applying a change", handlerId: `native.settings-read.${commandName}`, inputSchema: empty, resultSchema: { type: "string", maxLength: 32768 },
       mutationClass: "read", states: ["idle", "busy", "paused"], busyPolicy: "read-only", confirmation: "none",
-      availability: commandName.startsWith("projectctx") || (commandName === "permissions" ? (options.port?.permissions !== undefined || options.readiness?.permissions === true) : commandName === "search-provider" || commandName === "search-connect" ? (options.port?.search !== undefined || options.readiness?.search === true) : options.port !== undefined || options.readiness?.snapshot === true) ? "available" : "setup-required",
+      availability: commandName.startsWith("projectctx") || commandName === "editguard.status" || commandName === "jevprofile.entries" || (commandName === "permissions" ? (options.port?.permissions !== undefined || options.readiness?.permissions === true) : commandName === "search-provider" || commandName === "search-connect" ? (options.port?.search !== undefined || options.readiness?.search === true) : options.port !== undefined || options.readiness?.snapshot === true) ? "available" : "setup-required",
       reason: "actual-safe-settings-domain-reader" },
     execute: (context, request) => executeSettingsInspection({ cwd: context.cwd, config: context.record.config, ...(context.restriction === undefined ? {} : { restriction: context.restriction }) }, options.port, commandName, request.arguments),
   }));

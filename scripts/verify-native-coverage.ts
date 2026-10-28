@@ -18,17 +18,23 @@ import {
 
 type Json = Control["BoundedJson"];
 type Args = { [key: string]: Json };
-export interface ParityCase { line: string; arguments: Args | null; scenario?: "active-turn" | "background-task" | "foreground-task" | "approval-waiter" | "question-waiter" | "bus-peer" }
+/** `before`: terminal lines the operator typed first in the same terminal (the shipped two-step forms, e.g. a rewind preview before its confirm). */
+/** `operation`: the headless typed form is that frozen protocol operation (its body in `arguments`), not a CommandInvoke. */
+export interface ParityCase { line: string; arguments: Args | null; before?: string[]; operation?: "remove-queue" | "edit-queue";
+  scenario?: "active-turn" | "background-task" | "foreground-task" | "approval-waiter" | "question-waiter" | "bus-peer" | "rewind-checkpoint" | "queued-message" }
 export interface ParityOutcome { variantId: string; handlerName: string | null; local: NativeNormalizedOutcome; headless: NativeNormalizedOutcome | null }
 export interface ParityRun { catalogue: Control["CommandCatalogue"]; outcomes: ParityOutcome[] }
 export const INVENTORY_PATH = "output/hub-remote-sessions/native-command-coverage.json";
 export const DESCRIPTOR_PATH = "src/session/native-coverage.generated.ts";
 const CANDIDATE = "local-candidate";
 const RUN = { runId: "parity-run", turnId: "parity-turn" };
+const RUN_ASSOCIATION: Control["FlowAssociation"] = { mode: "ad-hoc", profileConsentVersion: 1 };
 const PULL = "https://github.com/owner/repo/pull/1";
 const APPROVAL_TURN = "PARITY-APPROVAL: create approved.txt";
 const QUESTION_TURN = "PARITY-QUESTION: ask the operator before continuing";
+const REWIND_TURN = "PARITY-REWIND: create rewound.txt and finish";
 const PEER_SESSION = "30000000-0000-4000-8000-000000000001";
+const WORKSPACE = "workspace-parity";
 /** Exact parsed terminal syntax and the typed native request for each required variant. `arguments: null` = no typed form exists. */
 export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "help.default": { line: "/help", arguments: {} },
@@ -53,8 +59,8 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "status.questions-list": { line: "/questions.list", arguments: {} },
   "status.questions-answer": { line: "/questions.answer {questionId} yes", arguments: { questionId: "{questionId}", runId: "held-run", turnId: "held-turn", fingerprint: "{fingerprint}", answers: { kind: "option", choice: "yes" } }, scenario: "question-waiter" },
   "flows.list": { line: "/flows", arguments: {} },
-  "flows.detail": { line: "/flows flow-1", arguments: { flowId: "flow-1" } },
-  "flows.ac-cached": { line: "/ac flow-1", arguments: { flowId: "flow-1" } },
+  "flows.detail": { line: "/flows {flow}", arguments: { flowId: "{flow}" } },
+  "flows.ac-cached": { line: "/ac {flow}", arguments: { flowId: "{flow}" } },
   "flows.ac-check": { line: "/ac flow-1 check", arguments: null },
   "doctor.report": { line: "/doctor", arguments: {} },
   "setup.init": { line: "/setup init", arguments: { scenario: "init" } },
@@ -63,19 +69,19 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "ac.cached": { line: "/ac", arguments: {} },
   "ac.check": { line: "/ac check", arguments: null },
   "workspace.overview": { line: "/workspace", arguments: {} },
-  "workspace.slates": { line: "/workspace ws", arguments: { workspaceId: "ws" } },
+  "workspace.slates": { line: `/workspace ${WORKSPACE}`, arguments: { workspaceId: WORKSPACE } },
   "workspace.slate-detail": { line: "/workspace ws slate", arguments: null },
   "review.catch-up": { line: "/review", arguments: {} },
   "review.layers": { line: "/review layers", arguments: { section: "layers" } },
   "review.parity": { line: "/review parity", arguments: { section: "parity" } },
   "review.readiness": { line: "/review readiness", arguments: { section: "readiness" } },
   "reviews.metrics": { line: "/reviews", arguments: {} },
-  "reviews.depth": { line: "/reviews depth", arguments: null },
+  "reviews.depth": { line: "/reviews depth", arguments: { section: "depth" } },
   "remote-control.on": { line: "/remote-control on", arguments: {} },
   "remote-control.name": { line: "/remote-control fixture", arguments: { name: "fixture" } },
   "remote-control.off": { line: "/remote-control off", arguments: {} },
   "remote-control.status": { line: "/remote-control status", arguments: {} },
-  "history.N-1-20": { line: "/history 5", arguments: null },
+  "history.N-1-20": { line: "/history 5", arguments: { count: 5 } },
   "channels.status": { line: "/channels", arguments: {} },
   "intake.status": { line: "/intake", arguments: {} },
   "intake.list": { line: "/intake list", arguments: {} },
@@ -92,7 +98,7 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "triggers.run": { line: "/triggers nightly run", arguments: null },
   "triggers.confirm-run": { line: "/triggers nightly run --confirm", arguments: null },
   "routing.inspection": { line: "/routing", arguments: {} },
-  "routing.configure": { line: "/routing configure", arguments: { enabled: true, profileId: "local", candidateIds: [CANDIDATE], fallbackCandidateId: CANDIDATE } },
+  "routing.configure": { line: `/routing configure on profile=local candidates=${CANDIDATE} fallback=${CANDIDATE}`, arguments: { enabled: true, profileId: "local", candidateIds: [CANDIDATE], fallbackCandidateId: CANDIDATE } },
   "routing.category-assignments": { line: "/routing categories", arguments: null },
   "schedules.list": { line: "/schedules", arguments: {} },
   "autoreview.list": { line: "/autoreview", arguments: {} },
@@ -127,9 +133,9 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "opencomments.repo-pr": { line: "/opencomments owner/repo#1", arguments: null },
   "contract.working-diff": { line: "/contract Fixture contract", arguments: { description: "Fixture contract" } },
   "triage.latest-review": { line: "/triage", arguments: {} },
-  "flow.origin-show": { line: "/flow origin show flow-1", arguments: { flowId: "flow-1" } },
+  "flow.origin-show": { line: "/flow origin {flow}", arguments: { flowId: "{flow}" } },
   "flow.origin-set-reason": { line: "/flow origin set flow-1 --reason fixture", arguments: null },
-  "flow.origin-summary": { line: "/flow origin summary", arguments: null },
+  "flow.origin-summary": { line: "/flow origin", arguments: null },
   "flow.origin-set-reason-quote-source": { line: "/flow origin set flow-1 --reason fixture --quote source", arguments: null },
   "guard.inspection": { line: "/guard", arguments: {} },
   "guard.measured-details": { line: "/guard details", arguments: null },
@@ -138,34 +144,34 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "route.off": { line: "/route off", arguments: { enabled: false } },
   "route.set": { line: "/route on", arguments: { enabled: true } },
   "editguard.inspection": { line: "/editguard", arguments: {} },
-  "editguard.threshold-and-recent-flags": { line: "/editguard status", arguments: null },
+  "editguard.threshold-and-recent-flags": { line: "/editguard status", arguments: {} },
   "projectctx.status": { line: "/projectctx", arguments: {} },
   "projectctx.refs": { line: "/projectctx refs", arguments: {} },
   "projectctx.warn": { line: "/projectctx warn", arguments: null },
   "projectctx.block": { line: "/projectctx block", arguments: null },
-  "projectctx.last-resolve-details": { line: "/projectctx status", arguments: null },
-  "projectctx.reference-details": { line: "/projectctx refs details", arguments: null },
+  "projectctx.last-resolve-details": { line: "/projectctx last", arguments: {} },
+  "projectctx.reference-details": { line: "/projectctx references", arguments: {} },
   "external.status": { line: "/external", arguments: {} },
   "external-agents.status": { line: "/external-agents", arguments: {} },
   "jevprofile.inspection": { line: "/jevprofile", arguments: {} },
-  "jevprofile.entries": { line: "/jevprofile entries", arguments: null },
+  "jevprofile.entries": { line: "/jevprofile entries", arguments: {} },
   "mcp.status": { line: "/mcp", arguments: {} },
   "mcp.disconnect": { line: "/mcp disconnect fixture", arguments: { name: "fixture" } },
   "mcp.trust-list": { line: "/mcp trust list", arguments: {} },
-  "mcp.trust-revoke-fqn": { line: "/mcp trust revoke fixture.tool", arguments: { fqn: "fixture.tool" } },
+  "mcp.trust-revoke-fqn": { line: "/mcp trust revoke fixture__tool", arguments: { fqn: "fixture__tool" } },
   "mcp.trust-revoke-all": { line: "/mcp trust revoke all", arguments: {} },
   "compact.default": { line: "/compact", arguments: {} },
   "compact.focus": { line: "/compact keep the API notes", arguments: null },
   "rewind.picker": { line: "/rewind", arguments: {} },
-  "rewind.files": { line: "/rewind 1 files", arguments: null },
-  "rewind.history": { line: "/rewind 1 history", arguments: null },
-  "rewind.both": { line: "/rewind 1 both", arguments: null },
-  "rewind.preview": { line: "/rewind.preview 1 files 1", arguments: { seq: 1, mode: "files", expectedHistoryVersion: 1 } },
-  "rewind.apply": { line: "/rewind.apply 1 files", arguments: { seq: 1, mode: "files", expectedHistoryVersion: 1, previewDigest: "0".repeat(64), workspaceBaseline: "0".repeat(64) } },
+  "rewind.files": { line: "/rewind 1 files", arguments: { seq: 1, mode: "files", expectedHistoryVersion: "{#historyVersion}" }, scenario: "rewind-checkpoint" },
+  "rewind.history": { line: "/rewind 1 history", arguments: { seq: 1, mode: "history", expectedHistoryVersion: "{#historyVersion}" }, scenario: "rewind-checkpoint" },
+  "rewind.both": { line: "/rewind 1 both", arguments: { seq: 1, mode: "both", expectedHistoryVersion: "{#historyVersion}" }, scenario: "rewind-checkpoint" },
+  "rewind.preview": { line: "/rewind.preview 1 files", arguments: { seq: 1, mode: "files", expectedHistoryVersion: "{#historyVersion}" }, scenario: "rewind-checkpoint" },
+  "rewind.apply": { line: "/rewind confirm", before: ["/rewind 1 files"], arguments: { seq: 1, mode: "files", expectedHistoryVersion: "{#historyVersion}", previewDigest: "{previewDigest}", workspaceBaseline: "{workspaceBaseline}" }, scenario: "rewind-checkpoint" },
   "settings.read": { line: "/settings", arguments: {} },
   "mode.show": { line: "/mode", arguments: {} },
   "mode.ask": { line: "/mode ask", arguments: null },
-  "reasoning.show": { line: "/reasoning", arguments: null },
+  "reasoning.show": { line: "/reasoning", arguments: {} },
   "reasoning.off": { line: "/reasoning off", arguments: { effort: "none" } },
   "reasoning.minimal": { line: "/reasoning minimal", arguments: { effort: "minimal" } },
   "reasoning.low": { line: "/reasoning low", arguments: { effort: "low" } },
@@ -180,12 +186,12 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "clear.default": { line: "/clear", arguments: {} },
   "interrupt.default": { line: "/interrupt", arguments: {}, scenario: "active-turn" },
   "queue.list": { line: "/queue", arguments: {} },
-  "queue.remove-N": { line: "/queue remove 1", arguments: null },
-  "queue.edit-N": { line: "/queue edit 1 text", arguments: null },
-  "queue.force-N": { line: "/queue force 1", arguments: null },
-  "queue.edit": { line: "/queue edit", arguments: null },
-  "queue.remove": { line: "/queue remove", arguments: null },
-  "queue.force": { line: "/queue force", arguments: null },
+  "queue.remove-N": { line: "/queue remove 1", operation: "remove-queue", arguments: { expectedSessionVersion: "{#sessionVersion}", controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, queueItemId: "{queueItemId}", expectedQueueVersion: "{#queueVersion}", expectedItemVersion: "{#itemVersion}" }, scenario: "queued-message" },
+  "queue.edit-N": { line: "/queue edit 1 Edited behind the held turn", operation: "edit-queue", arguments: { expectedSessionVersion: "{#sessionVersion}", controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, queueItemId: "{queueItemId}", expectedQueueVersion: "{#queueVersion}", expectedItemVersion: "{#itemVersion}", text: "Edited behind the held turn" }, scenario: "queued-message" },
+  "queue.force-N": { line: "/queue force 1", arguments: null, scenario: "queued-message" },
+  "queue.edit": { line: "/queue edit", arguments: null, scenario: "queued-message" },
+  "queue.remove": { line: "/queue remove", operation: "remove-queue", arguments: { expectedSessionVersion: "{#sessionVersion}", controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, queueItemId: "{queueItemId}", expectedQueueVersion: "{#queueVersion}", expectedItemVersion: "{#itemVersion}" }, scenario: "queued-message" },
+  "queue.force": { line: "/queue force", arguments: null, scenario: "queued-message" },
   "tasks.list": { line: "/tasks", arguments: {}, scenario: "background-task" },
   "tasks.output-task-id-cursor": { line: "/tasks output {task} 0", arguments: { taskId: "{task}", cursor: 0 }, scenario: "background-task" },
   "tasks.kill-task-id": { line: "/tasks kill {task}", arguments: { taskId: "{task}" }, scenario: "background-task" },
@@ -206,8 +212,10 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "exit.quit-alias": { line: "/quit", arguments: {} },
 };
 /** Variant-specific facts a refusal outcome cannot carry by itself. Every one stays a required, visible gap. */
+const REWIND_SNAPSHOT_GAP = "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for this turn\".";
 const KNOWN_GAPS: Readonly<Record<string, string>> = {
   "connect.test": "Configured OpenAI-compatible endpoints probe through the shared driver; anthropic, gemini, ollama and openai-codex have no shared native probe.",
+  ...Object.fromEntries(["rewind.files", "rewind.history", "rewind.both", "rewind.preview", "rewind.apply"].map((id) => [id, REWIND_SNAPSHOT_GAP])),
 };
 const JEV = new Set(["risk.working-diff", "scenarios.working-diff", "jevrules.working-diff", "staledocs.working-diff", "opencomments.repo-pr", "contract.working-diff", "triage.latest-review", "ci.triage", "ci.retry", "conform.run"]);
 /** Boundary rows execute their parsed syntax too, so every pin is backed by an executed receipt; they are never counted as earned parity. */
@@ -239,19 +247,27 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
   const { acquireCheckoutLease, currentCheckoutHead } = await import("../src/lib/hub-machine/checkout-lease");
   const { MachineError } = await import("../src/lib/hub-machine/errors");
   const { renderMetaprojectGitignoreBlock } = await import("../src/lib/metaproject-gitignore");
+  const { WorkspaceService, localWorkspaceAuthorizationServer } = await import("../src/sac/workspace-service");
   const root = await mkdtemp(join(tmpdir(), "native-parity-"));
   const held = new Set<() => void>();
   // A first-round model request for a marked turn streams one real tool call; every other model request is held open until its owner aborts it.
   const toolCall = (name: string, args: unknown) => new Response([
     `data: ${JSON.stringify({ id: "parity", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id: "call-parity", type: "function", function: { name, arguments: JSON.stringify(args) } }] }, finish_reason: null }] })}\n\n`,
     `data: ${JSON.stringify({ id: "parity", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] })}\n\n`, "data: [DONE]\n\n"].join(""), { headers: { "Content-Type": "text/event-stream" } });
+  const finalText = (content: string) => new Response([
+    `data: ${JSON.stringify({ id: "parity", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content }, finish_reason: null }] })}\n\n`,
+    `data: ${JSON.stringify({ id: "parity", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`, "data: [DONE]\n\n"].join(""), { headers: { "Content-Type": "text/event-stream" } });
   let requests = 0;
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: async (request) => {
     requests++;
     if (new URL(request.url).pathname.endsWith("/models")) return Response.json({ data: [{ id: "fixture-model" }] });
     const body = await request.json().catch(() => undefined) as { messages?: { role?: string; content?: unknown }[] } | undefined;
     // Only the first round of a marked turn: once a tool result is in the request, the turn is past its tool call.
-    const messages = body?.messages ?? []; const text = messages.some((message) => message.role === "tool") ? "" : JSON.stringify(messages.filter((message) => message.role === "user").map((message) => message.content));
+    const messages = body?.messages ?? []; const asked = JSON.stringify(messages.filter((message) => message.role === "user").map((message) => message.content));
+    const pastTool = messages.some((message) => message.role === "tool"); const text = pastTool ? "" : asked;
+    // The rewind fixture turn is the one turn that completes: its patch, then a final answer once the tool result is in.
+    if (asked.includes(REWIND_TURN)) return pastTool ? finalText("rewound.txt created")
+      : toolCall("apply_patch", { patch: "diff --git a/rewound.txt b/rewound.txt\nnew file mode 100644\n--- /dev/null\n+++ b/rewound.txt\n@@ -0,0 +1 @@\n+rewound\n" });
     if (text.includes(APPROVAL_TURN)) return toolCall("apply_patch", { patch: "diff --git a/approved.txt b/approved.txt\nnew file mode 100644\n--- /dev/null\n+++ b/approved.txt\n@@ -0,0 +1 @@\n+approved\n" });
     if (text.includes(QUESTION_TURN)) return toolCall("ask_user", { question: "Proceed with the parity fixture?", options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }] });
     return new Promise<Response>((done) => { const finish = () => { held.delete(finish); done(new Response(null, { status: 503 })); }; held.add(finish); request.signal.addEventListener("abort", finish, { once: true }); });
@@ -273,7 +289,14 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
     };
     const login = await call<unknown>("/hub/v1/session", "POST", { token: token("operator") });
     const cookie = login.response.headers.get("set-cookie")?.split(";")[0]; if (cookie === undefined) throw new Error("fixture Hub login set no cookie");
-    const project = (await call<{ id: string }>("/hub/v1/projects", "POST", { name: "Native parity" }, cookie)).value;
+    const project = (await call<{ id: string; version: number }>("/hub/v1/projects", "POST", { name: "Native parity" }, cookie)).value;
+    // One canonical Flow both paths select by id: a spec document, then the Flow pinned to it.
+    const imported = (await call<{ documents: { id: string; kind: string }[] }>(`/hub/v1/projects/${project.id}/import`, "POST", { expectedVersion: project.version, sourceRevision: "native-parity",
+      documents: [{ path: "openspec/specs/parity/spec.md", kind: "spec", content: "# Native parity\nBoth paths read one canonical Flow." }] }, cookie)).value;
+    const spec = imported.documents.find((document) => document.kind === "spec"); if (spec === undefined) throw new Error("fixture Hub imported no spec document");
+    const flow = (await call<{ id: string }>(`/hub/v1/projects/${project.id}/flows`, "POST", { title: "Native parity Flow", specDocumentId: spec.id, criteria: ["Both paths read the same canonical Flow"] }, cookie)).value;
+    /** Fixture identities every case may name; both paths see the same canonical subject. */
+    const shared: Record<string, string> = { flow: flow.id };
     const pairing = (await call<{ code: string }>("/hub/v2/machines/pairings", "POST", { displayName: "Native parity machine", projectIds: [project.id] }, cookie)).value;
     const machine = (await call<{ machineId: string; secret: string }>("/hub/v2/machines/enroll", "POST", { code: pairing.code, agentVersion: "native-parity", ledgerId: "native-parity-ledger" })).value;
     // As on a real machine, the session config dir is the user-global keryx dir (here the isolated synthetic XDG one), which the provider registry also reads.
@@ -294,7 +317,12 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
     const checkout = async (name: string) => {
       // A Keryx-initialized checkout: the managed ignore block `keryx init` writes keeps runtime-internal .metaproject/data writes out of the owned baseline.
       const cwd = join(root, `checkout-${name}`); await mkdir(cwd); await writeFile(join(cwd, "seed.txt"), "seed\n"); await writeFile(join(cwd, ".gitignore"), renderMetaprojectGitignoreBlock());
-      for (const args of [["init", "-q"], ["add", "seed.txt", ".gitignore"], ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-qm", "parity fixture"]]) {
+      // Committed project content the drill-down inspectors select: one configured trigger and one workspace, created through their own services.
+      await mkdir(join(cwd, ".metaproject"));
+      await writeFile(join(cwd, ".metaproject", "triggers.json"), JSON.stringify({ schemaVersion: 1, triggers: [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }] }));
+      await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), now: () => new Date("2026-01-01T00:00:00Z"),
+        strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: "native-parity-correlation-0001", id: WORKSPACE, title: "Native parity workspace" });
+      for (const args of [["init", "-q"], ["add", "seed.txt", ".gitignore", ".metaproject"], ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-qm", "parity fixture"]]) {
         if (await Bun.spawn(["git", ...args], { cwd, env: gitEnv, stdout: "ignore", stderr: "ignore" }).exited !== 0) throw new Error(`fixture git ${args.at(-1)} failed`);
       }
       return cwd;
@@ -325,7 +353,7 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       const tasks: string[] = [];
       const observed: string[] = []; value.subscribeTurnOutcome((observation) => { observed.push(`${observation.kind}:${"reason" in observation ? observation.reason : ""}:${"text" in observation ? observation.text.slice(0, 200) : ""}`); });
       const replace = (text: string) => tasks.reduce((current, task) => current.replaceAll(task, "<owned>"), text).replaceAll(value.nativeSessionId(), "<native-session>").replaceAll(dataDir, "<state>").replaceAll(cwd, "<checkout>")
-        .replaceAll(/"(pid|ageMs)":\d+/g, "\"$1\":0").replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>").replaceAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<time>");
+        .replaceAll(/"(pid|ageMs)":\d+/g, "\"$1\":0").replaceAll(/"(previewDigest|snapshotDigest|workspaceBaseline)":"[0-9a-f]{64}"/g, "\"$1\":\"<digest>\"").replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>").replaceAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<time>");
       return { host: value, runtime: assembled.value, tasks, observed, cwd, peerInstances, replace };
     };
     type Hosted = Awaited<ReturnType<typeof host>>;
@@ -371,6 +399,45 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       }
       throw new Error(`the live turn raised no question: last=${last} requests=${requests} observed=${JSON.stringify(target.observed).slice(0, 1500)} status=${new TextDecoder().decode(Bun.spawnSync(["git", "-C", target.cwd, "status", "--porcelain=v1", "-uall", "--ignored"], { env: gitEnv }).stdout)}`);
     };
+    /** One typed command on a host, exactly as a headless client sends it (fixture setup only; never a parity outcome). */
+    const typedCommand = async (target: Hosted, commandName: string, args: Args) => {
+      const current = await target.host.inspect(); const subject = await target.host.catalogue();
+      const request: Control["CommandInvoke"] = { expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, expectedConfigVersion: current.config.configVersion,
+        catalogueDigest: subject.catalogueDigest, commandName, arguments: args, busyPolicy: "reject" };
+      return target.host.apply({ kind: "command", operationId: randomUUID(), payloadDigest: canonicalDigest(request), actorId: "human", request });
+    };
+    /**
+     * An owned turn with one approved apply_patch, run to its end: the rewind snapshot the variants select. The fixture never
+     * fabricates a snapshot: when the turn ends without one, the pins stay unresolvable and both paths execute against that state.
+     */
+    const rewindCheckpoint = async (target: Hosted): Promise<Record<string, string>> => {
+      await busy(target.host, REWIND_TURN);
+      let pending: ReturnType<Hosted["host"]["pendingApprovals"]>[number] | undefined;
+      for (let attempt = 0; attempt < 500 && pending === undefined; attempt++) { pending = target.host.pendingApprovals()[0]; if (pending === undefined) await Bun.sleep(10); }
+      if (pending !== undefined) await typedCommand(target, "approvals.allow-once", { approvalId: pending.approvalId, runId: pending.runId, turnId: pending.turnId, fingerprint: pending.fingerprint, policyDigest: pending.policyDigest });
+      let ended: Control["SessionRecord"] | undefined;
+      for (let attempt = 0; attempt < 1000 && ended === undefined; attempt++) { const state = await target.host.inspect(); if (state.state !== "busy" && state.activeRunId === null) ended = state; else await Bun.sleep(10); }
+      if (ended === undefined) throw new Error(`the rewind fixture turn never ended: ${JSON.stringify(target.observed).slice(0, 1500)}`);
+      const unresolved = { historyVersion: String(ended.historyVersion), previewDigest: "0".repeat(64), workspaceBaseline: ended.workspaceBaseline };
+      const preview = await typedCommand(target, "rewind.preview", { seq: 1, mode: "files", expectedHistoryVersion: ended.historyVersion });
+      if (!("result" in preview) || typeof preview.result !== "string") return unresolved;
+      const parsed = JSON.parse(preview.result) as { ok?: boolean; data?: { previewDigest?: string; workspaceBaseline?: string } };
+      return parsed.ok === true && parsed.data?.previewDigest !== undefined && parsed.data.workspaceBaseline !== undefined
+        ? { historyVersion: String(ended.historyVersion), previewDigest: parsed.data.previewDigest, workspaceBaseline: parsed.data.workspaceBaseline } : unresolved;
+    };
+    /** An owned turn held open with one literal message queued behind it: the qN item the queue variants select, with its exact versions. */
+    const queuedMessage = async (target: Hosted): Promise<Record<string, string>> => {
+      await busy(target.host);
+      const current = await target.host.inspect();
+      const request: Control["StartTurnRequest"] = { sessionId: current.sessionId, expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, expectedConfigVersion: current.config.configVersion,
+        expectedHistoryVersion: current.historyVersion, expectedWorkspaceBaseline: current.workspaceBaseline, association: RUN_ASSOCIATION, messageId: "queued-message", text: "Queued behind the held turn" };
+      const queued = await target.host.apply({ kind: "message", operationId: "queued-message", payloadDigest: canonicalDigest(request), actorId: "human", runId: "queued-run", turnId: "queued-turn", request });
+      if (queued.status !== "queued") throw new Error(`the fixture message was not queued: ${queued.status}`);
+      const page = await target.host.queue(); const item = page.items.find((entry) => entry.operationId === "queued-message");
+      if (item === undefined) throw new Error("the queued fixture message is not in the queue");
+      target.tasks.push(item.queueItemId);
+      return { sessionVersion: String((await target.host.inspect()).version), queueItemId: item.queueItemId, queueVersion: String(page.queueVersion), itemVersion: String(item.version) };
+    };
     /** A real separate process joined to this checkout's local bus as `@peer` (a bus instance is per process). */
     const busPeer = async (target: Hosted): Promise<Record<string, string>> => {
       const script = `const { joinBus } = await import(${JSON.stringify(join(import.meta.dir, "../src/bus/client.ts"))}); const peer = await joinBus({ cwd: ${JSON.stringify(target.cwd)}, sessionId: ${JSON.stringify(PEER_SESSION)}, surface: "headless", env: {}, status: () => ({ status: "idle", activity: "parity peer" }), onEvent: () => {}, onPeers: () => {} }); if ("disabled" in peer) process.exit(3); await peer.rename("peer"); console.log(peer.instanceId); setInterval(() => {}, 1000);`;
@@ -383,12 +450,14 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       throw new Error("the session bus never observed the live peer");
     };
     const peerProcesses: Bun.Subprocess<"ignore", "pipe", "ignore">[] = [];
-    const bind = (value: Json, slots: Readonly<Record<string, string>>): Json => typeof value === "string" ? Object.entries(slots).reduce((current, [key, slot]) => current.replaceAll(`{${key}}`, slot), value)
+    // `{#name}` as a whole value binds a numeric slot as a number; `{name}` substitutes text.
+    const bind = (value: Json, slots: Readonly<Record<string, string>>): Json => typeof value === "string" && /^\{#\w+\}$/.test(value) && slots[value.slice(2, -1)] !== undefined ? Number(slots[value.slice(2, -1)])
+      : typeof value === "string" ? Object.entries(slots).reduce((current, [key, slot]) => current.replaceAll(`{${key}}`, slot), value)
       : Array.isArray(value) ? value.map((item) => bind(item, slots)) : value !== null && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, bind(item, slots)])) : value;
     let catalogue: Control["CommandCatalogue"] | undefined;
     const outcomes: ParityOutcome[] = [];
     for (const item of input.cases) {
-      const tools = item.case.scenario === "approval-waiter" ? ["read_file", "apply_patch"] : item.case.scenario === "question-waiter" ? ["read_file", "ask_user"] : undefined;
+      const tools = item.case.scenario === "approval-waiter" || item.case.scenario === "rewind-checkpoint" ? ["read_file", "apply_patch"] : item.case.scenario === "question-waiter" ? ["read_file", "ask_user"] : undefined;
       const [local, headless] = await Promise.all([host(tools), host(tools)]);
       try {
         const subject = await headless.host.catalogue();
@@ -397,20 +466,27 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
         const scenario = item.case.scenario;
         if (scenario === "active-turn") await Promise.all([busy(local.host), busy(headless.host)]);
         const owned = (target: Hosted): Promise<Record<string, string>> => scenario === "background-task" || scenario === "foreground-task" ? ownedTask(target, scenario === "background-task" ? "background" : "foreground")
-          : scenario === "approval-waiter" ? approvalWaiter(target) : scenario === "question-waiter" ? questionWaiter(target) : scenario === "bus-peer" ? busPeer(target) : Promise.resolve({});
-        const [localSlots, headlessSlots] = await Promise.all([owned(local), owned(headless)]);
-        const terminal = createTerminalSessionAdapter(local.host, { actorId: "human", controllerLeaseId: "controller", controllerVersion: 1 });
+          : scenario === "approval-waiter" ? approvalWaiter(target) : scenario === "rewind-checkpoint" ? rewindCheckpoint(target) : scenario === "queued-message" ? queuedMessage(target) : scenario === "question-waiter" ? questionWaiter(target) : scenario === "bus-peer" ? busPeer(target) : Promise.resolve({});
+        const [localOwned, headlessOwned] = await Promise.all([owned(local), owned(headless)]);
+        const localSlots = { ...shared, ...localOwned }; const headlessSlots = { ...shared, ...headlessOwned };
+        // The operator's explicit work mode is the same ad-hoc association the headless request carries.
+        const terminal = createTerminalSessionAdapter(local.host, { actorId: "human", controllerLeaseId: "controller", controllerVersion: 1, work: RUN_ASSOCIATION });
         const typed = item.case.arguments === null ? null : bind(item.case.arguments, headlessSlots) as Args;
+        // The operator's earlier lines in this same terminal (e.g. the preview a confirm applies) run first; only the final line is the outcome.
+        for (const earlier of item.case.before ?? []) await terminal.execute(String(bind(earlier, localSlots)));
         // Both paths start from the same state at the same moment; neither waits on the other's side effects.
         const [localOutcome, headlessOutcome] = await Promise.all([
           terminal.execute(String(bind(item.case.line, localSlots))).then((receipt) => outcomeOf(receipt, local.replace)),
           (async (): Promise<NativeNormalizedOutcome | null> => {
             if (typed === null || item.handlerName === null) return null;
+            const operation = item.case.operation;
+            if (operation === "remove-queue") return outcomeOf(await headless.host.apply({ kind: operation, operationId: randomUUID(), payloadDigest: canonicalDigest(typed), actorId: "human", request: typed as unknown as Control["QueueRemove"] }), headless.replace);
+            if (operation === "edit-queue") return outcomeOf(await headless.host.apply({ kind: operation, operationId: randomUUID(), payloadDigest: canonicalDigest(typed), actorId: "human", request: typed as unknown as Control["QueueEdit"] }), headless.replace);
             const current = await headless.host.inspect(); const entry = subject.entries.find((row) => row.commandName === item.handlerName);
             const request: Control["CommandInvoke"] = { expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 },
               expectedConfigVersion: current.config.configVersion, catalogueDigest: subject.catalogueDigest, commandName: item.handlerName, arguments: typed, busyPolicy: "reject" };
             return outcomeOf(await headless.host.apply({ kind: "command", operationId: randomUUID(), payloadDigest: canonicalDigest(request), actorId: "human", request,
-              ...(entry?.mutationClass === "workspace" ? { ...RUN, association: { mode: "ad-hoc", profileConsentVersion: 1 } } : {}) }), headless.replace);
+              ...(entry?.mutationClass === "workspace" ? { ...RUN, association: RUN_ASSOCIATION } : {}) }), headless.replace);
           })(),
         ]);
         outcomes.push({ variantId: item.variantId, handlerName: item.handlerName, local: localOutcome, headless: headlessOutcome });
@@ -456,7 +532,7 @@ export function receiptsFor(inventory: NativeCoverageInventory, run: ParityRun, 
     const command = inventory.commands.find((entry) => entry.commandName === row.commandName); const parity = parityCaseFor(row);
     const body: Omit<NativeParityReceipt, "receiptDigest"> = { schema: 1, id: parityReceiptId(row.id), variantId: row.id, commandName: row.commandName, handlerName: row.handlerName, catalogueDigest: run.catalogue.catalogueDigest,
       sources: (command?.sources ?? []).map((source) => ({ ...source, sha256: hashes.get(source.path) ?? "" })),
-      local: { line: parity.line, outcome: outcome.local }, headless: { arguments: outcome.headless === null ? null : parity.arguments, outcome: outcome.headless } };
+      local: { line: parity.line, outcome: outcome.local }, headless: { arguments: outcome.headless === null ? null : parity.arguments, outcome: outcome.headless, ...(parity.operation === undefined ? {} : { operation: parity.operation }) } };
     return { ...body, receiptDigest: nativeParityReceiptDigest(body) };
   });
 }

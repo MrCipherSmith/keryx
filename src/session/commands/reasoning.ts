@@ -1,4 +1,6 @@
 import { isReasoningEffortLevel, type ReasoningEffortLevel } from "../../commands/agent";
+import type { Control } from "../../remote-control/protocol";
+import type { NativeCommandContribution } from "./handlers";
 
 export interface ReasoningCommandHost {
   current: string | undefined;
@@ -13,4 +15,20 @@ export function executeReasoningCommand(wanted: string, host: ReasoningCommandHo
   if (host.permitted !== undefined && !host.permitted(wanted)) return { ok: false, error: "policy-denied" };
   host.commit(wanted);
   return { ok: true, effort: wanted, changed: true };
+}
+
+const effortSchema: Control["ArgumentSchema"] = { type: "string", maxLength: 16, enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] };
+const versionSchema: Control["ArgumentSchema"] = { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER };
+/** `/reasoning` with no argument: the same shared operation shows the session's effective effort and the configuration version it belongs to. */
+export function reasoningCommands(): NativeCommandContribution[] {
+  return [{ entry: { commandName: "reasoning.show", summary: "Read this session's effective reasoning effort", handlerId: "native.reasoning.show",
+    inputSchema: { type: "object", additionalProperties: false, properties: {}, required: [] },
+    resultSchema: { type: "object", additionalProperties: false, required: ["effort", "configVersion"], properties: { effort: effortSchema, configVersion: versionSchema } },
+    mutationClass: "read", states: ["idle", "busy", "paused"], busyPolicy: "read-only", confirmation: "none", availability: "available", reason: "shared-reasoning-operation" },
+  structuredResult: true,
+  async execute(context) {
+    const shown = executeReasoningCommand("", { current: context.record.config.reasoningEffort, commit() { throw new Error("reasoning-show-is-read-only"); } });
+    if (!shown.ok) throw new Error("reasoning-show-refused");
+    return { effort: shown.effort, configVersion: context.record.config.configVersion };
+  } }];
 }

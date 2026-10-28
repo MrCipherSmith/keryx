@@ -61,7 +61,11 @@ export interface WorkspaceBaseline {
     digest: string;
     indexDigest:string;
     files:Record<string,{mode:number;hash:string;symlink?:string}>;
+    /** What a fresh capture measured against the snapshot quota; not part of the digest. */
+    usage?:{bytes:number;entries:number};
 }
+/** The bounded provenance snapshot: beyond either limit a capture refuses with quota-exceeded. */
+export const SNAPSHOT_QUOTA={bytes:20*1024*1024,entries:10000} as const;
 export function captureBaseline(cwd: string, options: {
     requireClean: boolean;
 }): WorkspaceBaseline {
@@ -96,10 +100,10 @@ export function captureBaseline(cwd: string, options: {
         if (!stat.isFile())
             throw new MachineError('unsupported-workspace-file');
         total += stat.size;
-        if (total > 20 * 1024 * 1024 || entries.length >= 10000)
+        if (total > SNAPSHOT_QUOTA.bytes || entries.length >= SNAPSHOT_QUOTA.entries)
             throw new MachineError('quota-exceeded');
         const hash=createHash('sha256').update(readFileSync(file)).digest('hex');files[name]={mode:stat.mode&0o777,hash};entries.push([name,stat.mode&0o777,hash]);
     }
-    const index=git(cwd,['diff','--cached','--binary']);return {head,files,indexDigest:createHash('sha256').update(index).digest('hex'),digest:createHash('sha256').update(JSON.stringify([head,index.toString(),entries])).digest('hex')};
+    const index=git(cwd,['diff','--cached','--binary']);return {head,files,usage:{bytes:total,entries:entries.length},indexDigest:createHash('sha256').update(index).digest('hex'),digest:createHash('sha256').update(JSON.stringify([head,index.toString(),entries])).digest('hex')};
 }
 export function verifyBaseline(cwd: string, baseline: WorkspaceBaseline): boolean { const actual = captureBaseline(cwd, { requireClean: false }); return actual.head === baseline.head && actual.digest === baseline.digest; }

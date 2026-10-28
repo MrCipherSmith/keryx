@@ -3,7 +3,7 @@ import type { NativeRewindPort } from "./rewind";
 import { validateArguments, validateControl, type Control } from "../../remote-control/protocol";
 import type { NativeSessionRuntime } from "../native-runtime";
 import type { NormalizedMessage } from "../../harness/provider/types";
-import { executeReasoningCommand } from "./reasoning";
+import { executeReasoningCommand, reasoningCommands } from "./reasoning";
 import type { SessionCommandEffect, SessionCommandInspection, SessionProjectReadPort } from "./effects";
 import { projectInspectionCommands } from "./project-inspection";
 import { conversationCommands } from "./conversation";
@@ -59,7 +59,7 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
   const entry = context.catalogue.entries.find((item) => item.commandName === request.commandName);
   let errorCode: Control["CommandOutcome"]["errorCode"] = null;
   let result: unknown = null;
-  const contribution = [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...planCommands(), ...settingsInspectionCommands(), ...(context.contributions ?? [])].reverse().find((item) => item.entry.commandName === request.commandName);
+  const contribution = [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...settingsInspectionCommands(), ...(context.contributions ?? [])].reverse().find((item) => item.entry.commandName === request.commandName);
   if (request.catalogueDigest !== context.catalogue.catalogueDigest) errorCode = "stale-catalogue";
   else if (request.expectedConfigVersion !== context.record.config.configVersion) errorCode = "policy-changed";
   else if (entry === undefined) errorCode = "unknown-command";
@@ -86,14 +86,14 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
         else result = args.effort;
       }
     }
-  } else if (request.arguments === null || typeof request.arguments !== "object" || Array.isArray(request.arguments) || Object.keys(request.arguments).length !== 0) errorCode = "invalid-arguments";
+  } else if (request.arguments === null || typeof request.arguments !== "object" || Array.isArray(request.arguments) || (request.commandName !== "history" && Object.keys(request.arguments).length !== 0)) errorCode = "invalid-arguments";
   else {
     const handlers: Record<string, () => unknown> = {
       help: () => context.catalogue,
       status: () => context.record,
       models: () => context.runtime.routing(context.record.config).availability(),
       routing: () => context.record.config.routing,
-      history: () => context.publicHistory?.() ?? [],
+      history: () => { const all = context.publicHistory?.() ?? []; const count = (request.arguments as { count?: number }).count; return count === undefined ? all : all.slice(-count); },
       tasks: () => context.runtime.jobs.list().map((item) => ({ taskId: item.jobId, status: item.status, description: item.description ?? "" })),
       compact: context.compact,
       queue: () => ({ status: context.record.state, queueVersion: context.record.queueVersion }),

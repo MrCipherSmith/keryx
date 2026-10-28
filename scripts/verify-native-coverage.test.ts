@@ -14,7 +14,7 @@ async function embedded(): Promise<NativeCoverageDescriptor> {
 test("receipts come from executing the same variant through the real terminal adapter and headless host, and expose failing parity", async () => {
   const inventory = await readInventory(root);
   const run = await collectParityRun(root, inventory, ["status.default", "reasoning.high", "reasoning.off", "trail.tool-NAME", "intake.list", "interrupt.default", "model.select", "history.N-1-20",
-    "tasks.kill", "demote.task-id", "flows.list", "rewind.picker", "approvals.allow-once", "status.questions-answer"]);
+    "tasks.kill", "demote.task-id", "flows.list", "flows.detail", "rewind.picker", "approvals.allow-once", "status.questions-answer", "goal.-workspace", "queue.remove-N", "queue.force-N"]);
   const receipts = receiptsFor(inventory, run, await sourceHashes(root, inventory));
   const parity = Object.fromEntries(receipts.map((receipt) => [receipt.variantId, { ...receiptParity(receipt), receipt }]));
   expect(parity["status.default"]).toMatchObject({ matched: true, admitted: true, receipt: { local: { line: "/status", outcome: { status: "applied" } }, headless: { arguments: {}, outcome: { status: "applied" } } } });
@@ -24,14 +24,19 @@ test("receipts come from executing the same variant through the real terminal ad
   expect(parity["reasoning.high"]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "confirmation-required" } } } });
   // The terminal adapter maps `/reasoning off` to the typed `none`, a typed TUI argument and a subcommand to its dotted handler.
   for (const id of ["reasoning.off", "trail.tool-NAME", "intake.list"]) expect({ id, ...receiptParity(parity[id]!.receipt) }).toEqual({ id, matched: true, admitted: true });
-  // `/model` is picker-only in the TUI: the terminal refuses the text form while headless selection is accepted, a real parity failure.
-  expect(parity["model.select"]).toMatchObject({ matched: false, receipt: { local: { outcome: { errorCode: "invalid-arguments" } }, headless: { outcome: { status: "applied" } } } });
+  // The picker-only `/model` has the terminal text form `/model <candidateId>`: the same idle-boundary selection on both paths.
+  expect(parity["model.select"]).toMatchObject({ matched: true, admitted: true, receipt: { local: { line: "/model local-candidate", outcome: { status: "applied" } } } });
   // Real owners: a supervised session shell task, the Hub's scoped Flow reader, the owned-checkout rewind port.
-  for (const id of ["tasks.kill", "demote.task-id", "flows.list", "rewind.picker"]) expect({ id, ...receiptParity(parity[id]!.receipt) }).toEqual({ id, matched: true, admitted: true });
-  // A real approval waiter and a real ask_user question are answered headlessly; the terminal has no text form for either, so parity fails.
-  for (const id of ["approvals.allow-once", "status.questions-answer"]) expect(parity[id]).toMatchObject({ matched: false, receipt: { local: { outcome: { errorCode: "invalid-arguments" } }, headless: { outcome: { status: "applied" } } } });
-  // No typed native request expresses `/history N`; nothing is sent headlessly and nothing is earned.
-  expect(parity["history.N-1-20"]).toMatchObject({ matched: false, receipt: { headless: { arguments: null, outcome: null } } });
+  for (const id of ["tasks.kill", "demote.task-id", "flows.list", "flows.detail", "rewind.picker"]) expect({ id, ...receiptParity(parity[id]!.receipt) }).toEqual({ id, matched: true, admitted: true });
+  // A real approval waiter and a real ask_user question: the terminal names the card by id and resolves its pins from the session's own pending list.
+  for (const id of ["approvals.allow-once", "status.questions-answer"]) expect(parity[id]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "applied" } } } });
+  // `/history N` reads the last N messages through the same typed history read.
+  expect(parity["history.N-1-20"]).toMatchObject({ matched: true, admitted: true, receipt: { headless: { arguments: { count: 5 } } } });
+  // A workspace-class goal runs as one new local run under the operator's explicit work mode, admitted on both paths.
+  expect(parity["goal.-workspace"]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "queued" } } } });
+  // `/queue remove N` is the frozen QueueRemove operation on the qN item; `/queue force` has no typed native form and stays a gap.
+  expect(parity["queue.remove-N"]).toMatchObject({ matched: true, admitted: true, receipt: { headless: { operation: "remove-queue" } } });
+  expect(parity["queue.force-N"]).toMatchObject({ matched: false, receipt: { local: { outcome: { errorCode: "invalid-arguments" } }, headless: { arguments: null, outcome: null } } });
   for (const receipt of receipts) expect(receipt.sources.every((source) => /^[a-f0-9]{64}$/.test(source.sha256))).toBe(true);
 }, 120_000);
 
@@ -45,11 +50,12 @@ test("release guard re-executes the committed inventory: the embedded descriptor
   // Required gaps stay open and visible, so the release guard refuses.
   expect(checkEmbeddedDescriptor(verification, descriptor, true)).toEqual({ ok: false, code: "not-release-ready" });
   const gaps = descriptor.requiredGaps.map((gap) => gap.variantId);
-  for (const id of ["connect.select", "connect.test", "autoreview.start", "autoreview.stop", "risk.working-diff", "conform.run"]) expect(gaps).toContain(id);
+  for (const id of ["new.default", "compact.focus", "risk.working-diff", "conform.run", "rewind.apply", "queue.force"]) expect(gaps).toContain(id);
   // Telegram remote control is a cited spec-3.1 capability boundary, neither earned nor a hidden gap.
   for (const id of ["remote-control.on", "remote-control.name", "remote-control.off", "remote-control.status"]) { expect(descriptor.boundaries).toContain(id); expect(gaps).not.toContain(id); }
   expect(descriptor.releaseReady).toBe(false);
-  expect(descriptor.earned).toEqual(expect.arrayContaining(["status.default", "help.default", "interrupt.default", "settings.read", "tasks.kill", "demote.task-id", "flows.list", "ac.cached", "rewind.picker", "mcp.status", "bus.modal", "mode.show"]));
+  expect(descriptor.earned).toEqual(expect.arrayContaining(["status.default", "help.default", "interrupt.default", "settings.read", "tasks.kill", "demote.task-id", "flows.list", "ac.cached", "rewind.picker", "mcp.status", "bus.modal", "mode.show",
+    "model.select", "connect.select", "connect.test", "autoreview.start", "autoreview.stop", "bus.send", "goal.-workspace", "approvals.allow-once", "queue.remove-N", "reasoning.show"]));
   // A changed source the audit was pinned to: receipts bind the actual bytes, so the committed audit is stale.
   const stale = structuredClone(inventory);
   const status = stale.commands.find((command) => command.commandName === "status")!;
@@ -78,7 +84,7 @@ test("shipped readiness validates only the embedded descriptor and fails closed 
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: (line) => lines.push(line) })).rejects.toThrow("native-coverage-not-ready");
     const report = JSON.parse(lines[0]!) as { descriptorValid: boolean; releaseReady: boolean; descriptorDigest: string; requiredGaps: string[] };
     expect(report).toMatchObject({ descriptorValid: true, releaseReady: false, descriptorDigest: (await embedded()).descriptorDigest });
-    expect(report.requiredGaps).toContain("connect.select");
+    expect(report.requiredGaps).toContain("new.default");
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: () => {}, nativeCoverageDescriptor: null })).rejects.toThrow("native-coverage-descriptor-missing");
     const forged = { ...structuredClone(await embedded()), releaseReady: true, requiredGaps: [], otherBlockers: [] };
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: () => {}, nativeCoverageDescriptor: forged })).rejects.toThrow("native-coverage-descriptor-tampered");

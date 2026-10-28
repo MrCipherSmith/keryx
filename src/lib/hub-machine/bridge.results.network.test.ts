@@ -54,23 +54,26 @@ test('R9.1 a failed run publishes its owned change as a labeled partial result a
 });
 const outside=mkdtempSync(path.join(tmpdir(),'result-outside-'));process.on('exit',()=>rmSync(outside,{recursive:true,force:true}));
 const SNAPSHOT_QUOTA=20*1024*1024;
-for(const [label,target,seed,kept] of [
- ['an ignored path','ignored.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'.gitignore'),'ignored.txt\n');},null],
- ['a path outside the checkout','../escaped.txt',()=>{},null],
- ['a path through an ignored local symlink','linked/escaped.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'.gitignore'),'linked\n');symlinkSync(outside,path.join(cwd,'linked'));},null],
- // The patch itself is small; the checkout snapshot it produces exceeds the 20 MiB snapshot quota.
- ['a file that takes the checkout snapshot over its quota','over-quota.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'large.bin'),Buffer.alloc(SNAPSHOT_QUOTA-8,1));},'over-quota.txt'],
+for(const [label,target,seed,code] of [
+ ['an ignored path','ignored.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'.gitignore'),'ignored.txt\n');},'unsupported-ignored-path'],
+ ['a path outside the checkout','../escaped.txt',()=>{},'unsafe-workspace-path'],
+ ['a path through an ignored local symlink','linked/escaped.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'.gitignore'),'linked\n');symlinkSync(outside,path.join(cwd,'linked'));},'unsafe-workspace-path'],
+ // The patch itself is small; the checkout snapshot it would produce exceeds the 20 MiB snapshot quota, so it is refused before anything is written.
+ ['a file that would take the checkout snapshot over its quota','over-quota.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'large.bin'),Buffer.alloc(SNAPSHOT_QUOTA-8,1));},'quota-exceeded'],
 ] as const)
-test(`R9.1 an owned patch to ${label} is refused visibly, stays local and is never uploaded`,async()=>{
- const m=await h.machine({approve:allowAll,seed,scripts:[callRound('unsafe','apply_patch',newFilePatch(target,'escaped')),okReply]});const s=m.session;const lease=(await s.claim()).lease;
+test(`R9.1 an owned patch to ${label} is refused before any write, the run ends truthfully, nothing is uploaded and the session stays usable`,async()=>{
+ const m=await h.machine({approve:allowAll,seed,scripts:[callRound('unsafe','apply_patch',newFilePatch(target,'escaped')),okReply,okReply]});const s=m.session;const lease=(await s.claim()).lease;
  const turn=await s.turn(lease,`Patch ${target}`);
- const run=await s.waitRun(turn.runId!,v=>['succeeded','failed','cancelled','unknown'].includes(v.state));expect(run.state).not.toBe('succeeded');
- expect((await s.events(turn.runId!)).flatMap(e=>e.kind==='log'?[e.text]:[])).toContain('apply_patch: failed');
- await Bun.sleep(300);expect((await s.run(turn.runId!)).result).toBeUndefined();expect(await resultEvents(s,turn.runId!)).toEqual([]);expect((await hubAggregate()).revisions).toEqual([]);
+ // The refusal ends only that tool call: the model sees it and finishes the turn, which is what the run reports. No false recovery.
+ const run=await s.waitRun(turn.runId!,v=>['succeeded','failed','cancelled','unknown'].includes(v.state)&&v.result!==undefined);expect(run.state).toBe('succeeded');
+ const events=await s.events(turn.runId!);expect(events.flatMap(e=>e.kind==='log'?[e.text]:[])).toContain(`apply_patch: refused (${code})`);
+ expect(events.some(e=>e.kind==='state'&&e.state==='unknown')).toBe(false);
+ // The published result is the run's actual change set: empty, since nothing was written.
+ expect((await hubAggregate()).revisions.find(r=>r.id===run.result!.revisionId)!.files).toEqual([]);
  const ledger=h.ledger(m.state);try{expect(ledger.pendingResults()).toEqual([]);}finally{ledger.close();}
- // Nothing escaped the checkout; a write the snapshot could not measure stays only in the local checkout.
- for(const file of [path.join(m.state.root,'escaped.txt'),path.join(outside,'escaped.txt'),path.join(m.state.cwd,'ignored.txt')])expect(await Bun.file(file).exists()).toBe(false);
- if(kept)expect(await Bun.file(path.join(m.state.cwd,kept)).text()).toBe('escaped\n');
+ for(const file of [path.join(m.state.root,'escaped.txt'),path.join(outside,'escaped.txt'),path.join(m.state.cwd,'ignored.txt'),path.join(m.state.cwd,'over-quota.txt')])expect(await Bun.file(file).exists()).toBe(false);
+ const idle=await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null);
+ const next=await s.turn(lease,'A later ordinary turn',{current:idle});expect((await s.waitRun(next.runId!,v=>['succeeded','failed','cancelled','unknown'].includes(v.state))).state).toBe('succeeded');expect(m.provider.requests).toHaveLength(3);
 },40000);
 
 type Flow={id:string;version:number;specDocumentId:string;specContentDigest:string;criteria:string[];status:string};
@@ -106,6 +109,42 @@ test('R9.2 a Flow spec change between start and upload keeps the original result
   const current=await success<Flow>(await h.hub().call(`/hub/v1/projects/${h.hub().project.id}/flows/${flow.id}`,{cookie:h.hub().cookie}));
   const refused=await submit(run.result!.revisionId,current.version);expect(refused.status).toBe(409);expect(await refused.json()).toMatchObject({error:{code:'spec-changed'}});
   expect((await success<Flow>(await h.hub().call(`/hub/v1/projects/${h.hub().project.id}/flows/${flow.id}`,{cookie:h.hub().cookie}))).status).toBe('in-progress');
+ }finally{globalThis.fetch=fetchActual;}
+},40000);
+test('R9.2 a Flow spec change before the turn\'s last action stops the run at its next action: it ends failed with the drift visible, keeps the original pins and never hangs paused',async()=>{
+ const m=await h.machine({approve:allowAll,scripts:[callRound('patch','apply_patch',newFilePatch('managed.txt','managed')),callRound('check','shell_exec',JSON.stringify({command:'echo checked'})),callRound('after-drift','shell_exec',JSON.stringify({command:'echo late > after-drift.txt'})),okReply]});const s=m.session;const lease=(await s.claim()).lease;
+ const {flow,association,changeSpec,submit}=await managedFlow();
+ // The spec changes while the third model round streams: its tool call is the first action after the drift.
+ const original=m.provider.provider.stream;let round=0;m.provider.provider.stream=(request,options)=>{const current=++round;const events=original(request,options);return (async function*(){if(current===3)await changeSpec();yield* events;})();};
+ const turn=await s.turn(lease,'Managed patch and check, then one more action',{association});
+ const run=await s.waitRun(turn.runId!,v=>['succeeded','failed','cancelled','unknown'].includes(v.state)&&v.result!==undefined);expect(run.state).toBe('failed');
+ const events=await s.events(turn.runId!);expect(events.filter(e=>e.kind==='state'&&e.state==='failed').map(e=>e.kind==='state'?e.reasonCode:null)).toEqual(['stale-reference']);
+ expect(events.some(e=>e.kind==='log'&&e.stream==='diagnostic'&&e.text.includes('pinned Flow changed'))).toBe(true);expect(events.some(e=>e.kind==='state'&&e.state==='unknown')).toBe(false);
+ // The action after the drift never ran, and no further model round was asked for.
+ expect(await Bun.file(path.join(m.state.cwd,'after-drift.txt')).exists()).toBe(false);expect(m.provider.requests).toHaveLength(3);
+ // The labeled partial result keeps the run's original pins and its pre-drift Evidence; the drift is marked and review submission is refused.
+ expect(run.association).toEqual(association);expect(run.pinDrift).toEqual(['spec']);expect(run.result).toMatchObject({checksKind:'FlowEvidence',flowId:flow.id,partial:true});
+ const aggregate=await hubAggregate();expect(aggregate.revisions.find(r=>r.id===run.result!.revisionId)!.files.map(f=>f.path)).toEqual(['managed.txt']);expect(aggregate.evidence.filter(e=>e.subjectRevisionId===run.result!.revisionId).map(e=>e.command)).toEqual(['echo checked']);
+ const current=await success<Flow>(await h.hub().call(`/hub/v1/projects/${h.hub().project.id}/flows/${flow.id}`,{cookie:h.hub().cookie}));
+ const refused=await submit(run.result!.revisionId,current.version);expect(refused.status).toBe(409);expect(await refused.json()).toMatchObject({error:{code:'spec-changed'}});
+ // The required human step stays in the session history, and the session is usable for a turn with current pins.
+ const idle=await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null);
+ const history=await h.get<Control['HistoryPage']>(`${s.path}/history`);expect(history.messages.some(message=>message.role==='system-receipt'&&message.runId===turn.runId&&message.text.includes('pinned Flow changed'))).toBe(true);
+ expect(idle.state).toBe('idle');
+},40000);
+test('R9.2 a Flow spec change caught at a model action also ends the run failed with the drift visible, never unknown or paused',async()=>{
+ const m=await h.machine({approve:allowAll,scripts:[callRound('patch','apply_patch',newFilePatch('managed.txt','managed')),callRound('check','shell_exec',JSON.stringify({command:'echo checked'})),okReply]});const s=m.session;const lease=(await s.claim()).lease;
+ const {association,changeSpec}=await managedFlow();
+ // The spec changes once the check finished, just before the machine's authority read for the third model round.
+ const fetchActual=globalThis.fetch;let changed=false;
+ globalThis.fetch=Object.assign(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=input instanceof Request?input.url:String(input);
+  if(!changed&&url.endsWith(s.path)&&new Headers(init?.headers).has('authorization')&&m.runtimes[0]!.jobs.list().some(job=>job.status==='completed')){changed=true;await changeSpec();}return fetchActual(input,init);},fetchActual);
+ try{
+  const turn=await s.turn(lease,'Managed patch and check, then a final model round',{association});
+  const run=await s.waitRun(turn.runId!,v=>['succeeded','failed','cancelled','unknown'].includes(v.state)&&v.result!==undefined);expect(changed).toBe(true);expect(run.state).toBe('failed');
+  expect((await s.events(turn.runId!)).filter(e=>e.kind==='state'&&e.state==='failed').map(e=>e.kind==='state'?e.reasonCode:null)).toEqual(['stale-reference']);
+  expect(m.provider.requests).toHaveLength(2);expect(run.pinDrift).toEqual(['spec']);expect(run.result).toMatchObject({checksKind:'FlowEvidence',partial:true});
+  expect((await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null)).state).toBe('idle');
  }finally{globalThis.fetch=fetchActual;}
 },40000);
 test('R9.2 an undrifted managed result carries no drift marker',async()=>{

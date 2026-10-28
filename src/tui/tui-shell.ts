@@ -222,12 +222,12 @@ import { resolveJevApiKey } from "../harness/decision/jev-client";
 import {
   EDIT_GUARD_COMMAND,
   isEditGuardCommand,
+  loadEditGuardStatus as loadSharedEditGuardStatus,
   openEditGuard,
   renderEditGuardSidebarValue,
   type EditGuardStatusSnapshot,
 } from "./jev-edit-guard-inspector";
-import { readJevEditGuardConfig, writeJevEditGuardEnabled } from "../review/jev-edit-guard-config";
-import { editGuardTodayStats, readEditGuardLogRecords, recentEditGuardFlags } from "../review/jev-edit-guard-log";
+import { writeJevEditGuardEnabled } from "../review/jev-edit-guard-config";
 // flow 461: the project rules/implementation context line and `/projectctx` modal.
 import { writeProjectContextEnforcement } from "../gdskills/project-context-config";
 import { loadProjectContextStatus, type ProjectContextStatus } from "../gdskills/project-context-status";
@@ -6018,21 +6018,7 @@ export async function launchTuiAgentShell(opts: {
       today: { calls: 0, flagged: 0, costUsd: 0 },
       recentFlags: [],
     };
-    const loadEditGuardStatus = async (): Promise<EditGuardStatusSnapshot> => {
-      const dir = editGuardProjectDir();
-      const cfg = await readJevEditGuardConfig(dir);
-      const records = await readEditGuardLogRecords(dir);
-      const today = editGuardTodayStats(records);
-      const recentFlags = recentEditGuardFlags(records, 10).map((flag) => ({
-        file: flag.file,
-        line: flag.line,
-        ruleId: flag.ruleId,
-        clauseId: flag.clauseId,
-        probability: flag.probability,
-        at: flag.at,
-      }));
-      return { enabled: cfg.enabled, threshold: cfg.threshold, maxCalls: cfg.maxCalls, today, recentFlags };
-    };
+    const loadEditGuardStatus = (): Promise<EditGuardStatusSnapshot> => loadSharedEditGuardStatus(editGuardProjectDir());
     const refreshEditGuardSidebar = (): void => {
       clearTranscriptChildren(sbEditGuard);
       const value = renderEditGuardSidebarValue(editGuardStatus);

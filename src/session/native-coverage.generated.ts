@@ -4,51 +4,81 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
   "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
-  "contractDigest": "3609c75ead1ebd34e37840996eabd764108a8a24bb849c071e7000eb9d93a603",
-  "subjectCatalogueDigest": "b59f63af74c84c485d56aaf17705ca268ac7336d489c404127d4cc9433d8c921",
-  "inventoryDigest": "f801cfb987abd9d68715aa0a85827899e66c85bbcbb99f05525b6654aa19fc3f",
+  "contractDigest": "df0ff4e9b286a07aac422279dab1fe261c809f191da178918141815759c801d4",
+  "subjectCatalogueDigest": "2f1c5b9272b094959bcff57afc7004c89323918892f3b18dfe7bbd4f8e555cf1",
+  "inventoryDigest": "f1887d9f8b4f28f5811b981e840e3df747b959dc225a9bfe18857acfcec2c92e",
   "releaseReady": false,
   "counts": {
     "registeredCommands": 74,
     "variants": 261,
     "required": 169,
-    "earned": 80,
-    "requiredGaps": 89,
+    "earned": 121,
+    "requiredGaps": 48,
     "boundaries": 92,
     "otherBlockers": 0
   },
   "earned": [
     "ac.cached",
+    "approvals.allow-once",
+    "approvals.deny",
     "approvals.list",
     "autoreview.arbiter",
     "autoreview.list",
     "autoreview.ls",
+    "autoreview.start",
+    "autoreview.start-budget-minutes-budget-tokens",
+    "autoreview.stop",
+    "bus.-name-text",
+    "bus.ask",
     "bus.modal",
+    "bus.name",
+    "bus.override",
+    "bus.pause",
+    "bus.pause-scope-ttl",
+    "bus.reply",
+    "bus.resume",
+    "bus.send",
     "channels.status",
     "ci.list",
     "compact.default",
     "conform.setup",
     "connect.list",
+    "connect.select",
+    "connect.test",
     "decisions.arms",
     "decisions.show",
     "demote.task-id",
     "doctor.report",
     "editguard.inspection",
+    "editguard.threshold-and-recent-flags",
     "exit.default",
     "exit.quit-alias",
     "external-agents.status",
     "external.status",
+    "flow.origin-show",
+    "flows.ac-cached",
+    "flows.detail",
     "flows.list",
+    "goal.-auto",
+    "goal.-workspace",
+    "goal.auto-rounds",
     "governance.inspection",
     "guard.inspection",
     "help.default",
+    "history.N-1-20",
     "intake.list",
     "intake.status",
     "interrupt.default",
+    "jevprofile.entries",
     "jevprofile.inspection",
+    "mcp.disconnect",
     "mcp.status",
+    "mcp.trust-list",
+    "mcp.trust-revoke-all",
+    "mcp.trust-revoke-fqn",
     "mode.show",
     "model.list",
+    "model.select",
     "notes.key",
     "permissions.list",
     "plan.off",
@@ -56,26 +86,34 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "plan.set",
     "plan.show",
     "product.report",
+    "projectctx.last-resolve-details",
+    "projectctx.reference-details",
     "projectctx.refs",
     "projectctx.status",
+    "queue.edit-N",
     "queue.list",
+    "queue.remove",
+    "queue.remove-N",
     "reasoning.high",
     "reasoning.low",
     "reasoning.max",
     "reasoning.medium",
     "reasoning.minimal",
     "reasoning.off",
+    "reasoning.show",
     "reasoning.xhigh",
     "review.catch-up",
     "review.layers",
     "review.parity",
     "review.readiness",
+    "reviews.depth",
     "reviews.metrics",
     "rewind.picker",
     "route.inspection",
     "route.off",
     "route.on",
     "route.set",
+    "routing.configure",
     "routing.inspection",
     "schedules.list",
     "search-connect.list",
@@ -85,6 +123,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "setup.refresh",
     "setup.repair",
     "status.default",
+    "status.questions-answer",
     "status.questions-list",
     "tasks.kill",
     "tasks.kill-task-id",
@@ -96,84 +135,16 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "trail.from-STEP",
     "trail.to-STEP",
     "trail.tool-NAME",
+    "triggers.detail",
     "triggers.list",
-    "workspace.overview"
+    "workspace.overview",
+    "workspace.slates"
   ],
   "requiredGaps": [
     {
       "variantId": "ac.check",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "approvals.allow-once",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless applied)."
-    },
-    {
-      "variantId": "approvals.deny",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless applied)."
-    },
-    {
-      "variantId": "autoreview.start",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "autoreview.start-budget-minutes-budget-tokens",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "autoreview.stop",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.-name-text",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.ask",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.name",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.override",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.pause",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.pause-scope-ttl",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.reply",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.resume",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
-    },
-    {
-      "variantId": "bus.send",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless confirmation-required)."
     },
     {
       "variantId": "ci.detail",
@@ -231,16 +202,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "connect.select",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless applied)."
-    },
-    {
-      "variantId": "connect.test",
-      "code": "required-implementation-gap",
-      "detail": "Configured OpenAI-compatible endpoints probe through the shared driver; anthropic, gemini, ollama and openai-codex have no shared native probe. Observed: local rejected/invalid-arguments, headless confirmation-required."
-    },
-    {
       "variantId": "contract.working-diff",
       "code": "required-implementation-gap",
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
@@ -256,11 +217,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "editguard.threshold-and-recent-flags",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
       "variantId": "flow.origin-set-reason",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
@@ -271,19 +227,9 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
     },
     {
-      "variantId": "flow.origin-show",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless rejected/forbidden)."
-    },
-    {
       "variantId": "flow.origin-summary",
       "code": "required-implementation-gap",
       "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "flows.ac-cached",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless rejected/forbidden)."
     },
     {
       "variantId": "flows.ac-check",
@@ -291,37 +237,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "flows.detail",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless rejected/forbidden)."
-    },
-    {
-      "variantId": "goal.-auto",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless queued)."
-    },
-    {
-      "variantId": "goal.-workspace",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless queued)."
-    },
-    {
-      "variantId": "goal.auto-rounds",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/busy, headless queued)."
-    },
-    {
       "variantId": "guard.measured-details",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "history.N-1-20",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "jevprofile.entries",
       "code": "required-implementation-gap",
       "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
     },
@@ -331,34 +247,9 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
     },
     {
-      "variantId": "mcp.disconnect",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless confirmation-required)."
-    },
-    {
-      "variantId": "mcp.trust-list",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless applied)."
-    },
-    {
-      "variantId": "mcp.trust-revoke-all",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless confirmation-required)."
-    },
-    {
-      "variantId": "mcp.trust-revoke-fqn",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless confirmation-required)."
-    },
-    {
       "variantId": "mode.ask",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "model.select",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless applied)."
     },
     {
       "variantId": "new.default",
@@ -376,27 +267,12 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "projectctx.last-resolve-details",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "projectctx.reference-details",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
       "variantId": "projectctx.warn",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
       "variantId": "queue.edit",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "queue.edit-N",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
@@ -411,54 +287,34 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "queue.remove",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "queue.remove-N",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "reasoning.show",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
       "variantId": "resume.picker",
       "code": "required-implementation-gap",
       "detail": "setup-required: machine-lifecycle-port-required. Observed: local rejected/forbidden, headless rejected/forbidden."
     },
     {
-      "variantId": "reviews.depth",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
       "variantId": "rewind.apply",
       "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless confirmation-required)."
+      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
     },
     {
       "variantId": "rewind.both",
       "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
+      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
     },
     {
       "variantId": "rewind.files",
       "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
+      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
     },
     {
       "variantId": "rewind.history",
       "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
+      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
     },
     {
       "variantId": "rewind.preview",
       "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless rejected/forbidden)."
+      "detail": "No native rewind snapshot exists to select: in the production-assembled fixture session the approved apply_patch turn is fenced as workspace-conflict because the shell hook runtime writes .metaproject/data/security/impact-evidence/ (outside the keryx init ignore block) into the owned checkout, and with that path ignored the native recorder still reports \"A complete checkpoint is unavailable for th"
     },
     {
       "variantId": "risk.working-diff",
@@ -469,11 +325,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "variantId": "routing.category-assignments",
       "code": "required-implementation-gap",
       "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "routing.configure",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless confirmation-required)."
     },
     {
       "variantId": "scenarios.working-diff",
@@ -511,11 +362,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
     },
     {
-      "variantId": "status.questions-answer",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless applied)."
-    },
-    {
       "variantId": "triage.latest-review",
       "code": "required-implementation-gap",
       "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
@@ -526,11 +372,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
     },
     {
-      "variantId": "triggers.detail",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless rejected/forbidden)."
-    },
-    {
       "variantId": "triggers.run",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
@@ -539,11 +380,6 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
       "variantId": "workspace.slate-detail",
       "code": "required-implementation-gap",
       "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "workspace.slates",
-      "code": "required-implementation-gap",
-      "detail": "The local terminal adapter and the headless host disagree (local rejected/invalid-arguments, headless rejected/forbidden)."
     }
   ],
   "boundaries": [
@@ -641,5 +477,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "b93f092eefad942d04c719abe38b5fabbddbae0a238931db613c3a64583821da"
+  "descriptorDigest": "bfc56e575b9acba0cc19f69a209b3c095ed7cc920e6931ef1ea8dfcc5bdd0a42"
 };

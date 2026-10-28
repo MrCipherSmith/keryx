@@ -225,7 +225,12 @@ export function createRemoteControl(ports: RemotePorts) {
         if (!run || !command || !binding || run.machineId !== m.machineId || run.projectId !== p[1] || run.sessionId !== row.record.sessionId || run.checkoutId !== row.record.checkoutId || run.turnId !== row.record.activeTurnId || !ports.authorityValid(command.authority, p[1])) fail(403, "forbidden", "Current run actor authority required");
         operator(command.authority); scoped(command.authority, p[1], store.load()); held(row, command.authority, binding.controller);
         if (run.snapshot.config.policyDigest !== row.record.config.policyDigest || run.snapshot.config.capabilityDigest !== row.record.config.capabilityDigest) fail(409, "stale-reference", "Active execution policy changed");
-        checkAssociation(store.load(), run.association);
+        try { checkAssociation(store.load(), run.association); }
+        catch (cause) {
+          // The run's pinned Flow is no longer current executable work: a final answer for this run, never a transient pause.
+          if (!(cause instanceof HubFailure)) throw cause;
+          const refused = json({ error: { code: cause.code, message: cause.message } }, cause.status); refused.headers.set("X-Keryx-Action-Authority", "association-stale"); return refused;
+        }
         const response = json(row.record);
         response.headers.set("X-Keryx-Action-Authority", "checked-v2");
         return response;

@@ -6,6 +6,8 @@ export function expirePendingCommands(repo:RemoteRepository,now=Date.now()):{pro
  const changes:{projectId:string;sessionId:string;runId?:string}[]=[];
  for(const command of repo.expiringCommands<StoredCommand>(now)) {
   if(!['pending','received','admitted'].includes(command.status)||command.capacityReleased)continue;
+  // A when-idle close the machine admitted waits for the current turn's boundary: its outcome is the machine's boundary receipt, never the delivery TTL.
+  if(command.envelope.kind==='close-session'&&command.status==='admitted'&&command.domainAccepted===true)continue;
   const control=command.capacity==='cancel'||command.capacity==='denial'||command.envelope.kind==='cancel-run';
   if((command.status!=='pending'&&!control)||Date.parse(command.envelope.expiresAt)>now)continue;
   const uncertain=command.deliveredAt!==undefined;
