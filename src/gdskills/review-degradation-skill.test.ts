@@ -89,9 +89,10 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
     expect(skill).toMatch(/cap/);
   });
 
-  test("reading is evidence: a traced trigger and outcome is a finding without a run", () => {
+  test("reading is evidence: a traced trigger and outcome is a finding, major when a user gets a wrong result", () => {
     expect(skill).toMatch(/`consumer-trace` and `base-diff` are still evidence/);
-    expect(skill).toMatch(/I could not run it, so it is only a question/);
+    expect(skill).toMatch(/`major` when a user who reaches it\s+gets a wrong, lost or blocked result/);
+    expect(skill).toMatch(/I could not run it, so it is a question or a `minor`/);
   });
 
   test("it is generic: no project-specific rule name, path, PR number or reviewer name", () => {

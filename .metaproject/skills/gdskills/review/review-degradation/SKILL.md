@@ -71,9 +71,9 @@ minor, major or blocker carries one `evidence_kind`, and `evidence` says what yo
 | `base-diff` | you read the same path on base and on head and quote both |
 
 `probe`, `red-test` and `merge-trace` run code, so they need `allowed_tools` to include
-`run-tests`. Without it, `consumer-trace` and `base-diff` are still evidence: when the trigger
-and the outcome both follow from code you read, that is a finding, `minor` or `major`. A question
-is for what the code you can read cannot answer (a backend reply, data, timing), not for what you did not run.
+`run-tests`. Without it, `consumer-trace` and `base-diff` are still evidence: a trigger and outcome you
+read in the code is a finding, `major` when a user who reaches it gets a wrong, lost or blocked result.
+A question is for what the code cannot answer (a backend reply, data, timing), not for what you did not run.
 
 This is enforced, not requested. `keryx review ingest` lowers a `major` or
 `blocker` of this reviewer that has no `evidence_kind` to `info`, marks it unproven
@@ -161,7 +161,7 @@ Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severi
 | "It looks worse, so it is a `major`." | Without an `evidence_kind` the ingest lowers it to `info` and marks it unproven. Show it, or file it as a question. |
 | "This code was already messy, and the change sits next to it." | Worse than the base is the question. Pre-existing goes in its own lane, not in findings. |
 | "I will name the consumers I think matter." | The graph's list comes first. A model-chosen set is the sweep that misses the consumer nobody thought of; extra users you find by search are added, labelled `search-derived`. |
-| "I could not run it, so it is only a question." | A traced trigger and outcome is a finding without a run. Ask only what the code cannot answer. |
+| "I could not run it, so it is a question or a `minor`." | A traced trigger and outcome is a finding without a run, and `major` when a user gets a wrong, lost or blocked result. Ask only what the code cannot answer. |
 | "The set was capped, but I covered the important ones." | The cap is recorded. If it dropped consumers, say so; a report that implies a full sweep over a truncated set is a false claim about coverage. |
 | "The description says nothing changed, so I will trust it." | Reading the description against the diff is the check. `diff-vs-description` is a class because the two disagree often. |
 | "The new test passes, so the change is covered." | A test that uses the one input that works cannot see the regression. Ask whether it fails when the behaviour is wrong. |
