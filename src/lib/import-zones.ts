@@ -121,6 +121,15 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "contracts", zone: "shared" },
   { segment: "assets", zone: "shared" },
   { segment: "rules", zone: "shared" },
+  // The remote-sessions wire protocol: `protocol.ts`, its generated standalone
+  // validators and types, and `owned-controls.ts`. Types, canonical digests and
+  // validation shared by both ends of the wire — the Hub (`src/hub/`), the
+  // machine bridge (`src/lib/hub-machine/`), the native session host
+  // (`src/session/`, client) and `src/commands/hub-machine.ts` (adapter). It
+  // imports nothing outside itself, which is the shared-primitive shape, and
+  // `scripts/package-team-hub.ts` ships it as the Hub's "neutral validator
+  // boundary".
+  { segment: "remote-control", zone: "shared" },
 
   // Core owners — deterministic operations, policies, source owners, budgets.
   { segment: "gdgraph", zone: "core" },
@@ -248,6 +257,25 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // adapter caller imports it directly, which is why this is a new
   // FACADELESS core zone rather than a bypass of one.
   { segment: "impact-evidence", zone: "core" },
+  // The Team Hub (`keryx hub`: its server, connector, context sync, Git
+  // delivery and remote sessions). It owns the Hub's project, Flow, revision,
+  // proposal and receipt records and the policies over them (`domain.ts`:
+  // human-only gates, an agent never approves its own work), with no provider
+  // registry, no model selection and no LLM call. Core because of the direction
+  // its imports take: one core primitive (`flow/machine.ts`, the transition
+  // table it reuses) and shared modules (`lib/git-revision.ts`,
+  // `remote-control/`), never the shell, the CLI or the native session host —
+  // the boundary `scripts/package-team-hub.ts` ships it on, as an allowlisted
+  // archive holding two `src/flow/` files. Under `adapter` or `client` that one
+  // flow edge would be an avoidable facade bypass whose only fix,
+  // `flow/service.ts`, bundles 178 modules; under `core`, RULE 1 holds the
+  // boundary at zero tolerance instead. Its HTTP, MCP and argv fronts live
+  // inside it because the standalone server and client binaries are built from
+  // this directory alone. No `service.ts`: `src/commands/hub.ts` (adapter)
+  // wires `client-command.ts` to the CLI verb directly, the facadeless shape
+  // `impact-evidence` has, and `src/lib/hub-machine/` (shared) reaches its
+  // connector, context sync and Git delivery.
+  { segment: "hub", zone: "core" },
   // Remote control (flow 376): the serve-side hub that mirrors a shell session
   // into a Telegram forum topic. It reaches the filesystem only through
   // `lib/config-dir` and the network only through its single HTTP client file,

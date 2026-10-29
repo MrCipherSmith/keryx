@@ -6,6 +6,7 @@ import type { NormalizedUsage } from "../harness/provider/types";
 import type { SessionProjectReadPort } from "./commands/effects";
 import type { SessionRestriction } from "./commands/plan";
 import type { SessionLifecyclePort, NativeForkHistorySeed } from "./host-lifecycle";
+import type { SessionLeaseOwner } from "./lease";
 
 export interface NativeTurnIdentity {
   hostId: string;
@@ -110,6 +111,18 @@ export interface SessionHostOptions {
   authorizeInspection?: (action: SessionInspectionAuthority) => Promise<boolean>;
   authorizeOwnedControl?: (action: SessionOwnedControlAuthority) => Promise<boolean>;
   lifecycle?: SessionLifecyclePort;
+  /**
+   * A restarted daemon re-hosting a session a serve crash left with one run in flight, only after the explicit local recovery and
+   * the human `lost` resolution of that run. Absent, or for any other run, a restored in-flight run keeps the host recovery-required.
+   */
+  crashRecovery?: {
+    /** This session's runs a human resolved lost after the local recovery of the crashed daemon that ran them. */
+    lostRuns: ReadonlyArray<{ runId: string; turnId: string }>;
+    /** True only when the native lease's holder is the crashed daemon that ran `run`, proven absent by its recorded identity. */
+    reclaimLease(holder: SessionLeaseOwner, run: { runId: string; turnId: string }): boolean;
+  };
+  /** Called with every native session lease this host takes, before anything runs on it: the machine ledger binds it to its daemon. */
+  onNativeLease?: (lease: { token: string; nativeSessionId: string }) => void;
 }
 interface OperationBase { operationId: string; payloadDigest: string; actorId: string; expiresAt?: string }
 export type SessionHostOperation = OperationBase & (
@@ -159,4 +172,6 @@ export interface SessionHostPort {
   nativeSessionId(): string;
   /** Closes an exact expired idle owner only after actual owned runtime cessation, then releases its lapsed controller. Expiry selects the target; it never proves a stop. */
   recoverExpiredIdle(target: LocalOwnerRecoveryTarget): Promise<LocalOwnerRecoveryResult>;
+  /** True while this host restored a human-resolved lost crash and nothing but a controller change applied since: only an explicit resume makes it idle. */
+  resumableAfterLost(): boolean;
 }

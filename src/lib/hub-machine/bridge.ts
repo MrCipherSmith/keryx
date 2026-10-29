@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { MachineContextSync } from './context';
 import { canonicalDigest, parseMachineFrame, runCommandDigest, sessionCommandDigest, validateControl, type Control, type FrameOf, type MachineFrame, type MachineToHubFrame } from '../../remote-control/protocol';
 import { createSessionHost } from '../../session/host';
 import type { SessionLifecycleInput, NativeForkHistorySeed } from '../../session/host-lifecycle';
 import type { NativeTurnObservation, SessionHostPort, SessionHostOptions, SessionHostReceipt } from '../../session/host-types';
+import type { SessionLeaseOwner } from '../../session/lease';
 import { redactSensitiveText } from '../../security/redact';
 import { acquireMachineDaemon, loadEnrollment, machineStateDir, readMachineSecret, type MachineEnrollment, type CheckoutMapping } from './config';
-import { captureBaseline, verifyBaseline, acquireCheckoutLease, currentCheckoutHead, releaseRecoveredCheckoutLease } from './checkout-lease';
+import { captureBaseline, verifyBaseline, acquireCheckoutLease, currentCheckoutHead, observeCheckout, releaseRecoveredCheckoutLease } from './checkout-lease';
 import { MachineConnection, readSessionSelectionAuthority, readSessionInspectionAuthority, readSessionActionAuthority, readScopedHubFlows, verifyScopedFlowAssociation, type GrantApplication } from './client';
 import { createOwnedWorkspace, validateOwnedEffectPaths, type OwnedWorkspace } from './workspace';
 import { readAllRecovery, verifyReconciliationReceipt } from './recovery';
@@ -43,6 +45,8 @@ const knownRefusal = (command: SessionCommand, receipt: SessionHostReceipt): Fra
 const TERMINAL_RUN_STATES = new Set(['succeeded', 'failed', 'cancelled', 'rejected', 'lost']);
 /** Local log GC cadence; the first pass runs on every (re)connect once Hub cursors are reconciled. */
 const RETENTION_INTERVAL_MS = 3600000;
+/** How often mapped checkouts are re-measured while connected (HEAD, cleanliness, Git operation; never file content). Publication follows only a change. */
+const INVENTORY_REMEASURE_MS = 10000;
 type RemoteRun = Control['RecoveryPage']['runs'][number];
 /** A capability page before its publication version is assigned (distributes over the catalogue and routing page kinds). */
 type UnversionedCapabilityPage = Control['CapabilityPage'] extends infer Page ? Page extends unknown ? Omit<Page, 'projectionVersion' | 'inventoryVersion'> : never : never;
@@ -68,6 +72,8 @@ export interface MachineBridgeOptions {
     runLogByteLimit?: number;
     /** Shortens how long hosted approvals and confirmation cards stay answerable; absent keeps the frozen 120 s. */
     decisionTtlMs?: number;
+    /** How often mapped checkouts are re-measured while connected, 100 ms to 60 s; absent keeps 10 s. */
+    inventoryIntervalMs?: number;
 }
 /** Outbound transport/application composition. Local factories and mapping paths never come from frames. */
 export class MachineBridge {
@@ -130,10 +136,15 @@ export class MachineBridge {
     private reconnectAttempts = 0;
     private outboxTimer: ReturnType<typeof setTimeout> | undefined;
     private retentionTimer: ReturnType<typeof setInterval> | undefined;
+    private inventoryTimer: ReturnType<typeof setInterval> | undefined;
+    /** What the last complete inventory publication measured (observeCheckout per mapping) and published; undefined forces the next one. */
+    private inventoryObserved: string | undefined;
+    private inventoryContent: string | undefined;
     private flushingOutbox = false;
     private congested = false;
     constructor(private readonly options: MachineBridgeOptions) { if (options.runLogByteLimit !== undefined && (!Number.isSafeInteger(options.runLogByteLimit) || options.runLogByteLimit < 8192 || options.runLogByteLimit > 10 * 1024 * 1024))
-        throw new MachineError('invalid-log-quota'); }
+        throw new MachineError('invalid-log-quota'); if (options.inventoryIntervalMs !== undefined && (!Number.isSafeInteger(options.inventoryIntervalMs) || options.inventoryIntervalMs < 100 || options.inventoryIntervalMs > 60000))
+        throw new MachineError('invalid-inventory-interval'); }
     baseline(sessionId: string): string | undefined { return this.hosted.get(sessionId)?.workspace.baseline().digest; }
     get connected(): boolean { return this.ready && this.connection?.connected === true; }
     get hubId(): string { return this.options.enrollment.hubId; }
@@ -169,6 +180,8 @@ export class MachineBridge {
             this.context = new MachineContextSync({ hubUrl: e.hubUrl, token: readMachineSecret(e), cacheRoot: path.join(machineStateDir(this.options.configDir, e.hubId), 'context'), mappings: e.mappings.filter(m => existsSync(path.join(m.cwd, '.metaproject', 'index.md'))) });
             this.retentionTimer = setInterval(() => this.retireExpiredLogs(), RETENTION_INTERVAL_MS);
             this.retentionTimer.unref?.();
+            this.inventoryTimer = setInterval(() => this.refreshInventory(), this.options.inventoryIntervalMs ?? INVENTORY_REMEASURE_MS);
+            this.inventoryTimer.unref?.();
             try {
                 await this.connect();
             }
@@ -204,7 +217,7 @@ export class MachineBridge {
         for (const session of recovered.sessions)
             this.ledger!.reconcileCursor(`session:${session.sessionId}`, session.sessionEventCursor);
         await this.context?.initialize();
-        await this.publishInventory();
+        this.publishInventory();
         this.replay();
         const deadline = performance.now() + 5000;
         while (this.ledger!.cursors().some(c => this.ledger!.pendingEvents(c.stream).length) && performance.now() < deadline) {
@@ -292,7 +305,38 @@ export class MachineBridge {
             type: T;
         }>;
     }
-    private async publishInventory(): Promise<void> {
+    /** The inventory-visible state of every mapped checkout, measured without reading content; an unobservable one is its error code. */
+    private observeCheckouts(): string {
+        return canonicalDigest(this.options.enrollment.mappings.map(m => { try {
+            return observeCheckout(m.cwd);
+        }
+        catch (cause) {
+            return { unobservable: machineFailure(cause).code };
+        } }));
+    }
+    /**
+     * Re-measures the mapped checkouts while connected, at a bounded cadence and at session create/close and run-end boundaries,
+     * and publishes the complete projection again only when what Hub sees changed (a commit, a dirtied or cleaned checkout), at
+     * the durable content-keyed version. An unchanged projection is never sent twice on one connection.
+     */
+    private refreshInventory(): void {
+        if (!this.ready || this.stopped || !this.connection?.connected)
+            return;
+        try {
+            if (this.observeCheckouts() !== this.inventoryObserved)
+                this.publishInventory(false);
+        }
+        catch (cause) {
+            // A publication cut short (a full send buffer) is repeated whole at the next re-measure; Hub accepts the identical replay.
+            this.inventoryObserved = undefined;
+            this.inventoryContent = undefined;
+            this.notice(cause);
+        }
+    }
+    /** `force`: every (re)connect publishes the complete projection, changed or not. */
+    private publishInventory(force = true): void {
+        const observed = this.observeCheckouts();
+        this.inventoryObserved = undefined;
         const checkouts: FrameOf<'inventory'>['payload']['checkouts'] = [];
         for (const m of this.options.enrollment.mappings) {
             const profile = this.profiles.get(m.checkoutId);
@@ -331,7 +375,13 @@ export class MachineBridge {
         }
         // Protocol: inventory is a versioned complete projection. The version is durable and content-keyed, so a reconnect or a
         // daemon restart replays an unchanged projection at its version and publishes any change (a commit, a dirty checkout) as the next one.
-        const version = this.ledger!.publicationVersion(canonicalDigest({ checkouts, pages }));
+        const content = canonicalDigest({ checkouts, pages });
+        if (!force && content === this.inventoryContent) {
+            this.inventoryObserved = observed;
+            return;
+        }
+        this.inventoryContent = undefined;
+        const version = this.ledger!.publicationVersion(content);
         const valid = pages.map(page => validateControl('CapabilityPage', { ...page, projectionVersion: version, inventoryVersion: version }));
         if (valid.some(page => !page.ok))
             throw new MachineError('setup-required');
@@ -339,6 +389,8 @@ export class MachineBridge {
         for (const page of valid)
             if (page.ok)
                 this.send(this.envelope('capability-page', page.value));
+        this.inventoryContent = content;
+        this.inventoryObserved = observed;
     }
     private persistSession(event: Control['SessionEvent']): void {
         this.ledger!.persistEvent(`session:${event.sessionId}`, event.sessionEventSeq, event);
@@ -567,7 +619,9 @@ export class MachineBridge {
             return;
         }
         const sessionId = frame.type === 'command' ? frame.payload.sessionId : frame.payload.target.sessionId;
-        const hosted = this.hosted.get(sessionId);
+        // Only an explicit controller change or resume brings back a session a crash left, and only after the human lost resolution.
+        const recoverable = frame.type === 'session-command' && (frame.payload.kind === 'claim-controller' || frame.payload.kind === 'resume-session');
+        const hosted = this.hosted.get(sessionId) ?? (recoverable ? await this.rehostAfterLost(sessionId, mapping, profile, c.commandId) : undefined);
         if (!hosted)
             throw new MachineError('recovery-required');
         const current = await hosted.host.inspect();
@@ -703,6 +757,9 @@ export class MachineBridge {
             const op = command.kind === 'submit-message' ? { ...base, kind: 'submit-message' as const, request: command.body } : command.kind === 'change-config' ? { ...base, kind: 'config' as const, request: command.body } : command.kind === 'invoke-command' ? { ...base, kind: 'command' as const, request: command.body } : command.kind === 'confirm-command' ? { ...base, kind: 'confirm-command' as const, request: command.body } : command.kind === 'edit-queue' ? { ...base, kind: 'edit-queue' as const, request: command.body } : command.kind === 'remove-queue' ? { ...base, kind: 'remove-queue' as const, request: command.body } : command.kind === 'reauthorize-queue' ? { ...base, kind: 'reauthorize-queue' as const, request: command.body } : command.kind === 'close-session' ? { ...base, kind: 'close-session' as const, request: command.body } : command.kind === 'resume-session' ? { ...base, kind: 'resume-session' as const, request: command.body } : null;
             if (!op)
                 throw new MachineError('setup-required');
+            // `/sessions resume` of a session a serve crash left reaches the same guarded re-host as a direct resume, on frame arrival.
+            if (command.kind === 'invoke-command' && command.body.commandName === 'sessions.resume' && ordinary.ok && ordinary.value.kind === 'resume-session' && !this.hosted.has(ordinary.value.sessionId))
+                await this.rehostResumeTarget(ordinary.value, command.commandId);
             let replacementOperation: {
                 sessionId: string;
                 digest: string;
@@ -781,6 +838,9 @@ export class MachineBridge {
             const response: FrameOf<'session-command-receipt'>['payload'] = { commandId: command.commandId, hubSequence: command.hubSequence, sessionId, observedSessionVersion: actual.version, status: rejected ? 'not-applied' : pending ? 'admitted' : 'applied', receiptId: 'receiptId' in applied.value ? applied.value.receiptId : randomUUID(), errorCode: rejected ? knownRefusal(command, applied.value) : null };
             this.ledger!.finish(e.hubId, command.commandId, rejected ? 'rejected' : 'applied', response);
             this.send(this.envelope('session-command-receipt', response));
+            // A session boundary: re-measure what Hub sees of the checkouts.
+            if (command.kind === 'close-session')
+                this.refreshInventory();
             return;
         }
         throw new MachineError('setup-required');
@@ -809,12 +869,74 @@ export class MachineBridge {
             const receipt: FrameOf<'session-command-receipt'>['payload'] = { commandId: c.commandId, hubSequence: c.hubSequence, sessionId: r.sessionId, observedSessionVersion: actual.version, status: 'applied', receiptId: randomUUID(), errorCode: null };
             this.ledger!.finish(this.options.enrollment.hubId, c.commandId, 'applied', receipt);
             this.send(this.envelope('session-command-receipt', receipt));
+            this.refreshInventory();
         }
         catch (cause) {
             if (!marked)
                 lease.release(lease.nonce);
             throw cause;
         }
+    }
+    /**
+     * The restarted daemon hosts again a session a serve crash left with its run in flight, only once that run went through the
+     * explicit local recovery and the human `lost` resolution (recovery-runbook.md "After a serve crash"): Hub shows the run lost
+     * one version after this ledger's own confirmed-stopped receipt and release-resolved-run marked its launch lost. The session comes
+     * back from its durable host state on its re-verified owned baseline, recovery-required until an explicit resume. The crashed
+     * daemon's native lease is taken over only when its recorded token names that daemon and the daemon plus every process it recorded
+     * for the checkout are absent by recorded identity (process group and start time), never by PID or lease age. Anything else stays unhosted.
+     */
+    private async rehostAfterLost(sessionId: string, mapping: CheckoutMapping, profile: MachineProfile, commandId: string): Promise<Hosted | undefined> {
+        const e = this.options.enrollment, ledger = this.ledger!;
+        if (this.stopped || !existsSync(path.join(machineStateDir(this.options.configDir, e.hubId), 'remote-sessions', `${sessionId}.json`)))
+            return undefined;
+        const fetched = validateControl('SessionRecord', await this.connection!.request(`/hub/v2/projects/${mapping.projectId}/sessions/${sessionId}`));
+        if (!fetched.ok)
+            return undefined;
+        const r = fetched.value;
+        if (r.machineId !== e.machineId || r.projectId !== mapping.projectId || r.checkoutId !== mapping.checkoutId || r.agentProfileId !== mapping.profileId || r.config.policyDigest !== profile.policyDigest || r.config.capabilityDigest !== profile.capabilityDigest || r.state !== 'recovery-required' || r.activeRunId !== null)
+            return undefined;
+        const own = (await readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`))).runs.filter(run => run.sessionId === sessionId);
+        // A run of the session still open in Hub, or uncertain local work of its checkout besides this very command, keeps it fenced.
+        const unresolved = ledger.unresolved();
+        if (own.some(run => !TERMINAL_RUN_STATES.has(run.state)) || unresolved.length >= 1000 || unresolved.some(row => row.checkout === mapping.checkoutId && row.id !== commandId))
+            return undefined;
+        const lost = own.flatMap(run => {
+            const resolution = run.state === 'lost' && run.checkoutId === mapping.checkoutId ? ledger.lostResolution(e.hubId, run.runId, run.commandDigest) : null;
+            return resolution !== null && resolution.daemon !== this.daemonId && run.version === resolution.expectedRunVersion + 1 ? [{ run, daemonId: resolution.daemon }] : [];
+        });
+        if (lost.length === 0)
+            return undefined;
+        const crashedDaemon = new Map(lost.map(({ run, daemonId }) => [run.runId, daemonId]));
+        const reclaimLease = (holder: SessionLeaseOwner, run: { runId: string }): boolean => {
+            const daemonId = crashedDaemon.get(run.runId), daemon = daemonId === undefined ? null : ledger.daemonRecord(daemonId), bound = ledger.nativeLease(holder.token);
+            return daemon !== null && bound !== null && bound.daemonId === daemon.daemonId && bound.sessionId === sessionId && holder.pid === daemon.pid && holder.host === hostname() && this.ownedPresence(daemon, mapping.checkoutId) === 'absent';
+        };
+        const baseline = captureBaseline(mapping.cwd, { requireClean: false });
+        if (baseline.digest !== r.workspaceBaseline)
+            throw new MachineError('workspace-conflict');
+        const lease = acquireCheckoutLease(mapping.cwd, { hubId: e.hubId, runId: sessionId, daemonId: this.daemonId });
+        try {
+            const workspace = createOwnedWorkspace(mapping.cwd, () => lease.assertOwnership(), baseline);
+            return await this.materializeRecord(r, mapping, profile, workspace, lease, undefined, () => !this.stopped, { crashRecovery: { lostRuns: lost.map(({ run }) => ({ runId: run.runId, turnId: run.turnId })), reclaimLease } });
+        }
+        catch (cause) {
+            // A host that came up keeps its leases, fenced like any recovery-required session; one that never came up releases the checkout.
+            if (!this.hosted.has(sessionId))
+                lease.release(lease.nonce);
+            throw cause;
+        }
+    }
+    /**
+     * The target of a `/sessions resume` this daemon does not host comes back only through rehostAfterLost and its guards (operator
+     * step, Hub's lost resolution of exactly that run, baseline match, lease evidence). A target that stays unhosted refuses the command
+     * before it starts, so nothing is applied and Hub settles the source session at once instead of after an attempted application.
+     */
+    private async rehostResumeTarget(receipt: Control['SessionOperationReceipt'], commandId: string): Promise<void> {
+        const target = receipt.session;
+        const mapping = target ? this.options.enrollment.mappings.find(m => m.projectId === target.projectId && m.checkoutId === target.checkoutId && m.profileId === target.agentProfileId) : undefined;
+        const profile = mapping && this.profiles.get(mapping.checkoutId);
+        if (!target || target.sessionId !== receipt.sessionId || !mapping || !profile || !await this.rehostAfterLost(receipt.sessionId, mapping, profile, commandId))
+            throw new MachineError('recovery-required');
     }
     private lifecycleContext(input: SessionLifecycleInput) {
         const context = this.lifecycleAuthority.get(input.operationId);
@@ -940,7 +1062,7 @@ export class MachineBridge {
             return { ok: false as const, error: { code: error.code, message: error.code } };
         }
     }
-    private async materializeRecord(r: Control['SessionRecord'], mapping: CheckoutMapping, profile: MachineProfile, workspace: OwnedWorkspace, lease: Hosted['lease'], nativeSessionId?: string, guard: () => boolean = () => false, initial: Pick<SessionHostOptions, 'initialHistory' | 'initialRestriction'> = {}): Promise<Hosted> {
+    private async materializeRecord(r: Control['SessionRecord'], mapping: CheckoutMapping, profile: MachineProfile, workspace: OwnedWorkspace, lease: Hosted['lease'], nativeSessionId?: string, guard: () => boolean = () => false, initial: Pick<SessionHostOptions, 'initialHistory' | 'initialRestriction' | 'crashRecovery'> = {}): Promise<Hosted> {
         if (!guard())
             throw new MachineError('authorization-not-applied');
         const runtime = await profile.createRuntime(r.sessionId);
@@ -952,6 +1074,8 @@ export class MachineBridge {
             throw new MachineError('authorization-not-applied');
         const host = await createSessionHost({ cwd: mapping.cwd, dataDir: process.env.KERYX_DATA_DIR !== undefined && process.env.KERYX_DATA_DIR.length > 0 ? process.env.KERYX_DATA_DIR : this.options.configDir, controlDir: machineStateDir(this.options.configDir, this.options.enrollment.hubId), configDir: this.options.configDir, record: r, runtime: runtime.value, ...(this.options.decisionTtlMs === undefined ? {} : { decisionTtlMs: this.options.decisionTtlMs }),
             inspectionMode: 'hub-remote', ...initial, ...(nativeSessionId ? { nativeSessionId } : {}), lifecycle: { apply: input => this.applyLifecycle(input), list: input => this.listLifecycle(input), open: input => this.openLifecycle(input) },
+            // The lease token binds the native session to this daemon before anything runs on it: the only evidence a later crash recovery takes it over on.
+            onNativeLease: nativeLease => this.ledger!.recordNativeLease({ token: nativeLease.token, daemonId: this.daemonId, sessionId: r.sessionId }),
             projectContext: { source: 'hub-canonical', listFlows: () => readScopedHubFlows({ hubUrl: this.options.enrollment.hubUrl, secret: readMachineSecret(this.options.enrollment), projectId: mapping.projectId }), readFlow: flowId => readScopedHubFlows({ hubUrl: this.options.enrollment.hubUrl, secret: readMachineSecret(this.options.enrollment), projectId: mapping.projectId, flowId }), readContext: documentId => this.context?.read(mapping.projectId, documentId) ?? Promise.reject(new MachineError('context-setup-required')) },
             authorizeSelection: action => { try {
                 lease.assertOwnership();
@@ -1034,7 +1158,9 @@ export class MachineBridge {
             this.notice(cause);
         } });
         const actual = await host.inspect();
-        if (actual.state !== 'idle' || actual.workspaceBaseline !== workspace.baseline().digest)
+        // A re-hosted lost crash comes back recovery-required without the lost run, waiting for its explicit resume; anything else starts idle.
+        const ready = initial.crashRecovery === undefined ? actual.state === 'idle' : actual.state === 'recovery-required' && actual.activeRunId === null && host.resumableAfterLost();
+        if (!ready || actual.workspaceBaseline !== workspace.baseline().digest)
             throw new MachineError('recovery-required');
         return hosted;
     }
@@ -1132,6 +1258,8 @@ export class MachineBridge {
                     this.ledger!.stageResultDraft(observation.runId, { sessionId: observation.sessionId, turnId: observation.turnId, association: run.command.association, gitBaseSha: hosted.workspace.baseline().head, workspaceBaseline: observation.workspaceBaseline, outcome: observation.outcome, partial: observation.partial, changes, checks });
                 }
                 run.terminalSeq = this.runEvent(observation.runId, { kind: 'state', state: observation.outcome, reasonCode: observation.outcome === 'unknown' ? 'recovery-required' : drifted ? 'stale-reference' : observation.outcome === 'failed' ? 'native-failure' : 'none', ...(run.nativeIdentity ? { nativeIdentity: run.nativeIdentity } : {}) });
+                // A run-end boundary, before the session reports idle: Hub sees a checkout the run dirtied before any next admission.
+                this.refreshInventory();
             }
         }
         catch (cause) {
@@ -1450,12 +1578,14 @@ export class MachineBridge {
         return; this.stopped = true; this.ready = false; if (this.reconnectTimer)
         clearTimeout(this.reconnectTimer); if (this.outboxTimer)
         clearTimeout(this.outboxTimer); if (this.retentionTimer)
-        clearInterval(this.retentionTimer); this.connection?.close(); if (this.pumpTask)
+        clearInterval(this.retentionTimer); if (this.inventoryTimer)
+        clearInterval(this.inventoryTimer); this.connection?.close(); if (this.pumpTask)
         await Promise.allSettled([this.pumpTask]); await Promise.allSettled([...this.ownerTasks]); let provenStop = true; for (const hosted of this.hosted.values()) {
         hosted.host.setConnected(false);
         await hosted.host.dispose('machine-stop');
         const state = await hosted.host.inspect();
-        if (!hosted.leaseReleased && (state.state === 'idle' || state.state === 'closed'))
+        // A re-hosted lost crash that was never resumed ran nothing, and its dispose proved the stop: it fences nothing, so the next daemon re-hosts it.
+        if (!hosted.leaseReleased && (state.state === 'idle' || state.state === 'closed' || hosted.host.resumableAfterLost()))
             hosted.lease.release(hosted.lease.nonce);
         else if (!hosted.leaseReleased)
             provenStop = false;

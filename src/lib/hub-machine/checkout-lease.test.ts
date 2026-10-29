@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { acquireCheckoutLease, captureBaseline, verifyBaseline } from './checkout-lease';
+import { acquireCheckoutLease, captureBaseline, observeCheckout, verifyBaseline } from './checkout-lease';
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
@@ -46,4 +46,25 @@ test('displaced Git admin ownership is detected before any later workspace effec
 });
 test('explicit same-owner resume reacquires a fresh nonce only after a proved release and never displaces another Hub',()=>{
  const cwd=repo(),owner={hubId:'hub-a',runId:'session',daemonId:'daemon'};const lease=acquireCheckoutLease(cwd,owner),old=lease.nonce;expect(()=>lease.reacquire()).toThrow('lease-owner-mismatch');lease.release(old);const other=acquireCheckoutLease(cwd,{hubId:'hub-b',runId:'other',daemonId:'other'});expect(()=>lease.reacquire()).toThrow('checkout-busy');other.release(other.nonce);lease.reacquire();expect(lease.nonce).not.toBe(old);expect(()=>lease.assertOwnership()).not.toThrow();expect(()=>lease.release(old)).toThrow('lease-owner-mismatch');lease.release(lease.nonce);
+});
+test('a checkout observation sees HEAD, cleanliness and an active Git operation exactly as a baseline capture judges them, without reading content', () => {
+    const cwd = repo();
+    const head = captureBaseline(cwd, { requireClean: true }).head;
+    expect(observeCheckout(cwd)).toEqual({ head, clean: true, operation: false });
+    // Keryx's own runtime data is never a change, exactly as for a baseline capture.
+    mkdirSync(path.join(cwd, '.metaproject', 'data', 'learning', 'observations'), { recursive: true });
+    writeFileSync(path.join(cwd, '.metaproject', 'data', 'learning', 'observations', 'events.jsonl'), '{}\n');
+    expect(observeCheckout(cwd)).toEqual({ head, clean: true, operation: false });
+    writeFileSync(path.join(cwd, 'a.txt'), 'edited');
+    expect(observeCheckout(cwd)).toEqual({ head, clean: false, operation: false });
+    writeFileSync(path.join(cwd, 'a.txt'), 'baseline');
+    writeFileSync(path.join(cwd, 'new.txt'), 'untracked');
+    expect(observeCheckout(cwd)).toEqual({ head, clean: false, operation: false });
+    expect(Bun.spawnSync(['git', '-C', cwd, 'add', 'new.txt']).exitCode).toBe(0);
+    expect(Bun.spawnSync(['git', '-C', cwd, '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'developer commit']).exitCode).toBe(0);
+    const committed = observeCheckout(cwd);
+    expect(committed.head).not.toBe(head);
+    expect(committed).toEqual({ head: captureBaseline(cwd, { requireClean: true }).head, clean: true, operation: false });
+    writeFileSync(path.join(cwd, '.git', 'MERGE_HEAD'), `${committed.head}\n`);
+    expect(observeCheckout(cwd)).toEqual({ ...committed, operation: true });
 });

@@ -2,8 +2,7 @@
 // (`/projectctx warn|block`, gdskills/project-context-config.ts) and a local Flow's origin (`/flow origin <id> <kind> --reason …`,
 // flow/service.ts originSet). Each write is one owned workspace effect over exactly the files it names, inside an admitted run.
 import { flowServiceDeps } from "../../commands/flow";
-import { createFlowService } from "../../flow/service";
-import { resolveFlowDir } from "../../flow/store";
+import { createFlowService, resolveFlowDir } from "../../flow/service";
 import type { FlowService } from "../../flow/types";
 import { writeProjectContextEnforcement } from "../../gdskills/project-context-config";
 import { loadProjectContextStatus } from "../../gdskills/project-context-status";

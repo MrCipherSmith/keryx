@@ -29,8 +29,10 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
     if (next.version < row.record.version) fail(409, "stale-version", "Applied machine projection regressed");
     if (next.workspaceBaseline === "0".repeat(64) && next.state !== "opening") fail(409, "workspace-conflict", "Measured baseline required for ready session");
     if(next.state==='closed')row.closedProof={eventSeq:event.sessionEventSeq,epoch:m.epoch,ledgerId:m.ledgerId,receivedAt:new Date().toISOString()};else delete row.closedProof;
-    // The machine's own applied projection supersedes Hub's overlay of a human lost resolution.
-    row.record = { ...next, sessionEventCursor: event.sessionEventSeq }; row.baselineVerified = next.state !== "opening"; delete row.lostRecovery;
+    // The machine's own applied projection supersedes Hub's overlay of a human lost resolution, except one that agrees with it: a crashed
+    // session the restarted machine re-hosted stays recovery-required without the lost run (a controller change may precede its resume).
+    row.record = { ...next, sessionEventCursor: event.sessionEventSeq }; row.baselineVerified = next.state !== "opening";
+    if (next.state !== "recovery-required" || next.activeRunId !== null) delete row.lostRecovery;
     row.controllerVersion = next.controller?.version ?? row.controllerVersion;
     const pendingDelivery=row.pending&&repo.get<StoredCommand>('remote_command',row.pending.commandId);
     if (row.pending && next.version >= row.pending.expectedAppliedVersion && applicationObserved(repo,row,pendingDelivery,next)) {
@@ -205,6 +207,28 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
   }
   repo.put("remote_event", key, { event, payloadDigest: canonicalDigest(raw), retained: true, ...(logBytes === undefined ? {} : { logBytes }) } satisfies StoredRunEvent, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId, seq: event.localSeq }); run.lastLocalSeq = event.localSeq; run.notificationVersion = (run.notificationVersion ?? 0) + 1; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId }); return event.localSeq;
 }
+/**
+ * Does this receipt say the command never applied, so its session fence settles now? `rejected` is a delivery refusal: the machine
+ * refused before starting it (a delivery receipt means received/admitted/rejected, never started), so nothing applied whatever the
+ * code. That includes recovery-required, e.g. a claim or resume a restarted machine cannot re-host before the operator's
+ * release-resolved-run step: the human retries after that step instead of meeting session-busy. `not-applied` follows an attempted
+ * application, and with recovery-required its effect is not known, so that fence stays.
+ */
+function knownNonApplication(p: FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"]): boolean {
+  return p.status === "rejected" || (p.status === "not-applied" && p.errorCode !== "recovery-required");
+}
+/**
+ * A session command the machine rejected before starting it fails its operation with the machine's own code, as an expired delivery
+ * does. A FIFO admission of a queued item is the exception: its refusal does not reject the still-queued logical operation.
+ */
+function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p: FrameOf<"session-command-receipt">["payload"]): void {
+  if (p.status !== "rejected" || p.errorCode === null) return;
+  if (repo.all<QueueRow>("remote_queue", { sessionId: p.sessionId }).some((queued) => queued.admissionCommandId === p.commandId)) return;
+  const operation = repo.get<OperationRecord>("remote_operation", command.operationId);
+  if (!operation) return;
+  operation.status = 409; operation.deliveryFailure = { error: { code: p.errorCode, message: "The machine refused this operation before starting it; nothing was applied" } };
+  repo.put("remote_operation", operation.id, operation);
+}
 export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, frame: FrameOf<"command-receipt"> | FrameOf<"session-command-receipt">,authorityValid?:(authority:StoredCommand["authority"],projectId:string)=>boolean): void {
   const p = frame.payload; const command = repo.get<StoredCommand>("remote_command", p.commandId);
   if (!command || command.machineId !== machine.machineId || p.hubSequence !== command.envelope.hubSequence) fail(403, "scope-denied", "Command receipt ownership denied");
@@ -216,15 +240,16 @@ export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, f
   if (digest !== command.envelope.commandDigest) fail(409, "payload-conflict", "Stored command integrity changed");
   if (command.receipt && canonicalDigest(command.receipt) !== canonicalDigest(p) && ["applied", "rejected", "not-applied"].includes((command.receipt as {status:string}).status)) fail(409, "payload-conflict", "Terminal command receipt changed");
   releaseQueuedAttempt(repo,command,frame,authorityValid?.(command.authority,command.projectId)===true);
-  if ((p.status === "rejected" || p.status === "not-applied") && p.errorCode!=="recovery-required" && command.status !== "admitted" && command.status !== "applied") {
+  if (knownNonApplication(p) && command.status !== "admitted" && command.status !== "applied") {
     const row = repo.get<SessionRow>("remote_session", targetSession);
     if (row?.pending?.commandId === p.commandId) {
       if (row.record.machineId !== machine.machineId || row.record.projectId !== command.projectId
         || (frame.type === "session-command-receipt" && frame.payload.observedSessionVersion !== row.record.version)) fail(409, "stale-reference", "Rejection requires the same applied session projection");
       delete row.pending; delete row.pendingController; saveSession(repo, row);
+      if (frame.type === "session-command-receipt") failRejectedDelivery(repo, command, frame.payload);
     }
   }
-  if(command.envelope.kind==='close-session'&&(p.status==='not-applied'||p.status==='rejected')&&p.errorCode!=='recovery-required'&&!command.domainAccepted){const row=repo.get<SessionRow>('remote_session',targetSession);if(row?.pendingClosure?.commandId===p.commandId){delete row.pendingClosure;row.closing=false;saveSession(repo,row);}}
+  if(command.envelope.kind==='close-session'&&knownNonApplication(p)&&!command.domainAccepted){const row=repo.get<SessionRow>('remote_session',targetSession);if(row?.pendingClosure?.commandId===p.commandId){delete row.pendingClosure;row.closing=false;saveSession(repo,row);if(frame.type==='session-command-receipt')failRejectedDelivery(repo,command,frame.payload);}}
   if (command.envelope.kind === "answer-approval") {
     const question = repo.get<ApprovalRow>("remote_approval_projection", command.envelope.body.approvalId);
     if (question?.answer?.commandId === command.envelope.commandId && ["recorded", "delivered"].includes(question.status)) { question.status = p.status === "not-applied" || p.status === "rejected" ? "not-applied" : "delivered"; repo.put("remote_approval_projection", question.approvalId, question, { projectId: question.projectId, machineId: machine.machineId, sessionId: question.sessionId, runId: question.runId }); const affected = repo.get<RunRow>("remote_run", question.runId); if (affected) { affected.notificationVersion = (affected.notificationVersion ?? 0) + 1; repo.put("remote_run", affected.runId, affected, { projectId: affected.projectId, machineId: machine.machineId, sessionId: affected.sessionId, runId: affected.runId }); } }

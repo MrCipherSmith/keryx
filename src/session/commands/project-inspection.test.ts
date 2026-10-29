@@ -6,8 +6,12 @@ import { randomUUID } from "node:crypto";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../../sac/workspace-service";
 import { loadInspectorWorkspace } from "../../tui/inspector-sources";
 import { renderSetupSlash } from "../../commands/setup-guide";
+import { readOpenIntents } from "../../commands/product";
 import { executeProjectInspection, projectInspectionCommands, type ProjectInspectionContext } from "./project-inspection";
+import { registerOpenIntentReader } from "./open-intents";
 
+// As the CLI registry does in every keryx process: the product command hands its reader to the session command port.
+registerOpenIntentReader(readOpenIntents);
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 async function context(): Promise<ProjectInspectionContext> {
@@ -66,6 +70,16 @@ test("read-only empty reports are genuine domain outcomes with explicit source",
     expect(result.ok).toBe(true); if (result.ok) expect(result.source).toBe("local-native");
   }
   expect(await executeProjectInspection(c, "integrate", {})).toMatchObject({ ok: false, error: { code: "local-required" } });
+});
+
+test("/product reads the open report only through the reader the product command registers, and refuses setup-required where none is", async () => {
+  const c = await context();
+  registerOpenIntentReader(undefined);
+  try {
+    expect(await executeProjectInspection(c, "product", {})).toMatchObject({ ok: false, source: "local-native", error: { code: "setup-required" } });
+    registerOpenIntentReader(readOpenIntents);
+    expect(await executeProjectInspection(c, "product", {})).toEqual({ ok: true, source: "local-native", data: await readOpenIntents(c.cwd) });
+  } finally { registerOpenIntentReader(readOpenIntents); }
 });
 
 test("domain errors stay sanitized and bounded; direct contribution execution validates arguments", async () => {

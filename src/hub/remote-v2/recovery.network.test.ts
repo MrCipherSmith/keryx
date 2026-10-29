@@ -88,6 +88,79 @@ test("a human lost resolution frees its crashed session from the lost run: recov
   expect((await success<Control["QueuePage"]>(await f.call(`${s.path}/queue`, { cookie: f.cookie }))).items.map((i) => i.state)).toEqual(["suspended"]);
 });
 
+/** A session whose crashed run a human resolved lost: recovery-required without the run, its controller held, waiting for the restarted machine. */
+async function lostResolvedSession() {
+  f = await fixture(); const s = await admittedSession(f); const c = await appliedController(f, s);
+  const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
+  const emit = async (seq: number, event: object) => { s.peer.send("session-event", { sessionId: s.session.sessionId, projectId: f.project.id, checkoutId: "checkout", sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next("session-event-ack"); };
+  const runEvent = async (runId: string, turnId: string, localSeq: number, fields: object) => { s.peer.send("run-event", { runId, turnId, sessionId: s.session.sessionId, projectId: f.project.id, checkoutId: "checkout", localSeq, observedAt: new Date().toISOString(), ...fields }); await s.peer.next("run-event-ack"); };
+  const read = async () => success<Control["SessionRecord"]>(await f.call(s.path, { cookie: f.cookie }));
+  const turn = await success<Control["TurnReceipt"]>(await f.call(`${s.path}/messages`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: s.session.version, expectedConfigVersion: 1, controller, text: "crashing turn", interpretation: "literal-message", association: { mode: "ad-hoc", profileConsentVersion: 1 }, busyPolicy: "reject" } }));
+  const start = (await s.peer.next("command")).payload as FrameOf<"command">["payload"];
+  const busy: Control["SessionRecord"] = { ...s.session, version: 3, state: "busy", activeRunId: turn.runId, activeTurnId: turn.turnId, nextTurnOrdinal: 2, sessionEventCursor: 4 };
+  await emit(4, { kind: "session-state", session: busy });
+  for (const [i, state] of (["received", "starting"] as const).entries()) await runEvent(turn.runId!, turn.turnId!, i + 1, { kind: "state", state, reasonCode: "none" });
+  await runEvent(turn.runId!, turn.turnId!, 3, { kind: "state", state: "unknown", reasonCode: "recovery-required" });
+  const run = await success<{ version: number }>(await f.call(`/hub/v2/projects/${f.project.id}/runs/${turn.runId}`, { cookie: f.cookie }));
+  const report: Control["ReconciliationReport"] = { runId: turn.runId!, projectId: f.project.id, checkoutId: "checkout", ledgerId: "ledger-1", daemonId: "daemon-1", commandDigest: start.commandDigest, expectedRunVersion: run.version, observation: "confirmed-stopped", observedAt: new Date().toISOString(), sessionId: s.session.sessionId, turnId: turn.turnId! };
+  const receipt = await success<Control["ReconciliationReceipt"]>(await f.call(`/hub/v2/machines/${s.machine.machineId}/reconciliations`, { method: "POST", token: s.machine.secret, origin: null, body: report }));
+  await success(await f.call(`/hub/v2/machines/${s.machine.machineId}/resolve-run`, { method: "POST", cookie: f.cookie, body: { runId: turn.runId, expectedRunVersion: run.version, localReconciliationId: receipt.reconciliationId, decision: "lost", reason: "Locally confirmed absence" } }));
+  const released = await read(); expect({ state: released.state, activeRunId: released.activeRunId }).toEqual({ state: "recovery-required", activeRunId: null });
+  return { s, c, controller, emit, read, busy, released };
+}
+
+test("a controller change the re-hosting machine applies before the resume keeps a lost-resolved session resumable", async () => {
+  const { s, c, controller, emit, read, busy, released } = await lostResolvedSession();
+  // The human renews control explicitly; the restarted machine re-hosts the crashed session for it and applies the renewal while it still awaits its resume.
+  const renewal = await success<Control["ControllerReceipt"]>(await f.call(`${s.path}/controller/renew`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: released.version, expectedControllerVersion: c.lease.version, controllerLeaseId: c.lease.controllerLeaseId, requestedLeaseSeconds: 60, mode: "renew" } }));
+  const delivered = (await s.peer.next("session-command")).payload as FrameOf<"session-command">["payload"]; expect(delivered.kind).toBe("claim-controller");
+  s.peer.send("session-command-receipt", { commandId: delivered.commandId, hubSequence: delivered.hubSequence, sessionId: s.session.sessionId, observedSessionVersion: renewal.sessionVersion, status: "applied", receiptId: renewal.receiptId, errorCode: null });
+  await emit(5, { kind: "controller-changed", receipt: renewal });
+  const rehosted: Control["SessionRecord"] = { ...busy, version: renewal.sessionVersion, state: "recovery-required", activeRunId: null, activeTurnId: null, controller: renewal.lease, sessionEventCursor: 6 };
+  await emit(6, { kind: "session-state", session: rehosted });
+  const current = await read(); expect({ state: current.state, controller: current.controller?.expiresAt }).toEqual({ state: "recovery-required", controller: renewal.lease.expiresAt });
+  // The machine's own recovery-required projection without the lost run agrees with the resolution: the resume is still delivered.
+  const resume = await success<Control["SessionOperationReceipt"]>(await f.call(`${s.path}/resume`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: current.version, controller, expectedHistoryVersion: current.historyVersion, expectedWorkspaceBaseline: current.workspaceBaseline } }));
+  expect({ kind: resume.kind, status: resume.status }).toEqual({ kind: "resume-session", status: "pending" });
+  const resumed = (await s.peer.next("session-command")).payload as FrameOf<"session-command">["payload"]; expect(resumed.kind).toBe("resume-session");
+  const authorized = await f.call(`/hub/v2/machines/${s.machine.machineId}/commands/${resumed.commandId}/authorize`, { method: "POST", token: s.machine.secret, origin: null, body: { commandDigest: resumed.commandDigest, policyDigest: D, target: resumed.target, controller } });
+  expect(authorized.status).toBe(200);
+});
+
+test("a claim, resume or close the machine rejects before starting it settles at once with that code, while a not-applied recovery-required outcome keeps its fence", async () => {
+  const { s, c, controller, read, released } = await lostResolvedSession();
+  const renew = (key: string) => f.call(`${s.path}/controller/renew`, { method: "POST", cookie: f.cookie, key, body: { expectedSessionVersion: released.version, expectedControllerVersion: c.lease.version, controllerLeaseId: c.lease.controllerLeaseId, requestedLeaseSeconds: 60, mode: "renew" } });
+  const resume = () => f.call(`${s.path}/resume`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: released.version, controller, expectedHistoryVersion: released.historyVersion, expectedWorkspaceBaseline: released.workspaceBaseline } });
+  const close = () => f.call(`${s.path}/close`, { method: "POST", cookie: f.cookie, body: { expectedSessionVersion: released.version, controller, mode: "when-idle" } });
+  const answer = async (kind: FrameOf<"session-command">["payload"]["kind"], status: "rejected" | "not-applied", errorCode: string) => {
+    const delivered = (await s.peer.next("session-command")).payload as FrameOf<"session-command">["payload"]; expect(delivered.kind).toBe(kind);
+    s.peer.send("session-command-receipt", { commandId: delivered.commandId, hubSequence: delivered.hubSequence, sessionId: s.session.sessionId, observedSessionVersion: released.version, status, receiptId: `${kind}-${status}`, errorCode });
+    s.peer.send("heartbeat", { daemonId: "daemon-1" }); await s.peer.next("heartbeat-ack");
+  };
+  const unchanged = async () => { const now = await read(); expect({ state: now.state, version: now.version, controller: now.controller, activeRunId: now.activeRunId }).toEqual({ state: "recovery-required", version: released.version, controller: released.controller, activeRunId: null }); };
+  // Before the operator's release-resolved-run step the restarted machine cannot re-host the session, so it rejects the renewal before starting it.
+  await success<Control["ControllerReceipt"]>(await renew("renewal-before-local-step"));
+  await answer("claim-controller", "rejected", "recovery-required");
+  // Nothing applied, and the session is not left busy: the operation answers with the machine's code and the next request is accepted at once.
+  await unchanged();
+  expect(await (await renew("renewal-before-local-step")).json()).toMatchObject({ error: { code: "recovery-required" } });
+  const early = await success<Control["SessionOperationReceipt"]>(await resume()); expect({ kind: early.kind, status: early.status }).toEqual({ kind: "resume-session", status: "pending" });
+  await answer("resume-session", "rejected", "recovery-required");
+  const refused = await f.call(`${s.path}/operations/${early.operationId}`, { cookie: f.cookie });
+  expect({ status: refused.status, body: await refused.json() }).toMatchObject({ status: 409, body: { error: { code: "recovery-required" } } });
+  await unchanged();
+  // A close rejected before it started does not leave the session sealed for a close that never applied.
+  await success(await close());
+  await answer("close-session", "rejected", "recovery-required");
+  await unchanged();
+  // The human retries once the local step is done: the renewal is accepted and delivered again.
+  await success<Control["ControllerReceipt"]>(await renew("renewal-after-local-step"));
+  // A machine that attempted the application and cannot say its outcome reports not-applied recovery-required: that fence stays.
+  await answer("claim-controller", "not-applied", "recovery-required");
+  expect(await (await resume()).json()).toMatchObject({ error: { code: "session-busy" } });
+  await unchanged();
+});
+
 test("session-only recovery pages advance independently of run count and retain every session", async()=>{
  const {HEAD}=await import("./fixture.test-support"); f=await fixture(); const s=await admittedSession(f);
  const ids=new Set([s.session.sessionId]);

@@ -25,8 +25,17 @@ export async function executeDecisionFollowup(context: Pick<SessionCommandContex
   const args = input as { text?: string; choice?: string };
   const done = await decisionsFollowup(command === "decisions.reason" ? { kind: "reason", text: args.text ?? "" } : { kind: "change", choice: args.choice ?? "" },
     { cwd: context.cwd, lastDecisionId: journal.lastDecisionId, session: journal.session, flowContext: async () => ({}) });
-  const text = redactSensitiveText(done.text.replaceAll(context.cwd, "."));
+  const text = redactedAround(done.text.replaceAll(context.cwd, "."), done.decisionId);
   return done.ok ? { ok: true, source: "local-native", data: { decisionId: done.decisionId ?? null, text } } : failure("refused", text);
+}
+
+/**
+ * The text redacted everywhere except the journal's own decision id, which the result already carries whole in `decisionId` and the
+ * human needs whole to act on it: a generated id whose time digits run into an all-digit hex tail otherwise reads as a phone number.
+ */
+function redactedAround(text: string, decisionId: string | undefined): string {
+  if (decisionId === undefined || decisionId.length === 0) return redactSensitiveText(text);
+  return text.split(decisionId).map((part) => redactSensitiveText(part)).join(decisionId);
 }
 
 export function decisionFollowupCommands(): NativeCommandContribution[] {

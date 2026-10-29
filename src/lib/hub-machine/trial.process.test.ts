@@ -1,4 +1,4 @@
-import{expect,test}from'bun:test';import{existsSync,lstatSync,readFileSync,readdirSync,rmSync}from'node:fs';import path from'node:path';
+import{expect,test}from'bun:test';import{existsSync,lstatSync,readFileSync,readdirSync,rmSync,writeFileSync}from'node:fs';import path from'node:path';
 import{startMachineTrial,SERVE_ENTRY,TRIAL_CONTEXT,TRIAL_INDEX,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
 import{canonicalDigest,type Control,type FrameOf}from'../../remote-control/protocol';import{createMachineCommandCatalogue}from'./production';import{localControlPath}from'./local-control';import{resolveRemoteProfile}from'../../harness/policy/profiles';
 type Trial=Awaited<ReturnType<typeof startMachineTrial>>;type RunEvent=FrameOf<'run-event'>['payload'];
@@ -118,8 +118,8 @@ test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and
  }finally{await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
 },120000);
 
-test.skipIf(catalogueGaps.length>0)('a serve killed mid-run stays uncertain until the operator recovers it locally and a human resolves it in Hub, keeping history and the owned baseline and never replaying queued work',async()=>{
- const trial=await startMachineTrial();const[target,other]=trial.targets as [TrialTarget,TrialTarget];const marker=supervisedMarker(target.machine,2);try{
+test.skipIf(catalogueGaps.length>0)('a serve killed mid-run stays uncertain until the operator recovers it locally and a human resolves it in Hub, then resumes on the restarted daemon with history and the owned baseline kept and queued work never replayed, while a commit made with serve connected reaches Hub',async()=>{
+ const trial=await startMachineTrial({spareCheckout:true});const[target,other]=trial.targets as [TrialTarget,TrialTarget];const marker=supervisedMarker(target.machine,2);try{
  const hub=hubClient(trial);await hub.login();
  const calls=(ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});
  const machine=()=>hub.call<Inventory>(`/hub/v2/machines/${target.machineId}`);
@@ -170,28 +170,78 @@ test.skipIf(catalogueGaps.length>0)('a serve killed mid-run stays uncertain unti
  expect(await recover(trial,target,['--action','release-resolved-run','--run',crashed.runId,'--reconciliation',reconciliationId,'--request-id','release-before-human'])).toEqual({ok:false,code:'recovery-required'});
  // The human resolves the run through the existing ResolveRunRequest; only then does operator step 4 release exactly this run's local fences.
  expect(await hub.call<{runId:string;state:string;version:number;reconciliationId:string}>(`/hub/v2/machines/${target.machineId}/resolve-run`,{runId:crashed.runId,expectedRunVersion:uncertain.version,localReconciliationId:reconciliationId,decision:'lost',reason:'Locally confirmed absence of the crashed serve and its supervised process group'})).toEqual({runId:crashed.runId,state:'lost',version:uncertain.version+1,reconciliationId});
+ // A renewal or resume the human sends before operator step 4 is refused at once with its truthful code: the restarted daemon cannot
+ // re-host yet, rejects it before starting anything, and Hub settles it instead of leaving the session busy until a delivery deadline.
+ const early=await s.read();expect({state:early.state,activeRunId:early.activeRunId}).toEqual({state:'recovery-required',activeRunId:null});
+ expect(await hub.raw(`${s.base}/controller/renew`,{expectedSessionVersion:early.version,expectedControllerVersion:s.controller.expectedControllerVersion,controllerLeaseId:s.controller.controllerLeaseId,requestedLeaseSeconds:60,mode:'renew'})).toMatchObject({status:200});
+ const earlyResume=await hub.wait(()=>hub.raw(`${s.base}/resume`,{expectedSessionVersion:early.version,controller:s.controller,expectedHistoryVersion:early.historyVersion,expectedWorkspaceBaseline:early.workspaceBaseline}),r=>r.status!==409||(r.data as {error:{code:string}}).error.code!=='session-busy',10000);
+ expect(earlyResume).toMatchObject({status:200,data:{kind:'resume-session',status:'pending'}});const earlyOperation=(earlyResume.data as Control['SessionOperationReceipt']).operationId;
+ expect(await hub.wait(()=>hub.raw(`${s.base}/operations/${earlyOperation}`),r=>r.status!==200,10000)).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});
+ // So is `/sessions resume` from a new session on the machine's other checkout, and that source session is not left busy either.
+ const spareTarget={...target,checkoutId:target.spare!.checkoutId,cwd:target.spare!.cwd};
+ const sessionsResume=async(source:Awaited<ReturnType<typeof controlledSession>>,at:Control['SessionRecord'])=>{const ready=await source.idle();const catalogue=await hub.call<Control['CommandCatalogue']>(`${source.base}/commands`);
+  return hub.call<Control['SessionOperationReceipt']>(`${source.base}/commands/invoke`,{expectedSessionVersion:ready.version,expectedConfigVersion:ready.config.configVersion,controller:source.controller,catalogueDigest:catalogue.catalogueDigest,commandName:'sessions.resume',
+   arguments:{sessionId:s.created.sessionId,expectedSessionVersion:at.version,controller:s.controller,expectedHistoryVersion:at.historyVersion,expectedWorkspaceBaseline:at.workspaceBaseline},busyPolicy:'reject'});};
+ const tooEarlySource=await controlledSession(trial,hub,spareTarget,'Resume the crashed session too early');const tooEarly=await sessionsResume(tooEarlySource,early);
+ expect({sessionId:tooEarly.sessionId,kind:tooEarly.kind,status:tooEarly.status}).toEqual({sessionId:s.created.sessionId,kind:'resume-session',status:'pending'});
+ expect(await hub.wait(()=>hub.raw(`${tooEarlySource.base}/operations/${tooEarly.operationId}`),r=>r.status!==200,10000)).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});
+ const afterRefusal=await tooEarlySource.idle();const status=await hub.call<Control['CommandOutcome']>(`${tooEarlySource.base}/commands/invoke`,{expectedSessionVersion:afterRefusal.version,controller:tooEarlySource.controller,expectedConfigVersion:afterRefusal.config.configVersion,catalogueDigest:(await hub.call<Control['CommandCatalogue']>(`${tooEarlySource.base}/commands`)).catalogueDigest,commandName:'status',arguments:{},busyPolicy:'reject'});
+ expect((await hub.wait(()=>hub.call<Control['CommandOutcome']>(`${tooEarlySource.base}/operations/${status.operationId}`),o=>o.status!=='queued')).status).toBe('applied');
+ const refused=await s.read();expect({state:refused.state,version:refused.version,controller:refused.controller,activeRunId:refused.activeRunId}).toEqual({state:'recovery-required',version:early.version,controller:early.controller,activeRunId:null});
  expect(await recover(trial,target,['--action','release-resolved-run','--run',crashed.runId,'--reconciliation',reconciliationId,'--request-id','release-after-human'])).toEqual({ok:true,value:{kind:'released-resolved-run',runId:crashed.runId,sessionId:s.created.sessionId,reconciliationId,capacityReleased:true,checkoutLeaseReleased:true}});
- const released=await recover(trial,target,[]);expect(released.ok?released.value.uncertainRuns:released.code).toEqual([]);
+ // The daemon hosts only the source session of the refused `/sessions resume`; nothing re-hosted the crashed one.
+ const released=await recover(trial,target,[]);if(!released.ok)throw new Error(released.code);expect(released.value).toMatchObject({uncertainRuns:[]});
+ expect((released.value.sessions as {session:{sessionId:string}}[]).map(hosted=>hosted.session.sessionId)).toEqual([tooEarlySource.created.sessionId]);
  // History, the owned baseline and the queued input survive the crash and its recovery; the queued turn never reached the provider and is
  // now suspended, exactly as the restarted native host keeps queued input: never authorization, only a human reauthorizes or removes it.
  expect((await hub.call<Control['HistoryPage']>(`${s.base}/history`)).messages).toEqual(history.messages);expect(checkoutState(target)).toEqual(owned);expect(readFileSync(path.join(target.cwd,'trial-edit-1.txt'),'utf8')).toBe('deterministic native edit 1\n');
  expect((await hub.call<Control['QueuePage']>(`${s.base}/queue`)).items.map(i=>({operationId:i.operationId,state:i.state}))).toEqual([{operationId:queued.operationId,state:'suspended'}]);
  await Bun.sleep(1000);expect([calls(1),calls(2),calls(3)]).toEqual([[{reply:'tool',toolName:'apply_patch'},{reply:'text'}],[{reply:'tool',toolName:'shell_exec'}],[]]);
  // Released is not resumed: the lost run no longer occupies the session, which is recovery-required, never busy, idle or closed; its
- // controller is not released, and new work on the unverified baseline is refused.
+ // controller is not released, new work on the unverified baseline is refused, and nothing re-hosted the session on its own.
  const final=await s.read();expect({state:final.state,activeRunId:final.activeRunId,activeTurnId:final.activeTurnId}).toEqual({state:'recovery-required',activeRunId:null,activeTurnId:null});expect(final.controller?.state).not.toBe('released');
- expect(await hub.raw(`${s.base}/messages`,{expectedSessionVersion:final.version,expectedConfigVersion:final.config.configVersion,controller:s.controller,text:trialTurn(4,'read seed.txt'),interpretation:'literal-message',busyPolicy:'reject',association:{mode:'ad-hoc',profileConsentVersion:1}})).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});
- // New work after the recovery: the developer commits the agent's file while serve is stopped; the restarted machine publishes the new
- // HEAD as the next inventory version, and a new session starts on it and runs a real turn. The suspended turn still never runs.
- expect(await trial.stopServe(target)).toBe(0);git(target,['add','trial-edit-1.txt']);git(target,['commit','-qm','Keep the agent edit']);const committed=git(target,['rev-parse','HEAD']);expect(committed).not.toBe(head);
- await trial.restartServe(target);
- const fresh=await hub.wait(machine,v=>v.connected&&v.inventory?.checkouts.some(c=>c.checkoutId===target.checkoutId&&c.headSha===committed&&c.clean)===true);expect(fresh.inventory!.inventoryVersion).toBeGreaterThan(restarted.inventoryVersion);
- const work=await controlledSession(trial,hub,target,'New work after crash recovery');
+ expect(await hub.raw(`${s.base}/messages`,{expectedSessionVersion:final.version,expectedConfigVersion:final.config.configVersion,controller:s.controller,text:trialTurn(3,'read seed.txt too early'),interpretation:'literal-message',busyPolicy:'reject',association:{mode:'ad-hoc',profileConsentVersion:1}})).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});
+ // Control stays explicit: the human renews the same controller lease, and that renewal is what the restarted daemon re-hosts the crashed
+ // session for, from its durable state, on its re-verified owned baseline and the crashed daemon's lease proven gone by recorded identity.
+ const left=Date.parse(final.controller!.expiresAt)-Date.now();if(left<5000)throw new Error(`trial-controller-lease-nearly-expired: ${left} ms left`);
+ const renewal=await hub.call<Control['ControllerReceipt']>(`${s.base}/controller/renew`,{expectedSessionVersion:final.version,expectedControllerVersion:s.controller.expectedControllerVersion,controllerLeaseId:s.controller.controllerLeaseId,requestedLeaseSeconds:60,mode:'renew'});
+ expect({id:renewal.lease.controllerLeaseId,version:renewal.lease.version}).toEqual({id:s.controller.controllerLeaseId,version:s.controller.expectedControllerVersion});
+ const renewed=await hub.wait(s.read,v=>v.controller?.expiresAt===renewal.lease.expiresAt&&v.sessionEventCursor>=final.sessionEventCursor+2);
+ expect({state:renewed.state,activeRunId:renewed.activeRunId,workspaceBaseline:renewed.workspaceBaseline}).toEqual({state:'recovery-required',activeRunId:null,workspaceBaseline:final.workspaceBaseline});
+ const rehosted=await recover(trial,target,['--session',s.created.sessionId]);if(!rehosted.ok)throw new Error(rehosted.code);
+ expect(rehosted.value).toMatchObject({sessions:[{session:{sessionId:s.created.sessionId,state:'recovery-required',activeRunId:null},checkoutOwned:true}],uncertainRuns:[]});
+ // An operator stop before the resume fences nothing the re-hosted session took: the next daemon hosts it again for the resume.
+ expect(await trial.stopServe(target)).toBe(0);await trial.restartServe(target);await hub.wait(machine,v=>v.connected);
+ const restartedAgain=await recover(trial,target,[]);if(!restartedAgain.ok)throw new Error(restartedAgain.code);expect(restartedAgain.value).toMatchObject({sessions:[],uncertainRuns:[]});
+ // The human resumes it with `/sessions resume` from a new session on the machine's other checkout: the command reaches the same guarded
+ // re-host on the restarted daemon, and only the machine's own re-verification of the owned baseline makes it idle. The lost run stays lost.
+ const source=await controlledSession(trial,hub,spareTarget,'Resume the crashed session');
+ const leaseLeft=Date.parse(renewal.lease.expiresAt)-Date.now();if(leaseLeft<5000)throw new Error(`trial-controller-lease-nearly-expired: ${leaseLeft} ms left`);
+ const resume=await sessionsResume(source,renewed);
+ expect({sessionId:resume.sessionId,kind:resume.kind,status:resume.status}).toEqual({sessionId:s.created.sessionId,kind:'resume-session',status:'pending'});
+ const resumed=await hub.wait(s.read,v=>v.state==='idle');expect((await source.read()).state).toBe('idle');expect({activeRunId:resumed.activeRunId,workspaceBaseline:resumed.workspaceBaseline}).toEqual({activeRunId:null,workspaceBaseline:final.workspaceBaseline});
+ expect((await s.run(crashed.runId)).state).toBe('lost');expect(checkoutState(target)).toEqual(owned);
+ // A new turn runs on the resumed native conversation, past the suspended item; the queued turn still never reaches the provider.
+ const queuedText=trialTurn(3,'read seed.txt'),next=await s.send(3,'read seed.txt after the resume');
+ await hub.wait(()=>s.run(next.runId),r=>r.state==='succeeded');
+ expect(calls(3)).toEqual([{reply:'tool',toolName:'read_file'},{reply:'text'}]);expect(trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===3).map(c=>c.text)).toEqual([trialTurn(3,'read seed.txt after the resume'),trialTurn(3,'read seed.txt after the resume')]);
+ expect(trial.provider.calls.filter(c=>c.text===queuedText)).toEqual([]);
+ expect((await hub.call<Control['QueuePage']>(`${s.base}/queue`)).items.map(i=>({operationId:i.operationId,state:i.state}))).toEqual([{operationId:queued.operationId,state:'suspended'}]);
+ // History is intact: every message before the crash stays, in order, and the new turn only appends.
+ const after=(await hub.call<Control['HistoryPage']>(`${s.base}/history`)).messages;expect(after.slice(0,history.messages.length)).toEqual(history.messages);
+ expect(after.slice(history.messages.length).map(m=>m.role)).toEqual(['human','tool-summary','assistant']);expect(after.at(-3)?.text).toBe(trialTurn(3,'read seed.txt after the resume'));
+ // The other machine was never touched by any of it.
+ expect((await hub.call<Inventory>(`/hub/v2/machines/${other.machineId}`)).connected).toBe(true);expect(trial.provider.calls.filter(c=>c.machine===other.machine)).toEqual([]);expect(notices(other)).toEqual([]);
+ // While serve stays connected, a developer commit on that machine's checkout reaches Hub as the next inventory version without any
+ // reconnect, and a new session on the new HEAD runs a real turn.
+ const otherMachine=()=>hub.call<Inventory>(`/hub/v2/machines/${other.machineId}`);const otherBefore=(await otherMachine()).inventory!,otherPid=other.serve.pid;
+ writeFileSync(path.join(other.cwd,'developer.txt'),'a developer commit while serve runs\n');git(other,['add','developer.txt']);git(other,['commit','-qm','Developer commit while serve is connected']);const committed=git(other,['rev-parse','HEAD']);
+ const fresh=await hub.wait(otherMachine,v=>v.connected&&v.inventory?.checkouts.some(c=>c.checkoutId===other.checkoutId&&c.headSha===committed&&c.clean)===true,30000);
+ expect(fresh.inventory!.inventoryVersion).toBeGreaterThan(otherBefore.inventoryVersion);expect(other.serve.pid).toBe(otherPid);expect(notices(other)).toEqual([]);
+ const work=await controlledSession(trial,hub,other,'New work on a commit made while serve is connected');
  const read=await work.send(1,'read seed.txt');await hub.wait(()=>work.run(read.runId),r=>r.state==='succeeded');
- expect(calls(1)).toEqual([{reply:'tool',toolName:'apply_patch'},{reply:'text'},{reply:'tool',toolName:'read_file'},{reply:'text'}]);expect(calls(3)).toEqual([]);
- expect((await hub.call<Control['QueuePage']>(`${s.base}/queue`)).items.map(i=>i.state)).toEqual(['suspended']);expect(checkoutState(target)).toEqual({index:TRIAL_INDEX,status:''});
- // The other machine was never touched.
- expect((await hub.call<Inventory>(`/hub/v2/machines/${other.machineId}`)).connected).toBe(true);expect(trial.provider.calls.filter(c=>c.machine===other.machine)).toEqual([]);expect(notices(other)).toEqual([]);expect(trial.provider.unexpected).toEqual([]);
+ expect(trial.provider.calls.filter(c=>c.machine===other.machine).map(({reply,toolName})=>toolName?{reply,toolName}:{reply})).toEqual([{reply:'tool',toolName:'read_file'},{reply:'text'}]);
+ expect(notices(other)).toEqual([]);expect(trial.provider.unexpected).toEqual([]);
  }finally{killGroup(marker);await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
 },180000);
 

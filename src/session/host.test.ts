@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSessionHost } from "./host";
@@ -709,6 +709,23 @@ test("queued input publishes only after its durable receipt and rejects the boun
     expect((await host.queue({ limit: 100 })).items.filter((entry) => entry.state === "queued")).toHaveLength(100);
     expect(provider.requests).toHaveLength(0);
   } finally { off(); await host.dispose("test"); }
+});
+
+test("the private session record goes through the bounded config helpers: a widened directory is tightened owner-only and a record path that is no regular file is refused typed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "keryx-native-host-state-")); roots.push(root);
+  const cwd = join(root, "checkout"); expect(await Bun.spawn(["git", "init", cwd], { stdout: "ignore", stderr: "ignore" }).exited).toBe(0);
+  const workspace: SessionWorkspacePort = { verify: async () => ({ ok: true, baseline: digest }), checkpoint: async () => ({ ok: true, baseline: digest }) };
+  const open = (dataDir: string, controlDir?: string) => createSessionHost({ cwd, dataDir, ...(controlDir === undefined ? {} : { controlDir }), record: record(),
+    runtime: createNativeSessionRuntime({ cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m" }), workspace, authorizeAction: async () => true });
+  const mode = async (target: string) => ((await stat(target)).mode & 0o777).toString(8);
+  // Created earlier under a permissive umask, so a creation-time mode alone would leave both levels group-writable.
+  const control = join(root, "hub-control"); await mkdir(join(control, "remote-sessions"), { recursive: true }); await chmod(control, 0o775); await chmod(join(control, "remote-sessions"), 0o775);
+  const host = await open(join(root, "state"), control);
+  try { expect({ root: await mode(control), dir: await mode(join(control, "remote-sessions")), record: await mode(join(control, "remote-sessions", "session-test.json")) }).toEqual({ root: "700", dir: "700", record: "600" }); }
+  finally { await host.dispose("test"); }
+  // Something that is not a regular file where the record belongs is refused before any read, as a typed local-state failure.
+  await mkdir(join(root, "other-state", "remote-sessions", "session-test.json"), { recursive: true });
+  await expect(open(join(root, "other-state"))).rejects.toMatchObject({ name: "SessionHostError", code: "local-state-not-regular" });
 });
 
 test("shared native lease refuses an actual separate-process readline resume while Hub records stay private", async () => {
@@ -1474,6 +1491,102 @@ test("the native decision window may only be shortened: a longer, empty or fract
     for (const decisionTtlMs of [120_001, 0, 1.5]) await expect(createSessionHost({ cwd, dataDir: join(root, "state"), record: { ...record(), sessionId: "session-decision-window" }, runtime, workspace, decisionTtlMs })).rejects.toMatchObject({ code: "invalid-decision-ttl" });
   } finally { await host.dispose(); }
 });
+
+/**
+ * A host in a separate real process, SIGKILLed with a turn in flight and a message queued behind it: its durable local state,
+ * public history and a native lease whose fresh heartbeat names a dead process stay exactly as a serve crash leaves them.
+ */
+async function crashedHost() {
+  const root = await mkdtemp(join(tmpdir(), "keryx-native-crash-")); roots.push(root);
+  const cwd = join(root, "checkout"); const dataDir = join(root, "state");
+  expect(await Bun.spawn(["git", "init", cwd], { stdout: "ignore", stderr: "pipe" }).exited).toBe(0);
+  const at = (file: string) => JSON.stringify(join(import.meta.dir, file));
+  const script = `import { createSessionHost } from ${at("host.ts")};import { createNativeSessionRuntime } from ${at("native-runtime.ts")};import { canonicalDigest } from ${at("../remote-control/protocol.ts")};
+const capabilities = { streaming: true, toolCalls: true, parallelToolCalls: false, structuredOutput: false, reasoningMetadata: false, promptCaching: false, vision: false, tokenCounting: false, modelListing: false };
+const provider = { describe: () => ({ descriptor: { providerId: "scripted" }, capabilities }), stream: () => (async function* () { await new Promise(() => {}); })() };
+const cwd = process.env.CRASH_CWD, workspace = { verify: async () => ({ ok: true, baseline: "a".repeat(64) }), checkpoint: async () => ({ ok: true, baseline: "a".repeat(64) }) };
+const host = await createSessionHost({ cwd, dataDir: process.env.CRASH_DATA, record: JSON.parse(process.env.CRASH_RECORD), runtime: createNativeSessionRuntime({ cwd, provider, providerId: "scripted", modelId: "m" }), workspace, authorizeController: async () => true, authorizeQueued: async () => true, authorizeAction: async () => true });
+const controller = { controllerLeaseId: "controller", expectedControllerVersion: 1 }, association = { mode: "ad-hoc", profileConsentVersion: 1 };
+let current = await host.inspect();
+const turn = { sessionId: current.sessionId, expectedSessionVersion: current.version, controller, expectedConfigVersion: 1, expectedHistoryVersion: current.historyVersion, expectedWorkspaceBaseline: current.workspaceBaseline, association, messageId: "crashing", text: "The turn a serve crash interrupts" };
+const admitted = await host.apply({ kind: "message", operationId: "crashing", payloadDigest: canonicalDigest(turn), actorId: "human", runId: "run-crashing", turnId: "turn-crashing", request: turn });
+current = await host.inspect();
+const behind = { expectedSessionVersion: current.version, controller, expectedConfigVersion: 1, text: "Queued behind the crash", interpretation: "literal-message", busyPolicy: "enqueue", association };
+const queued = await host.apply({ kind: "submit-message", operationId: "queued-behind", payloadDigest: canonicalDigest(behind), actorId: "human", request: behind });
+console.log(JSON.stringify({ admitted: admitted.status, queued: queued.status, nativeSessionId: host.nativeSessionId() }));
+await new Promise(() => {});`;
+  const child = Bun.spawn([process.execPath, "--no-env-file", "--config=/dev/null", "-e", script], { cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore",
+    env: { PATH: process.env.PATH ?? "", HOME: root, XDG_DATA_HOME: join(root, "xdg-data"), XDG_CONFIG_HOME: join(root, "xdg-config"), KERYX_HOOKS: "off", CRASH_CWD: cwd, CRASH_DATA: dataDir, CRASH_RECORD: JSON.stringify(record()) } });
+  const reader = child.stdout.getReader(); let text = "";
+  for (const deadline = Date.now() + 15_000; !text.includes("\n") && Date.now() < deadline;) { const next = await reader.read(); if (next.done) break; text += new TextDecoder().decode(next.value); }
+  const ready = JSON.parse(text.trim() || "{}") as { admitted?: string; queued?: string; nativeSessionId?: string };
+  child.kill("SIGKILL"); await child.exited;
+  expect({ admitted: ready.admitted, queued: ready.queued }).toEqual({ admitted: "admitted", queued: "queued" });
+  return { cwd, dataDir, pid: child.pid, nativeSessionId: ready.nativeSessionId! };
+}
+test("a crashed in-flight host is re-hosted only for a human-resolved lost run on its proven crashed lease holder, resumes explicitly and never replays queued input", async () => {
+  const crash = await crashedHost(); const lost = { runId: "run-crashing", turnId: "turn-crashing" };
+  const workspace: SessionWorkspacePort = { verify: async () => ({ ok: true, baseline: digest }), checkpoint: async () => ({ ok: true, baseline: digest }) };
+  const provider = scriptedProvider([okReply]); const consulted: string[] = []; const leases: string[] = [];
+  const open = (crashRecovery?: SessionHostOptions["crashRecovery"]) => createSessionHost({ cwd: crash.cwd, dataDir: crash.dataDir, record: record(), workspace,
+    runtime: createNativeSessionRuntime({ cwd: crash.cwd, provider: provider.provider, providerId: "scripted", modelId: "m" }), onNativeLease: (lease) => { leases.push(lease.nativeSessionId); },
+    authorizeController: async () => true, authorizeQueued: async () => true, authorizeAction: async () => true, ...(crashRecovery === undefined ? {} : { crashRecovery }) });
+  const proof = (proven: boolean): NonNullable<SessionHostOptions["crashRecovery"]>["reclaimLease"] => (holder, run) => { consulted.push(`${holder.pid}:${run.runId}`); return proven && holder.pid === crash.pid; };
+  let host: Awaited<ReturnType<typeof createSessionHost>> | undefined;
+  try {
+    // Not human-resolved: the dead holder's fresh heartbeat keeps the native lease, and an unproven holder is never taken over.
+    await expect(open()).rejects.toMatchObject({ name: "SessionLeasedError" });
+    await expect(open({ lostRuns: [{ runId: "another-run", turnId: "another-turn" }], reclaimLease: proof(true) })).rejects.toMatchObject({ name: "SessionLeasedError" });
+    expect(consulted).toEqual([]);
+    await expect(open({ lostRuns: [lost], reclaimLease: proof(false) })).rejects.toMatchObject({ name: "SessionLeasedError" });
+    expect(consulted).toEqual([`${crash.pid}:${lost.runId}`]); expect(await contenderRefusal(crash.cwd, crash.dataDir, crash.nativeSessionId)).toBe("SessionLeasedError");
+    // Human-resolved and proven: the crashed holder's lease is taken over and the host comes back recovery-required without the lost run.
+    host = await open({ lostRuns: [lost], reclaimLease: proof(true) });
+    const restored = await host.inspect();
+    expect({ state: restored.state, activeRunId: restored.activeRunId, activeTurnId: restored.activeTurnId, resumable: host.resumableAfterLost(), native: host.nativeSessionId() }).toEqual({ state: "recovery-required", activeRunId: null, activeTurnId: null, resumable: true, native: crash.nativeSessionId });
+    expect(leases).toEqual([crash.nativeSessionId]);
+    expect((await host.queue()).items.map((item) => [item.operationId, item.state])).toEqual([["queued-behind", "suspended"]]);
+    const history = (await host.history()).messages; expect(history.map((item) => [item.role, item.text])).toEqual([["human", "The turn a serve crash interrupts"]]);
+    // Nothing but a controller change or an explicit resume applies; new work is refused.
+    expect((await message(host, "before-resume", "New work before the resume")).status).toBe("rejected");
+    // A daemon stopped before the resume releases the lease it took; the next re-host still knows the lost run.
+    await host.dispose(); expect(await contenderRefusal(crash.cwd, crash.dataDir, crash.nativeSessionId)).toBe("none");
+    host = await open({ lostRuns: [lost], reclaimLease: proof(true) }); expect(host.resumableAfterLost()).toBe(true); expect(consulted).toHaveLength(2);
+    const claimed = await host.inspect();
+    const takeover: Control["ControllerReceipt"] = { receiptId: "takeover-after-lost", sessionVersion: claimed.version + 1, lease: { controllerLeaseId: "controller-after-lost", sessionId: claimed.sessionId, version: claimed.controller!.version + 1, actorId: "human", actorKind: "human-operator", expiresAt: new Date(Date.now() + 60_000).toISOString(), state: "held" } };
+    expect(await host.applyController(takeover, { actorId: "human", commandId: "takeover-after-lost", commandDigest: digest })).toMatchObject({ ok: true });
+    const held = await host.inspect(); expect({ state: held.state, controller: held.controller?.controllerLeaseId, resumable: host.resumableAfterLost() }).toEqual({ state: "recovery-required", controller: "controller-after-lost", resumable: true });
+    const binding = { controllerLeaseId: "controller-after-lost", expectedControllerVersion: held.controller!.version };
+    const resume: Control["SessionResume"] = { expectedSessionVersion: held.version, controller: binding, expectedHistoryVersion: held.historyVersion, expectedWorkspaceBaseline: held.workspaceBaseline };
+    expect((await host.apply({ kind: "resume-session", operationId: "resume-after-lost", payloadDigest: canonicalDigest(resume), actorId: "human", request: resume })).status).toBe("applied");
+    expect({ state: (await host.inspect()).state, resumable: host.resumableAfterLost() }).toEqual({ state: "idle", resumable: false });
+    // A new turn runs although the suspended item stays in the queue: it is never admitted, and the model never sees it.
+    const now = await host.inspect();
+    const turn: Control["StartTurnRequest"] = { sessionId: now.sessionId, expectedSessionVersion: now.version, controller: binding, expectedConfigVersion: now.config.configVersion, expectedHistoryVersion: now.historyVersion, expectedWorkspaceBaseline: now.workspaceBaseline, association: { mode: "ad-hoc", profileConsentVersion: 1 }, messageId: "after-resume", text: "The first turn after the resume" };
+    expect((await host.apply({ kind: "message", operationId: "after-resume", payloadDigest: canonicalDigest(turn), actorId: "human", runId: "run-after-resume", turnId: "turn-after-resume", request: turn })).status).toBe("admitted");
+    expect((await idle(host)).state).toBe("idle");
+    expect(provider.requests).toHaveLength(1); expect(JSON.stringify(provider.requests[0])).toContain("The first turn after the resume"); expect(JSON.stringify(provider.requests[0])).not.toContain("Queued behind the crash");
+    expect((await host.queue()).items.map((item) => [item.operationId, item.state])).toEqual([["queued-behind", "suspended"]]);
+    expect((await host.history()).messages.slice(0, history.length)).toEqual(history);
+  } finally { await host?.dispose(); }
+}, 30000);
+test("a restored in-flight run that no human resolved lost keeps the host recovery-required even when its lease is free", async () => {
+  const crash = await crashedHost();
+  // The crashed holder's lease reads gone by the D-09 rule once its heartbeat is old: a plain re-open acquires it, and still fences the session.
+  const lockFile = join(sessionLeasePath(crash.cwd, crash.nativeSessionId, crash.dataDir), "owner.json");
+  const old = new Date(Date.now() - 60_000).toISOString(); await writeFile(lockFile, JSON.stringify({ ...JSON.parse(await readFile(lockFile, "utf8")), heartbeatAt: old }));
+  const host = await createSessionHost({ cwd: crash.cwd, dataDir: crash.dataDir, record: record(), runtime: createNativeSessionRuntime({ cwd: crash.cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m" }),
+    workspace: { verify: async () => ({ ok: true, baseline: digest }), checkpoint: async () => ({ ok: true, baseline: digest }) }, authorizeController: async () => true, authorizeQueued: async () => true, authorizeAction: async () => true });
+  try {
+    const restored = await host.inspect();
+    expect({ state: restored.state, activeRunId: restored.activeRunId, resumable: host.resumableAfterLost() }).toEqual({ state: "recovery-required", activeRunId: "run-crashing", resumable: false });
+    const takeover: Control["ControllerReceipt"] = { receiptId: "takeover-unresolved", sessionVersion: restored.version + 1, lease: { controllerLeaseId: "controller-unresolved", sessionId: restored.sessionId, version: restored.controller!.version + 1, actorId: "human", actorKind: "human-operator", expiresAt: new Date(Date.now() + 60_000).toISOString(), state: "held" } };
+    expect(await host.applyController(takeover, { actorId: "human", commandId: "takeover-unresolved", commandDigest: digest })).toMatchObject({ ok: false, error: { code: "recovery-required" } });
+    const resume: Control["SessionResume"] = { expectedSessionVersion: restored.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, expectedHistoryVersion: restored.historyVersion, expectedWorkspaceBaseline: restored.workspaceBaseline };
+    expect((await host.apply({ kind: "resume-session", operationId: "resume-unresolved", payloadDigest: canonicalDigest(resume), actorId: "human", request: resume })).status).toBe("recovery-required");
+    expect((await host.inspect()).state).toBe("recovery-required");
+  } finally { await host.dispose(); }
+}, 30000);
 
 test("every command outcome the host sends satisfies the result check Hub applies: a long help is bounded and a violating result is a rejection that leaves the session usable", async () => {
   const resultSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { n: { type: "integer", minimum: 0, maximum: 1 } }, required: ["n"] };

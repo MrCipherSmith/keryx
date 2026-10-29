@@ -36,7 +36,7 @@ export function gated(provider:{provider:Provider['provider']}):()=>void{let rel
 
 export interface MachineOptions{
  scripts?:Script[];provider?:Provider;approve?:NativeRuntimeOptions['approve'];contributions?:NativeCommandContribution[];spawner?:NativeRuntimeOptions['spawner'];
- candidates?:Control['RoutingAvailability']['candidates'];runLogByteLimit?:number;decisionTtlMs?:number;base?:string;checkouts?:number;maxConcurrentRuns?:number;bridge?:Partial<Pick<MachineBridgeOptions,'runLogByteLimit'>>;
+ candidates?:Control['RoutingAvailability']['candidates'];runLogByteLimit?:number;decisionTtlMs?:number;inventoryIntervalMs?:number;base?:string;checkouts?:number;maxConcurrentRuns?:number;bridge?:Partial<Pick<MachineBridgeOptions,'runLogByteLimit'>>;
  /** Extra committed content of every checkout, written before its fixture commit (for example a .gitignore or a tracked symlink). */
  seed?:(cwd:string)=>void;
 }
@@ -67,7 +67,7 @@ export function bridgeHarness(){
  async function startBridge(state:Local,options:MachineOptions,provider:Provider){
   const digest=canonicalDigest(state.policy);const routing:Control['RoutingAvailability']={version:1,policyDigest:digest,capabilityDigest:digest,profileIds:['local'],candidates:options.candidates??[localCandidate]};const runtimes:NativeSessionRuntime[]=[];
   const catalogue=createMachineCommandCatalogue(digest,options.contributions??[]);
-  const bridge=new MachineBridge({...(options.runLogByteLimit!==undefined?{runLogByteLimit:options.runLogByteLimit}:{}),...(options.decisionTtlMs!==undefined?{decisionTtlMs:options.decisionTtlMs}:{}),onNotice:recordNotice,configDir:state.configDir,enrollment:loadEnrollment(state.configDir)!,policy:state.policy,resolveProfile:async mapping=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue,routing,createRuntime:async()=>{const runtime=createNativeSessionRuntime({cwd:mapping.cwd,provider:provider.provider,providerId:'scripted',modelId:'m',availability:routing,...(options.approve?{approve:options.approve}:{}),...(options.spawner?{spawner:options.spawner}:{}),...(options.contributions?{commandContributions:options.contributions}:{})});runtimes.push(runtime);return {ok:true,value:runtime};}}})});
+  const bridge=new MachineBridge({...(options.runLogByteLimit!==undefined?{runLogByteLimit:options.runLogByteLimit}:{}),...(options.decisionTtlMs!==undefined?{decisionTtlMs:options.decisionTtlMs}:{}),...(options.inventoryIntervalMs!==undefined?{inventoryIntervalMs:options.inventoryIntervalMs}:{}),onNotice:recordNotice,configDir:state.configDir,enrollment:loadEnrollment(state.configDir)!,policy:state.policy,resolveProfile:async mapping=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue,routing,createRuntime:async()=>{const runtime=createNativeSessionRuntime({cwd:mapping.cwd,provider:provider.provider,providerId:'scripted',modelId:'m',availability:routing,...(options.approve?{approve:options.approve}:{}),...(options.spawner?{spawner:options.spawner}:{}),...(options.contributions?{commandContributions:options.contributions}:{})});runtimes.push(runtime);return {ok:true,value:runtime};}}})});
   bridges.push(bridge);await bridge.start();return {bridge,digest,routing,runtimes,catalogue};
  }
  /** Machine + bridge + one idle native session per checkout. */

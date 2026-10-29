@@ -393,6 +393,7 @@ function leaseSession(
   dataDir: string | undefined,
   timing: ReturnType<typeof resolveTiming>,
   takeOver: boolean,
+  reclaimHolder?: (holder: SessionLeaseOwner) => boolean,
 ): LeasedHandle {
   const lockPath = sessionLeasePath(cwd, summary.id, dataDir);
   const existing = heldByThisProcess.get(lockPath);
@@ -401,9 +402,12 @@ function leaseSession(
   const owner = mintOwner(timing.now ?? Date.now);
   const opts: LeaseOptions<SessionLeaseOwner> = {
     ...leaseOptions(timing),
+    // With a caller's proof, neither heartbeat age nor PID liveness decides anything: every record reads live (an unreadable one
+    // too) unless that proof, or this instance's own leftover, says the holder is gone.
+    ...(reclaimHolder === undefined ? {} : { staleMs: Number.MAX_SAFE_INTEGER }),
     // A record naming this very instance with no live handle is our own
     // leftover (a release that failed half-way); reclaim it.
-    reclaimIf: (holder) => isMine(holder),
+    reclaimIf: (holder) => isMine(holder) || reclaimHolder?.(holder) === true,
   };
   const result = takeOver ? reclaimStaleLeaseSync(lockPath, owner, opts) : acquireLeaseSync(lockPath, owner, opts);
   if (!result.ok) {
@@ -508,6 +512,12 @@ export interface OpenLeasedSessionOptions extends OpenSessionOptions, SessionLea
   takeOver?: boolean;
   /** With `resumeId`: fork the source (no lease needed on it) and lease the fork. */
   fork?: boolean;
+  /**
+   * With `resumeId`: the lease on disk is taken only when it is free or this predicate proves its holder gone by the caller's own
+   * evidence (a crash recovery's recorded process identity). Heartbeat age and PID liveness are then never consulted, so a fresh
+   * heartbeat of a proven-dead holder is taken over and an unproven holder keeps its lease even when the D-09 rule calls it gone.
+   */
+  reclaimHolder?: (holder: SessionLeaseOwner) => boolean;
 }
 
 export type OpenLeasedSessionResult = ReturnType<typeof openSession> & {
@@ -533,7 +543,7 @@ export type OpenLeasedSessionResult = ReturnType<typeof openSession> & {
  * `releaseSessionLease` (or through `switchLeasedSession`).
  */
 export function openLeasedSession(opts: OpenLeasedSessionOptions): OpenLeasedSessionResult {
-  const { takeOver, fork, staleMs, heartbeatMs, now, isAlive, host, resumeId: rawResumeId, continueLast, ...base } =
+  const { takeOver, fork, reclaimHolder, staleMs, heartbeatMs, now, isAlive, host, resumeId: rawResumeId, continueLast, ...base } =
     opts;
   const timing = resolveTiming({
     ...(staleMs !== undefined ? { staleMs } : {}),
@@ -579,7 +589,7 @@ export function openLeasedSession(opts: OpenLeasedSessionOptions): OpenLeasedSes
       // No lease to take: let the store raise its usual "no session matching" error.
       return openWith(resumeId);
     }
-    return openWith(found.id, leaseSession(cwd, found, dataDir, timing, takeOver === true));
+    return openWith(found.id, leaseSession(cwd, found, dataDir, timing, takeOver === true, reclaimHolder));
   }
 
   let skipped: SkippedSession | undefined;

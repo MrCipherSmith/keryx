@@ -4,7 +4,6 @@ import { buildDoctorReport } from "../../commands/doctor";
 import { renderSetupSlash } from "../../commands/setup-guide";
 import { loadReport } from "../../decisions/service";
 import { readLatestGovernanceReport } from "../../governance/service";
-import { loadOpenReport } from "../../product/service";
 import { validateArguments, type Control } from "../../remote-control/protocol";
 import { computeBotMetrics } from "../../review/bot/metrics";
 import { redactSensitiveText } from "../../security/service";
@@ -12,6 +11,7 @@ import { loadInspectorCatchUp, loadInspectorFlows, loadInspectorSlates, loadInsp
 import { loadReviewDepth } from "../../tui/review-panel";
 import { loadTriggerLedgerView } from "../../tui/trigger-ledger";
 import type { NativeCommandContribution, SessionCommandContext } from "./handlers";
+import { openIntentReader } from "./open-intents";
 
 export type ProjectInspectionContext = Pick<SessionCommandContext, "cwd" | "nativeSessionDir" | "configDir" | "inspectionMode" | "projectContext" | "effect">;
 type Source = "hub-canonical" | "local-native";
@@ -94,7 +94,11 @@ const readers: Record<string, Reader> = {
     return args.section === undefined || args.section === "overview" ? { metrics: await computeBotMetrics(context.cwd), depth }
       : { section: args.section, depth };
   },
-  product: (context) => loadOpenReport(context.cwd),
+  // The product command's own reader (open-intents.ts): this module never imports the product module.
+  product: async (context) => {
+    const read = openIntentReader();
+    return read === undefined ? failure("local-native", "setup-required", "The product report is not available in this process.") : read(context.cwd);
+  },
   governance: (context) => readLatestGovernanceReport(context.cwd),
   triggers: async (context, args) => {
     const view = await loadTriggerLedgerView(context.cwd);

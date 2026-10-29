@@ -94,6 +94,7 @@ export class MachineLedger {
    CREATE TABLE IF NOT EXISTS machine_operations(id TEXT PRIMARY KEY,sessionId TEXT NOT NULL,digest TEXT NOT NULL,body TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS machine_daemons(daemonId TEXT PRIMARY KEY,lockNonce TEXT NOT NULL,pid INTEGER NOT NULL,pgid INTEGER NOT NULL,startedAt TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS machine_owned_processes(id TEXT PRIMARY KEY,daemonId TEXT NOT NULL,checkoutId TEXT NOT NULL,sessionId TEXT NOT NULL,phase TEXT NOT NULL,pid INTEGER,pgid INTEGER,startedAt TEXT);
+   CREATE TABLE IF NOT EXISTS machine_native_leases(token TEXT PRIMARY KEY,daemonId TEXT NOT NULL,sessionId TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS machine_run_recovery(id TEXT PRIMARY KEY,digest TEXT NOT NULL,runId TEXT NOT NULL,step TEXT NOT NULL,phase TEXT NOT NULL,result TEXT);
    CREATE TABLE IF NOT EXISTS machine_run_terminal(stream TEXT PRIMARY KEY,terminalAt INTEGER NOT NULL);
    CREATE TABLE IF NOT EXISTS machine_retired_logs(stream TEXT NOT NULL,fromSeq INTEGER NOT NULL,toSeq INTEGER NOT NULL,digest TEXT NOT NULL,bytes INTEGER NOT NULL,retiredAt INTEGER NOT NULL,PRIMARY KEY(stream,fromSeq));`);
@@ -146,8 +147,14 @@ export class MachineLedger {
     /** Only a spawn that provably created no process may drop its intent. */
     abandonOwnedProcess(id:string):void{this.db.query("DELETE FROM machine_owned_processes WHERE id=? AND phase='intent'").run(id);}
     ownedProcesses(daemonId:string,checkoutId:string):OwnedProcessRecord[]{return this.db.query<OwnedProcessRecord,[string,string]>('SELECT id,daemonId,checkoutId,sessionId,phase,pid,pgid,startedAt FROM machine_owned_processes WHERE daemonId=? AND checkoutId=? ORDER BY id').all(daemonId,checkoutId);}
+    /**
+     * The native session lease a daemon took, by the token of its owner record, durable before any run on that session: a crash
+     * leaves exactly the binding a recovery judges, like the daemon lock's nonce. An unrecorded lease can never be taken over.
+     */
+    recordNativeLease(lease:{token:string;daemonId:string;sessionId:string}):void{this.db.transaction(()=>{const old=this.nativeLease(lease.token);if(old){if(old.daemonId!==lease.daemonId||old.sessionId!==lease.sessionId)throw new MachineError('payload-conflict');return;}if(this.db.query<{n:number},[string]>('SELECT count(*) n FROM machine_native_leases WHERE daemonId=?').get(lease.daemonId)!.n>=OWNED_PROCESS_CAPACITY)throw new MachineError('quota-exceeded');this.db.query('INSERT INTO machine_native_leases(token,daemonId,sessionId) VALUES(?,?,?)').run(lease.token,lease.daemonId,lease.sessionId);}).immediate();}
+    nativeLease(token:string):{daemonId:string;sessionId:string}|null{return this.db.query<{daemonId:string;sessionId:string},[string]>('SELECT daemonId,sessionId FROM machine_native_leases WHERE token=?').get(token);}
     /** A daemon that stopped with every owned stop proven leaves no identity to recover. */
-    forgetDaemon(daemonId:string):void{this.db.transaction(()=>{this.db.query('DELETE FROM machine_owned_processes WHERE daemonId=?').run(daemonId);this.db.query('DELETE FROM machine_daemons WHERE daemonId=?').run(daemonId);}).immediate();}
+    forgetDaemon(daemonId:string):void{this.db.transaction(()=>{this.db.query('DELETE FROM machine_owned_processes WHERE daemonId=?').run(daemonId);this.db.query('DELETE FROM machine_native_leases WHERE daemonId=?').run(daemonId);this.db.query('DELETE FROM machine_daemons WHERE daemonId=?').run(daemonId);}).immediate();}
     /** The launch command of a run, matched by the Hub run's immutable command digest. */
     launchCommand(hub:string,runId:string,digest:string):{id:string;phase:Phase;daemon:string|null;checkout:string}|null{const row=this.db.query<CommandRow,[string,string,string]>('SELECT * FROM machine_commands WHERE hub=? AND run=? AND digest=?').get(hub,runId,digest);return row?{id:row.id,phase:row.phase==='starting'?'unknown':row.phase,daemon:row.daemon,checkout:row.checkout}:null;}
     /** Crash-run recovery claims. Each step only observes or applies exact idempotent releases, so an interrupted claim resumes rather than staying unknown. */
@@ -166,6 +173,19 @@ export class MachineLedger {
     resolveLostRun(hub:string,commandId:string,runId:string,reconciliationId:string,now=Date.now()):void{this.db.transaction(()=>{const row=this.stored(hub,commandId);if(!row||row.run!==runId)throw new MachineError('stale-reference');const key=`lost:${commandId}`,prior=this.db.query<{value:string},[string]>('SELECT value FROM machine_meta WHERE key=?').get(key);if(prior&&prior.value!==reconciliationId)throw new MachineError('payload-conflict');
         if(['received','starting','unknown'].includes(row.phase))this.db.query("UPDATE machine_commands SET phase='lost' WHERE hub=? AND id=?").run(hub,commandId);
         this.db.query('INSERT OR IGNORE INTO machine_meta(key,value) VALUES(?,?)').run(key,reconciliationId);this.db.query('INSERT OR IGNORE INTO machine_run_terminal(stream,terminalAt) VALUES(?,?)').run(`run:${runId}`,now);}).immediate();}
+    /**
+     * A launch released after the exact human `lost` resolution of this ledger's own confirmed-stopped receipt (resolveLostRun):
+     * its command, the crashed daemon that ran it and that receipt. Anything less (an unknown launch, a receipt of another run or
+     * ledger) is null.
+     */
+    lostResolution(hub:string,runId:string,digest:string):{commandId:string;daemon:string;reconciliationId:string;expectedRunVersion:number}|null{
+        const row=this.db.query<CommandRow,[string,string,string]>('SELECT * FROM machine_commands WHERE hub=? AND run=? AND digest=?').get(hub,runId,digest);
+        // An admitted launch keeps its applied receipt; an unadmitted one became lost. Either way only resolveLostRun's marker releases it.
+        if(!row||(row.phase!=='lost'&&row.phase!=='applied')||row.daemon===null)return null;
+        const marker=this.db.query<{value:string},[string]>('SELECT value FROM machine_meta WHERE key=?').get(`lost:${row.id}`),local=marker?this.reconciliation(marker.value):null;
+        if(!marker||!local||local.receipt.runId!==runId||local.receipt.observation!=='confirmed-stopped'||local.receipt.ledgerId!==this.ledgerId||local.report.commandDigest!==digest)return null;
+        return{commandId:row.id,daemon:row.daemon,reconciliationId:marker.value,expectedRunVersion:local.receipt.expectedRunVersion};
+    }
     /**
      * Version of this machine's complete inventory publication (the inventory and its capability projection), keyed by the digest of
      * that content. Identical content replays its version, so Hub sees an agreeing replay; any change takes the next version. It is

@@ -34,21 +34,24 @@ export function trialSelection(messages:NormalizedMessage[]):{ordinal:number;too
  return{ordinal:users.length,toolName:text.includes('sleep')||text.includes('cancel')?'shell_exec':text.includes('read')?'read_file':'apply_patch'};
 }
 type WireMessage={role?:unknown;content?:unknown;tool_calls?:unknown};
-export interface ProviderCall{machine:string;ordinal:number;reply:'tool'|'text';toolName?:string}
+/** `text`: the operator turn the request answers, so a test can tell which turn reached the model. */
+export interface ProviderCall{machine:string;ordinal:number;reply:'tool'|'text';toolName?:string;text?:string}
 /** One deterministic reply for an OpenAI-compatible chat request: the turn's tool once, then a final text. Wire messages carry no
  * injection flags, so only a message with the operator prefix is the operator's; every other user message is treated as injected. */
 export function wireReply(machine:string,body:{messages?:WireMessage[];tools?:{function?:{name?:unknown}}[]}):{call:ProviderCall;chunks:object[]}{
  const messages=body.messages??[];const normalized:NormalizedMessage[]=messages.flatMap(m=>m.role==='user'&&typeof m.content==='string'?[OPERATOR_TURN.test(m.content)?{role:'user' as const,content:m.content,provenance:'project' as const}:{role:'user' as const,content:m.content,injected:true as const}]:[]);
  const selection=trialSelection(normalized);let last=-1;messages.forEach((m,index)=>{if(m.role==='user'&&typeof m.content==='string'&&OPERATOR_TURN.test(m.content))last=index;});
- if(last<0||Number(OPERATOR_TURN.exec(messages[last]!.content as string)![1])!==selection.ordinal)return{call:{machine,ordinal:selection.ordinal,reply:'text'},chunks:[{delta:{role:'assistant',content:'keryx-trial-unrecognised-request'},finish:'stop'}]};
+ if(last<0)return{call:{machine,ordinal:selection.ordinal,reply:'text'},chunks:[{delta:{role:'assistant',content:'keryx-trial-unrecognised-request'},finish:'stop'}]};
+ const text=messages[last]!.content as string;
+ if(Number(OPERATOR_TURN.exec(text)![1])!==selection.ordinal)return{call:{machine,ordinal:selection.ordinal,reply:'text',text},chunks:[{delta:{role:'assistant',content:'keryx-trial-unrecognised-request'},finish:'stop'}]};
  const answered=messages.slice(last+1).some(m=>m.role==='assistant'&&Array.isArray(m.tool_calls)&&m.tool_calls.length>0);
  const offered=(body.tools??[]).some(t=>t.function?.name===selection.toolName);
- if(answered||!offered)return{call:{machine,ordinal:selection.ordinal,reply:'text'},chunks:[{delta:{role:'assistant',content:offered?TRIAL_REPLY:`keryx-trial-tool-not-offered:${selection.toolName}`},finish:'stop'}]};
+ if(answered||!offered)return{call:{machine,ordinal:selection.ordinal,reply:'text',text},chunks:[{delta:{role:'assistant',content:offered?TRIAL_REPLY:`keryx-trial-tool-not-offered:${selection.toolName}`},finish:'stop'}]};
  const ordinal=selection.ordinal,toolName=selection.toolName;
  // A crash trial outlives its serve process and the operator's recovery steps, so its supervised child sleeps longer than a cancel trial's.
  const seconds=(messages[last]!.content as string).toLowerCase().includes('crash')?120:30;
  const input=toolName==='shell_exec'?{command:`sleep ${seconds}; echo ${supervisedMarker(machine,ordinal)}`}:toolName==='read_file'?{path:'seed.txt'}:{patch:`diff --git a/trial-edit-${ordinal}.txt b/trial-edit-${ordinal}.txt\nnew file mode 100644\n--- /dev/null\n+++ b/trial-edit-${ordinal}.txt\n@@ -0,0 +1 @@\n+deterministic native edit ${ordinal}\n`};
- return{call:{machine,ordinal,reply:'tool',toolName},chunks:[{delta:{role:'assistant',tool_calls:[{index:0,id:`call_trial_${machine}_${ordinal}`,type:'function',function:{name:toolName,arguments:JSON.stringify(input)}}]},finish:null},{delta:{},finish:'tool_calls'}]};
+ return{call:{machine,ordinal,reply:'tool',toolName,text},chunks:[{delta:{role:'assistant',tool_calls:[{index:0,id:`call_trial_${machine}_${ordinal}`,type:'function',function:{name:toolName,arguments:JSON.stringify(input)}}]},finish:null},{delta:{},finish:'tool_calls'}]};
 }
 /** A loopback OpenAI-compatible endpoint per machine path prefix (`/<machine>/v1/chat/completions`). No vendor is ever reached. */
 function startLoopbackProvider(){
@@ -97,10 +100,12 @@ async function runOperatorCommand(machineRoot:string,args:string[],candidate?:st
  const forced=setTimeout(()=>handle.kill('SIGKILL'),30000);
  try{const[stdout,stderr,exitCode]=await Promise.all([new Response(handle.stdout).text(),new Response(handle.stderr).text(),handle.exited]);return{exitCode,stdout,stderr};}finally{clearTimeout(forced);}
 }
-/** `contextRoot`: the machine's own keryx-managed Hub context cache (never inside the checkout). */
-export interface TrialTarget{machine:string;machineId:string;checkoutId:string;cwd:string;configDir:string;machineRoot:string;hookLog:string;contextRoot:string;machinePolicyDigest:string;serve:ServeChild}
-/** `candidate`: run every machine's serve from that absolute packaged executable instead of the checkout's source CLI. */
-export async function startMachineTrial(options:{port?:number;root?:string;candidate?:string}={}){
+/** `contextRoot`: the machine's own keryx-managed Hub context cache (never inside the checkout). `spare`: a second clean checkout the
+ * first machine maps when the trial asks for one, so a session there can act on the main checkout's session. */
+export interface TrialTarget{machine:string;machineId:string;checkoutId:string;cwd:string;configDir:string;machineRoot:string;hookLog:string;contextRoot:string;machinePolicyDigest:string;serve:ServeChild;spare?:{checkoutId:string;cwd:string}}
+/** `candidate`: run every machine's serve from that absolute packaged executable instead of the checkout's source CLI. `spareCheckout`:
+ * the first machine also maps a second Keryx checkout of the same project. */
+export async function startMachineTrial(options:{port?:number;root?:string;candidate?:string;spareCheckout?:boolean}={}){
  if(options.candidate!==undefined&&!path.isAbsolute(options.candidate))throw new Error('trial-candidate-not-absolute');
  // A darwin owner socket path must stay under 104 bytes, so the trial root is short and real (startup.test.ts does the same).
  const root=options.root??mkdtempSync(process.platform==='darwin'?'/private/tmp/keryx-serve-trial-':path.join(realpathSync(tmpdir()),'keryx-serve-trial-'));mkdirSync(root,{recursive:true,mode:0o700});const operatorToken=`trial-operator-${randomBytes(32).toString('base64url')}`;const reviewerToken=`trial-reviewer-${randomBytes(32).toString('base64url')}`;const agentToken=`trial-agent-${randomBytes(32).toString('base64url')}`;
@@ -118,21 +123,25 @@ export async function startMachineTrial(options:{port?:number;root?:string;candi
   for(let i=1;i<=2;i++){
    // The hook log sits in the checkout's ignored .metaproject/: under the shipped untrusted profile a hook runs isolated and may write only there.
    const machine=`m${i}`,machineRoot=path.join(root,machine),cwd=path.join(machineRoot,'checkout'),env=scrubbedEnv(machineRoot),configDir=path.join(env.XDG_DATA_HOME!,'keryx'),hookLog=path.join(cwd,'.metaproject','trial-hook-events.jsonl');
-   for(const dir of [cwd,env.HOME!,configDir,env.XDG_CONFIG_HOME!,env.XDG_CACHE_HOME!,env.XDG_STATE_HOME!,env.TMPDIR!])mkdirSync(dir,{recursive:true,mode:0o700});
-   const git=(args:string[])=>{const r=Bun.spawnSync(['git','-C',cwd,'-c','user.name=Trial','-c','user.email=trial@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null',...args],{env:gitEnv});if(r.exitCode!==0)throw new Error(`trial-git-failed: ${r.stderr.toString()}`);};
+   const spare=i===1&&options.spareCheckout===true?{checkoutId:`trial-checkout-${i}-spare`,cwd:path.join(machineRoot,'spare')}:undefined;
+   for(const dir of [cwd,...(spare?[spare.cwd]:[]),env.HOME!,configDir,env.XDG_CONFIG_HOME!,env.XDG_CACHE_HOME!,env.XDG_STATE_HOME!,env.TMPDIR!])mkdirSync(dir,{recursive:true,mode:0o700});
    // Production resolution requires a Keryx project checkout. Its index is tracked, as in a developer's project, so anything that rewrites it
    // (a context sync on connect) dirties the checkout; the rest of .metaproject/ is ignored local state (the hook log below).
-   mkdirSync(path.join(cwd,'.metaproject'),{recursive:true});writeFileSync(path.join(cwd,'.metaproject','index.md'),TRIAL_INDEX);
-   git(['init','-q']);writeFileSync(path.join(cwd,'seed.txt'),'deterministic native trial seed\n');writeFileSync(path.join(cwd,'.gitignore'),'.metaproject/*\n!.metaproject/index.md\n');git(['add','.']);git(['commit','-qm','trial baseline']);
-   const hubId=hubIdentity(origin);const ledger=new MachineLedger(path.join(machineStateDir(configDir,hubId),'control.sqlite'));const pairing=(await request('/hub/v2/machines/pairings',{displayName:`Deterministic serve machine ${i}`,projectIds:[project.id]},cookie)).value as {code:string};const enrolled=await enrollMachine(origin,{code:pairing.code,agentVersion:'explicit-deterministic-trial',ledgerId:ledger.ledgerId});ledger.close();saveEnrollment(configDir,{hubUrl:origin,...enrolled});const checkoutId=`trial-checkout-${i}`;allowCheckout(configDir,{projectId:project.id,checkoutId,cwd,profileId:TRIAL_PROFILE});
+   for(const dir of [cwd,...(spare?[spare.cwd]:[])]){
+    const git=(args:string[])=>{const r=Bun.spawnSync(['git','-C',dir,'-c','user.name=Trial','-c','user.email=trial@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null',...args],{env:gitEnv});if(r.exitCode!==0)throw new Error(`trial-git-failed: ${r.stderr.toString()}`);};
+    mkdirSync(path.join(dir,'.metaproject'),{recursive:true});writeFileSync(path.join(dir,'.metaproject','index.md'),TRIAL_INDEX);
+    git(['init','-q']);writeFileSync(path.join(dir,'seed.txt'),'deterministic native trial seed\n');writeFileSync(path.join(dir,'.gitignore'),'.metaproject/*\n!.metaproject/index.md\n');git(['add','.']);git(['commit','-qm','trial baseline']);
+   }
+   const hubId=hubIdentity(origin);const ledger=new MachineLedger(path.join(machineStateDir(configDir,hubId),'control.sqlite'));const pairing=(await request('/hub/v2/machines/pairings',{displayName:`Deterministic serve machine ${i}`,projectIds:[project.id]},cookie)).value as {code:string};const enrolled=await enrollMachine(origin,{code:pairing.code,agentVersion:'explicit-deterministic-trial',ledgerId:ledger.ledgerId});ledger.close();saveEnrollment(configDir,{hubUrl:origin,...enrolled});const checkoutId=`trial-checkout-${i}`;
+   const mapped=[{checkoutId,cwd},...(spare?[spare]:[])];for(const mapping of mapped)allowCheckout(configDir,{projectId:project.id,checkoutId:mapping.checkoutId,cwd:mapping.cwd,profileId:TRIAL_PROFILE});
    const candidateId=canonicalDigest([TRIAL_PROVIDER,TRIAL_MODEL]);
-   const policy:Control['LocalMachinePolicy']={version:2,hubId,enabled:true,maxConcurrentRuns:2,checkouts:[{projectId:project.id,checkoutId,localBindingId:canonicalDigest([hubId,checkoutId]),path:realpathSync(cwd),profileIds:[TRIAL_PROFILE]}],allowAdHocSessions:true,allowedCandidateIds:[candidateId],profiles:[{profileId:TRIAL_PROFILE,allowAdHocTurns:true,consentVersion:1,allowedCandidateIds:[candidateId]}]};writeMachinePolicy(configDir,policy);
+   const policy:Control['LocalMachinePolicy']={version:2,hubId,enabled:true,maxConcurrentRuns:2,checkouts:mapped.map(mapping=>({projectId:project.id,checkoutId:mapping.checkoutId,localBindingId:canonicalDigest([hubId,mapping.checkoutId]),path:realpathSync(mapping.cwd),profileIds:[TRIAL_PROFILE]})),allowAdHocSessions:true,allowedCandidateIds:[candidateId],profiles:[{profileId:TRIAL_PROFILE,allowAdHocTurns:true,consentVersion:1,allowedCandidateIds:[candidateId]}]};writeMachinePolicy(configDir,policy);
    saveShellConfig({provider:TRIAL_PROVIDER,model:TRIAL_MODEL,baseUrl:`${provider.origin}/${machine}`},configDir);
    const issued=issueServeToken(configDir);if(!issued.ok)throw new Error(`trial-serve-token: ${issued.reason}`);if(!saveServeConfig(defaultServeConfig(issued.record.id,{address:'127.0.0.1'}),configDir))throw new Error('trial-serve-config');
    // A user-scope observe hook: proof that the shipped hook runtime is on in the serve child, without changing any decision.
    mkdirSync(path.join(env.HOME!,'.keryx'),{recursive:true,mode:0o700});writeFileSync(path.join(env.HOME!,'.keryx','hooks.json'),JSON.stringify({schemaVersion:'1.0.0',hooks:{PreToolUse:[{id:'trial-observer',matcher:'.*',class:'observe',command:{argv:['/bin/sh','-c','/bin/cat >> "$KERYX_PROJECT_ROOT/.metaproject/trial-hook-events.jsonl"; echo >> "$KERYX_PROJECT_ROOT/.metaproject/trial-hook-events.jsonl"']}}]}}));
    const serve=await startServeChild(machineRoot,options.candidate);serve.serveToken=issued.token;
-   targets.push({machine,machineId:enrolled.machineId,checkoutId,cwd:realpathSync(cwd),configDir,machineRoot,hookLog,contextRoot:path.join(machineStateDir(configDir,hubId),'context'),machinePolicyDigest:canonicalDigest(policy),serve});
+   targets.push({machine,machineId:enrolled.machineId,checkoutId,cwd:realpathSync(cwd),configDir,machineRoot,hookLog,contextRoot:path.join(machineStateDir(configDir,hubId),'context'),machinePolicyDigest:canonicalDigest(policy),serve,...(spare?{spare:{checkoutId:spare.checkoutId,cwd:realpathSync(spare.cwd)}}:{})});
   }
   const credentialsFile=path.join(root,'operator-token');protectedWrite(credentialsFile,operatorToken,true);
   let stopped:Promise<number[]>|undefined;

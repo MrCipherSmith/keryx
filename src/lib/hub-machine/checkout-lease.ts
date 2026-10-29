@@ -66,16 +66,27 @@ export interface WorkspaceBaseline {
 }
 /** The bounded provenance snapshot: beyond either limit a capture refuses with quota-exceeded. */
 export const SNAPSHOT_QUOTA={bytes:20*1024*1024,entries:10000} as const;
+const GIT_OPERATION_MARKERS = ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-apply', 'rebase-merge', 'index.lock'];
+const gitOperationActive = (cwd: string): boolean => { const admin = git(cwd, ['rev-parse', '--absolute-git-dir']).toString().trim(); return GIT_OPERATION_MARKERS.some(p => existsSync(path.join(admin, p))); };
+// Keryx's own runtime data (the paths `keryx init` ignores) is never a foreign change, ignore block present or not; tracked files always stay observed.
+const untrackedNames = (cwd: string): string[] => git(cwd, ['ls-files', '-z', '--others', '--exclude-standard']).toString().split('\0').filter(name => name.length > 0 && !isMetaprojectManagedPath(name));
+const trackedChanges = (cwd: string): boolean => git(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=no']).length > 0;
+/**
+ * The inventory-visible state of a checkout, measured without reading file content: HEAD, an active Git operation, and whether
+ * it is clean exactly as {@link captureBaseline} judges it. Cheap enough to re-measure while connected.
+ */
+export function observeCheckout(cwd: string): { head: string; clean: boolean; operation: boolean } {
+    const head = currentCheckoutHead(cwd), operation = gitOperationActive(cwd);
+    return { head, clean: !trackedChanges(cwd) && untrackedNames(cwd).length === 0, operation };
+}
 export function captureBaseline(cwd: string, options: {
     requireClean: boolean;
 }): WorkspaceBaseline {
     const head = currentCheckoutHead(cwd);
-    const admin = git(cwd, ['rev-parse', '--absolute-git-dir']).toString().trim();
-    if (['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-apply', 'rebase-merge', 'index.lock'].some(p => existsSync(path.join(admin, p))))
+    if (gitOperationActive(cwd))
         throw new MachineError('git-operation-active');
-    // Keryx's own runtime data (the paths `keryx init` ignores) is never a foreign change, ignore block present or not; tracked files always stay observed.
-    const untracked = git(cwd, ['ls-files', '-z', '--others', '--exclude-standard']).toString().split('\0').filter(name => name.length > 0 && !isMetaprojectManagedPath(name));
-    if (options.requireClean && (git(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=no']).length || untracked.length))
+    const untracked = untrackedNames(cwd);
+    if (options.requireClean && (trackedChanges(cwd) || untracked.length))
         throw new MachineError('checkout-dirty');
     const names = [...git(cwd, ['ls-files', '-z', '--cached']).toString().split('\0').filter(Boolean), ...untracked];
     const entries: unknown[] = [];

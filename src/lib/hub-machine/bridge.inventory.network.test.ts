@@ -1,11 +1,11 @@
 import {expect,test} from 'bun:test';
 import {rmSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
-import {bridgeHarness,git,wait} from './bridge.test-support';
-import {scriptedProvider} from '../../commands/agent.test-helpers';
+import {allowAll,bridgeHarness,git,newFilePatch,wait} from './bridge.test-support';
+import {callRound,okReply,scriptedProvider} from '../../commands/agent.test-helpers';
 import type {MachineBridge} from './bridge';
 
-const {get,post,hub,local,startBridge}=bridgeHarness();
+const {get,post,hub,local,startBridge,machine,sessionHandle}=bridgeHarness();
 type Checkout={checkoutId:string;headSha:string;clean:boolean;available:boolean;agentProfiles:Array<{readiness:string;reason:string}>};
 type MachineView={connected:boolean;inventory:{inventoryVersion:number;checkouts:Checkout[]}|null};
 
@@ -42,3 +42,35 @@ test('a checkout changed between connections reaches Hub as a higher inventory v
  const clean=await wait(read,v=>v.connected&&v.inventory!.checkouts[0]!.clean);expect(clean.inventory!.inventoryVersion).toBeGreaterThan(dirty.inventory!.inventoryVersion);
  await created(clean,'Cleaned checkout');
 },60000);
+test('while serve stays connected a developer commit reaches Hub at the bounded re-measure as the next version, and an unchanged checkout publishes nothing new',async()=>{
+ const state=await local();const provider=scriptedProvider([okReply]);
+ const read=()=>get<MachineView>(`/hub/v2/machines/${state.machine.machineId}`);
+ const started=await startBridge(state,{inventoryIntervalMs:200},provider);
+ const first=await wait(read,v=>v.connected&&v.inventory!==null);const version=first.inventory!.inventoryVersion;
+ // Several re-measures of an unchanged checkout keep Hub at the version it has.
+ await Bun.sleep(1000);expect((await read()).inventory!.inventoryVersion).toBe(version);
+ writeFileSync(path.join(state.cwd,'committed.txt'),'a developer commit\n');expect(git(state.cwd,'add','committed.txt').exitCode).toBe(0);expect(git(state.cwd,'commit','-qm','developer commit').exitCode).toBe(0);
+ const head=git(state.cwd,'rev-parse','HEAD').stdout.trim();
+ const committed=await wait(read,v=>v.inventory!.checkouts[0]!.headSha===head);
+ // No reconnect carried it: the same connected bridge published it once, as exactly the next version.
+ expect({connected:committed.connected,version:committed.inventory!.inventoryVersion}).toEqual({connected:true,version:version+1});expect(started.bridge.connected).toBe(true);
+ expect(committed.inventory!.checkouts[0]).toMatchObject({clean:true,available:true,agentProfiles:[{readiness:'ready',reason:'none'}]});
+ // A session starts on the new HEAD and runs a turn there.
+ const response=await wait(async()=>{const r=await post(`/hub/v2/projects/${hub().project.id}/sessions`,{machineId:state.machine.machineId,checkoutId:'checkout',agentProfileId:'fixture',expectedInventoryVersion:committed.inventory!.inventoryVersion,expectedHeadSha:head,capabilityDigest:started.digest,policyDigest:started.digest,title:'Session on the new HEAD'});return {status:r.status,body:await r.json() as {sessionId?:string}};},r=>r.status===200);
+ const s=sessionHandle(response.body.sessionId!,started.catalogue.catalogueDigest);await wait(s.read,v=>v.state==='idle');
+ const lease=(await s.claim()).lease;const turn=await s.turn(lease,'Work on the committed HEAD',{busyPolicy:'reject'});await s.waitRun(turn.runId!,v=>v.state==='succeeded');expect(provider.requests).toHaveLength(1);
+ await Bun.sleep(600);expect((await read()).inventory!.inventoryVersion).toBe(version+1);
+},40000);
+test('a run that dirties its checkout republishes the inventory at its run-end boundary, before its session reports idle',async()=>{
+ // The re-measure interval is at its 60 s bound, so only the run-end boundary can publish the change within this test.
+ const m=await machine({inventoryIntervalMs:60000,approve:allowAll,scripts:[callRound('patch','apply_patch',newFilePatch('owned.txt','owned')),okReply,okReply]});const s=m.session;
+ const read=()=>get<MachineView>(`/hub/v2/machines/${m.state.machine.machineId}`);
+ const before=(await read()).inventory!;expect(before.checkouts[0]).toMatchObject({clean:true});
+ const lease=(await s.claim()).lease;const turn=await s.turn(lease,'Write an owned file',{busyPolicy:'reject'});await s.waitRun(turn.runId!,v=>v.state==='succeeded');
+ await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null);
+ const after=(await read()).inventory!;
+ expect({version:after.inventoryVersion,checkout:after.checkouts[0]}).toMatchObject({version:before.inventoryVersion+1,checkout:{headSha:before.checkouts[0]!.headSha,clean:false,available:true,agentProfiles:[{readiness:'ready',reason:'none'}]}});
+ // The owning session keeps working on its own dirty checkout, and an unchanged dirty checkout is not published again.
+ const next=await s.turn(lease,'A next turn on the same session',{busyPolicy:'reject'});await s.waitRun(next.runId!,v=>v.state==='succeeded');
+ await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null);expect((await read()).inventory!.inventoryVersion).toBe(after.inventoryVersion);
+},40000);

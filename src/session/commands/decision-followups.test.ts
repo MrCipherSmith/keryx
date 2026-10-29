@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { answerDecision, openDecision } from "../../decisions/journal";
 import { readRecords } from "../../decisions/store";
 import { runDecisionsFollowup } from "../../tui/decisions-surface";
 import { createNativeQuestionJournal } from "../question-journal";
@@ -29,6 +30,23 @@ test("decisions.reason and decisions.change act on this session's latest answere
   await runDecisionsFollowup({ kind: "change", choice: "Yes" }, { cwd: twin.cwd, lastDecisionId: twin.journal.lastDecisionId, session: twin.journal.session, notice: (text) => notices.push(text) });
   expect(changed.ok && (changed.data as { text: string }).text.replaceAll(id, "<id>")).toBe(notices[0]!.replaceAll(twin.id, "<id>"));
   expect((await readRecords(cwd)).filter((record) => record.kind === "answer").map((record) => record.kind === "answer" && record.choice)).toEqual(["no", "yes"]);
+});
+
+test("a follow-up keeps the journal's own decision id whole in its words while the redaction still cuts the question", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-native-followup-")); roots.push(cwd);
+  expect(await Bun.spawn(["git", "init", "-q", cwd], { env: { PATH: process.env.PATH ?? "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } }).exited).toBe(0);
+  // A generated id whose base-36 time ends in digits and whose hex tail is all digits reads as a phone number to the redaction.
+  const id = "d-mvtgj271-721701";
+  await openDecision({ cwd, id, session: "hub-session", channel: "hub", question: "Call 555 123 4567 before the parity fixture?", reasonPrompt: false, arm: "A", salt: "native-followup-test-salt",
+    options: [{ id: "yes", label: "Yes", description: "Go on" }, { id: "no", label: "No", description: "Stop" }], recommendation: { optionId: "yes", reason: "The planned path." } });
+  await answerDecision({ cwd, id, choice: "no" });
+  const journal = { session: "hub-session", lastDecisionId: () => id };
+  for (const [command, input, lead] of [["decisions.reason", { text: "the fixture said so" }, `decision ${id} (`], ["decisions.change", { choice: "yes" }, `Decision ${id} (`]] as const) {
+    const done = await executeDecisionFollowup({ cwd, decisionJournal: journal }, command, input);
+    expect(done).toMatchObject({ ok: true, data: { decisionId: id } });
+    const text = done.ok ? done.data.text : "";
+    expect({ id: text.includes(lead), phone: text.includes("555 123 4567"), redacted: text.includes("[REDACTED:phone]") }).toEqual({ id: true, phone: false, redacted: true });
+  }
 });
 
 test("a follow-up the journal refuses changes nothing and says why; without a journal nothing is attempted", async () => {

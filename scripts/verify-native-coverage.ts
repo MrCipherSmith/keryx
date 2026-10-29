@@ -249,6 +249,9 @@ function outcomeOf(receipt: unknown, replace: (text: string) => string): NativeN
 
 /** Child-process side: runs inside the isolated environment only. Every owner is the production one, composed as the machine bridge composes it. */
 async function runHarness(input: { cases: { variantId: string; handlerName: string | null; case: ParityCase }[] }): Promise<ParityRun> {
+  // Every keryx process, `serve` included, loads the CLI registry, which hands the product command's readers to their ports (the
+  // native `/product` inspection among them). Loaded here for the same composition, never a reader registered by the harness itself.
+  await import("../src/cli-registry");
   const { createSessionHost } = await import("../src/session/host");
   const { assembleNativeSessionRuntime } = await import("../src/session/native-runtime-production");
   const { resolveLocalProfile } = await import("../src/harness/policy/profiles");

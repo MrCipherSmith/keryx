@@ -3,12 +3,12 @@ import { createNativeRewindPort, rewindCommands, type RewindEffectInput, type Na
 import { createNativeOwnedGit } from "./native-owned-git";
 import { activeArchiveIndices, type NativeContextReset } from "./host-context";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalDigest, LIMITS, validateArguments, validateControl, type Control } from "../remote-control/protocol";
-import { keryxConfigDir } from "../lib/config-dir";
-import { redactSensitiveText } from "../security/redact";
-import { openLeasedSession, releaseSessionLease } from "./lease";
+import { ensureKeryxSubdir, isDefiniteAbsence, keryxConfigDir, readTranscriptFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { redactSensitiveText } from "../security/service";
+import { openLeasedSession, releaseSessionLease, type SessionLeaseOwner } from "./lease";
 import { persistHistory, forkSession, loadArchive, loadContext } from "./store";
 import { compactMessages } from "./compact";
 import { createHostCommandCatalogue } from "./commands/catalogue";
@@ -66,7 +66,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const now = options.now ?? Date.now;
   const decisionTtlMs = options.decisionTtlMs ?? DECISION_TTL_MS;
   if (!Number.isSafeInteger(decisionTtlMs) || decisionTtlMs <= 0 || decisionTtlMs > DECISION_TTL_MS) throw new SessionHostError("invalid-decision-ttl");
-  const dir = join(options.controlDir ?? options.dataDir ?? keryxConfigDir(), "remote-sessions"); mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // The private record sits below the shared config root (or the per-Hub control dir), owner-only at every level, written atomically and
+  // read through the bounded content reader: it carries the session's public history, so it is content, not a few-hundred-byte config.
+  const dir = ensureKeryxSubdir(["remote-sessions"], options.controlDir ?? options.dataDir);
   const statePath = join(dir, `${options.record.sessionId}.json`);
   let record = checked("SessionRecord", options.record);
   let nativeId: string | undefined = options.nativeSessionId;
@@ -96,14 +98,27 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const configCommandNames = new Map<string, string>();
   const confirmedConfigurations = new Set<string>();
   const controllerClaims = new Map<string, { commandDigest: string; receipt: Control["ControllerReceipt"] }>();
-  const hadLocalState = existsSync(statePath);
-  if (hadLocalState) {
-    const saved: unknown = JSON.parse(readFileSync(statePath, "utf8"));
+  /** The run a serve crash left in flight, once a human resolved it lost; persisted until an explicit resume clears it. */
+  let lostRun: { runId: string; turnId: string } | undefined;
+  /** This host restored exactly that resolution (options.crashRecovery) and nothing but a controller change applied since. */
+  let lostResumable = false;
+  const localState = readTranscriptFile(statePath);
+  // Only a definite absence is a fresh session; a record that is there but unreadable, oversized or not a regular file is refused.
+  if (!localState.ok && !isDefiniteAbsence(localState.reason)) throw new SessionHostError(`local-state-${localState.reason}`);
+  const hadLocalState = localState.ok;
+  if (options.crashRecovery !== undefined && !hadLocalState) throw new SessionHostError("crash-recovery-state-missing");
+  if (localState.ok) {
+    const saved: unknown = JSON.parse(localState.text);
     if (!object(saved) || typeof saved.nativeId !== "string") throw new SessionHostError("invalid-local-state");
     if (options.nativeSessionId !== undefined && options.nativeSessionId !== saved.nativeId) throw new SessionHostError("native-session-binding-conflict");
     if (Array.isArray(saved.nativeBoundaries)) for (const boundary of saved.nativeBoundaries) { if (!Array.isArray(boundary) || boundary.length !== 2 || !boundary.every((value) => Number.isSafeInteger(value) && value >= 0)) throw new SessionHostError("invalid-native-history-boundary"); nativeBoundaries.set(boundary[0], boundary[1]); }
     if (saved.historySeedDigest !== undefined) { if (typeof saved.historySeedDigest !== "string" || !/^[a-f0-9]{64}$/.test(saved.historySeedDigest)) throw new SessionHostError("invalid-history-seed-digest"); historySeedDigest = saved.historySeedDigest; }
     nativeId = saved.nativeId; record = checked("SessionRecord", saved.record);
+    const crashed = { runId: record.activeRunId, turnId: record.activeTurnId, state: record.state };
+    if (saved.lostRun !== undefined) {
+      if (!object(saved.lostRun) || typeof saved.lostRun.runId !== "string" || typeof saved.lostRun.turnId !== "string") throw new SessionHostError("invalid-local-lost-run");
+      lostRun = { runId: saved.lostRun.runId, turnId: saved.lostRun.turnId };
+    }
     if (saved.rewindPending !== undefined && typeof saved.rewindPending !== "boolean") throw new SessionHostError("invalid-rewind-intent");
     if (saved.rewindPending === true) { rewindPending = true; record.state = "recovery-required"; }
     if (Array.isArray(saved.contextResets)) for (const reset of saved.contextResets) {
@@ -152,6 +167,14 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     // Queued messages are input, never restart authorization. Their reauthorization must be fresh.
     for (const item of queueItems) if (item.state === "queued") item.state = "suspended";
     if (record.activeRunId !== null || record.state === "busy") record.state = "recovery-required";
+    // A run a serve crash left in flight is passed only once the bridge shows a human resolved exactly that run lost after the local
+    // recovery. The lost run stays lost: nothing of it runs again, queued input stays suspended and the session waits for a resume.
+    const inFlight = crashed.runId !== null && crashed.turnId !== null && (crashed.state === "busy" || crashed.state === "paused") ? { runId: crashed.runId, turnId: crashed.turnId } : undefined;
+    const candidate = lostRun ?? inFlight;
+    if (candidate !== undefined && saved.selection === undefined && saved.rewindPending !== true && (lostRun === undefined || (record.activeRunId === null && record.state === "recovery-required"))
+      && options.crashRecovery?.lostRuns.some((run) => run.runId === candidate.runId && run.turnId === candidate.turnId) === true) {
+      record.activeRunId = null; record.activeTurnId = null; lostRun = candidate; lostResumable = true;
+    }
     if (Array.isArray(saved.receipts)) for (const value of saved.receipts) {
       if (!object(value) || typeof value.id !== "string" || typeof value.digest !== "string") throw new SessionHostError("invalid-local-receipt");
       const validated = validateControl("TurnReceipt", value.receipt);
@@ -164,7 +187,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     }
   }
   if (!restrictions.has(record.config.configVersion)) {
-    if (hadLocalState) record.state = "recovery-required";
+    if (hadLocalState) { record.state = "recovery-required"; lostResumable = false; }
     const initial = hadLocalState ? undefined : options.initialRestriction;
     if (initial !== undefined && (initial.configVersion !== record.config.configVersion || (initial.approvalMode !== undefined && initial.approvalMode !== "ask")
       || initial.restrictionDigest !== sessionRestrictionDigest(initial, record.config.policyDigest))) throw new SessionHostError("invalid-initial-session-restriction");
@@ -174,10 +197,14 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     restrictions.set(record.config.configVersion, { enabled, configVersion: record.config.configVersion, effectiveFromTurnOrdinal: initial?.effectiveFromTurnOrdinal ?? 1,
       ...(approvalMode === undefined ? {} : { approvalMode }), restrictionDigest: sessionRestrictionDigest({ enabled, approvalMode }, record.config.policyDigest) });
   }
-  let opened = openLeasedSession({ cwd: options.cwd, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }), ...(nativeId === undefined ? {} : { resumeId: nativeId }) });
+  // The crashed daemon's native lease is taken over only on the bridge's identity proof for exactly the lost run, never on its age.
+  const recovery = options.crashRecovery, crashedRun = lostResumable ? lostRun : undefined;
+  let opened = openLeasedSession({ cwd: options.cwd, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }), ...(nativeId === undefined ? {} : { resumeId: nativeId }),
+    ...(recovery === undefined || crashedRun === undefined ? {} : { reclaimHolder: (holder: SessionLeaseOwner) => recovery.reclaimLease(holder, crashedRun) }) });
   // A handle another runtime of this process left unproven stays fenced: this host can neither run on it nor release it.
-  if (fencedLeases.has(opened.lease)) record.state = "recovery-required";
+  if (fencedLeases.has(opened.lease)) { record.state = "recovery-required"; lostResumable = false; }
   let handle = opened.handle; nativeId = handle.summary.id;
+  options.onNativeLease?.({ token: opened.lease.owner.token, nativeSessionId: handle.summary.id });
   const history = opened.history; const archive = opened.archive;
   if (!hadLocalState && options.initialHistory?.contextResets !== undefined) contextResets.push(...structuredClone(options.initialHistory.contextResets));
   const activeArchive = activeArchiveIndices(archive.length, record.historyCursor, contextResets).map(index => archive[index]!);
@@ -241,11 +268,11 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   };
   let unwatchLease = opened.lease.onLost(onLeaseLost);
   const persist = () => {
-    const body = { record, nativeId, contextResets, rewindPending, selectionDecisions: [...selectionDecisions].map(([operationId, value]) => ({ operationId, ...value })), selection: selecting === undefined ? undefined : { operationId: selecting.operationId, payloadDigest: selecting.payloadDigest, runId: selecting.runId, turnId: selecting.turnId }, historySeedDigest, restrictions: [...restrictions.values()], configCommandNames: [...configCommandNames], queuedCommands: [...queuedCommands].map(([queueItemId, request]) => ({ queueItemId, request })), nativeBoundaries: [...nativeBoundaries], publicHistory, queue: queueItems, queuedConfigurations: [...queuedConfigurations].map(([queueItemId, request]) => ({ queueItemId, request })),
+    const body = { record, nativeId, contextResets, rewindPending, lostRun, selectionDecisions: [...selectionDecisions].map(([operationId, value]) => ({ operationId, ...value })), selection: selecting === undefined ? undefined : { operationId: selecting.operationId, payloadDigest: selecting.payloadDigest, runId: selecting.runId, turnId: selecting.turnId }, historySeedDigest, restrictions: [...restrictions.values()], configCommandNames: [...configCommandNames], queuedCommands: [...queuedCommands].map(([queueItemId, request]) => ({ queueItemId, request })), nativeBoundaries: [...nativeBoundaries], publicHistory, queue: queueItems, queuedConfigurations: [...queuedConfigurations].map(([queueItemId, request]) => ({ queueItemId, request })),
       queuedMessages: [...queuedMessages].map(([queueItemId, request]) => ({ queueItemId, request })),
       controllerClaims: [...controllerClaims].map(([commandId, value]) => ({ commandId, ...value })),
       events: eventLog, receipts: [...receipts].map(([id, value]) => ({ id, ...value })) };
-    const temporary = `${statePath}.${randomUUID()}.tmp`; writeFileSync(temporary, JSON.stringify(body), { mode: 0o600 }); renameSync(temporary, statePath);
+    writeOwnerOnlyFileAtomic(statePath, JSON.stringify(body));
   };
   const syncHistory = () => {
     if (opened.lease.checkLost()) { options.runtime.detachSession(); throw new SessionHostError("native-lease-lost"); }
@@ -799,19 +826,22 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   };
   const resumeOwnedSession = async (request: Control["SessionResume"]): Promise<Control["SessionRecord"]> => {
     // A same-process re-open receives this process's own retained lease handle (lease.ts); unproven cessation stays fenced until explicit recovery.
-    if (record.state === "recovery-required" || recovering) throw new SessionHostError("recovery-required");
+    // The one exception is a re-hosted crash whose in-flight run a human resolved lost: its owned baseline is re-verified below.
+    if ((record.state === "recovery-required" && !lostResumable) || recovering) throw new SessionHostError("recovery-required");
     if (active !== undefined || request.expectedSessionVersion !== record.version
       || request.expectedHistoryVersion !== record.historyVersion || request.expectedWorkspaceBaseline !== record.workspaceBaseline) throw new SessionHostError("stale-resume-pins");
     const verified = await options.workspace.verify(record.workspaceBaseline); if (!verified.ok) throw new SessionHostError("workspace-conflict");
     if (opened.lease.checkLost()) throw new SessionHostError("native-lease-lost");
     if (opened.lease.released) {
       const reopened = openLeasedSession({ cwd: options.cwd, resumeId: nativeId, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }) });
-      unwatchLease(); opened = reopened; handle = reopened.handle;
+      unwatchLease(); opened = reopened; handle = reopened.handle; options.onNativeLease?.({ token: opened.lease.owner.token, nativeSessionId: handle.summary.id });
       history.splice(0, history.length, ...reopened.history); archive.splice(0, archive.length, ...reopened.archive); archiveCursor = history.length;
       options.runtime.bindSessionDir(handle.dir); unwatchLease = opened.lease.onLost(onLeaseLost);
       // Close finalized the session services; the resumed owner binds fresh ones, or stays fenced.
-      try { await attachSessionServices(); } catch { record.state = "recovery-required"; state(); throw new SessionHostError("recovery-required"); }
+      try { await attachSessionServices(); } catch { lostResumable = false; record.state = "recovery-required"; state(); throw new SessionHostError("recovery-required"); }
     }
+    // The lost run is passed for good: it stays lost in history and the session continues from its re-verified baseline.
+    lostRun = undefined; lostResumable = false;
     if (record.state !== "idle") { record.state = "idle"; state(); }
     return structuredClone(record);
   };
@@ -906,8 +936,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     if (selecting?.operationId === operation.operationId) { releaseMutation(); return selecting.payloadDigest === operation.payloadDigest ? selecting.done : opReceipt(operation, "rejected", "stale-version"); }
     if (!authorized(operation)) return remember(operation, opReceipt(operation, "rejected", "forbidden"));
     if (selecting !== undefined && !(operation.kind === "command" && catalogue().entries.find((entry) => entry.commandName === operation.request.commandName)?.mutationClass === "read")) return remember(operation, opReceipt(operation, "rejected", "busy"));
-    if (opened.lease.checkLost()) { options.runtime.detachSession(); record.state = "recovery-required"; state(); }
-    if (record.state === "recovery-required") return remember(operation, opReceipt(operation, "recovery-required", "recovery-required"));
+    if (opened.lease.checkLost()) { options.runtime.detachSession(); record.state = "recovery-required"; lostResumable = false; state(); }
+    if (record.state === "recovery-required" && !(lostResumable && operation.kind === "resume-session")) return remember(operation, opReceipt(operation, "recovery-required", "recovery-required"));
     if (operation.kind === "close-session") {
       const request = checked("SessionClose", operation.request);
       if (pendingClose !== undefined) return remember(operation, opReceipt(operation, "rejected", "busy"));
@@ -960,7 +990,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
           sessionVersion: record.version, queueItemId: item.queueItemId, status: "queued", runId: null, turnId: null, turnOrdinal: null });
         remember(operation, receipt); emit({ kind: "queue-changed", queueVersion: record.queueVersion, item }); emit({ kind: "session-state", session: structuredClone(record) }); return receipt;
       }
-      if (pendingQueueCount() > 0) return remember(operation, opReceipt(operation, "rejected", "busy"));
+      // Still-queued work goes first (FIFO). A suspended item is not authorization (protocol: new admitted work follows FIFO among still-authorized
+      // items), so it holds back no new turn Hub admitted, exactly as Hub's own admission treats it; only its explicit reauthorization runs it.
+      if (queueItems.some((item) => item.state === "queued")) return remember(operation, opReceipt(operation, "rejected", "busy"));
       return start(operation, request.text, request, undefined, releaseMutation);
     }
     if (operation.kind === "config") return applyConfig(operation);
@@ -1246,10 +1278,11 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   activeArchive.splice(0, activeArchive.length, ...activeArchiveIndices(archive.length, record.historyCursor, contextResets).map(index => archive[index]!));
   const attachSessionServices = () => options.runtime.attachServices({ configDir: options.configDir ?? options.dataDir ?? keryxConfigDir(), identity: () => ({ nativeSessionId: handle.summary.id, projectId: record.projectId, checkoutId: record.checkoutId }), sessionState: () => ({ config: structuredClone(record.config), restriction: restriction(), permissionMode: "ask", status: record.state }) });
   try { await attachSessionServices(); }
-  catch { record.state = "recovery-required"; state(); }
+  catch { lostResumable = false; record.state = "recovery-required"; state(); }
   restriction(); persist();
   return {
     inspect: async () => structuredClone(record),
+    resumableAfterLost: () => lostResumable,
     async history(query) { const result = page(publicHistory, query); return checked("HistoryPage", {
       messages: structuredClone(result.values),
       cursor: result.cursor, hasMore: result.hasMore, historyVersion: record.historyVersion, retainedFromCursor: 0, gap: false }); },
@@ -1317,7 +1350,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         ? { ok: true, value: previous.receipt } : denied("controller-command-conflict");
       // No claim, renewal or takeover attaches to unproven cessation or races an in-flight local owner release.
       if (recovering) return denied("local-recovery-in-progress");
-      if (record.state === "recovery-required" && receipt.lease.state === "held") return denied("recovery-required");
+      // A re-hosted human-resolved lost crash runs nothing yet, so an explicit claim, renewal or verified takeover may precede its resume.
+      if (record.state === "recovery-required" && receipt.lease.state === "held" && !lostResumable) return denied("recovery-required");
       if (receipt.sessionVersion === record.version && canonicalDigest(receipt.lease) === canonicalDigest(record.controller)) return { ok: true, value: receipt };
       const current = record.controller;
       const sameGenerationRenewal = current !== null && current.state === "held" && receipt.lease.state === "held"
@@ -1369,8 +1403,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       const settled = await within(Promise.allSettled([active?.done, ...inspections.values()]).then(() => true), false, SETTLE_BOUND_MS);
       const servicesClosed = await closeSessionServices();
       // A session already fenced, or a handle another runtime of this process left unproven, is never released by this runtime's own clean stop.
-      const confirmed = stopped.status === "stopped" && settled && selectionSettled && servicesClosed && record.state !== "recovery-required" && !fencedLeases.has(opened.lease);
-      if (!confirmed) { if (record.state !== "recovery-required") { record.state = "recovery-required"; state(); } fenceLease(); }
+      // A re-hosted lost crash that ran nothing is no fence: its proven stop releases the lease it took, and the next re-host takes it again.
+      const confirmed = stopped.status === "stopped" && settled && selectionSettled && servicesClosed && (record.state !== "recovery-required" || lostResumable) && !fencedLeases.has(opened.lease);
+      if (!confirmed) { lostResumable = false; if (record.state !== "recovery-required") { record.state = "recovery-required"; state(); } fenceLease(); }
       if (!opened.lease.checkLost() && !opened.lease.released) { syncHistory(); await options.runtime.preserveSession(); }
       else options.runtime.detachSession();
       disposed = true; unwatchLease(); if (confirmed) releaseSessionLease(opened.lease); listeners.clear(); approvalListeners.clear(); approvalOutcomeListeners.clear(); },

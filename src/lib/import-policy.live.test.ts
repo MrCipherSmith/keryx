@@ -495,6 +495,12 @@ test("some core zones have no service.ts, so the facade rule is unsatisfiable fo
     "capability",
     "ctx",
     "gdskills",
+    // `src/hub/` joined the core zone with no `service.ts` of its own: its one
+    // adapter caller (`commands/hub.ts`) imports `client-command.ts` directly
+    // to wire the `keryx hub` verb — the impact-evidence shape below. A facade
+    // would be a door into an isolated, separately packaged server that no
+    // second caller uses.
+    "hub",
     // Flow 356 (A-1): `src/impact-evidence/` joined the core zone with no
     // `service.ts` of its own — its one caller (`commands/security-
     // impact-evidence.ts`) imports it directly, which is exactly the shape

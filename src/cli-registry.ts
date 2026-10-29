@@ -83,8 +83,9 @@ import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
 import { intakeCommand, printIntakeHelp } from "./commands/intake";
 import { researchCommand, printResearchHelp } from "./commands/research-sync";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
-import { productCommand, readDigestBoard } from "./commands/product";
+import { productCommand, readDigestBoard, readOpenIntents } from "./commands/product";
 import { registerBoardReader } from "./scheduler/digest-board";
+import { registerOpenIntentReader } from "./session/commands/open-intents";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
@@ -98,6 +99,8 @@ import packageJson from "../package.json" with { type: "json" };
 
 // Flow 389: the scheduled digest reads the flow board through the product command, the only reader of the product index.
 registerBoardReader(readDigestBoard);
+// The native session `/product` inspection reads the open report the same way, through the product command's reader.
+registerOpenIntentReader(readOpenIntents);
 
 export const VERSION = packageJson.version;
 

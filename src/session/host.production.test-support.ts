@@ -13,7 +13,6 @@ import { acquireCheckoutLease, currentCheckoutHead } from "../lib/hub-machine/ch
 import { createOwnedWorkspace, validateOwnedEffectPaths } from "../lib/hub-machine/workspace";
 import { MachineError } from "../lib/hub-machine/errors";
 import { syncMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
-import { keryxConfigDir } from "../lib/config-dir";
 
 export interface ProductionTurnObservation {
   admitted: string; state: string; note: string; messages: string[]; status: string[];
@@ -32,8 +31,9 @@ if (checkout === "initialized") { mkdirSync(join(cwd, ".metaproject")); writeFil
 git(cwd, "init", "-q"); git(cwd, "add", "."); git(cwd, "commit", "-qm", "fixture");
 // `keryx init` writes its managed block to the clone's info/exclude; a plain checkout has none.
 if (checkout === "initialized" && (await syncMetaprojectIgnoreRules(cwd)).status !== "written") throw new Error("keryx ignore rules were not written");
-// The native session data dir: the production default (~/.local/share/keryx under the synthetic HOME), or one reached through a symlink.
-let dataDir = keryxConfigDir();
+// The native session data dir: none given, so the host and the session store resolve their own production default (~/.local/share/keryx
+// under the synthetic HOME), or one reached through a symlink. The fixture never resolves the shared directory itself.
+let dataDir: string | undefined;
 if (dataLayout === "symlinked") { mkdirSync(join(root, "state-real")); symlinkSync(join(root, "state-real"), join(root, "state-link")); dataDir = join(root, "state-link"); }
 const configDir = join(root, "config"); mkdirSync(configDir);
 const lease = acquireCheckoutLease(cwd, { hubId: "hub", runId: "production-turn", daemonId: "daemon" });
@@ -52,7 +52,7 @@ const record: Control["SessionRecord"] = { sessionId: "production-turn", project
   controller: { controllerLeaseId: "controller", sessionId: "production-turn", version: 1, actorId: "human", actorKind: "human-operator", expiresAt: new Date(Date.now() + 600_000).toISOString(), state: "held" },
   activeRunId: null, activeTurnId: null, nextTurnOrdinal: 1, historyCursor: 0, sessionEventCursor: 0, queueVersion: 0, workspaceBaseline: workspace.baseline().digest, forkedFromSessionId: null,
   capabilities: { literalText: true, attachments: false, attachmentReason: "typed-artifact-contract-required", commandCatalogue: true, modelRouting: true } };
-const host = await createSessionHost({ cwd, dataDir, configDir, record, runtime: assembled.value,
+const host = await createSessionHost({ cwd, ...(dataDir === undefined ? {} : { dataDir }), configDir, record, runtime: assembled.value,
   workspace: { ...workspace, rewind: {
     ownership: () => { lease.assertOwnership(); const baseline = workspace.baseline(); const head = currentCheckoutHead(cwd); if (head !== baseline.head) throw new MachineError("workspace-conflict"); return { nonce: lease.nonce, gitHead: head, paths: Object.keys(baseline.files) }; },
     validatePaths: async (paths, signal) => { signal.throwIfAborted(); lease.assertOwnership(); validateOwnedEffectPaths(cwd, paths); signal.throwIfAborted(); } } },

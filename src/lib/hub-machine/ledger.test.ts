@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MachineLedger } from './ledger';
-import type {Control} from '../../remote-control/protocol';
+import {canonicalDigest,type Control} from '../../remote-control/protocol';
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
@@ -158,6 +158,32 @@ test('crash identities: daemon and owned-process records, spawn intents and run 
   ledger.resolveLostRun('hub-a','command-a','run-a','reconciliation-1');ledger.resolveLostRun('hub-a','command-a','run-a','reconciliation-1');expect(()=>ledger.resolveLostRun('hub-a','command-a','run-a','reconciliation-2')).toThrow('payload-conflict');
   expect(ledger.unresolved()).toEqual([]);expect(ledger.claim({...command,daemonId:'daemon-b'})).toEqual({status:'replay',phase:'lost'});
   ledger.forgetDaemon('daemon-a');expect(ledger.ownedProcesses('daemon-a','checkout-a')).toEqual([]);expect(ledger.daemonRecord('daemon-a')).toBeNull();
+ }finally{ledger.close();}
+});
+test('a native session lease stays bound to the daemon that took it, and a lost run names its crashed daemon only after the human resolution of this ledger\'s own receipt',()=>{
+ const f=file();let ledger=new MachineLedger(f);
+ try{
+  ledger.recordNativeLease({token:'token-a',daemonId:'daemon-a',sessionId:'session-a'});ledger.recordNativeLease({token:'token-a',daemonId:'daemon-a',sessionId:'session-a'});
+  expect(()=>ledger.recordNativeLease({token:'token-a',daemonId:'daemon-b',sessionId:'session-a'})).toThrow('payload-conflict');expect(()=>ledger.recordNativeLease({token:'token-a',daemonId:'daemon-a',sessionId:'session-b'})).toThrow('payload-conflict');
+  ledger.close();ledger=new MachineLedger(f);
+  // The binding is durable, so a crash of daemon-a leaves exactly this evidence; an unknown token is evidence of nothing.
+  expect(ledger.nativeLease('token-a')).toEqual({daemonId:'daemon-a',sessionId:'session-a'});expect(ledger.nativeLease('token-x')).toBeNull();
+  ledger.claim({...command,daemonId:'daemon-a'});ledger.markStarting('hub-a','command-a','daemon-a');
+  const report:Control['ReconciliationReport']={runId:'run-a',sessionId:'session-a',turnId:'turn-a',projectId:'project-a',checkoutId:'checkout-a',ledgerId:ledger.ledgerId,daemonId:'daemon-b',commandDigest:command.digest,expectedRunVersion:4,observation:'confirmed-stopped',observedAt:new Date().toISOString()};
+  const receipt:Control['ReconciliationReceipt']={reconciliationId:'reconciliation-a',machineId:'machine-a',reportDigest:canonicalDigest(report),receivedAt:new Date().toISOString(),runId:'run-a',projectId:'project-a',checkoutId:'checkout-a',ledgerId:ledger.ledgerId,daemonId:'daemon-b',expectedRunVersion:4,observation:'confirmed-stopped',sessionId:'session-a',turnId:'turn-a'};
+  ledger.recordReconciliation(report,receipt);
+  // A confirmed absence alone resolves nothing: the launch is still uncertain until the human resolution was released locally.
+  expect(ledger.lostResolution('hub-a','run-a',command.digest)).toBeNull();
+  ledger.resolveLostRun('hub-a','command-a','run-a','reconciliation-a');
+  expect(ledger.lostResolution('hub-a','run-a',command.digest)).toEqual({commandId:'command-a',daemon:'daemon-a',reconciliationId:'reconciliation-a',expectedRunVersion:4});
+  expect(ledger.lostResolution('hub-a','run-a','b'.repeat(64))).toBeNull();expect(ledger.lostResolution('hub-b','run-a',command.digest)).toBeNull();
+  // A launch the crashed daemon had admitted keeps its applied receipt; the same resolution marker releases it, and nothing less does.
+  const admitted={hubId:'hub-a',commandId:'command-b',digest:'c'.repeat(64),runId:'run-b',checkoutId:'checkout-a',daemonId:'daemon-a'};ledger.claim(admitted);ledger.markStarting('hub-a','command-b','daemon-a');ledger.finish('hub-a','command-b','applied',{status:'admitted'});
+  const reportB={...report,runId:'run-b',commandDigest:admitted.digest},receiptB={...receipt,reconciliationId:'reconciliation-b',runId:'run-b',reportDigest:canonicalDigest(reportB)};ledger.recordReconciliation(reportB,receiptB);
+  expect(ledger.lostResolution('hub-a','run-b',admitted.digest)).toBeNull();ledger.resolveLostRun('hub-a','command-b','run-b','reconciliation-b');
+  expect(ledger.lostResolution('hub-a','run-b',admitted.digest)).toEqual({commandId:'command-b',daemon:'daemon-a',reconciliationId:'reconciliation-b',expectedRunVersion:4});
+  // A clean stop of the daemon forgets its lease bindings with its identity.
+  ledger.forgetDaemon('daemon-a');expect(ledger.nativeLease('token-a')).toBeNull();
  }finally{ledger.close();}
 });
 /** Appends real acknowledged log rows of ~60 KiB to the SQLite file until it stores at least `target` bytes; few rows, so the event count stays far below its cap. */
