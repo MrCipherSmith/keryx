@@ -13,12 +13,21 @@ interface OwnerRequestBase {v:1;requestId:string;hubId:string}
 /** Crash-uncertain run recovery pins: step 1 names the run; step 2 also names the exact local confirmed-stopped receipt a human resolved in Hub. */
 export interface LocalRunRecoveryTarget {runId:string}
 export interface LocalResolvedRunTarget {runId:string;reconciliationId:string}
-export type LocalOwnerRequest=OwnerRequestBase&({operation:'inspect';sessionId?:string}|{operation:'release-expired-idle';target:LocalRecoveryTarget}|{operation:'confirm-run-absence';target:LocalRunRecoveryTarget}|{operation:'release-resolved-run';target:LocalResolvedRunTarget});
+/** A session command a crashed daemon left unresolved in the ledger, named by its exact Hub command id. */
+export interface LocalCrashedCommandTarget {commandId:string}
+export type LocalOwnerRequest=OwnerRequestBase&({operation:'inspect';sessionId?:string}|{operation:'release-expired-idle';target:LocalRecoveryTarget}|{operation:'confirm-run-absence';target:LocalRunRecoveryTarget}|{operation:'release-resolved-run';target:LocalResolvedRunTarget}|{operation:'settle-crashed-command';target:LocalCrashedCommandTarget});
+/**
+ * What a settled crashed command is known to have done: `applied` when this ledger recorded its effect and Hub ingested that record,
+ * `not-applied` when it never started or the host recorded refusing it, `unknown` when neither can be established.
+ */
+export type CrashedCommandOutcome='applied'|'not-applied'|'unknown';
 export type LocalOwnerValue=
  |{kind:'inspection';hubId:string;machineId:string;ledgerId:string;daemonId:string;sessions:Array<{session:Control['SessionRecord'];nativeSessionId:string;checkoutOwned:boolean}>;unresolved:Array<{commandId:string;runId:string|null;checkoutId:string;phase:'received'|'unknown'}>;recoveryClaims:Array<{requestId:string;sessionId:string;state:'unknown'|'complete'}>;uncertainRuns:Array<{runId:string;daemonId:string}>;truncated:boolean}
  |{kind:'released-expired-idle';stopped:true;session:Control['SessionRecord'];controller:Control['ControllerReceipt']}
  |{kind:'run-absence-confirmed';runId:string;sessionId:string;reconciliationId:string;expectedRunVersion:number;receivedAt:string}
- |{kind:'released-resolved-run';runId:string;sessionId:string;reconciliationId:string;capacityReleased:boolean;checkoutLeaseReleased:boolean};
+ |{kind:'released-resolved-run';runId:string;sessionId:string;reconciliationId:string;capacityReleased:boolean;checkoutLeaseReleased:boolean}
+ /** `receipt`: the final machine receipt sent to Hub for the command. `resubmit`: whether the human has to send the command again. */
+ |{kind:'settled-crashed-command';commandId:string;sessionId:string;command:string;outcome:CrashedCommandOutcome;receipt:{status:'applied'|'admitted'|'not-applied'|'rejected';errorCode:'recovery-required'|null};resubmit:'no'|'yes'|'if-absent'};
 export type LocalOwnerResult=ProtocolResult<LocalOwnerValue>;
 /** A local recovery may wait out a full owned-process stop (TERM, then KILL after five seconds) plus its bounded finalizers. */
 const REQUEST_BYTES=16384,REPLY_BYTES=65536,DEADLINE_MS=15000;
@@ -32,6 +41,10 @@ export function parseLocalOwnerRequest(value:unknown):ProtocolResult<LocalOwnerR
  if(!obj(value)||value.v!==1||!id(value.requestId)||!digest(value.hubId))return error('invalid-local-request');
  if(value.operation==='inspect'&&exact(value,['v','requestId','hubId','operation',...('sessionId'in value?['sessionId']:[])])&&(!('sessionId'in value)||id(value.sessionId)))return{ok:true,value:{v:1,requestId:value.requestId,hubId:value.hubId,operation:'inspect',...(id(value.sessionId)?{sessionId:value.sessionId}:{})}};
  const target=value.target;
+ if(value.operation==='settle-crashed-command'){
+  if(!exact(value,['v','requestId','hubId','operation','target'])||!obj(target)||!exact(target,['commandId'])||!id(target.commandId))return error('invalid-local-request');
+  return{ok:true,value:{v:1,requestId:value.requestId,hubId:value.hubId,operation:'settle-crashed-command',target:{commandId:target.commandId}}};
+ }
  if(value.operation==='confirm-run-absence'||value.operation==='release-resolved-run'){
   const pins=value.operation==='confirm-run-absence'?['runId']:['runId','reconciliationId'];
   if(!exact(value,['v','requestId','hubId','operation','target'])||!obj(target)||!exact(target,pins)||!id(target.runId)||(value.operation==='release-resolved-run'&&!id(target.reconciliationId)))return error('invalid-local-request');
@@ -45,6 +58,11 @@ function validValue(value:unknown):value is LocalOwnerValue{
  if(value.kind==='released-expired-idle')return exact(value,['kind','stopped','session','controller'])&&value.stopped===true&&validateControl('SessionRecord',value.session).ok&&validateControl('ControllerReceipt',value.controller).ok;
  if(value.kind==='run-absence-confirmed')return exact(value,['kind','runId','sessionId','reconciliationId','expectedRunVersion','receivedAt'])&&id(value.runId)&&id(value.sessionId)&&id(value.reconciliationId)&&typeof value.expectedRunVersion==='number'&&Number.isSafeInteger(value.expectedRunVersion)&&value.expectedRunVersion>=0&&typeof value.receivedAt==='string'&&Number.isFinite(Date.parse(value.receivedAt));
  if(value.kind==='released-resolved-run')return exact(value,['kind','runId','sessionId','reconciliationId','capacityReleased','checkoutLeaseReleased'])&&id(value.runId)&&id(value.sessionId)&&id(value.reconciliationId)&&typeof value.capacityReleased==='boolean'&&typeof value.checkoutLeaseReleased==='boolean';
+ if(value.kind==='settled-crashed-command'){
+  const receipt=value.receipt;
+  return exact(value,['kind','commandId','sessionId','command','outcome','receipt','resubmit'])&&id(value.commandId)&&id(value.sessionId)&&typeof value.command==='string'&&/^[a-z][a-z-]{0,63}$/.test(value.command)&&['applied','not-applied','unknown'].includes(String(value.outcome))
+   &&obj(receipt)&&exact(receipt,['status','errorCode'])&&['applied','admitted','not-applied','rejected'].includes(String(receipt.status))&&(receipt.errorCode===null||receipt.errorCode==='recovery-required')&&['no','yes','if-absent'].includes(String(value.resubmit));
+ }
  return value.kind==='inspection'&&exact(value,['kind','hubId','machineId','ledgerId','daemonId','sessions','unresolved','recoveryClaims','uncertainRuns','truncated'])&&Array.isArray(value.uncertainRuns)&&value.uncertainRuns.length<=1000&&value.uncertainRuns.every(item=>obj(item)&&exact(item,['runId','daemonId'])&&id(item.runId)&&id(item.daemonId))&&digest(value.hubId)&&id(value.machineId)&&id(value.ledgerId)&&id(value.daemonId)&&typeof value.truncated==='boolean'&&Array.isArray(value.sessions)&&value.sessions.length<=100&&value.sessions.every(item=>obj(item)&&exact(item,['session','nativeSessionId','checkoutOwned'])&&validateControl('SessionRecord',item.session).ok&&id(item.nativeSessionId)&&typeof item.checkoutOwned==='boolean')&&Array.isArray(value.recoveryClaims)&&value.recoveryClaims.length<=1000&&value.recoveryClaims.every(item=>obj(item)&&exact(item,['requestId','sessionId','state'])&&id(item.requestId)&&id(item.sessionId)&&['unknown','complete'].includes(String(item.state)))&&Array.isArray(value.unresolved)&&value.unresolved.length<=1000&&value.unresolved.every(item=>obj(item)&&exact(item,['commandId','runId','checkoutId','phase'])&&id(item.commandId)&&(item.runId===null||id(item.runId))&&id(item.checkoutId)&&['received','unknown'].includes(String(item.phase)));
 }
 export function validLocalOwnerResult(value:unknown):value is LocalOwnerResult{

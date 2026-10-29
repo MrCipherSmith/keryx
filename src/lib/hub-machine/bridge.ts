@@ -20,7 +20,7 @@ import { MachineExecutionPool } from './pool';
 import { MachineLedger } from './ledger';
 import { MachineError, machineFailure, machineNoticeCode, type MachineResult } from './errors';
 import { resolveProductionMachineProfile, type MachineProfile } from './production';
-import { validLocalOwnerResult, type LocalOwnerRequest, type LocalOwnerResult, type LocalOwnerValue, type LocalRecoveryTarget } from './local-control';
+import { validLocalOwnerResult, type CrashedCommandOutcome, type LocalCrashedCommandTarget, type LocalOwnerRequest, type LocalOwnerResult, type LocalOwnerValue, type LocalRecoveryTarget } from './local-control';
 import { currentProcessIdentity, processPresence, readProcessIdentity, type ProcessPresence } from './process-identity';
 import type { DaemonRecord } from './ledger';
 import type { NativeOwnedProcessEvent } from '../../session/native-runtime';
@@ -129,6 +129,8 @@ export class MachineBridge {
     private readonly background = new Set<Promise<unknown>>();
     private readonly ownerTasks = new Set<Promise<unknown>>();
     private readonly pendingFrames: Array<FrameOf<'command'> | FrameOf<'session-command'>> = [];
+    /** Commands the pump is applying right now; an operator settlement never races one. */
+    private readonly inFlight = new Set<string>();
     private pendingBytes = 0;
     private pumping = false;
     private pumpTask: Promise<void> | undefined;
@@ -509,11 +511,15 @@ export class MachineBridge {
             while (this.ready && !this.stopped && this.pendingFrames.length) {
                 const frame = this.pendingFrames.shift()!;
                 this.pendingBytes -= Buffer.byteLength(JSON.stringify(frame));
+                this.inFlight.add(frame.payload.commandId);
                 try {
                     await this.command(frame);
                 }
                 catch (cause) {
                     await this.commandFailure(frame, cause);
+                }
+                finally {
+                    this.inFlight.delete(frame.payload.commandId);
                 }
             }
         }
@@ -1321,6 +1327,7 @@ export class MachineBridge {
         const task = (request.operation === 'inspect' ? this.ownerInspection(request.sessionId)
             : request.operation === 'release-expired-idle' ? this.releaseExpiredIdle(request.requestId, request.target)
             : request.operation === 'confirm-run-absence' ? this.confirmRunAbsence(request.requestId, request.target)
+            : request.operation === 'settle-crashed-command' ? this.settleCrashedCommand(request.requestId, request.target)
             : this.releaseResolvedRun(request.requestId, request.target)).catch(cause => ownerRefusal(machineFailure(cause, 'local-control-failed').code));
         this.ownerTasks.add(task);
         try {
@@ -1538,6 +1545,134 @@ export class MachineBridge {
         const capacityReleased = this.pool!.releaseRecovered(e.hubId, remote.runId, launch.daemon);
         const checkoutLeaseReleased = releaseRecoveredCheckoutLease(mapping.cwd, { hubId: e.hubId, runId: remote.sessionId, daemonId: launch.daemon }) === 'released';
         return settle({ ok: true, value: { kind: 'released-resolved-run', runId: remote.runId, sessionId: remote.sessionId, reconciliationId: target.reconciliationId, capacityReleased, checkoutLeaseReleased } });
+    }
+    /**
+     * What this ledger durably recorded of a crashed session command's own effect: the session events that name its operation, or for
+     * a controller change Hub's exact receipt. A queue item means the message or work was queued; a receipt or outcome tells applied,
+     * pending (admitted), refused, or attempted without proof. No such event decides nothing: the host may have applied the command
+     * after its last recorded event, so the absence of a record is never read as non-application.
+     */
+    private crashedCommandEvidence(command: SessionCommand, operation: unknown): { found: false } | { found: true; seq: number; outcome: 'applied' | 'admitted' | 'refused' | 'unproven'; receiptId?: string } {
+        const controller = command.kind === 'claim-controller' || command.kind === 'release-controller' ? validateControl('ControllerReceipt', operation) : undefined;
+        const typed = validateControl('ConfigReceipt', operation), outcome = validateControl('CommandOutcome', operation), ordinary = validateControl('SessionOperationReceipt', operation), turn = validateControl('TurnReceipt', operation);
+        // The same operation identity the daemon applied the command under (see command()).
+        const key = controller ? (controller.ok ? controller.value.receiptId : null) : command.kind === 'confirm-command' ? command.commandId : typed.ok ? typed.value.operationId : outcome.ok ? outcome.value.operationId : ordinary.ok ? ordinary.value.operationId : turn.ok ? turn.value.operationId : null;
+        if (key === null)
+            return { found: false };
+        const matched = this.ledger!.operationEvents(command.target.sessionId, key).filter(({ payload }) => controller ? payload.kind === 'controller-changed' && payload.receipt.receiptId === key
+            : payload.kind === 'queue-changed' ? payload.item.operationId === key : payload.kind === 'config-receipt' || payload.kind === 'operation-receipt' ? payload.receipt.operationId === key : payload.kind === 'command-outcome' && payload.outcome.operationId === key);
+        // A queue item of the operation is its enqueue applied; what happens to the item later is its own, visible fact.
+        const queued = matched.find(({ payload }) => payload.kind === 'queue-changed');
+        const last = queued ?? matched.at(-1);
+        if (!last)
+            return { found: false };
+        const event = last.payload;
+        if (event.kind === 'config-receipt')
+            return { found: true, seq: last.seq, outcome: event.receipt.status === 'rejected' ? 'refused' : 'applied', receiptId: event.receipt.receiptId };
+        if (event.kind === 'operation-receipt')
+            return { found: true, seq: last.seq, outcome: event.receipt.status === 'rejected' ? 'refused' : event.receipt.status === 'recovery-required' ? 'unproven' : event.receipt.status === 'pending' ? 'admitted' : 'applied', receiptId: event.receipt.receiptId };
+        if (event.kind === 'command-outcome')
+            return { found: true, seq: last.seq, outcome: event.outcome.status === 'rejected' ? 'refused' : event.outcome.status === 'recovery-required' ? 'unproven' : 'applied' };
+        return { found: true, seq: last.seq, outcome: 'applied', ...(event.kind === 'controller-changed' ? { receiptId: event.receipt.receiptId } : {}) };
+    }
+    /**
+     * A session command a serve crash left unresolved (claimed, or past its start marker, its outcome never recorded) fences every
+     * re-host of its checkout. This explicit operator step settles it, only once the daemon that claimed it and every process that
+     * daemon recorded for the checkout are proven gone by recorded identity (process group and start time, never a PID or a lease's
+     * age). The recorded outcome is what is actually known: `not-applied` for a command that never reached its start marker or whose
+     * refusal the host recorded; `applied` only when this ledger durably recorded the command's own effect and Hub's recovery read shows
+     * Hub ingested that record; otherwise `unknown`. The row is kept with its final receipt, which Hub receives as the frozen
+     * session-command-receipt. Nothing else is released: run fences, leases and the guarded re-host stay exactly as they are.
+     */
+    private async settleCrashedCommand(requestId: string, target: LocalCrashedCommandTarget): Promise<LocalOwnerResult> {
+        const e = this.options.enrollment, ledger = this.ledger!, digest = canonicalDigest({ hubId: e.hubId, operation: 'settle-crashed-command', target });
+        const claim = ledger.claimRunRecovery(requestId, digest, target.commandId, 'settle-crashed-command');
+        if (claim.status === 'replay')
+            return validLocalOwnerResult(claim.result) ? claim.result : ownerRefusal('recovery-required');
+        // Refusals are recorded complete and replay exactly; a transient failure (offline, a Hub error, an unacknowledged record) leaves the claim to resume.
+        const settle = (result: LocalOwnerResult): LocalOwnerResult => { ledger.finishRunRecovery(requestId, digest, result); return result; };
+        if (!this.connection?.connected)
+            throw new MachineError('machine-offline');
+        const row = ledger.commandRecord(e.hubId, target.commandId);
+        const frame = row?.envelope ? parseMachineFrame(JSON.stringify(row.envelope), 'hub-to-machine') : undefined;
+        if (!row || !frame?.ok || (frame.value.type !== 'command' && frame.value.type !== 'session-command') || frame.value.payload.commandId !== target.commandId)
+            return settle(ownerRefusal('stale-reference'));
+        // A run's commands go through the run's own recovery; a session creation has no session to come back to.
+        if (frame.value.type !== 'session-command' || row.run !== null || frame.value.payload.target.scope !== 'session' || frame.value.payload.kind === 'create-session')
+            return settle(ownerRefusal('recovery-required'));
+        const command = frame.value.payload, sessionId = command.target.sessionId;
+        const report = (phase: 'applied' | 'rejected' | 'lost', receipt: FrameOf<'session-command-receipt'>['payload']): LocalOwnerResult => {
+            const outcome: CrashedCommandOutcome = phase === 'applied' ? 'applied' : phase === 'rejected' ? 'not-applied' : 'unknown';
+            return { ok: true, value: { kind: 'settled-crashed-command', commandId: command.commandId, sessionId, command: command.kind, outcome, receipt: { status: receipt.status as 'applied' | 'admitted' | 'not-applied' | 'rejected', errorCode: receipt.errorCode === null ? null : 'recovery-required' }, resubmit: outcome === 'applied' ? 'no' : outcome === 'not-applied' ? 'yes' : 'if-absent' } };
+        };
+        // This very request settled it before an interruption: Hub receives the recorded receipt again, nothing is decided twice.
+        if (row.settledBy === requestId && (row.phase === 'applied' || row.phase === 'rejected' || row.phase === 'lost')) {
+            const receipt = row.receipt as FrameOf<'session-command-receipt'>['payload'];
+            this.send(this.envelope('session-command-receipt', receipt));
+            return settle(report(row.phase, receipt));
+        }
+        if (!['received', 'starting', 'unknown'].includes(row.phase))
+            return settle(ownerRefusal('stale-reference'));
+        // Only a daemon of this installation that is gone, judged by its recorded identity, can have left it uncertain.
+        if (row.daemon === this.daemonId)
+            return settle(ownerRefusal('daemon-live'));
+        const daemon = row.daemon === null ? null : ledger.daemonRecord(row.daemon);
+        if (!daemon || daemon.daemonId !== row.daemon)
+            return settle(ownerRefusal('recovery-required'));
+        const absence = (): string | undefined => { const own = processPresence(daemon); if (own !== 'absent')
+            return own === 'live' ? 'daemon-live' : 'recovery-required'; const owned = this.ownedPresence(daemon, row.checkout); return owned === 'absent' ? undefined : owned === 'live' ? 'owned-process-live' : 'recovery-required'; };
+        const before = absence();
+        if (before !== undefined)
+            return settle(ownerRefusal(before));
+        const mapping = e.mappings.find(m => m.projectId === command.projectId && m.checkoutId === command.checkoutId);
+        if (!mapping || row.checkout !== command.checkoutId)
+            return settle(ownerRefusal('stale-reference'));
+        const busy = () => this.hosted.has(sessionId) || this.inFlight.has(command.commandId) || this.pendingFrames.some(pending => pending.payload.commandId === command.commandId);
+        if (busy())
+            return settle(ownerRefusal('session-busy'));
+        // Hub's own view: the session record and its event cursor, read through the machine recovery route.
+        const record = (await readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`))).sessions.find(session => session.sessionId === sessionId);
+        if (!record || record.machineId !== e.machineId || record.projectId !== command.projectId || record.checkoutId !== command.checkoutId)
+            return settle(ownerRefusal('stale-reference'));
+        const observedSessionVersion = ledger.lastSessionVersion(sessionId) ?? record.version;
+        if (observedSessionVersion !== record.version)
+            return settle(ownerRefusal('stale-reference'));
+        let phase: 'applied' | 'rejected' | 'lost', status: FrameOf<'session-command-receipt'>['payload']['status'], receiptId: string = randomUUID();
+        if (row.phase === 'received') {
+            // Every host effect follows the start marker, so a command claimed but never started applied nothing.
+            phase = 'rejected';
+            status = 'rejected';
+        }
+        else {
+            let operation: unknown;
+            try {
+                operation = await this.connection.request(`/hub/v2/projects/${command.projectId}/sessions/${sessionId}/operations/${command.commandId}`);
+            }
+            catch (cause) {
+                // Hub holds no answerable operation for it (missing, or failed as undeliverable): no identity to match a record against.
+                if (!(cause instanceof MachineError) || !['machine-http-404', 'machine-http-409'].includes(cause.code))
+                    throw cause;
+            }
+            const evidence = this.crashedCommandEvidence(command, operation);
+            // A record Hub has not ingested yet is still being replayed: retry the same request once the reconnect replay settled.
+            if (evidence.found && record.sessionEventCursor < evidence.seq)
+                throw new MachineError('replay-gap');
+            const known = evidence.found && (evidence.outcome === 'applied' || evidence.outcome === 'admitted');
+            phase = known ? 'applied' : evidence.found && evidence.outcome === 'refused' ? 'rejected' : 'lost';
+            status = known ? (evidence.outcome === 'admitted' ? 'admitted' : 'applied') : 'not-applied';
+            if (known && evidence.found && evidence.receiptId !== undefined)
+                receiptId = evidence.receiptId;
+        }
+        const receipt: FrameOf<'session-command-receipt'>['payload'] = { commandId: command.commandId, hubSequence: command.hubSequence, sessionId, observedSessionVersion, status, receiptId, errorCode: status === 'applied' || status === 'admitted' ? null : 'recovery-required' };
+        // A fresh observation right before the decision is recorded: nothing may reappear or start applying it in between unnoticed.
+        const now = absence();
+        if (now !== undefined)
+            return settle(ownerRefusal(now));
+        if (busy())
+            return settle(ownerRefusal('session-busy'));
+        ledger.settleCommand(e.hubId, command.commandId, { phase: row.phase, daemon: daemon.daemonId }, phase, receipt, requestId);
+        this.send(this.envelope('session-command-receipt', receipt));
+        return settle(report(phase, receipt));
     }
     /** Durable request identity before any effect. A claim interrupted once the host began its stop stays unknown and is never re-executed. */
     private async releaseExpiredIdle(requestId: string, target: LocalRecoveryTarget): Promise<LocalOwnerResult> {

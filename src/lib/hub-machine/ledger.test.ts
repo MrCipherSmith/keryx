@@ -227,3 +227,30 @@ test('an oversized ledger refuses to open with ledger-size-exceeded and is never
  expect(refusal).toMatchObject({name:'MachineError',code:'ledger-size-exceeded'});expect(machineFailure(refusal).code).toBe('ledger-size-exceeded');
  expect(statSync(f).size).toBe(size);expect(createHash('sha256').update(readFileSync(f)).digest('hex')).toBe(digest);
 });
+test('an operator settlement of a crashed session command is compare-and-set on its observed phase and owner, durable and never deletes the row', () => {
+ const f=file();let ledger=new MachineLedger(f);
+ try{
+  const session='session-a',stream=`session:${session}`,base={sessionId:session,projectId:'project-a',checkoutId:'checkout-a',observedAt:new Date(0).toISOString()};
+  const settled={commandId:'command-s',hubSequence:7,sessionId:session,observedSessionVersion:3,status:'applied',receiptId:'receipt-s',errorCode:null};
+  ledger.claim({hubId:'hub-a',commandId:'command-s',digest:'d'.repeat(64),runId:null,checkoutId:'checkout-a',daemonId:'daemon-a',envelope:{v:2,type:'session-command'}});ledger.markStarting('hub-a','command-s','daemon-a');
+  expect(ledger.commandRecord('hub-a','command-s')).toMatchObject({phase:'starting',daemon:'daemon-a',run:null,receipt:null,settledBy:null});expect(ledger.commandRecord('hub-a','missing')).toBeNull();
+  // The crashed daemon's own record of the effect, found by the operation it names, and the last version it projected.
+  ledger.persistEvent(stream,1,{...base,sessionEventSeq:1,kind:'queue-changed',queueVersion:1,item:{queueItemId:'item-a',version:1,kind:'message',operationId:'operation-s',state:'queued',position:1,text:'queued',commandName:null,expectedConfigVersion:1,replacesOperationId:null}});
+  ledger.persistEvent(stream,2,{...base,sessionEventSeq:2,kind:'session-state',session:{version:3}});
+  expect(ledger.operationEvents(session,'operation-s').map(event=>event.seq)).toEqual([1]);expect(ledger.operationEvents(session,'operation-other')).toEqual([]);expect(ledger.lastSessionVersion(session)).toBe(3);expect(ledger.lastSessionVersion('session-none')).toBeNull();
+  // A phase or owner that moved since the observation (the live daemon started applying it) is refused and changes nothing.
+  expect(()=>ledger.settleCommand('hub-a','command-s',{phase:'received',daemon:'daemon-a'},'applied',settled,'settle-1')).toThrow('session-busy');
+  expect(()=>ledger.settleCommand('hub-a','command-s',{phase:'starting',daemon:'daemon-b'},'applied',settled,'settle-1')).toThrow('session-busy');
+  expect(ledger.unresolved().map(row=>row.id)).toEqual(['command-s']);
+  ledger.settleCommand('hub-a','command-s',{phase:'starting',daemon:'daemon-a'},'applied',settled,'settle-1');
+  // The same request settling again is a no-op; any other request is a conflict, whatever it would record.
+  ledger.settleCommand('hub-a','command-s',{phase:'starting',daemon:'daemon-a'},'applied',settled,'settle-1');
+  expect(()=>ledger.settleCommand('hub-a','command-s',{phase:'applied',daemon:'daemon-a'},'lost',{...settled,status:'not-applied'},'settle-2')).toThrow('payload-conflict');
+  expect(()=>ledger.settleCommand('hub-a','command-missing',{phase:'starting',daemon:'daemon-a'},'lost',settled,'settle-3')).toThrow('stale-reference');
+  ledger.close();ledger=new MachineLedger(f);
+  expect(ledger.commandRecord('hub-a','command-s')).toMatchObject({phase:'applied',receipt:settled,settledBy:'settle-1'});expect(ledger.unresolved()).toEqual([]);
+  // A redelivery of the settled command replays its recorded receipt; it never runs the command again.
+  expect(ledger.claim({hubId:'hub-a',commandId:'command-s',digest:'d'.repeat(64),runId:null,checkoutId:'checkout-a'})).toEqual({status:'replay',phase:'applied'});expect(ledger.commandReceipt('hub-a','command-s')).toEqual(settled);
+  expect(ledger.claimRunRecovery('settle-1','e'.repeat(64),'command-s','settle-crashed-command')).toEqual({status:'claimed'});expect(()=>ledger.claimRunRecovery('settle-1','e'.repeat(64),'command-other','settle-crashed-command')).toThrow('payload-conflict');
+ }finally{ledger.close();}
+});

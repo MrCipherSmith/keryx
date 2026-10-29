@@ -157,8 +157,11 @@ export class MachineLedger {
     forgetDaemon(daemonId:string):void{this.db.transaction(()=>{this.db.query('DELETE FROM machine_owned_processes WHERE daemonId=?').run(daemonId);this.db.query('DELETE FROM machine_native_leases WHERE daemonId=?').run(daemonId);this.db.query('DELETE FROM machine_daemons WHERE daemonId=?').run(daemonId);}).immediate();}
     /** The launch command of a run, matched by the Hub run's immutable command digest. */
     launchCommand(hub:string,runId:string,digest:string):{id:string;phase:Phase;daemon:string|null;checkout:string}|null{const row=this.db.query<CommandRow,[string,string,string]>('SELECT * FROM machine_commands WHERE hub=? AND run=? AND digest=?').get(hub,runId,digest);return row?{id:row.id,phase:row.phase==='starting'?'unknown':row.phase,daemon:row.daemon,checkout:row.checkout}:null;}
-    /** Crash-run recovery claims. Each step only observes or applies exact idempotent releases, so an interrupted claim resumes rather than staying unknown. */
-    claimRunRecovery(id:string,digest:string,runId:string,step:'confirm-run-absence'|'release-resolved-run'):{status:'claimed'}|{status:'replay';result:unknown}{
+    /**
+     * Crash recovery claims. Each step only observes or applies exact idempotent changes, so an interrupted claim resumes rather than
+     * staying unknown. `runId` names the run, or for `settle-crashed-command` the crashed command.
+     */
+    claimRunRecovery(id:string,digest:string,runId:string,step:'confirm-run-absence'|'release-resolved-run'|'settle-crashed-command'):{status:'claimed'}|{status:'replay';result:unknown}{
         return this.db.transaction(()=>{
             const old=this.db.query<{digest:string;runId:string;step:string;phase:string;result:string|null},[string]>('SELECT * FROM machine_run_recovery WHERE id=?').get(id);
             if(old){if(old.digest!==digest||old.runId!==runId||old.step!==step)throw new MachineError('payload-conflict');return old.phase==='complete'&&old.result?{status:'replay' as const,result:JSON.parse(old.result)}:{status:'claimed' as const};}
@@ -452,6 +455,40 @@ export class MachineLedger {
     ]>('SELECT stream,coalesce(max(CASE WHEN acked=1 THEN seq ELSE 0 END),0) AS ack FROM (SELECT stream,seq,acked FROM machine_events UNION ALL SELECT stream,seq,acked FROM machine_discarded_logs UNION ALL SELECT stream,toSeq AS seq,1 AS acked FROM machine_retired_logs) GROUP BY stream ORDER BY stream').all(); }
     unresolved() { return this.db.query<CommandRow, [
     ]>("SELECT * FROM machine_commands WHERE phase IN ('received','starting','unknown') ORDER BY hub,id LIMIT 1000").all().map(row => ({ ...row, phase: row.phase === 'starting' ? 'unknown' as const : row.phase })); }
+    /** The stored row of one command, its raw phase included: `starting` is a start marker whose effect a crash may have cut short. */
+    commandRecord(hub:string,id:string):{id:string;phase:Phase;daemon:string|null;checkout:string;run:string|null;envelope:unknown;receipt:unknown;settledBy:string|null}|null{
+        const row=this.stored(hub,id);if(!row)return null;const marker=this.db.query<{value:string},[string]>('SELECT value FROM machine_meta WHERE key=?').get(`settled:${id}`);
+        return{id:row.id,phase:row.phase,daemon:row.daemon,checkout:row.checkout,run:row.run,envelope:row.envelope===null?null:JSON.parse(row.envelope),receipt:row.receipt===null?null:JSON.parse(row.receipt),settledBy:marker?.value??null};
+    }
+    /**
+     * The session events this ledger durably recorded that name one operation: its queue item, config receipt, command outcome or
+     * operation receipt, or for a controller change the controller receipt with that id. They are the crashed daemon's own record of the
+     * command's effect, persisted before they were sent to Hub.
+     */
+    operationEvents(sessionId:string,key:string):Array<{seq:number;payload:Control['SessionEvent']}>{
+        return this.db.query<{seq:number;payload:string},[string,string,string,string,string]>("SELECT seq,payload FROM machine_events WHERE stream=? AND (json_extract(payload,'$.item.operationId')=? OR json_extract(payload,'$.receipt.operationId')=? OR json_extract(payload,'$.outcome.operationId')=? OR (json_extract(payload,'$.kind')='controller-changed' AND json_extract(payload,'$.receipt.receiptId')=?)) ORDER BY seq LIMIT 100").all(`session:${sessionId}`,key,key,key,key).map(row=>({seq:row.seq,payload:JSON.parse(row.payload)}));
+    }
+    /** The session version this ledger last recorded for a session: its latest state snapshot or controller change. */
+    lastSessionVersion(sessionId:string):number|null{
+        const row=this.db.query<{payload:string},[string]>("SELECT payload FROM machine_events WHERE stream=? AND json_extract(payload,'$.kind') IN ('session-state','controller-changed') ORDER BY seq DESC LIMIT 1").get(`session:${sessionId}`);
+        if(!row)return null;const event=JSON.parse(row.payload) as Control['SessionEvent'];
+        return event.kind==='session-state'?event.session.version:event.kind==='controller-changed'?event.receipt.sessionVersion:null;
+    }
+    /**
+     * Explicit operator settlement of a command a crashed daemon left unresolved: the exact phase and owner observed are compared and
+     * set in one transaction, with the final receipt and the request that settled it. The command row is kept, never deleted. The same
+     * request settling it again changes nothing; another request, or a phase or owner that moved meanwhile, is refused.
+     */
+    settleCommand(hub:string,id:string,expected:{phase:Phase;daemon:string},phase:'applied'|'rejected'|'lost',receipt:unknown,requestId:string):void{
+        this.db.transaction(()=>{
+            const row=this.stored(hub,id);if(!row)throw new MachineError('stale-reference');
+            const key=`settled:${id}`,prior=this.db.query<{value:string},[string]>('SELECT value FROM machine_meta WHERE key=?').get(key);
+            if(prior){if(prior.value!==requestId)throw new MachineError('payload-conflict');return;}
+            if(row.phase!==expected.phase||row.daemon!==expected.daemon)throw new MachineError('session-busy');
+            this.db.query('UPDATE machine_commands SET phase=?,receipt=? WHERE hub=? AND id=?').run(phase,JSON.stringify(receipt),hub,id);
+            this.db.query('INSERT INTO machine_meta(key,value) VALUES(?,?)').run(key,requestId);
+        }).immediate();
+    }
     /** `detail`: the fixed reason token of the guard that refused (MachineError.detail), when the code alone does not name it. */
     recordDiagnostic(commandId: string, code: string, detail?: string): void { this.db.query('INSERT INTO machine_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(`fault:${commandId}`, JSON.stringify({ commandId, code, ...(detail === undefined ? {} : { detail }), observedAt: new Date().toISOString() })); }
     diagnostics(): Array<{

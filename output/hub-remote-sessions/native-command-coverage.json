@@ -416,7 +416,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "bb4c57fa9212b092e6d7a424b425441a2220b0ac9b720b361b1f6a263b54b16c",
+          "sha256": "ab47cf0994a447df519457c26da8302488f30a7434a2996ce74b37d45a4ad991",
           "anchor": "line:1"
         },
         {
@@ -516,7 +516,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "bb4c57fa9212b092e6d7a424b425441a2220b0ac9b720b361b1f6a263b54b16c",
+          "sha256": "ab47cf0994a447df519457c26da8302488f30a7434a2996ce74b37d45a4ad991",
           "anchor": "line:1"
         },
         {
@@ -573,7 +573,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "bb4c57fa9212b092e6d7a424b425441a2220b0ac9b720b361b1f6a263b54b16c",
+          "sha256": "ab47cf0994a447df519457c26da8302488f30a7434a2996ce74b37d45a4ad991",
           "anchor": "line:1"
         },
         {
@@ -3467,7 +3467,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "bb4c57fa9212b092e6d7a424b425441a2220b0ac9b720b361b1f6a263b54b16c",
+          "sha256": "ab47cf0994a447df519457c26da8302488f30a7434a2996ce74b37d45a4ad991",
           "anchor": "line:1"
         },
         {
@@ -12752,7 +12752,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "110464dc9e9ae9ef8470afb090f6b6287b7d2d6918245a44019df32422810155"
+      "receiptDigest": "4749089e4b61058cdf8a0cda190d1c6202b13e15e8b7597837dc67328e96c67f"
     },
     {
       "variantId": "goal.-workspace",
@@ -12776,7 +12776,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "2322a5719baa387e40793ee2b1c78d9625bafa7abe64e59bb2bd4e2a6de3ac08"
+      "receiptDigest": "1fa28d120db8de618129a13f927b6a4bc4ba3dd77bd23337d3570eac54126c01"
     },
     {
       "variantId": "sessions.picker",
@@ -12784,7 +12784,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f52ca8b8423d9464824a61cd1845504653f2e9778101df26b0c44586b4db1713"
+      "receiptDigest": "20243abbadebd1220e8da0b4cc1b20d244ddb3b8e4824f5620e6a7c8176a9eb9"
     },
     {
       "variantId": "sessions.open",
@@ -12792,7 +12792,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1cd3a813c3a969efac0058fe466e36280e5c3581d7ab9a5aa957c2886d66be00"
+      "receiptDigest": "faeea425e80e6d8d335ac2f19fde34deab6fd5f15d3410d6e280ed9def6c0838"
     },
     {
       "variantId": "sessions.resume",
@@ -12800,7 +12800,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8620a4850d062856d15e60beb1bf8777eb716ca2eb3febfba2ce77d9b5223578"
+      "receiptDigest": "89d6d15f826fbf15407f1cb8ef15d462c6353fa4fd6f022dfc69b9a60e4cee84"
     },
     {
       "variantId": "sessions.fork",
@@ -12808,7 +12808,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8b8e2bb0d7f4cc17422a38b586ef6adff23e7bc928200061bceee0a2964b56a9"
+      "receiptDigest": "186b0446dbfe0d101956fc794940633ff76f1ad203ce1e83294028b0dbfe966c"
     },
     {
       "variantId": "status.default",
@@ -12856,7 +12856,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c560ec1c90d6673e635b74d6c6f4aac598e02089ce0c2701366b091e6fd745bd"
+      "receiptDigest": "505fa2bffae12fb95749fda48663ca8c1eed14b34def39d56e7d045d8cfb4899"
     },
     {
       "variantId": "setup.init",
@@ -13056,7 +13056,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "9f9a4678b89075d47d07114e120422f693f6ca22ea089b80b916bd1da5018ca2"
+      "receiptDigest": "bdfa9342f31c5e648e3dde926b01177f692e9d47b2f8134efd3b399866ef77bb"
     },
     {
       "variantId": "intake.status",
@@ -14120,7 +14120,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "fb0575409b28447da8ffae8cca610b4b905025a88746a2333ac58917e589d3f4"
+      "receiptDigest": "f36eca5986bdf9c59b6ce98fd564e5b6744cb1bc7671861675b089b43bcfe9db"
     },
     {
       "variantId": "interrupt.default",
@@ -14216,7 +14216,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "7cf0fae878b288b817b54855b25965fcec3d1af52d0e143abd1d373d06b6278b"
+      "receiptDigest": "589324b7a59f48e47bac46bf1a0bfc341a0d87fe038cfbbf1b07c31fdc911170"
     },
     {
       "variantId": "bus.-name-text",

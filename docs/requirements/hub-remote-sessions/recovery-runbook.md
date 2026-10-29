@@ -3,9 +3,10 @@
 This runbook covers the explicit local recoveries this release supports:
 
 - closing an **expired, idle** native session on the executor machine that owns it, so a human can take over its controller in Hub;
-- recovering a run left **uncertain by a `serve` crash**, in two operator steps with a human Hub resolution between them (see [After a serve crash](#after-a-serve-crash)).
+- recovering a run left **uncertain by a `serve` crash**, in two operator steps with a human Hub resolution between them (see [After a serve crash](#after-a-serve-crash));
+- settling a **session command a `serve` crash left unresolved** (a queued message, a controller claim, a config or queue change), so the session can be re-hosted (see [step 5](#5-settle-a-session-command-the-crash-left-unresolved)).
 
-Both are local-owner actions, separate from Hub machine credentials and from Hub human authority. Neither ever stops or releases work because a lease expired, a process looks old, or a PID is missing, and neither force-unlocks anything.
+All of them are local-owner actions, separate from Hub machine credentials and from Hub human authority. None of them ever stops or releases work because a lease expired, a process looks old, or a PID is missing, and none force-unlocks anything.
 
 ## How the channel is set up
 
@@ -33,7 +34,7 @@ Inspection only reads state. It does not attach, retry, unlock or replay anythin
 | `sessions[].session` | The host's actual `SessionRecord`: state, versions, controller lease, history version, workspace baseline. |
 | `sessions[].nativeSessionId` | The local native session identity. It is only ever shown locally, never sent to Hub. |
 | `sessions[].checkoutOwned` | Whether this `serve` process still holds the checkout lease. |
-| `unresolved` | Ledger commands still `received` or `unknown`. |
+| `unresolved` | Ledger commands still `received` or `unknown`, with their `commandId`. A command a crashed `serve` left here is settled by [step 5](#5-settle-a-session-command-the-crash-left-unresolved). |
 | `recoveryClaims` | Earlier expired-idle recovery requests and whether each is `complete` or `unknown`. |
 | `uncertainRuns` | Runs whose capacity another daemon of this installation still reserves, with that daemon id: what a crash, or an unproven stop, left fenced. |
 | `truncated` | `true` when some entries did not fit the bounded reply. Narrow with `--session` to see the rest. |
@@ -90,7 +91,7 @@ These are never released by the expired-idle release, and expiry alone never cha
 - an owned stop or a session service (MCP, bus) close that could not be proven, for example a process that survived its kill,
 - a recovery claim left `unknown`.
 
-A fenced session refuses controller claims, renewals and takeovers, and refuses resume, until recovery is proven. That includes this same process opening the native session again, where the session lease would otherwise hand back the handle this process still holds: a host re-opened on that handle starts `recovery-required`, and disposing it never releases the lease. Hub likewise refuses a takeover without an exact applied release. The only release for a run a `serve` crash left uncertain is the explicit sequence in [After a serve crash](#after-a-serve-crash).
+A fenced session refuses controller claims, renewals and takeovers, and refuses resume, until recovery is proven. That includes this same process opening the native session again, where the session lease would otherwise hand back the handle this process still holds: a host re-opened on that handle starts `recovery-required`, and disposing it never releases the lease. Hub likewise refuses a takeover without an exact applied release. The only release for a run a `serve` crash left uncertain, and the only settlement for a session command it left unresolved, are the explicit steps in [After a serve crash](#after-a-serve-crash).
 
 `serve` shutdown disposes every session within a bound: a routing selection or run that does not settle in two seconds, or a session service that does not confirm its close, leaves that session `recovery-required` with its native lease held, instead of hanging shutdown.
 
@@ -107,6 +108,8 @@ No command clears an unknown expired-idle claim or unlocks a session left `recov
 ## After a serve crash
 
 When `serve` dies mid-run (for example `SIGKILL`, a power loss or an out-of-memory kill), the run's Hub record stays non-terminal and three local fences stay in place: the run's capacity reservation, the session's checkout lease and the launch tombstone in the ledger. Supervised tool processes may still be running in their own process groups. Nothing below releases any of them automatically.
+
+A crash can also land while `serve` applies a session command that starts no run: a queued message, a controller claim or renewal, a config or queue change. Hub may already show its effect (the queued item, the new controller), but the ledger never recorded the command's outcome. That command stays unresolved, and while it does, every re-host of a session on the same checkout is refused (`rehost-uncertain-local-work` in the ledger diagnostics), even after steps 1 to 4. Step 5 settles it.
 
 ### What identity is recorded
 
@@ -148,12 +151,49 @@ keryx hub machine recover --hub <hub-id> --action release-resolved-run --run <ru
 
 It runs only when Hub shows exactly that resolution: the run `lost`, one version after the local receipt, with the same command, session and checkout, and no other uncertain run of the same session. Then, each step durable and exact-owner, it marks the launch tombstone `lost` (the tombstone is kept and the run's logs enter retention), releases the crashed daemon's capacity reservation for that run, and removes the checkout lease the crashed daemon left for that session. Another owner of either is refused with `lease-owner-mismatch`, never overwritten. It prints `"kind":"released-resolved-run"` with `capacityReleased` and `checkoutLeaseReleased`. Resuming the session afterwards is an ordinary resume with its own checks.
 
+### 5. Settle a session command the crash left unresolved
+
+Find the command in `recover` output: an `unresolved` entry with `runId: null` and `phase` `unknown` (it passed its start marker) or `received` (it was claimed but never started). Choose a new request id and keep it.
+
+```sh
+keryx hub machine recover --hub <hub-id> --action settle-crashed-command --command <commandId> --request-id <new-request-id>
+```
+
+It runs only on the running `serve`, and only when all of the following hold:
+
+1. The ledger holds that exact command for this Hub, still unresolved, as a session command on an existing session. A run's commands go through steps 2 to 4 instead, and a session creation is not settled here (`recovery-required`).
+2. The daemon that claimed it is not this `serve` (`daemon-live`), its identity is recorded (`recovery-required` otherwise), and that daemon and every process it recorded for the checkout are gone by identity, measured once before and once right before the outcome is recorded. A live daemon is refused with `daemon-live`, a live process or group with `owned-process-live`, uncertain evidence with `recovery-required`. No PID, lease age or heartbeat counts.
+3. This `serve` neither hosts that session nor is applying that command right now (`session-busy`).
+4. Hub's session record, read through the machine recovery route, belongs to this machine, project and checkout, at the same session version the ledger last recorded (`stale-reference` otherwise).
+
+The outcome it records is what is actually known, never a guessed success:
+
+| `outcome` | When | Receipt sent to Hub | `resubmit` |
+|---|---|---|---|
+| `applied` | The ledger holds the crashed daemon's own record of the command's effect (its queued item, its config or command receipt, its operation receipt, or for a controller change Hub's exact receipt), and Hub's session event cursor shows Hub ingested that record. | `applied` (or `admitted` for a close still waiting for its turn boundary) | `no` |
+| `not-applied` | The command was claimed but never reached its start marker, so nothing was applied; or the host recorded refusing it. | `rejected` with `recovery-required` when it never started, else `not-applied` with `recovery-required` | `yes` |
+| `unknown` | Neither can be established: the ledger holds no record of an effect (the host may still have applied it just before the crash), or only an attempt without proof. | `not-applied` with `recovery-required` | `if-absent` |
+
+`resubmit` tells the human what to do in Hub: `no`, the effect is there (a queued item comes back `suspended` after the run's `lost` resolution and is reauthorized or removed as usual); `yes`, send the command again; `if-absent`, resume the session first and send the command again only if its effect is missing.
+
+Then, in one ledger transaction compared against the exact phase and owner it observed, it keeps the command row (never deleted), marks it `applied`, `rejected` (not applied) or `lost` (unknown) with that final receipt and this request id, and sends the receipt to Hub as the ordinary `session-command-receipt`. A later redelivery of the command replays that receipt and never runs the command. Nothing else changes: run fences, leases and native sessions are untouched.
+
+It prints `"kind":"settled-crashed-command"` with `commandId`, `sessionId`, `command` (its kind), `outcome`, `receipt` (`status`, `errorCode`) and `resubmit`. For example:
+
+```json
+{"kind":"settled-crashed-command","commandId":"<commandId>","sessionId":"<sessionId>","command":"submit-message","outcome":"applied","receipt":{"status":"applied","errorCode":null},"resubmit":"no"}
+```
+
+After it, the existing guarded re-host works unchanged: when the run's steps 2 to 4 are done (if a run was in flight), the human's next controller claim, renewal or resume brings the session back `recovery-required` on its re-verified owned baseline, with the crashed daemon's native lease taken over only on its recorded identity, and a resume makes it idle.
+
+One case can stay fenced in Hub, by Hub's own rule: when Hub did not see the command applied (the outcome is `unknown`, or `not-applied` from a refusal the host recorded), Hub may still hold the session's accepted operation and then refuses every session change with `session-busy`. The `not-applied` receipt with `recovery-required` it receives means "effect not known" and does not lift that fence, and this release has no Hub route for a human to lift it. (A command that never started is reported `rejected`, which Hub settles.) The local settlement still records the truth and stops fencing other sessions of the checkout.
+
 ### Replay
 
 - Repeating a request id with the same pins returns the recorded result exactly and does nothing again. Reusing it with other pins is refused with `payload-conflict`.
-- A refusal is recorded as `complete`. After you fix its cause (the process group finally exited, or the human resolved the run), use a **new** request id.
-- A step interrupted by `machine-offline`, a Hub error or a crash is not recorded; repeating the same request id resumes it. Step 2 only observes and each release in step 4 is idempotent, so a resumed step never acts twice.
-- At most 1000 crash-run recovery requests are kept per Hub ledger. After that new requests return `quota-exceeded`.
+- A refusal is recorded as `complete`. After you fix its cause (the process group finally exited, or the human resolved the run), use a **new** request id. Settling a command that is already settled is refused with `stale-reference`.
+- A step interrupted by `machine-offline`, a Hub error or a crash is not recorded; repeating the same request id resumes it. Step 2 only observes, each release in step 4 is idempotent, and step 5 records its decision once: a resumed step 5 sends the recorded receipt again and decides nothing twice.
+- At most 1000 crash recovery requests (steps 2, 4 and 5 together) are kept per Hub ledger. After that new requests return `quota-exceeded`.
 
 ## Ledger retention and storage limits
 
@@ -167,12 +207,13 @@ It runs only when Hub shows exactly that resolution: the run `lost`, one version
 | `scope-denied` | The request names a Hub this installation's live bridges do not serve. |
 | `local-control-unavailable` | No running `serve` owner channel, or the bridge is stopping. |
 | `owned-process-live` | The crashed daemon, or a process it recorded for the checkout, still runs with its recorded start time or process group. |
-| `daemon-live` | `release-stale-daemon`: the daemon that wrote the lock still runs. |
+| `daemon-live` | `release-stale-daemon`: the daemon that wrote the lock still runs. `settle-crashed-command`: the daemon that claimed the command is this running `serve`, or still runs. |
 | `machine-offline` | `serve` is not connected to Hub. The step is not recorded; retry the same request id later. |
-| `stale-reference` | A pin does not match, or the session is not hosted by this `serve`. |
+| `replay-gap` | `settle-crashed-command`: Hub has not ingested the ledger's record of the command's effect yet (the reconnect replay is still running). The step is not recorded; retry the same request id. |
+| `stale-reference` | A pin does not match, or the session is not hosted by this `serve`. For `settle-crashed-command`: no such command, it is already settled, or Hub's session record does not match. |
 | `controller-live` | The controller lease has not expired. |
-| `session-not-idle`, `session-busy` | Active, paused, selecting or recovery-required work. |
-| `recovery-required` | Uncertain work is known, an unknown claim exists, the stop (or a session service close) was not proven, process identity is missing or uncertain, or, for `release-resolved-run`, Hub does not show the exact human resolution yet. |
+| `session-not-idle`, `session-busy` | Active, paused, selecting or recovery-required work. For `settle-crashed-command`: this `serve` hosts that session or is applying that command now. |
+| `recovery-required` | Uncertain work is known, an unknown claim exists, the stop (or a session service close) was not proven, process identity is missing or uncertain, or, for `release-resolved-run`, Hub does not show the exact human resolution yet. For `settle-crashed-command`: the command is a run's or a session creation, or its daemon has no recorded identity. |
 | `lease-owner-mismatch`, `native-lease-lost` | This process no longer holds the checkout or native lease. |
 | `payload-conflict` | The request id was already used with different pins. |
 | `quota-exceeded` | A recovery request limit, the bounded request or reply size, or (for a new launch) the ledger event cap was reached. |

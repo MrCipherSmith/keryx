@@ -2,7 +2,7 @@ import {afterEach,expect,setDefaultTimeout,test} from 'bun:test';
 import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {fixture,success,operatorToken,reviewerToken,agentToken,hubSessionPending,type Fixture} from '../../hub/remote-v2/fixture.test-support';
+import {fixture,success,operatorToken,reviewerToken,agentToken,hubSessionPending,hubCommandReceipt,type Fixture} from '../../hub/remote-v2/fixture.test-support';
 import {lifecycleCommands} from '../../session/host-lifecycle';
 import {startHub} from '../../hub/server';
 import {MachineBridge} from './bridge';
@@ -601,18 +601,24 @@ test('a full local ledger refuses a new launch visibly while an admitted run sti
   expect(calls).toBe(1);
  }finally{unblock();}
 },40000);
-/** A real separate machine process: its daemon is SIGKILLed mid-run while a supervised sleep keeps running in its own process group. */
-function crashingMachine(state:Awaited<ReturnType<typeof local>>){
+/**
+ * A real separate machine process: its daemon is SIGKILLed mid-run while a supervised sleep keeps running in its own process group.
+ * `park`: once the `arm` file exists, the daemon stops dead in the ledger write that would finish its next session command (after the
+ * command's session events went to Hub, before its receipt), names that command in `parked`, and waits there for the SIGKILL.
+ */
+function crashingMachine(state:Awaited<ReturnType<typeof local>>,park?:{arm:string;parked:string}){
  const root=path.resolve(import.meta.dir,'..','..','..');const at=(file:string)=>JSON.stringify(path.join(root,file));
- const script=`import {MachineBridge} from ${at('src/lib/hub-machine/bridge.ts')};import {loadEnrollment} from ${at('src/lib/hub-machine/config.ts')};import {createNativeSessionRuntime} from ${at('src/session/native-runtime.ts')};import {createMachineCommandCatalogue} from ${at('src/lib/hub-machine/production.ts')};import {canonicalDigest} from ${at('src/remote-control/protocol.ts')};
+ const script=`import {MachineBridge} from ${at('src/lib/hub-machine/bridge.ts')};import {loadEnrollment} from ${at('src/lib/hub-machine/config.ts')};import {createNativeSessionRuntime} from ${at('src/session/native-runtime.ts')};import {createMachineCommandCatalogue} from ${at('src/lib/hub-machine/production.ts')};import {canonicalDigest} from ${at('src/remote-control/protocol.ts')};import {MachineLedger} from ${at('src/lib/hub-machine/ledger.ts')};import {existsSync,writeFileSync} from 'node:fs';
 const configDir=process.env.CRASH_CONFIG_DIR,cwd=process.env.CRASH_CWD,policy=JSON.parse(process.env.CRASH_POLICY),digest=canonicalDigest(policy);
+const arm=process.env.CRASH_PARK_ARM,parked=process.env.CRASH_PARKED;
+if(arm&&parked){const finish=MachineLedger.prototype.finish;MachineLedger.prototype.finish=function(hub,id,phase,receipt){if(existsSync(arm)&&receipt&&typeof receipt==='object'&&'observedSessionVersion' in receipt){writeFileSync(parked,id);for(;;)Bun.sleepSync(1000);}return finish.call(this,hub,id,phase,receipt);};}
 const routing={version:1,policyDigest:digest,capabilityDigest:digest,profileIds:['local'],candidates:[{candidateId:'scripted:m',providerId:'scripted',modelId:'m',reasoningEfforts:['none'],available:true,reason:'none',privacyClass:'local',costClass:'local'}]};
 let rounds=0;const provider={describe:()=>({descriptor:{providerId:'scripted'},capabilities:{streaming:true,toolCalls:true,parallelToolCalls:false,structuredOutput:false,reasoningMetadata:false,promptCaching:false,vision:false,tokenCounting:false,modelListing:false}}),
  stream(request,options){const round=rounds++;return(async function*(){let sequence=0;const event=(kind,fields={})=>({kind,sequence:sequence++,attemptId:options.attemptId,...fields});if(round>0){await new Promise(()=>{});}
   yield event('tool_call_start',{toolCallId:'crash-sleep',toolName:'shell_exec'});yield event('tool_call_end',{toolCallId:'crash-sleep',input:JSON.stringify({command:'sleep 120'})});yield event('model_end');})();}};
 const bridge=new MachineBridge({configDir,enrollment:loadEnrollment(configDir),policy,resolveProfile:async()=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue:createMachineCommandCatalogue(digest),routing,createRuntime:async()=>({ok:true,value:createNativeSessionRuntime({cwd,provider,providerId:'scripted',modelId:'m',availability:routing,approve:async(_name,_input,meta)=>({approved:true,...(meta?{fingerprint:meta.fingerprint}:{})})})})}})});
 await bridge.start();console.log('crash-machine-ready');await new Promise(()=>{});`;
- const child=Bun.spawn([process.execPath,'--no-env-file','-e',script],{cwd:state.cwd,stdout:'pipe',stderr:'pipe',env:{PATH:process.env.PATH??'',HOME:state.root,KERYX_HOOKS:'off',KERYX_DATA_DIR:path.join(state.configDir,'native-data'),CRASH_CONFIG_DIR:state.configDir,CRASH_CWD:state.cwd,CRASH_POLICY:JSON.stringify(state.policy)}});
+ const child=Bun.spawn([process.execPath,'--no-env-file','-e',script],{cwd:state.cwd,stdout:'pipe',stderr:'pipe',env:{PATH:process.env.PATH??'',HOME:state.root,KERYX_HOOKS:'off',KERYX_DATA_DIR:path.join(state.configDir,'native-data'),CRASH_CONFIG_DIR:state.configDir,CRASH_CWD:state.cwd,CRASH_POLICY:JSON.stringify(state.policy),...(park?{CRASH_PARK_ARM:park.arm,CRASH_PARKED:park.parked}:{})}});
  const ready=(async()=>{const reader=child.stdout.getReader();const decoder=new TextDecoder();let text='';const deadline=Date.now()+20000;while(Date.now()<deadline&&!text.includes('crash-machine-ready')){const next=await reader.read();if(next.done)break;text+=decoder.decode(next.value,{stream:true});}if(!text.includes('crash-machine-ready')){reader.releaseLock();throw new Error(`crash machine not ready: ${text} ${await new Response(child.stderr).text()}`);}
   // Drain both streams so the machine process can never block on a full pipe.
   void (async()=>{try{while(!(await reader.read()).done){/* drain */}}catch{/* The process was killed. */}})();void new Response(child.stderr).text();})();
@@ -668,3 +674,66 @@ test('a serve crash leaves the run fenced until owned process absence is proven,
   const ledger=new MachineLedger(ledgerFile(state));try{expect(ledger.unresolved().filter(row=>row.run===runId)).toEqual([]);expect(ledger.reconciliation(confirmed.value.reconciliationId)?.receipt.observation).toBe('confirmed-stopped');}finally{ledger.close();}
  }finally{machine.child.kill('SIGKILL');await machine.child.exited;if(sleeper){try{process.kill(-sleeper.pgid,'SIGKILL');}catch{/* The group is already gone. */}}}
 },90000);
+test('a serve crash after Hub recorded a queued message but before the ledger settled it fences every re-host until the operator settles that command',async()=>{
+ const {hubMachineCommand}=await import('../../commands/hub-machine');const {processPresence}=await import('./process-identity');const {readFileSync,existsSync}=await import('node:fs');
+ const state=await local(process.platform==='darwin'?'/private/tmp':tmpdir());const park={arm:path.join(state.root,'park-arm'),parked:path.join(state.root,'parked-command')};
+ const machine=crashingMachine(state,park);let sleeper:{pid:number;pgid:number;startedAt:string}|undefined;const previousDataDir=process.env.KERYX_DATA_DIR;
+ const recover=async(args:string[])=>{const logs:string[]=[];try{await hubMachineCommand(['recover','--hub',state.hubId,...args],{stateDir:state.configDir,write:s=>logs.push(s)});return{ok:true as const,value:JSON.parse(logs[0]!) as Record<string,unknown>};}catch(cause){return{ok:false as const,code:(cause as Error).message};}};
+ const withLedger=<T>(read:(ledger:MachineLedger)=>T):T=>{const ledger=new MachineLedger(ledgerFile(state));try{return read(ledger);}finally{ledger.close();}};
+ try{await machine.ready;
+  const inventory=await wait(async()=>success<{inventory:{inventoryVersion:number;checkouts:Array<{headSha:string}>}|null}>(await f!.call(`/hub/v2/machines/${state.machine.machineId}`,{cookie:f!.cookie})),v=>v.inventory!==null);const digest=canonicalDigest(state.policy);
+  const created=await success<Control['SessionOperationReceipt']>(await f!.call(`/hub/v2/projects/${f!.project.id}/sessions`,{method:'POST',cookie:f!.cookie,body:{machineId:state.machine.machineId,checkoutId:'checkout',agentProfileId:'fixture',expectedInventoryVersion:inventory.inventory!.inventoryVersion,expectedHeadSha:inventory.inventory!.checkouts[0]!.headSha,capabilityDigest:digest,policyDigest:digest,title:'Crash with a queued message'}}));
+  const sessionPath=`/hub/v2/projects/${f!.project.id}/sessions/${created.sessionId}`;const read=async()=>success<Control['SessionRecord']>(await f!.call(sessionPath,{cookie:f!.cookie}));const idle=await wait(read,v=>v.state==='idle');
+  const claim=await success<Control['ControllerReceipt']>(await f!.call(`${sessionPath}/controller/claim`,{method:'POST',cookie:f!.cookie,body:{expectedSessionVersion:idle.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'}}));
+  await hubApplied(created.sessionId);const controlled=await wait(read,v=>v.controller?.controllerLeaseId===claim.lease.controllerLeaseId);const controller={controllerLeaseId:claim.lease.controllerLeaseId,expectedControllerVersion:claim.lease.version};
+  const message=(key:string,text:string,at:Control['SessionRecord'])=>f!.call(`${sessionPath}/messages`,{method:'POST',cookie:f!.cookie,key,body:{expectedSessionVersion:at.version,expectedConfigVersion:at.config.configVersion,controller,text,interpretation:'literal-message',busyPolicy:'enqueue',association:{mode:'ad-hoc',profileConsentVersion:1}}});
+  const turn=await success<Control['TurnReceipt']>(await message('crash-run','Run a supervised sleep',controlled));expect(turn.status).toBe('admitted');const runId=turn.runId!;await wait(runState(runId),v=>v.state==='running');
+  const lockNonce=readFileSync(path.join(machineStateDir(state.configDir,state.hubId),'daemon.lock'),'utf8');
+  const crashed=await wait(async()=>withLedger(ledger=>{const daemon=ledger.daemonByLockNonce(lockNonce);return daemon?{daemon,processes:ledger.ownedProcesses(daemon.daemonId,'checkout')}:undefined;}),value=>value!==undefined&&value.processes.some(row=>row.phase==='recorded'&&row.pid!==null&&row.pid!==value.daemon.pid));
+  const record=crashed!.processes.find(row=>row.phase==='recorded')!;sleeper={pid:record.pid!,pgid:record.pgid!,startedAt:record.startedAt!};expect(processPresence(sleeper)).toBe('live');
+  // A message queued behind the running turn: the machine records its queue item, Hub ingests it, and the daemon dies before its ledger settles the submission.
+  writeFileSync(park.arm,'');const busy=await wait(read,v=>v.state==='busy'&&v.activeRunId===runId);
+  const queued=await success<Control['TurnReceipt']>(await message('crash-queued','Queued behind the crashing run',busy));expect(queued.status).toBe('queued');
+  const commandId=await wait(async()=>existsSync(park.parked)?readFileSync(park.parked,'utf8'):'',id=>id!=='');
+  await wait(async()=>success<Control['QueuePage']>(await f!.call(`${sessionPath}/queue`,{cookie:f!.cookie})),page=>page.items.some(item=>item.operationId===queued.operationId&&item.state==='queued'));
+  expect(hubCommandReceipt(f!.dataDir,created.sessionId,queued.operationId)).toBeUndefined();
+  machine.child.kill('SIGKILL');await machine.child.exited;expect(processPresence(crashed!.daemon)).toBe('absent');
+  expect(withLedger(ledger=>ledger.commandRecord(state.hubId,commandId))).toMatchObject({phase:'starting',receipt:null,daemon:crashed!.daemon.daemonId,run:null,settledBy:null});
+  // Restart and the existing run recovery, exactly as the runbook orders it. The restarted daemon reads the crashed one's native session store.
+  process.env.KERYX_DATA_DIR=path.join(state.configDir,'native-data');
+  expect(await recover(['--action','release-stale-daemon'])).toEqual({ok:true,value:{kind:'daemon-lock',state:'released',daemonId:crashed!.daemon.daemonId}});
+  const provider=scriptedProvider([okReply]);const routing:Control['RoutingAvailability']={version:1,policyDigest:digest,capabilityDigest:digest,profileIds:['local'],candidates:[{candidateId:'scripted:m',providerId:'scripted',modelId:'m',reasoningEfforts:['none'],available:true,reason:'none',privacyClass:'local',costClass:'local'}]};
+  const bridge=new MachineBridge({onNotice:recordNotice,configDir:state.configDir,enrollment:loadEnrollment(state.configDir)!,policy:state.policy,resolveProfile:async()=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue:createCommandCatalogue(digest),routing,createRuntime:async()=>({ok:true,value:createNativeSessionRuntime({cwd:state.cwd,provider:provider.provider,providerId:'scripted',modelId:'m',availability:routing})})}})});bridges.push(bridge);await bridge.start();
+  await wait(async()=>bridge.connected,value=>value);const owner=await startMachineOwnerControl(state.configDir,new Map([[state.hubId,bridge]]));owners.push(owner);
+  const settle=(requestId:string,command=commandId)=>recover(['--action','settle-crashed-command','--command',command,'--request-id',requestId]);
+  // The settlement refuses while a process the crashed daemon recorded for the checkout still lives, and replays that refusal exactly.
+  expect(await settle('settle-while-live')).toEqual({ok:false,code:'owned-process-live'});expect(await settle('settle-while-live')).toEqual({ok:false,code:'owned-process-live'});
+  process.kill(-sleeper.pgid,'SIGKILL');await wait(async()=>processPresence(sleeper!),value=>value==='absent');
+  const confirmed=await recover(['--action','confirm-run-absence','--run',runId,'--request-id','confirm-absent']);if(!confirmed.ok)throw new Error(confirmed.code);const reconciliationId=confirmed.value.reconciliationId as string;
+  expect((await success<{state:string}>(await f!.call(`/hub/v2/machines/${state.machine.machineId}/resolve-run`,{method:'POST',cookie:f!.cookie,body:{runId,expectedRunVersion:confirmed.value.expectedRunVersion,localReconciliationId:reconciliationId,decision:'lost',reason:'Locally confirmed absence of the crashed daemon and its supervised process group'}}))).state).toBe('lost');
+  expect(await recover(['--action','release-resolved-run','--run',runId,'--reconciliation',reconciliationId,'--request-id','release-after-human'])).toMatchObject({ok:true,value:{kind:'released-resolved-run',capacityReleased:true,checkoutLeaseReleased:true}});
+  // The permanent fence: every run fence is released, yet the human's renewal cannot re-host the session while the crashed submission is unresolved.
+  const renew=async()=>{const at=await wait(read,v=>v.state==='recovery-required'&&v.activeRunId===null);await hubApplied(created.sessionId);return success<Control['ControllerReceipt']>(await f!.call(`${sessionPath}/controller/renew`,{method:'POST',cookie:f!.cookie,body:{expectedSessionVersion:at.version,expectedControllerVersion:controller.expectedControllerVersion,controllerLeaseId:controller.controllerLeaseId,requestedLeaseSeconds:60,mode:'renew'}}));};
+  await renew();await wait(async()=>withLedger(ledger=>ledger.diagnostics().filter(fault=>fault.detail==='rehost-uncertain-local-work')),faults=>faults.length===1);
+  const inspected=await recover([]);if(!inspected.ok)throw new Error(inspected.code);expect(inspected.value).toMatchObject({sessions:[],uncertainRuns:[],unresolved:[{commandId,runId:null,checkoutId:'checkout',phase:'unknown'}]});
+  // The operator settles exactly that command. Its queue item is this ledger's own record, which Hub ingested: the submission applied, nothing to resubmit.
+  const settled=await settle('settle-queued');
+  expect(settled).toEqual({ok:true,value:{kind:'settled-crashed-command',commandId,sessionId:created.sessionId,command:'submit-message',outcome:'applied',receipt:{status:'applied',errorCode:null},resubmit:'no'}});
+  expect(await settle('settle-queued')).toEqual(settled);expect(await settle('settle-queued','another-command')).toEqual({ok:false,code:'payload-conflict'});
+  expect(await settle('settle-again')).toEqual({ok:false,code:'stale-reference'});
+  expect(withLedger(ledger=>({row:ledger.commandRecord(state.hubId,commandId),unresolved:ledger.unresolved()}))).toMatchObject({row:{phase:'applied',receipt:{commandId,status:'applied',errorCode:null},settledBy:'settle-queued'},unresolved:[]});
+  await wait(async()=>hubCommandReceipt(f!.dataDir,created.sessionId,queued.operationId)??null,receipt=>receipt!==null);expect(hubCommandReceipt(f!.dataDir,created.sessionId,queued.operationId)).toMatchObject({status:'applied',errorCode:null});
+  // The guarded re-host then works unchanged: the next renewal brings the session back recovery-required, and a resume makes it idle with the queued item suspended.
+  const renewal=await renew();const renewed=await wait(read,v=>v.controller?.expiresAt===renewal.lease.expiresAt);
+  const hosted=await recover(['--session',created.sessionId]);if(!hosted.ok)throw new Error(hosted.code);expect(hosted.value).toMatchObject({sessions:[{session:{sessionId:created.sessionId,state:'recovery-required',activeRunId:null},checkoutOwned:true}],unresolved:[]});
+  await hubApplied(created.sessionId);const resume=await success<Control['SessionOperationReceipt']>(await f!.call(`${sessionPath}/resume`,{method:'POST',cookie:f!.cookie,body:{expectedSessionVersion:renewed.version,controller,expectedHistoryVersion:renewed.historyVersion,expectedWorkspaceBaseline:renewed.workspaceBaseline}}));expect(resume.status).toBe('pending');
+  const resumed=await wait(read,v=>v.state==='idle');expect(resumed.activeRunId).toBeNull();expect((await runState(runId)()).state).toBe('lost');
+  expect((await success<Control['QueuePage']>(await f!.call(`${sessionPath}/queue`,{cookie:f!.cookie}))).items.map(item=>({operationId:item.operationId,state:item.state}))).toEqual([{operationId:queued.operationId,state:'suspended'}]);
+  // A command the live daemon itself holds unresolved (it is applying it right now) is never settled: only a gone daemon's command is.
+  const inspection=await recover([]);if(!inspection.ok)throw new Error(inspection.code);const live=inspection.value.daemonId as string;
+  const stored=withLedger(ledger=>ledger.commandRecord(state.hubId,commandId))!.envelope as {payload:Record<string,unknown>};
+  withLedger(ledger=>{ledger.claim({hubId:state.hubId,commandId:'live-command',digest:'e'.repeat(64),runId:null,checkoutId:'checkout',envelope:{...stored,payload:{...stored.payload,commandId:'live-command'}},daemonId:live});ledger.markStarting(state.hubId,'live-command',live);});
+  expect(await settle('settle-live','live-command')).toEqual({ok:false,code:'daemon-live'});
+  expect(withLedger(ledger=>ledger.commandRecord(state.hubId,'live-command'))).toMatchObject({phase:'starting',settledBy:null});
+ }finally{machine.child.kill('SIGKILL');await machine.child.exited;if(sleeper){try{process.kill(-sleeper.pgid,'SIGKILL');}catch{/* The group is already gone. */}}if(previousDataDir===undefined)delete process.env.KERYX_DATA_DIR;else process.env.KERYX_DATA_DIR=previousDataDir;}
+},120000);

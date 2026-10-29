@@ -91,6 +91,22 @@ test('crash-run recovery actions send only their exact run pins over the owner c
   expect(seen).toEqual([{v:1,hubId,requestId:'confirm-1',operation:'confirm-run-absence',target:{runId:'run-1'}},{v:1,hubId,requestId:'release-1',operation:'release-resolved-run',target:{runId:'run-1',reconciliationId:'reconciliation-1'}}]);
  }finally{await server.stop();}
 });
+test('a crashed command settlement sends only its exact command pin over the owner channel and prints the validated outcome',async()=>{
+ const fs=await import('node:fs');const{startLocalOwnerControl}=await import('../lib/hub-machine/local-control');const{hubIdentity,saveEnrollment}=await import('../lib/hub-machine/config');const stateDir=fs.mkdtempSync(process.platform==='darwin'?'/private/tmp/owner-settle-cli-':path.join(tmpdir(),'owner-settle-cli-'));dirs.push(stateDir);const hubId=hubIdentity('https://hub.example');saveEnrollment(stateDir,{hubUrl:'https://hub.example',machineId:'m',secret:'s'.repeat(43)});
+ const value={kind:'settled-crashed-command' as const,commandId:'command-1',sessionId:'session-1',command:'submit-message',outcome:'unknown' as const,receipt:{status:'not-applied' as const,errorCode:'recovery-required' as const},resubmit:'if-absent' as const};
+ const seen:unknown[]=[];let reply:unknown={ok:true,value};const server=await startLocalOwnerControl({configDir:stateDir,handle:async request=>{seen.push(request);return reply as never;}});
+ try{const logs:string[]=[];const settle=(args:string[])=>hubMachineCommand(['recover','--hub',hubId,'--action','settle-crashed-command',...args],{stateDir,write:s=>logs.push(s)});
+  await expect(settle(['--command','command-1'])).rejects.toThrow('Required --request-id');
+  await expect(settle(['--request-id','settle-1'])).rejects.toThrow('Required --command');
+  await expect(settle(['--command','command-1','--run','run-1','--request-id','settle-1'])).rejects.toThrow('invalid-local-request');
+  await expect(settle(['--command','bad command','--request-id','settle-1'])).rejects.toThrow();
+  expect(seen).toEqual([]);
+  await settle(['--command','command-1','--request-id','settle-1']);expect(JSON.parse(logs[0]!)).toEqual(value);
+  // A reply that claims more than the contract allows (an unknown outcome name) never reaches the operator as a result.
+  reply={ok:true,value:{...value,outcome:'probably-applied'}};await expect(settle(['--command','command-1','--request-id','settle-2'])).rejects.toThrow('invalid-local-response');
+  expect(seen).toEqual([{v:1,hubId,requestId:'settle-1',operation:'settle-crashed-command',target:{commandId:'command-1'}},{v:1,hubId,requestId:'settle-2',operation:'settle-crashed-command',target:{commandId:'command-1'}}]);
+ }finally{await server.stop();}
+});
 test('a stale daemon lock is released only once its recorded daemon is proven gone, never by its PID or age alone',async()=>{
  const fs=await import('node:fs');const{hubIdentity,saveEnrollment,acquireMachineDaemon}=await import('../lib/hub-machine/config');const{MachineLedger}=await import('../lib/hub-machine/ledger');const{readProcessIdentity}=await import('../lib/hub-machine/process-identity');
  const stateDir=dir();saveEnrollment(stateDir,{hubUrl:'https://hub.example',machineId:'m',secret:'s'.repeat(43)});const hubId=hubIdentity('https://hub.example');const lockFile=path.join(machineStateDir(stateDir,hubId),'daemon.lock');

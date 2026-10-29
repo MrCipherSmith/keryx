@@ -44,7 +44,7 @@ export async function hubMachineCommand(args: string[], options: CommandOptions 
     const env = options.env ?? process.env;
     const write = options.write ?? console.log;
     const [command, ...rest] = args;
-    const allowed: Record<string, string[]> = { readiness: [], pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation'], unpair: ['--hub'],configure:['--hub','--candidate','--ad-hoc','--max-runs'] };
+    const allowed: Record<string, string[]> = { readiness: [], pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation','--command'], unpair: ['--hub'],configure:['--hub','--candidate','--ad-hoc','--max-runs'] };
     if (!command || !allowed[command])
         throw new MachineError('Use hub machine pair | allow | recover | unpair');
     const flags = new Map<string, string>();
@@ -105,14 +105,15 @@ export async function hubMachineCommand(args: string[], options: CommandOptions 
     const enrollment=loadEnrollment(stateDir,flags.get('--hub'));
     if(!enrollment)throw new MachineError('not-paired');
     if(command==='recover'){
-        const action=flags.get('--action')??'inspect';if(!['inspect','release-expired-idle','confirm-run-absence','release-resolved-run','release-stale-daemon'].includes(action))throw new MachineError('invalid-local-request');
+        const action=flags.get('--action')??'inspect';if(!['inspect','release-expired-idle','confirm-run-absence','release-resolved-run','settle-crashed-command','release-stale-daemon'].includes(action))throw new MachineError('invalid-local-request');
         const integer=(key:string)=>{const raw=required(key);if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw)))throw new MachineError('invalid-local-request');return Number(raw);};
         const only=(keys:string[])=>{if([...flags.keys()].some(key=>!keys.includes(key)))throw new MachineError('invalid-local-request');};
         if(action==='inspect')only(['--hub','--action','--session','--request-id']);
         if(action==='confirm-run-absence')only(['--hub','--action','--run','--request-id']);
         if(action==='release-resolved-run')only(['--hub','--action','--run','--reconciliation','--request-id']);
+        if(action==='settle-crashed-command')only(['--hub','--action','--command','--request-id']);
         if(action==='release-stale-daemon'){only(['--hub','--action']);write(JSON.stringify(releaseStaleDaemonLock(stateDir,enrollment.hubId)));return;}
-        const target=()=>action==='confirm-run-absence'?{runId:required('--run')}:action==='release-resolved-run'?{runId:required('--run'),reconciliationId:required('--reconciliation')}
+        const target=()=>action==='confirm-run-absence'?{runId:required('--run')}:action==='release-resolved-run'?{runId:required('--run'),reconciliationId:required('--reconciliation')}:action==='settle-crashed-command'?{commandId:required('--command')}
             :{sessionId:required('--session'),nativeSessionId:required('--native-session'),controllerLeaseId:required('--controller-lease'),controllerVersion:integer('--controller-version'),expectedSessionVersion:integer('--session-version'),expectedHistoryVersion:integer('--history-version'),expectedWorkspaceBaseline:required('--workspace-baseline')};
         const request=parseLocalOwnerRequest({v:1,hubId:enrollment.hubId,requestId:flags.get('--request-id')??(action==='inspect'?randomUUID():required('--request-id')),operation:action,
             ...(action==='inspect'?(flags.has('--session')?{sessionId:required('--session')}:{}) : {target:target()})});
