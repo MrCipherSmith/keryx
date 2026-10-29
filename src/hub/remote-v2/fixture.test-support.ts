@@ -1,6 +1,7 @@
 import { catalogueDigest } from "../../remote-control/protocol";
 import type { Control } from "../../remote-control/protocol";
 import { expect } from "bun:test";
+import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,6 +19,32 @@ export async function success<T = Record<string, unknown>>(response: Response): 
   const body = await response.json();
   expect({ status: response.status, body }).toMatchObject({ status: 200 });
   return body as T;
+}
+/** Hub's own stored rows, read-only from the data directory of a running Hub: the state its fences read, not an HTTP projection. */
+function hubRows<T>(dataDir: string, read: (db: Database) => T): T {
+  const db = new Database(join(dataDir, "hub.sqlite"), { readonly: true });
+  try { db.exec("PRAGMA busy_timeout=5000"); return read(db); } finally { db.close(); }
+}
+/**
+ * Hub settles an accepted session operation (a controller claim, a command invocation, a submitted message) only once the machine
+ * applied it, and until then its idle fence refuses the next mutation as session-busy, even though the session events the operation
+ * emitted (the new controller, the applied command outcome) are already visible. True while Hub's own session row still holds such
+ * an operation; undefined when Hub has no row for the session.
+ */
+export function hubSessionPending(dataDir: string, sessionId: string): boolean | undefined {
+  return hubRows(dataDir, (db) => {
+    const row = db.query<{ body: string }, [string]>("SELECT body FROM remote_session WHERE id=?").get(sessionId);
+    return row ? (JSON.parse(row.body) as { pending?: unknown }).pending !== undefined : undefined;
+  });
+}
+/**
+ * The machine's receipt Hub stored for the session command that delivered `operationId`. The machine sends it only after its own
+ * ledger durably settled that command, so it is the proof that a crash from now on cannot leave the command uncertain.
+ */
+export function hubCommandReceipt(dataDir: string, sessionId: string, operationId: string): { status: string; errorCode: string | null } | undefined {
+  return hubRows(dataDir, (db) => db.query<{ body: string }, [string]>("SELECT body FROM remote_command WHERE sessionId=?").all(sessionId)
+    .map((row) => JSON.parse(row.body) as { frameType?: string; operationId?: string; receipt?: { status: string; errorCode: string | null } })
+    .find((command) => command.frameType === "session-command" && command.operationId === operationId)?.receipt);
 }
 export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'>={}) {
   const dataDir = mkdtempSync(join(tmpdir(), "hub-remote-v2-"));

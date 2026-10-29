@@ -1,5 +1,6 @@
 import{expect,test}from'bun:test';import{existsSync,lstatSync,readFileSync,readdirSync,rmSync,writeFileSync}from'node:fs';import path from'node:path';
-import{startMachineTrial,SERVE_ENTRY,TRIAL_CONTEXT,TRIAL_INDEX,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
+import{startMachineTrial,ledgerDiagnosis,SERVE_ENTRY,TRIAL_CONTEXT,TRIAL_INDEX,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
+import{hubCommandReceipt,hubSessionPending}from'../../hub/remote-v2/fixture.test-support';
 import{canonicalDigest,type Control,type FrameOf}from'../../remote-control/protocol';import{createMachineCommandCatalogue}from'./production';import{localControlPath}from'./local-control';import{resolveRemoteProfile}from'../../harness/policy/profiles';import{detectSandboxLauncher}from'../../harness/process/sandbox/detect';
 type Trial=Awaited<ReturnType<typeof startMachineTrial>>;type RunEvent=FrameOf<'run-event'>['payload'];
 type Inventory={connected:boolean;inventory:{inventoryVersion:number;checkouts:{checkoutId:string;headSha:string;clean:boolean;available:boolean;agentProfiles:{profileId:string;adapter:string;readiness:string;reason:string;capabilityDigest:string;policyDigest:string}[]}[]}|null};
@@ -15,9 +16,10 @@ function hubClient(trial:Trial){
  let cookie='';
  const raw=async(route:string,body?:unknown)=>{const response=await fetch(`${trial.origin}${route}`,{method:body===undefined?'GET':'POST',headers:{Origin:trial.origin,...(cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID()})},...(body===undefined?{}:{body:JSON.stringify(body)})});if(route==='/hub/v1/session'&&response.ok)cookie=response.headers.get('set-cookie')!.split(';')[0]!;return{status:response.status,data:await response.json() as unknown};};
  const call=async<T>(route:string,body?:unknown):Promise<T>=>{const result=await raw(route,body);expect(result).toMatchObject({status:200});return result.data as T;};
- // A timeout names what each serve child said, so a stuck run is diagnosable from the failure alone.
- const children=()=>JSON.stringify({serve:trial.targets.map(t=>({machine:t.machine,stdout:t.serve.stdout.slice(-12),stderr:t.serve.stderr.slice(-12)})),provider:trial.provider});
- const wait=async<T>(read:()=>Promise<T>,done:(v:T)=>boolean,ms=20000)=>{const deadline=Date.now()+ms;for(;;){const v=await read();if(done(v))return v;if(Date.now()>deadline)throw new Error(`trial-timeout: ${JSON.stringify(v).slice(0,2000)} ${children().slice(0,6000)}`);await Bun.sleep(20);}};
+ // A timeout names what each serve child said and what its ledger holds unresolved or recorded as a refusal (code and reason token), so
+ // a stuck run is diagnosable from the failure alone even where a notice only says recovery-required.
+ const children=()=>JSON.stringify({serve:trial.targets.map(t=>({machine:t.machine,stdout:t.serve.stdout.slice(-12),stderr:t.serve.stderr.slice(-12),ledger:ledgerDiagnosis(t,trial.hubId)})),provider:trial.provider});
+ const wait=async<T>(read:()=>Promise<T>,done:(v:T)=>boolean,ms=20000)=>{const deadline=Date.now()+ms;for(;;){const v=await read();if(done(v))return v;if(Date.now()>deadline)throw new Error(`trial-timeout: ${JSON.stringify(v).slice(0,2000)} ${children().slice(0,10000)}`);await Bun.sleep(20);}};
  return{raw,call,wait,login:()=>call('/hub/v1/session',{token:readFileSync(trial.credentialsFile,'utf8')})};
 }
 const processCommand=(pid:number)=>Bun.spawnSync(['ps','-o','command=','-p',String(pid)]).stdout.toString().trim();
@@ -42,7 +44,11 @@ async function controlledSession(trial:Trial,hub:ReturnType<typeof hubClient>,ta
  const checkout=metadata.inventory!.checkouts.find(c=>c.checkoutId===target.checkoutId)!,profile=checkout.agentProfiles[0]!;expect(profile.policyDigest).toBe(canonicalDigest(resolveRemoteProfile(TRIAL_PROFILE)));
  const created=await hub.call<Control['SessionOperationReceipt']>(`/hub/v2/projects/${trial.projectId}/sessions`,{machineId:target.machineId,checkoutId:target.checkoutId,agentProfileId:TRIAL_PROFILE,expectedInventoryVersion:metadata.inventory!.inventoryVersion,expectedHeadSha:checkout.headSha,capabilityDigest:profile.capabilityDigest,policyDigest:profile.policyDigest,title});
  const base=`/hub/v2/projects/${trial.projectId}/sessions/${created.sessionId}`,runs=`/hub/v2/projects/${trial.projectId}/runs`;
- const read=()=>hub.call<Control['SessionRecord']>(base);const idle=()=>hub.wait(read,s=>s.state==='idle');
+ // Idle as Hub's own fence reads it: the session row holds no accepted operation still awaiting the machine. The session events of a
+ // controller change or an applied command show its effect before the machine's receipt settles it, and until then Hub refuses the
+ // next submission as session-busy. Hub's row is read before the record, so the returned record is never older than that settlement.
+ const read=()=>hub.call<Control['SessionRecord']>(base);
+ const idle=async()=>(await hub.wait(async()=>{const pending=hubSessionPending(trial.hubDataDir,created.sessionId);return{pending,session:await read()};},v=>v.pending===false&&v.session.state==='idle')).session;
  const initial=await idle();const claim=await hub.call<Control['ControllerReceipt']>(`${base}/controller/claim`,{expectedSessionVersion:initial.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'});
  await hub.wait(read,s=>s.controller?.controllerLeaseId===claim.lease.controllerLeaseId&&s.sessionEventCursor>=initial.sessionEventCursor+2);const controller={controllerLeaseId:claim.lease.controllerLeaseId,expectedControllerVersion:claim.lease.version};
  const message=(ordinal:number,text:string,session:Control['SessionRecord'])=>hub.call<Control['TurnReceipt']>(`${base}/messages`,{expectedSessionVersion:session.version,expectedConfigVersion:session.config.configVersion,controller,text:trialTurn(ordinal,text),interpretation:'literal-message',busyPolicy:'enqueue',association:{mode:'ad-hoc',profileConsentVersion:1}});
@@ -139,6 +145,10 @@ test.skipIf(catalogueGaps.length>0||!launcher.available)(`a serve killed mid-run
  const queued=await s.message(3,'read seed.txt',await s.read());expect(queued.status).toBe('queued');
  // The machine durably queued it: Hub's queue projection comes from the serve child's own session events.
  await hub.wait(()=>hub.call<Control['QueuePage']>(`${s.base}/queue`),q=>q.items.some(i=>i.operationId===queued.operationId&&i.state==='queued'));
+ // Those events reach Hub while the machine is still settling the submission: its receipt follows only once its ledger durably finished
+ // the command. A crash before that leaves the submission uncertain local work on the checkout, which (rightly) fences every later
+ // re-host; this trial crashes a settled queue, so it waits for that receipt.
+ await hub.wait(async()=>hubCommandReceipt(trial.hubDataDir,s.created.sessionId,queued.operationId)??null,receipt=>receipt?.status==='applied');
  const history=await hub.call<Control['HistoryPage']>(`${s.base}/history`);expect(history.messages.map(m=>m.role)).toEqual(['human','tool-summary','assistant','human']);
  const before=await s.run(crashed.runId);expect(before.state).toBe('running');
  // SIGKILL: serve drains nothing and stops nothing. Its supervised child outlives it in its own process group.

@@ -1,6 +1,8 @@
 /** Sanitized local failures; neither messages nor causes are serialized to Hub. */
 export class MachineError extends Error {
- constructor(readonly code:string,options?:ErrorOptions){super(code,options);this.name='MachineError';}
+ /** Which guard refused, as a fixed reason token: like the code never a message, path or secret. Only this machine's ledger diagnostics record it. */
+ readonly detail?:string;
+ constructor(readonly code:string,options?:ErrorOptions&{detail?:string}){super(code,options);this.name='MachineError';if(options?.detail!==undefined)this.detail=options.detail;}
 }
 export type MachineResult<T>={ok:true;value:T}|{ok:false;error:MachineError};
 export function machineFailure(cause:unknown,fallback='machine-state-unavailable'):MachineError{return cause instanceof MachineError?cause:new MachineError(fallback,{cause});}

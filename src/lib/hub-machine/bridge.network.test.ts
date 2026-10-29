@@ -2,7 +2,7 @@ import {afterEach,expect,setDefaultTimeout,test} from 'bun:test';
 import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {fixture,success,operatorToken,reviewerToken,agentToken,type Fixture} from '../../hub/remote-v2/fixture.test-support';
+import {fixture,success,operatorToken,reviewerToken,agentToken,hubSessionPending,type Fixture} from '../../hub/remote-v2/fixture.test-support';
 import {lifecycleCommands} from '../../session/host-lifecycle';
 import {startHub} from '../../hub/server';
 import {MachineBridge} from './bridge';
@@ -580,7 +580,7 @@ const runState=(runId:string)=>async()=>success<{state:string;version:number}>(a
  * command emitted: the claimed controller is visible in the record first, and until the receipt Hub refuses the next mutation as
  * session-busy. Waits on Hub's own session row for the exact state its idle fence reads: no accepted operation awaiting the machine.
  */
-const hubApplied=(sessionId:string)=>wait(async()=>{const {Database}=await import('bun:sqlite');const hub=new Database(path.join(f!.dataDir,'hub.sqlite'),{readonly:true});try{const row=hub.query<{body:string},[string]>('SELECT body FROM remote_session WHERE id=?').get(sessionId);return row?JSON.parse(row.body) as {pending?:unknown}:undefined;}finally{hub.close();}},row=>row!==undefined&&row.pending===undefined);
+const hubApplied=(sessionId:string)=>wait(async()=>hubSessionPending(f!.dataDir,sessionId),pending=>pending===false);
 test('a full local ledger refuses a new launch visibly while an admitted run still persists its critical events',async()=>{
  const o=await ownerFixture();let unblock!:()=>void;const blocked=new Promise<void>(resolve=>{unblock=resolve;});const original=o.provider.provider.stream;let calls=0;
  o.provider.provider.stream=(request,options)=>(async function*(){calls++;await blocked;yield* original(request,options);})();

@@ -524,7 +524,7 @@ export class MachineBridge {
     private async commandFailure(frame: FrameOf<'command'> | FrameOf<'session-command'>, cause: unknown): Promise<void> {
         const error = machineFailure(cause);
         const c = frame.payload;
-        this.ledger!.recordDiagnostic(c.commandId, error.code);
+        this.ledger!.recordDiagnostic(c.commandId, error.code, error.detail);
         this.notice(error);
         const row = this.ledger!.unresolved().find(r => r.id === c.commandId && r.digest === c.commandDigest);
         if (!row) {
@@ -623,7 +623,7 @@ export class MachineBridge {
         const recoverable = frame.type === 'session-command' && (frame.payload.kind === 'claim-controller' || frame.payload.kind === 'resume-session');
         const hosted = this.hosted.get(sessionId) ?? (recoverable ? await this.rehostAfterLost(sessionId, mapping, profile, c.commandId) : undefined);
         if (!hosted)
-            throw new MachineError('recovery-required');
+            throw new MachineError('recovery-required', { detail: 'session-not-hosted' });
         const current = await hosted.host.inspect();
         if (frame.type === 'session-command' && (frame.payload.kind === 'claim-controller' || frame.payload.kind === 'release-controller')) {
             const command = frame.payload;
@@ -883,33 +883,45 @@ export class MachineBridge {
      * one version after this ledger's own confirmed-stopped receipt and release-resolved-run marked its launch lost. The session comes
      * back from its durable host state on its re-verified owned baseline, recovery-required until an explicit resume. The crashed
      * daemon's native lease is taken over only when its recorded token names that daemon and the daemon plus every process it recorded
-     * for the checkout are absent by recorded identity (process group and start time), never by PID or lease age. Anything else stays unhosted.
+     * for the checkout are absent by recorded identity (process group and start time), never by PID or lease age. Anything else stays
+     * unhosted and refuses with recovery-required, naming the guard that refused in its detail for this machine's ledger diagnostics.
      */
-    private async rehostAfterLost(sessionId: string, mapping: CheckoutMapping, profile: MachineProfile, commandId: string): Promise<Hosted | undefined> {
+    private async rehostAfterLost(sessionId: string, mapping: CheckoutMapping, profile: MachineProfile, commandId: string): Promise<Hosted> {
         const e = this.options.enrollment, ledger = this.ledger!;
-        if (this.stopped || !existsSync(path.join(machineStateDir(this.options.configDir, e.hubId), 'remote-sessions', `${sessionId}.json`)))
-            return undefined;
+        const refused = (detail: string, cause?: unknown) => new MachineError('recovery-required', { detail: `rehost-${detail}`, ...(cause === undefined ? {} : { cause }) });
+        if (this.stopped)
+            throw refused('machine-stopping');
+        if (!existsSync(path.join(machineStateDir(this.options.configDir, e.hubId), 'remote-sessions', `${sessionId}.json`)))
+            throw refused('local-state-missing');
         const fetched = validateControl('SessionRecord', await this.connection!.request(`/hub/v2/projects/${mapping.projectId}/sessions/${sessionId}`));
         if (!fetched.ok)
-            return undefined;
+            throw refused('hub-session-invalid');
         const r = fetched.value;
-        if (r.machineId !== e.machineId || r.projectId !== mapping.projectId || r.checkoutId !== mapping.checkoutId || r.agentProfileId !== mapping.profileId || r.config.policyDigest !== profile.policyDigest || r.config.capabilityDigest !== profile.capabilityDigest || r.state !== 'recovery-required' || r.activeRunId !== null)
-            return undefined;
+        if (r.machineId !== e.machineId || r.projectId !== mapping.projectId || r.checkoutId !== mapping.checkoutId || r.agentProfileId !== mapping.profileId || r.config.policyDigest !== profile.policyDigest || r.config.capabilityDigest !== profile.capabilityDigest)
+            throw refused('session-binding-changed');
+        if (r.state !== 'recovery-required' || r.activeRunId !== null)
+            throw refused('hub-session-not-recovering');
         const own = (await readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`))).runs.filter(run => run.sessionId === sessionId);
         // A run of the session still open in Hub, or uncertain local work of its checkout besides this very command, keeps it fenced.
+        if (own.some(run => !TERMINAL_RUN_STATES.has(run.state)))
+            throw refused('hub-run-open');
         const unresolved = ledger.unresolved();
-        if (own.some(run => !TERMINAL_RUN_STATES.has(run.state)) || unresolved.length >= 1000 || unresolved.some(row => row.checkout === mapping.checkoutId && row.id !== commandId))
-            return undefined;
+        if (unresolved.length >= 1000 || unresolved.some(row => row.checkout === mapping.checkoutId && row.id !== commandId))
+            throw refused('uncertain-local-work');
         const lost = own.flatMap(run => {
             const resolution = run.state === 'lost' && run.checkoutId === mapping.checkoutId ? ledger.lostResolution(e.hubId, run.runId, run.commandDigest) : null;
             return resolution !== null && resolution.daemon !== this.daemonId && run.version === resolution.expectedRunVersion + 1 ? [{ run, daemonId: resolution.daemon }] : [];
         });
         if (lost.length === 0)
-            return undefined;
+            throw refused('lost-resolution-missing');
         const crashedDaemon = new Map(lost.map(({ run, daemonId }) => [run.runId, daemonId]));
+        // The last takeover refusal, so a host that comes up fenced names which piece of lease evidence was missing.
+        let leaseRefusal: string | undefined;
         const reclaimLease = (holder: SessionLeaseOwner, run: { runId: string }): boolean => {
             const daemonId = crashedDaemon.get(run.runId), daemon = daemonId === undefined ? null : ledger.daemonRecord(daemonId), bound = ledger.nativeLease(holder.token);
-            return daemon !== null && bound !== null && bound.daemonId === daemon.daemonId && bound.sessionId === sessionId && holder.pid === daemon.pid && holder.host === hostname() && this.ownedPresence(daemon, mapping.checkoutId) === 'absent';
+            const presence = daemon === null || bound === null || bound.daemonId !== daemon.daemonId || bound.sessionId !== sessionId || holder.pid !== daemon.pid || holder.host !== hostname() ? undefined : this.ownedPresence(daemon, mapping.checkoutId);
+            leaseRefusal = daemon === null ? 'daemon-unrecorded' : bound === null || bound.daemonId !== daemon.daemonId || bound.sessionId !== sessionId ? 'native-lease-unbound' : presence === undefined ? 'holder-mismatch' : presence === 'absent' ? undefined : `owned-process-${presence}`;
+            return presence === 'absent';
         };
         const baseline = captureBaseline(mapping.cwd, { requireClean: false });
         if (baseline.digest !== r.workspaceBaseline)
@@ -923,7 +935,7 @@ export class MachineBridge {
             // A host that came up keeps its leases, fenced like any recovery-required session; one that never came up releases the checkout.
             if (!this.hosted.has(sessionId))
                 lease.release(lease.nonce);
-            throw cause;
+            throw cause instanceof MachineError && cause.code === 'recovery-required' && cause.detail === undefined ? refused(leaseRefusal === undefined ? 'host-not-resumable' : `lease-${leaseRefusal}`, cause) : cause;
         }
     }
     /**
@@ -935,8 +947,9 @@ export class MachineBridge {
         const target = receipt.session;
         const mapping = target ? this.options.enrollment.mappings.find(m => m.projectId === target.projectId && m.checkoutId === target.checkoutId && m.profileId === target.agentProfileId) : undefined;
         const profile = mapping && this.profiles.get(mapping.checkoutId);
-        if (!target || target.sessionId !== receipt.sessionId || !mapping || !profile || !await this.rehostAfterLost(receipt.sessionId, mapping, profile, commandId))
-            throw new MachineError('recovery-required');
+        if (!target || target.sessionId !== receipt.sessionId || !mapping || !profile)
+            throw new MachineError('recovery-required', { detail: 'rehost-target-unmapped' });
+        await this.rehostAfterLost(receipt.sessionId, mapping, profile, commandId);
     }
     private lifecycleContext(input: SessionLifecycleInput) {
         const context = this.lifecycleAuthority.get(input.operationId);

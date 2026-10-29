@@ -452,10 +452,12 @@ export class MachineLedger {
     ]>('SELECT stream,coalesce(max(CASE WHEN acked=1 THEN seq ELSE 0 END),0) AS ack FROM (SELECT stream,seq,acked FROM machine_events UNION ALL SELECT stream,seq,acked FROM machine_discarded_logs UNION ALL SELECT stream,toSeq AS seq,1 AS acked FROM machine_retired_logs) GROUP BY stream ORDER BY stream').all(); }
     unresolved() { return this.db.query<CommandRow, [
     ]>("SELECT * FROM machine_commands WHERE phase IN ('received','starting','unknown') ORDER BY hub,id LIMIT 1000").all().map(row => ({ ...row, phase: row.phase === 'starting' ? 'unknown' as const : row.phase })); }
-    recordDiagnostic(commandId: string, code: string): void { this.db.query('INSERT INTO machine_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(`fault:${commandId}`, JSON.stringify({ commandId, code, observedAt: new Date().toISOString() })); }
+    /** `detail`: the fixed reason token of the guard that refused (MachineError.detail), when the code alone does not name it. */
+    recordDiagnostic(commandId: string, code: string, detail?: string): void { this.db.query('INSERT INTO machine_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(`fault:${commandId}`, JSON.stringify({ commandId, code, ...(detail === undefined ? {} : { detail }), observedAt: new Date().toISOString() })); }
     diagnostics(): Array<{
         commandId: string;
         code: string;
+        detail?: string;
         observedAt: string;
     }> { return this.db.query<{
         value: string;

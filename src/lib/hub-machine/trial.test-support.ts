@@ -3,8 +3,8 @@
  * with a scrubbed environment. Nothing below injects a profile, runtime or provider into that process: serve itself starts its
  * machine bridges (startConfiguredMachineBridges), resolves the checkout through production profile resolution, and reaches the
  * deterministic model only as a configured loopback OpenAI-compatible endpoint. Hooks are left on. */
-import {randomBytes,randomUUID} from 'node:crypto';
-import {mkdirSync,mkdtempSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
+import {randomBytes,randomUUID} from 'node:crypto';import{Database}from'bun:sqlite';
+import {existsSync,mkdirSync,mkdtempSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';import path from 'node:path';
 import {startHub} from '../../hub/server';
 import {hubIdentity,machineStateDir,saveEnrollment,allowCheckout} from './config';
@@ -103,14 +103,27 @@ async function runOperatorCommand(machineRoot:string,args:string[],candidate?:st
 /** `contextRoot`: the machine's own keryx-managed Hub context cache (never inside the checkout). `spare`: a second clean checkout the
  * first machine maps when the trial asks for one, so a session there can act on the main checkout's session. */
 export interface TrialTarget{machine:string;machineId:string;checkoutId:string;cwd:string;configDir:string;machineRoot:string;hookLog:string;contextRoot:string;machinePolicyDigest:string;serve:ServeChild;spare?:{checkoutId:string;cwd:string}}
+/**
+ * What a stuck trial needs from one machine's own ledger, read-only: the commands it holds unresolved and the refusal it recorded for
+ * each failed command (its code and fixed reason token). Identifiers and codes only; no envelope, body, token or path.
+ */
+export function ledgerDiagnosis(target:TrialTarget,hubId:string){
+ const file=path.join(machineStateDir(target.configDir,hubId),'control.sqlite');if(!existsSync(file))return null;
+ const db=new Database(file,{readonly:true});
+ try{db.exec('PRAGMA busy_timeout=5000');
+  const unresolved=db.query<{commandId:string;runId:string|null;checkoutId:string;phase:string;kind:string|null},[]>("SELECT id AS commandId,run AS runId,checkout AS checkoutId,phase,json_extract(envelope,'$.payload.kind') AS kind FROM machine_commands WHERE phase IN ('received','starting','unknown') ORDER BY id LIMIT 20").all();
+  const faults=db.query<{value:string},[]>("SELECT value FROM machine_meta WHERE key LIKE 'fault:%'").all().map(row=>JSON.parse(row.value) as {commandId:string;code:string;detail?:string;observedAt:string}).sort((a,b)=>a.observedAt.localeCompare(b.observedAt)).slice(-10);
+  return{unresolved,faults};
+ }finally{db.close();}
+}
 /** `candidate`: run every machine's serve from that absolute packaged executable instead of the checkout's source CLI. `spareCheckout`:
  * the first machine also maps a second Keryx checkout of the same project. */
 export async function startMachineTrial(options:{port?:number;root?:string;candidate?:string;spareCheckout?:boolean}={}){
  if(options.candidate!==undefined&&!path.isAbsolute(options.candidate))throw new Error('trial-candidate-not-absolute');
  // A darwin owner socket path must stay under 104 bytes, so the trial root is short and real (startup.test.ts does the same).
  const root=options.root??mkdtempSync(process.platform==='darwin'?'/private/tmp/keryx-serve-trial-':path.join(realpathSync(tmpdir()),'keryx-serve-trial-'));mkdirSync(root,{recursive:true,mode:0o700});const operatorToken=`trial-operator-${randomBytes(32).toString('base64url')}`;const reviewerToken=`trial-reviewer-${randomBytes(32).toString('base64url')}`;const agentToken=`trial-agent-${randomBytes(32).toString('base64url')}`;
- const provider=startLoopbackProvider();
- let hub=startHub({host:'127.0.0.1',port:options.port??0,dataDir:path.join(root,'hub'),operatorToken,reviewerToken,agentToken});const origin=hub.url.origin;
+ const provider=startLoopbackProvider();const hubDataDir=path.join(root,'hub');
+ let hub=startHub({host:'127.0.0.1',port:options.port??0,dataDir:hubDataDir,operatorToken,reviewerToken,agentToken});const origin=hub.url.origin;
  async function request(route:string,body?:unknown,cookie?:string){const response=await fetch(`${origin}${route}`,{method:body===undefined?'GET':'POST',headers:{Origin:origin,...(cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json','Idempotency-Key':randomUUID()})},...(body===undefined?{}:{body:JSON.stringify(body)})});const value=await response.json() as Record<string,unknown>;if(!response.ok)throw new Error(`trial-http-${response.status}`);return{value,response};}
  const targets:TrialTarget[]=[];
  // Product code run here to write the synthetic installation (checkout mapping) also invokes git; keep it off the operator's git config.
@@ -146,6 +159,8 @@ export async function startMachineTrial(options:{port?:number;root?:string;candi
   const credentialsFile=path.join(root,'operator-token');protectedWrite(credentialsFile,operatorToken,true);
   let stopped:Promise<number[]>|undefined;
   return {root,origin,hubId:hubIdentity(origin),projectId:project.id,targets,credentialsFile,provider:{calls:provider.calls,unexpected:provider.unexpected},
+   /** The data directory of the Hub this process runs, for reading its own stored session and command rows. */
+   hubDataDir,
    /** SIGKILL, like an out-of-memory kill or a power loss: serve drains nothing, so its daemon lock, leases and launch tombstones stay behind. */
    async crashServe(target:TrialTarget){process.kill(target.serve.pid,'SIGKILL');return target.serve.exited;},
    /** A fresh `keryx serve` for the same installation (same synthetic HOME/XDG and serve token); `target.serve` then names the new process. */
@@ -155,7 +170,7 @@ export async function startMachineTrial(options:{port?:number;root?:string;candi
    /** An operator's own `keryx <args>` on that machine: the shipped CLI entry in the installation's environment, never an in-process call. */
    operator:(target:TrialTarget,args:string[])=>runOperatorCommand(target.machineRoot,args,options.candidate),
    /** Stops the Hub process and starts a replacement on the same port and data directory while every serve child keeps running. */
-   async restartHub(between?:()=>Promise<void>|void){await hub.stop(true);await between?.();hub=startHub({host:'127.0.0.1',port:Number(new URL(origin).port),dataDir:path.join(root,'hub'),operatorToken,reviewerToken,agentToken});},
+   async restartHub(between?:()=>Promise<void>|void){await hub.stop(true);await between?.();hub=startHub({host:'127.0.0.1',port:Number(new URL(origin).port),dataDir:hubDataDir,operatorToken,reviewerToken,agentToken});},
    stop(remove=false){stopped??=stopAll().then(codes=>{if(remove)rmSync(root,{recursive:true,force:true});return codes;});return stopped;}};
  }catch(cause){await stopAll();if(options.root===undefined)rmSync(root,{recursive:true,force:true});throw cause;}
 }

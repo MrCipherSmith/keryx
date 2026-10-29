@@ -6,7 +6,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
   "contractDigest": "8facd34c5ca8aa53c36146c5b43c4c13dcb306c8a2882dcf2ce4e1afc171cc56",
   "subjectCatalogueDigest": "470b81d96a56f829db39733fc49d2927fc93f6452d22ef509927540d39efb41d",
-  "inventoryDigest": "c1bca1bd767916c04aa110182dc16aa7837dccfa184332044e2ba5c4ba4aaf2b",
+  "inventoryDigest": "c3140c01db75789d8e682c9e084b235a27c049c02ca139c35b70770eafa2120d",
   "releaseReady": true,
   "counts": {
     "registeredCommands": 74,
@@ -284,5 +284,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "28afcada21d9e7c5941dd6b3adccf7f2c2628a15bed0c9ea679d211e7f6fd7c5"
+  "descriptorDigest": "e92d3c200f45e38f2f13b0b4e3b446fafe9286c7a371b1c47e865947979a7ff4"
 };
