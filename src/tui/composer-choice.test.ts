@@ -1025,3 +1025,30 @@ otuiTest("question body: topic winner destroys mounted body and releases selecti
     expect(h.chrome.textarea.focused).toBe(true);
   } finally { h.destroy(); }
 });
+
+otuiTest("question body reserves the actual multiline composer height", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  h.resize(80, 24);
+  h.chrome.input.value = Array.from({ length: 8 }, (_, i) => `draft-${i}`).join("\n");
+  const controller = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question", acceptDelayMs: 0, signal: controller.signal,
+    body: Array.from({ length: 30 }, (_, i) => `MULTILINE-${i}`).join("\n"),
+    cancelId: "cancel", options: [{ id: "yes", label: "VISIBLE-ANSWER", description: "" }],
+  });
+  try {
+    await h.flush();
+    const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+    expect(h.chrome.textarea.y + h.chrome.textarea.height).toBeLessThanOrEqual(h.renderer.height);
+    expect(h.captureCharFrame()).toContain("VISIBLE-ANSWER");
+    scroll.scrollTo(1_000_000);
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("MULTILINE-29");
+    h.mockInput.pressEnter();
+    expect(await pending).toBe("yes");
+  } finally {
+    controller.abort();
+    h.destroy();
+  }
+});

@@ -479,7 +479,12 @@ function presentComposerChoice(
           if (bodyText.height !== lines) bodyText.height = lines;
           // Account for wrapped hints and the input, not just source lines.
           const extraRows = textStep === undefined ? 0 : (ownNote?.height ?? 0) + (ownInput?.height ?? 1);
-          const overhead = 8 + title.height + (subtitleScroll?.height ?? subtitleLine?.height ?? 0) + extraRows;
+          // Reserve measured non-shrinking host rows, including multiline input.
+          const hostRows = dock.parent?.getChildren()
+            .filter((node) => node !== dock && node.visible && node.id !== "transcript")
+            .reduce((height, node) => height + node.height, 0) ?? 6;
+          const overhead = hostRows + 2 + title.height
+            + (subtitleScroll?.height ?? subtitleLine?.height ?? 0) + extraRows;
           const optionHeight = Math.min(4, Math.max(OPTION_ROWS, r.height - overhead - 1), Math.max(optionsRows, OPTION_ROWS));
           if (optionsScroll.height !== optionHeight) optionsScroll.height = optionHeight;
           const available = Math.max(1, r.height - overhead - (textStep === undefined ? optionHeight : 0));
