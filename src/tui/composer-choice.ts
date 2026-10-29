@@ -42,6 +42,8 @@ export function initialChoiceSelection(options: ReadonlyArray<Pick<ChoiceOption,
 /** Request shown in the composer-dock choice menu. */
 export interface ComposerChoiceRequest {
   title: string;
+  /** Full question, word-wrapped in a viewport of at most ten visible rows. */
+  body?: string;
   subtitle?: string;
   /**
    * Short advisory context (one renderable per line) mounted between subtitle and
@@ -411,7 +413,7 @@ function presentComposerChoice(
       subtitleLines.length > 1 || (subtitleLines[0]?.length ?? 0) > SUBTITLE_INLINE_MAX_CHARS;
     const subtitleRows = Math.min(Math.max(subtitleLines.length, 1), MAX_SUBTITLE_ROWS);
 
-    const listHint = `${hasScrollableSubtitle ? "↑/↓ Enter · Esc · ctrl+o scroll cmd" : "↑/↓ Enter · Esc"}${ownEnabled ? " · Tab = pick + reason" : ""}`;
+    const listHint = `${request.body !== undefined ? "↑/↓ Enter · Esc · ctrl+o scroll question" : hasScrollableSubtitle ? "↑/↓ Enter · Esc · ctrl+o scroll cmd" : "↑/↓ Enter · Esc"}${ownEnabled ? " · Tab = pick + reason" : ""}`;
     const title = new otui.TextRenderable(r, {
       id: `ch-title-${Date.now()}`,
       content: otui.t`${boldChunk(otui, request.title)} ${dimChunk(otui, listHint)}`,
@@ -452,13 +454,64 @@ function presentComposerChoice(
       dock.add(subtitleLine);
     }
 
+    // Separate from command previews: a question is never character-truncated.
+    let bodyScroll: ScrollBox | undefined;
+    if (request.body !== undefined) {
+      const bodyText = new otui.TextRenderable(r, {
+        id: `ch-body-text-${Date.now()}`,
+        content: request.body,
+        width: "100%",
+        wrapMode: "word",
+        flexShrink: 0,
+      });
+      bodyScroll = new otui.ScrollBoxRenderable(r, {
+        id: `ch-body-scroll-${Date.now()}`,
+        width: "100%",
+        height: 1,
+        flexShrink: 0,
+        scrollX: false,
+        scrollY: true,
+        contentOptions: { flexDirection: "column" },
+        // Use OpenTUI's wrapped line count, not source newlines or JS string length.
+        // Layout/resize can change it without changing the question itself.
+        renderAfter() {
+          const lines = Math.max(1, bodyText.virtualLineCount);
+          if (bodyText.height !== lines) bodyText.height = lines;
+          // Account for wrapped hints and the input, not just source lines.
+          const extraRows = textStep === undefined ? 0 : (ownNote?.height ?? 0) + (ownInput?.height ?? 1);
+          const overhead = 8 + title.height + (subtitleScroll?.height ?? subtitleLine?.height ?? 0) + extraRows;
+          const optionHeight = Math.min(4, Math.max(OPTION_ROWS, r.height - overhead - 1), Math.max(optionsRows, OPTION_ROWS));
+          if (optionsScroll.height !== optionHeight) optionsScroll.height = optionHeight;
+          const available = Math.max(1, r.height - overhead - (textStep === undefined ? optionHeight : 0));
+          const height = Math.min(10, available, lines);
+          if (this.height !== height) this.height = height;
+        },
+      });
+      bodyScroll.add(bodyText);
+      handBackFrom.set(bodyScroll, previousFocus);
+      dock.add(bodyScroll);
+    }
+
     const optionsRows = options.length * OPTION_ROWS;
+    let optionsLayout = "";
     const optionsScroll = new otui.ScrollBoxRenderable(r, {
       id: `ch-opts-scroll-${Date.now()}`,
       width: "100%",
-      height: Math.min(Math.max(optionsRows, OPTION_ROWS), MAX_OPTIONS_ROWS),
+      height: Math.min(Math.max(optionsRows, OPTION_ROWS), request.body === undefined ? MAX_OPTIONS_ROWS : 4),
       scrollY: true,
       contentOptions: { flexDirection: "column" },
+      renderAfter() {
+        if (request.body === undefined || textStep !== undefined) return;
+        const layout = `${this.width}:${this.viewport.height}:${this.scrollHeight}:${selected}`;
+        if (layout === optionsLayout) return;
+        optionsLayout = layout;
+        const row = rows[selected];
+        if (row === undefined) return;
+        // The native nearest-edge helper does not move equal-sized rows.
+        if (row.box.y < this.viewport.y || row.box.y + row.label.height > this.viewport.y + this.viewport.height) {
+          this.scrollTo(this.scrollTop + row.box.y - this.viewport.y);
+        }
+      },
     });
     dock.add(optionsScroll);
     handBackFrom.set(optionsScroll, previousFocus);
@@ -647,6 +700,7 @@ function presentComposerChoice(
         title,
         ...(subtitleScroll !== undefined ? [subtitleScroll] : []),
         ...(subtitleLine !== undefined ? [subtitleLine] : []),
+        ...(bodyScroll !== undefined ? [bodyScroll] : []),
         ...contextLines,
         optionsScroll,
         ...mountedExtras(),
@@ -726,20 +780,21 @@ function presentComposerChoice(
         key.stopPropagation();
         return;
       }
-      if (subtitleScroll !== undefined && key.ctrl && key.name === "o") {
+      const textScroll = bodyScroll ?? subtitleScroll;
+      if (textScroll !== undefined && key.ctrl && key.name === "o") {
         const focused = r.currentFocusedRenderable;
-        const inScroll = focused !== null && containsNode(subtitleScroll, focused);
+        const inScroll = focused !== null && containsNode(textScroll, focused);
         if (inScroll) {
           optionsScroll.focus();
         } else {
-          subtitleScroll.focus();
+          textScroll.focus();
         }
         key.preventDefault();
         key.stopPropagation();
         return;
       }
       const focused = r.currentFocusedRenderable;
-      const inScroll = subtitleScroll !== undefined && focused !== null && containsNode(subtitleScroll, focused);
+      const inScroll = textScroll !== undefined && focused !== null && containsNode(textScroll, focused);
       if (inScroll && key.name !== "return" && key.name !== "linefeed" && key.name !== "kpenter") {
         // Arrow keys / PageUp / PageDown fall through to the scroll box's own
         // native `handleKeyPress`. Enter still confirms the highlighted option
