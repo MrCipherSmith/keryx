@@ -4,6 +4,8 @@ import { rewindCommands } from "./rewind";
 import { commandsForMode } from "../../commands/agent-commands";
 import { catalogueDigest, type Control } from "../../remote-control/protocol";
 import { projectInspectionCommands } from "./project-inspection";
+import { acCheckCommands } from "./ac-check";
+import { decisionFollowupCommands } from "./decision-followups";
 import { approvalModeCommands, planCommands } from "./plan";
 import { sessionSettingsCommands } from "./session-settings";
 import { goalCommands } from "./goal";
@@ -15,6 +17,8 @@ import type { NativeCommandContribution } from "./handlers";
 import { analysisCommands } from "./analysis";
 import { tasksIntegrationsCommands } from "./tasks-integrations";
 import { reasoningCommands } from "./reasoning";
+import { projectRecordCommands } from "./project-records";
+import { routingCategoryCommands } from "./routing-categories";
 
 export const sharedCommandIds = new Set(["help", "status", "models", "routing", "reasoning", "history", "compact", "tasks", "queue"]);
 /** specification.md 3.1: "Pure terminal display functions are client concerns." `/think` only chooses how reasoning blocks are shown. */
@@ -43,7 +47,7 @@ export function createCommandCatalogue(capabilityDigest: string, contributions: 
       reason: available ? "shared-native-handler" : presentation.has(commandName) ? "client-presentation" : externalVendor.has(commandName) ? "external-vendor-execution-not-admitted" : localSetup.has(commandName) ? "dedicated-local-security-workflow" : "required-domain-handler-extraction-pending",
     };
   });
-  for (const contribution of [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...lifecycleCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...approvalModeCommands(), ...rewindCommands(), ...settingsInspectionCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.settings }), ...analysisCommands(NATIVE_DEFAULT_SERVICE_READINESS.analysis), ...tasksIntegrationsCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.integrations }), ...contributions]) {
+  for (const contribution of [...projectInspectionCommands(), ...acCheckCommands(), ...decisionFollowupCommands(), ...projectRecordCommands(), ...routingCategoryCommands(), ...conversationCommands(), ...questionCommands(), ...lifecycleCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...approvalModeCommands(), ...rewindCommands(), ...settingsInspectionCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.settings }), ...analysisCommands(NATIVE_DEFAULT_SERVICE_READINESS.analysis), ...tasksIntegrationsCommands({ readiness: NATIVE_DEFAULT_SERVICE_READINESS.integrations }), ...contributions]) {
     const index = entries.findIndex((entry) => entry.commandName === contribution.entry.commandName);
     if (index >= 0) entries[index] = contribution.entry;
     else entries.push(contribution.entry);

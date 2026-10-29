@@ -44,6 +44,8 @@ const TERMINAL_RUN_STATES = new Set(['succeeded', 'failed', 'cancelled', 'reject
 /** Local log GC cadence; the first pass runs on every (re)connect once Hub cursors are reconciled. */
 const RETENTION_INTERVAL_MS = 3600000;
 type RemoteRun = Control['RecoveryPage']['runs'][number];
+/** A capability page before its publication version is assigned (distributes over the catalogue and routing page kinds). */
+type UnversionedCapabilityPage = Control['CapabilityPage'] extends infer Page ? Page extends unknown ? Omit<Page, 'projectionVersion' | 'inventoryVersion'> : never : never;
 type Command = FrameOf<'command'>['payload'];
 type SessionCommand = FrameOf<'session-command'>['payload'];
 type ExecutionIdentity = Pick<Command, 'sessionId' | 'turnId' | 'projectId' | 'checkoutId' | 'runId' | 'commandDigest'> & {
@@ -238,7 +240,16 @@ export class MachineBridge {
         }
     }
     private async reconcileActiveRuns(): Promise<void> {
-        const e = this.options.enrollment, snapshot = await readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`));
+        const e = this.options.enrollment, read = () => readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`));
+        let snapshot = await read();
+        // Spec section 7: a run this daemon cannot prove it owns shows unknown, never last-known running. That is every non-terminal
+        // run whose start marker another daemon of this installation left (a crash): only the explicit local recovery and a human
+        // resolution settle it. Publishing the state releases nothing and restates only the native identity already published.
+        const inherited = snapshot.runs.filter(remote => !TERMINAL_RUN_STATES.has(remote.state) && remote.state !== 'unknown' && this.inheritedLaunch(remote));
+        for (const remote of inherited)
+            await this.publishUnknown(remote);
+        if (inherited.length > 0)
+            snapshot = await read();
         for (const remote of snapshot.runs) {
             if (['succeeded', 'failed', 'cancelled', 'rejected', 'lost'].includes(remote.state))
                 continue;
@@ -292,30 +303,42 @@ export class MachineBridge {
                 clean = true;
             }
             catch (cause) {
-                available = false;
-                this.errors.set(m.checkoutId, machineFailure(cause).code);
+                const failure = machineFailure(cause);
+                // Uncommitted changes (a session's own work, or a crash's leftovers) make a checkout dirty, not unusable: Hub refuses a
+                // clean start on it, while the session owning that work still finds its HEAD and profile after a reconnect.
+                if (failure.code === 'checkout-dirty')
+                    headSha = currentCheckoutHead(m.cwd);
+                else {
+                    available = false;
+                    this.errors.set(m.checkoutId, failure.code);
+                }
             }
             const reason = this.errors.get(m.checkoutId);
             checkouts.push({ projectId: m.projectId, checkoutId: m.checkoutId, localBindingId: canonicalDigest([this.options.enrollment.hubId, m.checkoutId]), label: m.checkoutId, headSha, clean, available, busy: false, agentProfiles: [{ profileId: m.profileId, adapter: 'keryx-native-v1', readiness: profile && available ? 'ready' : 'setup-required', reason: profile && available ? 'none' : reason === 'containment-missing' ? 'containment-missing' : reason === 'local-policy' ? 'local-policy' : reason === 'provider-setup' ? 'provider-setup' : available ? 'adapter-unsupported' : 'checkout-unavailable', capabilityDigest: profile?.capabilityDigest ?? canonicalDigest([]), policyDigest: profile?.policyDigest ?? canonicalDigest(this.options.policy) }] });
         }
-        this.send(this.envelope('inventory', { inventoryVersion: 1, checkouts }));
+        const pages: UnversionedCapabilityPage[] = [];
         for (const m of this.options.enrollment.mappings) {
             const p = this.profiles.get(m.checkoutId);
             if (!p)
                 continue;
-            const common = { projectId: m.projectId, checkoutId: m.checkoutId, agentProfileId: m.profileId, projectionVersion: 1, inventoryVersion: 1, policyDigest: p.policyDigest, capabilityDigest: p.capabilityDigest, catalogueVersion: p.catalogue.catalogueVersion, catalogueDigest: p.catalogue.catalogueDigest };
+            const common = { projectId: m.projectId, checkoutId: m.checkoutId, agentProfileId: m.profileId, policyDigest: p.policyDigest, capabilityDigest: p.capabilityDigest, catalogueVersion: p.catalogue.catalogueVersion, catalogueDigest: p.catalogue.catalogueDigest };
             for (const kind of ['catalogue', 'routing'] as const) {
                 const entries = kind === 'catalogue' ? p.catalogue.entries : p.routing.candidates;
-                const pages = Math.max(1, Math.ceil(entries.length / 16));
-                for (let i = 0; i < pages; i++) {
-                    const value = kind === 'catalogue' ? { ...common, kind, totalEntries: entries.length, cursor: i * 16, nextCursor: i + 1 < pages ? (i + 1) * 16 : null, entries: p.catalogue.entries.slice(i * 16, i * 16 + 16) } : { ...common, kind, totalEntries: entries.length, cursor: i * 16, nextCursor: i + 1 < pages ? (i + 1) * 16 : null, profileIds: p.routing.profileIds, entries: p.routing.candidates.slice(i * 16, i * 16 + 16) };
-                    const valid = validateControl('CapabilityPage', value);
-                    if (!valid.ok)
-                        throw new MachineError('setup-required');
-                    this.send(this.envelope('capability-page', valid.value));
-                }
+                const count = Math.max(1, Math.ceil(entries.length / 16));
+                for (let i = 0; i < count; i++)
+                    pages.push(kind === 'catalogue' ? { ...common, kind, totalEntries: entries.length, cursor: i * 16, nextCursor: i + 1 < count ? (i + 1) * 16 : null, entries: p.catalogue.entries.slice(i * 16, i * 16 + 16) } : { ...common, kind, totalEntries: entries.length, cursor: i * 16, nextCursor: i + 1 < count ? (i + 1) * 16 : null, profileIds: p.routing.profileIds, entries: p.routing.candidates.slice(i * 16, i * 16 + 16) });
             }
         }
+        // Protocol: inventory is a versioned complete projection. The version is durable and content-keyed, so a reconnect or a
+        // daemon restart replays an unchanged projection at its version and publishes any change (a commit, a dirty checkout) as the next one.
+        const version = this.ledger!.publicationVersion(canonicalDigest({ checkouts, pages }));
+        const valid = pages.map(page => validateControl('CapabilityPage', { ...page, projectionVersion: version, inventoryVersion: version }));
+        if (valid.some(page => !page.ok))
+            throw new MachineError('setup-required');
+        this.send(this.envelope('inventory', { inventoryVersion: version, checkouts }));
+        for (const page of valid)
+            if (page.ok)
+                this.send(this.envelope('capability-page', page.value));
     }
     private persistSession(event: Control['SessionEvent']): void {
         this.ledger!.persistEvent(`session:${event.sessionId}`, event.sessionEventSeq, event);
@@ -1273,6 +1296,16 @@ export class MachineBridge {
         if (!daemon)
             return { ok: false, code: 'recovery-required' };
         return { ok: true, remote, launch: { id: launch.id, daemon: daemon.daemonId }, daemon, mapping };
+    }
+    /**
+     * A run whose start marker another daemon of this installation recorded, held by no run of this daemon: nothing here can prove
+     * its ownership. A claim that never reached its start marker stays redeliverable and is not one of these.
+     */
+    private inheritedLaunch(remote: RemoteRun): boolean {
+        if (this.runs.has(remote.runId))
+            return false;
+        const launch = this.ledger!.launchCommand(this.options.enrollment.hubId, remote.runId, remote.commandDigest);
+        return launch !== null && launch.daemon !== this.daemonId && (launch.phase === 'unknown' || launch.phase === 'applied');
     }
     /** Hub resolve-run needs the run unknown. The recovering daemon re-states only the native identity this ledger already published; it never invents one. */
     private async publishUnknown(remote: RemoteRun): Promise<void> {

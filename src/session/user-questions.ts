@@ -48,10 +48,16 @@ export function createSessionUserQuestions(options: { dir: string; sessionId: st
       && current.runId === entry.view.runId && current.turnId === entry.view.turnId && current.policyDigest === entry.view.policyDigest
       && current.controllerLeaseId === entry.context.controllerLeaseId && current.controllerVersion === entry.context.controllerVersion && current.controllerExpiresAt > now();
   };
-  const ask: AskUserFn = async (request) => {
+  /** The checks a question must pass before it is shown: a live turn context, a safe bounded request and room among the pending ones. */
+  const admission = (request: AskUserRequest) => {
     const context = options.context(); const safe = publicRequest(request);
-    if (context === undefined || safe === undefined || pending.size >= 32 || context.signal.aborted || context.controllerExpiresAt <= now()) return ASK_USER_NO_HOST;
-    if ([...pending.values()].reduce((bytes, entry) => bytes + Buffer.byteLength(JSON.stringify(entry.view)), Buffer.byteLength(JSON.stringify(safe))) > 32000) return ASK_USER_NO_HOST;
+    if (context === undefined || safe === undefined || pending.size >= 32 || context.signal.aborted || context.controllerExpiresAt <= now()) return undefined;
+    if ([...pending.values()].reduce((bytes, entry) => bytes + Buffer.byteLength(JSON.stringify(entry.view)), Buffer.byteLength(JSON.stringify(safe))) > 32000) return undefined;
+    return { context, safe };
+  };
+  const ask: AskUserFn = async (request) => {
+    const admitted = admission(request); if (admitted === undefined) return ASK_USER_NO_HOST;
+    const { context, safe } = admitted;
     const view: SessionUserQuestion = { questionId: randomUUID(), sessionId: options.sessionId, runId: context.runId, turnId: context.turnId, policyDigest: context.policyDigest,
       fingerprint: canonicalDigest({ kind: "ask_user", request, runId: context.runId, turnId: context.turnId, policyDigest: context.policyDigest,
         controllerLeaseId: context.controllerLeaseId, controllerVersion: context.controllerVersion }), expiresAt: new Date(now() + expiryMs).toISOString(), ...safe };
@@ -74,6 +80,8 @@ export function createSessionUserQuestions(options: { dir: string; sessionId: st
     });
   };
   return { ask,
+    /** Whether `ask` would show this question now, without showing it (the decision journal records only a question that is shown). */
+    admissible: (request: AskUserRequest) => admission(request) !== undefined,
     pending: () => [...pending.values()].map((entry) => structuredClone(entry.view)),
     answer(input: SessionUserAnswer): UserQuestionOutcome {
       const entry = pending.get(input.questionId); if (entry === undefined) return { status: "not-pending", reason: "no-live-question" };

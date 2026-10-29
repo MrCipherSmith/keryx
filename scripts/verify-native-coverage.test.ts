@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { canonicalDigest } from "../src/remote-control/protocol";
-import { checkNativeCommandCoverage, receiptParity, registeredNativeCommandNames, type NativeCoverageDescriptor, type NativeNormalizedOutcome } from "../src/session/commands/coverage";
+import { buildNativeCoverageDescriptor, checkNativeCommandCoverage, currentNativeCoverageSubject, receiptParity, registeredNativeCommandNames, type NativeCoverageDescriptor, type NativeNormalizedOutcome } from "../src/session/commands/coverage";
 import { checkEmbeddedDescriptor, collectParityRun, DESCRIPTOR_PATH, INVENTORY_PATH, judgeNativeCoverage, readInventory, receiptsFor, sourceHashes } from "./verify-native-coverage";
 
 const root = resolve(import.meta.dir, "..");
@@ -58,23 +58,35 @@ test("lifecycle variants run bridge-hosted: both paths reach a real enrolled Mac
   for (const id of ["sessions.open", "sessions.resume", "sessions.fork"]) expect(parity[id]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "applied", errorCode: null } }, headless: { outcome: { status: "applied", errorCode: null } } } });
 }, 180_000);
 
-test("release guard re-executes the committed inventory: the embedded descriptor is current, not release-ready, and stale/tampered/missing evidence fails closed", async () => {
+test("release guard re-executes the committed inventory: the embedded descriptor is current and release-ready, and a gap or stale/tampered/missing evidence fails closed", async () => {
   const inventory = await readInventory(root);
   const hashes = await sourceHashes(root, inventory);
   const run = await collectParityRun(root, inventory);
   const verification = await judgeNativeCoverage(root, inventory, run, hashes, false);
   const descriptor = await embedded();
   expect(checkEmbeddedDescriptor(verification, descriptor, false)).toMatchObject({ ok: true });
-  // Required gaps stay open and visible, so the release guard refuses.
-  expect(checkEmbeddedDescriptor(verification, descriptor, true)).toEqual({ ok: false, code: "not-release-ready" });
+  // Every required variant earned its receipt, so the release guard admits the embedded descriptor.
+  expect(checkEmbeddedDescriptor(verification, descriptor, true)).toMatchObject({ ok: true });
   const gaps = descriptor.requiredGaps.map((gap) => gap.variantId);
-  for (const id of ["risk.working-diff", "conform.run", "queue.force"]) expect(gaps).toContain(id);
-  // Telegram remote control is a cited spec-3.1 capability boundary, neither earned nor a hidden gap.
-  for (const id of ["remote-control.on", "remote-control.name", "remote-control.off", "remote-control.status"]) { expect(descriptor.boundaries).toContain(id); expect(gaps).not.toContain(id); }
-  expect(descriptor.releaseReady).toBe(false);
+  expect(gaps).toEqual([]);
+  // Cited spec-3.1 boundaries, neither earned nor a hidden gap: Telegram remote control (owner decision 2026-10-28), Jev analysis without local
+  // Jev setup and consent, queue actions no frozen queue operation expresses (owner decision 2026-10-29), and the stage-4 decisions:
+  // the conform wizard steps, running a trigger, the TUI-memory guard details and a GitHub CI run detail (ownerDecisionStage4).
+  for (const id of ["remote-control.on", "remote-control.name", "remote-control.off", "remote-control.status", "risk.working-diff", "conform.run", "ci.retry", "triage.latest-review", "queue.force", "queue.force-N", "queue.edit",
+    "conform.reference-select", "conform.target-diff", "conform.target-pr", "conform.target-report", "conform.clause-detail", "triggers.run", "triggers.confirm-run", "guard.measured-details", "ci.detail"]) { expect(descriptor.boundaries).toContain(id); expect(descriptor.earned).not.toContain(id); }
+  expect(descriptor.releaseReady).toBe(true);
+  // A required variant without its receipt is a visible gap, and the release guard refuses a descriptor that carries one.
+  const gapRun = { ...run, outcomes: run.outcomes.filter((outcome) => outcome.variantId !== "ac.check") };
+  const refreshed = (await judgeNativeCoverage(root, inventory, gapRun, hashes, true)).refreshed;
+  const withGap = await judgeNativeCoverage(root, refreshed, gapRun, hashes, false);
+  expect([withGap.descriptor.releaseReady, withGap.descriptor.requiredGaps.map((gap) => gap.variantId)]).toEqual([false, ["ac.check"]]);
+  expect(checkEmbeddedDescriptor(withGap, withGap.descriptor, false)).toMatchObject({ ok: true });
+  expect(checkEmbeddedDescriptor(withGap, withGap.descriptor, true)).toEqual({ ok: false, code: "not-release-ready" });
   expect(descriptor.earned).toEqual(expect.arrayContaining(["status.default", "help.default", "interrupt.default", "settings.read", "tasks.kill", "demote.task-id", "flows.list", "ac.cached", "rewind.picker", "mcp.status", "bus.modal", "mode.show",
     "model.select", "connect.select", "connect.test", "autoreview.start", "autoreview.stop", "bus.send", "goal.-workspace", "approvals.allow-once", "queue.remove-N", "reasoning.show",
-    "new.default", "clear.default", "resume.picker", "sessions.picker", "sessions.open", "sessions.resume", "sessions.fork", "compact.focus", "mode.ask"]));
+    "new.default", "clear.default", "resume.picker", "sessions.picker", "sessions.open", "sessions.resume", "sessions.fork", "compact.focus", "mode.ask",
+    "search-connect.select", "projectctx.warn", "projectctx.block", "flow.origin-summary", "flow.origin-set-reason", "flow.origin-set-reason-quote-source", "workspace.slate-detail", "routing.category-assignments",
+    "ac.check", "flows.ac-check", "decisions.reason", "decisions.change"]));
   // A lifecycle receipt binds the bridge and Hub lifecycle sources it ran through: a changed bridge makes it stale.
   const bridgeStale = structuredClone(inventory);
   const created = bridgeStale.commands.find((command) => command.commandName === "new")!;
@@ -118,13 +130,19 @@ test("shipped readiness validates only the embedded descriptor and fails closed 
   const state = await mkdtemp(join(tmpdir(), "native-readiness-"));
   try {
     const lines: string[] = [];
-    await expect(hubMachineCommand(["readiness"], { stateDir: state, write: (line) => lines.push(line) })).rejects.toThrow("native-coverage-not-ready");
+    await hubMachineCommand(["readiness"], { stateDir: state, write: (line) => lines.push(line) });
     const report = JSON.parse(lines[0]!) as { descriptorValid: boolean; releaseReady: boolean; descriptorDigest: string; requiredGaps: string[] };
-    expect(report).toMatchObject({ descriptorValid: true, releaseReady: false, descriptorDigest: (await embedded()).descriptorDigest });
-    expect(report.requiredGaps).toContain("queue.force");
+    expect(report).toMatchObject({ descriptorValid: true, releaseReady: true, descriptorDigest: (await embedded()).descriptorDigest, requiredGaps: [] });
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: () => {}, nativeCoverageDescriptor: null })).rejects.toThrow("native-coverage-descriptor-missing");
-    const forged = { ...structuredClone(await embedded()), releaseReady: true, requiredGaps: [], otherBlockers: [] };
+    const forged = { ...structuredClone(await embedded()), releaseReady: false };
     await expect(hubMachineCommand(["readiness"], { stateDir: state, write: () => {}, nativeCoverageDescriptor: forged })).rejects.toThrow("native-coverage-descriptor-tampered");
+    // A valid descriptor of the shipped subject that still names a gap is not ready.
+    const shipped = await embedded(); const subject = currentNativeCoverageSubject(); const inventory = await readInventory(root);
+    const notReady = buildNativeCoverageDescriptor({ registryNames: subject.registryNames, catalogue: subject.catalogue, contractCatalogue: subject.catalogue, inventory,
+      result: { ready: false, registeredCommands: shipped.counts.registeredCommands, auditedVariants: shipped.counts.variants, blockers: [{ code: "missing-current-evidence", subject: "ac.check", detail: "fixture gap" }] } });
+    const notReadyLines: string[] = [];
+    await expect(hubMachineCommand(["readiness"], { stateDir: state, write: (line) => notReadyLines.push(line), nativeCoverageDescriptor: notReady })).rejects.toThrow("native-coverage-not-ready");
+    expect(JSON.parse(notReadyLines[0]!)).toMatchObject({ descriptorValid: true, releaseReady: false, requiredGaps: ["ac.check"] });
   } finally { await rm(state, { recursive: true, force: true }); }
 });
 

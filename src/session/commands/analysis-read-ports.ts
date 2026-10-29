@@ -45,25 +45,60 @@ export function validateAnalysisReadArgv(input: readonly string[]): ProtocolResu
 }
 function invalidArgv(): ProtocolResult<never> { return { ok: false, error: { code: "invalid-argv", message: "The local analysis read is not permitted." } }; }
 
+/** A revision `runCheckAc` passes after `--end-of-options`: a branch, tag or commit name, never an option, range or reflog form. */
+const revision: Predicate = (value) => /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(value) && !value.includes("..") && !value.endsWith(".lock");
+/**
+ * The two reads the acceptance-criteria check makes (flow-check-ac.ts resolveDiffAgainstBase), and the hardened form run for each:
+ * no pager, and no external diff or textconv program a repository configuration could name. Anything else is refused.
+ */
+export function acCheckGitCommand(argv: readonly string[]): readonly string[] | undefined {
+  const [git, verb, ...rest] = argv;
+  if (git !== "git") return undefined;
+  if (verb === "merge-base" && rest.length === 3 && rest[0] === "HEAD" && rest[1] === "--end-of-options" && revision(rest[2]!)) return Object.freeze(["git", "--no-pager", "merge-base", "HEAD", "--end-of-options", rest[2]!]);
+  if (verb === "diff" && rest.length === 4 && rest[0] === "--no-color" && rest[1] === "-U20" && rest[2] === "--end-of-options" && revision(rest[3]!)) return Object.freeze(["git", "--no-pager", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "-U20", "--end-of-options", rest[3]!]);
+  return undefined;
+}
+/** The `GitSpawn` shape `runCheckAc` takes (flow-check-ac.ts), structurally: argv plus the checkout and cancellation it names. */
+export type AcCheckGitSpawn = (argv: readonly string[], opts?: { readonly signal?: AbortSignal; readonly cwd?: string }) => Promise<CiSpawnResult>;
+
 export interface AnalysisReadPortOptions {
   cwd: string;
   /** Must supervise its own process, stop on signal/timeout and cap each stream BEFORE buffering. */
   runOwned(argv: readonly string[], signal?: AbortSignal): Promise<CiSpawnResult>;
+  /** The same supervision for the acceptance-criteria check's hardened git reads. Absent, those reads are refused. */
+  runOwnedGit?(argv: readonly string[], signal?: AbortSignal): Promise<CiSpawnResult>;
 }
 export function createAnalysisReadPorts(options: AnalysisReadPortOptions): {
   ciSpawn: CiSourceSpawn;
+  acCheckGit: AcCheckGitSpawn;
   readReference(relativePath: string, signal: AbortSignal): Promise<string>;
 } {
+  const sameCheckout = async (requestedCwd: string) => {
+    const [expected, requested] = await Promise.all([realpath(options.cwd), realpath(requestedCwd)]).catch(() => { throw new AnalysisReadError("invalid-cwd"); });
+    if (expected !== requested) throw new AnalysisReadError("invalid-cwd");
+  };
+  const bounded = (result: CiSpawnResult) => {
+    if (Buffer.byteLength(result.stdout, "utf8") > 512 * 1024 || Buffer.byteLength(result.stderr, "utf8") > 512 * 1024) throw new AnalysisReadError("quota-exceeded");
+    return result;
+  };
   return {
+    acCheckGit: async (argv, opts) => {
+      const signal = opts?.signal;
+      if (signal?.aborted) throw new AnalysisReadError("cancelled");
+      const command = acCheckGitCommand(argv); if (command === undefined) throw new AnalysisReadError("invalid-argv");
+      await sameCheckout(opts?.cwd ?? options.cwd);
+      if (options.runOwnedGit === undefined) throw new AnalysisReadError("read-denied");
+      const result = await options.runOwnedGit(command, signal);
+      if (signal?.aborted) throw new AnalysisReadError("cancelled");
+      return bounded(result);
+    },
     ciSpawn: async (argv, requestedCwd, signal) => {
       if (signal?.aborted) throw new AnalysisReadError("cancelled");
       const validated = validateAnalysisReadArgv(argv); if (!validated.ok) throw new AnalysisReadError("invalid-argv");
-      const [expected, requested] = await Promise.all([realpath(options.cwd), realpath(requestedCwd)]).catch(() => { throw new AnalysisReadError("invalid-cwd"); });
-      if (expected !== requested) throw new AnalysisReadError("invalid-cwd");
+      await sameCheckout(requestedCwd);
       const result = await options.runOwned(validated.value, signal);
       if (signal?.aborted) throw new AnalysisReadError("cancelled");
-      if (Buffer.byteLength(result.stdout, "utf8") > 512 * 1024 || Buffer.byteLength(result.stderr, "utf8") > 512 * 1024) throw new AnalysisReadError("quota-exceeded");
-      return result;
+      return bounded(result);
     },
     readReference: async (relativePath, signal) => {
       const result = await readProjectReference(options.cwd, relativePath, signal);

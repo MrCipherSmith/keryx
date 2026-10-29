@@ -509,6 +509,51 @@ test("analysis cache writes await exact owned-effect hooks instead of laundering
   } finally { await host.dispose("test"); }
 });
 
+test("a project record write is its own owned effect kind, not an analysis cache write, and a readonly session refuses it", async () => {
+  const seen: string[] = [];
+  const contribution: NativeCommandContribution = { entry: { commandName: "projectctx.set", summary: "Owned project record fixture", handlerId: "native.fixture.record",
+    inputSchema: { type: "object", additionalProperties: false, properties: {}, required: [] }, resultSchema: { type: "string", maxLength: 32768 },
+    mutationClass: "workspace", states: ["idle"], busyPolicy: "reject", confirmation: "none", availability: "available", reason: "local-fixture" },
+    async execute(context) { await context.effect!.mutate("project-record", [".metaproject/tasks.config.json"], async () => { seen.push("write"); }); return { ok: true }; } };
+  const { host, workspace } = await fixture([okReply], true, false, undefined, async () => true, [contribution]);
+  workspace.beforeEffect = async (tool, input) => { seen.push(`${tool}:${JSON.stringify(input.paths)}`); return { ok: true, value: { effectId: "record-effect" } }; };
+  workspace.afterEffect = async () => ({ ok: true, value: { baseline: digest } });
+  try {
+    const current = await host.inspect(); const catalogue = await host.catalogue();
+    const request: Control["CommandInvoke"] = { expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, expectedConfigVersion: 1,
+      catalogueDigest: catalogue.catalogueDigest, commandName: "projectctx.set", arguments: {}, busyPolicy: "reject" };
+    await host.apply({ kind: "command", operationId: "owned-record", payloadDigest: canonicalDigest(request), actorId: "human", runId: "run-record", turnId: "turn-record", association: { mode: "ad-hoc", profileConsentVersion: 1 }, request });
+    await idle(host); expect(seen).toEqual(["project_record_write:[\".metaproject/tasks.config.json\"]", "write"]);
+  } finally { await host.dispose("test"); }
+});
+
+test("projectctx.set and flow.origin.set run to completion in a real owned checkout: each write becomes the owned baseline and the session stays idle", async () => {
+  const { createOwnedWorkspace } = await import("../lib/hub-machine/workspace"); const { renderMetaprojectGitignoreBlock } = await import("../lib/metaproject-gitignore");
+  const { createFlowService } = await import("../flow/service"); const { flowServiceDeps } = await import("../commands/flow");
+  const { host, workspace, cwd } = await fixture([okReply]);
+  const git = (...args: string[]) => Bun.spawnSync(["git", "-C", cwd, "-c", "user.name=Fixture", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args], { env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } });
+  await writeFile(join(cwd, ".gitignore"), renderMetaprojectGitignoreBlock()); await createFlowService(flowServiceDeps()).init({ cwd, title: "Owned record" });
+  expect(git("add", ".").exitCode).toBe(0); expect(git("commit", "-qm", "fixture").exitCode).toBe(0);
+  const owned = createOwnedWorkspace(cwd);
+  Object.assign(workspace, { verify: async () => owned.verify(owned.baseline().digest), checkpoint: () => owned.checkpoint(), beforeEffect: owned.beforeEffect, afterEffect: owned.afterEffect });
+  const run = async (id: string, commandName: string, args: Control["CommandInvoke"]["arguments"]) => {
+    const current = await host.inspect(); const catalogue = await host.catalogue();
+    const request: Control["CommandInvoke"] = { expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, expectedConfigVersion: current.config.configVersion,
+      catalogueDigest: catalogue.catalogueDigest, commandName, arguments: args, busyPolicy: "reject" };
+    await host.apply({ kind: "command", operationId: id, payloadDigest: canonicalDigest(request), actorId: "human", runId: `run-${id}`, turnId: `turn-${id}`, association: { mode: "ad-hoc", profileConsentVersion: 1 }, request });
+    return idle(host);
+  };
+  try {
+    expect(await run("ctx", "projectctx.set", { mode: "block" })).toMatchObject({ state: "idle" });
+    expect(JSON.parse(await readFile(join(cwd, ".metaproject", "tasks.config.json"), "utf8"))).toMatchObject({ gdskills: { projectContext: { enforcement: "block" } } });
+    expect(await run("origin", "flow.origin.set", { flowId: "001", kind: "agent-finding", reason: "seen in review", source: "review-1" })).toMatchObject({ state: "idle" });
+    expect((await createFlowService(flowServiceDeps()).get({ cwd, id: "001" })).origin).toMatchObject({ kind: "agent-finding", source: "review-1" });
+    // Both writes are the checkout's owned changes now, never a foreign edit the next turn would be fenced on.
+    expect((await owned.verify(owned.baseline().digest)).ok).toBe(true);
+    expect(owned.resultChanges().map((change) => change.path).sort()).toEqual([expect.stringMatching(/^\.metaproject\/flows\/001-[\w-]*owned-record\/flow\.json$/), expect.stringMatching(/^\.metaproject\/flows\/001-[\w-]*owned-record\/journal\.md$/), ".metaproject/tasks.config.json"]);
+  } finally { await host.dispose("test"); }
+});
+
 test("the actual analysis service candidate is receipted before egress without making it a primary chat provider", async () => {
   let selection: Control["SelectionReceipt"] | undefined;
   const fetchFn: typeof fetch = Object.assign(async () => {
@@ -1427,5 +1472,30 @@ test("the native decision window may only be shortened: a longer, empty or fract
   const { host, runtime, workspace, cwd, root } = await fixture();
   try {
     for (const decisionTtlMs of [120_001, 0, 1.5]) await expect(createSessionHost({ cwd, dataDir: join(root, "state"), record: { ...record(), sessionId: "session-decision-window" }, runtime, workspace, decisionTtlMs })).rejects.toMatchObject({ code: "invalid-decision-ttl" });
+  } finally { await host.dispose(); }
+});
+
+test("every command outcome the host sends satisfies the result check Hub applies: a long help is bounded and a violating result is a rejection that leaves the session usable", async () => {
+  const resultSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { n: { type: "integer", minimum: 0, maximum: 1 } }, required: ["n"] };
+  const violating: NativeCommandContribution = { entry: { commandName: "fixture.violating", summary: "Returns a result outside its own schema", handlerId: "native.fixture.violating",
+    inputSchema: { type: "object", additionalProperties: false, properties: {}, required: [] }, resultSchema, mutationClass: "read", states: ["idle", "busy", "paused"],
+    busyPolicy: "read-only", confirmation: "none", availability: "available", reason: "fixture" }, structuredResult: true, execute: async () => ({ n: 7 }) };
+  const { host } = await fixture([okReply], true, false, undefined, async () => true, [violating]);
+  const invoke = async (commandName: string, id: string) => { const row = await host.inspect(); const cat = await host.catalogue();
+    const request: Control["CommandInvoke"] = { commandName, arguments: {}, catalogueDigest: cat.catalogueDigest, expectedSessionVersion: row.version,
+      expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, busyPolicy: "reject" };
+    return host.apply({ kind: "command", operationId: id, payloadDigest: canonicalDigest(request), actorId: "human", request }); };
+  try {
+    const catalogue = await host.catalogue();
+    // The real catalogue is far larger than the byte quota once serialized.
+    expect(Buffer.byteLength(JSON.stringify(JSON.stringify(catalogue)))).toBeGreaterThan(32768);
+    for (const [commandName, id, status] of [["fixture.violating", "violating", "rejected"], ["help", "help", "applied"], ["status", "status-after", "applied"]] as const) {
+      expect(await invoke(commandName, id)).toMatchObject({ status, errorCode: status === "rejected" ? "implementation-gap" : null });
+      const sent = (await host.events()).events.find((event) => event.kind === "command-outcome" && event.outcome.operationId === id);
+      if (sent?.kind !== "command-outcome") throw new Error(`no outcome event for ${id}`);
+      const entry = catalogue.entries.find((item) => item.commandName === commandName)!;
+      expect(sent.outcome.status === "rejected" || validateArguments(entry.resultSchema, sent.outcome.result).ok).toBe(true);
+    }
+    expect((await host.inspect()).state).toBe("idle");
   } finally { await host.dispose(); }
 });

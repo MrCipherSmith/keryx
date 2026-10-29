@@ -23,6 +23,18 @@ test('trusted analysis writes adopt only fixed regular cache outputs and reject 
   expect((await workspace.beforeEffect('analysis_cache_write',{paths:['arbitrary.json']})).ok).toBe(false);
  }finally{rmSync(cwd,{recursive:true,force:true});}
 });
+test('a project record write adopts only the project config and a local Flow record, never an arbitrary or ignored path',async()=>{
+ const cwd=fixture();try{
+  const config='.metaproject/tasks.config.json',flow='.metaproject/flows/001-native/flow.json',journal='.metaproject/flows/001-native/journal.md';mkdirSync(path.join(cwd,'.metaproject/flows/001-native'),{recursive:true});
+  const workspace=createOwnedWorkspace(cwd);const effect=await workspace.beforeEffect('project_record_write',{paths:[config]});expect(effect.ok).toBe(true);if(!effect.ok)return;
+  writeFileSync(path.join(cwd,config),'{"gdskills":{"projectContext":{"enforcement":"block"}}}\n');expect((await workspace.afterEffect(effect.value.effectId,{isError:false})).ok).toBe(true);
+  const origin=await workspace.beforeEffect('project_record_write',{paths:[flow,journal]});expect(origin.ok).toBe(true);if(!origin.ok)return;
+  writeFileSync(path.join(cwd,flow),'{}\n');writeFileSync(path.join(cwd,journal),'- origin-set\n');expect((await workspace.afterEffect(origin.value.effectId,{isError:false})).ok).toBe(true);
+  for(const paths of [['arbitrary.json'],['.metaproject/flows/001-native/../../a'],['.metaproject/data/decisions/journal.jsonl'],['.metaproject/index.md']])expect((await workspace.beforeEffect('project_record_write',{paths})).ok).toBe(false);
+  // A write the effect did not name is foreign, exactly as for a patch.
+  const named=await workspace.beforeEffect('project_record_write',{paths:[config]});expect(named.ok).toBe(true);if(!named.ok)return;writeFileSync(path.join(cwd,'a'),'foreign');expect((await workspace.afterEffect(named.value.effectId,{isError:false})).ok).toBe(false);
+ }finally{rmSync(cwd,{recursive:true,force:true});}
+});
 test('patching ignored files is refused before mutation instead of disappearing from provenance',async()=>{
  const cwd=fixture();try{writeFileSync(path.join(cwd,'.gitignore'),'ignored.txt\n');Bun.spawnSync(['git','-C',cwd,'add','.gitignore']);Bun.spawnSync(['git','-C',cwd,'-c','user.name=Fixture','-c','user.email=test@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null','commit','-qm','ignore']);const workspace=createOwnedWorkspace(cwd);expect((await workspace.beforeEffect('apply_patch',{patch:'diff --git a/ignored.txt b/ignored.txt\nnew file mode 100644\n--- /dev/null\n+++ b/ignored.txt\n@@ -0,0 +1 @@\n+invisible\n'})).ok).toBe(false);}finally{rmSync(cwd,{recursive:true,force:true});}
 });

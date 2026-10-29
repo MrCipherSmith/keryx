@@ -77,6 +77,12 @@ test("connect.select applies through the host's serialized session config transa
         operationDigest: outcome.confirmation.operationDigest, policyDigest: outcome.confirmation.policyDigest, decision: "allow-once" };
       expect(await host.apply({ kind: "confirm-command", operationId: "confirm-select", payloadDigest: canonicalDigest(answer), actorId: "human", request: answer })).toMatchObject({ status: "applied", configVersion: 2 });
       expect((await host.inspect()).config).toMatchObject({ configVersion: 2, baselineCandidateId: "second" });
+      // The applied outcome carries the model-pick result, and the advertised result schema is that one: Hub's own check admits it.
+      const applied = (await host.events()).events.find((event) => event.kind === "command-outcome" && event.outcome.operationId === "select-second" && event.outcome.status === "applied");
+      if (applied?.kind !== "command-outcome") throw new Error("no applied connect.select outcome");
+      const { validateArguments } = await import("../../remote-control/protocol");
+      expect(validateArguments(catalogue.entries.find((row) => row.commandName === "connect.select")!.resultSchema, applied.outcome.result).ok).toBe(true);
+      expect(applied.outcome.result).toMatchObject({ configVersion: 2, baselineCandidateId: "second" });
       // An unknown candidate is refused by the same transaction; nothing changes.
       const unknown: Control["CommandInvoke"] = { ...request, expectedConfigVersion: 2, expectedSessionVersion: (await host.inspect()).version, arguments: { id: "not-local" } };
       expect(await host.apply({ kind: "command", operationId: "select-unknown", payloadDigest: canonicalDigest(unknown), actorId: "human", request: unknown })).toMatchObject({ status: "rejected" });

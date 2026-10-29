@@ -54,13 +54,37 @@ export function registeredNativeCommandNames(): string[] { return [...new Set(co
 const presentation = new Set(["think", "expand", "copy", "theme", "rendering", "game"]);
 const standing = new Set(["schedule", "schedules", "intake", "remote-policy"]);
 const vendors = new Set(["delegate", "external-agents", "external-diff"]);
+/**
+ * Owner decision 2026-10-29 (ownerDecisionStage1bTo3): these variants execute Jev analysis, which needs explicit local Jev setup and
+ * consent (specification.md 3.1 security-local setup). Owner decision 2026-10-29 (ownerDecisionStage4) adds the conform wizard steps:
+ * picking a reference or a target starts that Jev run, and a clause detail renders its in-memory result. Exactly these, and only with
+ * the frozen spec reference checked below.
+ */
+export const JEV_SETUP_BOUNDARIES: ReadonlySet<string> = new Set(["risk.working-diff", "scenarios.working-diff", "jevrules.working-diff", "staledocs.working-diff",
+  "contract.working-diff", "opencomments.repo-pr", "triage.latest-review", "ci.triage", "ci.retry", "conform.run",
+  "conform.reference-select", "conform.target-diff", "conform.target-pr", "conform.target-report", "conform.clause-detail"]);
+/**
+ * Owner decision 2026-10-29 (ownerDecisionStage4), each variant in exactly its decided class and only with the frozen spec reference:
+ * running a trigger spawns an unbounded `keryx trigger run` child whose tracked writes would fence the owned checkout (scope); the
+ * measured turn-guard details exist only in the TUI process memory (presentation); a CI run detail needs GitHub data (external vendor).
+ */
+export const STAGE4_DECIDED_BOUNDARIES: ReadonlyMap<string, NativeCoverageVariant["classification"]> = new Map([
+  ["triggers.run", "scope-boundary"], ["triggers.confirm-run", "scope-boundary"], ["guard.measured-details", "presentation"], ["ci.detail", "external-vendor"]]);
+/** Owner decision 2026-10-29: queue actions no frozen queue operation expresses (spec 3.1 names queue edit/remove; protocol QueueEdit/QueueRemove). */
+export const QUEUE_SCOPE_BOUNDARIES: ReadonlySet<string> = new Set(["queue.force", "queue.force-N", "queue.edit"]);
+function needsFrozenSpecReference(row: NativeCoverageVariant): boolean {
+  return row.classification === "scope-boundary" || row.commandName === "remote-control" || JEV_SETUP_BOUNDARIES.has(row.id) || STAGE4_DECIDED_BOUNDARIES.has(row.id);
+}
 function boundaryAllowed(row: NativeCoverageVariant): boolean {
   if (row.status !== "boundary" || row.reason.length < 30 || /TUI.only|panel.unavailable|callback.missing|not.yet/i.test(row.reason)) return false;
+  const decided = STAGE4_DECIDED_BOUNDARIES.get(row.id);
+  if (decided !== undefined) return row.classification === decided;
   if (row.classification === "presentation") return presentation.has(row.commandName) || /\.(?:navigate|scroll|close|resize|focus)$/.test(row.id);
   // Telegram remote control (owner decision 2026-10-28): every variant is the unimplemented delegated-principal vendor adapter, and only with the frozen spec reference checked below.
   if (row.classification === "external-vendor") return (vendors.has(row.commandName) && !/\.(status|list|read)$/.test(row.id)) || row.commandName === "remote-control";
-  if (row.classification === "scope-boundary") return /^(review|reviews|governance)\.(proposal\.(accept|accept-acknowledged|decline)|refresh-layers|prepare-missing-chunks|check|complete|rerun)$/.test(row.id);
+  if (row.classification === "scope-boundary") return QUEUE_SCOPE_BOUNDARIES.has(row.id) || /^(review|reviews|governance)\.(proposal\.(accept|accept-acknowledged|decline)|refresh-layers|prepare-missing-chunks|check|complete|rerun)$/.test(row.id);
   if (row.classification !== "local-security") return false;
+  if (JEV_SETUP_BOUNDARIES.has(row.id)) return true;
   if (/(?:^|\.)(status|list|read|inspect|default)$/.test(row.id) && row.commandName !== "integrate") return false;
   if (standing.has(row.commandName)) return true;
   if (row.commandName === "connect") return /\.(add-key|device-login|disconnect|configure)$/.test(row.id);
@@ -124,7 +148,7 @@ export async function checkNativeCommandCoverage(options: {
         if (!boundaryAllowed(row)) add("invalid-boundary", id, "This source-specific security or presentation boundary cannot waive a native domain operation.");
         const exposed = catalogue.entries.find(entry => entry.commandName === row.handlerName);
         if (exposed?.availability === "available" && exposed.mutationClass !== "read") add("boundary-handler-advertised", id, "A boundary cannot hide a mutating handler that is advertised as remotely available.");
-        if ((row.classification === "scope-boundary" || row.commandName === "remote-control") && (row.scopeReference?.path !== "docs/requirements/hub-remote-sessions/specification.md"
+        if (needsFrozenSpecReference(row) && (row.scopeReference?.path !== "docs/requirements/hub-remote-sessions/specification.md"
           || row.scopeReference.sha256 !== "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2"
           || await source(row.scopeReference) === undefined)) add("invalid-scope-reference", id, "A scope boundary needs the exact frozen normative source subject.");
         continue;

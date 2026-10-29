@@ -72,3 +72,73 @@ test("a receipt whose headless form is a frozen queue operation binds that opera
  for(const forged of [{...queue,headless:{...queue.headless,operation:"edit-queue" as const}},{...queue,headless:{arguments:queue.headless.arguments,outcome:queue.headless.outcome}}])
   expect((await checkNativeCommandCoverage({...f,receipts:[forged],registryNames:["example"]})).blockers.map(row=>row.code)).toEqual(["tampered-receipt"]);
 });
+
+const SPEC={path:"docs/requirements/hub-remote-sessions/specification.md",sha256:"7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2"};
+async function withFrozenSpec(cwd:string){const spec=path.join(cwd,"docs/requirements/hub-remote-sessions");await mkdir(spec,{recursive:true});
+ await writeFile(path.join(spec,"specification.md"),await Bun.file(new URL("../../../docs/requirements/hub-remote-sessions/specification.md",import.meta.url).pathname).text());}
+function audited(f:Awaited<ReturnType<typeof fixture>>,commandName:string,id:string,row:Partial<NativeCoverageInventory["variants"][number]>){
+ f.inventory.commands[0]!.commandName=commandName;f.inventory.commands[0]!.expectedVariants=[id];f.inventory.registryDigest=canonicalDigest([commandName]);
+ f.inventory.variants[0]={...f.inventory.variants[0]!,id,commandName,status:"boundary",...row};
+}
+test("Jev analysis execution is a security-local setup boundary only for the audited Jev variants and only with the frozen spec-3.1 reference",async()=>{
+ const reason="This variant runs Jev analysis, which needs explicit local Jev setup and consent that the native subject does not have.";
+ const anchor={...SPEC,anchor:"Security-local setup and unimplemented vendor adapters are explicit capability boundaries"};
+ const f=await fixture();audited(f,"risk","risk.working-diff",{classification:"local-security",reason});
+ expect((await checkNativeCommandCoverage({...f,registryNames:["risk"]})).blockers.map(row=>row.code)).toContain("invalid-scope-reference");
+ await withFrozenSpec(f.cwd);f.inventory.variants[0]!.scopeReference=anchor;
+ expect(await checkNativeCommandCoverage({...f,registryNames:["risk"]})).toMatchObject({ready:true,blockers:[]});
+ // The same wording cannot waive a deterministic native operation that merely shares a command family with a Jev one.
+ const other=await fixture();await withFrozenSpec(other.cwd);audited(other,"ac","ac.check",{classification:"local-security",reason,scopeReference:anchor});
+ expect((await checkNativeCommandCoverage({...other,registryNames:["ac"]})).blockers.map(row=>row.code)).toContain("invalid-boundary");
+});
+test("a queue variant with no frozen queue operation is a scope boundary only with the spec reference; queue edit/remove stay required",async()=>{
+ const reason="Forcing a queued item to the front has no frozen queue operation: specification 3.1 names queue edit and remove only.";
+ const anchor={...SPEC,anchor:"message queue edit/remove"};
+ for(const id of ["queue.force","queue.force-N","queue.edit"]){
+  const f=await fixture();audited(f,"queue",id,{classification:"scope-boundary",reason});
+  expect((await checkNativeCommandCoverage({...f,registryNames:["queue"]})).blockers.map(row=>row.code)).toContain("invalid-scope-reference");
+  await withFrozenSpec(f.cwd);f.inventory.variants[0]!.scopeReference=anchor;
+  expect(await checkNativeCommandCoverage({...f,registryNames:["queue"]})).toMatchObject({ready:true,blockers:[]});
+ }
+ for(const id of ["queue.edit-N","queue.remove","queue.list"]){
+  const f=await fixture();await withFrozenSpec(f.cwd);audited(f,"queue",id,{classification:"scope-boundary",reason,scopeReference:anchor});
+  expect((await checkNativeCommandCoverage({...f,registryNames:["queue"]})).blockers.map(row=>row.code)).toContain("invalid-boundary");
+ }
+});
+
+test("the conform wizard steps start or render the Jev conformance run, so they are the same spec-3.1 setup boundary, only with the frozen reference",async()=>{
+ const reason="Choosing a conform reference or target starts the Jev conformance run, and a clause detail renders that run; it needs explicit local Jev setup and consent.";
+ const anchor={...SPEC,anchor:"Security-local setup and unimplemented vendor adapters are explicit capability boundaries"};
+ for(const id of ["conform.reference-select","conform.target-diff","conform.target-pr","conform.target-report","conform.clause-detail"]){
+  const f=await fixture();audited(f,"conform",id,{classification:"local-security",reason});
+  expect((await checkNativeCommandCoverage({...f,registryNames:["conform"]})).blockers.map(row=>row.code)).toContain("invalid-scope-reference");
+  await withFrozenSpec(f.cwd);f.inventory.variants[0]!.scopeReference=anchor;
+  expect(await checkNativeCommandCoverage({...f,registryNames:["conform"]})).toMatchObject({ready:true,blockers:[]});
+ }
+ // The conform setup read stays a required native inspection.
+ const read=await fixture();await withFrozenSpec(read.cwd);audited(read,"conform","conform.setup",{classification:"local-security",reason,scopeReference:anchor});
+ expect((await checkNativeCommandCoverage({...read,registryNames:["conform"]})).blockers.map(row=>row.code)).toContain("invalid-boundary");
+});
+test("owner decision stage 4: exactly these four variants are boundaries, each only in its decided class and with the frozen spec reference",async()=>{
+ const reason="Owner decision 2026-10-29 (ownerDecisionStage4): this variant is an explicit boundary of the native session foundation.";
+ const decided=[["triggers","triggers.run","scope-boundary","Unknown ownership, ambiguous external edits, quota-limited provenance checks or a restarted uncertain executor require reconciliation/refusal"],
+  ["triggers","triggers.confirm-run","scope-boundary","Unknown ownership, ambiguous external edits, quota-limited provenance checks or a restarted uncertain executor require reconciliation/refusal"],
+  ["guard","guard.measured-details","presentation","Pure terminal display functions are client concerns."],
+  ["ci","ci.detail","external-vendor","unimplemented vendor adapters are explicit capability boundaries"]] as const;
+ for(const [commandName,id,classification,text] of decided){
+  const f=await fixture();audited(f,commandName,id,{classification,reason});
+  expect((await checkNativeCommandCoverage({...f,registryNames:[commandName]})).blockers.map(row=>row.code)).toContain("invalid-scope-reference");
+  await withFrozenSpec(f.cwd);f.inventory.variants[0]!.scopeReference={...SPEC,anchor:text};
+  expect(await checkNativeCommandCoverage({...f,registryNames:[commandName]})).toMatchObject({ready:true,blockers:[]});
+  // Any other class for the same variant is not what the owner decided.
+  for(const other of ["scope-boundary","presentation","external-vendor","local-security"] as const){ if(other===classification)continue;
+   const g=await fixture();await withFrozenSpec(g.cwd);audited(g,commandName,id,{classification:other,reason,scopeReference:{...SPEC,anchor:text}});
+   expect((await checkNativeCommandCoverage({...g,registryNames:[commandName]})).blockers.map(row=>row.code)).toContain("invalid-boundary");
+  }
+ }
+ // Their reads stay required native operations.
+ for(const [commandName,id,classification,text] of [["triggers","triggers.detail","scope-boundary",decided[0][3]],["guard","guard.inspection","presentation",decided[2][3]],["ci","ci.list","external-vendor",decided[3][3]]] as const){
+  const f=await fixture();await withFrozenSpec(f.cwd);audited(f,commandName,id,{classification,reason,scopeReference:{...SPEC,anchor:text}});
+  expect((await checkNativeCommandCoverage({...f,registryNames:[commandName]})).blockers.map(row=>row.code)).toContain("invalid-boundary");
+ }
+});

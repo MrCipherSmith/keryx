@@ -1,18 +1,22 @@
 /** Bridge-hosted lifecycle parity for scripts/verify-native-coverage.ts. Runs only inside its isolated harness child.
  * The machine bridge applies a lifecycle command only when Hub delivers it, so every path of every variant gets its own real
  * enrolled machine: a real MachineBridge over loopback Hub v2, hosting native sessions whose runtime is the harness's production
- * assembly. The terminal path parses its line with the real terminal adapter over a Hub client; the headless path sends the typed
+ * assembly. Its profile is the shipped production machine profile (resolveProductionMachineProfile) plus the MCP and bus services the
+ * run binds locally so their variants can execute; each machine checks that this is its ONLY difference from the production profile.
+ * The terminal path parses its line with the real terminal adapter over a Hub client; the headless path sends the typed
  * request to Hub directly. Hub first answers pending or queued, so both outcomes are read from the final operation receipt.
  */
 import { randomUUID } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { copyFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
-import { validateControl, type Control, type ProtocolResult } from "../src/remote-control/protocol";
+import { canonicalDigest, validateControl, type Control, type ProtocolResult } from "../src/remote-control/protocol";
 import { MachineBridge } from "../src/lib/hub-machine/bridge";
 import { enrollMachine } from "../src/lib/hub-machine/client";
 import { allowCheckout, hubIdentity, loadEnrollment, machineStateDir, saveEnrollment } from "../src/lib/hub-machine/config";
 import { MachineError } from "../src/lib/hub-machine/errors";
 import { MachineLedger } from "../src/lib/hub-machine/ledger";
+import { resolveProductionMachineProfile } from "../src/lib/hub-machine/production";
+import { saveShellConfig } from "../src/lib/shell-config";
 import { createTerminalSessionAdapter, type TerminalSessionReads } from "../src/session/commands/terminal-adapter";
 import type { NativeNormalizedOutcome } from "../src/session/commands/coverage";
 import type { SessionLifecyclePort } from "../src/session/host-lifecycle";
@@ -26,6 +30,13 @@ type Slots = Readonly<Record<string, string>>;
 /** The fixture machine maps two committed checkouts: the session's own and the separate clean target a fork needs. */
 const CHECKOUTS = ["checkout", "checkout-2"] as const;
 const PROFILE = "fixture";
+/** The shipped remote profile each machine's own profile is checked against. */
+const PRODUCTION_PROFILE = "remote-read-only";
+/**
+ * No remote production profile binds MCP or bus services today, so their catalogue entries are setup-required there
+ * (tasks-integrations.ts capability: availability follows the live service port), while the run subject binds both.
+ */
+const LOCALLY_BOUND_SERVICE = /^(?:mcp|bus)(?:\.|$)/;
 const WORK: Control["FlowAssociation"] = { mode: "ad-hoc", profileConsentVersion: 1 };
 /** How long (x 20 ms) a delivered operation may stay pending before the outcome is recorded as unsettled. */
 const FINAL_RECEIPT_POLLS = 1500;
@@ -50,10 +61,14 @@ export interface LifecycleParityContext {
   origin: string; cookie: string; projectId: string; root: string;
   /** The subject catalogue every host of this run computes; each fixture machine advertises exactly it. */
   catalogue: Control["CommandCatalogue"]; digest: string; availability: Control["RoutingAvailability"];
-  /** The same committed, Keryx-initialized fixture checkout every non-bridge host gets. */
-  checkout(name: string): Promise<string>;
   /** The run's production runtime assembly for one mapped checkout. */
   assemble(cwd: string, sessionId: string): Promise<ProtocolResult<NativeSessionRuntime>>;
+  /** The run's isolated keryx config dir holding the loopback provider registry (`llm-providers.json`) every machine copies. */
+  configDir: string;
+  /** The loopback provider and model each machine saves as its shell selection, the local setup the production profile reads. */
+  providerId: string; modelId: string;
+  /** The same committed, Keryx-initialized fixture checkout every non-bridge host gets. */
+  checkout(name: string): Promise<string>;
   outcome(receipt: unknown, replace: (text: string) => string): NativeNormalizedOutcome;
   bind(value: Json, slots: Slots): Json;
 }
@@ -168,6 +183,15 @@ async function enrolledMachine(context: LifecycleParityContext, hub: HubClient, 
   saveEnrollment(configDir, { hubUrl: context.origin, ...enrolled });
   CHECKOUTS.forEach((checkoutId, index) => allowCheckout(configDir, { projectId: context.projectId, checkoutId, cwd: cwds[index]!, profileId: PROFILE }));
   const enrollment = loadEnrollment(configDir); if (enrollment === null) throw new LifecycleParityError("fixture-enrollment-missing");
+  // The operator's local setup the production profile reads: the saved shell selection and the provider registry it names.
+  await copyFile(join(context.configDir, "llm-providers.json"), join(configDir, "llm-providers.json"));
+  saveShellConfig({ provider: context.providerId, model: context.modelId }, configDir);
+  const production = await resolveProductionMachineProfile({ ...enrollment.mappings[0]!, profileId: PRODUCTION_PROFILE }, { configDir, allowedCandidateIds: [canonicalDigest([context.providerId, context.modelId])] });
+  if (!production.ok) throw new LifecycleParityError("production-profile-refused", production.error.code);
+  // The catalogue and checkout-sync defects are fixed: the production profile now differs from the run subject only by the locally bound services.
+  const differing = [...new Set([...production.value.catalogue.entries, ...context.catalogue.entries].map((entry) => entry.commandName))].filter((name) =>
+    JSON.stringify(production.value.catalogue.entries.find((entry) => entry.commandName === name)) !== JSON.stringify(context.catalogue.entries.find((entry) => entry.commandName === name)));
+  if (differing.some((name) => !LOCALLY_BOUND_SERVICE.test(name))) throw new LifecycleParityError("production-profile-drift", `the production profile differs from the run subject beyond MCP/bus in: ${differing.join(", ")}`);
   const candidates = context.availability.candidates.map((candidate) => candidate.candidateId);
   const policy: Control["LocalMachinePolicy"] = { version: 2, hubId, enabled: true, maxConcurrentRuns: 2, allowAdHocSessions: true, allowedCandidateIds: candidates,
     checkouts: enrollment.mappings.map((mapping, index) => ({ projectId: mapping.projectId, checkoutId: mapping.checkoutId, localBindingId: `binding-${index}`, path: mapping.cwd, profileIds: [PROFILE] })),

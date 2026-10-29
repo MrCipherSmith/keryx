@@ -28,6 +28,7 @@ import { readConformEnabled } from "../../review/conform-report";
 import { readCiTriageEnabled } from "../../review/ci-triage";
 import type { ReportFindingLike } from "../../review/conform-state";
 import type { ConformTargetOption } from "../../tui/conform-inspector";
+import type { AcCheckGitSpawn } from "./analysis-read-ports";
 
 export type AnalysisCommand = "ci" | "conform" | "risk" | "scenarios" | "jevrules" | "staledocs" | "opencomments" | "contract" | "triage";
 /** Local constructor capability only. It is never accepted from Hub data or serialized into a result. */
@@ -51,6 +52,8 @@ export interface NativeAnalysisPort {
  * Carries no model, environment, fetch, budget or policy value, so no inspection can reach a provider. */
 export interface NativeAnalysisReadPort {
   ciSpawn: CiSourceSpawn;
+  /** The acceptance-criteria check's two git reads, hardened (analysis-read-ports.ts acCheckGitCommand), over the same owned capture. */
+  acCheckGit?: AcCheckGitSpawn;
 }
 export interface AnalysisCommandContext {
   cwd: string;

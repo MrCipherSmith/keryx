@@ -10,6 +10,7 @@ import type { SessionApprovalAnswer, AppliedApprovalAnswer } from "../question-s
 import type { NativeCommandContribution, SessionCommandContext } from "./handlers";
 import { validateArguments, type Control } from "../../remote-control/protocol";
 import { redactSensitiveText } from "../../security/service";
+import { sessionConfigResultSchemas } from "./session-settings";
 
 export interface TasksApprovalPort {
  pending(): {approvalId:string;runId:string;turnId:string;fingerprint:string;policyDigest:string}[];
@@ -156,8 +157,9 @@ function busInput(name:string,args:Record<string,string|number|undefined>):Parse
  const action=name.slice(4);const tail=action==="send"||action==="ask"?`${args.to} ${args.text}`:action==="reply"?`${args.id} ${args.text}`:action==="name"?String(args.name):action==="pause"?`${args.to??"@all"} --scope ${args.scope??"turns"}${args.ttlMinutes===undefined?"":` --ttl ${args.ttlMinutes}m`} ${args.reason}`:args.leaseId===undefined?"":String(args.leaseId);
  return parseBusCommand(`/bus ${action} ${tail}`);
 }
+/** connect.select is applied by the host config transaction, so its result is the manual model pick result (session-settings.ts) and its schema says so. */
 export function tasksIntegrationsCommands(options:{port?:TasksIntegrationsPort;readiness?:Partial<Record<keyof TasksIntegrationsPort,boolean>>}={}):NativeCommandContribution[]{return variants.map(variant=>({
- entry:{commandName:variant.name,summary:variant.name,handlerId:`native.integrations.${variant.name}`,inputSchema:variant.schema,resultSchema:{type:"string",maxLength:32768},mutationClass:variant.local?"sensitive-setup":["tasks.kill","demote","approvals.allow-once","approvals.deny"].includes(variant.name)?"session":variant.effect?"workspace":"read",states:ownedControls.includes(variant.name)?["idle","busy","paused"]:variant.effect?["idle"]:["idle","busy","paused"],busyPolicy:variant.effect?"reject":"read-only",confirmation:variant.local?"local-only":ownedControls.includes(variant.name)?"none":variant.effect?"human":"none",availability:variant.local?"policy-denied":capability(variant.name,options.port,options.readiness).availability,reason:variant.local??capability(variant.name,options.port,options.readiness).reason},
+ entry:{commandName:variant.name,summary:variant.name,handlerId:`native.integrations.${variant.name}`,inputSchema:variant.schema,resultSchema:variant.name==="connect.select"?sessionConfigResultSchemas.model!:{type:"string",maxLength:32768},mutationClass:variant.local?"sensitive-setup":["tasks.kill","demote","approvals.allow-once","approvals.deny"].includes(variant.name)?"session":variant.effect?"workspace":"read",states:ownedControls.includes(variant.name)?["idle","busy","paused"]:variant.effect?["idle"]:["idle","busy","paused"],busyPolicy:variant.effect?"reject":"read-only",confirmation:variant.local?"local-only":ownedControls.includes(variant.name)?"none":variant.effect?"human":"none",availability:variant.local?"policy-denied":capability(variant.name,options.port,options.readiness).availability,reason:variant.local??capability(variant.name,options.port,options.readiness).reason},
  execute:(context,request)=>executeTasksIntegration(adapt(context,options.port),variant.name,request.arguments),
 }));}
 function adapt(context:SessionCommandContext,port:TasksIntegrationsPort|undefined):TasksIntegrationContext{

@@ -2,7 +2,7 @@ import{expect,test}from'bun:test';import{existsSync,lstatSync,readFileSync,readd
 import{startMachineTrial,SERVE_ENTRY,TRIAL_CONTEXT,TRIAL_INDEX,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
 import{canonicalDigest,type Control,type FrameOf}from'../../remote-control/protocol';import{createMachineCommandCatalogue}from'./production';import{localControlPath}from'./local-control';import{resolveRemoteProfile}from'../../harness/policy/profiles';
 type Trial=Awaited<ReturnType<typeof startMachineTrial>>;type RunEvent=FrameOf<'run-event'>['payload'];
-type Inventory={connected:boolean;inventory:{inventoryVersion:number;checkouts:{checkoutId:string;headSha:string;agentProfiles:{profileId:string;adapter:string;readiness:string;reason:string;capabilityDigest:string;policyDigest:string}[]}[]}|null};
+type Inventory={connected:boolean;inventory:{inventoryVersion:number;checkouts:{checkoutId:string;headSha:string;clean:boolean;available:boolean;agentProfiles:{profileId:string;adapter:string;readiness:string;reason:string;capabilityDigest:string;policyDigest:string}[]}[]}|null};
 /** Production resolution refuses a profile with `adapter-unsupported` while the shipped command catalogue still lists an implementation gap. */
 const catalogueGaps=createMachineCommandCatalogue(canonicalDigest([])).entries.filter(entry=>entry.availability==='implementation-gap').map(entry=>entry.commandName);
 function hubClient(trial:Trial){
@@ -16,13 +16,41 @@ function hubClient(trial:Trial){
 }
 const processCommand=(pid:number)=>Bun.spawnSync(['ps','-o','command=','-p',String(pid)]).stdout.toString().trim();
 const processesWith=(marker:string)=>Bun.spawnSync(['ps','-axo','pid=,command=']).stdout.toString().split('\n').filter(line=>line.includes(marker));
+/** The process group of the supervised shell carrying `marker`, which the native runtime starts as its own group leader. */
+const processGroup=(marker:string)=>{const line=Bun.spawnSync(['ps','-axo','pgid=,command=']).stdout.toString().split('\n').find(l=>l.includes(marker));return line===undefined?undefined:Number(line.trim().split(/\s+/)[0]);};
+const killGroup=(marker:string)=>{const pgid=processGroup(marker);if(pgid!==undefined){try{process.kill(-pgid,'SIGKILL');}catch{/* The group is already gone. */}}};
 const notices=(target:TrialTarget)=>target.serve.stdout.flatMap(line=>{const m=/Hub machine: ([a-z0-9-]+)/.exec(line);return m?[m[1]!]:[];});
+/** The developer's own git in a trial checkout, off the operator's git config and hooks. */
+const git=(target:TrialTarget,args:string[])=>{const r=Bun.spawnSync(['git','-C',target.cwd,'-c','user.name=Trial developer','-c','user.email=trial@example.invalid','-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null',...args],{env:{...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'}});expect(r.exitCode).toBe(0);return r.stdout.toString().trim();};
 /** The developer-visible checkout: its tracked index bytes and git's porcelain status (the trial's .metaproject/ local state is ignored). */
 const checkoutState=(target:TrialTarget)=>({index:readFileSync(path.join(target.cwd,'.metaproject','index.md'),'utf8'),status:Bun.spawnSync(['git','-C',target.cwd,'status','--porcelain=v1','--untracked-files=all'],{env:{...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'}}).stdout.toString()});
 /** The shared context the serve machine synced on connect, read from its own keryx-managed cache. */
 function syncedContext(target:TrialTarget):{revision:number;documents:{path:string;content:string}[]}{
  const caches=existsSync(target.contextRoot)?readdirSync(target.contextRoot).map(dir=>path.join(target.contextRoot,dir,'context.json')).filter(file=>existsSync(file)):[];
  expect(caches).toHaveLength(1);return JSON.parse(readFileSync(caches[0]!,'utf8')) as {revision:number;documents:{path:string;content:string}[]};
+}
+type RunRecord={state:string;version:number;lastLocalSeq:number;result?:Control['ResultReceipt'];connected?:boolean};
+/** An ad-hoc session on `target` once production resolution made its profile ready, with the controller claimed by the human operator. */
+async function controlledSession(trial:Trial,hub:ReturnType<typeof hubClient>,target:TrialTarget,title:string){
+ const metadata=await hub.wait(()=>hub.call<Inventory>(`/hub/v2/machines/${target.machineId}`),v=>v.connected&&v.inventory?.checkouts.some(c=>c.checkoutId===target.checkoutId&&c.agentProfiles[0]?.readiness==='ready')===true);
+ const checkout=metadata.inventory!.checkouts.find(c=>c.checkoutId===target.checkoutId)!,profile=checkout.agentProfiles[0]!;expect(profile.policyDigest).toBe(canonicalDigest(resolveRemoteProfile(TRIAL_PROFILE)));
+ const created=await hub.call<Control['SessionOperationReceipt']>(`/hub/v2/projects/${trial.projectId}/sessions`,{machineId:target.machineId,checkoutId:target.checkoutId,agentProfileId:TRIAL_PROFILE,expectedInventoryVersion:metadata.inventory!.inventoryVersion,expectedHeadSha:checkout.headSha,capabilityDigest:profile.capabilityDigest,policyDigest:profile.policyDigest,title});
+ const base=`/hub/v2/projects/${trial.projectId}/sessions/${created.sessionId}`,runs=`/hub/v2/projects/${trial.projectId}/runs`;
+ const read=()=>hub.call<Control['SessionRecord']>(base);const idle=()=>hub.wait(read,s=>s.state==='idle');
+ const initial=await idle();const claim=await hub.call<Control['ControllerReceipt']>(`${base}/controller/claim`,{expectedSessionVersion:initial.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'});
+ await hub.wait(read,s=>s.controller?.controllerLeaseId===claim.lease.controllerLeaseId&&s.sessionEventCursor>=initial.sessionEventCursor+2);const controller={controllerLeaseId:claim.lease.controllerLeaseId,expectedControllerVersion:claim.lease.version};
+ const message=(ordinal:number,text:string,session:Control['SessionRecord'])=>hub.call<Control['TurnReceipt']>(`${base}/messages`,{expectedSessionVersion:session.version,expectedConfigVersion:session.config.configVersion,controller,text:trialTurn(ordinal,text),interpretation:'literal-message',busyPolicy:'enqueue',association:{mode:'ad-hoc',profileConsentVersion:1}});
+ const send=async(ordinal:number,text:string)=>{const receipt=await message(ordinal,text,await idle());expect(receipt.status).toBe('admitted');if(receipt.runId===null)throw new Error('trial-turn-without-run');return{runId:receipt.runId};};
+ const run=(runId:string)=>hub.call<RunRecord>(`${runs}/${runId}`);
+ const events=(runId:string)=>hub.call<{events:RunEvent[]}>(`${runs}/${runId}/events`);
+ const approveOnce=async(runId:string)=>{const page=await hub.wait(()=>events(runId),p=>p.events.some(e=>e.kind==='approval-request'));const question=page.events.find((e):e is Extract<RunEvent,{kind:'approval-request'}>=>e.kind==='approval-request')!;const current=await hub.wait(()=>run(runId),r=>r.state==='waiting-approval');const session=await read();
+  await hub.call(`${runs}/${runId}/approvals/${question.approvalId}/answer`,{expectedRunVersion:current.version,expectedSessionVersion:session.version,controller,actionFingerprint:question.actionFingerprint,policyDigest:question.policyDigest,decision:'allow-once'});};
+ return{created,base,runs,read,idle,controller,message,send,run,events,approveOnce};
+}
+/** `keryx hub machine recover --hub <hub> ...` exactly as the operator types it on that machine: its one JSON line, or its refusal code. */
+async function recover(trial:Trial,target:TrialTarget,args:string[]):Promise<{ok:true;value:Record<string,unknown>}|{ok:false;code:string}>{
+ const result=await trial.operator(target,['hub','machine','recover','--hub',trial.hubId,...args]);
+ return result.exitCode===0?{ok:true,value:JSON.parse(result.stdout.trim()) as Record<string,unknown>}:{ok:false,code:result.stderr.trim()};
 }
 
 test('two keryx serve processes start their machine bridges through the shipped startup path and production profile resolution',async()=>{
@@ -61,13 +89,7 @@ test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and
  const hub=hubClient(trial);await hub.login();expect(trial.targets).toHaveLength(2);
  const calls=(target:TrialTarget,ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});
  for(const target of trial.targets){
-  const metadata=await hub.wait(()=>hub.call<Inventory>(`/hub/v2/machines/${target.machineId}`),v=>v.connected&&v.inventory?.checkouts.some(c=>c.checkoutId===target.checkoutId&&c.agentProfiles[0]?.readiness==='ready')===true);
-  const checkout=metadata.inventory!.checkouts.find(c=>c.checkoutId===target.checkoutId)!,profile=checkout.agentProfiles[0]!;expect(profile.policyDigest).toBe(canonicalDigest(resolveRemoteProfile(TRIAL_PROFILE)));
-  const created=await hub.call<Control['SessionOperationReceipt']>(`/hub/v2/projects/${trial.projectId}/sessions`,{machineId:target.machineId,checkoutId:target.checkoutId,agentProfileId:TRIAL_PROFILE,expectedInventoryVersion:metadata.inventory!.inventoryVersion,expectedHeadSha:checkout.headSha,capabilityDigest:profile.capabilityDigest,policyDigest:profile.policyDigest,title:'Two-process serve proof'});
-  const base=`/hub/v2/projects/${trial.projectId}/sessions/${created.sessionId}`,runs=`/hub/v2/projects/${trial.projectId}/runs`;
-  const idle=()=>hub.wait(()=>hub.call<Control['SessionRecord']>(base),s=>s.state==='idle');
-  const initial=await idle();const claim=await hub.call<Control['ControllerReceipt']>(`${base}/controller/claim`,{expectedSessionVersion:initial.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'});
-  await hub.wait(()=>hub.call<Control['SessionRecord']>(base),s=>s.controller?.controllerLeaseId===claim.lease.controllerLeaseId&&s.sessionEventCursor>=initial.sessionEventCursor+2);const controller={controllerLeaseId:claim.lease.controllerLeaseId,expectedControllerVersion:claim.lease.version};
+  const{base,runs,idle,controller,send,events,approveOnce}=await controlledSession(trial,hub,target,'Two-process serve proof');
   // The checkout synced its project's shared Hub context on connect and still hosts this session, its tracked index untouched.
   expect(syncedContext(target).documents.map(d=>({path:d.path,content:d.content}))).toContainEqual(TRIAL_CONTEXT);expect(checkoutState(target)).toEqual({index:TRIAL_INDEX,status:''});
   // A slash command exactly as the Hub web client sends it: the catalogue Hub publishes for this session, delivered to and applied by this serve child.
@@ -75,10 +97,6 @@ test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and
   const invoked=await hub.call<Control['CommandOutcome']>(`${base}/commands/invoke`,{expectedSessionVersion:ready.version,controller,expectedConfigVersion:ready.config.configVersion,catalogueDigest:published.catalogueDigest,commandName:'status',arguments:{},busyPolicy:'reject'});
   const applied=await hub.wait(()=>hub.call<Control['CommandOutcome']>(`${base}/operations/${invoked.operationId}`),o=>o.status!=='queued');
   expect({commandName:applied.commandName,status:applied.status,errorCode:applied.errorCode}).toEqual({commandName:'status',status:'applied',errorCode:null});
-  const send=async(ordinal:number,text:string)=>{const session=await idle();const receipt=await hub.call<Control['TurnReceipt']>(`${base}/messages`,{expectedSessionVersion:session.version,expectedConfigVersion:session.config.configVersion,controller,text:trialTurn(ordinal,text),interpretation:'literal-message',busyPolicy:'enqueue',association:{mode:'ad-hoc',profileConsentVersion:1}});expect(receipt.status).toBe('admitted');if(receipt.runId===null)throw new Error('trial-turn-without-run');return{runId:receipt.runId};};
-  const events=(runId:string)=>hub.call<{events:RunEvent[]}>(`${runs}/${runId}/events`);
-  const approveOnce=async(runId:string)=>{const page=await hub.wait(()=>events(runId),p=>p.events.some(e=>e.kind==='approval-request'));const question=page.events.find((e):e is Extract<RunEvent,{kind:'approval-request'}>=>e.kind==='approval-request')!;const current=await hub.wait(()=>hub.call<{version:number;state:string}>(`${runs}/${runId}`),r=>r.state==='waiting-approval');const session=await hub.call<Control['SessionRecord']>(base);
-   await hub.call(`${runs}/${runId}/approvals/${question.approvalId}/answer`,{expectedRunVersion:current.version,expectedSessionVersion:session.version,controller,actionFingerprint:question.actionFingerprint,policyDigest:question.policyDigest,decision:'allow-once'});};
   // A real approved patch written by the production runtime in this serve child, from one tool round and one final round.
   const patch=await send(1,'write an approved native patch');await approveOnce(patch.runId);
   await hub.wait(()=>hub.call<{state:string;result?:Control['ResultReceipt']}>(`${runs}/${patch.runId}`),r=>r.state==='succeeded'&&r.result?.checksKind==='RunChecks');
@@ -99,3 +117,114 @@ test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and
  }
  }finally{await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
 },120000);
+
+test.skipIf(catalogueGaps.length>0)('a serve killed mid-run stays uncertain until the operator recovers it locally and a human resolves it in Hub, keeping history and the owned baseline and never replaying queued work',async()=>{
+ const trial=await startMachineTrial();const[target,other]=trial.targets as [TrialTarget,TrialTarget];const marker=supervisedMarker(target.machine,2);try{
+ const hub=hubClient(trial);await hub.login();
+ const calls=(ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});
+ const machine=()=>hub.call<Inventory>(`/hub/v2/machines/${target.machineId}`);
+ const s=await controlledSession(trial,hub,target,'Serve crash recovery');
+ const published=(await machine()).inventory!;const head=published.checkouts.find(c=>c.checkoutId===target.checkoutId)!.headSha;
+ // Turn 1 leaves an agent-owned uncommitted file: the owned baseline the crash must neither lose nor reset.
+ const patch=await s.send(1,'write an approved native patch');await s.approveOnce(patch.runId);await hub.wait(()=>s.run(patch.runId),r=>r.state==='succeeded'&&r.result?.checksKind==='RunChecks');
+ const owned=checkoutState(target);expect(owned).toEqual({index:TRIAL_INDEX,status:'?? trial-edit-1.txt\n'});
+ // Turn 2 runs a supervised sleep in its own process group; turn 3 waits behind it in the durable session queue.
+ const crashed=await s.send(2,'crash supervised sleep work');await s.approveOnce(crashed.runId);await hub.wait(async()=>processesWith(marker),found=>found.length>0);
+ const queued=await s.message(3,'read seed.txt',await s.read());expect(queued.status).toBe('queued');
+ // The machine durably queued it: Hub's queue projection comes from the serve child's own session events.
+ await hub.wait(()=>hub.call<Control['QueuePage']>(`${s.base}/queue`),q=>q.items.some(i=>i.operationId===queued.operationId&&i.state==='queued'));
+ const history=await hub.call<Control['HistoryPage']>(`${s.base}/history`);expect(history.messages.map(m=>m.role)).toEqual(['human','tool-summary','assistant','human']);
+ const before=await s.run(crashed.runId);expect(before.state).toBe('running');
+ // SIGKILL: serve drains nothing and stops nothing. Its supervised child outlives it in its own process group.
+ const crashedPid=target.serve.pid;expect(await trial.crashServe(target)).toBe(137);expect(processCommand(crashedPid)).toBe('');expect(processesWith(marker)).toHaveLength(1);
+ // While the machine is offline Hub keeps the last-known run: never succeeded, cancelled, failed or closed, its session never idle or closed, its controller never released.
+ const lastKnown={state:'running',version:before.version};
+ const unsettled=async(expected:{state:string;version:number})=>{const run=await s.run(crashed.runId),session=await s.read();expect({state:run.state,version:run.version}).toEqual(expected);expect({state:session.state,activeRunId:session.activeRunId}).toEqual({state:'busy',activeRunId:crashed.runId});expect(session.controller?.state).not.toBe('released');};
+ await hub.wait(machine,v=>!v.connected);await unsettled(lastKnown);
+ // A plain restart cannot take over: the crashed daemon's lock still fences this Hub, so serve comes up without its bridge.
+ await trial.restartServe(target);expect(notices(target)).toEqual(['machine-busy']);await Bun.sleep(1000);expect((await machine()).connected).toBe(false);await unsettled(lastKnown);
+ expect(await trial.stopServe(target)).toBe(0);
+ // Operator step 1: the stale daemon lock goes only through the explicit command, on the crashed daemon's proven absence.
+ const lock=await recover(trial,target,['--action','release-stale-daemon']);if(!lock.ok)throw new Error(lock.code);expect(lock.value).toMatchObject({kind:'daemon-lock',state:'released'});
+ // The crash also left its owner socket behind; the runbook has the operator remove it once no serve runs for this installation.
+ expect(processCommand(crashedPid)).toBe('');const socket=localControlPath(target.configDir);expect(lstatSync(socket).isSocket()).toBe(true);rmSync(socket);
+ await trial.restartServe(target);await hub.wait(machine,v=>v.connected);expect(notices(target)).not.toContain('machine-busy');expect(notices(target)).not.toContain('local-control-busy');
+ // The reconnected daemon cannot prove it owns the crashed run, so Hub now shows it unknown and recovery-required (spec section 7), never
+ // running; nothing is released, nothing repeats and the queued turn is not admitted.
+ const shownUnknown={state:'unknown',version:before.version+1};await hub.wait(()=>s.run(crashed.runId),r=>r.state!=='running');
+ await Bun.sleep(1000);await unsettled(shownUnknown);expect((await s.events(crashed.runId)).events.filter(e=>e.kind==='state').at(-1)).toMatchObject({state:'unknown',reasonCode:'recovery-required'});
+ expect(calls(2)).toEqual([{reply:'tool',toolName:'shell_exec'}]);expect(calls(3)).toEqual([]);
+ // The restarted machine published its changed checkout as the next inventory version: dirty with the crashed session's own file, at the unchanged HEAD.
+ const restarted=(await machine()).inventory!;expect(restarted.inventoryVersion).toBeGreaterThan(published.inventoryVersion);
+ expect(restarted.checkouts.find(c=>c.checkoutId===target.checkoutId)).toMatchObject({headSha:head,clean:false,available:true,agentProfiles:[{readiness:'ready'}]});
+ const inspected=await recover(trial,target,[]);if(!inspected.ok)throw new Error(inspected.code);expect(inspected.value).toMatchObject({kind:'inspection',sessions:[],uncertainRuns:[{runId:crashed.runId,daemonId:lock.value.daemonId}]});
+ // Operator step 2 refuses while the crashed run's process group lives, and Hub has no local receipt a human could resolve with.
+ expect(await recover(trial,target,['--action','confirm-run-absence','--run',crashed.runId,'--request-id','confirm-while-live'])).toEqual({ok:false,code:'owned-process-live'});
+ expect(await hub.raw(`/hub/v2/machines/${target.machineId}/resolve-run`,{runId:crashed.runId,expectedRunVersion:shownUnknown.version,localReconciliationId:'none',decision:'lost',reason:'No local proof'})).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});await unsettled(shownUnknown);
+ // The operator stops the leftover group; absence is then proven by recorded identity against the run Hub already shows unknown.
+ killGroup(marker);await hub.wait(async()=>processesWith(marker),found=>found.length===0);
+ const confirmed=await recover(trial,target,['--action','confirm-run-absence','--run',crashed.runId,'--request-id','confirm-absent']);if(!confirmed.ok)throw new Error(confirmed.code);
+ expect(confirmed.value).toMatchObject({kind:'run-absence-confirmed',runId:crashed.runId,sessionId:s.created.sessionId,expectedRunVersion:shownUnknown.version});const reconciliationId=confirmed.value.reconciliationId as string;
+ const uncertain=await s.run(crashed.runId);expect(uncertain.state).toBe('unknown');expect((await s.events(crashed.runId)).events.filter(e=>e.kind==='state').at(-1)).toMatchObject({state:'unknown',reasonCode:'recovery-required'});
+ // Nothing is released by the local confirmation alone.
+ expect(await recover(trial,target,['--action','release-resolved-run','--run',crashed.runId,'--reconciliation',reconciliationId,'--request-id','release-before-human'])).toEqual({ok:false,code:'recovery-required'});
+ // The human resolves the run through the existing ResolveRunRequest; only then does operator step 4 release exactly this run's local fences.
+ expect(await hub.call<{runId:string;state:string;version:number;reconciliationId:string}>(`/hub/v2/machines/${target.machineId}/resolve-run`,{runId:crashed.runId,expectedRunVersion:uncertain.version,localReconciliationId:reconciliationId,decision:'lost',reason:'Locally confirmed absence of the crashed serve and its supervised process group'})).toEqual({runId:crashed.runId,state:'lost',version:uncertain.version+1,reconciliationId});
+ expect(await recover(trial,target,['--action','release-resolved-run','--run',crashed.runId,'--reconciliation',reconciliationId,'--request-id','release-after-human'])).toEqual({ok:true,value:{kind:'released-resolved-run',runId:crashed.runId,sessionId:s.created.sessionId,reconciliationId,capacityReleased:true,checkoutLeaseReleased:true}});
+ const released=await recover(trial,target,[]);expect(released.ok?released.value.uncertainRuns:released.code).toEqual([]);
+ // History, the owned baseline and the queued input survive the crash and its recovery; the queued turn never reached the provider and is
+ // now suspended, exactly as the restarted native host keeps queued input: never authorization, only a human reauthorizes or removes it.
+ expect((await hub.call<Control['HistoryPage']>(`${s.base}/history`)).messages).toEqual(history.messages);expect(checkoutState(target)).toEqual(owned);expect(readFileSync(path.join(target.cwd,'trial-edit-1.txt'),'utf8')).toBe('deterministic native edit 1\n');
+ expect((await hub.call<Control['QueuePage']>(`${s.base}/queue`)).items.map(i=>({operationId:i.operationId,state:i.state}))).toEqual([{operationId:queued.operationId,state:'suspended'}]);
+ await Bun.sleep(1000);expect([calls(1),calls(2),calls(3)]).toEqual([[{reply:'tool',toolName:'apply_patch'},{reply:'text'}],[{reply:'tool',toolName:'shell_exec'}],[]]);
+ // Released is not resumed: the lost run no longer occupies the session, which is recovery-required, never busy, idle or closed; its
+ // controller is not released, and new work on the unverified baseline is refused.
+ const final=await s.read();expect({state:final.state,activeRunId:final.activeRunId,activeTurnId:final.activeTurnId}).toEqual({state:'recovery-required',activeRunId:null,activeTurnId:null});expect(final.controller?.state).not.toBe('released');
+ expect(await hub.raw(`${s.base}/messages`,{expectedSessionVersion:final.version,expectedConfigVersion:final.config.configVersion,controller:s.controller,text:trialTurn(4,'read seed.txt'),interpretation:'literal-message',busyPolicy:'reject',association:{mode:'ad-hoc',profileConsentVersion:1}})).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});
+ // New work after the recovery: the developer commits the agent's file while serve is stopped; the restarted machine publishes the new
+ // HEAD as the next inventory version, and a new session starts on it and runs a real turn. The suspended turn still never runs.
+ expect(await trial.stopServe(target)).toBe(0);git(target,['add','trial-edit-1.txt']);git(target,['commit','-qm','Keep the agent edit']);const committed=git(target,['rev-parse','HEAD']);expect(committed).not.toBe(head);
+ await trial.restartServe(target);
+ const fresh=await hub.wait(machine,v=>v.connected&&v.inventory?.checkouts.some(c=>c.checkoutId===target.checkoutId&&c.headSha===committed&&c.clean)===true);expect(fresh.inventory!.inventoryVersion).toBeGreaterThan(restarted.inventoryVersion);
+ const work=await controlledSession(trial,hub,target,'New work after crash recovery');
+ const read=await work.send(1,'read seed.txt');await hub.wait(()=>work.run(read.runId),r=>r.state==='succeeded');
+ expect(calls(1)).toEqual([{reply:'tool',toolName:'apply_patch'},{reply:'text'},{reply:'tool',toolName:'read_file'},{reply:'text'}]);expect(calls(3)).toEqual([]);
+ expect((await hub.call<Control['QueuePage']>(`${s.base}/queue`)).items.map(i=>i.state)).toEqual(['suspended']);expect(checkoutState(target)).toEqual({index:TRIAL_INDEX,status:''});
+ // The other machine was never touched.
+ expect((await hub.call<Inventory>(`/hub/v2/machines/${other.machineId}`)).connected).toBe(true);expect(trial.provider.calls.filter(c=>c.machine===other.machine)).toEqual([]);expect(notices(other)).toEqual([]);expect(trial.provider.unexpected).toEqual([]);
+ }finally{killGroup(marker);await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
+},180000);
+
+test.skipIf(catalogueGaps.length>0)('a Hub restart while both serve machines stay up keeps running and approval-paused work owned: no restart, no repeated tool or provider round, no takeover',async()=>{
+ const trial=await startMachineTrial();const[target,other]=trial.targets as [TrialTarget,TrialTarget];const marker=supervisedMarker(target.machine,1);try{
+ const hub=hubClient(trial);await hub.login();
+ const calls=(ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});
+ const pids=trial.targets.map(t=>t.serve.pid);const reconnected=()=>Promise.all(trial.targets.map(t=>hub.wait(()=>hub.call<Inventory>(`/hub/v2/machines/${t.machineId}`),v=>v.connected,30000)));
+ const s=await controlledSession(trial,hub,target,'Hub restart');
+ // A supervised sleep is running on the machine when Hub goes away.
+ const sleeper=await s.send(1,'sleep supervised work across a Hub restart');await s.approveOnce(sleeper.runId);await hub.wait(async()=>processesWith(marker),found=>found.length>0);
+ const running=await s.run(sleeper.runId);expect(running.state).toBe('running');
+ await trial.restartHub(async()=>{
+  // While Hub is down both serve processes and the owned child keep running: the machine neither stops nor restarts work.
+  for(const pid of pids)expect(processCommand(pid)).toContain(`${SERVE_ENTRY} serve`);expect(processesWith(marker)).toHaveLength(1);await Bun.sleep(1000);});
+ await hub.login();await reconnected();
+ // Reconnect reconciles the same run: still running at its version, one supervised child, one provider round, the same serve processes.
+ const reconciled=await s.run(sleeper.runId);expect({state:reconciled.state,version:reconciled.version}).toEqual({state:'running',version:running.version});expect(reconciled.lastLocalSeq).toBeGreaterThanOrEqual(running.lastLocalSeq);
+ expect(processesWith(marker)).toHaveLength(1);expect(calls(1)).toEqual([{reply:'tool',toolName:'shell_exec'}]);expect(trial.targets.map(t=>t.serve.pid)).toEqual(pids);
+ // No implicit takeover: the human controller is unchanged, and a cancel after the restart stops exactly the owned child.
+ const current=await s.read();expect(current.controller?.controllerLeaseId).toBe(s.controller.controllerLeaseId);
+ await hub.call(`${s.runs}/${sleeper.runId}/cancel`,{expectedRunVersion:reconciled.version,expectedSessionVersion:current.version,controller:s.controller,reason:'Stop after the Hub restart'});
+ await hub.wait(()=>s.run(sleeper.runId),r=>r.state==='cancelled');await hub.wait(async()=>processesWith(marker),found=>found.length===0,6000);
+ // An approval pending across a second restart applies once afterwards: no effect before Allow once, exactly one patch and one final round after.
+ const patch=await s.send(2,'write an approved native patch');await hub.wait(()=>s.run(patch.runId),r=>r.state==='waiting-approval');
+ await trial.restartHub(async()=>{await Bun.sleep(500);});await hub.login();await reconnected();
+ expect((await s.run(patch.runId)).state).toBe('waiting-approval');expect(existsSync(path.join(target.cwd,'trial-edit-2.txt'))).toBe(false);expect(calls(2)).toEqual([{reply:'tool',toolName:'apply_patch'}]);
+ await s.approveOnce(patch.runId);await hub.wait(()=>s.run(patch.runId),r=>r.state==='succeeded'&&r.result?.checksKind==='RunChecks');
+ expect(readFileSync(path.join(target.cwd,'trial-edit-2.txt'),'utf8')).toBe('deterministic native edit 2\n');expect(calls(2)).toEqual([{reply:'tool',toolName:'apply_patch'},{reply:'text'}]);
+ // History kept every turn in order across both restarts.
+ expect((await hub.call<Control['HistoryPage']>(`${s.base}/history`)).messages.map(m=>[m.historyCursor,m.role])).toEqual([[1,'human'],[2,'tool-summary'],[3,'human'],[4,'tool-summary'],[5,'assistant']]);
+ // Each serve reported only its lost connection, and the untouched machine stayed separately scoped.
+ for(const t of trial.targets){const seen=notices(t);expect(seen.length).toBeGreaterThan(0);expect(new Set(seen)).toEqual(new Set(['machine-disconnected']));}
+ expect(trial.provider.calls.filter(c=>c.machine===other.machine)).toEqual([]);expect(trial.provider.unexpected).toEqual([]);
+ }finally{killGroup(marker);await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
+},180000);

@@ -181,6 +181,39 @@ describe("runCheckAc", () => {
     }
   });
 
+  test("askJev: false takes the deterministic path the check takes without Jev, even with the opt-in and a credential", async () => {
+    const root = await realRepo();
+    try {
+      const dir = await frozenFlow(root, "Jev withheld");
+      await writeFile(path.join(root, ".metaproject", "tasks.config.json"), JSON.stringify({ review: { jev: { ac_check: true } } }));
+      let fetchCalls = 0;
+      const fetchFn = (async () => { fetchCalls += 1; return new Response("{}", { status: 200 }); }) as unknown as typeof fetch;
+      const withheld = await runCheckAc(root, dir, { askJev: false, noCache: true }, { gitSpawn: fakeGitSpawn(DIFF_WITH_CHECK_AC), fetchFn, env: { OPENROUTER_API_KEY: "sk-or-fixture-key" } });
+      const plain = await runCheckAc(root, dir, { noCache: true }, { gitSpawn: fakeGitSpawn(DIFF_WITH_CHECK_AC) });
+      expect(fetchCalls).toBe(0);
+      expect(withheld.jevAsked).toBe(false);
+      expect(withheld.verdicts).toEqual(plain.verdicts);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("persist: false computes the same result without writing the cache file", async () => {
+    const root = await realRepo();
+    try {
+      const dir = await frozenFlow(root, "Not persisted");
+      const result = await runCheckAc(root, dir, { persist: false }, { gitSpawn: fakeGitSpawn(DIFF_WITH_CHECK_AC) });
+      expect(result.cached).toBe(false);
+      expect(await readAcCheckCache(acCheckCachePath(root, dir))).toBeUndefined();
+      // A cache written by an earlier local run is still read back, exactly as without the option.
+      const written = await runCheckAc(root, dir, {}, { gitSpawn: fakeGitSpawn(DIFF_WITH_CHECK_AC) });
+      const read = await runCheckAc(root, dir, { persist: false }, { gitSpawn: fakeGitSpawn(DIFF_WITH_CHECK_AC) });
+      expect(read).toMatchObject({ cached: true, verdicts: written.verdicts, at: written.at });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("a Jev failure degrades to facts-only and is never fatal", async () => {
     const root = await realRepo();
     try {

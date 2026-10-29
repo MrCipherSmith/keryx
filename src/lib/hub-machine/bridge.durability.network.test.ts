@@ -17,7 +17,10 @@ test('R4.4 a log flood across a Hub restart keeps the terminal event, one contig
  const offline=await h.sqlite(h.ledgerFile(m.state),db=>db.query<{seq:number;sent:number;acked:number},[string]>('SELECT seq,sent,acked FROM machine_events WHERE stream=? ORDER BY seq').all(`run:${runId}`));
  const ackedOffline=offline.filter(row=>row.acked===1).map(row=>row.seq);expect(ackedOffline).toEqual(ackedOffline.length?Array.from({length:ackedOffline.length},(_,i)=>offline[0]!.seq+i):[]);
  await h.restartHub();await wait(async()=>m.bridge.connected,v=>v);
- const run=await s.waitRun(runId,v=>v.state==='succeeded',1500);
+ // The run's last event is result-ready, which the machine appends after the terminal state once Hub holds the result. The terminal
+ // condition is Hub's cursor reaching that event, not the succeeded state alone (Hub can show succeeded one event before it).
+ const lastSeq=await wait(()=>h.sqlite(h.ledgerFile(m.state),db=>db.query<{seq:number},[string]>("SELECT seq FROM machine_events WHERE stream=? AND json_extract(payload,'$.kind')='result-ready'").get(`run:${runId}`)?.seq),v=>v!==undefined);
+ const run=await s.waitRun(runId,v=>v.state==='succeeded'&&v.lastLocalSeq!>=lastSeq!,1500);
  const events:RunEvent[]=[];for(let after=0;;){const page=await s.events(runId,after);if(page.length===0)break;events.push(...page);after=page.at(-1)!.localSeq;if(after>=run.lastLocalSeq!)break;}
  // Hub holds every sequence number exactly once: each retained event, or a gap event covering exactly the next discarded range.
  let next=1;for(const e of events){if(e.kind==='log-gap'){expect(e.fromSeq).toBe(next);expect(e.localSeq).toBe(e.toSeq+1);}else expect(e.localSeq).toBe(next);next=e.localSeq+1;}expect(next-1).toBe(run.lastLocalSeq!);

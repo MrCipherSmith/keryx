@@ -24,15 +24,16 @@ test("local analysis diff is fixed, supervised, bounded and disables repository 
   } finally { await runtime.stop(); await rm(cwd, { recursive: true, force: true }); }
 });
 
-test("Flow-free read port exists without any Jev service and exposes only the owned fixed GH read", async () => {
+test("Flow-free read port exists without any Jev service and exposes only the owned fixed GH read and the AC check's hardened git read", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-owned-read-port-")); let spawned = 0;
   const runtime = createNativeSessionRuntime({ cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m",
     spawner: async () => { spawned++; const proc = Bun.spawn(["bun", "-e", 'process.stdout.write("[]")'], { cwd, stdout: "pipe", stderr: "pipe", detached: true });
       return superviseSpawnedProcess(proc, { kill(signal) { try { process.kill(-proc.pid, signal); } catch { /* The process group already exited. */ } } }); } });
   try {
     expect(runtime.commandPolicy("a".repeat(64)).analysis).toBeUndefined();
-    const port = runtime.analysisReadPort(); expect(Object.keys(port)).toEqual(["ciSpawn"]);
-    await expect(port.ciSpawn(["gh", "auth", "token"], cwd)).rejects.toThrow("invalid-argv"); expect(spawned).toBe(0);
+    const port = runtime.analysisReadPort(); expect(Object.keys(port)).toEqual(["ciSpawn", "acCheckGit"]);
+    await expect(port.ciSpawn(["gh", "auth", "token"], cwd)).rejects.toThrow("invalid-argv");
+    await expect(port.acCheckGit!(["git", "log"], { cwd })).rejects.toThrow("invalid-argv"); expect(spawned).toBe(0);
     expect(await port.ciSpawn(["gh", "run", "list", "--branch", "feature", "--json", "databaseId,conclusion,workflowName,headBranch,createdAt", "-L", "20"], cwd)).toEqual({ stdout: "[]", stderr: "", exitCode: 0 });
     expect(spawned).toBe(1); expect(runtime.jobs.list()[0]?.status).toBe("completed");
     const inspection = runtime.commandContributions().filter((item) => item.entry.handlerId.endsWith(".inspect")).map((item) => [item.entry.commandName, item.entry.availability]);

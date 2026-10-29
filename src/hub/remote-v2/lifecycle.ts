@@ -1,4 +1,5 @@
 import {resumeProved} from './closure';
+import {resumableAfterLost} from './recovery';
 import type { Control, FrameOf } from "../../remote-control/protocol";
 import { fail } from "../domain";
 import type { HubStore } from "../store";
@@ -30,8 +31,9 @@ export function createLifecycleOperations(store: HubStore, deps: SessionDependen
     if (action === "resume") {
       resumeProved(store.remote,row);
       const request = control("SessionResume", input); version(row.record.historyVersion, request.expectedHistoryVersion);
-      if (request.expectedWorkspaceBaseline !== row.record.workspaceBaseline || !row.baselineVerified) fail(409, "workspace-conflict", "Measured workspace baseline differs");
-      if (row.record.state === "recovery-required" || row.record.activeRunId) fail(409, "recovery-required", "Runtime ownership must be reconciled before resume");
+      const lost = resumableAfterLost(store.remote, row);
+      if (request.expectedWorkspaceBaseline !== row.record.workspaceBaseline || (!row.baselineVerified && !lost)) fail(409, "workspace-conflict", "Measured workspace baseline differs");
+      if ((row.record.state === "recovery-required" && !lost) || row.record.activeRunId) fail(409, "recovery-required", "Runtime ownership must be reconciled before resume");
     }
     const kind = action === "resume" ? "resume-session" : "close-session";
     sessionCommand(store.remote, machine(store.remote, row.record.machineId), row, auth, operationId, kind, input);
@@ -68,7 +70,8 @@ export function createLifecycleOperations(store: HubStore, deps: SessionDependen
       resumeProved(store.remote,target);
       const { sessionId: _sessionId, ...resume } = args;
       const request = control("SessionResume", resume); version(target.record.version, request.expectedSessionVersion); held(target, auth, request.controller); version(target.record.historyVersion, request.expectedHistoryVersion);
-      if (target.record.workspaceBaseline !== request.expectedWorkspaceBaseline || !target.baselineVerified || target.record.activeRunId || target.record.state === "recovery-required" || target.pending) fail(409, "recovery-required", "Target native session requires reconciliation");
+      const lost = resumableAfterLost(store.remote, target);
+      if (target.record.workspaceBaseline !== request.expectedWorkspaceBaseline || (!target.baselineVerified && !lost) || target.record.activeRunId || (target.record.state === "recovery-required" && !lost) || target.pending) fail(409, "recovery-required", "Target native session requires reconciliation");
       target.resumingOperationId=operationId;saveSession(store.remote,target);
       receipt = { receiptId: id(), operationId, sessionId: target.record.sessionId, kind: "resume-session", status: "pending", observedSessionVersion: target.record.version, session: target.record, reason: "none" };
     }
@@ -93,7 +96,8 @@ export function authorizeLifecycle(repo:import('./storage').RemoteRepository,row
  const resume=(target:SessionRow,request:Control['SessionResume'])=>{
   resumeProved(repo,target);
   version(target.record.version,request.expectedSessionVersion);held(target,command.authority,request.controller);version(target.record.historyVersion,request.expectedHistoryVersion);
-  if(!target.baselineVerified||target.record.workspaceBaseline!==request.expectedWorkspaceBaseline||target.record.activeRunId||target.record.state==='recovery-required'||(target.pending&&target.pending.operationId!==command.operationId))fail(409,'recovery-required','Lifecycle target ownership or workspace changed');
+  const lost=resumableAfterLost(repo,target,command.operationId);
+  if((!target.baselineVerified&&!lost)||target.record.workspaceBaseline!==request.expectedWorkspaceBaseline||target.record.activeRunId||(target.record.state==='recovery-required'&&!lost)||(target.pending&&target.pending.operationId!==command.operationId))fail(409,'recovery-required','Lifecycle target ownership or workspace changed');
   inventory(target,false);
  };
  const fork=(request:Control['SessionFork'])=>{held(row,command.authority,request.controller);version(row.record.historyVersion,request.expectedHistoryVersion);if(row.record.activeRunId||request.throughHistoryCursor>row.record.historyCursor||request.targetCheckoutId===row.record.checkoutId)fail(409,'stale-reference','Fork source history or target changed');};

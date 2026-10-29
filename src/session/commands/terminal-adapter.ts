@@ -6,6 +6,7 @@ import { parseDemoteCommand } from "../../commands/agent-commands";
 import { parseGoalArgs } from "../../commands/goal-command";
 import { parseSetupArgs } from "../../commands/setup-guide";
 import { executePlanCommand } from "./plan";
+import { boundedCommandText } from "./handlers";
 import { parseTrailArgs } from "../../tui/working-memory-command";
 import { parseAutoReviewArgs } from "../../tui/autoreview-surface";
 import { parseBusCommand } from "../../tui/bus-command";
@@ -16,7 +17,8 @@ import { parseProjectContextCommand } from "../../tui/project-context-inspector"
 import { parseDecisionsCommand } from "../../tui/decisions-surface";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand } from "../../tui/reviews-inspector";
 import { parseTasksArgs } from "../../tui/tasks-command";
-import { parseAcText, parseApprovalsText, parseConnectText, parseFlowOriginText, parseFlowsText, parseHistoryText, parseInspectorDetail, parseMcpText, parseModelText, parseProjectContextTab, parseQueueText, parseQuestionAnswerText, parseReviewsText, parseRewindText, parseRoutingText, parseSessionsText, parseTriggersText, parseWorkspaceText,
+import { SEARCH_PROVIDER_IDS } from "./settings-inspection";
+import { parseAcText, parseApprovalsText, parseCiText, parseConformText, parseConnectText, parseGuardText, parseFlowOriginText, parseFlowsText, parseHistoryText, parseInspectorDetail, parseMcpText, parseModelText, parseProjectContextTab, parseQueueText, parseQuestionAnswerText, parseReviewsText, parseRewindText, parseRoutingText, parseSearchConnectText, parseSessionsText, parseTriggersText, parseWorkspaceText,
   refuse, typed, type TerminalCommandParse, type TerminalQueueAction } from "./terminal-grammar";
 
 type Args = { [key: string]: Control["BoundedJson"] };
@@ -87,6 +89,7 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
     return arg === "on" || arg === "off" ? typed("route.set", { enabled: arg === "on" }) : refuse("route", `Unknown /route argument '${arg}'. Usage: /route [on|off]`);
   },
   model: (rest) => parseModelText(rest),
+  "search-connect": (rest) => parseSearchConnectText(rest, SEARCH_PROVIDER_IDS),
   connect: (rest) => parseConnectText(rest),
   mcp: (rest) => parseMcpText(rest),
   routing: (rest) => parseRoutingText(rest),
@@ -97,6 +100,10 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
   ac: (rest) => parseAcText(rest),
   workspace: (rest) => parseWorkspaceText(rest),
   triggers: (rest) => parseTriggersText(rest),
+  // Anything without a typed text form keeps the generic refusal below.
+  guard: (rest) => parseGuardText(rest) ?? noArguments("guard", rest, "/guard takes no typed arguments in the terminal adapter."),
+  ci: (rest) => parseCiText(rest) ?? noArguments("ci", rest, "/ci takes no typed arguments in the terminal adapter."),
+  conform: (rest) => parseConformText(rest) ?? noArguments("conform", rest, "/conform takes no typed arguments in the terminal adapter."),
   flow: (rest) => parseFlowOriginText(rest),
   reviews: (rest) => parseReviewsText(rest),
   rewind: (rest) => parseRewindText(rest),
@@ -147,14 +154,16 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
     const tab = parseProjectContextTab(rest); if (tab !== undefined) return tab;
     const parsed = parseProjectContextCommand(line);
     if (parsed.kind === "invalid") return refuse("projectctx", parsed.message);
-    if (parsed.kind === "set") return refuse("projectctx", `Setting enforcement to ${parsed.mode} writes project configuration; it has no typed native request.`);
+    if (parsed.kind === "set") return typed("projectctx.set", { mode: parsed.mode });
     return typed(parsed.tab === "references" ? "projectctx.refs" : "projectctx");
   },
+  // The shipped grammar (decisions-surface.ts): the words after reason|change, joined as the TUI joins them; an empty one is the TUI's own refusal.
   decisions: (_rest, line) => {
     const parsed = parseDecisionsCommand(line);
     if (parsed.kind === "arms") return typed("decisions", { section: "arms" });
     if (parsed.kind === "show") return typed("decisions");
-    return refuse("decisions", `/decisions ${parsed.kind} carries free text that no typed native request accepts.`);
+    if (parsed.kind === "reason") return parsed.text.length === 0 ? refuse("decisions", "/decisions reason: a reason needs some text: /decisions reason <why>") : typed("decisions.reason", { text: parsed.text });
+    return parsed.choice.length === 0 ? refuse("decisions", "/decisions change: name the option: /decisions change <option id or label>") : typed("decisions.change", { choice: parsed.choice });
   },
   review: (rest, line) => {
     if (rest.length === 0) return typed("review");
@@ -273,7 +282,7 @@ export function createTerminalSessionAdapter(host: TerminalHost, authority: Term
   const refused = async (commandName: string, refusal: Refusal) => {
     const current = await host.inspect();
     const outcome = validateControl("CommandOutcome", { operationId: randomUUID(), sessionId: current.sessionId, commandName, status: "rejected", sessionVersion: current.version,
-      result: JSON.stringify({ error: refusal.reason }).slice(0, 32768), confirmationId: null, errorCode: refusal.errorCode, confirmation: null, runId: null, turnId: null });
+      result: boundedCommandText(JSON.stringify({ error: refusal.reason })), confirmationId: null, errorCode: refusal.errorCode, confirmation: null, runId: null, turnId: null });
     return outcome.ok ? outcome.value : undefined;
   };
   return {

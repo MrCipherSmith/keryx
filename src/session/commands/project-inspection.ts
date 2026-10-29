@@ -29,6 +29,8 @@ const schemas: Record<string, Control["ArgumentSchema"]> = {
   reviews: object({ section: choice("overview", "layers", "parity", "readiness", "depth") }),
   product: object({}), governance: object({}), triggers: object({ name: text }),
   decisions: object({ section: choice("show", "arms") }), integrate: object({}),
+  // The workspace inspector's Slate tab: one slate of the selected workspace, picked by the session it belongs to.
+  "workspace.slate": { type: "object", properties: { workspaceId: text, sessionId: text }, additionalProperties: false, required: ["workspaceId", "sessionId"] },
 };
 const sourceFor = (context: ProjectInspectionContext, command: string): Source =>
   ["flow", "flows", "ac"].includes(command) && context.inspectionMode !== "local-native" ? "hub-canonical" : "local-native";
@@ -81,6 +83,11 @@ const readers: Record<string, Reader> = {
   flows, flow: flows,
   ac: async (context, args) => { const selected = await flows(context, args); return isFailure(selected) ? selected : { advisoryOnly: true, flow: selected }; },
   workspace,
+  "workspace.slate": async (context, args) => {
+    if (await loadInspectorWorkspace(context.cwd, args.workspaceId!) === undefined) return failure("local-native", "not-found", "The selected local-native workspace was not found.");
+    return (await loadInspectorSlates(context.cwd, args.workspaceId!)).find((item) => item.sessionId === args.sessionId)
+      ?? failure("local-native", "not-found", "No slate of the selected session is bound to this workspace.");
+  },
   review: (context) => loadInspectorCatchUp(context.cwd),
   reviews: async (context, args) => {
     const depth = await loadReviewDepth(context.cwd);

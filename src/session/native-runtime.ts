@@ -97,10 +97,10 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
     for (const listener of processListeners) listener({ phase: "intent", intentId: intent.id });
     return spawnIntent.run(intent, async () => { try { return await registryStart(...args); } finally { if (!intent.started) emitAfterIntent({ phase: "failed", intentId: intent.id }); } });
   };
-  const readPorts = createAnalysisReadPorts({ cwd: options.cwd, runOwned: (argv, signal) => {
-    const quoted = argv.map((arg) => `'${arg.replaceAll("'", "'\\''")}'`).join(" ");
-    return ownedReads.run(jobs, `GH_PAGER=cat GH_PROMPT_DISABLED=1 ${quoted}`, signal);
-  } });
+  const quote = (argv: readonly string[]) => argv.map((arg) => `'${arg.replaceAll("'", "'\\''")}'`).join(" ");
+  const readPorts = createAnalysisReadPorts({ cwd: options.cwd, runOwned: (argv, signal) => ownedReads.run(jobs, `GH_PAGER=cat GH_PROMPT_DISABLED=1 ${quote(argv)}`, signal),
+    // No pager or prompt, and no opportunistic index refresh: a read never writes the owned checkout's index.
+    runOwnedGit: (argv, signal) => ownedReads.run(jobs, `GIT_PAGER=cat GIT_TERMINAL_PROMPT=0 GIT_OPTIONAL_LOCKS=0 ${quote(argv)}`, signal) });
   let services: NativeSessionServices | undefined;
   let retryServicesClose: (() => Promise<{ stopped: boolean }>) | undefined;
   /** Wrapped tools contributed by the attached services; a closed service's tools are no longer offered. */
@@ -270,7 +270,7 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
     },
     commandContributions() { return [...goalCommands(), ...settingsInspectionCommands(services === undefined ? {} : { port: services.settings }), ...analysisCommands({ availableCommands: options.analysis?.enabledCommands ?? [], readInspection: true }), ...tasksIntegrationsCommands(integrationPort() === undefined ? {} : { port: integrationPort()! }), ...(options.commandContributions ?? [])]; },
     /** Flow-free read port over the SAME owned jobs capture, independent of the optional Jev service. The host adds inspection authority. */
-    analysisReadPort(): NativeAnalysisReadPort { return { ciSpawn: readPorts.ciSpawn }; },
+    analysisReadPort(): NativeAnalysisReadPort { return { ciSpawn: readPorts.ciSpawn, acCheckGit: readPorts.acCheckGit }; },
     ownedGitSpawner() { return options.spawnOwnedGit; },
     integrationPort,
     modelBindings() { return structuredClone([...bindings.values()]); },

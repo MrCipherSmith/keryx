@@ -45,7 +45,9 @@ export function wireReply(machine:string,body:{messages?:WireMessage[];tools?:{f
  const offered=(body.tools??[]).some(t=>t.function?.name===selection.toolName);
  if(answered||!offered)return{call:{machine,ordinal:selection.ordinal,reply:'text'},chunks:[{delta:{role:'assistant',content:offered?TRIAL_REPLY:`keryx-trial-tool-not-offered:${selection.toolName}`},finish:'stop'}]};
  const ordinal=selection.ordinal,toolName=selection.toolName;
- const input=toolName==='shell_exec'?{command:`sleep 30; echo ${supervisedMarker(machine,ordinal)}`}:toolName==='read_file'?{path:'seed.txt'}:{patch:`diff --git a/trial-edit-${ordinal}.txt b/trial-edit-${ordinal}.txt\nnew file mode 100644\n--- /dev/null\n+++ b/trial-edit-${ordinal}.txt\n@@ -0,0 +1 @@\n+deterministic native edit ${ordinal}\n`};
+ // A crash trial outlives its serve process and the operator's recovery steps, so its supervised child sleeps longer than a cancel trial's.
+ const seconds=(messages[last]!.content as string).toLowerCase().includes('crash')?120:30;
+ const input=toolName==='shell_exec'?{command:`sleep ${seconds}; echo ${supervisedMarker(machine,ordinal)}`}:toolName==='read_file'?{path:'seed.txt'}:{patch:`diff --git a/trial-edit-${ordinal}.txt b/trial-edit-${ordinal}.txt\nnew file mode 100644\n--- /dev/null\n+++ b/trial-edit-${ordinal}.txt\n@@ -0,0 +1 @@\n+deterministic native edit ${ordinal}\n`};
  return{call:{machine,ordinal,reply:'tool',toolName},chunks:[{delta:{role:'assistant',tool_calls:[{index:0,id:`call_trial_${machine}_${ordinal}`,type:'function',function:{name:toolName,arguments:JSON.stringify(input)}}]},finish:null},{delta:{},finish:'tool_calls'}]};
 }
 /** A loopback OpenAI-compatible endpoint per machine path prefix (`/<machine>/v1/chat/completions`). No vendor is ever reached. */
@@ -60,16 +62,20 @@ function startLoopbackProvider(){
  }});
  return{origin:server.url.origin,calls,unexpected,stop:()=>server.stop(true)};
 }
-/** Only what the serve child needs; nothing from the operator's environment beyond PATH reaches it. */
-function scrubbedEnv(machineRoot:string):Record<string,string>{
- return{PATH:process.env.PATH??'/usr/bin:/bin:/usr/sbin:/sbin',HOME:path.join(machineRoot,'home'),XDG_DATA_HOME:path.join(machineRoot,'data'),XDG_CONFIG_HOME:path.join(machineRoot,'xdg-config'),XDG_CACHE_HOME:path.join(machineRoot,'xdg-cache'),XDG_STATE_HOME:path.join(machineRoot,'xdg-state'),TMPDIR:path.join(machineRoot,'tmp'),LANG:'C.UTF-8',NO_COLOR:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0'};
+/** Only what the serve child needs; nothing from the operator's environment beyond PATH reaches it. A packaged candidate's own bin
+ * directory goes first on PATH, so its builtin hook launcher resolves to that exact installation. */
+function scrubbedEnv(machineRoot:string,binDir?:string):Record<string,string>{
+ const inherited=process.env.PATH??'/usr/bin:/bin:/usr/sbin:/sbin';
+ return{PATH:binDir?`${binDir}:${inherited}`:inherited,HOME:path.join(machineRoot,'home'),XDG_DATA_HOME:path.join(machineRoot,'data'),XDG_CONFIG_HOME:path.join(machineRoot,'xdg-config'),XDG_CACHE_HOME:path.join(machineRoot,'xdg-cache'),XDG_STATE_HOME:path.join(machineRoot,'xdg-state'),TMPDIR:path.join(machineRoot,'tmp'),LANG:'C.UTF-8',NO_COLOR:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0'};
 }
 const gitEnv={...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1',GIT_TERMINAL_PROMPT:'0'};
 export const SERVE_ENTRY=path.resolve(import.meta.dir,'../../cli.ts');
 export interface ServeChild{pid:number;argv:string[];stdout:string[];stderr:string[];exited:Promise<number>;servePort:number;serveToken:string}
-async function startServeChild(machineRoot:string):Promise<ServeChild>{
- const argv=[process.execPath,'--no-env-file','--config=/dev/null',SERVE_ENTRY,'serve','--port','0'];
- const handle=Bun.spawn(argv,{cwd:machineRoot,stdin:'ignore',stdout:'pipe',stderr:'pipe',env:scrubbedEnv(machineRoot)});
+/** The shipped CLI entry run from source, or an absolute packaged `keryx` executable (a native candidate's compiled bin/keryx). */
+const serveCommand=(candidate?:string)=>candidate?[candidate]:[process.execPath,'--no-env-file','--config=/dev/null',SERVE_ENTRY];
+async function startServeChild(machineRoot:string,candidate?:string):Promise<ServeChild>{
+ const argv=[...serveCommand(candidate),'serve','--port','0'];
+ const handle=Bun.spawn(argv,{cwd:machineRoot,stdin:'ignore',stdout:'pipe',stderr:'pipe',env:scrubbedEnv(machineRoot,candidate?path.dirname(candidate):undefined)});
  const stdout:string[]=[],stderr:string[]=[];
  const follow=(stream:ReadableStream<Uint8Array>,lines:string[])=>(async()=>{const decoder=new TextDecoder();let rest='';for await(const chunk of stream){rest+=decoder.decode(chunk,{stream:true});const parts=rest.split('\n');rest=parts.pop()!;lines.push(...parts);}if(rest)lines.push(rest);})();
  const drained=Promise.all([follow(handle.stdout,stdout),follow(handle.stderr,stderr)]);
@@ -85,13 +91,21 @@ async function stopServeChild(child:ServeChild):Promise<number>{
  const forced=setTimeout(()=>{try{process.kill(child.pid,'SIGKILL');}catch{/* already exited */}},15000);
  try{return await child.exited;}finally{clearTimeout(forced);}
 }
+/** Asynchronous on purpose: the Hub runs in the test process and must keep answering while an operator command talks to serve. */
+async function runOperatorCommand(machineRoot:string,args:string[],candidate?:string):Promise<{exitCode:number;stdout:string;stderr:string}>{
+ const handle=Bun.spawn([...serveCommand(candidate),...args],{cwd:machineRoot,stdin:'ignore',stdout:'pipe',stderr:'pipe',env:scrubbedEnv(machineRoot,candidate?path.dirname(candidate):undefined)});
+ const forced=setTimeout(()=>handle.kill('SIGKILL'),30000);
+ try{const[stdout,stderr,exitCode]=await Promise.all([new Response(handle.stdout).text(),new Response(handle.stderr).text(),handle.exited]);return{exitCode,stdout,stderr};}finally{clearTimeout(forced);}
+}
 /** `contextRoot`: the machine's own keryx-managed Hub context cache (never inside the checkout). */
 export interface TrialTarget{machine:string;machineId:string;checkoutId:string;cwd:string;configDir:string;machineRoot:string;hookLog:string;contextRoot:string;machinePolicyDigest:string;serve:ServeChild}
-export async function startMachineTrial(options:{port?:number;root?:string}={}){
+/** `candidate`: run every machine's serve from that absolute packaged executable instead of the checkout's source CLI. */
+export async function startMachineTrial(options:{port?:number;root?:string;candidate?:string}={}){
+ if(options.candidate!==undefined&&!path.isAbsolute(options.candidate))throw new Error('trial-candidate-not-absolute');
  // A darwin owner socket path must stay under 104 bytes, so the trial root is short and real (startup.test.ts does the same).
  const root=options.root??mkdtempSync(process.platform==='darwin'?'/private/tmp/keryx-serve-trial-':path.join(realpathSync(tmpdir()),'keryx-serve-trial-'));mkdirSync(root,{recursive:true,mode:0o700});const operatorToken=`trial-operator-${randomBytes(32).toString('base64url')}`;const reviewerToken=`trial-reviewer-${randomBytes(32).toString('base64url')}`;const agentToken=`trial-agent-${randomBytes(32).toString('base64url')}`;
  const provider=startLoopbackProvider();
- const hub=startHub({host:'127.0.0.1',port:options.port??0,dataDir:path.join(root,'hub'),operatorToken,reviewerToken,agentToken});const origin=hub.url.origin;
+ let hub=startHub({host:'127.0.0.1',port:options.port??0,dataDir:path.join(root,'hub'),operatorToken,reviewerToken,agentToken});const origin=hub.url.origin;
  async function request(route:string,body?:unknown,cookie?:string){const response=await fetch(`${origin}${route}`,{method:body===undefined?'GET':'POST',headers:{Origin:origin,...(cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json','Idempotency-Key':randomUUID()})},...(body===undefined?{}:{body:JSON.stringify(body)})});const value=await response.json() as Record<string,unknown>;if(!response.ok)throw new Error(`trial-http-${response.status}`);return{value,response};}
  const targets:TrialTarget[]=[];
  // Product code run here to write the synthetic installation (checkout mapping) also invokes git; keep it off the operator's git config.
@@ -117,12 +131,23 @@ export async function startMachineTrial(options:{port?:number;root?:string}={}){
    const issued=issueServeToken(configDir);if(!issued.ok)throw new Error(`trial-serve-token: ${issued.reason}`);if(!saveServeConfig(defaultServeConfig(issued.record.id,{address:'127.0.0.1'}),configDir))throw new Error('trial-serve-config');
    // A user-scope observe hook: proof that the shipped hook runtime is on in the serve child, without changing any decision.
    mkdirSync(path.join(env.HOME!,'.keryx'),{recursive:true,mode:0o700});writeFileSync(path.join(env.HOME!,'.keryx','hooks.json'),JSON.stringify({schemaVersion:'1.0.0',hooks:{PreToolUse:[{id:'trial-observer',matcher:'.*',class:'observe',command:{argv:['/bin/sh','-c','/bin/cat >> "$KERYX_PROJECT_ROOT/.metaproject/trial-hook-events.jsonl"; echo >> "$KERYX_PROJECT_ROOT/.metaproject/trial-hook-events.jsonl"']}}]}}));
-   const serve=await startServeChild(machineRoot);serve.serveToken=issued.token;
+   const serve=await startServeChild(machineRoot,options.candidate);serve.serveToken=issued.token;
    targets.push({machine,machineId:enrolled.machineId,checkoutId,cwd:realpathSync(cwd),configDir,machineRoot,hookLog,contextRoot:path.join(machineStateDir(configDir,hubId),'context'),machinePolicyDigest:canonicalDigest(policy),serve});
   }
   const credentialsFile=path.join(root,'operator-token');protectedWrite(credentialsFile,operatorToken,true);
   let stopped:Promise<number[]>|undefined;
-  return {root,origin,projectId:project.id,targets,credentialsFile,provider:{calls:provider.calls,unexpected:provider.unexpected},stop(remove=false){stopped??=stopAll().then(codes=>{if(remove)rmSync(root,{recursive:true,force:true});return codes;});return stopped;}};
+  return {root,origin,hubId:hubIdentity(origin),projectId:project.id,targets,credentialsFile,provider:{calls:provider.calls,unexpected:provider.unexpected},
+   /** SIGKILL, like an out-of-memory kill or a power loss: serve drains nothing, so its daemon lock, leases and launch tombstones stay behind. */
+   async crashServe(target:TrialTarget){process.kill(target.serve.pid,'SIGKILL');return target.serve.exited;},
+   /** A fresh `keryx serve` for the same installation (same synthetic HOME/XDG and serve token); `target.serve` then names the new process. */
+   async restartServe(target:TrialTarget){const token=target.serve.serveToken;target.serve=await startServeChild(target.machineRoot,options.candidate);target.serve.serveToken=token;return target.serve;},
+   /** The operator's Ctrl-C on one machine; its exit code. */
+   stopServe:(target:TrialTarget)=>stopServeChild(target.serve),
+   /** An operator's own `keryx <args>` on that machine: the shipped CLI entry in the installation's environment, never an in-process call. */
+   operator:(target:TrialTarget,args:string[])=>runOperatorCommand(target.machineRoot,args,options.candidate),
+   /** Stops the Hub process and starts a replacement on the same port and data directory while every serve child keeps running. */
+   async restartHub(between?:()=>Promise<void>|void){await hub.stop(true);await between?.();hub=startHub({host:'127.0.0.1',port:Number(new URL(origin).port),dataDir:path.join(root,'hub'),operatorToken,reviewerToken,agentToken});},
+   stop(remove=false){stopped??=stopAll().then(codes=>{if(remove)rmSync(root,{recursive:true,force:true});return codes;});return stopped;}};
  }catch(cause){await stopAll();if(options.root===undefined)rmSync(root,{recursive:true,force:true});throw cause;}
 }
 if(import.meta.main){

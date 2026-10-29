@@ -29,7 +29,8 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
     if (next.version < row.record.version) fail(409, "stale-version", "Applied machine projection regressed");
     if (next.workspaceBaseline === "0".repeat(64) && next.state !== "opening") fail(409, "workspace-conflict", "Measured baseline required for ready session");
     if(next.state==='closed')row.closedProof={eventSeq:event.sessionEventSeq,epoch:m.epoch,ledgerId:m.ledgerId,receivedAt:new Date().toISOString()};else delete row.closedProof;
-    row.record = { ...next, sessionEventCursor: event.sessionEventSeq }; row.baselineVerified = next.state !== "opening";
+    // The machine's own applied projection supersedes Hub's overlay of a human lost resolution.
+    row.record = { ...next, sessionEventCursor: event.sessionEventSeq }; row.baselineVerified = next.state !== "opening"; delete row.lostRecovery;
     row.controllerVersion = next.controller?.version ?? row.controllerVersion;
     const pendingDelivery=row.pending&&repo.get<StoredCommand>('remote_command',row.pending.commandId);
     if (row.pending && next.version >= row.pending.expectedAppliedVersion && applicationObserved(repo,row,pendingDelivery,next)) {

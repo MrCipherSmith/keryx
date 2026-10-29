@@ -18,7 +18,8 @@ for (let index = 0; index < args.length; index++) {
 }
 const freshness = Bun.spawn([process.execPath, "scripts/build-hub-web.ts", "--check"], { cwd: root, stdout: "inherit", stderr: "inherit" });
 if (await freshness.exited !== 0) throw new Error("Refusing to package stale frontend assets");
-const files: string[] = ["src/flow/machine.ts", "src/flow/types.ts", "scripts/package-team-hub.ts", "scripts/build-hub-web.ts", "scripts/smoke/team-hub.ts", "scripts/smoke/team-hub-remote.ts", "LICENSE"];
+// src/lib/git-revision.ts: the revision-operand guard src/hub/git-delivery.ts and src/hub/connector.ts import at runtime.
+const files: string[] = ["src/flow/machine.ts", "src/flow/types.ts", "src/lib/git-revision.ts", "scripts/package-team-hub.ts", "scripts/build-hub-web.ts", "scripts/smoke/team-hub.ts", "scripts/smoke/team-hub-remote.ts", "LICENSE"];
 async function include(directory: string, allowed: (name: string) => boolean) {
   for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
     if (entry.isSymbolicLink()) throw new Error("Refusing symlink in release inputs: " + entry.name);

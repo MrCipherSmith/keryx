@@ -19,6 +19,22 @@ test('SQLite command claim survives restart and conflicts on changed payload', (
     expect(() => l.claim({ ...command, digest: 'b'.repeat(64) })).toThrow('payload-conflict');
     l.close();
 });
+test('the inventory publication version replays for identical content and only grows on change, across daemon restarts', () => {
+    const f = file(), first = 'a'.repeat(64), changed = 'b'.repeat(64);
+    let l = new MachineLedger(f);
+    expect(l.publicationVersion(first)).toBe(1);
+    expect(l.publicationVersion(first)).toBe(1);
+    l.close();
+    l = new MachineLedger(f);
+    expect(l.publicationVersion(first)).toBe(1);
+    expect(l.publicationVersion(changed)).toBe(2);
+    l.close();
+    l = new MachineLedger(f);
+    // Content that returns to an earlier state is still a change: the version never goes back.
+    expect(l.publicationVersion(first)).toBe(3);
+    expect(l.publicationVersion(first)).toBe(3);
+    l.close();
+});
 test('prestart tombstone becomes unknown on restart and is never an automatic retry', () => {
     const f = file();
     let l = new MachineLedger(f);

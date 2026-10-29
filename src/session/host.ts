@@ -12,7 +12,7 @@ import { openLeasedSession, releaseSessionLease } from "./lease";
 import { persistHistory, forkSession, loadArchive, loadContext } from "./store";
 import { compactMessages } from "./compact";
 import { createHostCommandCatalogue } from "./commands/catalogue";
-import { executeSessionCommand } from "./commands/handlers";
+import { deliverableCommandOutcome, executeSessionCommand } from "./commands/handlers";
 import type { SessionCommandContext } from "./commands/handlers";
 import type { SessionCommandEffect, SessionCommandInspection } from "./commands/effects";
 import { executePlanCommand, sessionRestrictionDigest, type SessionRestriction } from "./commands/plan";
@@ -24,6 +24,7 @@ import { fetchBoundedAnalysis } from "./native-analysis-transport";
 import { OWNED_CONTROL_COMMANDS, type OwnedControlCommand } from "../remote-control/owned-controls";
 import { lifecycleCommands, lifecycleMutationCommands, type SessionLifecycleInput } from "./host-lifecycle";
 import { createSessionUserQuestions } from "./user-questions";
+import { createNativeQuestionJournal } from "./question-journal";
 import { createSessionApprovalService, type SessionApprovalQuestion, type SessionApprovalOutcome } from "./question-service";
 import type { NativeCheckObservation, NativeTurnObservation, NativeTurnObservationPayload, QueuedAdmissionAuthority, SessionHostOptions, SessionHostOperation, SessionHostPort, SessionHostReceipt, SessionOwnedResource, SessionPageQuery } from "./host-types";
 export type * from "./host-types";
@@ -50,6 +51,8 @@ const SETTLE_BOUND_MS = 2000;
 const SERVICE_CLOSE_BOUND_MS = 6000;
 /** The frozen native decision window: an approval or confirmation card stays answerable for 120 s. */
 const DECISION_TTL_MS = 120_000;
+/** Shown when the decision journal could not record a question; the question itself went on, exactly as without the journal. */
+const DECISION_JOURNAL_NOTE = "The decision journal could not record this question; it was asked without a journal record.";
 /** The human step after a turn stopped for a changed pinned Flow (frozen spec: drift is visible and the original pins stay). */
 const FLOW_DRIFT_RECEIPT = "The pinned Flow changed during this turn, so it stopped before its next action. Review the change and start a new turn with the current Flow.";
 async function within<T>(task: Promise<T>, fallback: T, ms: number): Promise<T> {
@@ -224,7 +227,11 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     deliver: (question) => publishMessage("assistant", [question.question, ...question.options.map((option) => `${option.id}: ${option.label} — ${option.description}`),
       question.allowFreeform ? "You may give your own answer." : "", `Question ${question.questionId}`].filter(Boolean).join("\n"), question.runId, question.turnId),
   });
-  options.runtime.bindAskUser(questions.ask);
+  // Every question is journaled as the TUI journals it (decisions journal, this session's id); the question service still shows and bounds it.
+  const questionJournal = createNativeQuestionJournal({ cwd: options.cwd, session: record.sessionId, ask: questions.ask, admissible: questions.admissible,
+    notify: (text) => publishMessage("system-receipt", text, active?.runId ?? null, active?.turnId ?? null),
+    note: () => publishMessage("system-receipt", DECISION_JOURNAL_NOTE, active?.runId ?? null, active?.turnId ?? null) });
+  options.runtime.bindAskUser(questionJournal.ask);
   const onLeaseLost = () => {
     options.runtime.detachSession();
     selecting?.abort.abort(new SessionHostError("native-lease-lost"));
@@ -435,13 +442,14 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
                 rewindPending = false; persist(); return value;
               } catch (cause) { commandOwnershipUnknown = true; if (token !== undefined) await options.workspace.afterEffect!(token, { isError: true }); persist(); throw cause; }
             },
-            async mutate<T>(_kind: "analysis-cache", paths: readonly string[], write: () => Promise<T>): Promise<T> {
+            async mutate<T>(kind: "analysis-cache" | "project-record", paths: readonly string[], write: () => Promise<T>): Promise<T> {
               if (turnRestriction.enabled) throw new SessionHostError("readonly-session-restriction");
-              await io.beforeAction!({ kind: "tool", toolName: "analysis_cache_write", signal: abort.signal });
+              const toolName = kind === "project-record" ? "project_record_write" : "analysis_cache_write";
+              await io.beforeAction!({ kind: "tool", toolName, signal: abort.signal });
               if (paths.length === 0 || paths.length > 20 || paths.some((path) => path.length === 0 || path.length > 500 || path.startsWith("/") || path.split(/[\\/]/).some((part) => part === ".." || part === ".git"))
                 || options.workspace.beforeEffect === undefined || options.workspace.afterEffect === undefined) throw new SessionHostError("owned-mutation-port-required");
               let begun: Awaited<ReturnType<NonNullable<SessionHostOptions["workspace"]["beforeEffect"]>>>;
-              try { begun = await options.workspace.beforeEffect("analysis_cache_write", { paths: [...paths] }); }
+              try { begun = await options.workspace.beforeEffect(toolName, { paths: [...paths] }); }
               catch (cause) { commandOwnershipUnknown = true; throw cause; }
               if (!begun.ok) { commandOwnershipUnknown = true; throw new SessionHostError("workspace-conflict"); }
               let value: T;
@@ -483,7 +491,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         // A run whose owned work outlives it has no proven cessation: the session is fenced with it, never idle beside a live owned process.
         if (terminal.outcome === "unknown") record.state = "recovery-required";
         if (command !== undefined) {
-          const outcome = checked("CommandOutcome", { ...(completedCommand ?? { operationId: operation.operationId, sessionId: record.sessionId, commandName: command.commandName,
+          const outcome = sendable({ ...(completedCommand ?? { operationId: operation.operationId, sessionId: record.sessionId, commandName: command.commandName,
             result: null, confirmationId: null, confirmation: null, runId: operation.runId, turnId: operation.turnId, errorCode: "forbidden" }), sessionVersion: record.version,
             status: terminal.outcome === "unknown" ? "recovery-required" : terminal.outcome === "succeeded" ? "applied" : "rejected" });
           remember(operation, outcome); emit({ kind: "command-outcome", outcome });
@@ -649,7 +657,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     const configCommandName = configCommandNames.get(operation.operationId);
     if (configCommandName === undefined) emit({ kind: "config-receipt", receipt });
     else {
-      const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: configCommandName, status: receipt.status,
+      const outcome = sendable({ operationId: operation.operationId, sessionId: record.sessionId, commandName: configCommandName, status: receipt.status,
         sessionVersion: record.version, result: receipt.status === "applied" ? sessionConfigCommandResult(configCommandName, record.config, routing.availability().candidates, record.nextTurnOrdinal) : null, confirmationId: receipt.confirmation?.confirmationId ?? null, errorCode: receipt.status === "rejected" ? "forbidden" : null,
         confirmation: receipt.confirmation, runId: null, turnId: null });
       remember(operation, outcome); emit({ kind: "command-outcome", outcome });
@@ -674,10 +682,12 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   };
   const contributions = () => [...options.runtime.commandContributions(), ...lifecycleCommands(options.lifecycle !== undefined), ...rewindCommands(rewindPort !== undefined)];
   const catalogue = () => createHostCommandCatalogue(record.config.capabilityDigest, { contributions: options.runtime.commandContributions(), lifecycle: options.lifecycle !== undefined, rewind: rewindPort !== undefined });
+  /** Every command outcome the host builds passes the result check Hub applies before it is remembered or sent (handlers.ts deliverableCommandOutcome). */
+  const sendable = (value: unknown): Control["CommandOutcome"] => deliverableCommandOutcome(checked("CommandOutcome", value), catalogue());
   const commandContext = (operationId: string, effect?: SessionCommandEffect, inspection?: SessionCommandInspection): SessionCommandContext => ({ cwd: options.cwd, nativeSessionDir: handle.dir,
     inspectionMode: options.inspectionMode ?? "hub-remote", ...(options.projectContext === undefined ? {} : { projectContext: options.projectContext }),
     ...((options.configDir ?? options.dataDir) === undefined ? {} : { configDir: options.configDir ?? options.dataDir }), ...(effect === undefined ? {} : { effect, runId: effect.runId, turnId: effect.turnId }),
-    operationId, questions, restriction, ...(rewindPort === undefined ? {} : { rewind: rewindPort }), close: closeForCommand, record, catalogue: catalogue(), runtime: options.runtime, contributions: contributions(), ...(inspection === undefined ? {} : { inspection }),
+    operationId, questions, decisionJournal: { session: questionJournal.session, lastDecisionId: questionJournal.lastDecisionId }, restriction, ...(rewindPort === undefined ? {} : { rewind: rewindPort }), close: closeForCommand, record, catalogue: catalogue(), runtime: options.runtime, contributions: contributions(), ...(inspection === undefined ? {} : { inspection }),
     history: () => history, publicHistory: () => structuredClone(publicHistory), compact: (compaction) => { const result = compactMessages(history, compaction?.focus === undefined ? {} : { focus: compaction.focus });
       history.splice(0, history.length, ...result.context); archiveCursor = history.length; syncHistory(); return { removed: result.removed, noop: result.noop }; },
   });
@@ -699,7 +709,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     // Flow-free reads only: no model, environment, fetch or policy value reaches an inspection, Jev configured or not.
     const read = options.runtime.analysisReadPort();
     const context: SessionCommandInspection = { signal: abort.signal, beforeAction,
-      analysisRead: { ciSpawn: async (argv: string[], cwd: string, signal?: AbortSignal) => { await beforeAction("analysis:github-read"); return read.ciSpawn(argv, cwd, signal === undefined ? abort.signal : AbortSignal.any([abort.signal, signal])); } },
+      analysisRead: { ciSpawn: async (argv: string[], cwd: string, signal?: AbortSignal) => { await beforeAction("analysis:github-read"); return read.ciSpawn(argv, cwd, signal === undefined ? abort.signal : AbortSignal.any([abort.signal, signal])); },
+        ...(read.acCheckGit === undefined ? {} : { acCheckGit: async (argv: readonly string[], opts?: { signal?: AbortSignal; cwd?: string }) => { await beforeAction("ac-check:git-read");
+          return read.acCheckGit!(argv, { ...opts, signal: opts?.signal === undefined ? abort.signal : AbortSignal.any([abort.signal, opts.signal]) }); } }) },
     };
     return { context, current, close() { clearTimeout(deadline); inspections.delete(abort); finish(); } };
   };
@@ -826,7 +838,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         ...(approvalMode === undefined ? {} : { approvalMode }), restrictionDigest: sessionRestrictionDigest({ enabled: applied.enabled, approvalMode }, record.config.policyDigest) });
       pendingConfigurations.clear(); pendingExecutions.clear(); pendingPlans.clear();
     }
-    const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: "plan.set", status, sessionVersion: record.version,
+    const outcome = sendable({ operationId: operation.operationId, sessionId: record.sessionId, commandName: "plan.set", status, sessionVersion: record.version,
       result: status === "applied" ? restriction() : null, confirmationId: card?.confirmationId ?? null, errorCode: status === "rejected" ? "busy" : null, confirmation: card, runId: null, turnId: null });
     remember(operation, outcome); emit({ kind: "command-outcome", outcome }); emit({ kind: "session-state", session: structuredClone(record) }); return outcome;
   };
@@ -843,7 +855,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         restrictionDigest: sessionRestrictionDigest({ enabled, approvalMode: "ask" }, record.config.policyDigest) });
       pendingConfigurations.clear(); pendingExecutions.clear(); pendingPlans.clear();
     }
-    const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: "mode.ask", status: busy ? "rejected" : "applied", sessionVersion: record.version,
+    const outcome = sendable({ operationId: operation.operationId, sessionId: record.sessionId, commandName: "mode.ask", status: busy ? "rejected" : "applied", sessionVersion: record.version,
       result: busy ? null : restriction(), confirmationId: null, errorCode: busy ? "busy" : null, confirmation: null, runId: null, turnId: null });
     remember(operation, outcome); emit({ kind: "command-outcome", outcome }); emit({ kind: "session-state", session: structuredClone(record) }); return outcome;
   };
@@ -1099,7 +1111,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         const configReceipt = await applyConfig({ ...operation, kind: "config", request: { expectedSessionVersion: request.expectedSessionVersion, controller: request.controller,
           expectedConfigVersion: request.expectedConfigVersion, baselineCandidateId: proposedConfig?.baselineCandidateId ?? record.config.baselineCandidateId, reasoningEffort: effort,
           routing: proposedConfig?.routing ?? record.config.routing, busyPolicy: request.busyPolicy === "queue-at-idle" ? "queue-at-idle" : "reject" } });
-        const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: request.commandName,
+        const outcome = sendable({ operationId: operation.operationId, sessionId: record.sessionId, commandName: request.commandName,
           status: configReceipt.status, sessionVersion: record.version, result: configReceipt.status === "applied" ? sessionConfigCommandResult(request.commandName, record.config, routing.availability().candidates, record.nextTurnOrdinal) : null, confirmationId: configReceipt.confirmation?.confirmationId ?? null,
           errorCode: configReceipt.status === "rejected" ? "forbidden" : null, confirmation: configReceipt.confirmation, runId: null, turnId: null });
         return outcome;

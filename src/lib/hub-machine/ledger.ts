@@ -166,6 +166,23 @@ export class MachineLedger {
     resolveLostRun(hub:string,commandId:string,runId:string,reconciliationId:string,now=Date.now()):void{this.db.transaction(()=>{const row=this.stored(hub,commandId);if(!row||row.run!==runId)throw new MachineError('stale-reference');const key=`lost:${commandId}`,prior=this.db.query<{value:string},[string]>('SELECT value FROM machine_meta WHERE key=?').get(key);if(prior&&prior.value!==reconciliationId)throw new MachineError('payload-conflict');
         if(['received','starting','unknown'].includes(row.phase))this.db.query("UPDATE machine_commands SET phase='lost' WHERE hub=? AND id=?").run(hub,commandId);
         this.db.query('INSERT OR IGNORE INTO machine_meta(key,value) VALUES(?,?)').run(key,reconciliationId);this.db.query('INSERT OR IGNORE INTO machine_run_terminal(stream,terminalAt) VALUES(?,?)').run(`run:${runId}`,now);}).immediate();}
+    /**
+     * Version of this machine's complete inventory publication (the inventory and its capability projection), keyed by the digest of
+     * that content. Identical content replays its version, so Hub sees an agreeing replay; any change takes the next version. It is
+     * durable, so it only grows across reconnects and daemon restarts and Hub can tell a changed checkout from a conflicting replay.
+     */
+    publicationVersion(digest:string):number{
+        return this.db.transaction(()=>{
+            const row=this.db.query<{value:string},[]>("SELECT value FROM machine_meta WHERE key='inventory-publication'").get();
+            const prior:unknown=row?JSON.parse(row.value):undefined;
+            if(prior!==undefined&&(prior===null||typeof prior!=='object'||!Number.isSafeInteger((prior as {version?:unknown}).version)||typeof (prior as {digest?:unknown}).digest!=='string'))throw new MachineError('invalid-ledger-state');
+            const last=prior as {version:number;digest:string}|undefined;
+            if(last?.digest===digest)return last.version;
+            const version=(last?.version??0)+1;
+            this.db.query("INSERT INTO machine_meta(key,value) VALUES('inventory-publication',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify({version,digest}));
+            return version;
+        }).immediate();
+    }
     /** The latest native identity this ledger published for a run; a recovering daemon re-states it, it never invents one. */
     publishedNativeIdentity(stream:string):unknown{const row=this.db.query<{identity:string|null},[string]>("SELECT json_extract(payload,'$.nativeIdentity') AS identity FROM machine_events WHERE stream=? AND json_extract(payload,'$.kind')='state' AND json_extract(payload,'$.nativeIdentity') IS NOT NULL ORDER BY seq DESC LIMIT 1").get(stream);return row?.identity?JSON.parse(row.identity):undefined;}
     private eventCount():number{return this.db.query<{n:number},[]>('SELECT count(*) AS n FROM machine_events').get()!.n;}

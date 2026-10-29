@@ -94,9 +94,9 @@ test("/reasoning off sends the typed wire value none; argument-free commands sta
 test("malformed input and unknown subcommands are refused locally the way the TUI refuses them, without reaching the host", async () => {
   for (const line of ["/plan maybe", "/reasoning loud", "/tasks kill", "/tasks output job-1 x", "/route sideways", "/setup init extra", "/demote a b",
     "/goal", "/goal ship it --workspace", "/goal ship it --auto", "/intake list now", "/autoreview frobnicate", "/trail tool=", "/bus warp", "/remote-control a b",
-    "/model a b", "/connect test", "/connect frobnicate x", "/history 21", "/history 0", "/projectctx warn", "/decisions reason because", "/mcp trust revoke", "/mcp disconnect",
+    "/model a b", "/connect test", "/connect frobnicate x", "/history 21", "/history 0", "/projectctx strict", "/decisions reason", "/decisions change", "/mcp trust revoke", "/mcp disconnect",
     "/routing configure on profile=local", "/routing configure maybe profile=a candidates=a fallback=a", "/approvals allow-once", "/questions.answer q1", "/questions.answer q1 --own",
-    "/flows a b", "/ac check", "/ac flow-1 check", "/flow origin", "/flow origin flow-1 human-request --reason why", "/reviews layers", "/triggers nightly run",
+    "/flows a b", "/flows a b check", "/ac check", "/ac check flow-1", "/ac a b check", "/flow", "/flow origin flow-1 human-request", "/flow origin flow-1 agent-finding --reason \"  \"", "/flow origin a b c --reason why", "/search-connect select", "/search-connect brave extra", "/workspace a slate", "/routing categories now", "/reviews layers", "/triggers nightly run",
     "/rewind 0", "/rewind 1 sideways", "/rewind confirm", "/rewind.preview confirm", "/queue force 1", "/queue edit 1", "/queue edit", "/queue frobnicate", "/editguard on", "/jevprofile toggle"]) {
     const refused = await sends(line);
     expect({ line, sent: refused.sent.length }).toEqual({ line, sent: 0 });
@@ -113,6 +113,14 @@ test("modal-only native operations have a terminal text form that is the handler
     ["/flows flow-7", "flows", { flowId: "flow-7" }], ["/ac flow-7", "ac", { flowId: "flow-7" }], ["/workspace workspace-a", "workspace", { workspaceId: "workspace-a" }], ["/triggers nightly", "triggers", { name: "nightly" }],
     ["/flow origin flow-7", "flow", { flowId: "flow-7" }], ["/reviews depth", "reviews", { section: "depth" }], ["/projectctx last", "projectctx.last", {}], ["/projectctx references", "projectctx.references", {}],
     ["/editguard status", "editguard.status", {}], ["/jevprofile entries", "jevprofile.entries", {}], ["/rewind", "rewind", {}],
+    ["/search-connect duckduckgo", "search-connect.select", { providerId: "duckduckgo" }], ["/projectctx block", "projectctx.set", { mode: "block" }], ["/projectctx warn", "projectctx.set", { mode: "warn" }],
+    ["/flow origin", "flow.origins", {}], ["/flow origin 001 unknown --reason \"no longer known\"", "flow.origin.set", { flowId: "001", kind: "unknown", reason: "no longer known" }],
+    ["/flow origin 001 human-request --reason why --quote \"Ship it now\" --source hub-session", "flow.origin.set", { flowId: "001", kind: "human-request", reason: "why", quote: "Ship it now", source: "hub-session" }],
+    ["/workspace workspace-a slate s-1", "workspace.slate", { workspaceId: "workspace-a", sessionId: "s-1" }], ["/routing categories", "routing.categories", {}],
+    // The Flow inspector's `c` on a selected local Flow, from the /ac and the /flows modal.
+    ["/ac 002 check", "ac.check", { flowId: "002" }], ["/flows 002 check", "ac.check", { flowId: "002" }],
+    // The TUI's follow-ups to the latest decision answered in this session: the words after the verb, as the TUI joins them.
+    ["/decisions reason the fixture  said so", "decisions.reason", { text: "the fixture said so" }], ["/decisions change option-a", "decisions.change", { choice: "option-a" }],
   ] as const) {
     // Probes, MCP effects and the like are workspace-class: the operator's work mode is part of the terminal's authority.
     const sent = await sends(line, { authority: { work: adHoc } });
@@ -211,4 +219,15 @@ test("/sessions open|resume|fork send the typed lifecycle selection with every p
     const refused = await sends(line, withReads ? options : { contributions: lifecycleCommands(true) });
     expect({ line, sent: refused.sent.length, receipt: refused.receipt }).toMatchObject({ line, sent: 0, receipt: { status: "rejected", errorCode } });
   }
+});
+
+test("each owner-decided boundary is refused with its own reason, sending nothing, while the reads beside it stay typed", async () => {
+  for (const [line, reason] of [["/triggers nightly run", "keryx trigger run"], ["/triggers nightly run --confirm", "keryx trigger run"], ["/guard details", "turn guard"],
+    ["/ci 1", "GitHub"], ["/conform reference docs/reference.md", "Jev"], ["/conform target pr 1", "Jev"], ["/conform target diff", "Jev"], ["/conform clause 1", "Jev"]] as const) {
+    const refused = await sends(line);
+    expect({ line, sent: refused.sent.length }).toEqual({ line, sent: 0 });
+    expect(refused.receipt).toMatchObject({ status: "rejected", errorCode: "invalid-arguments" });
+    expect({ line, reason: String((refused.receipt as Control["CommandOutcome"]).result).includes(reason) }).toEqual({ line, reason: true });
+  }
+  for (const [line, commandName] of [["/guard", "guard"], ["/ci", "ci"], ["/conform", "conform"], ["/triggers nightly", "triggers"]] as const) expect((await sends(line)).request).toMatchObject({ commandName, arguments: commandName === "triggers" ? { name: "nightly" } : {} });
 });

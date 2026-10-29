@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { executeSettingsInspection, settingsInspectionCommands, type SettingsInspectionPort } from "./settings-inspection";
+import { executeSearchProviderSelection, executeSettingsInspection, settingsInspectionCommands, type SettingsInspectionPort } from "./settings-inspection";
 import type { SettingsSnapshot } from "../../tui/settings-model";
 const roots:string[]=[];
 afterEach(async()=>{await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
@@ -30,6 +30,20 @@ test("search inspection uses the real controller selectable/configurable reads w
  const port={search:controller,snapshot:async()=>{throw new Error("not-needed");}};
  expect(await executeSettingsInspection({cwd,config},port,"search-provider",{})).toMatchObject({ok:true,data:{configurable:expect.arrayContaining(["duckduckgo","searxng","brave"]),selected:"duckduckgo"}});
  expect(await executeSettingsInspection({cwd,config},port,"search-connect",{})).toMatchObject({ok:true,data:{selectable:["duckduckgo"],selected:"duckduckgo"}});expect(transported).toBe(false);expect(credentialRead).toBe(false);
+});
+test("search-connect.select is the shared controller's select: it persists only an already connected provider, refused as the TUI refuses",async()=>{
+ const cwd=await mkdtemp(path.join(tmpdir(),"native-search-select-"));roots.push(cwd);
+ const {SearchProviderController,createSearchProviderRegistry}=await import("../../harness/search");const {loadSearchConfig}=await import("../../lib/search-config");let transported=false;
+ const controller=new SearchProviderController(createSearchProviderRegistry({request:async()=>{transported=true;throw new Error("unexpected-network");}},()=>{throw new Error("unexpected-credential");}),cwd);
+ const port={search:controller,snapshot:async()=>{throw new Error("not-needed");}};
+ expect(await executeSearchProviderSelection(port,{providerId:"brave"})).toEqual({ok:false,error:{code:"refused",message:"Cannot select 'brave': provider is not configured."}});
+ expect(await executeSearchProviderSelection(port,{providerId:"duckduckgo"})).toEqual({ok:true,data:{selected:"duckduckgo",text:"Search provider 'duckduckgo' selected."}});
+ expect(loadSearchConfig(cwd).activeProviderId).toBe("duckduckgo");expect(transported).toBe(false);
+ expect(await executeSearchProviderSelection(port,{providerId:"bing"})).toMatchObject({ok:false,error:{code:"invalid-arguments"}});
+ expect(await executeSearchProviderSelection(undefined,{providerId:"duckduckgo"})).toMatchObject({ok:false,error:{code:"setup-required"}});
+ const entry=settingsInspectionCommands({port}).find(row=>row.entry.commandName==="search-connect.select")?.entry;
+ expect(entry).toMatchObject({mutationClass:"session",busyPolicy:"reject",confirmation:"none",availability:"available"});
+ expect(settingsInspectionCommands().find(row=>row.entry.commandName==="search-connect.select")?.entry.availability).toBe("setup-required");
 });
 test("/mode reads the actual permission mode as a required session-settings read; only its mode changes stay local-security",async()=>{
  const {createCommandCatalogue}=await import("./catalogue");

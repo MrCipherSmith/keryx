@@ -23,7 +23,3 @@ A shared persistent SessionHost owns conversation, command execution, routing, q
 Scope: macOS/Linux, one Hub process, multiple paired machines and explicit checkouts; native Keryx executor as the first coding adapter. The currently empty-tool serve assembly must be completed as part of implementation. Codex/Claude execution adapters, OpenCode, arbitrary terminals, attaching existing desktop sessions, automatic Git delivery and hosted multi-tenant service are future work.
 
 Related: [existing Hub](../team-hub-prototype/README.md), [MCP](../hub-mcp/README.md), [context watch](../hub-context-watch/README.md), [distribution](../team-hub-prototype/distribution-notes.md).
-
-## Continuation handoff — 2026-10-28
-
-See [current worktree, Hub access and remaining gates](../../handoffs/team-hub-2026-10-28.md) and [continuation prompt](../../handoffs/team-hub-continue-prompt.md). This is an unfinished implementation handoff, not a release-ready claim.

@@ -2,9 +2,18 @@ import { canonicalDigest, type Control } from "../../remote-control/protocol";
 import { fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
-import type { HumanAuthority, MachineRecord, OperationRecord, RunRow, SessionRow } from "./model";
+import type { HumanAuthority, MachineRecord, OperationRecord, QueueRow, RunRow, SessionRow } from "./model";
 import { control, id, iso, saveSession, scoped, version } from "./guards";
 export type ReconciliationRow = { report: Control["ReconciliationReport"]; receipt: Control["ReconciliationReceipt"] };
+/**
+ * A crashed session whose only uncertain run a human resolved lost. Hub then delivers a resume although it holds no verified baseline:
+ * the machine re-verifies the owned workspace before it reports the session idle, and only that projection verifies it again.
+ * `operationId` is the resume's own pending delivery at its authorization.
+ */
+export function resumableAfterLost(repo: RemoteRepository, row: SessionRow, operationId?: string): boolean {
+  const lost = row.lostRecovery ? repo.get<RunRow>("remote_run", row.lostRecovery.runId) : undefined;
+  return lost?.state === "lost" && lost.sessionId === row.record.sessionId && lost.reconciliationId === row.lostRecovery?.reconciliationId && row.record.state === "recovery-required" && row.record.activeRunId === null && (!row.pending || row.pending.operationId === operationId) && repo.unresolvedSessionRuns(row.record.sessionId) === 0;
+}
 export function reconcile(repo: RemoteRepository, machine: MachineRecord, body: Control["ReconciliationReport"], operationId: string, key: string, activeDaemon?: string | null): Control["ReconciliationReceipt"] {
   if (body.ledgerId !== machine.ledgerId || !machine.projectIds.includes(body.projectId)) fail(403, "scope-denied", "Reconciliation ledger or project denied");
   const run = repo.get<RunRow>("remote_run", body.runId);
@@ -32,7 +41,19 @@ export function resolveRun(state: HubState, repo: RemoteRepository, authority: H
   run.version++; run.reconciliationId = receipt.reconciliationId; run.observedAt = report.observedAt; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: machine.machineId, sessionId: run.sessionId, runId: run.runId });
   const row = repo.get<SessionRow>("remote_session", run.sessionId);
   if(run.state==='lost')repo.releaseRunCapacity(run.runId);
-  if (row && run.state === "lost") { if (row.pending?.commandId === run.commandId) delete row.pending; row.baselineVerified = false; saveSession(repo, row); }
+  if (row && run.state === "lost") {
+    if (row.pending?.commandId === run.commandId) delete row.pending; row.baselineVerified = false;
+    // The crashed daemon's last projection still shows the lost run active, and nothing runs it now. The session is neither busy nor
+    // idle nor closed but recovery-required, until a resume the machine re-verifies against its owned baseline. The version is kept:
+    // it stays the machine's applied session version that such a resume is pinned to.
+    if (row.record.activeRunId === run.runId) {
+      row.record = { ...row.record, state: "recovery-required", activeRunId: null, activeTurnId: null }; row.lostRecovery = { runId: run.runId, reconciliationId: receipt.reconciliationId };
+      // A restarted native host never takes queued input as authorization: its queued items come back suspended. Hub projects the
+      // same, so nothing queued behind the lost run is admitted automatically; a human reauthorizes or removes it.
+      for (const queued of repo.all<QueueRow>("remote_queue", { sessionId: run.sessionId })) if (queued.item.state === "queued" && !queued.admissionCommandId) { queued.item = { ...queued.item, state: "suspended" }; repo.put("remote_queue", queued.item.queueItemId, queued, { sessionId: queued.sessionId, projectId: queued.projectId, machineId: queued.machineId, seq: queued.item.position }); }
+    }
+    saveSession(repo, row);
+  }
   state.events.push({ sequence: (state.events.at(-1)?.sequence ?? 0) + 1, projectId: run.projectId, type: "remote-run-resolved", actorId: authority.actor.id, actorRole: authority.actor.role, entityId: run.runId, createdAt: iso() });
   return { runId: run.runId, state: run.state, version: run.version, reconciliationId: receipt.reconciliationId };
 }

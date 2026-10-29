@@ -632,6 +632,10 @@ test('a serve crash leaves the run fenced until owned process absence is proven,
   const provider=scriptedProvider([okReply]);const routing:Control['RoutingAvailability']={version:1,policyDigest:digest,capabilityDigest:digest,profileIds:['local'],candidates:[{candidateId:'scripted:m',providerId:'scripted',modelId:'m',reasoningEfforts:['none'],available:true,reason:'none',privacyClass:'local',costClass:'local'}]};
   const bridge=new MachineBridge({onNotice:recordNotice,configDir:state.configDir,enrollment:loadEnrollment(state.configDir)!,policy:state.policy,resolveProfile:async()=>({ok:true,value:{profileId:'fixture',policyDigest:digest,capabilityDigest:digest,catalogue:createCommandCatalogue(digest),routing,createRuntime:async()=>({ok:true,value:createNativeSessionRuntime({cwd:state.cwd,provider:provider.provider,providerId:'scripted',modelId:'m',availability:routing})})}})});bridges.push(bridge);await bridge.start();
   await wait(async()=>bridge.connected,value=>value);const owner=await startMachineOwnerControl(state.configDir,new Map([[state.hubId,bridge]]));owners.push(owner);
+  // The reconnected daemon cannot prove it owns a run another daemon launched: Hub shows it unknown and recovery-required before any operator step (spec section 7), and nothing is released by that.
+  const shown=await runState(runId)();expect(shown.state).toBe('unknown');
+  const lastState=async()=>(await success<{events:Array<{kind:string;state?:string;reasonCode?:string}>}>(await f!.call(`/hub/v2/projects/${f!.project.id}/runs/${runId}/events`,{cookie:f!.cookie}))).events.filter(event=>event.kind==='state').at(-1);
+  expect(await lastState()).toMatchObject({state:'unknown',reasonCode:'recovery-required'});
   const ask=(input:unknown)=>requestLocalOwnerControl(state.configDir,input);const code=(result:Awaited<ReturnType<typeof ask>>)=>result.ok?'applied':result.error.code;
   const confirm=(requestId:string)=>ask({v:1,requestId,hubId:state.hubId,operation:'confirm-run-absence',target:{runId}});
   const releaseRun=(requestId:string,reconciliationId:string)=>ask({v:1,requestId,hubId:state.hubId,operation:'release-resolved-run',target:{runId,reconciliationId}});
@@ -644,7 +648,8 @@ test('a serve crash leaves the run fenced until owned process absence is proven,
   // (b) The real process group is killed; absence is now proven by identity, never by PID or lock age.
   process.kill(-sleeper.pgid,'SIGKILL');await wait(async()=>processPresence(sleeper!),value=>value==='absent');
   const confirmed=await confirm('confirm-absent');if(!confirmed.ok||confirmed.value.kind!=='run-absence-confirmed')throw new Error(code(confirmed));expect(await confirm('confirm-absent')).toEqual(confirmed);
-  expect((await runState(runId)()).state).toBe('unknown');
+  // The run was already unknown at reconnect, so the confirmation restates nothing: it reports against that same version.
+  expect(await runState(runId)()).toMatchObject({state:'unknown',version:shown.version});expect(confirmed.value.expectedRunVersion).toBe(shown.version);
   // Nothing is released by the confirmation alone.
   expect(code(await releaseRun('release-before-human',confirmed.value.reconciliationId))).toBe('recovery-required');expect(pool()).toEqual([{runId,daemonId:crashed!.daemon.daemonId}]);
   const resolved=await success<{state:string}>(await f!.call(`/hub/v2/machines/${state.machine.machineId}/resolve-run`,{method:'POST',cookie:f!.cookie,body:{runId,expectedRunVersion:confirmed.value.expectedRunVersion,localReconciliationId:confirmed.value.reconciliationId,decision:'lost',reason:'Locally confirmed absence of the crashed daemon and its supervised process group'}}));expect(resolved.state).toBe('lost');

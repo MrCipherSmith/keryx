@@ -74,8 +74,25 @@ test("domain errors stay sanitized and bounded; direct contribution execution va
   const result = await executeProjectInspection(c, "flows", {});
   expect(result).toMatchObject({ ok: false, error: { code: "read-failed" } });
   expect(JSON.stringify(result)).not.toContain("private-token");
-  const entries = projectInspectionCommands(); expect(entries).toHaveLength(13);
+  const entries = projectInspectionCommands(); expect(entries).toHaveLength(14);
   expect(entries.map((entry) => entry.entry.commandName)).toContain("doctor");
+});
+
+test("workspace.slate opens the one slate the workspace inspector's Slate tab shows, selected by its session", async () => {
+  const c = await context(); const previous = process.env.KERYX_DATA_DIR; process.env.KERYX_DATA_DIR = path.join(c.cwd, "data");
+  try {
+    const { createSession } = await import("../store"); const { writeSlate } = await import("../slate"); const { loadInspectorSlates } = await import("../../tui/inspector-sources");
+    await new WorkspaceService({ workspaceRoot: c.cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } })
+      .create({ request: undefined, requestCorrelationId: randomUUID(), id: "workspace-slate", title: "Slates" });
+    const session = createSession({ cwd: c.cwd, title: "Bound session" });
+    await writeSlate(session.dir, () => ({ workspaceId: "workspace-slate", anchors: { root: c.cwd, touched: ["src/a.ts"] }, course: { flowRef: "042" }, seeds: [] }));
+    const [expected] = await loadInspectorSlates(c.cwd, "workspace-slate");
+    expect(expected).toMatchObject({ sessionId: session.summary.id, flowRef: "042" });
+    expect(await executeProjectInspection(c, "workspace.slate", { workspaceId: "workspace-slate", sessionId: session.summary.id })).toEqual({ ok: true, source: "local-native", data: JSON.parse(JSON.stringify(expected).replaceAll(c.cwd, ".")) });
+    expect(await executeProjectInspection(c, "workspace.slate", { workspaceId: "workspace-slate", sessionId: "another" })).toMatchObject({ ok: false, error: { code: "not-found" } });
+    expect(await executeProjectInspection(c, "workspace.slate", { workspaceId: "absent", sessionId: session.summary.id })).toMatchObject({ ok: false, error: { code: "not-found" } });
+    expect(await executeProjectInspection(c, "workspace.slate", { workspaceId: "workspace-slate" })).toMatchObject({ ok: false, error: { code: "invalid-arguments" } });
+  } finally { if (previous === undefined) delete process.env.KERYX_DATA_DIR; else process.env.KERYX_DATA_DIR = previous; }
 });
 
 test("/reviews depth reads the same per-review depth the reviews panel shows, without the bot metrics", async () => {

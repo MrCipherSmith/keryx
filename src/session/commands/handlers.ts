@@ -1,11 +1,15 @@
 import { settingsInspectionCommands } from "./settings-inspection";
 import type { NativeRewindPort } from "./rewind";
-import { validateArguments, validateControl, type Control } from "../../remote-control/protocol";
+import { LIMITS, validateArguments, validateControl, type Control } from "../../remote-control/protocol";
 import type { NativeSessionRuntime } from "../native-runtime";
 import type { NormalizedMessage } from "../../harness/provider/types";
 import { executeReasoningCommand, reasoningCommands } from "./reasoning";
 import type { SessionCommandEffect, SessionCommandInspection, SessionProjectReadPort } from "./effects";
 import { projectInspectionCommands } from "./project-inspection";
+import { acCheckCommands } from "./ac-check";
+import { decisionFollowupCommands } from "./decision-followups";
+import { projectRecordCommands } from "./project-records";
+import { routingCategoryCommands } from "./routing-categories";
 import { conversationCommands } from "./conversation";
 import type { TasksApprovalPort, TasksIntegrationsPort } from "./tasks-integrations";
 
@@ -26,6 +30,8 @@ export interface SessionCommandContext {
   close?: () => Promise<{ status: "closed" }>;
   interrupt?: () => Promise<{ status: "stopped" | "unknown" | "too-late" }>;
   questions?: SessionQuestionPort;
+  /** This session's decision journal identity: what `/decisions reason|change` act on (session-scoped, as in the TUI). */
+  decisionJournal?: { session: string; lastDecisionId(): string | undefined };
   cwd: string;
   nativeSessionDir: string;
   configDir?: string;
@@ -60,7 +66,7 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
   const entry = context.catalogue.entries.find((item) => item.commandName === request.commandName);
   let errorCode: Control["CommandOutcome"]["errorCode"] = null;
   let result: unknown = null;
-  const contribution = [...projectInspectionCommands(), ...conversationCommands(), ...questionCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...approvalModeCommands(), ...settingsInspectionCommands(), ...(context.contributions ?? [])].reverse().find((item) => item.entry.commandName === request.commandName);
+  const contribution = [...projectInspectionCommands(), ...acCheckCommands(), ...decisionFollowupCommands(), ...projectRecordCommands(), ...routingCategoryCommands(), ...conversationCommands(), ...questionCommands(), ...sessionControlCommands(), ...goalCommands(), ...sessionSettingsCommands(), ...reasoningCommands(), ...planCommands(), ...approvalModeCommands(), ...settingsInspectionCommands(), ...(context.contributions ?? [])].reverse().find((item) => item.entry.commandName === request.commandName);
   if (request.catalogueDigest !== context.catalogue.catalogueDigest) errorCode = "stale-catalogue";
   else if (request.expectedConfigVersion !== context.record.config.configVersion) errorCode = "policy-changed";
   else if (entry === undefined) errorCode = "unknown-command";
@@ -101,12 +107,44 @@ export async function executeSessionCommand(context: SessionCommandContext, requ
     };
     result = handlers[request.commandName]?.() ?? null;
   }
-  const wireResult = contribution?.structuredResult === true && errorCode === null ? result : JSON.stringify(result).slice(0, 32768);
-  if (contribution?.structuredResult === true && errorCode === null && !validateArguments(contribution.entry.resultSchema, wireResult).ok) throw new SessionCommandError("invalid-command-result");
+  // A text result is bounded against the schema the catalogue advertises, the one Hub validates an applied outcome against.
+  const wireResult = contribution?.structuredResult === true && errorCode === null ? result
+    : boundedCommandText(JSON.stringify(result ?? null), errorCode === null ? entry?.resultSchema ?? TEXT_RESULT : TEXT_RESULT);
   const parsed = validateControl("CommandOutcome", { operationId: context.operationId, sessionId: context.record.sessionId, commandName: request.commandName,
     status: errorCode === null ? request.commandName === "interrupt" && typeof result === "object" && result !== null && "status" in result && result.status === "unknown" ? "recovery-required" : "applied" : "rejected", sessionVersion: context.record.version, result: wireResult,
     confirmationId: null, errorCode, confirmation: null, runId: context.effect?.runId ?? null, turnId: context.effect?.turnId ?? null });
   if (!parsed.ok) throw new SessionCommandError(parsed.error.code);
-  return parsed.value;
+  return deliverableCommandOutcome(parsed.value, context.catalogue);
 }
 export class SessionCommandError extends Error { constructor(readonly code: string) { super(code); this.name = "SessionCommandError"; } }
+
+/** The result schema of every text-form native command. */
+const TEXT_RESULT: Control["ArgumentSchema"] = { type: "string", maxLength: LIMITS.taskBytes };
+/**
+ * The longest prefix of `text`, cut between code points, that `schema` admits under Hub's own check (`validateArguments`: the
+ * serialized JSON bytes against the task quota, the code points against `maxLength`). A cut between code points never splits a
+ * UTF-8 sequence or a surrogate pair. Both measures only grow with the prefix, so the longest admitted one is a binary search.
+ */
+export function boundedCommandText(text: string, schema: Control["ArgumentSchema"] = TEXT_RESULT): string {
+  if (validateArguments(schema, text).ok) return text;
+  const points = Array.from(text);
+  let admitted = 0; let refused = Math.min(points.length, LIMITS.taskBytes + 1);
+  while (refused - admitted > 1) {
+    const middle = Math.floor((admitted + refused) / 2);
+    if (validateArguments(schema, points.slice(0, middle).join("")).ok) admitted = middle; else refused = middle;
+  }
+  return points.slice(0, admitted).join("");
+}
+/** Why an applied result is withheld: true whatever the command class, since a change the command made stays in the session state. */
+export const UNDELIVERABLE_RESULT = "The native command's result does not satisfy the result schema its catalogue entry advertises, so it was withheld; any change the command made is visible in the session state.";
+/**
+ * Hub refuses an applied outcome whose result fails the advertised entry's result schema (`validateArguments`, remote-v2/events.ts),
+ * and the refused event leaves the operation pending. The host applies that same check to every outgoing outcome first and sends a
+ * rejection with the reason instead. Other statuses carry no result Hub validates and pass unchanged.
+ */
+export function deliverableCommandOutcome(outcome: Control["CommandOutcome"], catalogue: Control["CommandCatalogue"]): Control["CommandOutcome"] {
+  if (outcome.status !== "applied") return outcome;
+  const entry = catalogue.entries.find((item) => item.commandName === outcome.commandName);
+  if (entry !== undefined && validateArguments(entry.resultSchema, outcome.result).ok) return outcome;
+  return { ...outcome, status: "rejected", errorCode: "implementation-gap", result: JSON.stringify({ error: UNDELIVERABLE_RESULT }), confirmationId: null, confirmation: null };
+}

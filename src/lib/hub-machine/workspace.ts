@@ -152,6 +152,17 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
                         paths.add(candidate);
                     }
                 }
+                if (toolName === 'project_record_write') {
+                    // The tracked project records a native command owns: the project config and one local Flow's record and journal.
+                    if (!Array.isArray(input.paths) || input.paths.length < 1 || input.paths.length > 2)
+                        throw new MachineError('invalid-arguments');
+                    for (const candidate of input.paths) {
+                        if (typeof candidate !== 'string' || !/^\.metaproject\/(?:tasks\.config\.json|flows\/[0-9]{3,}-[A-Za-z0-9_-]+\/(?:flow\.json|journal\.md))$/.test(candidate))
+                            throw new MachineError('workspace-conflict');
+                        safeHubPath(candidate); safeEffectPath(cwd, candidate); visiblePatchPath(cwd, candidate);
+                        paths.add(candidate);
+                    }
+                }
                 const effectId = randomUUID();
                 effects.set(effectId, { before: owned, paths, toolName });
                 return { ok: true, value: { effectId } };
@@ -173,7 +184,7 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
                     throw new MachineError('workspace-conflict');
                 for (const relative of effect.paths) {
                     safeEffectPath(cwd, relative);
-                    if (effect.toolName === 'apply_patch' || effect.toolName === 'rewind_restore')
+                    if (effect.toolName === 'apply_patch' || effect.toolName === 'rewind_restore' || effect.toolName === 'project_record_write')
                         visiblePatchPath(cwd, relative);
                 }
                 const after = captureBaseline(cwd, { requireClean: false });

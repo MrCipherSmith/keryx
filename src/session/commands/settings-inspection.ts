@@ -8,6 +8,7 @@ import { redactSensitiveText } from "../../security/service";
 import { loadEditGuardStatus } from "../../tui/jev-edit-guard-inspector";
 import { readJevProfileForShell } from "../../commands/review-jev-profile";
 import type { SearchProviderController } from "../../harness/search";
+import type { SearchProviderId } from "../../harness/search/types";
 import type { SessionRestriction } from "./plan";
 
 /** Locally constructed safe readers. Remote arguments never identify a config file or credential store. */
@@ -15,10 +16,28 @@ export interface SettingsInspectionPort {
   /** The actual loadSettingsSnapshot result; the local owner supplies only live state it really implements. */
   snapshot(): Promise<SettingsSnapshot>;
   permissions?(): PermissionsView;
-  search?: Pick<SearchProviderController, "configurable" | "selectable" | "active">;
+  search?: Pick<SearchProviderController, "configurable" | "selectable" | "active" | "select">;
+}
+/** The shipped search providers (harness/search/types.ts SearchProviderId); `/search-connect <id>` names one of them. */
+export const SEARCH_PROVIDER_IDS = ["duckduckgo", "searxng", "brave", "tavily", "exa"] as const satisfies readonly SearchProviderId[];
+const searchSelectSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { providerId: { type: "string", maxLength: 16, enum: [...SEARCH_PROVIDER_IDS] } }, required: ["providerId"] };
+/**
+ * `/search-connect <id>` and the picker's pick (tui-shell.ts selectSearchProviderAndReport): the shared controller's select, which persists only
+ * the active provider among those already configured and connected locally. Connecting or testing a provider stays the local `/search-provider` workflow.
+ */
+export async function executeSearchProviderSelection(port: SettingsInspectionPort | undefined, input: unknown): Promise<SettingsInspectionResult> {
+  if (!validateArguments(searchSelectSchema, input).ok) return failure("invalid-arguments", "Name one shipped search provider.");
+  if (port?.search === undefined) return failure("setup-required", "A locally owned search-provider controller is unavailable.");
+  const providerId = (input as { providerId: SearchProviderId }).providerId;
+  try {
+    const selected = await port.search.select(providerId);
+    if (selected.ok) return { ok: true, data: { selected: providerId, text: `Search provider '${providerId}' selected.` } };
+    return failure("refused", selected.reason === "not-configured" ? `Cannot select '${providerId}': provider is not configured.`
+      : `Cannot select '${providerId}': provider is not connected (run /search-provider ${providerId} <params> to test).`);
+  } catch { return failure("read-failed", "The search provider selection could not be saved."); }
 }
 export interface SettingsInspectionContext { cwd: string; config: Control["SessionConfig"]; restriction?: () => SessionRestriction }
-export type SettingsInspectionResult = { ok: true; data: unknown } | { ok: false; error: { code: "invalid-arguments" | "setup-required" | "read-failed" | "quota-exceeded"; message: string } };
+export type SettingsInspectionResult = { ok: true; data: unknown } | { ok: false; error: { code: "invalid-arguments" | "setup-required" | "read-failed" | "quota-exceeded" | "refused"; message: string } };
 const names = ["settings", "mode", "guard", "route", "editguard", "projectctx", "projectctx.refs", "projectctx.last", "projectctx.references", "editguard.status", "jevprofile.entries", "external", "external-agents", "jevprofile", "permissions", "search-provider", "search-connect"] as const;
 const empty: Control["ArgumentSchema"] = { type: "object", properties: {}, required: [], additionalProperties: false };
 function failure(code: Extract<SettingsInspectionResult, { ok: false }>["error"]["code"], message: string): SettingsInspectionResult { return { ok: false, error: { code, message } }; }
@@ -103,11 +122,18 @@ export async function executeSettingsInspection(context: SettingsInspectionConte
   } catch { return failure("read-failed", "The actual settings state could not be inspected."); }
 }
 export function settingsInspectionCommands(options: { port?: SettingsInspectionPort; readiness?: { snapshot?: boolean; permissions?: boolean; search?: boolean } } = {}): NativeCommandContribution[] {
-  return names.map(commandName => ({
+  const searchAvailable = options.port?.search !== undefined || options.readiness?.search === true;
+  const selection: NativeCommandContribution = {
+    entry: { commandName: "search-connect.select", summary: "Select the active web search provider among the locally connected ones", handlerId: "native.settings.search-connect.select",
+      inputSchema: searchSelectSchema, resultSchema: { type: "string", maxLength: 32768 }, mutationClass: "session", states: ["idle"], busyPolicy: "reject", confirmation: "none",
+      availability: searchAvailable ? "available" : "setup-required", reason: "shared-search-provider-controller" },
+    execute: (_context, request) => executeSearchProviderSelection(options.port, request.arguments),
+  };
+  return [selection, ...names.map((commandName): NativeCommandContribution => ({
     entry: { commandName, summary: "Inspect actual saved/live settings without applying a change", handlerId: `native.settings-read.${commandName}`, inputSchema: empty, resultSchema: { type: "string", maxLength: 32768 },
       mutationClass: "read", states: ["idle", "busy", "paused"], busyPolicy: "read-only", confirmation: "none",
       availability: commandName.startsWith("projectctx") || commandName === "editguard.status" || commandName === "jevprofile.entries" || (commandName === "permissions" ? (options.port?.permissions !== undefined || options.readiness?.permissions === true) : commandName === "search-provider" || commandName === "search-connect" ? (options.port?.search !== undefined || options.readiness?.search === true) : options.port !== undefined || options.readiness?.snapshot === true) ? "available" : "setup-required",
       reason: "actual-safe-settings-domain-reader" },
     execute: (context, request) => executeSettingsInspection({ cwd: context.cwd, config: context.record.config, ...(context.restriction === undefined ? {} : { restriction: context.restriction }) }, options.port, commandName, request.arguments),
-  }));
+  }))];
 }

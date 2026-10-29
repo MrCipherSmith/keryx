@@ -12,7 +12,8 @@ export interface SessionCommandEffect {
   analysis?: NativeAnalysisPort;
   beforeAction(action: { kind: "model" | "tool"; toolName?: string; signal?: AbortSignal }): Promise<void>;
   rewind?<T>(input: RewindEffectInput, write: () => Promise<T>): Promise<T>;
-  mutate<T>(kind: "analysis-cache", relativePaths: readonly string[], write: () => Promise<T>): Promise<T>;
+  /** One owned workspace effect over exactly these paths: an analysis cache output, or a tracked project record (the project config, one local Flow's record). */
+  mutate<T>(kind: "analysis-cache" | "project-record", relativePaths: readonly string[], write: () => Promise<T>): Promise<T>;
   policy: {
     profileId: string;
     fingerprint: string;

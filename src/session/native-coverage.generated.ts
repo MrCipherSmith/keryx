@@ -4,21 +4,22 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
   "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
-  "contractDigest": "15091f70a82204cd27b424f7d738a3be7d9b5c0ca49fc92f9a5e1c12bbe19c4d",
-  "subjectCatalogueDigest": "a07d6244fe6aa8f7049dc08c9d3c67629419a737c0272e638c95927babad9690",
-  "inventoryDigest": "ef30b19cc6e84432c7a9b3a5106b8e6f71574cdcf3ae5df800f953c88be49a72",
-  "releaseReady": false,
+  "contractDigest": "8facd34c5ca8aa53c36146c5b43c4c13dcb306c8a2882dcf2ce4e1afc171cc56",
+  "subjectCatalogueDigest": "470b81d96a56f829db39733fc49d2927fc93f6452d22ef509927540d39efb41d",
+  "inventoryDigest": "f09948fda79fee7817cc4a81168e0f33a777c8ff28242a09330fe651c4a84186",
+  "releaseReady": true,
   "counts": {
     "registeredCommands": 74,
     "variants": 261,
-    "required": 169,
-    "earned": 135,
-    "requiredGaps": 34,
-    "boundaries": 92,
+    "required": 147,
+    "earned": 147,
+    "requiredGaps": 0,
+    "boundaries": 114,
     "otherBlockers": 0
   },
   "earned": [
     "ac.cached",
+    "ac.check",
     "approvals.allow-once",
     "approvals.deny",
     "approvals.list",
@@ -48,6 +49,8 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "connect.select",
     "connect.test",
     "decisions.arms",
+    "decisions.change",
+    "decisions.reason",
     "decisions.show",
     "demote.task-id",
     "doctor.report",
@@ -57,8 +60,12 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "exit.quit-alias",
     "external-agents.status",
     "external.status",
+    "flow.origin-set-reason",
+    "flow.origin-set-reason-quote-source",
     "flow.origin-show",
+    "flow.origin-summary",
     "flows.ac-cached",
+    "flows.ac-check",
     "flows.detail",
     "flows.list",
     "goal.-auto",
@@ -90,10 +97,12 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "plan.set",
     "plan.show",
     "product.report",
+    "projectctx.block",
     "projectctx.last-resolve-details",
     "projectctx.reference-details",
     "projectctx.refs",
     "projectctx.status",
+    "projectctx.warn",
     "queue.edit-N",
     "queue.list",
     "queue.remove",
@@ -123,10 +132,12 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "route.off",
     "route.on",
     "route.set",
+    "routing.category-assignments",
     "routing.configure",
     "routing.inspection",
     "schedules.list",
     "search-connect.list",
+    "search-connect.select",
     "search-provider.list",
     "sessions.fork",
     "sessions.open",
@@ -152,190 +163,30 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "triggers.detail",
     "triggers.list",
     "workspace.overview",
+    "workspace.slate-detail",
     "workspace.slates"
   ],
-  "requiredGaps": [
-    {
-      "variantId": "ac.check",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "ci.detail",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "ci.retry",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "ci.triage",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
-    },
-    {
-      "variantId": "conform.clause-detail",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "conform.reference-select",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "conform.run",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
-    },
-    {
-      "variantId": "conform.target-diff",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "conform.target-pr",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "conform.target-report",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "contract.working-diff",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless rejected/forbidden."
-    },
-    {
-      "variantId": "decisions.change",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "decisions.reason",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "flow.origin-set-reason",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "flow.origin-set-reason-quote-source",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "flow.origin-summary",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "flows.ac-check",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "guard.measured-details",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "jevrules.working-diff",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "opencomments.repo-pr",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "projectctx.block",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "projectctx.warn",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "queue.edit",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "queue.force",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "queue.force-N",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "risk.working-diff",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "routing.category-assignments",
-      "code": "required-implementation-gap",
-      "detail": "No native handler exists for this parsed action. Observed: local rejected/invalid-arguments, headless not sent."
-    },
-    {
-      "variantId": "scenarios.working-diff",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "search-connect.select",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "staledocs.working-diff",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "triage.latest-review",
-      "code": "required-implementation-gap",
-      "detail": "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject. Observed: local rejected/forbidden, headless rejected/forbidden."
-    },
-    {
-      "variantId": "triggers.confirm-run",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "triggers.run",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    },
-    {
-      "variantId": "workspace.slate-detail",
-      "code": "required-implementation-gap",
-      "detail": "No typed native request expresses this parsed action; the terminal adapter alone reports rejected/invalid-arguments."
-    }
-  ],
+  "requiredGaps": [],
   "boundaries": [
     "ac.navigate",
     "autoreview.navigate",
     "channels.navigate",
+    "ci.detail",
     "ci.navigate",
+    "ci.retry",
+    "ci.triage",
+    "conform.clause-detail",
     "conform.navigate",
+    "conform.reference-select",
+    "conform.run",
+    "conform.target-diff",
+    "conform.target-pr",
+    "conform.target-report",
     "connect.add-key",
     "connect.device-login",
     "connect.disconnect",
     "connect.navigate",
+    "contract.working-diff",
     "copy.default",
     "decisions.navigate",
     "delegate.agent-task",
@@ -355,6 +206,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "governance.complete",
     "governance.navigate",
     "governance.rerun",
+    "guard.measured-details",
     "guard.navigate",
     "guard.off",
     "guard.on",
@@ -366,16 +218,21 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "jevprofile.apply-recommended",
     "jevprofile.navigate",
     "jevprofile.toggle",
+    "jevrules.working-diff",
     "mcp.connect",
     "mcp.navigate",
     "mode.auto",
     "mode.clear",
     "mode.save",
     "mode.trust",
+    "opencomments.repo-pr",
     "permissions.navigate",
     "permissions.remove",
     "product.navigate",
     "projectctx.navigate",
+    "queue.edit",
+    "queue.force",
+    "queue.force-N",
     "remote-control.name",
     "remote-control.off",
     "remote-control.on",
@@ -397,8 +254,10 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "reviews.prepare-missing-chunks",
     "reviews.refresh-layers",
     "rewind.navigate",
+    "risk.working-diff",
     "routing.navigate",
     "routing.trust-project-file",
+    "scenarios.working-diff",
     "schedule.add-confirmed",
     "schedules.delete",
     "schedules.navigate",
@@ -412,14 +271,18 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "setup.execute-refresh",
     "setup.execute-repair",
     "setup.navigate",
+    "staledocs.working-diff",
     "theme.name",
     "think.auto",
     "think.collapse",
     "think.expand",
     "think.hide",
+    "triage.latest-review",
+    "triggers.confirm-run",
     "triggers.navigate",
+    "triggers.run",
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "0c2db9d66538bb40733b068f7227fb84702205729e8739693e95f21745102147"
+  "descriptorDigest": "45556c07939bc54eef20d0d681e725b568103a5de802cdd8af83648a6ff7b7c4"
 };

@@ -22,7 +22,7 @@ type Args = { [key: string]: Json };
 /** `operation`: the headless typed form is that frozen protocol operation (its body in `arguments`), not a CommandInvoke. */
 /** `bridge-*` scenarios run on real enrolled machines behind Hub v2 (scripts/native-lifecycle-parity.ts): the bridge applies a lifecycle command only when Hub delivers it. */
 export interface ParityCase { line: string; arguments: Args | null; before?: string[]; operation?: "remove-queue" | "edit-queue";
-  scenario?: "active-turn" | "background-task" | "foreground-task" | "approval-waiter" | "question-waiter" | "bus-peer" | "rewind-checkpoint" | "queued-message"
+  scenario?: "active-turn" | "background-task" | "foreground-task" | "approval-waiter" | "question-waiter" | "decision-answered" | "bus-peer" | "rewind-checkpoint" | "queued-message"
     | "bridge-session" | "bridge-previous-session" | "bridge-fork-target" }
 export interface ParityOutcome { variantId: string; handlerName: string | null; local: NativeNormalizedOutcome; headless: NativeNormalizedOutcome | null }
 export interface ParityRun { catalogue: Control["CommandCatalogue"]; outcomes: ParityOutcome[] }
@@ -35,8 +35,13 @@ const PULL = "https://github.com/owner/repo/pull/1";
 const APPROVAL_TURN = "PARITY-APPROVAL: create approved.txt";
 const QUESTION_TURN = "PARITY-QUESTION: ask the operator before continuing";
 const REWIND_TURN = "PARITY-REWIND: create rewound.txt and finish";
+const DECISION_TURN = "PARITY-DECISION: ask which path to take, then finish";
 const PEER_SESSION = "30000000-0000-4000-8000-000000000001";
 const WORKSPACE = "workspace-parity";
+/** The checkout's frozen local Flow (base: its own HEAD) whose acceptance criteria the AC check variants check. */
+const AC_FLOW = "002";
+/** The local session a fixture slate is bound to the workspace under; one per checkout (sessions are keyed by project root). */
+const SLATE_SESSION = "40000000-0000-4000-8000-000000000001";
 /** Exact parsed terminal syntax and the typed native request for each required variant. `arguments: null` = no typed form exists. */
 export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "help.default": { line: "/help", arguments: {} },
@@ -47,7 +52,7 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "connect.select": { line: `/connect select ${CANDIDATE}`, arguments: { id: CANDIDATE } },
   "search-provider.list": { line: "/search-provider", arguments: {} },
   "search-connect.list": { line: "/search-connect", arguments: {} },
-  "search-connect.select": { line: "/search-connect select", arguments: null },
+  "search-connect.select": { line: "/search-connect duckduckgo", arguments: { providerId: "duckduckgo" } },
   "new.default": { line: "/new", arguments: {}, scenario: "bridge-session" },
   "goal.-workspace": { line: "/goal Ship the fixture --workspace ws", arguments: { text: "Ship the fixture", workspaceId: "ws" } },
   "goal.-auto": { line: "/goal Ship the fixture --auto 3", arguments: { text: "Ship the fixture", autoRounds: 3 } },
@@ -65,16 +70,17 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "flows.list": { line: "/flows", arguments: {} },
   "flows.detail": { line: "/flows {flow}", arguments: { flowId: "{flow}" } },
   "flows.ac-cached": { line: "/ac {flow}", arguments: { flowId: "{flow}" } },
-  "flows.ac-check": { line: "/ac flow-1 check", arguments: null },
+  // The Flow inspector's `c` on the checkout's local Flow, from the /flows modal and from the /ac modal.
+  "flows.ac-check": { line: `/flows ${AC_FLOW} check`, arguments: { flowId: AC_FLOW } },
   "doctor.report": { line: "/doctor", arguments: {} },
   "setup.init": { line: "/setup init", arguments: { scenario: "init" } },
   "setup.refresh": { line: "/setup refresh", arguments: { scenario: "refresh" } },
   "setup.repair": { line: "/setup repair", arguments: { scenario: "repair" } },
   "ac.cached": { line: "/ac", arguments: {} },
-  "ac.check": { line: "/ac check", arguments: null },
+  "ac.check": { line: `/ac ${AC_FLOW} check`, arguments: { flowId: AC_FLOW } },
   "workspace.overview": { line: "/workspace", arguments: {} },
   "workspace.slates": { line: `/workspace ${WORKSPACE}`, arguments: { workspaceId: WORKSPACE } },
-  "workspace.slate-detail": { line: "/workspace ws slate", arguments: null },
+  "workspace.slate-detail": { line: `/workspace ${WORKSPACE} slate ${SLATE_SESSION}`, arguments: { workspaceId: WORKSPACE, sessionId: SLATE_SESSION } },
   "review.catch-up": { line: "/review", arguments: {} },
   "review.layers": { line: "/review layers", arguments: { section: "layers" } },
   "review.parity": { line: "/review parity", arguments: { section: "parity" } },
@@ -103,7 +109,7 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "triggers.confirm-run": { line: "/triggers nightly run --confirm", arguments: null },
   "routing.inspection": { line: "/routing", arguments: {} },
   "routing.configure": { line: `/routing configure on profile=local candidates=${CANDIDATE} fallback=${CANDIDATE}`, arguments: { enabled: true, profileId: "local", candidateIds: [CANDIDATE], fallbackCandidateId: CANDIDATE } },
-  "routing.category-assignments": { line: "/routing categories", arguments: null },
+  "routing.category-assignments": { line: "/routing categories", arguments: {} },
   "schedules.list": { line: "/schedules", arguments: {} },
   "autoreview.list": { line: "/autoreview", arguments: {} },
   "autoreview.ls": { line: "/autoreview ls", arguments: {} },
@@ -117,8 +123,9 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "permissions.list": { line: "/permissions", arguments: {} },
   "decisions.show": { line: "/decisions", arguments: {} },
   "decisions.arms": { line: "/decisions arms", arguments: { section: "arms" } },
-  "decisions.reason": { line: "/decisions reason the fixture said so", arguments: null },
-  "decisions.change": { line: "/decisions change option-b", arguments: null },
+  // A journaled question of this session, answered against its recommendation (option-b over option-a) in a turn that then ended.
+  "decisions.reason": { line: "/decisions reason the fixture said so", arguments: { text: "the fixture said so" }, scenario: "decision-answered" },
+  "decisions.change": { line: "/decisions change option-a", arguments: { choice: "option-a" }, scenario: "decision-answered" },
   "ci.list": { line: "/ci", arguments: {} },
   "ci.detail": { line: "/ci 1", arguments: null },
   "ci.triage": { line: "/ci triage 1 build", arguments: { runId: "1", jobName: "build" } },
@@ -138,9 +145,11 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "contract.working-diff": { line: "/contract Fixture contract", arguments: { description: "Fixture contract" } },
   "triage.latest-review": { line: "/triage", arguments: {} },
   "flow.origin-show": { line: "/flow origin {flow}", arguments: { flowId: "{flow}" } },
-  "flow.origin-set-reason": { line: "/flow origin set flow-1 --reason fixture", arguments: null },
-  "flow.origin-summary": { line: "/flow origin", arguments: null },
-  "flow.origin-set-reason-quote-source": { line: "/flow origin set flow-1 --reason fixture --quote source", arguments: null },
+  // The checkout's own local Flow 001 (the store `/flow origin` reads and writes), not the Hub Flow `/flow origin <id>` shows.
+  "flow.origin-set-reason": { line: "/flow origin 001 unknown --reason fixture", arguments: { flowId: "001", kind: "unknown", reason: "fixture" } },
+  "flow.origin-summary": { line: "/flow origin", arguments: {} },
+  "flow.origin-set-reason-quote-source": { line: "/flow origin 001 human-request --reason fixture --quote \"Ship the parity fixture\" --source hub-session",
+    arguments: { flowId: "001", kind: "human-request", reason: "fixture", quote: "Ship the parity fixture", source: "hub-session" } },
   "guard.inspection": { line: "/guard", arguments: {} },
   "guard.measured-details": { line: "/guard details", arguments: null },
   "route.inspection": { line: "/route", arguments: {} },
@@ -151,8 +160,8 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "editguard.threshold-and-recent-flags": { line: "/editguard status", arguments: {} },
   "projectctx.status": { line: "/projectctx", arguments: {} },
   "projectctx.refs": { line: "/projectctx refs", arguments: {} },
-  "projectctx.warn": { line: "/projectctx warn", arguments: null },
-  "projectctx.block": { line: "/projectctx block", arguments: null },
+  "projectctx.warn": { line: "/projectctx warn", arguments: { mode: "warn" } },
+  "projectctx.block": { line: "/projectctx block", arguments: { mode: "block" } },
   "projectctx.last-resolve-details": { line: "/projectctx last", arguments: {} },
   "projectctx.reference-details": { line: "/projectctx references", arguments: {} },
   "external.status": { line: "/external", arguments: {} },
@@ -221,7 +230,6 @@ const KNOWN_GAPS: Readonly<Record<string, string>> = {
   "connect.test": "Configured OpenAI-compatible endpoints probe through the shared driver; anthropic, gemini, ollama and openai-codex have no shared native probe.",
   ...Object.fromEntries(["rewind.files", "rewind.history", "rewind.both", "rewind.preview", "rewind.apply"].map((id) => [id, REWIND_SNAPSHOT_GAP])),
 };
-const JEV = new Set(["risk.working-diff", "scenarios.working-diff", "jevrules.working-diff", "staledocs.working-diff", "opencomments.repo-pr", "contract.working-diff", "triage.latest-review", "ci.triage", "ci.retry", "conform.run"]);
 /** Boundary rows execute their parsed syntax too, so every pin is backed by an executed receipt; they are never counted as earned parity. */
 export function parityCaseFor(row: NativeCoverageVariant): ParityCase {
   const explicit = PARITY_CASES[row.id];
@@ -253,6 +261,11 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
   const { renderMetaprojectGitignoreBlock } = await import("../src/lib/metaproject-gitignore");
   const { WorkspaceService, localWorkspaceAuthorizationServer } = await import("../src/sac/workspace-service");
   const { createLifecycleParity, hubDeliveryOnlyLifecycle } = await import("./native-lifecycle-parity");
+  const { createFlowService } = await import("../src/flow/service");
+  const { flowServiceDeps } = await import("../src/commands/flow");
+  const { createSession: createLocalSession } = await import("../src/session/store");
+  const { writeSlate } = await import("../src/session/slate");
+  const { readRecords: readDecisionRecords } = await import("../src/decisions/store");
   const root = await mkdtemp(join(tmpdir(), "native-parity-"));
   const held = new Set<() => void>();
   // A first-round model request for a marked turn streams one real tool call; every other model request is held open until its owner aborts it.
@@ -271,6 +284,9 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
     const messages = body?.messages ?? []; const asked = JSON.stringify(messages.filter((message) => message.role === "user").map((message) => message.content));
     const pastTool = messages.some((message) => message.role === "tool"); const text = pastTool ? "" : asked;
     // The rewind fixture turn is the one turn that completes: its patch, then a final answer once the tool result is in.
+    // The decision fixture turn asks one question with a recommendation, then finishes once the answer is in.
+    if (asked.includes(DECISION_TURN)) return pastTool ? finalText("path chosen") : toolCall("ask_user", { question: "Which parity path should the fixture take?",
+      options: [{ id: "option-a", label: "Path A", description: "The planned path", recommended: true }, { id: "option-b", label: "Path B", description: "The other path" }], recommendationReason: "Path A is the planned one." });
     if (asked.includes(REWIND_TURN)) return pastTool ? finalText("rewound.txt created")
       : toolCall("apply_patch", { patch: "diff --git a/rewound.txt b/rewound.txt\nnew file mode 100644\n--- /dev/null\n+++ b/rewound.txt\n@@ -0,0 +1 @@\n+rewound\n" });
     if (text.includes(APPROVAL_TURN)) return toolCall("apply_patch", { patch: "diff --git a/approved.txt b/approved.txt\nnew file mode 100644\n--- /dev/null\n+++ b/approved.txt\n@@ -0,0 +1 @@\n+approved\n" });
@@ -324,12 +340,25 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       const cwd = join(root, `checkout-${name}`); await mkdir(cwd); await writeFile(join(cwd, "seed.txt"), "seed\n"); await writeFile(join(cwd, ".gitignore"), renderMetaprojectGitignoreBlock());
       // Committed project content the drill-down inspectors select: one configured trigger and one workspace, created through their own services.
       await mkdir(join(cwd, ".metaproject"));
+      // The routing index `keryx init` writes: the production machine profile serves only a Keryx-initialized checkout.
+      await writeFile(join(cwd, ".metaproject", "index.md"), "# Metaproject Index\n");
       await writeFile(join(cwd, ".metaproject", "triggers.json"), JSON.stringify({ schemaVersion: 1, triggers: [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }] }));
       await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), now: () => new Date("2026-01-01T00:00:00Z"),
         strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: "native-parity-correlation-0001", id: WORKSPACE, title: "Native parity workspace" });
-      for (const args of [["init", "-q"], ["add", "seed.txt", ".gitignore", ".metaproject"], ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-qm", "parity fixture"]]) {
-        if (await Bun.spawn(["git", ...args], { cwd, env: gitEnv, stdout: "ignore", stderr: "ignore" }).exited !== 0) throw new Error(`fixture git ${args.at(-1)} failed`);
-      }
+      const git = async (args: string[]) => { if (await Bun.spawn(["git", ...args], { cwd, env: gitEnv, stdout: "ignore", stderr: "ignore" }).exited !== 0) throw new Error(`fixture git ${args.at(-1)} failed`); };
+      await git(["init", "-q"]);
+      // One committed local Flow (`/flow origin` reads and writes this store), created through the flow service itself.
+      const flows = createFlowService(flowServiceDeps());
+      await flows.init({ cwd, title: "Native parity" });
+      // A second local Flow with frozen acceptance criteria and its own HEAD as base: the AC check runs against a clean, empty change.
+      const acFlow = await flows.init({ cwd, title: "Native parity AC", baseBranch: "HEAD" });
+      await writeFile(join(cwd, ".metaproject", "flows", acFlow.dir.split("/").at(-1)!, "acceptance-criteria.md"),
+        "# Acceptance Criteria\n\n## Criteria\n\n- AC1: `seed.txt` keeps the parity seed line.\n- AC2: Live check confirms the real endpoint.\n");
+      await flows.freeze({ cwd, id: acFlow.flow.id });
+      // One local session whose slate is bound to the workspace, as an agent's first real task binds one (sessions live under the isolated KERYX_DATA_DIR).
+      const slated = createLocalSession({ cwd, title: "Native parity slate", id: SLATE_SESSION });
+      await writeSlate(slated.dir, () => ({ workspaceId: WORKSPACE, anchors: { root: cwd, touched: ["seed.txt"] }, course: {}, seeds: [] }));
+      for (const args of [["add", "seed.txt", ".gitignore", ".metaproject"], ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-qm", "parity fixture"]]) await git(args);
       return cwd;
     };
     let serial = 0;
@@ -408,6 +437,25 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       }
       throw new Error(`the live turn raised no question: last=${last} requests=${requests} observed=${JSON.stringify(target.observed).slice(0, 1500)} status=${new TextDecoder().decode(Bun.spawnSync(["git", "-C", target.cwd, "status", "--porcelain=v1", "-uall", "--ignored"], { env: gitEnv }).stdout)}`);
     };
+    /** A journaled live question answered against its recommendation, and the turn run to its end: the decision the follow-ups act on. */
+    const decisionAnswered = async (target: Hosted): Promise<Record<string, string>> => {
+      await busy(target.host, DECISION_TURN);
+      let pending: { questionId: string; fingerprint: string } | undefined;
+      for (let attempt = 0; attempt < 500 && pending === undefined; attempt++) {
+        const listed = await typedCommand(target, "questions.list", {});
+        const row = "result" in listed && Array.isArray(listed.result) ? listed.result[0] : undefined;
+        if (row !== null && typeof row === "object" && !Array.isArray(row) && typeof row.questionId === "string" && typeof row.fingerprint === "string") pending = { questionId: row.questionId, fingerprint: row.fingerprint };
+        else await Bun.sleep(10);
+      }
+      if (pending === undefined) throw new Error(`the decision turn raised no question: requests=${requests} observed=${JSON.stringify(target.observed).slice(0, 1500)}`);
+      const answered = await typedCommand(target, "questions.answer", { ...pending, runId: "held-run", turnId: "held-turn", answers: { kind: "option", choice: "option-b" } });
+      if (answered.status !== "applied") throw new Error(`the decision question was not answered: ${JSON.stringify(answered).slice(0, 600)}`);
+      for (let attempt = 0; attempt < 1000; attempt++) { const state = await target.host.inspect(); if (state.state === "idle" && state.activeRunId === null) break; await Bun.sleep(10); }
+      if ((await target.host.inspect()).state !== "idle") throw new Error(`the decision turn never ended: ${JSON.stringify(target.observed).slice(0, 1500)}`);
+      const opened = (await readDecisionRecords(target.cwd)).filter((entry) => entry.kind === "open");
+      if (opened.length !== 1) throw new Error(`the decision question was not journaled once: ${opened.length}`);
+      target.tasks.push(opened[0]!.id); return {};
+    };
     /** One typed command on a host, exactly as a headless client sends it (fixture setup only; never a parity outcome). */
     const typedCommand = async (target: Hosted, commandName: string, args: Args) => {
       const current = await target.host.inspect(); const subject = await target.host.catalogue();
@@ -472,12 +520,13 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       let subject = catalogue;
       if (subject === undefined) { const probe = await host(); try { subject = await probe.host.catalogue(); } finally { await probe.host.dispose("native-parity"); } }
       catalogue = subject;
-      lifecycle = createLifecycleParity({ origin, cookie, projectId: project.id, root, catalogue: subject, digest, availability, checkout, assemble: (cwd, sessionId) => assemble(cwd, sessionId), outcome: outcomeOf, bind });
+      lifecycle = createLifecycleParity({ origin, cookie, projectId: project.id, root, catalogue: subject, digest, availability, assemble: (cwd, sessionId) => assemble(cwd, sessionId),
+        configDir, providerId: "fixture-local", modelId: "fixture-model", checkout, outcome: outcomeOf, bind });
       return lifecycle;
     };
     for (const item of input.cases) {
       if (item.case.scenario !== undefined && item.case.scenario.startsWith("bridge-")) { outcomes.push(await (await lifecycleParity()).run(item)); continue; }
-      const tools =item.case.scenario === "approval-waiter" || item.case.scenario === "rewind-checkpoint" ? ["read_file", "apply_patch"] : item.case.scenario === "question-waiter" ? ["read_file", "ask_user"] : undefined;
+      const tools =item.case.scenario === "approval-waiter" || item.case.scenario === "rewind-checkpoint" ? ["read_file", "apply_patch"] : item.case.scenario === "question-waiter" || item.case.scenario === "decision-answered" ? ["read_file", "ask_user"] : undefined;
       const [local, headless] = await Promise.all([host(tools), host(tools)]);
       try {
         const subject = await headless.host.catalogue();
@@ -486,7 +535,7 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
         const scenario = item.case.scenario;
         if (scenario === "active-turn") await Promise.all([busy(local.host), busy(headless.host)]);
         const owned = (target: Hosted): Promise<Record<string, string>> => scenario === "background-task" || scenario === "foreground-task" ? ownedTask(target, scenario === "background-task" ? "background" : "foreground")
-          : scenario === "approval-waiter" ? approvalWaiter(target) : scenario === "rewind-checkpoint" ? rewindCheckpoint(target) : scenario === "queued-message" ? queuedMessage(target) : scenario === "question-waiter" ? questionWaiter(target) : scenario === "bus-peer" ? busPeer(target) : Promise.resolve({});
+          : scenario === "approval-waiter" ? approvalWaiter(target) : scenario === "rewind-checkpoint" ? rewindCheckpoint(target) : scenario === "queued-message" ? queuedMessage(target) : scenario === "question-waiter" ? questionWaiter(target) : scenario === "decision-answered" ? decisionAnswered(target) : scenario === "bus-peer" ? busPeer(target) : Promise.resolve({});
         const [localOwned, headlessOwned] = await Promise.all([owned(local), owned(headless)]);
         const localSlots = { ...shared, ...localOwned }; const headlessSlots = { ...shared, ...headlessOwned };
         // The operator's explicit work mode is the same ad-hoc association the headless request carries.
@@ -573,7 +622,7 @@ export function refreshInventory(inventory: NativeCoverageInventory, receipts: r
     row.proofIds = [parityReceiptId(row.id)];
     const receipt = receipts.find((item) => item.variantId === row.id);
     const parity = receipt === undefined ? { matched: false, admitted: false } : receiptParity(receipt);
-    const known = KNOWN_GAPS[row.id] ?? (JEV.has(row.id) ? "Jev analysis execution needs explicit local Jev setup and consent; none is configured in the native subject." : undefined);
+    const known = KNOWN_GAPS[row.id];
     if (parity.admitted && entry?.availability === "available") { row.status = "implemented"; row.reason = "Exact-source local terminal and headless host outcomes match and the shared handler accepts the variant."; continue; }
     row.status = "unimplemented";
     const observed = receipt === undefined ? "no receipt" : `local ${describe(receipt.local.outcome)}, headless ${describe(receipt.headless.outcome)}`;

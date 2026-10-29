@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { createAnalysisReadPorts, validateAnalysisReadArgv } from "./analysis-read-ports";
+import { acCheckGitCommand, createAnalysisReadPorts, validateAnalysisReadArgv } from "./analysis-read-ports";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
@@ -48,4 +48,24 @@ test("read helper observes cancellation and independently caps stdout and stderr
   const ports = createAnalysisReadPorts({ cwd, runOwned: async () => { called = true; return { stdout: "{}", stderr: "x".repeat(512 * 1024 + 1), exitCode: 0 }; } });
   await expect(ports.ciSpawn(["gh", "pr", "view", "--json", "number,title"], cwd, AbortSignal.abort())).rejects.toMatchObject({ code: "cancelled" }); expect(called).toBe(false);
   await expect(ports.ciSpawn(["gh", "pr", "view", "--json", "number,title"], cwd)).rejects.toMatchObject({ code: "quota-exceeded" });
+});
+
+test("the acceptance-criteria check reads only its own two git argv shapes, run hardened: no pager, external diff or textconv program", () => {
+  expect(acCheckGitCommand(["git", "merge-base", "HEAD", "--end-of-options", "origin/main"])).toEqual(["git", "--no-pager", "merge-base", "HEAD", "--end-of-options", "origin/main"]);
+  expect(acCheckGitCommand(["git", "diff", "--no-color", "-U20", "--end-of-options", "a".repeat(40)])).toEqual(["git", "--no-pager", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "-U20", "--end-of-options", "a".repeat(40)]);
+  for (const argv of [["git", "diff", "--no-color", "-U20", "--end-of-options", "--output=x"], ["git", "diff", "--no-color", "-U20", "--end-of-options", "a..b"], ["git", "diff", "--no-color", "-U20", "a"],
+    ["git", "merge-base", "HEAD", "--end-of-options", "-x"], ["git", "log"], ["git", "-c", "core.pager=sh", "diff"], ["sh", "-c", "git diff"]]) expect(acCheckGitCommand(argv)).toBeUndefined();
+});
+
+test("the owned git read runs only the hardened argv in the configured checkout, cancellable and bounded", async () => {
+  const cwd = await root(); const other = await root(); const ran: (readonly string[])[] = [];
+  const ports = createAnalysisReadPorts({ cwd, runOwned: async () => { throw new Error("not-used"); }, runOwnedGit: async (argv) => { ran.push(argv); return { stdout: "diff", stderr: "", exitCode: 0 }; } });
+  await expect(ports.acCheckGit(["git", "log"], { cwd })).rejects.toMatchObject({ code: "invalid-argv" });
+  await expect(ports.acCheckGit(["git", "merge-base", "HEAD", "--end-of-options", "main"], { cwd: other })).rejects.toMatchObject({ code: "invalid-cwd" });
+  await expect(ports.acCheckGit(["git", "merge-base", "HEAD", "--end-of-options", "main"], { cwd, signal: AbortSignal.abort() })).rejects.toMatchObject({ code: "cancelled" });
+  expect(ran).toEqual([]);
+  expect(await ports.acCheckGit(["git", "diff", "--no-color", "-U20", "--end-of-options", "main"], { cwd })).toEqual({ stdout: "diff", stderr: "", exitCode: 0 });
+  expect(ran).toEqual([["git", "--no-pager", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "-U20", "--end-of-options", "main"]]);
+  // Without an owned git runner the read is refused, never run another way.
+  await expect(createAnalysisReadPorts({ cwd, runOwned: async () => { throw new Error("not-used"); } }).acCheckGit(["git", "merge-base", "HEAD", "--end-of-options", "main"], { cwd })).rejects.toMatchObject({ code: "read-denied" });
 });

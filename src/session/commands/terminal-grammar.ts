@@ -6,6 +6,7 @@ import type { Control } from "../../remote-control/protocol";
 import { MCP_TRUST_USAGE, parseMcpTrustCommand } from "../../mcp-servers/approval-render";
 import { HISTORY_USAGE, parseHistoryArgs } from "../../remote/history";
 import { parseQueueCommand } from "../../tui/main-queue";
+import { FLOW_ORIGIN_USAGE, splitShellWords } from "../../tui/flow-origin-command";
 
 type Args = { [key: string]: Control["BoundedJson"] };
 /** Pins the terminal resolves from this session's own typed pending list before it sends the answer. */
@@ -64,6 +65,8 @@ export const ROUTING_CONFIGURE_USAGE = "Usage: /routing configure on|off profile
 export function parseRoutingText(rest: string): TerminalCommandParse {
   const parts = words(rest);
   if (parts.length === 0) return typed("routing");
+  // The inspector's Categories tab: every category's resolved model and the layer that answered.
+  if (parts.length === 1 && parts[0] === "categories") return typed("routing.categories");
   if (parts[0] !== "configure" || parts.length !== 5 || (parts[1] !== "on" && parts[1] !== "off")) return refuse("routing", ROUTING_CONFIGURE_USAGE);
   const fields = new Map<string, string>();
   for (const part of parts.slice(2)) {
@@ -117,25 +120,85 @@ function selected(commandName: string, rest: string, field: string, usage: strin
   if (parts.length === 0) return typed(commandName);
   return parts.length === 1 && ID.test(parts[0]!) ? typed(commandName, { [field]: parts[0]! }) : refuse(commandName, usage);
 }
-export const FLOWS_USAGE = "Usage: /flows [flowId]";
-/** `/flows <flowId>`: the Flow inspector's selection of one Flow. */
-export function parseFlowsText(rest: string): TerminalCommandParse { return selected("flows", rest, "flowId", FLOWS_USAGE); }
-export const AC_USAGE = "Usage: /ac [flowId]  (running the checks has no typed native request)";
-/** `/ac <flowId>`: the AC tab of one selected Flow, cached results only. `check` executes checks and is refused. */
-export function parseAcText(rest: string): TerminalCommandParse {
-  return words(rest).includes("check") ? refuse("ac", AC_USAGE) : selected("ac", rest, "flowId", AC_USAGE);
-}
-export const WORKSPACE_USAGE = "Usage: /workspace [workspaceId]";
-/** `/workspace <workspaceId>`: the workspace inspector's selection and its slates. */
-export function parseWorkspaceText(rest: string): TerminalCommandParse { return selected("workspace", rest, "workspaceId", WORKSPACE_USAGE); }
-export const TRIGGERS_USAGE = "Usage: /triggers [name]  (running a trigger has no typed native request)";
-/** `/triggers <name>`: the triggers inspector's selection of one configured trigger. Running one is refused. */
-export function parseTriggersText(rest: string): TerminalCommandParse { return selected("triggers", rest, "name", TRIGGERS_USAGE); }
-export const FLOW_ORIGIN_READ_USAGE = "Usage: /flow origin <flowId>  (setting an origin and the recent-origin summary have no typed native request)";
-/** `/flow origin <flowId>` reads one Flow; the shipped set form (`<id> <kind> --reason …`) and the bare summary are refused. */
-export function parseFlowOriginText(rest: string): TerminalCommandParse {
+export const FLOWS_USAGE = "Usage: /flows [flowId] | /flows <flowId> check";
+/** `<flowId> check`: the Flow inspector's `c` key on the selected local Flow (tui-shell.ts onRunCheck), the typed ac.check. */
+function acCheck(rest: string): TerminalCommandParse | undefined {
   const parts = words(rest);
-  return parts.length === 2 && parts[0] === "origin" && ID.test(parts[1]!) ? typed("flow", { flowId: parts[1]! }) : refuse("flow", FLOW_ORIGIN_READ_USAGE);
+  return parts.length === 2 && parts[1] === "check" && parts[0] !== "check" && ID.test(parts[0]!) ? typed("ac.check", { flowId: parts[0]! }) : undefined;
+}
+/** `/flows <flowId>`: the Flow inspector's selection of one Flow; `/flows <flowId> check` runs its acceptance-criteria check. */
+export function parseFlowsText(rest: string): TerminalCommandParse { return acCheck(rest) ?? selected("flows", rest, "flowId", FLOWS_USAGE); }
+export const AC_USAGE = "Usage: /ac [flowId] | /ac <flowId> check";
+/** `/ac <flowId>`: the AC tab of one selected Flow, cached results only; `/ac <flowId> check` runs the check. A check names its Flow. */
+export function parseAcText(rest: string): TerminalCommandParse {
+  return acCheck(rest) ?? (words(rest).includes("check") ? refuse("ac", AC_USAGE) : selected("ac", rest, "flowId", AC_USAGE));
+}
+export const WORKSPACE_USAGE = "Usage: /workspace [workspaceId [slate <sessionId>]]";
+/** `/workspace <workspaceId>`: the workspace inspector's selection and its slates; `… slate <sessionId>` opens one slate (its Slate tab). */
+export function parseWorkspaceText(rest: string): TerminalCommandParse {
+  const parts = words(rest);
+  if (parts.length === 3 && parts[1] === "slate" && ID.test(parts[0]!) && ID.test(parts[2]!)) return typed("workspace.slate", { workspaceId: parts[0]!, sessionId: parts[2]! });
+  return selected("workspace", rest, "workspaceId", WORKSPACE_USAGE);
+}
+export const SEARCH_CONNECT_USAGE = "Usage: /search-connect [providerId]";
+/** `/search-connect <id>`: the shipped text form of the picker's pick (tui-shell.ts parseSearchProviderArgs); an unknown id is refused as the TUI refuses it. */
+export function parseSearchConnectText(rest: string, providers: readonly string[]): TerminalCommandParse {
+  const parts = words(rest);
+  if (parts.length === 0) return typed("search-connect");
+  if (parts.length !== 1) return refuse("search-connect", SEARCH_CONNECT_USAGE);
+  return providers.includes(parts[0]!) ? typed("search-connect.select", { providerId: parts[0]! }) : refuse("search-connect", `Unknown provider '${parts[0]!}'.`);
+}
+export const TRIGGERS_USAGE = "Usage: /triggers [name]  (running a trigger has no typed native request)";
+/**
+ * The owner-decided boundaries' own refusals (ownerDecisionStage4, specification 3.1): each says why the action is unsupported here.
+ * Nothing is sent and nothing pretends to have run.
+ */
+export const BOUNDARY_REFUSALS = {
+  triggerRun: "Running a trigger starts an unbounded `keryx trigger run` child whose writes this session's owned checkout cannot attribute, so a native session does not run triggers; run it locally. Usage: /triggers [name]",
+  guardDetails: "The measured turn-guard details are the TUI's in-memory record of its own turns; a native session runs no turn guard, so it has no details to show. /guard shows the guard setting.",
+  ciDetail: "A CI run detail is read from GitHub, an external vendor adapter this native session does not have. /ci shows what is available here.",
+  conformStep: "Choosing a conform reference or target starts the Jev conformance run, and a clause detail shows that run's result; Jev needs explicit local setup this native session does not have. /conform shows the setup.",
+} as const;
+/** `/triggers <name>`: the triggers inspector's selection of one configured trigger. Running one (`<name> run [--confirm]`) is a scope boundary. */
+export function parseTriggersText(rest: string): TerminalCommandParse {
+  const parts = words(rest);
+  if (parts.length >= 2 && parts.length <= 3 && parts[1] === "run" && (parts[2] === undefined || parts[2] === "--confirm")) return refuse("triggers", BOUNDARY_REFUSALS.triggerRun);
+  return selected("triggers", rest, "name", TRIGGERS_USAGE);
+}
+/** `/guard` reads the guard setting; `/guard details` (the modal's measured details) is a presentation boundary. `undefined`: no typed text form. */
+export function parseGuardText(rest: string): TerminalCommandParse | undefined {
+  const parts = words(rest);
+  return parts.length === 0 ? typed("guard") : parts.length === 1 && parts[0] === "details" ? refuse("guard", BOUNDARY_REFUSALS.guardDetails) : undefined;
+}
+/** `/ci` lists; `/ci <runId>` (the modal's run detail) is an external-vendor boundary. `undefined`: no typed text form. */
+export function parseCiText(rest: string): TerminalCommandParse | undefined {
+  const parts = words(rest);
+  return parts.length === 0 ? typed("ci") : parts.length === 1 && /^\d{1,20}$/.test(parts[0]!) ? refuse("ci", BOUNDARY_REFUSALS.ciDetail) : undefined;
+}
+/** `/conform` reads the setup; the wizard's reference, target and clause steps are the Jev setup boundary. `undefined`: no typed text form. */
+export function parseConformText(rest: string): TerminalCommandParse | undefined {
+  const parts = words(rest);
+  return parts.length === 0 ? typed("conform") : ["reference", "target", "clause"].includes(parts[0]!) ? refuse("conform", BOUNDARY_REFUSALS.conformStep) : undefined;
+}
+/**
+ * The shipped `/flow origin` grammar (src/tui/flow-origin-command.ts, quoted words kept whole): bare, the local origin summary;
+ * `<id>`, one Flow; `<id> <kind> --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]`, the set.
+ */
+export function parseFlowOriginText(rest: string): TerminalCommandParse {
+  const [sub, ...tail] = splitShellWords(rest.trim());
+  if (sub !== "origin") return refuse("flow", `Usage: ${FLOW_ORIGIN_USAGE}`);
+  const positionals: string[] = []; const flags: Record<string, string | undefined> = {};
+  for (let index = 0; index < tail.length; index++) {
+    const word = tail[index]!;
+    if (word === "--reason" || word === "--quote" || word === "--source") { flags[word.slice(2)] = tail[index + 1]; index++; } else positionals.push(word);
+  }
+  const [flowId, kind, ...extra] = positionals;
+  if (extra.length > 0) return refuse("flow", `Usage: ${FLOW_ORIGIN_USAGE}`);
+  if (flowId === undefined) return typed("flow.origins");
+  if (!ID.test(flowId)) return refuse("flow", `Usage: ${FLOW_ORIGIN_USAGE}`);
+  if (kind === undefined) return typed("flow", { flowId });
+  if (flags.reason === undefined || flags.reason.trim().length === 0) return refuse("flow", `/flow origin ${flowId} ${kind} needs --reason "<why>".\nUsage: ${FLOW_ORIGIN_USAGE}`);
+  return typed("flow.origin.set", { flowId, kind, reason: flags.reason, ...(flags.quote === undefined ? {} : { quote: flags.quote }), ...(flags.source === undefined ? {} : { source: flags.source }) });
 }
 export const REVIEWS_USAGE = "Usage: /reviews [depth]";
 /** `/reviews depth`: the reviews panel's per-review depth (readiness, parity, layers) without the bot metrics. */
