@@ -8,6 +8,8 @@ USER bun
 RUN bun install --frozen-lockfile --production --ignore-scripts
 COPY --chown=bun:bun src/hub ./src/hub
 COPY --chown=bun:bun src/flow/machine.ts src/flow/types.ts ./src/flow/
+# The revision-operand guard src/hub/git-delivery.ts and src/hub/connector.ts import at runtime.
+COPY --chown=bun:bun src/lib/git-revision.ts ./src/lib/
 COPY --chown=bun:bun src/remote-control ./src/remote-control
 COPY --chown=bun:bun docs/requirements/hub-remote-sessions ./docs/requirements/hub-remote-sessions
 ENV KERYX_HUB_HOST=0.0.0.0 KERYX_HUB_PORT=8787 KERYX_HUB_DATA_DIR=/data
