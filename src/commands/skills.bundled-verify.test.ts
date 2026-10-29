@@ -41,7 +41,7 @@ describe("keryx skills verify --bundled", () => {
     // review-jev-risk/review-jev-scenarios, flow 333 added
     // review-jev-docs/review-jev-comments, and flow 335 added
     // review-jev-contract.
-    expect(result.out).toContain("skills_evaluated: 80");
+    expect(result.out).toContain("skills_evaluated: 81");
     expect(result.out).toContain("findings: 0");
     expect(result.code).toBe(0);
   });
@@ -55,7 +55,7 @@ describe("keryx skills verify --bundled", () => {
       findings: unknown[];
       skillNames: string[];
     };
-    expect(parsed.skills).toBe(80);
+    expect(parsed.skills).toBe(81);
     // The harness builds are read too, and the count says so. `skills` alone
     // read as full coverage while 100-odd builds went unopened.
     expect(parsed.documents).toBeGreaterThan(parsed.skills);

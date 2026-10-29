@@ -4,16 +4,39 @@
 import { describe, expect, test } from "bun:test";
 import {
   CODEC_WRITE_AGENT_IDS,
+  codecWriteVersionRefusal,
   READ_ONLY_FORBIDDEN_ACTIONS,
   implementedSandboxModesFor,
   readRuntimeBlock,
   validateRuntimeBlock,
 } from "./dispatch";
 import type { RuntimeBlock } from "./dispatch";
-import { getExternalAgent } from "./registry";
+import { getExternalAgent, parseAgentVersion } from "./registry";
 import type { ExternalAgentEntry } from "./types";
 
 const READ_ONLY_ACTIONS = ["read", "run-command"];
+
+describe("measured Codex write versions", () => {
+  test("a refusal names the old range and the separately measured release", () => {
+    const entry = getExternalAgent("codex-cli") as ExternalAgentEntry;
+    const reason = codecWriteVersionRefusal(entry, "0.163.9");
+    expect(reason).toContain("0.159.2");
+    expect(reason).toContain("0.160.0");
+    expect(reason).toContain("0.164.0");
+    expect(reason).toContain("not yet verified");
+  });
+
+  test.each([
+    "codex-cli 0.164.0+custom",
+    "codex-cli 0.164.0.1",
+    "codex-cli 0.164.0-",
+    "codex-cli 0.164.0-rc.1",
+    "codex-cli 0.164.0\ncodex-cli 0.165.0",
+  ])("refuses unmeasured banners after version extraction: %s", (banner) => {
+    const entry = getExternalAgent("codex-cli") as ExternalAgentEntry;
+    expect(codecWriteVersionRefusal(entry, parseAgentVersion(entry, banner))).toBeDefined();
+  });
+});
 
 function external(overrides: Partial<RuntimeBlock> = {}): RuntimeBlock {
   return { kind: "external", agent: "codex-cli", sandbox: "read-only", ...overrides };

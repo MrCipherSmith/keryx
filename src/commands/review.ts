@@ -39,13 +39,13 @@ import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
+import { installedRosterRoles } from "../review/roster";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
 import { optInRolesFromArgs, optionalRolesLine, packageEnabledRoles, recordEnabledRoles } from "../review/role-switches";
 import { packageEstimateLine } from "../review/estimate-actual";
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
-import { manifestRosterRoles } from "../review/round-split";
 import { printPlanHelp, runPlan } from "./review-plan";
 import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -156,6 +156,13 @@ import {
   type BlastRadius,
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
+import { renderDegradationScreenLines } from "../review/degradation";
+import {
+  barrelsOf,
+  buildDegradationConsumers,
+  changedExportsOf,
+  renderDegradationPayloadBrief,
+} from "../review/degradation-payload";
 import { loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
@@ -556,6 +563,8 @@ const BLAST_RADIUS_FLAGS = [
   "--package",
   "--reach",
   "--no-text-links",
+  "--degradation",
+  "--degradation-cap",
 ] as const;
 
 const TIER_FLAGS = [
@@ -1269,6 +1278,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
         `  exempted ${exemption.finding.id ?? "<unidentified>"} [${exemption.rule} not applied]: ${exemption.detail}`,
       );
     }
+  }
+  // Flow 479: the degradation evidence screen, on the terminal as well as in scope.md. A downgrade nobody sees
+  // reads as a reviewer that found less than it did.
+  for (const line of renderDegradationScreenLines(result.degradationScreen)) {
+    console.log(line);
   }
   // A chunk pass that raised findings is part of the round once ingested; say how many came in, so the count is not a silence.
   const chunkPass = result.chunkPass;
@@ -3396,7 +3410,7 @@ async function runRequired(args: string[]): Promise<void> {
   });
   // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
   const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
-  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? manifestRosterRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
+  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? (await installedRosterRoles(process.cwd(), sliceManifest)).filter((role) => !baseSet.required.includes(role)) : [];
   const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
     // The one write: `ledger build` reads the round's depth back from the package.
@@ -3989,6 +4003,14 @@ async function runBlastRadius(args: string[]): Promise<void> {
   const maxFiles = parseNonNegativeInteger(optionValue(args, "--max-files"), "--max-files");
   const includeRelatedTests = !args.includes("--no-related-tests");
   const isFinalRound = args.includes("--final");
+  const wantsDegradation = args.includes("--degradation");
+  if (wantsDegradation) {
+    const clash = ["--json", "--brief", "--out"].find((flag) => (flag === "--out" ? optionValue(args, flag) !== undefined : args.includes(flag)));
+    if (clash !== undefined) throw new Error(`--degradation prints the review-degradation payload to stdout and cannot be combined with ${clash}; run blast-radius again for that output.`);
+  } else if (args.some((arg) => arg === "--degradation-cap")) {
+    throw new Error("--degradation-cap only applies together with --degradation.");
+  }
+  const degradationCap = wantsDegradation ? parseNonNegativeInteger(optionValue(args, "--degradation-cap"), "--degradation-cap") : undefined;
 
   const explicit = optionValue(args, "--changed");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
@@ -4033,8 +4055,13 @@ async function runBlastRadius(args: string[]): Promise<void> {
     depth,
     maxFiles,
   });
-  console.error(`recompute: ${decision.recompute ? "yes" : "no"} — ${decision.reason}`);
-  if (!decision.recompute && previous !== undefined) {
+  const reuse = !decision.recompute && previous !== undefined;
+  // The degradation payload is built from the code graph, which a reused record does not carry.
+  const recomputeForDegradation = reuse && wantsDegradation;
+  const recompute = decision.recompute || recomputeForDegradation;
+  const recomputeReason = recomputeForDegradation ? "the degradation payload needs the graph" : decision.reason;
+  console.error(`recompute: ${recompute ? "yes" : "no"} — ${recomputeReason}`);
+  if (reuse && !wantsDegradation) {
     await emitBlastRadius(previous, args);
     return;
   }
@@ -4094,7 +4121,20 @@ async function runBlastRadius(args: string[]): Promise<void> {
     textLinks,
     testCommand: detectTestCommand(projectRoot),
   });
-  await emitBlastRadius(radius, args);
+  // Flow 479 AC5: `--degradation` swaps the stdout brief for the `review-degradation` payload, whose consumers are the
+  // graph's one-hop answer for each changed shared export, with the cap and what it dropped recorded.
+  const degradationBrief = wantsDegradation
+    ? renderDegradationPayloadBrief(
+        buildDegradationConsumers({
+          graph,
+          changedExports: changedExportsOf(radius),
+          changedFiles: radius.changedFiles,
+          barrels: barrelsOf(radius),
+          cap: degradationCap,
+        }),
+      )
+    : undefined;
+  await emitBlastRadius(radius, args, degradationBrief);
   const reasoned =
     (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0) + (radius.counts.droppedTestConsumer ?? 0);
   if (reasoned > 0) {
@@ -4113,7 +4153,8 @@ async function runBlastRadius(args: string[]): Promise<void> {
       `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
         `Cut blast radius: run the waves — keryx review chunks plan --package ${packageOption ?? "<review>"}`,
     );
-    if (packageOption !== undefined) {
+    // The degradation payload is read-only: it must not overwrite the package's own record or re-cut its chunks.
+    if (packageOption !== undefined && !wantsDegradation) {
       const planned = await recordRadiusAndPlan(resolvePackageDir(args, cwd), resolveProjectRoot(cwd), radius, packageOption);
       console.error(planned);
     }
@@ -4125,8 +4166,10 @@ async function runBlastRadius(args: string[]): Promise<void> {
   }
 }
 
-async function emitBlastRadius(radius: BlastRadius, args: string[]): Promise<void> {
-  if (args.includes("--json")) {
+async function emitBlastRadius(radius: BlastRadius, args: string[], degradationBrief?: string): Promise<void> {
+  if (degradationBrief !== undefined) {
+    console.log(degradationBrief);
+  } else if (args.includes("--json")) {
     console.log(JSON.stringify(radius, null, 2));
   } else if (args.includes("--brief")) {
     console.log(renderBlastRadiusDispatchBrief(radius));
@@ -4943,14 +4986,19 @@ Writes mutation-<n>.json and .md to research-evidence/.`);
 function printBlastRadiusHelp(): void {
   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief] [--out <file>]
+                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief | --degradation [--degradation-cap <n>]] [--out <file>]
 
 The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
 --reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
 high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
 Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
 --no-text-links. With --package the changed files are base...head at the package's pinned head.
---package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
+--package stores the record in the package; --previous/--final carry the dropped files across rounds.
+--degradation prints the review-degradation payload instead: the one-hop importers of the module that holds each changed
+shared export (and of a barrel that re-exports it), from the code graph, under one cap shared by all of them
+(--degradation-cap, default 40), with the cap stated and the files it dropped named (the first 20, then a count).
+It always recomputes from the graph, also with --previous, never rewrites the package's record, and is refused together
+with --json, --brief or --out; --degradation-cap is refused without --degradation.`);
 }
 
 function printCompleteHelp(): void {

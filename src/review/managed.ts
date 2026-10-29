@@ -40,6 +40,12 @@ import {
   type BlastRadiusScreenResult,
 } from "./blast-radius";
 import {
+  renderDegradationScreenMarkdown,
+  screenDegradationFindings,
+  degradationScreenRecord,
+  type DegradationScreenRecord,
+} from "./degradation";
+import {
   applyFindingsCap,
   evaluateSpendCap,
   planReviewerWaves,
@@ -69,6 +75,8 @@ import {
   FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
+  REVIEW_DEGRADATION_CLASSES,
+  REVIEW_EVIDENCE_KINDS,
   REVIEW_FINDING_CONFIDENCES,
   REVIEW_PACKAGE_STATUSES,
   REVIEW_TARGET_KINDS,
@@ -285,7 +293,7 @@ const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
-): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[]; chunkPass: ChunkPassIngest }> {
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; degradationScreen: DegradationScreenRecord; duplicates: DuplicateMerge[]; chunkPass: ChunkPassIngest }> {
   const at = (input.now ?? new Date()).toISOString();
   // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
   const premiseClaims = parsePremiseClaimSets(input.premises);
@@ -393,7 +401,13 @@ export async function createManagedReviewPackage(
   // against the id it named, after the scope-B screen so a scope-B claim cannot
   // escape it by merging into a scope-A one, and before the cap so a duplicate
   // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
-  const deduped = mergeDuplicates(scopeB.retained);
+  // Flow 479. The `review-degradation` evidence rule, enforced in code like the screen above: a major or blocker
+  // without an evidence kind is lowered to info and listed, never dropped. After scope B (its findings are not
+  // scope-B claims and pass through that screen untouched) and before the duplicate merge, so the merge and every
+  // later stage see the severity the evidence supports.
+  const degradation = screenDegradationFindings(scopeB.retained);
+  const degradationScreen = degradationScreenRecord(degradation);
+  const deduped = mergeDuplicates(degradation.retained);
 
   // Flow 459. The premise judge, which can only hold or lower. It runs over the CANONICAL findings, after the
   // duplicate merge (so a claim names the one record that survives) and before the cap (so a downgraded severity
@@ -570,7 +584,7 @@ export async function createManagedReviewPackage(
   });
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, filterStats, allFindings: findings }) +
+    renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, degradationScreen, filterStats, allFindings: findings }) +
       premiseBlock +
       renderDuplicatesMarkdown(deduped.merges) +
       renderChunkPassMarkdown(chunkPassIngest),
@@ -630,6 +644,7 @@ export async function createManagedReviewPackage(
     // record follows: a removal an operator has to open a file to discover reads,
     // on the terminal they were already looking at, as "there was nothing more".
     scopeBScreen: scopeB.record,
+    degradationScreen,
     duplicates: deduped.merges,
     chunkPass: chunkPassIngest,
   };
@@ -1764,6 +1779,17 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   if (finding.class_scope !== undefined) {
     record.class_scope = finding.class_scope;
   }
+  // Flow 479. Written only when present, on the same rule as the fields below. `evidence_screen` is the
+  // marker the TUI reads to show a finding as unproven; a projection that dropped it would erase the downgrade.
+  if (finding.degradation_class !== undefined) {
+    record.degradation_class = finding.degradation_class;
+  }
+  if (finding.evidence_kind !== undefined) {
+    record.evidence_kind = finding.evidence_kind;
+  }
+  if (finding.evidence_screen !== undefined) {
+    record.evidence_screen = finding.evidence_screen;
+  }
   // Written only when present, on both. `global_id` is absent on nothing the
   // current pipeline writes but stays optional so a legacy record read back and
   // rewritten does not acquire an invented key; `disposition` is absent unless
@@ -2353,9 +2379,28 @@ function parseLegacyReport(
     if (location.line !== undefined) {
       finding.line = location.line;
     }
+    // Flow 479: the template of `review-degradation` is markdown with `Class` and `Evidence kind` lines. Read only
+    // for that reviewer (another reviewer's `Class:` line means something else), and only when the value is exactly
+    // one member of the closed list; a pasted `a | b | c` template line stays unread.
+    if (finding.reviewer === "review-degradation") {
+      const degradationClass = closedListValue(block, ["class", "degradation class", "degradation_class"], REVIEW_DEGRADATION_CLASSES);
+      if (degradationClass !== undefined) {
+        finding.degradation_class = degradationClass;
+      }
+      const evidenceKind = closedListValue(block, ["evidence kind", "evidence_kind"], REVIEW_EVIDENCE_KINDS);
+      if (evidenceKind !== undefined) {
+        finding.evidence_kind = evidenceKind;
+      }
+    }
     findings.push(finding);
   }
   return findings;
+}
+
+function closedListValue<V extends string>(block: string, labels: readonly string[], allowed: readonly V[]): V | undefined {
+  // A value written `**debt**`, `\`debt\`` or `_debt_` is the same word; only the emphasis around it comes off.
+  const value = labelledField(block, labels)?.trim().replace(/^[*_`]+|[*_`]+$/g, "").trim().toLowerCase();
+  return allowed.find((candidate) => candidate === value);
 }
 
 const SEVERITY_PREFIX = /^\s*(?:\*\*|__)?(?:blocker|major|minor|info)(?:\*\*|__)?\s*[:—–-]\s*/i;
@@ -2701,6 +2746,7 @@ async function readPreFilterScopeBlock(packageDir: string): Promise<string | und
 type ScopeExtras = {
   externalReclaims?: readonly ExternalReclaim[] | undefined;
   scopeBScreen?: ScopeBScreenRecord | undefined;
+  degradationScreen?: DegradationScreenRecord | undefined;
   filterStats?: ReviewFilterStats | undefined;
   allFindings?: readonly StructuredReviewFinding[] | undefined;
 };
@@ -2733,7 +2779,13 @@ function renderScope(
   caps: ReviewCapsRecord,
   extras: ScopeExtras = {},
 ): string {
-  const { externalReclaims = [], scopeBScreen = { source: "none", scopeBFindings: 0 }, filterStats, allFindings = [] } = extras;
+  const {
+    externalReclaims = [],
+    scopeBScreen = { source: "none", scopeBFindings: 0 },
+    degradationScreen = { screened: 0, downgraded: [] },
+    filterStats,
+    allFindings = [],
+  } = extras;
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
   const head = `# Review Scope
@@ -2755,7 +2807,8 @@ ${renderStageCountsMarkdown({
 })}
 
 ${renderCapsMarkdown(caps)}
-${renderScopeBScreenMarkdown(scopeBScreen)}${
+${renderScopeBScreenMarkdown(scopeBScreen)}
+${renderDegradationScreenMarkdown(degradationScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
   }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${renderQuoteUnlocatedMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;

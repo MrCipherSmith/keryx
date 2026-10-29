@@ -174,7 +174,7 @@ describe("a delta round's second look, on a throwaway repository", () => {
     expect(narrowedSlices(manifest, readText, { round: record, prior: priorFindings }).narrowed).toEqual([]);
     // Unbacked (a round with no second-look hunks): judged as a new slice, so the narrow roster is refused.
     expect(narrowedSlices(manifest, readText, { round: { ...record, secondLookHunks: [] }, prior: priorFindings }).narrowed.length).toBeGreaterThan(0);
-    expect(fixSliceRoles(manifest)).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
+    expect(fixSliceRoles(manifest, new Set(manifest.slices.flatMap((slice) => slice.roles ?? [])))).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
   });
 
   test("flow 460: a second-look hunk sharing a git region with the delta is cut to its own lines, and ledger build accepts the slicer's output", async () => {

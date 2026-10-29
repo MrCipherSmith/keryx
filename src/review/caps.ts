@@ -360,6 +360,7 @@ const CORE_REVIEWERS = new Set([
   "review-architecture",
   "review-highload",
   "review-regression",
+  "review-degradation",
   "review-core-boundaries",
   "code-boss-reviewer",
   "code-ai-review",
