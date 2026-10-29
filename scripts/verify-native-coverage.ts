@@ -10,6 +10,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { canonicalDigest, type Control } from "../src/remote-control/protocol";
+import { SAFE_BUN_SPAWN_ARGS } from "../src/lib/safe-exec";
 import {
   buildNativeCoverageDescriptor, checkNativeCommandCoverage, currentNativeCoverageSubject, nativeParityReceiptDigest, parityReceiptId, receiptParity,
   registeredNativeCommandNames, validateNativeCoverageDescriptor,
@@ -587,12 +588,17 @@ export async function collectParityRun(root: string, inventory: NativeCoverageIn
     const home = join(work, "home"); const xdg = join(work, "xdg"); await mkdir(join(xdg, "keryx"), { recursive: true }); await mkdir(home);
     // The doctor version probe would otherwise reach the public registry; a fresh synthetic failure backoff keeps it local.
     await writeFile(join(xdg, "keryx", "version-check.json"), JSON.stringify({ failureAt: Date.now() }));
+    // The harness child is not the CLI entry, so its built-in gate hooks resolve `keryx` from PATH (src/harness/hooks/builtins.ts
+    // resolveKeryxArgv). This checkout's own CLI goes first on that PATH: never a host-installed keryx, and never none at all.
+    const bin = join(work, "bin"); await mkdir(bin);
+    const quote = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`;
+    await writeFile(join(bin, "keryx"), `#!/bin/sh\nexec ${quote(process.execPath)} ${SAFE_BUN_SPAWN_ARGS.join(" ")} ${quote(join(root, "src/cli.ts"))} "$@"\n`, { mode: 0o755 });
     const rows = inventory.variants.filter((row) => only === undefined || only.includes(row.id));
     const input = join(work, "cases.json"); const output = join(work, "outcomes.json");
     await writeFile(input, JSON.stringify({ cases: rows.map((row) => ({ variantId: row.id, handlerName: row.handlerName, case: parityCaseFor(row) })) }));
     const child = Bun.spawn([process.execPath, "--no-env-file", join(root, "scripts/verify-native-coverage.ts"), "--harness", input, output], { cwd: root, stdout: "pipe", stderr: "pipe",
       // Product git calls (checkout baselines, leases, the bridge's mapping checks) see no developer or system git configuration either.
-      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, XDG_DATA_HOME: xdg, XDG_CONFIG_HOME: join(work, "xdg-config"), KERYX_DATA_DIR: join(work, "data"), TMPDIR: work, LANG: "C.UTF-8",
+      env: { PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}`, HOME: home, XDG_DATA_HOME: xdg, XDG_CONFIG_HOME: join(work, "xdg-config"), KERYX_DATA_DIR: join(work, "data"), TMPDIR: work, LANG: "C.UTF-8",
         GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } });
     const [code, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
     if (code !== 0) throw new NativeCoverageGateError("parity-harness-failed", stderr.slice(-2000));
