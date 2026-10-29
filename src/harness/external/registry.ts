@@ -30,7 +30,9 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     label: "Codex",
     binary: "codex",
     detect: ["--version"],
-    versionPattern: "codex-cli (\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.]+)?)",
+    // Write admission must never mistake a version prefix for a measured release.
+    versionPattern:
+      "^codex-cli (\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)[ \\t\\r\\n]*$(?![\\s\\S])",
     knownGoodRange: { min: "0.147.0" },
     sandboxModes: ["read-only", "worktree-write"],
     // No documented mid-run input channel; operator messages go through resume.
@@ -43,7 +45,7 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
       "`no rollout found for thread id … (code -32600)`. `codex exec resume` also takes a " +
       "narrower flag set than `codex exec` — no `-s`, no `-C` — so a read-only resume inherits " +
       "its sandbox, a write run re-asserts its confinement as `-c` overrides, and it must be " +
-      "spawned with cwd already set to the worktree. Write mode needs codex 0.159.2 up to, but not including, 0.160.0.",
+      "spawned with cwd already set to the worktree. Write mode needs codex 0.159.2 up to, but not including, 0.160.0, or exactly 0.164.0.",
   },
   {
     id: "claude-cli",

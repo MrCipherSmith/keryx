@@ -126,15 +126,15 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     const second = await plan();
     expect(second.round).toMatchObject({ number: 2, mode: "delta" });
     expect(second.slices.fix).toHaveLength(1);
-    // The fix roster: logic and regression (F-1's author is review-logic); the fix line routes no content role, and the
-    // deep round-1 roster of the file is not owed.
-    expect(second.slices.fix[0]).toMatchObject({ files: ["src/a.ts"], findingIds: ["F-1"], roles: ["review-logic", "review-regression"] });
+    // The fix roster: logic and regression (F-1's author is review-logic) plus the degradation reviewer, which any
+    // source-code fix region owes (flow 479); the deep round-1 roster of the file is not owed.
+    expect(second.slices.fix[0]).toMatchObject({ files: ["src/a.ts"], findingIds: ["F-1"], roles: ["review-degradation", "review-logic", "review-regression"] });
     // The runner, in the same file, is a new slice routed as in round 1: spawning a process brings security-code.
     const fresh = second.slices.new.filter((slice) => slice.files.includes("src/a.ts"));
     expect(fresh).toHaveLength(1);
     expect(fresh[0]!.roles).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
     // The fix slice's roster joins the round; the deep round-1 roster of its file does not.
-    expect(second.split?.fix).toMatchObject({ slices: 1, dispatches: 2 });
+    expect(second.split?.fix).toMatchObject({ slices: 1, dispatches: 3 });
     expect(second.dispatches).toBeLessThanOrEqual(DEFAULT_MAX_DISPATCHES);
     // The drivers `review slice --package` wrote are exactly the dispatches the plan counts, all for roster roles: the new
     // slice's deep routing names review-backend and review-frontend, which this roster never runs.

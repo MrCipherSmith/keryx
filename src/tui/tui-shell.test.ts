@@ -4564,7 +4564,11 @@ test("session replacement paths revoke foreground callbacks before replacing the
   }
   const invalidation = source.slice(source.indexOf("const invalidateForegroundSession ="), source.indexOf("const applyOpened ="));
   expect(invalidation).toContain("foregroundOperation.invalidateSession();");
-  expect(invalidation).toContain("forceHandoff.clear();");
+  // A forced line lives only in the handoff (it is already out of the queue), so
+  // a session switch must give it back rather than clear it away.
+  expect(invalidation).toContain("forceHandoff.drainPending();");
+  expect(invalidation).not.toContain("forceHandoff.clear();");
+  expect(invalidation).toContain("turnLoop.replaceQueue([...parked, ...turnLoop.queue]);");
   expect(invalidation).toContain("clearTimeout(sessionPersistTimer)");
   const finalizer = source.slice(source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);"));
   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("remoteQueue.turnSettled"));

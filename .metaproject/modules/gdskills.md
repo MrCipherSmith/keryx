@@ -96,6 +96,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-backend`: Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries.
 - `review-clean-code`: Review function and class maintainability, SOLID issues, cohesion, naming, and complexity.
 - `review-core-boundaries`: Review shared/core module coupling, public API stability, and dependency minimization.
+- `review-degradation`: Ask whether the code is worse after a change than on the base branch (behaviour, defaults, speed, structure) and whether that can be shown, over the diff plus every consumer of each changed shared symbol.
 - `review-flow-graph`: Review graph or flow UI abstractions, graph surfaces, layout lifecycle, and large-graph behavior.
 - `review-frontend`: Review frontend components, state boundaries, rendering behavior, and UI integration patterns.
 - `review-frontend-conventions`: Review frontend code against repository-local frontend conventions and agent entrypoints.

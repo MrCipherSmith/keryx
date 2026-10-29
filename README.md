@@ -641,8 +641,15 @@ Grouped by what you are trying to do, not by internal module layout.
   the findings that survived it. A round also says what it left undone: mutation
   candidates that never ran (`review mutate --cap`), severities held because only
   a presentation mutant survived, and follow-ups handed back to the parent, in
-  `review status` and `review report-parity`. A pull-request round adds
-  `review-pr-contract`, which reads the diff against the PR's own stated contract.
+  `review status` and `review report-parity`, and how long it sat idle between
+  waves with an authorized plan (`keryx review next` journals every call in
+  `tool-calls/wave-events.jsonl`). A pull-request round adds
+  `review-pr-contract`, which reads the diff against the PR's own stated contract. At
+  profile `full` a deep round adds `review-degradation`, which asks whether the code is
+  worse than on the base branch and wants it shown: a `major` or `blocker` with no
+  evidence is lowered to `info` and marked unproven (`keryx review blast-radius
+  --degradation` prints the graph's importers of each changed shared export's module
+  for it, under one cap).
 
 **Operate agents**
 

@@ -18,6 +18,8 @@ keryx review start  --target branch --ref feature/example --reviewers a,b
 keryx review attach --flow 001 --target pull-request --ref 42
 ```
 
+A round runs the core reviewers and the ones the stack and the change call for. `review-clean-code` and `review-style` are off by default: `keryx review required` lists them as excluded with the reason, and `report.md` ends up with the line `опциональные роли не запускались: …`. Add `--style` to `review start` (or `review required`) to run both, or `--with-role <role>` for one; the choice is kept in the package's `round-roles.json`. A project switches any role off, or always on, under `reviewRoles` in `routing.config.json` (`disabled`, `enabled`). `--all` does not bring a switched-off role back.
+
 The full surface:
 
 ```console
@@ -137,6 +139,12 @@ removes findings. For `--all` and a full review a wave holds at most 10 reviewer
 honoured, at most 300 seconds; after two halvings the round stops with
 `STATUS: BLOCKED rate_limited`, naming the reviewers still queued.
 
+After a timeout or a resumed session, `keryx review next --package <dir>` says which
+reviewers still owe slices. It counts every reply a reviewer left, in wave order, so
+slices covered in an earlier wave are not asked for again; saved `*.prev*.txt` copies are
+ignored; and a finished reply that does not list the slices it covered is shown as
+`rejected` and the reviewer is asked again. Asking twice gives the same answer.
+
 What the skill does not do: it does not run as a subagent of another orchestrator
 by default, it does not fix code, and it does not shrink the reviewer set to fit a
 budget.
@@ -149,7 +157,23 @@ stack rules out and the ones whose path triggers no changed file matches.
 `review-regression` joins the set only when a blast radius was computed for the
 package, and `review-pr-contract` (the reviewer that reads the diff against the
 pull request's own stated contract: title, description, linked issue, CI) only when
-`pr-context.md` is in the package. `keryx review required --pr-context <file>`
+`pr-context.md` is in the package. `review-degradation` (profile `full`, deep tier)
+is the reviewer for the question *is the code worse than on the base branch, and
+can that be shown?* It reads the diff and the importers of the module that holds
+each changed shared export (and of a barrel that re-exports it), a set
+`keryx review blast-radius --degradation` takes from the code graph rather than from
+the model under one cap shared by all exports; it has no severity floor, and a light
+round leaves it out. A delta round dispatches it on a fix slice that changes a
+source-code file (not a test, a document or a data file) and on every new deep slice;
+a fix slice's lines cannot tell whether they sit inside an exported function, so the
+payload settles it. Each of its findings carries a `degradation_class` (`behaviour-delta`,
+`default-change`, `diff-vs-description`, `debt`, `performance`, `cross-pr`,
+`blind-test`) and an `evidence_kind` (`probe`, `consumer-trace`, `merge-trace`,
+`red-test`, `base-diff`). `keryx review ingest` lowers a `major` or `blocker` with no
+evidence kind to `info`, marks it unproven and lists it in `scope.md` under
+`## Degradation evidence screen`; it is not rejected. The review panel and `/reviews`
+show the class, the evidence kind and an `UNPROVEN (was major)` marker.
+`keryx review required --pr-context <file>`
 prints the set, and prints each excluded reviewer
 with its reason. A narrower set (`mode: diff`, the roles derived from the changed
 files) is the operator's call and the dispatch records their own words as
@@ -278,7 +302,7 @@ keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 
 Before a round dispatches, the review refreshes the graph, the wiki and the memory for the PR head and writes `layers.json` into the package. **No model is called**, and `wiki enrich` — the only model step in the wiki — is never run automatically. The graph is built at the PR head in a fresh worktree, so its recorded commit equals the head; the wiki and the memory come from your working copy, and `layers.json` says how far that copy is from the head. Each reviewer payload carries a bounded `layers` block, and the package records per reviewer how many graph, wiki, memory and ctx calls it made (`unknown`, never zero, when it left no tool-call log).
 
-The blast radius is capped at 40 files a pass. The files beyond the cap are not skipped silently: `keryx review chunks plan` splits them into chunks, `chunks estimate` states the cost before you spend it (the ceiling is 25 passes of 40 files, set by `reviewChunks.maxPasses` in `routing.config.json`), and the chunks run one at a time through `review-regression` on the middle tier. `keryx review coverage` counts what is covered, covered by a named omission, and uncovered. `keryx review complete` refuses while a file is uncovered and names the command that runs the missing chunks; the only way past is `--waive-coverage "<operator quote>"`, recorded with the time and the files not reviewed. See [`review layers`, `review chunks` and `review coverage`](../cli-reference.md#review-layers-review-chunks-and-review-coverage).
+The blast radius is capped at 40 files a pass. The files beyond the cap are not skipped silently: `keryx review chunks plan` splits them into chunks, `chunks estimate` states the cost before you spend it (the ceiling is 25 passes of 40 files, set by `reviewChunks.maxPasses` in `routing.config.json`), and the chunks run one at a time through `review-regression` on the middle tier. `keryx review coverage` counts what is covered, covered by a named omission, and uncovered. `keryx review complete` refuses while a file is uncovered and names the command that runs the missing chunks; the only way past is `--waive-coverage "<operator quote>"`, recorded with the time and the files not reviewed. What a chunk pass finds reaches the round: `chunks merge` prints the findings and how many `findings.json` does not hold, and `keryx review ingest --review-id <id>` records them as `review-regression/<chunk>` findings that the scope-B screen no longer deletes for being outside the set (a minor is still dropped by the severity floor). A major the pass did not enumerate carries a `class_scope` that says `NOT ENUMERATED`. If a pass finishes after the report was written, ingest again and rewrite the report; `keryx review complete` warns about, and records in `report.md`, any pass finding still out of `findings.json`, and does not refuse. See [`review layers`, `review chunks` and `review coverage`](../cli-reference.md#review-layers-review-chunks-and-review-coverage).
 
 #### Child agents are counted per wave
 
@@ -675,7 +699,11 @@ What a round leaves behind that no finding count shows is printed under the same
 header: `Not run: N candidates`, `held: F-003 stays minor (mutant m2)`, and
 `follow-up open: <reviewer>:fu1 …`. `keryx review report-parity <review>` prints the
 same as Markdown to paste into `report.md`; `/review parity` in the shell and the
-sidebar show it too. `review complete` warns, and does not refuse, when the report
+sidebar show it too. Between waves, `keryx review next` journals each call in
+`<package>/tool-calls/wave-events.jsonl`, and a pause with open slices under an
+authorized plan adds `Gaps without a launch after the plan was authorized: N, longest
+M min (waits for operator cards are possible)` to the same place; it is a number to
+read, never a warning. `review complete` warns, and does not refuse, when the report
 names none of a kind of leftover. A package built before this existed shows no such
 lines, and a package whose ledger predates `review-pr-contract` is not refused for
 lacking it; `review complete` warns `review-pr-contract not run (package predates
@@ -713,6 +741,25 @@ keryx review ingest --report round7.md --ref round7 --refuted refuted.json
 
 Closing with no dispositions is allowed. It leaves every finding reading
 `unknown`, which means "nobody wrote down what happened".
+
+### The plan against the clock
+
+`review complete` writes one more line into `report.md` (after the `Evidence level:` line) and prints it:
+
+```text
+Plan estimate vs actual: plan 44-110 min (88 dispatches); actual 106 min from first to last raw reply (132 replies); pauses over 10 min: 1 (59 min), 46 min without them
+```
+
+The plan is read as recorded: `plan.json` (written by `review plan`), else `plan-confirmation.json`; a package with neither
+says `no recorded plan estimate`. The actual time is the first to the last file in `raw/`, by file time, so rounds older
+than the wave journal have it too. A gap longer than **10 minutes** between two neighbouring raw replies is counted as a
+pause and shown with the time left without it, so a round the operator walked away from is not read as a wrong estimate. The
+line does not cover what happens after the last raw reply (verifier, ingest, publication). If the raw files were copied or
+restored (every reply older than `plan.json`, or five or more replies within a minute of each other) the line says
+`actual not shown` rather than print a duration that is not the round's. A later close replaces the line, never repeats it;
+`review status` and the review panel (`/reviews`) show the same line, with `so far` while the round is open. The estimate
+itself is not changed by this: `TYPICAL_DISPATCH_MINUTES`, `CHILD_DEADLINE_MINUTES`, `ASSUMED_PARALLEL_DISPATCHES` and the
+confirmation thresholds keep their values.
 
 ### Completed means ready — the checklist
 

@@ -19,6 +19,7 @@ import {
   projectReviewsLayerLines,
   presentReviews,
   projectReviewsRow,
+  renderReviewDegradationText,
   renderReviewsText,
   REVIEWS_EMPTY,
   type PresentReviewsOptions,
@@ -482,5 +483,60 @@ describe("layers in /reviews", () => {
   test("without actions the keys do nothing", async () => {
     const view = open(metrics(), { depth: [depthRow()] });
     expect(() => view.press("l")).not.toThrow();
+  });
+});
+
+// Flow 479 AC7: the Review depth tab and the readline text of /reviews carry the degradation class, the evidence kind
+// and the unproven marker.
+describe("degradation findings in /reviews", () => {
+  const degradation = [
+    { id: "F-001", severity: "major", degradationClass: "behaviour-delta", evidenceKind: "consumer-trace", unproven: false, originalSeverity: undefined, file: undefined },
+    { id: "F-002", severity: "info", degradationClass: "default-change", evidenceKind: undefined, unproven: true, originalSeverity: "major", file: undefined },
+  ];
+  const depthRow = {
+    reviewId: "r1",
+    pull: "acme/app#7",
+    mode: "unrecorded",
+    selected: [],
+    required: [],
+    excluded: [],
+    missing: [],
+    filesKnown: false,
+    mutation: { passes: 0, totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 }, pending: 0 },
+    mutationWaived: false,
+    degradation,
+  } as never;
+
+  test("the readline text shows class, evidence kind and the unproven marker", () => {
+    const text = renderReviewsText(metrics(), [depthRow]);
+    expect(text).toContain("F-001 major behaviour-delta, evidence consumer-trace");
+    expect(text).toContain("F-002 info default-change, UNPROVEN (was major)");
+    expect(renderReviewDegradationText([depthRow])).toContain("degradation: 2 finding(s), 1 unproven");
+  });
+
+  test("the Review depth tab paints the same lines", () => {
+    let depth: { content: string } | undefined;
+    presentReviews(
+      (_otui, _chrome, input) => {
+        input.renderTab("depth", {
+          add: (child: { content: string }) => {
+            depth = child;
+          },
+        });
+        return { close: () => {}, setTab: () => {}, activeTab: () => "depth" };
+      },
+      {
+        TextRenderable: class {
+          content: string;
+          constructor(_r: unknown, opts: { content: string }) {
+            this.content = opts.content;
+          }
+        },
+      },
+      {},
+      { metrics: metrics(), depth: [depthRow], visibleRows: 20 },
+    );
+    expect(depth?.content).toContain("F-002 info default-change, UNPROVEN (was major)");
+    expect(depth?.content).toContain("F-001 major behaviour-delta, evidence consumer-trace");
   });
 });

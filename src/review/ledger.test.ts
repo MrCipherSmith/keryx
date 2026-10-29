@@ -608,6 +608,17 @@ describe("buildLedger", () => {
     expect((await blockersOf(result)).join("\n")).toContain("review-logic: reviewer scope is incomplete");
   });
 
+  test("needs_context: an object question is open for the ledger exactly as for the collector", async () => {
+    const base = await inputs();
+    const objectQuestion = [{ question: "is the token rotated?" }];
+    const result = buildLedger({ ...base, raws: [raw("review-architecture", "DONE"), raw("review-logic", "DONE", { needs_context: objectQuestion }), raw("review-testing-practices", "DONE")] });
+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+    expect(logic).toMatchObject({ status: "incomplete", scopeComplete: false });
+    expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("is the token rotated?");
+    const empty = buildLedger({ ...base, raws: [raw("review-architecture", "DONE"), raw("review-logic", "DONE", { needs_context: [{}, ""] }), raw("review-testing-practices", "DONE")] });
+    expect((empty.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")).toMatchObject({ scopeComplete: true });
+  });
+
   test("a DONE result with open needs_context is not a finished scope", async () => {
     const base = await inputs();
     const raws = base.selected.map((r) => raw(r, "DONE", r === "review-style" || r === "review-logic" ? { needs_context: ["run the tests"] } : {}));

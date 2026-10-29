@@ -86,7 +86,7 @@ interface CardsModule {
     otui: unknown,
     chrome: unknown,
     cardId: string,
-    opts: { snapshot: () => Snapshot; initialTab?: string; runCommand?: (command: string) => void },
+    opts: import("./sidebar-cards").OpenSidebarCardOptions,
   ): { close(): void; activeTab(): string } | undefined;
 }
 interface GeometryModule {
@@ -413,6 +413,44 @@ otuiTest("flow 468 AC13: clicking a card opens its detail, in default mode and i
       host.destroy();
       h.destroy();
     }
+  });
+});
+
+otuiTest("Work item click opens a temporary tab and cleans up on return", async () => {
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  const c = await loadCards();
+  await withTmpDir(async (configDir) => {
+    const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
+    const h = await mountChrome(otui, geo);
+    let disposed = 0;
+    try {
+      const handle = c.openSidebarCard(otui.core, h.chrome, "work", {
+        initialTab: "subagents",
+        snapshot: () => ({ sections: { subagents: "Subagents 1/0" },
+          items: { subagents: [{ id: "a", label: "Agent A", text: "running Agent A" }] } }),
+        renderItem: (_section, _item, body) => {
+          (body as { add(child: unknown): void }).add(new otui.core.TextRenderable(h.renderer, {
+            id: "test-live-agent", content: "Live agent output",
+          }));
+          return () => { disposed += 1; };
+        },
+      });
+      await h.flush();
+      const row = byId(h, "sb-card-item-subagents-a");
+      await h.mockMouse.click(row.x, row.y);
+      await h.flush();
+      expect(handle?.activeTab()).toBe("detail:subagents:a");
+      expect(h.captureCharFrame()).toContain("Live agent output");
+      const source = byId(h, "modal-tab-subagents");
+      await h.mockMouse.click(source.x, source.y);
+      await h.flush();
+      expect(handle?.activeTab()).toBe("subagents");
+      expect(disposed).toBe(1);
+      expect(h.renderer.root.findDescendantById("modal-tab-detail:subagents:a")).toBeUndefined();
+      handle?.close();
+      expect(disposed).toBe(1);
+    } finally { h.destroy(); }
   });
 });
 

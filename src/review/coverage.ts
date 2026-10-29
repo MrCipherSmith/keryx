@@ -13,6 +13,7 @@ import { confirmedDecision, decisionWriters, type OperatorDecisionKind, type Ope
 import { pendingMutants } from "./mutate";
 import { buildReviewScope } from "./scope";
 import { assertGitRevision } from "../lib/git-revision";
+import { decideRoleSwitches, packageEnabledRoles, readRoleConfig, rolesThatRan } from "./role-switches";
 
 export type ReviewMode = "all" | "diff";
 export type RoundDepth = "light" | "full";
@@ -41,6 +42,10 @@ export type RequiredSet = {
   filesKnown: boolean;
   /** Supersedes and overlap removals that were NOT applied, and why (M6). Absent when there is nothing to say. */
   notes?: string[] | undefined;
+  /** Roles of the roster that are switched off for the round (default-off roles, `reviewRoles.disabled`); each also has an `excluded` entry. */
+  rolesOff?: string[] | undefined;
+  /** Role-switch warnings: an unknown or protected name in the config, an unreadable `reviewRoles`. Never a refusal. */
+  warnings?: string[] | undefined;
 };
 
 /**
@@ -243,6 +248,8 @@ export type RequiredOptions = {
   prContext?: boolean | undefined;
   /** `light` narrows the set to logic, testing and one conventions reviewer; default `full`. */
   depth?: RoundDepth | undefined;
+  /** Roles the round asked for (`--style`, `--with-role`) or the package recorded: they stay on although off by default or by config. */
+  enabledRoles?: readonly string[] | undefined;
 };
 
 const REGRESSION = "review-regression";
@@ -377,6 +384,12 @@ function lightConventionsReviewer(roster: readonly string[], inventory: Pick<Rev
   return group?.find((member) => roster.includes(member)) ?? pick;
 }
 
+/** Names of the reviewers the project's review tree holds (bundled and project), the inventory `requiredReviewers` builds its roster from. */
+export async function installedReviewerNames(root: string): Promise<ReadonlySet<string>> {
+  const inventory = await collectReviewers(root);
+  return new Set([...inventory.bundled, ...inventory.project].map((reviewer) => reviewer.name));
+}
+
 export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
   const stack = await detectProjectStack(root);
@@ -395,6 +408,19 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (reviewer.pathsSource !== "none" && reviewer.paths.length) projectGates.set(reviewer.name, reviewer.paths.map(globToRegExp));
   }
   const filesKnown = files !== undefined;
+  const switches = decideRoleSwitches({
+    roster,
+    config: await readRoleConfig(root),
+    optIn: options.enabledRoles ?? [],
+    protectedRoles: NEVER_SUPERSEDED,
+    configIgnored: files?.some((file) => file === "routing.config.json") ? "this round changes routing.config.json, so a branch cannot switch roles off for its own review" : undefined,
+  });
+  const rolesOff = [...switches.off.keys()].sort();
+  const warnings = switches.warnings;
+  const switchedOff = (name: string): boolean => switches.off.has(name);
+  for (const name of roster) if (switchedOff(name)) excluded.push({ reviewer: name, reason: switches.off.get(name) as string });
+  roster.splice(0, roster.length, ...roster.filter((name) => !switchedOff(name)));
+  const switchFields = { ...(warnings.length === 0 ? {} : { warnings }), ...(rolesOff.length === 0 ? {} : { rolesOff }) };
   if (options.depth === "light") {
     const conventions = lightConventionsReviewer(roster, inventory);
     const keep = new Set([...LIGHT_FIXED_REVIEWERS, ...(conventions === undefined ? [] : [conventions])]);
@@ -403,7 +429,7 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     for (const name of [REGRESSION, PR_CONTRACT]) if (inventory.bundled.some((r) => r.name === name)) excluded.push({ reviewer: name, reason: "light round: not part of the light set" });
     const notes: string[] = [];
     const kept = applySupersedes(light, inventory, excluded, { root, files }, notes).sort();
-    return { mode, depth: "light", required: kept, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }) };
+    return { mode, depth: "light", required: kept, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }), ...switchFields };
   }
   const gated = (name: string): boolean | undefined => {
     if (!filesKnown) return undefined;
@@ -435,7 +461,7 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
   }
   const notes: string[] = [];
   const collapsed = applyOverlapGroups(applySupersedes(required, inventory, excluded, { root, files }, notes), inventory, files, excluded, { root }, notes).sort();
-  return { mode, depth: "full", required: collapsed, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }) };
+  return { mode, depth: "full", required: collapsed, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }), ...switchFields };
 }
 
 export type CoverageOptions = {
@@ -663,8 +689,21 @@ export async function reviewersLeftOut(packageDir: string, selected: readonly st
   const need = await requiredReviewers(projectRootOfPackage(packageDir), "all", await packageScopeFiles(packageDir), {
     blastRadius: await packageHasBlastRadius(packageDir),
     prContext: packageHasPrContext(packageDir),
+    enabledRoles: await packageEnabledRoles(packageDir),
   });
   return { required: need.required, missing: selected === undefined ? need.required : need.required.filter((role) => !selected.includes(role)) };
+}
+
+/** The roles switched off for the package's round that left no driver or raw reply: the roles that did not run, for the report line. */
+export async function packageRolesNotRun(packageDir: string): Promise<string[]> {
+  const need = await requiredReviewers(projectRootOfPackage(packageDir), "all", await packageScopeFiles(packageDir), {
+    blastRadius: await packageHasBlastRadius(packageDir),
+    prContext: packageHasPrContext(packageDir),
+    enabledRoles: await packageEnabledRoles(packageDir),
+  });
+  const off = need.rolesOff ?? [];
+  const ran = await rolesThatRan(packageDir, off);
+  return off.filter((role) => !ran.has(role));
 }
 
 /**
@@ -772,6 +811,7 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
     blastRadius: options.blastRadius,
     prContext: options.prContext === true && dispatchKnowsRole(record, PR_CONTRACT),
     depth: effective?.depth ?? "full",
+    enabledRoles: options.packageDir === undefined ? [] : await packageEnabledRoles(options.packageDir),
   });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   // A deliberate skip (`ledger build --skip <reviewer> --reason`) accounts for a required reviewer only with its reason

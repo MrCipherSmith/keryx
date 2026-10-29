@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { recordChunk } from "../review/chunks";
-import { formatReviewDepthLines, layersDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, REVIEW_DEPTH_EMPTY, type ReviewDepthRow } from "./review-panel";
+import { degradationLines, formatReviewDepthLines, layersDepthLines, layersLine, loadReviewDepth, renderReviewDegradationText, renderReviewDepthText, renderReviewLayersText, REVIEW_DEPTH_EMPTY, type ReviewDepthRow } from "./review-panel";
 import { presentReviews, renderReviewsText } from "./reviews-inspector";
 
 const roots: string[] = [];
@@ -51,6 +51,19 @@ describe("loadReviewDepth", () => {
     expect(text).toContain(`1 of ${row?.required.length} required were dispatched`);
     expect(text).toContain("excluded review-regression: no blast radius");
     expect(text).toContain("missing: ");
+  });
+
+  test("names the optional roles that are off, and stops once the package asked for them", async () => {
+    const files = { [`${PKG}/manifest.json`]: manifest, [`${PKG}/research.json`]: { dispatch: { version: 1, mode: "all", selected: [] } } };
+    const root = await project(files);
+    const [row] = await loadReviewDepth(root);
+    expect(row?.rolesOff).toEqual(["review-clean-code", "review-style"]);
+    expect(formatReviewDepthLines(row ? [row] : []).join("\n")).toContain("roles off: review-clean-code, review-style");
+
+    const asked = await project({ ...files, [`${PKG}/round-roles.json`]: { enabled: ["review-clean-code", "review-style"] } });
+    const [back] = await loadReviewDepth(asked);
+    expect(back?.rolesOff ?? []).toEqual([]);
+    expect(formatReviewDepthLines(back ? [back] : []).join("\n")).not.toContain("roles off:");
   });
 
   test("a blast-radius record turns the regression reviewer from excluded to required", async () => {
@@ -275,5 +288,105 @@ describe("layers in the review depth", () => {
     const [row] = await loadReviewDepth(root);
     expect(layersLine(row?.layersView)).toBe("layers: not refreshed");
     expect(layersDepthLines(row?.layersView).join("\n")).toContain("keryx review layers refresh --package");
+  });
+});
+
+describe("plan estimate against the actual time", () => {
+  const plan = { dispatches: 54, minutes: { min: 28, max: 70 } };
+  const raws = (count: number): Record<string, string> => Object.fromEntries(Array.from({ length: count }, (_, i) => [`${PKG}/raw/r${i}.txt`, "x"]));
+
+  test("a closed review shows the line and an open one shows so far", async () => {
+    const closed = await project({ [`${PKG}/manifest.json`]: { ...manifest, status: "closed" }, [`${PKG}/plan.json`]: plan, ...raws(2) });
+    const open = await project({ [`${PKG}/manifest.json`]: { ...manifest, status: "in_progress" }, [`${PKG}/plan.json`]: plan, ...raws(2) });
+    const [closedRow] = await loadReviewDepth(closed);
+    const [openRow] = await loadReviewDepth(open);
+    expect(closedRow?.timing).toContain("Plan estimate vs actual: plan 28-70 min (54 dispatches)");
+    expect(closedRow?.timing).not.toContain("so far");
+    expect(openRow?.timing).toContain("so far");
+    expect(formatReviewDepthLines(closedRow ? [closedRow] : []).join("\n")).toContain("  Plan estimate vs actual:");
+  });
+
+  test("a row without a plan and without raw replies is unchanged", async () => {
+    const root = await project({ [`${PKG}/manifest.json`]: manifest });
+    const [row] = await loadReviewDepth(root);
+    expect(row?.timing).toBeUndefined();
+    expect(formatReviewDepthLines(row ? [row] : []).join("\n")).not.toContain("Plan estimate");
+  });
+});
+
+// Flow 479 AC7: the degradation class and evidence kind of each finding, and the unproven marker.
+describe("degradation findings in the review panel", () => {
+  const FINDINGS = [
+    { id: "F-001", reviewer: "review-degradation", severity: "major", degradation_class: "behaviour-delta", evidence_kind: "probe", file: "src/a.ts" },
+    {
+      id: "F-002",
+      reviewer: "review-degradation",
+      severity: "info",
+      degradation_class: "performance",
+      evidence_screen: { rule: "degradation-no-evidence", original_severity: "major" },
+    },
+    { id: "F-003", reviewer: "review-logic", severity: "major", file: "src/b.ts" },
+  ];
+
+  test("each finding shows its class and evidence kind; one the screen lowered shows UNPROVEN and its original severity", async () => {
+    const root = await project({ [`${PKG}/manifest.json`]: manifest, [`${PKG}/findings.json`]: FINDINGS });
+    const [row] = await loadReviewDepth(root);
+    expect(row?.degradation?.map((f) => f.id)).toEqual(["F-001", "F-002"]);
+    const text = formatReviewDepthLines(row ? [row] : []).join("\n");
+    expect(text).toContain("degradation: 2 finding(s), 1 unproven");
+    expect(text).toContain("F-001 major behaviour-delta, evidence probe src/a.ts");
+    expect(text).toContain("F-002 info performance, UNPROVEN (was major)");
+    expect(text).not.toContain("F-003");
+  });
+
+  test("a proven finding is never marked unproven, and a screened one never names an evidence kind", () => {
+    const lines = degradationLines([
+      { id: "F-1", severity: "major", degradationClass: "debt", evidenceKind: "base-diff", unproven: false, originalSeverity: undefined, file: undefined },
+      { id: "F-2", severity: "info", degradationClass: "debt", evidenceKind: undefined, unproven: true, originalSeverity: "blocker", file: undefined },
+    ]);
+    expect(lines[1]).toBe("  F-1 major debt, evidence base-diff");
+    expect(lines[1]).not.toContain("UNPROVEN");
+    expect(lines[2]).toBe("  F-2 info debt, UNPROVEN (was blocker)");
+    expect(lines[2]).not.toContain("evidence ");
+  });
+
+  test("a package with no degradation finding, or no findings.json, adds nothing", async () => {
+    const plain = await project({ [`${PKG}/manifest.json`]: manifest, [`${PKG}/findings.json`]: [FINDINGS[2]] });
+    const none = await project({ [`${PKG}/manifest.json`]: manifest });
+    for (const root of [plain, none]) {
+      const [row] = await loadReviewDepth(root);
+      expect(row?.degradation).toBeUndefined();
+      expect(formatReviewDepthLines(row ? [row] : []).join("\n")).not.toContain("degradation:");
+    }
+    expect(degradationLines(undefined)).toEqual([]);
+  });
+
+  test("TP-006: either side of the OR is enough to be read as a degradation finding", async () => {
+    const byName = { id: "F-010", reviewer: "Review_Degradation (deep)", severity: "minor" };
+    const byField = { id: "F-011", reviewer: "review-logic", severity: "major", degradation_class: "debt" };
+    const neither = { id: "F-012", reviewer: "review-regression", severity: "major" };
+    const root = await project({ [`${PKG}/manifest.json`]: manifest, [`${PKG}/findings.json`]: [byName, byField, neither] });
+    const [row] = await loadReviewDepth(root);
+    expect(row?.degradation?.map((f) => f.id)).toEqual(["F-010", "F-011"]);
+  });
+
+  test("SEC-001: a hostile id or file reaches the panel as one plain line", () => {
+    const lines = degradationLines([
+      { id: "F-1\u001b[2J\u2028X", severity: "major", degradationClass: "debt", evidenceKind: "probe", unproven: false, originalSeverity: undefined, file: "a\rb\u2029c.ts" },
+    ]);
+    expect(lines[1]).toBe("  F-1 X major debt, evidence probe a b c.ts");
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point of this check
+    expect(lines.join("\n")).not.toMatch(new RegExp("[\\u001b\\r\\u2028\\u2029]"));
+  });
+
+  test("the depth tab and the readline text print the same lines", async () => {
+    const root = await project({ [`${PKG}/manifest.json`]: manifest, [`${PKG}/findings.json`]: FINDINGS });
+    const [row] = await loadReviewDepth(root);
+    for (const line of degradationLines(row?.degradation)) {
+      expect(formatReviewDepthLines([row!])).toContain(`  ${line}`);
+      expect(renderReviewDepthText([row!])).toContain(line);
+    }
+    expect(renderReviewDegradationText([row!])).toContain("F-002 info performance, UNPROVEN (was major)");
+    expect(renderReviewDegradationText([])).toContain("No degradation findings.");
   });
 });

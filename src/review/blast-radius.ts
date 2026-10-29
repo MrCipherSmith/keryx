@@ -866,8 +866,10 @@ export type BlastRadiusRejection = {
  */
 export type BlastRadiusExemption<T> = {
   finding: T;
-  /** The rule that did NOT run. */
+  /** The rule that did NOT run. For a chunk-pass finding `outside-set` stands for both rules not applied. */
   rule: BlastRadiusRejectionRule;
+  /** Why the rule did not run: the blocker exemption (the default) or a finding that came from a chunk pass. */
+  reason?: "blocker" | "chunk-pass";
   /** Why it did not run, in words. Rendered verbatim beside the accepted count. */
   detail: string;
 };
@@ -1097,7 +1099,7 @@ function findingText(finding: Partial<StructuredReviewFinding>): string {
 export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFinding>>(
   findings: readonly T[],
   radius: Pick<BlastRadius, "files" | "changedFiles">,
-  options?: { minSeverity?: ReviewFindingSeverity | undefined },
+  options?: { minSeverity?: ReviewFindingSeverity | undefined; chunkPass?: ((finding: T) => boolean) | undefined },
 ): BlastRadiusScreenResult<T> {
   const minSeverity = options?.minSeverity ?? "major";
   const floor = severityRank(minSeverity);
@@ -1109,6 +1111,29 @@ export function screenBlastRadiusFindings<T extends Partial<StructuredReviewFind
   const exempted: BlastRadiusExemption<T>[] = [];
 
   for (const finding of findings) {
+    if (options?.chunkPass?.(finding) === true) {
+      // A chunk pass reads the files the cap dropped from the set and traces callers outside it, so the set cannot
+      // bound where it may report, and it is not prose about the change. The severity floor still holds.
+      const passSeverity = finding.severity;
+      if (passSeverity !== undefined && severityRank(passSeverity) > floor) {
+        rejected.push({
+          finding,
+          rule: "non-regression-severity",
+          detail: `severity \`${passSeverity}\` is below the scope-B floor \`${minSeverity}\`; a chunk-pass finding is held to the same floor.`,
+        });
+        continue;
+      }
+      exempted.push({
+        finding,
+        rule: "outside-set",
+        reason: "chunk-pass",
+        detail:
+          "a chunk-pass finding: `outside-set` and `no-link-to-change` were NOT applied, because the pass reads files outside the " +
+          "computed set on purpose and traces callers of the change. Only the severity floor judged it.",
+      });
+      accepted.push(finding);
+      continue;
+    }
     const file = typeof finding.file === "string" ? normalizeFile(finding.file) : undefined;
     const sites = (finding.class_scope?.sites ?? []).map((site) => normalizeFile(site.split(":")[0] ?? site));
     const anchored = (file !== undefined && inScope.has(file)) || sites.some((site) => inScope.has(site));
@@ -1320,13 +1345,13 @@ export function renderBlastRadiusScreenMarkdown(result: BlastRadiusScreenResult<
   lines.push("## Scope B rejections");
   lines.push("");
   lines.push(`severity_floor: ${result.minSeverity}`);
-  lines.push(
-    `accepted: ${result.accepted.length}${
-      exempted.length === 0
-        ? ""
-        : ` (${exempted.length} admitted by the blocker exemption without naming the change)`
-    }`,
-  );
+  const passExempt = exempted.filter((exemption) => exemption.reason === "chunk-pass").length;
+  const blockerExempt = exempted.length - passExempt;
+  const exemptNotes = [
+    ...(blockerExempt === 0 ? [] : [`${blockerExempt} admitted by the blocker exemption without naming the change`]),
+    ...(passExempt === 0 ? [] : [`${passExempt} chunk-pass finding(s) admitted without \`outside-set\` and \`no-link-to-change\``]),
+  ];
+  lines.push(`accepted: ${result.accepted.length}${exemptNotes.length === 0 ? "" : ` (${exemptNotes.join("; ")})`}`);
   lines.push(`rejected: ${result.rejected.length}`);
   lines.push(`exempted: ${exempted.length}`);
   lines.push("");
@@ -1348,7 +1373,9 @@ export function renderBlastRadiusScreenMarkdown(result: BlastRadiusScreenResult<
     lines.push(
       exempted.length === 0
         ? "_every scope-B finding was a regression claim inside the computed set._"
-        : "_nothing was rejected. The finding(s) above were admitted by the blocker exemption, so this record does NOT say they named the change — `no-link-to-change` was not applied to them._",
+        : passExempt > 0
+          ? "_nothing was rejected. The finding(s) above include chunk-pass findings, admitted without `outside-set` and `no-link-to-change`, so this record does NOT say they sit inside the set or name the change._"
+          : "_nothing was rejected. The finding(s) above were admitted by the blocker exemption, so this record does NOT say they named the change — `no-link-to-change` was not applied to them._",
     );
     lines.push("");
     return lines.join("\n");

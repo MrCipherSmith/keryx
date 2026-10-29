@@ -6,7 +6,7 @@ import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { INGEST_SCREENED_FILE, type IngestScreened, packageCoverageErrors, researchErrors } from "./research";
 import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
-import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
+import { needsContextQuestions, readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
@@ -117,6 +117,8 @@ export type LedgerInputs = {
    * `selected`, and are written to `dispatch.skipped` and as `Not run: <reviewer> — <reason>` lines to `dispatch.notRun`.
    */
   skipped?: readonly ReviewerSkip[] | undefined;
+  /** Reviewer names the project's review tree holds; a fix slice's routed roles outside it are owed no read. Absent: every routed role counts as installed. */
+  installed?: ReadonlySet<string> | undefined;
   /** Reviewers the required set dropped by `supersedes` or an overlap group, and the notes of the ones it refused to drop (M6). */
   superseded?: ReadonlyArray<{ reviewer: string; reason: string }> | undefined;
   supersedeNotes?: readonly string[] | undefined;
@@ -475,7 +477,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const dispositionsBy = new Map<string, Map<string, string>>();
   for (const raw of [...attributed].sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))) {
     const result = raw.result!;
-    const open = Array.isArray(result.needs_context) && result.needs_context.filter(text).length > 0;
+    const open = needsContextQuestions(result.needs_context).length > 0;
     const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
     if (!FINISHED.has(String(result.status ?? "").toUpperCase()) || open || (typeof stamped === "string" && stamped !== fingerprintNow)) continue;
     const mine = dispositionsBy.get(result.reviewer!) ?? new Map<string, string>();
@@ -524,7 +526,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     }
     const result = latest.result!;
     const status = String(result.status ?? "").toUpperCase();
-    const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
+    const asked = needsContextQuestions(result.needs_context);
     const unreadable = unreadableInputClaim(result);
     const finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined;
     const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
@@ -582,7 +584,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 
   // A fix slice is covered only when every reviewer on its roster (but a skip the operator confirmed) read it AND every
   // finding attached to it has a disposition from a reviewer on that roster (M4).
-  const fix = manifest === undefined ? { covered: [], gaps: [] } : fixSliceCoverage(manifest, readBy, dispositionsBy, skippedNames);
+  const fix = manifest === undefined ? { covered: [], gaps: [] } : fixSliceCoverage(manifest, readBy, dispositionsBy, skippedNames, input.installed ?? new Set(manifest.slices.flatMap((slice) => slice.roles ?? [])));
   const fixCovered = new Set(fix.covered);
   gaps.push(...fix.gaps);
 

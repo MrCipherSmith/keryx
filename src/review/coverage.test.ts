@@ -58,9 +58,21 @@ describe("derivedFromFiles", () => {
   });
 });
 
+const STYLE_ON = { enabledRoles: ["review-clean-code", "review-style"] } as const;
+
 describe("requiredReviewers", () => {
-  test("mode all lists every roster reviewer and leaves out the router and the verifier", async () => {
+  test("without the flag the two readability roles are left out, with the reason", async () => {
     const need = await requiredReviewers(root, "all", undefined);
+    expect(need.required).not.toContain("review-clean-code");
+    expect(need.required).not.toContain("review-style");
+    expect(need.excluded.find((e) => e.reviewer === "review-clean-code")?.reason).toContain("--style");
+    expect(need.excluded.find((e) => e.reviewer === "review-style")?.reason).toContain("--style");
+    expect(need.rolesOff).toEqual(["review-clean-code", "review-style"]);
+  });
+
+  test("mode all lists every roster reviewer and leaves out the router and the verifier", async () => {
+    const need = await requiredReviewers(root, "all", undefined, STYLE_ON);
+    expect(need.rolesOff ?? []).toEqual([]);
     expect(need.required).toEqual([
       "review-architecture",
       "review-clean-code",
@@ -74,7 +86,7 @@ describe("requiredReviewers", () => {
   });
 
   test("a known file list rules out path-gated reviewers with no matching path, with the reason", async () => {
-    const need = await requiredReviewers(root, "all", frontendFiles);
+    const need = await requiredReviewers(root, "all", frontendFiles, STYLE_ON);
     expect(need.required).not.toContain("review-core-boundaries");
     expect(need.required).not.toContain("review-testing-practices");
     expect(need.excluded.find((e) => e.reviewer === "review-core-boundaries")?.reason).toContain("no-matching-paths");
@@ -82,8 +94,43 @@ describe("requiredReviewers", () => {
   });
 
   test("mode diff narrows to the derived set", async () => {
-    const need = await requiredReviewers(root, "diff", frontendFiles);
+    const need = await requiredReviewers(root, "diff", frontendFiles, STYLE_ON);
     expect(need.required).toEqual(["review-frontend", "review-logic", "review-style"]);
+    const plain = await requiredReviewers(root, "diff", frontendFiles);
+    expect(plain.required).toEqual(["review-frontend", "review-logic"]);
+  });
+});
+
+describe("review-degradation is a roster reviewer of a deep round (flow 479 AC6)", () => {
+  test("installed (profile full), it is required in a mode all round without a blast radius, and mode diff narrows it out", async () => {
+    await install("review-degradation");
+    const all = await requiredReviewers(root, "all", frontendFiles);
+    expect(all.required).toContain("review-degradation");
+    expect(all.excluded.find((e) => e.reviewer === "review-degradation")).toBeUndefined();
+    const diff = await requiredReviewers(root, "diff", frontendFiles, { blastRadius: false });
+    expect(diff.required).not.toContain("review-degradation");
+    expect(diff.required).not.toContain("review-regression");
+  });
+
+  test("not installed (the recommended profile), nothing requires it", async () => {
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).not.toContain("review-degradation");
+    expect(need.excluded.find((e) => e.reviewer === "review-degradation")).toBeUndefined();
+  });
+
+  test("a light round leaves it out, with the light-round reason", async () => {
+    await install("review-degradation");
+    const light = await requiredReviewers(root, "all", frontendFiles, { depth: "light" });
+    expect(light.required).not.toContain("review-degradation");
+    expect(light.excluded.find((e) => e.reviewer === "review-degradation")?.reason).toContain("light round");
+  });
+
+  test("a dispatch that skips it is refused when it is installed", async () => {
+    await install("review-degradation");
+    const all = (await requiredReviewers(root, "all", frontendFiles)).required;
+    const without = all.filter((name) => name !== "review-degradation");
+    expect(await coverageErrors({ mode: "all", selected: without }, { root, files: frontendFiles })).toEqual([expect.stringContaining("missing: review-degradation")]);
+    expect(await coverageErrors({ mode: "all", selected: all }, { root, files: frontendFiles })).toEqual([]);
   });
 });
 
@@ -178,9 +225,15 @@ describe("coverageErrors", () => {
   });
 
   test("mode all with a reviewer missing names it", async () => {
-    const errors = await coverageErrors({ mode: "all", selected: all.filter((n) => n !== "review-clean-code") }, { root });
+    const errors = await coverageErrors({ mode: "all", selected: all.filter((n) => n !== "review-logic") }, { root });
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("missing: review-clean-code");
+    expect(errors[0]).toContain("missing: review-logic");
+  });
+
+  test("mode all does not ask for the readability roles that are off by default, and accepts them when dispatched", async () => {
+    const withoutStyle = all.filter((n) => n !== "review-clean-code" && n !== "review-style");
+    expect(await coverageErrors({ mode: "all", selected: withoutStyle }, { root })).toEqual([]);
+    expect(await coverageErrors({ mode: "all", selected: all }, { root })).toEqual([]);
   });
 
   test("mode all with the full set passes", async () => {
@@ -310,13 +363,20 @@ describe("round depth (light vs full)", () => {
   });
 
   test("the light set is logic, testing and one conventions reviewer; full is unchanged", async () => {
-    const light = await requiredReviewers(root, "all", small, { depth: "light" });
+    const light = await requiredReviewers(root, "all", small, { depth: "light", ...STYLE_ON });
     expect(light.depth).toBe("light");
     expect(light.required).toEqual(["review-clean-code", "review-logic", "review-testing-practices"]);
     expect(light.excluded.find((e) => e.reviewer === "review-style")?.reason).toContain("light round");
-    const full = await requiredReviewers(root, "all", undefined);
+    const full = await requiredReviewers(root, "all", undefined, STYLE_ON);
     expect(full.depth).toBe("full");
     expect(full.required).toContain("review-style");
+  });
+
+  test("a light round without the flag does not fall back to review-clean-code as its conventions reviewer", async () => {
+    const light = await requiredReviewers(root, "all", small, { depth: "light" });
+    expect(light.depth).toBe("light");
+    expect(light.required).toEqual(["review-logic", "review-testing-practices"]);
+    expect(light.excluded.find((e) => e.reviewer === "review-clean-code")?.reason).toContain("--style");
   });
 });
 
@@ -445,7 +505,7 @@ describe("supersedes and overlap groups (flow 458 AC6)", () => {
 
   test("a project overlay removes the bundled reviewers it supersedes, recorded as excluded with the reason", async () => {
     await installWith("acme-frontend", '  supersedes: "review-frontend, review-style"', "project");
-    const need = await requiredReviewers(root, "all", frontendFiles);
+    const need = await requiredReviewers(root, "all", frontendFiles, STYLE_ON);
     expect(need.required).toContain("acme-frontend");
     expect(need.required).not.toContain("review-frontend");
     expect(need.required).not.toContain("review-style");
@@ -484,7 +544,7 @@ describe("supersedes and overlap groups (flow 458 AC6)", () => {
 
   test("M6: a supersedes or overlap group never removes a core role", async () => {
     await installWith("acme-everything", '  supersedes: "review-logic, review-architecture, review-style"', "project");
-    const need = await requiredReviewers(root, "all", frontendFiles);
+    const need = await requiredReviewers(root, "all", frontendFiles, STYLE_ON);
     for (const core of ["review-logic", "review-architecture"]) expect(need.required).toContain(core);
     expect(need.required).not.toContain("review-style");
     expect(need.excluded.filter((entry) => entry.reason.startsWith("superseded")).map((entry) => entry.reviewer)).toEqual(["review-style"]);
@@ -494,10 +554,10 @@ describe("supersedes and overlap groups (flow 458 AC6)", () => {
 
   test("M6: an overlay this round changes supersedes nothing, with a note; so does one when the changed files are unknown", async () => {
     await installWith("acme-frontend", '  supersedes: "review-frontend, review-style"', "project");
-    const changed = await requiredReviewers(root, "all", [...frontendFiles, ".metaproject/project-skills/review/acme-frontend/SKILL.md"]);
+    const changed = await requiredReviewers(root, "all", [...frontendFiles, ".metaproject/project-skills/review/acme-frontend/SKILL.md"], STYLE_ON);
     expect(changed.required).toEqual(expect.arrayContaining(["acme-frontend", "review-frontend", "review-style"]));
     expect(changed.notes?.join("\n")).toContain("acme-frontend supersedes review-frontend, review-style: ignored, acme-frontend is a project overlay this round changes (.metaproject/project-skills/review/acme-frontend/SKILL.md)");
-    const unknown = await requiredReviewers(root, "all", undefined);
+    const unknown = await requiredReviewers(root, "all", undefined, STYLE_ON);
     expect(unknown.required).toContain("review-style");
     expect(unknown.notes?.join("\n")).toContain("changed files are not recorded");
   });

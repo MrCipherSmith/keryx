@@ -3,7 +3,8 @@ import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
-import { packageCoverageWarnings } from "./coverage";
+import { packageCoverageWarnings, packageRolesNotRun } from "./coverage";
+import { optionalRolesLine, upsertOptionalRolesLine } from "./role-switches";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
@@ -39,6 +40,12 @@ import {
   type BlastRadiusScreenResult,
 } from "./blast-radius";
 import {
+  renderDegradationScreenMarkdown,
+  screenDegradationFindings,
+  degradationScreenRecord,
+  type DegradationScreenRecord,
+} from "./degradation";
+import {
   applyFindingsCap,
   evaluateSpendCap,
   planReviewerWaves,
@@ -54,6 +61,9 @@ import {
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { hashedDisplayIdMessage, hashedDisplayIds } from "./display-id";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
+import { computeChunkPass } from "./chunks";
+import { packageEstimateLine, upsertEstimateLine } from "./estimate-actual";
+import { describePassFinding, injectablePassFindings, missingWarning, passNotInRound, upsertMissingSection } from "./chunk-findings";
 import { flowReviewsRoot, readManifestHead, reviewsRoot } from "./package-location";
 import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
 import { promoteParentExecutions } from "./verify-run";
@@ -65,6 +75,8 @@ import {
   FINDING_DISMISSAL_STATES,
   MANAGED_REVIEW_MODES,
   REVIEW_COVERAGE_STATUSES,
+  REVIEW_DEGRADATION_CLASSES,
+  REVIEW_EVIDENCE_KINDS,
   REVIEW_FINDING_CONFIDENCES,
   REVIEW_PACKAGE_STATUSES,
   REVIEW_TARGET_KINDS,
@@ -260,12 +272,28 @@ export type ScopeBScreenRecord = {
   screen?: BlastRadiusScreenResult<NormalizedReviewFinding> | undefined;
 };
 
+/** What an ingest did with the findings of the package's chunk pass. */
+export type ChunkPassIngest = {
+  /** Ids of the pass findings brought into the round. */
+  brought: string[];
+  /** Pass findings the report already carried at the same site, described for the record. */
+  alreadyReported: string[];
+};
+
+function renderChunkPassMarkdown(record: ChunkPassIngest): string {
+  if (record.brought.length === 0 && record.alreadyReported.length === 0) return "";
+  const lines = ["", "## Chunk pass findings", "", `brought_in: ${record.brought.length}${record.brought.length === 0 ? "" : ` (${record.brought.join(", ")})`}`];
+  if (record.alreadyReported.length > 0) lines.push(`already_in_report: ${record.alreadyReported.join("; ")}`);
+  lines.push("", "Brought in from chunk-state.json as reviewer `<reviewer>/<chunk>`; the screen did not apply `outside-set` and `no-link-to-change` to them.", "");
+  return lines.join("\n");
+}
+
 /** The file name every copy of the blast-radius record is read from and written to. */
 const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
-): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; degradationScreen: DegradationScreenRecord; duplicates: DuplicateMerge[]; chunkPass: ChunkPassIngest }> {
   const at = (input.now ?? new Date()).toISOString();
   // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
   const premiseClaims = parsePremiseClaimSets(input.premises);
@@ -291,6 +319,12 @@ export async function createManagedReviewPackage(
   // report's own ordering already contained.
   const repairs = repairMechanicalOmissions(reported);
 
+  // What a chunk pass found reaches the round here, from the live pass state and before the findings are located, so the
+  // verifier and the premise judge see it like any other finding. The report's own findings win a same-site tie.
+  const passIn = input.mode === "ingest" ? injectablePassFindings(await computeChunkPass(packageDir), reported) : undefined;
+  const passFindings = passIn === undefined ? [] : triage(passIn.findings, { mode: input.mode, attachedToFlow: flowMatch !== null });
+  reported.push(...passFindings);
+
   // Resolved HERE rather than beside `buildManifest`, because the locator needs
   // it: a round is a claim about a commit, and its findings are located at that
   // commit rather than against whatever the tree currently holds.
@@ -309,6 +343,11 @@ export async function createManagedReviewPackage(
   // `global_id` and the key has to exist for it to be resolvable. Round N+1
   // carries round N's key verbatim; only a finding without one is minted here.
   assignGlobalIds(reported, reviewId);
+  const chunkPassIngest: ChunkPassIngest = {
+    brought: passFindings.map((finding) => finding.id),
+    alreadyReported: passIn?.alreadyReported.map(describePassFinding) ?? [],
+  };
+  const passKeys = new Set(passFindings.flatMap((finding) => (finding.global_id === undefined ? [] : [finding.global_id])));
 
   // The verifier, which can only delete. In `annotate` — the default for one
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
@@ -354,7 +393,7 @@ export async function createManagedReviewPackage(
   // completion at the review gate — the opposite of the promise. It runs BEFORE
   // the findings cap so a rejected finding cannot spend a reviewer's reading
   // budget on its way out.
-  const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
+  const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal, passKeys);
 
   // Flow 458 AC5. One defect reported by several reviewers becomes ONE finding
   // with the highest severity (the verifier's, when it confirmed one) and every
@@ -362,7 +401,13 @@ export async function createManagedReviewPackage(
   // against the id it named, after the scope-B screen so a scope-B claim cannot
   // escape it by merging into a scope-A one, and before the cap so a duplicate
   // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
-  const deduped = mergeDuplicates(scopeB.retained);
+  // Flow 479. The `review-degradation` evidence rule, enforced in code like the screen above: a major or blocker
+  // without an evidence kind is lowered to info and listed, never dropped. After scope B (its findings are not
+  // scope-B claims and pass through that screen untouched) and before the duplicate merge, so the merge and every
+  // later stage see the severity the evidence supports.
+  const degradation = screenDegradationFindings(scopeB.retained);
+  const degradationScreen = degradationScreenRecord(degradation);
+  const deduped = mergeDuplicates(degradation.retained);
 
   // Flow 459. The premise judge, which can only hold or lower. It runs over the CANONICAL findings, after the
   // duplicate merge (so a claim names the one record that survives) and before the cap (so a downgraded severity
@@ -539,9 +584,10 @@ export async function createManagedReviewPackage(
   });
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, filterStats, allFindings: findings }) +
+    renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, degradationScreen, filterStats, allFindings: findings }) +
       premiseBlock +
-      renderDuplicatesMarkdown(deduped.merges),
+      renderDuplicatesMarkdown(deduped.merges) +
+      renderChunkPassMarkdown(chunkPassIngest),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0); a re-ingest
@@ -598,7 +644,9 @@ export async function createManagedReviewPackage(
     // record follows: a removal an operator has to open a file to discover reads,
     // on the terminal they were already looking at, as "there was nothing more".
     scopeBScreen: scopeB.record,
+    degradationScreen,
     duplicates: deduped.merges,
+    chunkPass: chunkPassIngest,
   };
 }
 
@@ -631,15 +679,20 @@ async function screenScopeBFindings(
   input: ManagedReviewIngestInput,
   packageDir: string,
   findings: readonly NormalizedReviewFinding[],
+  passKeys: ReadonlySet<string> = new Set(),
 ): Promise<{ retained: NormalizedReviewFinding[]; record: ScopeBScreenRecord; resolved: ResolvedScreenRadius | undefined }> {
   const resolved = await resolveScreenRadius(input, packageDir);
   const reviewers = resolved?.radius.reviewers ?? [BLAST_RADIUS_SCOPE_REVIEWER];
+  const isPass = (finding: NormalizedReviewFinding): boolean => finding.global_id !== undefined && passKeys.has(finding.global_id);
   const scopeB = findings.filter((finding) => isBlastRadiusScopedFinding(finding, reviewers));
 
   if (resolved === undefined) {
-    if (scopeB.length > 0) {
+    // A chunk-pass finding is scope-B by name but the screen would not judge it by the set anyway, so a package whose
+    // only scope-B findings came from its own pass is not refused for lacking the record.
+    if (scopeB.some((finding) => !isPass(finding))) {
       throw new Error(
-        `Refusing to record ${scopeB.length} finding(s) raised under scope B (${scopeB
+        `Refusing to record ${scopeB.filter((finding) => !isPass(finding)).length} finding(s) raised under scope B (${scopeB
+          .filter((finding) => !isPass(finding))
           .map((finding) => `${finding.id} by ${finding.reviewer}`)
           .join(
             ", ",
@@ -655,7 +708,7 @@ async function screenScopeBFindings(
     return { retained: [...findings], record: { source: "none", scopeBFindings: 0 }, resolved: undefined };
   }
 
-  const screen = screenBlastRadiusFindings(scopeB, resolved.radius, { minSeverity: resolved.radius.minSeverity });
+  const screen = screenBlastRadiusFindings(scopeB, resolved.radius, { minSeverity: resolved.radius.minSeverity, chunkPass: isPass });
   const rejected = new Set(screen.rejected.map((rejection) => rejection.finding));
   // The rejected findings do NOT go on to `findings.json`, and that is the
   // decision rather than an oversight. `findings.json` is what this round is
@@ -927,8 +980,12 @@ export type CompleteManagedReviewResult = {
   coverageWaiver?: CoverageWaiver;
   /** The readiness checklist this close passed, with any items the operator waived. */
   readiness?: ReadinessReport;
+  /** Roles switched off for the round that did not run; also written into report.md as one line. Absent when none. */
+  rolesNotRun?: string[];
   /** Things the close let through that a current package would have been refused for. */
   warnings: string[];
+  /** The plan-against-actual line this close wrote into report.md; absent when the package holds neither a plan nor a raw reply. */
+  estimateLine?: string;
 };
 
 /**
@@ -991,6 +1048,10 @@ export async function completeManagedReview(
   // A warning, never a refusal: leftovers (Not run candidates, held severities, open follow-ups) the report does not name.
   warnings.push(...(await packageParityWarnings(packageDir, reportText).catch(() => [])));
   warnings.push(...(await packageCoverageWarnings(packageDir)));
+  // Variant A (poll 283): a pass finding the round does not hold is said, in the output and in report.md, never refused.
+  const passGap = await passNotInRound(packageDir).catch(() => null);
+  const passMissing = passGap?.missing ?? [];
+  if (passMissing.length > 0) warnings.push(missingWarning(passMissing));
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
   // so the next run does not pass the same gate without the flag.
@@ -999,6 +1060,8 @@ export async function completeManagedReview(
   let coverageWaiver: CoverageWaiver | undefined;
   let readiness: ReadinessReport | undefined;
   let updated: ManagedReviewManifest;
+  let notRun: string[];
+  let estimateLine: string | undefined;
   const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
   try {
     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
@@ -1028,6 +1091,13 @@ export async function completeManagedReview(
       throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
     }
     await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+    // Before the round is recorded as finished, because the registry hashes the package.
+    estimateLine = await packageEstimateLine(packageDir, { open: false });
+    notRun = await packageRolesNotRun(packageDir).catch(() => []);
+    // Read again: a readiness waiver above may have put the partial-review header at the top since `reportText` was read.
+    const current = await readFile(path.join(packageDir, "report.md"), "utf8");
+    const marked = upsertEstimateLine(upsertOptionalRolesLine(upsertMissingSection(current, passMissing), optionalRolesLine(notRun)), estimateLine);
+    if (marked !== current) await writeFileAtomic(path.join(packageDir, "report.md"), marked);
   } catch (error) {
     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
     if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
@@ -1062,7 +1132,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(coverageWaiver === undefined ? {} : { coverageWaiver }), ...(readiness === undefined ? {} : { readiness }) };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(estimateLine === undefined ? {} : { estimateLine }), ...(coverageWaiver === undefined ? {} : { coverageWaiver }), ...(readiness === undefined ? {} : { readiness }), ...(notRun.length === 0 ? {} : { rolesNotRun: notRun }) };
 }
 
 export async function validateManagedReviewManifest(
@@ -1378,7 +1448,7 @@ function refuseStubReport(input: ManagedReviewInput, report: string, from: "inpu
 
 function triage(
   findings: Array<StructuredReviewFinding & { summary: string; class_scope_present?: boolean | undefined }>,
-  args: NormalizeFindingsArgs,
+  args: Pick<NormalizeFindingsArgs, "mode" | "attachedToFlow">,
 ): NormalizedReviewFinding[] {
   const classification = args.mode === "ingest" ? "valid_followup" : "skill_learning_candidate";
   return findings.map((finding) => {
@@ -1708,6 +1778,17 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.class_scope !== undefined) {
     record.class_scope = finding.class_scope;
+  }
+  // Flow 479. Written only when present, on the same rule as the fields below. `evidence_screen` is the
+  // marker the TUI reads to show a finding as unproven; a projection that dropped it would erase the downgrade.
+  if (finding.degradation_class !== undefined) {
+    record.degradation_class = finding.degradation_class;
+  }
+  if (finding.evidence_kind !== undefined) {
+    record.evidence_kind = finding.evidence_kind;
+  }
+  if (finding.evidence_screen !== undefined) {
+    record.evidence_screen = finding.evidence_screen;
   }
   // Written only when present, on both. `global_id` is absent on nothing the
   // current pipeline writes but stays optional so a legacy record read back and
@@ -2298,9 +2379,28 @@ function parseLegacyReport(
     if (location.line !== undefined) {
       finding.line = location.line;
     }
+    // Flow 479: the template of `review-degradation` is markdown with `Class` and `Evidence kind` lines. Read only
+    // for that reviewer (another reviewer's `Class:` line means something else), and only when the value is exactly
+    // one member of the closed list; a pasted `a | b | c` template line stays unread.
+    if (finding.reviewer === "review-degradation") {
+      const degradationClass = closedListValue(block, ["class", "degradation class", "degradation_class"], REVIEW_DEGRADATION_CLASSES);
+      if (degradationClass !== undefined) {
+        finding.degradation_class = degradationClass;
+      }
+      const evidenceKind = closedListValue(block, ["evidence kind", "evidence_kind"], REVIEW_EVIDENCE_KINDS);
+      if (evidenceKind !== undefined) {
+        finding.evidence_kind = evidenceKind;
+      }
+    }
     findings.push(finding);
   }
   return findings;
+}
+
+function closedListValue<V extends string>(block: string, labels: readonly string[], allowed: readonly V[]): V | undefined {
+  // A value written `**debt**`, `\`debt\`` or `_debt_` is the same word; only the emphasis around it comes off.
+  const value = labelledField(block, labels)?.trim().replace(/^[*_`]+|[*_`]+$/g, "").trim().toLowerCase();
+  return allowed.find((candidate) => candidate === value);
 }
 
 const SEVERITY_PREFIX = /^\s*(?:\*\*|__)?(?:blocker|major|minor|info)(?:\*\*|__)?\s*[:—–-]\s*/i;
@@ -2646,6 +2746,7 @@ async function readPreFilterScopeBlock(packageDir: string): Promise<string | und
 type ScopeExtras = {
   externalReclaims?: readonly ExternalReclaim[] | undefined;
   scopeBScreen?: ScopeBScreenRecord | undefined;
+  degradationScreen?: DegradationScreenRecord | undefined;
   filterStats?: ReviewFilterStats | undefined;
   allFindings?: readonly StructuredReviewFinding[] | undefined;
 };
@@ -2678,7 +2779,13 @@ function renderScope(
   caps: ReviewCapsRecord,
   extras: ScopeExtras = {},
 ): string {
-  const { externalReclaims = [], scopeBScreen = { source: "none", scopeBFindings: 0 }, filterStats, allFindings = [] } = extras;
+  const {
+    externalReclaims = [],
+    scopeBScreen = { source: "none", scopeBFindings: 0 },
+    degradationScreen = { screened: 0, downgraded: [] },
+    filterStats,
+    allFindings = [],
+  } = extras;
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
   const head = `# Review Scope
@@ -2700,7 +2807,8 @@ ${renderStageCountsMarkdown({
 })}
 
 ${renderCapsMarkdown(caps)}
-${renderScopeBScreenMarkdown(scopeBScreen)}${
+${renderScopeBScreenMarkdown(scopeBScreen)}
+${renderDegradationScreenMarkdown(degradationScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
   }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${renderQuoteUnlocatedMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;

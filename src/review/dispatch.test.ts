@@ -82,13 +82,15 @@ test("a pull request's reviewer set defaults to every applicable reviewer, and a
   try {
     const all = await requiredReviewers(root, "all", FILES);
     expect(all.mode).toBe("all");
-    expect(all.required).toEqual(["review-architecture", "review-clean-code", "review-logic"]);
+    expect(all.required).toEqual(["review-architecture", "review-logic"]);
+    const withStyle = await requiredReviewers(root, "all", FILES, { enabledRoles: ["review-clean-code"] });
+    expect(withStyle.required).toEqual(["review-architecture", "review-clean-code", "review-logic"]);
     const narrowed = ["review-logic"];
     expect((await coverageErrors({ mode: "diff", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("needs operatorQuote");
     expect((await coverageErrors({ mode: "diff", selected: narrowed, operatorQuote: "   " }, { root, files: FILES })).join(" ")).toContain("needs operatorQuote");
     const quoted = await coverageErrors({ mode: "diff", selected: narrowed, operatorQuote: "only the logic reviewer, please" }, { root, files: FILES });
     expect(quoted).toEqual([]);
-    expect((await coverageErrors({ mode: "all", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("missing: review-architecture, review-clean-code");
+    expect((await coverageErrors({ mode: "all", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("missing: review-architecture");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -105,5 +107,17 @@ test("review-regression is required exactly when a blast radius was computed, an
     const refused = await coverageErrors({ mode: "all", selected: without }, { root, files: FILES, blastRadius: true });
     expect(refused.join(" ")).toContain("missing: review-regression");
     expect(await coverageErrors({ mode: "all", selected: without }, { root, files: FILES, blastRadius: false })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("review-degradation joins a deep round's set when installed, and its absence from a dispatch is refused (flow 479 AC6)", async () => {
+  const root = await reviewRoot([...SET, "review-degradation"]);
+  try {
+    const all = await requiredReviewers(root, "all", FILES);
+    expect(all.required).toContain("review-degradation");
+    const without = all.required.filter((name) => name !== "review-degradation");
+    expect((await coverageErrors({ mode: "all", selected: without }, { root, files: FILES })).join(" ")).toContain("missing: review-degradation");
+    const light = await requiredReviewers(root, "all", FILES, { depth: "light" });
+    expect(light.required).not.toContain("review-degradation");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

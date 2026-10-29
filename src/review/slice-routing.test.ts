@@ -75,6 +75,60 @@ describe("roles come from the slice's content", () => {
   });
 });
 
+describe("review-degradation routing (flow 479 AC6)", () => {
+  const exported = "+export function render(value: string) { return value; }";
+
+  test("a changed exported symbol routes the degradation reviewer, with the reason", () => {
+    const hits = contentRolesOf({ path: "src/ui/field.ts", text: exported });
+    expect(hits).toContainEqual({ role: "review-degradation", why: "shared (exported) symbol changed: src/ui/field.ts" });
+  });
+
+  test("a removed export counts as much as an added one, and a re-export or a default export counts", () => {
+    for (const line of ["-export const DEFAULT_LABEL = 'n/a';", "+export * from './field';", "+export { Field } from './field';", "+export default function Field() {}", "+export type Label = string;"]) {
+      expect(contentRolesOf({ path: "src/ui/field.ts", text: line }).map((hit) => hit.role)).toContain("review-degradation");
+    }
+  });
+
+  test("every declaration form of the exported-symbol pattern routes it (flow 479 TP-005)", () => {
+    const forms = [
+      "+export declare const VERSION: string;",
+      "+export declare function parse(input: string): number;",
+      "+export abstract class Base {}",
+      "+export enum Level { Low, High }",
+      "+export let counter = 0;",
+      "-export var legacy = 1;",
+      "+export async function load() {}",
+      "+export interface Shape { size: number }",
+      "+export class Field {}",
+      "-export default class Field {}",
+    ];
+    for (const line of forms) expect(contentRolesOf({ path: "src/ui/field.ts", text: line }).map((hit) => hit.role)).toContain("review-degradation");
+  });
+
+  test("an `export` inside a comment, a string or an unchanged line is not a changed declaration (flow 479 TP-005)", () => {
+    const lines = ["+// export const LABEL = 'n/a';", "+const doc = \"export const LABEL = 1\";", "+  * export function render() {}", " export const LABEL = 'n/a';", "+exports.LABEL = 1;"];
+    for (const line of lines) expect(contentRolesOf({ path: "src/ui/field.ts", text: line }).map((hit) => hit.role)).not.toContain("review-degradation");
+  });
+
+  test("a change that touches no shared symbol does not route it", () => {
+    for (const text of ["+  return total + 1;", "+const local = 1;", "+function helper() { return 1; }", " export const untouched = 1;"]) {
+      expect(contentRolesOf({ path: "src/ui/field.ts", text }).map((hit) => hit.role)).not.toContain("review-degradation");
+    }
+  });
+
+  test("an export in a test, a doc or a non-code file is not a shared symbol", () => {
+    for (const file of ["src/ui/field.test.ts", "docs/guide.md", "data/export.json"]) {
+      expect(contentRolesOf({ path: file, text: exported }).map((hit) => hit.role)).not.toContain("review-degradation");
+    }
+  });
+
+  test("it is a routable role, so a deep slice's roster carries it", () => {
+    expect(deepRosterRoles(["src/ui/field.ts"])).toContain("review-degradation");
+    const [slice] = routeSlices(sliced([["src/ui/field.ts", ["export const LABEL = 'n/a';"]]]), { head: "h", auditRate: 0 });
+    expect(slice!.roles).toContain("review-degradation");
+  });
+});
+
 describe("depth follows risk", () => {
   test("a deterministic risk class (auth path) sends the slice deep with the full core set", () => {
     const [slice] = routeSlices(sliced([["src/auth/login.ts", ["const retries = 3;"]]]), { head: "h", auditRate: 0 });

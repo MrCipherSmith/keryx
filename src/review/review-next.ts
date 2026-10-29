@@ -2,10 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { type DriverFile } from "./driver-read";
+import { packagePlanGate } from "./estimate";
 import { evaluateRetry, withProcessed } from "./retry-eval";
 import { writeFileAtomic } from "../lib/fs";
 import { parseReviewResult, sha, type ParsedResult } from "./ledger";
-import { type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, escalationsFor, scopeFingerprint } from "./retry-plan";
+import { type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, escalationsFor, needsContextQuestions, normalizeRetryState, scopeFingerprint } from "./retry-plan";
 import { type SliceEntry, type SliceManifest } from "./slice";
 import { DRIVERS_DIR, RAW_DIR, packageReviewers } from "./wave-drivers";
 import { requiredSlices } from "./waves";
@@ -18,6 +19,10 @@ import { requiredSlices } from "./waves";
  * retry state, `planRetry`) that `keryx review retry-plan` runs. What it adds is the loop over reviewers, the escalations
  * every result causes (a major finding re-opens a light slice deep for the whole core set), and idempotence: a reply already
  * counted (its hash is in the retry state) is not counted again by the next poll.
+ *
+ * Flow 475 (R3): a reviewer's replies are all read, not only the newest. They are fed in wave order through the same retry
+ * state, so a slice an older wave covered stays covered; `*.prev*.txt` copies are never read; a finished reply with no `slices`
+ * array is rejected with a reason instead of being accepted silently.
  */
 
 /** Why a reviewer is handed another dispatch. */
@@ -56,30 +61,56 @@ export type NextResult = {
   blocked: Array<{ reviewer: string; message: string }>;
   /** Light slices a finding re-opened deep in this call. */
   escalated: Array<{ slice: string; finding: string; by: string }>;
+  /** Finished replies that list no `slices`: nothing is counted from them, their reviewer's slices stay open. They stay listed until the reply is replaced. */
+  rejected: Array<{ reviewer: string; file: string; reason: string }>;
   applied: boolean;
+  /**
+   * Whether the operator's plan covers what is dispatched now: `packagePlanGate(...).refusal === undefined` over the plan with this call's
+   * escalations applied. `null` when the gate could not be evaluated; it never changes what is dispatched.
+   */
+  planAuthorized: boolean | null;
+  /** True when the plan is authorized and there is something to dispatch: the orchestrator goes on without asking. */
+  continue: boolean;
 };
 
-type Latest = { name: string; hash: string; body: string; mtimeMs: number; result: ParsedResult };
+type Reply = { name: string; hash: string; mtimeMs: number; wave: number | undefined; result: ParsedResult };
 
-async function latestResults(packageDir: string, driverOf: ReadonlyMap<string, string>): Promise<Map<string, Latest>> {
-  const latest = new Map<string, Latest>();
+/** A saved earlier attempt (`X.prev.txt`, `X.prev2.txt`): it is history, not a reply, and never takes part in the choice. */
+const PREV_COPY = /\.prev[^/]*\.txt$/;
+const waveOfName = (name: string): number | undefined => {
+  const match = /-w(\d+)\.txt$/.exec(name);
+  return match === null ? undefined : Number(match[1]);
+};
+
+/** Every parseable reply in `raw/`, grouped by reviewer and ordered by wave (the driver's `wave`, else the `-w<n>` of the name; a file with neither goes first, by mtime). */
+async function collectReplies(packageDir: string, driverOf: ReadonlyMap<string, { reviewer: string; wave?: number | undefined }>): Promise<Map<string, Reply[]>> {
+  const replies = new Map<string, Reply[]>();
   const dir = path.join(packageDir, RAW_DIR);
-  if (!existsSync(dir)) return latest;
-  for (const name of (await readdir(dir)).filter((entry) => entry.endsWith(".txt")).sort()) {
+  if (!existsSync(dir)) return replies;
+  for (const name of (await readdir(dir)).filter((entry) => entry.endsWith(".txt") && !PREV_COPY.test(entry)).sort()) {
     const file = path.join(dir, name);
     const body = await readFile(file, "utf8");
     const result = parseReviewResult(body);
     if (result === undefined) continue;
-    const reviewer = typeof result.reviewer === "string" && result.reviewer !== "" ? result.reviewer : driverOf.get(name);
+    const driver = driverOf.get(name);
+    const reviewer = typeof result.reviewer === "string" && result.reviewer !== "" ? result.reviewer : driver?.reviewer;
     if (reviewer === undefined) continue;
-    const mtimeMs = (await stat(file)).mtimeMs;
-    const known = latest.get(reviewer);
-    if (known === undefined || mtimeMs >= known.mtimeMs) latest.set(reviewer, { name: `${RAW_DIR}/${name}`, hash: sha(body), body, mtimeMs, result: { ...result, reviewer } });
+    const mine = replies.get(reviewer) ?? [];
+    const hash = sha(body);
+    if (mine.some((known) => known.hash === hash)) continue;
+    mine.push({ name: `${RAW_DIR}/${name}`, hash, mtimeMs: (await stat(file)).mtimeMs, wave: driver?.wave ?? waveOfName(name), result: { ...result, reviewer } });
+    replies.set(reviewer, mine);
   }
-  return latest;
+  for (const mine of replies.values()) mine.sort((a, b) => (a.wave ?? 0) - (b.wave ?? 0) || a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
+  return replies;
 }
 
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
+
+const statusOf = (reply: Reply): string => String(reply.result.status ?? "").trim().toUpperCase();
+
+/** A finished reply that lists no `slices` and asks nothing: it says nothing about what was covered, so nothing is taken from it. */
+const isSliceless = (reply: Reply): boolean => FINISHED.has(statusOf(reply)) && !Array.isArray(reply.result.slices) && needsContextQuestions(reply.result.needs_context).length === 0;
 
 /** Everything still to dispatch for the package, every reviewer at once. Writes only with `apply`. */
 export async function reviewNext(input: { packageDir: string; reviewers?: readonly string[] | undefined; apply?: boolean | undefined }): Promise<NextResult> {
@@ -89,21 +120,19 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
   if (!existsSync(manifestSource)) throw new Error(`${manifestSource} is missing: run \`keryx review slice --package ${packageDir}\` first.`);
   let manifest = JSON.parse(await readFile(manifestSource, "utf8")) as SliceManifest;
   const statePath = path.join(sliceDir, "retry-state.json");
-  let state: RetryState = existsSync(statePath) ? (JSON.parse(await readFile(statePath, "utf8")) as RetryState) : emptyRetryState();
+  let state: RetryState = existsSync(statePath) ? normalizeRetryState(JSON.parse(await readFile(statePath, "utf8"))) : emptyRetryState();
   const driverFiles = await readDriverFiles(packageDir);
-  const driverOf = new Map<string, string>();
-  for (const driver of driverFiles) if (driver.result !== undefined) driverOf.set(path.basename(driver.result), driver.reviewer);
+  const driverOf = new Map<string, { reviewer: string; wave?: number | undefined }>();
+  for (const driver of driverFiles) if (driver.result !== undefined) driverOf.set(path.basename(driver.result), { reviewer: driver.reviewer, wave: driver.wave });
   let fingerprint: string | undefined;
   try { fingerprint = scopeFingerprint(manifest, (entry) => readFileSync(path.resolve(sliceDir, entry.path), "utf8")); } catch { fingerprint = undefined; }
-  const currentState = fingerprint !== undefined && state.scopeFingerprint === fingerprint;
   const reviewers = [...(input.reviewers ?? (await packageReviewers(packageDir, manifest, { withDrivers: true })))].sort();
-  const latest = await latestResults(packageDir, driverOf);
+  const repliesOf = await collectReplies(packageDir, driverOf);
 
   // Escalations first: a major finding on a light slice re-opens it deep for every core role, whoever reported it.
   const before = new Map(reviewers.map((reviewer) => [reviewer, new Set(requiredSlices(manifest, reviewer))]));
   const found = reviewers.flatMap((reviewer) => {
-    const reply = latest.get(reviewer);
-    return reply === undefined ? [] : escalationsFor(manifest, reviewer, reply.result.findings, driverSlices(driverFiles, reviewer));
+    return (repliesOf.get(reviewer) ?? []).flatMap((reply) => escalationsFor(manifest, reviewer, reply.result.findings, driverSlices(driverFiles, reviewer)));
   });
   const escalations = [...new Map(found.map((entry) => [entry.slice, entry])).values()];
   if (escalations.length > 0) manifest = applyEscalations(manifest, escalations);
@@ -112,35 +141,66 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
   const dispatches: NextDispatch[] = [];
   const notRun: NextResult["notRun"] = [];
   const blocked: NextResult["blocked"] = [];
+  const rejected: NextResult["rejected"] = [];
   const added: Array<SliceEntry & { text: string }> = [];
+  const isCurrent = (): boolean => fingerprint !== undefined && state.scopeFingerprint === fingerprint;
   for (const reviewer of reviewers) {
-    if (currentState && state.reviewers[reviewer]?.notRun === true) {
+    const replies = repliesOf.get(reviewer) ?? [];
+    const seen = new Set(isCurrent() ? state.reviewers[reviewer]?.processed ?? [] : []);
+    const fresh = replies.filter((reply) => !seen.has(reply.hash));
+    const refused = fresh.filter(isSliceless);
+    for (const reply of refused) rejected.push({ reviewer, file: reply.name, reason: `${statusOf(reply)} without a "slices" list: nothing is counted as covered; list the slice ids that were read` });
+    // A reply stamped with another scope is a stale round's: it only blocks the reviewer when it is the newest.
+    const usable = fresh.filter((reply) => !isSliceless(reply)).filter((reply) => {
+      const stamped = (reply.result as { scopeFingerprint?: unknown }).scopeFingerprint;
+      return reply === replies[replies.length - 1] || typeof stamped !== "string" || fingerprint === undefined || stamped === fingerprint;
+    });
+    if (isCurrent() && state.reviewers[reviewer]?.notRun === true && usable.length === 0) {
       notRun.push({ reviewer, reason: `${state.reviewers[reviewer]!.status || "no result"} after the allowed retry (retry-state)` });
       continue;
     }
-    const reply = latest.get(reviewer);
-    const counted = reply !== undefined && currentState && (state.reviewers[reviewer]?.processed ?? []).includes(reply.hash);
-    const result: ReviewerResult = reply === undefined || counted ? {} : (reply.result as ReviewerResult);
+    const saved = state;
     try {
-      const evaluation = await evaluateRetry({ manifestSource, manifest, state, statePath, result, reviewer, packageSource: packageDir, nextWave: reply === undefined || counted });
+      let evaluation: Awaited<ReturnType<typeof evaluateRetry>> | undefined;
+      // The late-result collector credits every driver-named reply to the first one evaluated, so a later reply of the same
+      // batch would read as "nothing new" and spend a stall it did not earn: once the batch has moved coverage, stalls restart.
+      const coveredAtStart = new Set(isCurrent() ? state.reviewers[reviewer]?.covered ?? [] : []);
+      const grown = (): boolean => (state.reviewers[reviewer]?.covered ?? []).some((id) => !coveredAtStart.has(id));
+      const withStalls = (value: number): RetryState => {
+        const entry = state.reviewers[reviewer];
+        return entry === undefined ? state : { ...state, reviewers: { ...state.reviewers, [reviewer]: { ...entry, stalls: value } } };
+      };
+      for (const reply of usable) {
+        if (grown()) state = withStalls(0);
+        evaluation = await evaluateRetry({ manifestSource, manifest, state, statePath, result: reply.result as ReviewerResult, reviewer, packageSource: packageDir, nextWave: false });
+        state = withProcessed(evaluation.plan.state, reviewer, reply.hash);
+      }
+      if (usable.length > 1 && grown()) state = withStalls(0);
+      if (evaluation === undefined) {
+        evaluation = await evaluateRetry({ manifestSource, manifest, state, statePath, result: {}, reviewer, packageSource: packageDir, nextWave: true });
+        state = withProcessed(evaluation.plan.state, reviewer, undefined);
+      }
       const { plan } = evaluation;
-      state = withProcessed(plan.state, reviewer, reply !== undefined && !counted ? reply.hash : undefined);
       if (plan.decision === "not-run") { notRun.push({ reviewer, reason: plan.reason }); continue; }
       if (plan.wave.length === 0) {
         // A reviewer of the package that has no reply and no slice to be handed did no work: it is owed, not done.
-        if (reply === undefined && requiredSlices(manifest, reviewer).length === 0) notRun.push({ reviewer, reason: "no reply recorded and no slice routed to it, so it never ran" });
+        if (replies.length === 0 && requiredSlices(manifest, reviewer).length === 0) notRun.push({ reviewer, reason: "no reply recorded and no slice routed to it, so it never ran" });
         continue;
       }
-      const status = String(reply?.result.status ?? "").toUpperCase();
+      const reply = usable[usable.length - 1] ?? replies[replies.length - 1];
+      const status = reply === undefined ? "" : statusOf(reply);
       const owned = newlyOwned.get(reviewer)!;
       const reason: NextReason = reply === undefined ? "missing"
         : plan.newSlices.length > 0 ? "stalled"
         : plan.wave.some((entry) => owned.has(entry.id)) && FINISHED.has(status) ? "escalated"
-        : FINISHED.has(status) && plan.decision === "wave" ? "missing"
+        : FINISHED.has(status) && plan.decision === "wave" && refused.length === 0 ? "missing"
         : "retry";
       added.push(...plan.newSlices);
-      dispatches.push(describeDispatch({ reviewer, plan, reason, reply, sliceDir, driverFiles, manifest }));
+      const dispatch = describeDispatch({ reviewer, plan, reason, reply, sliceDir, driverFiles, manifest });
+      if (refused.length > 0 && usable.length === 0) dispatch.detail = `${refused.map((entry) => entry.name).join(", ")} rejected (no "slices" list); ${dispatch.detail}`;
+      dispatches.push(dispatch);
     } catch (error) {
+      state = saved;
       blocked.push({ reviewer, message: error instanceof Error ? error.message : String(error) });
     }
   }
@@ -154,6 +214,7 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
     await writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
     for (const dispatch of dispatches) if (dispatch.needsApply === true) delete dispatch.needsApply;
   }
+  const planAuthorized = await planAuthorization(packageDir, manifest);
   return {
     done: dispatches.length === 0 && blocked.length === 0,
     package: packageDir,
@@ -161,8 +222,19 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
     notRun,
     blocked,
     escalated: escalations.map((entry) => ({ slice: entry.slice, finding: entry.finding, by: entry.by })),
+    rejected,
     applied: input.apply === true,
+    planAuthorized,
+    continue: planAuthorized === true && dispatches.length > 0,
   };
+}
+
+async function planAuthorization(packageDir: string, manifest: SliceManifest): Promise<boolean | null> {
+  try {
+    return (await packagePlanGate(packageDir, { manifestValue: manifest })).refusal === undefined;
+  } catch {
+    return null;
+  }
 }
 
 type DriverView = { reviewer: string; file: string; wave?: number; slices: string[]; result?: string; model?: string };
@@ -194,7 +266,7 @@ function describeDispatch(input: {
   reviewer: string;
   plan: Awaited<ReturnType<typeof evaluateRetry>>["plan"];
   reason: NextReason;
-  reply: Latest | undefined;
+  reply: Reply | undefined;
   sliceDir: string;
   driverFiles: readonly DriverView[];
   manifest: SliceManifest;
@@ -223,6 +295,8 @@ function describeDispatch(input: {
 }
 
 /** The text a `review next` run prints. */
+export const CONTINUE_LINE = "plan authorized; continue the loop without asking the operator; stop only for the card list, for plan growth, or on done / Not run";
+
 export function renderNext(result: NextResult, relativeTo: string = process.cwd()): string {
   const rel = (file: string): string => path.relative(relativeTo, file) || file;
   const lines: string[] = [];
@@ -232,6 +306,7 @@ export function renderNext(result: NextResult, relativeTo: string = process.cwd(
     const reviewers = new Set(result.dispatches.map((entry) => entry.reviewer)).size;
     lines.push(`review next: ${result.dispatches.length} dispatch(es) for ${reviewers} reviewer(s); dispatch them in one batch, save each reply under its result path, then run \`keryx review next --package ${rel(result.package)}\` again.`);
   }
+  if (result.continue) lines.push(CONTINUE_LINE);
   for (const entry of result.dispatches) {
     lines.push(`- ${entry.reviewer} wave ${entry.wave} (${entry.wavesLeft} left) [${entry.reason}] ${entry.slices.join(", ")} (${entry.bytes} bytes) model: ${entry.model ?? "model not recorded"}`);
     lines.push(`    result: ${entry.result}${entry.driver === undefined ? "" : `  driver: ${entry.driver}`}`);
@@ -240,8 +315,9 @@ export function renderNext(result: NextResult, relativeTo: string = process.cwd(
     if (entry.needsApply === true) lines.push(`    ${entry.recut} re-cut slice(s) are written by \`keryx review next --package ${rel(result.package)} --apply\``);
   }
   for (const item of result.escalated) lines.push(`- escalate ${item.slice}: finding ${item.finding} from ${item.by} on a light slice; it is re-opened deep and every core role now owns it`);
+  for (const item of result.rejected) lines.push(`- rejected ${item.file} (${item.reviewer}): ${item.reason}`);
   for (const item of result.notRun) lines.push(`- **Not run:** ${item.reviewer} — ${item.reason}; never counted as a clean pass`);
   for (const item of result.blocked) lines.push(`- blocked ${item.reviewer}: ${item.message}`);
-  if (!result.applied && result.dispatches.some((entry) => entry.needsApply === true)) lines.push("(read-only: nothing was written)");
+  if (!result.applied && result.dispatches.some((entry) => entry.needsApply === true)) lines.push("(--apply not given: the re-cut slices, the manifest and the retry state were not written)");
   return lines.join("\n");
 }

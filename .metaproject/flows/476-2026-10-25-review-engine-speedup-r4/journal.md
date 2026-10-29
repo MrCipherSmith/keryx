@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-10-25T15:05:30.943Z - flow created
+- 2026-10-25T15:45:27.617Z - frozen: 13 criteria; checksum recorded
+- 2026-10-25T15:45:27.840Z - started
+- 2026-10-25T16:03:34.177Z - ac-confirmed: AC1: #8111 copy: merge prints R-001 and '1 chunk-pass findings not in round'; --json has findings and notInRound (verification.md) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:40.155Z - ac-confirmed: AC2: #8158 copy: merge text, --json and chunk-pass.json byte-identical to the 0.3.131 build (verification.md) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:40.377Z - ac-confirmed: AC3: #8111 copy: complete warns in output and report.md, exit 0; second complete leaves one section (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:40.604Z - ac-confirmed: AC4: #8111 copy: ingest --review-id brings chunk-001-R-001 as review-regression/chunk-001, rejected=0, 14 findings after repeat ingest (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:40.832Z - ac-confirmed: AC5: bun test chunk-findings + blast-radius: green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:41.059Z - ac-confirmed: AC6: class_scope placeholder NOT ENUMERATED (poll 302); 14/14 findings validate against review-finding.schema.json; ledger build READY with slashed reviewer (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:41.279Z - ac-confirmed: AC7: bun test build-parity + bundled-eval: green; four skill copies byte-identical, ceiling 1571 held (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:41.501Z - ac-confirmed: AC8: cli-reference.md, review-with-a-record.md, CHANGELOG [Unreleased], help of review ingest and complete (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:41.719Z - ac-confirmed: AC9: bun test review-panel + review-inspector: green; verification.md states no new TUI surface is needed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:41.941Z - ac-confirmed: AC10: bun run typecheck: clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:42.159Z - ac-confirmed: AC11: originals #8111 (100 files, 84edccda1e1c) and #8158 (113 files, 16452b822183) unchanged by path/size/mtime (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:42.375Z - ac-confirmed: AC12: verification.md written in the flow directory (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:42.595Z - ac-confirmed: AC13: no commit, no push; no AI attribution in files or flow text (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T16:03:42.814Z - task-done: T1: Collect remaining context
+- 2026-10-25T16:03:43.037Z - task-done: T2: Implement per plan
+- 2026-10-25T16:03:43.254Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-25T16:03:43.478Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-25T16:27:37.428Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1085 (base: main)

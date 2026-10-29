@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { EVIDENCE_DIR, pendingMutants, type MutationRecord } from "./mutate";
+import { readWaveGaps } from "./wave-events";
 
 /**
  * What a review round leaves behind that no severity or finding count shows: mutation candidates that never ran,
@@ -28,6 +29,8 @@ export type ReviewParityView = {
   notRunIds: string[];
   held: ParityHeld[];
   followUps: ParityFollowUp[];
+  /** `idle` events in `tool-calls/wave-events.jsonl`: pauses with open slices under an authorized plan. Absent without any. */
+  gaps?: { count: number; maxMinutes: number } | undefined;
 };
 
 const FOLLOW_UP_ID = /:fu\d+$/;
@@ -91,16 +94,23 @@ function followUpsOf(research: unknown): ParityFollowUp[] {
 export async function readReviewParity(packageDir: string): Promise<ReviewParityView> {
   const pending = await pendingMutants(packageDir).catch(() => []);
   const research = await readJson(path.join(packageDir, "research.json"));
+  const gaps = await readWaveGaps(packageDir).catch(() => undefined);
   return {
     notRun: pending.length,
     cap: pending.length > 0 ? await latestCap(packageDir) : undefined,
     notRunIds: pending.map((m) => m.id),
     held: heldOf(await readJson(path.join(packageDir, "findings.json"))),
     followUps: followUpsOf(research),
+    ...(gaps === undefined ? {} : { gaps }),
   };
 }
 
-export const parityIsEmpty = (view: ReviewParityView): boolean => view.notRun === 0 && view.held.length === 0 && view.followUps.length === 0;
+export const parityIsEmpty = (view: ReviewParityView): boolean => view.notRun === 0 && view.held.length === 0 && view.followUps.length === 0 && view.gaps === undefined;
+
+/** A pause is not a verdict: a wait for an operator card looks the same, so this line informs and never warns. */
+function gapsText(gaps: { count: number; maxMinutes: number }): string {
+  return `Gaps without a launch after the plan was authorized: ${gaps.count}, longest ${gaps.maxMinutes} min (waits for operator cards are possible)`;
+}
 
 function notRunText(view: ReviewParityView): string {
   const ids = view.notRunIds.length > 0 ? `: ${view.notRunIds.slice(0, 6).join(", ")}${view.notRunIds.length > 6 ? ", …" : ""}` : "";
@@ -114,6 +124,7 @@ export function parityLines(view: ReviewParityView | undefined): string[] {
   if (view.notRun > 0) lines.push(notRunText(view));
   for (const held of view.held) lines.push(`held: ${held.finding} stays ${held.severity} (mutant ${held.mutant}): ${held.reason}`);
   for (const up of view.followUps) lines.push(`follow-up ${up.state}: ${up.id} ${up.text}${up.remains === undefined ? "" : ` (remains: ${up.remains})`}`);
+  if (view.gaps !== undefined) lines.push(gapsText(view.gaps));
   return lines;
 }
 
@@ -124,6 +135,7 @@ export function paritySummary(view: ReviewParityView | undefined): string {
   if (view.notRun > 0) parts.push(`Not run ${view.notRun}`);
   if (view.held.length > 0) parts.push(`held ${view.held.length}`);
   if (view.followUps.length > 0) parts.push(`follow-ups ${view.followUps.length}`);
+  if (view.gaps !== undefined) parts.push(`gaps ${view.gaps.count}`);
   return parts.join(", ");
 }
 
@@ -134,6 +146,7 @@ export function renderParityReport(view: ReviewParityView): string {
   if (view.notRun > 0) lines.push(`- **${notRunText(view)}.** They stay pending; a pass that runs them can still change a severity.`);
   for (const held of view.held) lines.push(`- **Held severity:** ${held.finding} stays ${held.severity}. ${held.kind === "covered" ? `${held.reason.charAt(0).toUpperCase()}${held.reason.slice(1)}.` : `Mutant ${held.mutant} survived but only changes presentation.`}`);
   for (const up of view.followUps) lines.push(`- **Not verified:** ${up.text} (${up.id}, ${up.state === "open" ? "open" : `narrowed, remains: ${up.remains ?? "not stated"}`})`);
+  if (view.gaps !== undefined) lines.push(`- **${gapsText(view.gaps)}.**`);
   return `${lines.join("\n")}\n`;
 }
 

@@ -33,6 +33,7 @@ import {
 } from "./types";
 import type { ManagedReviewInput, ManagedReviewManifest, StructuredReviewFinding } from "./types";
 import { withSpendSection } from "./dispatch-usage";
+import { ensureChunkPlan, recordChunk } from "./chunks";
 
 let ROOT = "";
 const ORIGINAL_CWD = process.cwd();
@@ -2064,3 +2065,119 @@ function createManagedReviewPackage(input: ManagedReviewIngestInput) {
     ...input,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Flow 476 (R4): a chunk pass that found something reaches the round
+// ---------------------------------------------------------------------------
+
+const PASS_FINDING = {
+  id: "R-001",
+  file: "src/far-0.ts",
+  line: 218,
+  severity: "high",
+  confidence: "high",
+  title: "routing store keeps a stale entry",
+  problem: "the store returns the cached route after the workspace was renamed",
+  impact: "the panel opens the old workspace",
+  suggested_fix: "drop the entry on rename",
+  evidence: "src/far-0.ts:218",
+};
+
+async function packageWithPass(reviewId: string, findings: unknown[] = [PASS_FINDING]): Promise<string> {
+  const pkg = await packageWithUncoveredFiles(reviewId);
+  const dir = path.join(ROOT, pkg);
+  for (let index = 0; index < 8; index += 1) {
+    await mkdir(path.join(ROOT, "src"), { recursive: true });
+    await writeFile(path.join(ROOT, `src/far-${index}.ts`), "export const x = 1;\n", "utf8");
+  }
+  await ensureChunkPlan(dir, ROOT);
+  await recordChunk(dir, "chunk-001", { status: "DONE", findings });
+  return pkg;
+}
+
+test("R4-D3: ingest brings a chunk-pass finding in, past the screen, and a repeated ingest does not duplicate it", async () => {
+  await fresh();
+  const pkg = await packageWithPass("2026-10-25-pass-ingest");
+  const reviewId = "2026-10-25-pass-ingest";
+  const first = await ingestFindings(reviewId, { blastRadius: RADIUS });
+  const brought = first.findings.filter((finding) => finding.reviewer === "review-regression/chunk-001");
+  expect(first.path).toBe(pkg);
+  expect(brought).toHaveLength(1);
+  expect(brought[0]).toMatchObject({ severity: "major", file: "src/far-0.ts", line: 218 });
+  expect(first.scopeBScreen.screen?.rejected).toEqual([]);
+  expect(first.scopeBScreen.screen?.exempted.map((entry) => entry.rule)).toContain("outside-set");
+  const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+  expect(scope).toContain("## Chunk pass findings");
+  const again = await ingestFindings(reviewId, { blastRadius: RADIUS });
+  expect(again.findings.filter((finding) => finding.reviewer === "review-regression/chunk-001")).toHaveLength(1);
+});
+
+test("R4-D3: a major pass finding without class_scope gets the honest placeholder, a pass's own class_scope is kept", async () => {
+  await fresh();
+  await packageWithPass("2026-10-25-pass-scope", [
+    PASS_FINDING,
+    { ...PASS_FINDING, id: "R-002", line: 300, class_scope: { sites: ["src/far-0.ts:300", "src/far-1.ts:12"], enumeration_method: "every caller of the store" } },
+  ]);
+  const { findings } = await ingestFindings("2026-10-25-pass-scope", { blastRadius: RADIUS });
+  const [bare, enumerated] = ["218", "300"].map((line) => findings.find((finding) => finding.reviewer === "review-regression/chunk-001" && String(finding.line) === line));
+  expect(bare?.class_scope?.enumeration_method).toStartWith("NOT ENUMERATED");
+  expect(bare?.class_scope?.sites).toEqual(["src/far-0.ts:218"]);
+  expect(enumerated?.class_scope?.enumeration_method).toBe("every caller of the store");
+  expect(enumerated?.class_scope?.sites).toHaveLength(2);
+});
+
+test("R4-D3: a minor pass finding is dropped by the severity floor, and a non-pass review-regression finding is still screened", async () => {
+  await fresh();
+  await packageWithPass("2026-10-25-pass-minor", [{ ...PASS_FINDING, severity: "medium" }]);
+  const { findings, scopeBScreen } = await ingestFindings("2026-10-25-pass-minor", {
+    blastRadius: RADIUS,
+    findings: [scopeBFinding({ id: "F-900", file: "src/somewhere/else.ts", class_scope: { sites: ["src/somewhere/else.ts:9"], enumeration_method: "read the file" } })],
+  });
+  expect(findings.some((finding) => finding.reviewer === "review-regression/chunk-001")).toBe(false);
+  expect(findings.some((finding) => finding.id === "F-900")).toBe(false);
+  const rules = scopeBScreen.screen?.rejected.map((rejection) => rejection.rule) ?? [];
+  expect(rules).toContain("non-regression-severity");
+  expect(rules).toContain("outside-set");
+});
+
+test("R4-D3: a pass finding the report already holds at the same file:line is not brought in twice", async () => {
+  await fresh();
+  await packageWithPass("2026-10-25-pass-dup");
+  const { findings } = await ingestFindings("2026-10-25-pass-dup", {
+    blastRadius: RADIUS,
+    findings: [scopeBFinding({ id: "F-901", file: "src/far-0.ts", line: 218 })],
+  });
+  expect(findings.some((finding) => finding.reviewer === "review-regression/chunk-001")).toBe(false);
+  expect(findings.filter((finding) => finding.line === 218)).toHaveLength(1);
+});
+
+test("R4-D2: review complete warns about a pass finding findings.json lacks, in the output and in report.md, and still completes", async () => {
+  await fresh();
+  const pkg = await packageWithPass("2026-10-25-pass-complete");
+  const result = await completeManagedReview(ROOT, pkg);
+  expect(result.warnings.join("\n")).toContain("1 chunk-pass finding(s) are not in findings.json");
+  expect(result.warnings.join("\n")).toContain("R-001 high src/far-0.ts:218 [chunk-001]");
+  const report = await readFile(path.join(ROOT, pkg, "report.md"), "utf8");
+  expect(report).toContain("## Chunk pass findings not in the round");
+  expect(report).toContain("R-001 high src/far-0.ts:218");
+});
+
+test("R4-D2: once the finding is ingested the close says nothing and the report.md section is gone; the section is written once", async () => {
+  await fresh();
+  const pkg = await packageWithPass("2026-10-25-pass-clean");
+  await completeManagedReview(ROOT, pkg);
+  await ingestFindings("2026-10-25-pass-clean", {
+    blastRadius: RADIUS,
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\nNot verified: 1\n",
+  });
+  const after = await completeManagedReview(ROOT, pkg);
+  expect(after.warnings.join("\n")).not.toContain("chunk-pass finding");
+  expect(await readFile(path.join(ROOT, pkg, "report.md"), "utf8")).not.toContain("## Chunk pass findings not in the round");
+});
+
+test("R4-D2: a package with no chunk plan completes with no pass warning", async () => {
+  await fresh();
+  const { path: pkg } = await ingestFindings("2026-10-25-no-pass");
+  const result = await completeManagedReview(ROOT, pkg);
+  expect(result.warnings.join("\n")).not.toContain("chunk-pass");
+});

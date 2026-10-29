@@ -214,6 +214,7 @@ const ALLOWED: Readonly<Record<string, readonly [sites: number, reason: string]>
   "review/ci-triage.ts": [1, "operand is <sha>:<path> of a CI-reported commit"],
   "review/conform-pr-port.ts": [1, "gh, not git; the PR number is numeric"],
   "review/managed.ts": [1, "operand is <sha>:<path> of a recorded commit"],
+  "review/worktree-provenance.ts": [1, "every argv is a fixed array at its call site (HEAD, rev-parse, diff, ls-files); no operand comes from a person"],
   "rewind/restore.ts": [2, "operands are tree ids the snapshot recorded; the native preview's is 40-hex checked first and again by safeShadowArguments"],
   "rewind/snapshot.ts": [1, "operands are tree-ish ids the snapshot recorded"],
   "session/commands/analysis-read-ports.ts": [1, "a gh argv pattern table, not git; the operand is the /^[1-9]\\d{0,19}$/ identifier predicate"],

@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { loadavg, tmpdir } from "node:os";
 import path from "node:path";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+import { worktreeProvenance } from "./worktree-provenance";
 
 /**
  * What a mutant changes. `behavior` alters what the code does; `presentation` alters only how it
@@ -53,6 +55,22 @@ export type MutationRecord = {
   cap?: number | undefined;
   /** Candidates the pass was given but did not run (they stay pending). Present only when a cap was set. */
   not_reached?: number | undefined;
+  /** True when mutants ran with `--bail` (the baseline never does); absent when the command was left as given. */
+  bail?: true | undefined;
+  /** ISO time the pass started. The fields below are absent in records written before they existed. */
+  startedAt?: string | undefined;
+  /** Commit of the reviewed worktree; absent outside a git checkout. */
+  head?: string | undefined;
+  /** sha256 of the uncommitted state (tracked diff plus untracked, non-ignored files, review packages excluded); see `worktreeProvenance` for what it does not cover. Absent outside the root of a git checkout, when git fails, or when a size or time limit is hit. */
+  treeHash?: string | undefined;
+  /** os.loadavg() at the start of the pass, before the provenance step and the copy: 1, 5 and 15 minutes. */
+  loadavg?: [number, number, number] | undefined;
+  /** Time spent reading the git state of the worktree (head and treeHash). */
+  provenanceMs?: number | undefined;
+  /** Time spent copying the worktree to scratch. */
+  copyMs?: number | undefined;
+  /** Sum of the mutant rows' `ms`. */
+  mutantsMs?: number | undefined;
 };
 
 export const MUTANTS_SPEC = "mutants.json";
@@ -107,6 +125,24 @@ export function parseMutantSpec(raw: unknown): MutantSpec[] {
   });
 }
 
+const BAIL_SAFE = /^[A-Za-z0-9_./:=,@+% -]+$/;
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * `command` with `--bail` right after `bun test`, or undefined when it is not certainly a plain
+ * `[env] [NAME=value ...] bun test <tokens>` or already has the flag. A command it cannot read runs as given.
+ */
+export function withBail(command: string): string | undefined {
+  if (!BAIL_SAFE.test(command)) return undefined;
+  const tokens = command.split(" ").filter((token) => token !== "");
+  let at = tokens[0] === "env" ? 1 : 0;
+  while (at < tokens.length && ENV_ASSIGNMENT.test(tokens[at]!)) at += 1;
+  if (tokens[at] !== "bun" || tokens[at + 1] !== "test") return undefined;
+  const rest = tokens.slice(at + 2);
+  if (rest.some((token) => token === "--bail" || token.startsWith("--bail=") || token === "--watch" || token === "--hot")) return undefined;
+  return [...tokens.slice(0, at + 2), "--bail", ...rest].join(" ");
+}
+
 /** Process groups of the test commands running now; a signal kills them before the scratch copy goes. */
 const liveGroups = new Set<number>();
 
@@ -123,9 +159,7 @@ function killLiveGroups(): void {
 
 /** The environment a test run gets: git cannot be pointed at another repository, so the ceiling holds. */
 function runEnv(scratchBase: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
-  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY"]) delete env[name];
-  return env;
+  return { ...withoutGitDiscoveryOverrides(process.env), GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
 }
 
 function runCommand(command: string, cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<{ exitCode: number; timedOut: boolean; ms: number; output: string }> {
@@ -226,8 +260,18 @@ export async function runMutation(options: {
   scratch?: ScratchMode | undefined;
   /** Run at most this many candidates; the rest, and any that came out invalid, are counted in `not_reached` and stay pending. */
   cap?: number | undefined;
+  /** Run each mutant with `--bail` when the command allows it (default true); the baseline always runs in full. */
+  bail?: boolean | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
+  const startedAt = new Date().toISOString();
+  // Sampled before the pass's own test runs, so it shows the load that was there already.
+  const load = loadavg() as [number, number, number];
+  // Before the scratch directory exists, so the hash describes the tree the caller handed in.
+  const provenanceStarted = Date.now();
+  const provenance = await worktreeProvenance(worktree);
+  const provenanceMs = Date.now() - provenanceStarted;
+  const passFields = { startedAt, ...provenance, loadavg: load, provenanceMs };
   const timeoutMs = options.timeoutMs ?? 300_000;
   const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
   await mkdir(scratchBase, { recursive: true });
@@ -237,7 +281,9 @@ export async function runMutation(options: {
   return withScratchSignalCleanup(async () => { killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
   try {
     const copy = path.join(scratch, "tree");
+    const copyStarted = Date.now();
     await copyTree(worktree, copy, new Set([scratchBase, scratch]));
+    const copyMs = Date.now() - copyStarted;
     const baseline = await runCommand(options.command, copy, timeoutMs, env);
     if (baseline.exitCode !== 0 || baseline.timedOut) {
       const tail = tailLines(baseline.output);
@@ -256,9 +302,13 @@ export async function runMutation(options: {
         baseline: { exitCode: baseline.exitCode, ms: baseline.ms, timedOut: baseline.timedOut, cwd: copy, tail },
         mutants: [],
         totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+        ...passFields,
+        copyMs,
       });
     }
 
+    const bailCommand = options.bail === false ? undefined : withBail(options.command);
+    const mutantCommand = bailCommand ?? options.command;
     const results: MutantResult[] = [];
     const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
     // The cap bounds the mutants that actually run. An invalid candidate costs nothing and stays pending
@@ -266,7 +316,7 @@ export async function runMutation(options: {
     let ran = 0;
     for (const mutant of options.mutants) {
       if (cap !== undefined && ran >= cap) break;
-      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command, ...(mutant.kind === undefined ? {} : { kind: mutant.kind }) };
+      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: mutantCommand, ...(mutant.kind === undefined ? {} : { kind: mutant.kind }) };
       const target = insideRoot(copy, mutant.file);
       if (target === undefined || !existsSync(target)) {
         results.push({ ...base, status: "invalid", ms: 0, reason: target === undefined ? "file is outside the worktree" : "file does not exist in the worktree" });
@@ -285,7 +335,7 @@ export async function runMutation(options: {
       await writeFile(target, original.slice(0, first) + mutant.replacement + original.slice(first + mutant.anchor.length), "utf8");
       ran += 1;
       try {
-        const run = await runCommand(options.command, copy, timeoutMs, env);
+        const run = await runCommand(mutantCommand, copy, timeoutMs, env);
         results.push({ ...base, line: lineOf(original, first), status: run.timedOut ? "timeout" : run.exitCode === 0 ? "survived" : "killed", exitCode: run.exitCode, ms: run.ms });
       } finally {
         await writeFile(target, original, "utf8");
@@ -293,11 +343,40 @@ export async function runMutation(options: {
     }
     const totals: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
     for (const r of results) totals[r.status] += 1;
-    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals, ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - ran }) };
+    return {
+      schemaVersion: 1,
+      worktree,
+      command: options.command,
+      baseline: { exitCode: baseline.exitCode, ms: baseline.ms },
+      mutants: results,
+      totals,
+      ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - ran }),
+      ...(bailCommand === undefined ? {} : { bail: true as const }),
+      ...passFields,
+      copyMs,
+      mutantsMs: results.reduce((sum, r) => sum + r.ms, 0),
+    };
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
   });
+}
+
+function costLine(record: MutationRecord): string[] {
+  const parts: string[] = [];
+  if (record.provenanceMs !== undefined) parts.push(`provenance ${record.provenanceMs} ms`);
+  if (record.copyMs !== undefined) parts.push(`copy ${record.copyMs} ms`);
+  if (record.mutantsMs !== undefined) parts.push(`mutants ${record.mutantsMs} ms`);
+  if (record.loadavg !== undefined) parts.push(`load ${record.loadavg.map((n) => n.toFixed(1)).join("/")}`);
+  return parts.length === 0 ? [] : [`Cost: ${parts.join(", ")}.`, ""];
+}
+
+function provenanceLine(record: MutationRecord): string[] {
+  const parts: string[] = [];
+  if (record.startedAt !== undefined) parts.push(`started ${record.startedAt}`);
+  if (record.head !== undefined) parts.push(`head ${record.head.slice(0, 12)}`);
+  if (record.treeHash !== undefined) parts.push(`treeHash ${record.treeHash.slice(0, 12)}`);
+  return parts.length === 0 ? [] : [`${parts.join(", ")}.`, ""];
 }
 
 export function renderMutationTable(record: MutationRecord): string {
@@ -320,6 +399,9 @@ export function renderMutationTable(record: MutationRecord): string {
     "",
     `Command: \`${record.command}\` (baseline exit ${record.baseline.exitCode}, ${record.baseline.ms} ms). Run in a scratch copy; the worktree was not written.`,
     "",
+    ...(record.bail === true ? ["Bail: applied (mutants ran with --bail; baseline in full).", ""] : []),
+    ...costLine(record),
+    ...provenanceLine(record),
     ...(record.baseline.tail === undefined
       ? []
       : [`Baseline ${record.baseline.timedOut ? "timed out" : `failed (exit ${record.baseline.exitCode})`}; no mutant ran. cwd: \`${record.baseline.cwd ?? "-"}\`. Last output:`, "", "```", record.baseline.tail.replace(/```/g, "'"), "```", ""]),

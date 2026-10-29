@@ -71,6 +71,9 @@ test("estimatePackage reads the manifest and the recorded depth from a package",
     await writeFile(path.join(pkg, "slices", "manifest.json"), JSON.stringify(manifest(4, 100, 1000)));
     await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ version: 1, files: ["src/a.ts"], changedLines: 10 }));
     await writeFile(path.join(pkg, "round-depth.json"), JSON.stringify({ requested: "auto", depth: "light", reason: "auto: small", files: ["src/a.ts"], changedLines: 10 }));
+    const withoutStyle = await estimatePackage(pkg);
+    expect(withoutStyle.roles).toBe(2);
+    await writeFile(path.join(pkg, "round-roles.json"), JSON.stringify({ enabled: ["review-clean-code", "review-style"] }));
     const e = await estimatePackage(pkg);
     expect(e.manifest).toBe(path.join(".metaproject", "reviews", "r1", "slices", "manifest.json"));
     expect(renderEstimate(e)).toContain("manifest: .metaproject/reviews/r1/slices/manifest.json");
@@ -81,6 +84,34 @@ test("estimatePackage reads the manifest and the recorded depth from a package",
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a delta round's fix slice routed to review-degradation counts it only where the project has the reviewer (flow 479 REG-1)", async () => {
+  const fixManifest: SliceManifest = {
+    ...manifest(1, 100, 1000),
+    slices: [{ id: "s0", path: "slices/s0.diff", bytes: 100, files: ["src/a.ts"], domain: "d", split: "domain", roles: ["review-logic", "review-degradation"], depth: "deep", kind: "fix", findingIds: ["F1"] }],
+  };
+  const estimateWith = async (installed: string[]) => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-estimate-"));
+    try {
+      for (const name of ["review-orchestrator", "review-logic", ...installed]) {
+        const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", name);
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`);
+      }
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills: {} } }));
+      const pkg = path.join(root, ".metaproject", "reviews", "r1");
+      await mkdir(path.join(pkg, "slices"), { recursive: true });
+      await writeFile(path.join(pkg, "slices", "manifest.json"), JSON.stringify(fixManifest));
+      await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ version: 1, files: ["src/a.ts"], changedLines: 10 }));
+      await writeFile(path.join(pkg, "round-depth.json"), JSON.stringify({ requested: "auto", depth: "light", reason: "auto: small", files: ["src/a.ts"], changedLines: 10 }));
+      return await estimatePackage(pkg);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  };
+  expect((await estimateWith([])).perRole.map((r) => r.role)).not.toContain("review-degradation");
+  expect((await estimateWith(["review-degradation"])).perRole.map((r) => r.role)).toContain("review-degradation");
 });
 
 test("--manifest and the shell-host default manifest are read, and the estimate names the one used", async () => {
@@ -253,4 +284,12 @@ describe("plan confirmation", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+});
+
+test("the estimate parameters keep their values (flow 477: the plan is reported against the actual time, not retuned)", () => {
+  expect(TYPICAL_DISPATCH_MINUTES).toBe(2);
+  expect(CHILD_DEADLINE_MINUTES).toBe(5);
+  expect(ASSUMED_PARALLEL_DISPATCHES).toBe(4);
+  expect(DEFAULT_MAX_DISPATCHES).toBe(40);
+  expect(DEFAULT_MAX_MINUTES).toBe(90);
 });

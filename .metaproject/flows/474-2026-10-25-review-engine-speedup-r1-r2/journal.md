@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-10-25T10:47:38.750Z - flow created
+- 2026-10-25T10:57:04.711Z - frozen: 17 criteria; checksum recorded
+- 2026-10-25T10:57:04.933Z - started
+- 2026-10-25T11:05:34.373Z - ac-confirmed: AC1: review-next.test.ts planAuthorized tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:34.592Z - ac-confirmed: AC2: continuation line tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:34.815Z - ac-confirmed: AC3: gate failure tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:35.035Z - ac-confirmed: AC4: wave-events.test.ts next event tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:35.272Z - ac-confirmed: AC5: idle gap tests pass; #8086 replay gave A=58 min (verification.md); run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:35.500Z - ac-confirmed: AC6: write failure tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:35.723Z - ac-confirmed: AC7: event size tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:35.942Z - ac-confirmed: AC8: orchestrator log untouched test passes; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:36.179Z - ac-confirmed: AC9: commands/review-next.test.ts only wave-events changes passes; copies of 4 closed packages changed only wave-events.jsonl; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:36.405Z - ac-confirmed: AC10: file optional test passes; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:36.626Z - ac-confirmed: AC11: parity.test.ts gaps tests pass; status and report-parity on #8174 copy show the line; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:36.858Z - ac-confirmed: AC13: four skill copies cmp-identical, docs and CHANGELOG grep OK; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:37.080Z - ac-confirmed: AC15: parity.test.ts and review-panel.test.ts pass (96 pass across 8 files); run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:37.307Z - ac-confirmed: AC16: typecheck and related test files pass (96 pass, 0 fail); run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T11:05:42.049Z - task-done: T1: Collect remaining context
+- 2026-10-25T11:05:42.275Z - task-done: T2: Implement per plan
+- 2026-10-25T11:05:42.497Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-25T11:05:42.714Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-25T13:01:24.166Z - ac-confirmed: AC12: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T13:01:24.386Z - ac-confirmed: AC14: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T13:01:24.610Z - ac-confirmed: AC17: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T17:18:28.725Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1083 (warning: PR is not a draft)

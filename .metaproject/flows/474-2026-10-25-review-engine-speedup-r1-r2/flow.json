@@ -1,0 +1,552 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "474",
+  "slug": "review-engine-speedup-r1-r2",
+  "title": "Review engine speedup, step 1: no stop between waves (R1) and wave-events journal (R2)",
+  "status": "implemented",
+  "createdAt": "2026-10-25T10:47:38.750Z",
+  "updatedAt": "2026-10-25T17:18:28.725Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-25T11:05:34.373Z",
+      "note": "review-next.test.ts planAuthorized tests pass; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC2": {
+      "at": "2026-10-25T11:05:34.592Z",
+      "note": "continuation line tests pass; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC3": {
+      "at": "2026-10-25T11:05:34.815Z",
+      "note": "gate failure tests pass; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC4": {
+      "at": "2026-10-25T11:05:35.035Z",
+      "note": "wave-events.test.ts next event tests pass; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC5": {
+      "at": "2026-10-25T11:05:35.271Z",
+      "note": "idle gap tests pass; #8086 replay gave A=58 min (verification.md); run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC6": {
+      "at": "2026-10-25T11:05:35.500Z",
+      "note": "write failure tests pass; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC7": {
+      "at": "2026-10-25T11:05:35.722Z",
+      "note": "event size tests pass; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC8": {
+      "at": "2026-10-25T11:05:35.942Z",
+      "note": "orchestrator log untouched test passes; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC9": {
+      "at": "2026-10-25T11:05:36.179Z",
+      "note": "commands/review-next.test.ts only wave-events changes passes; copies of 4 closed packages changed only wave-events.jsonl; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC10": {
+      "at": "2026-10-25T11:05:36.405Z",
+      "note": "file optional test passes; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC11": {
+      "at": "2026-10-25T11:05:36.626Z",
+      "note": "parity.test.ts gaps tests pass; status and report-parity on #8174 copy show the line; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC13": {
+      "at": "2026-10-25T11:05:36.858Z",
+      "note": "four skill copies cmp-identical, docs and CHANGELOG grep OK; run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC15": {
+      "at": "2026-10-25T11:05:37.080Z",
+      "note": "parity.test.ts and review-panel.test.ts pass (96 pass across 8 files); run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC16": {
+      "at": "2026-10-25T11:05:37.307Z",
+      "note": "typecheck and related test files pass (96 pass, 0 fail); run 2026-10-25 in worktree keryx-speedup"
+    },
+    "AC12": {
+      "at": "2026-10-25T13:01:24.166Z",
+      "note": "operator answer, poll 299, 2026-10-25: 'Подтвердить'"
+    },
+    "AC14": {
+      "at": "2026-10-25T13:01:24.386Z",
+      "note": "operator answer, poll 299, 2026-10-25: 'Подтвердить'"
+    },
+    "AC17": {
+      "at": "2026-10-25T13:01:24.610Z",
+      "note": "operator answer, poll 299, 2026-10-25: 'Подтвердить'"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1083"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "/home/altsay/arena/ideas/pr-review-management/23_KERYX_IMPLEMENTATION_PROMPT.md",
+    "source": "Helyx message 226364, 2026-10-25"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "no commit, push or draft PR without the operator's word; self-review of the diff done, attribution scan clean"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-25T10:47:38.750Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-25T10:57:04.711Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-25T10:57:04.933Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-25T11:05:34.373Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: review-next.test.ts planAuthorized tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:34.592Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: continuation line tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:34.815Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: gate failure tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:35.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: wave-events.test.ts next event tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:35.272Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: idle gap tests pass; #8086 replay gave A=58 min (verification.md); run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:35.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: write failure tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:35.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: event size tests pass; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:35.942Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: orchestrator log untouched test passes; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:36.179Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: commands/review-next.test.ts only wave-events changes passes; copies of 4 closed packages changed only wave-events.jsonl; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:36.405Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: file optional test passes; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:36.626Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: parity.test.ts gaps tests pass; status and report-parity on #8174 copy show the line; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:36.858Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: four skill copies cmp-identical, docs and CHANGELOG grep OK; run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:37.080Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: parity.test.ts and review-panel.test.ts pass (96 pass across 8 files); run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:37.307Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: typecheck and related test files pass (96 pass, 0 fail); run 2026-10-25 in worktree keryx-speedup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T11:05:42.049Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-25T11:05:42.275Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-25T11:05:42.497Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-25T11:05:42.714Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-25T13:01:24.166Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T13:01:24.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T13:01:24.610Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: operator answer, poll 299, 2026-10-25: 'Подтвердить' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-25T17:18:28.725Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1083 (warning: PR is not a draft)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"planAuthorized\""
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"continuation line\""
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts -t \"gate failure\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/wave-events.test.ts -t \"next event\""
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/wave-events.test.ts -t \"idle gap\""
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/wave-events.test.ts -t \"write failure\""
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/wave-events.test.ts -t \"event size\""
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/review/wave-events.test.ts -t \"orchestrator log untouched\""
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-next.test.ts -t \"only wave-events changes\""
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/review/wave-events.test.ts -t \"file optional\""
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/review/parity.test.ts -t \"gaps\""
+    },
+    "AC12": {
+      "kind": "judged"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "sh -c 'cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md && cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md && grep -q wave-events.jsonl docs/docs/cli-reference.md && grep -q wave-events.jsonl CHANGELOG.md && grep -q planAuthorized docs/docs/cli-reference.md'"
+    },
+    "AC14": {
+      "kind": "judged"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/review/parity.test.ts src/tui/review-panel.test.ts"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "sh -c 'bun run typecheck && bun test src/review/review-next.test.ts src/review/wave-events.test.ts src/review/parity.test.ts src/commands/review-next.test.ts src/commands/review-revision-operand.test.ts'"
+    },
+    "AC17": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-25T11:05:34.373Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:34.592Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:34.815Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:35.035Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:35.271Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:35.500Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:35.722Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:35.942Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:36.179Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:36.405Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:36.626Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:36.858Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:37.080Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T11:05:37.307Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T13:01:24.166Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T13:01:24.386Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    },
+    {
+      "at": "2026-10-25T13:01:24.610Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC17",
+      "acChecksum": "sha256:a430ce0fafc9a05b467fd88ce9473fa92b63297053e078925607179ea7c1c11e"
+    }
+  ]
+}

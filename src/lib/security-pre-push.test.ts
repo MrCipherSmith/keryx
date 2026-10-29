@@ -16,7 +16,7 @@ test("rendered pre-push blocks end their trailing call with `|| exit $?`", () =>
     "keryx_testing_pre_push || exit $?",
   );
   expect(renderSecurityPrePushHook()).toContain(
-    "keryx_security_pre_push || exit $?",
+    'keryx_security_pre_push "$@" || exit $?',
   );
 });
 
@@ -204,4 +204,79 @@ test("security hook scans every commit of a first push, not just HEAD", async ()
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 60_000);
+
+
+for (const scenario of ["inherited", "modified", "other-remote", "published-only", "blocked"] as const) {
+  test(`security hook preserves unpublished edits: ${scenario}`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-prepush-merge-"));
+    try {
+      const git = (...args: string[]) => {
+        const proc = Bun.spawnSync({
+          cmd: ["git", ...args], cwd: root,
+          env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.test",
+            GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.test" },
+          stdout: "pipe", stderr: "pipe",
+        });
+        expect(proc.exitCode).toBe(0);
+        return new TextDecoder().decode(proc.stdout).trim();
+      };
+      git("init", "-q");
+      await writeFile(path.join(root, "base.txt"), "base\n");
+      git("add", "."); git("commit", "-qm", "base");
+      const base = git("rev-parse", "HEAD");
+      await writeFile(path.join(root, "published.txt"), "already published\n");
+      git("add", "."); git("commit", "-qm", "main advance");
+      const main = git("rev-parse", "HEAD");
+      git("update-ref", `refs/remotes/${scenario === "other-remote" ? "elsewhere" : "origin"}/main`, main);
+      git("checkout", "-qb", "feature", base);
+      await writeFile(path.join(root, "feature.txt"), "unpublished\n");
+      git("add", "."); git("commit", "-qm", "feature");
+      const oldFeature = git("rev-parse", "HEAD");
+      git("update-ref", "refs/remotes/origin/feature", oldFeature);
+      git("merge", "--no-edit", main);
+      if (scenario === "modified") {
+        await writeFile(path.join(root, "published.txt"), "unpublished change\n");
+        git("add", "."); git("commit", "-qm", "modify inherited file");
+      }
+      if (scenario !== "published-only") {
+        await writeFile(path.join(root, "new.txt"), "new local file\n");
+        git("add", "."); git("commit", "-qm", "new file");
+      }
+      const head = git("rev-parse", "HEAD");
+      const binDir = path.join(root, "bin");
+      await mkdir(binDir);
+      const scanLog = path.join(root, "scanned.log");
+      await writeFile(path.join(binDir, "keryx"), [
+        "#!/bin/sh",
+        'if [ "$1" = security ] && [ "$2" = scan ]; then',
+        `  printf '%s\\n' "$3" >> "${scanLog}"`,
+        scenario === "blocked" ? "  exit 1" : "  :",
+        "fi", "exit 0", "",
+      ].join("\n"));
+      await chmod(path.join(binDir, "keryx"), 0o755);
+      const hook = path.join(root, "hook");
+      await writeFile(hook, `#!/bin/sh\n${renderSecurityPrePushHook()}`);
+      const proc = Bun.spawnSync({
+        cmd: ["sh", hook, "origin"], cwd: root,
+        env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}` },
+        stdin: new TextEncoder().encode(`refs/heads/feature ${head} refs/heads/feature ${oldFeature}\n`),
+        stdout: "pipe", stderr: "pipe",
+      });
+      expect(proc.exitCode).toBe(scenario === "blocked" ? 1 : 0);
+      const scanned = (await Bun.file(scanLog).text().catch(() => "")).trim().split("\n").filter(Boolean);
+      if (scenario === "published-only") {
+        expect(scanned).toEqual([]);
+        return;
+      }
+      expect(scanned).toContain("new.txt");
+      if (scenario === "inherited" || scenario === "blocked") {
+        expect(scanned).not.toContain("published.txt");
+      } else {
+        expect(scanned).toContain("published.txt");
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+}

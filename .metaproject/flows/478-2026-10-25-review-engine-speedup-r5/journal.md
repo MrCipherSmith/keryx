@@ -1,0 +1,30 @@
+# Flow Journal
+
+- 2026-10-25T18:03:52.492Z - flow created
+- 2026-10-25T19:14:48.073Z - frozen: 8 criteria; checksum recorded
+- 2026-10-25T19:14:48.316Z - started
+- 2026-10-25T19:15:07.565Z - task-done: T1: Collect remaining context
+- 2026-10-25T19:15:07.790Z - task-done: T2: Implement per plan
+- 2026-10-25T19:15:08.020Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-25T19:15:08.232Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-25T19:15:57.291Z - ac-confirmed: AC5: bun test coverage/role-switches/review-required-package: зелёные (253 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:15:57.522Z - ac-confirmed: AC6: bun test review-slice-paths + review.test: зелёные (253 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:15:57.744Z - ac-confirmed: AC7: bun test review-panel + review-inspector: зелёные (253 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:15:57.969Z - ac-confirmed: AC8: bun run typecheck чистый; адаптированные тесты зелёные (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:15:58.191Z - ac-confirmed: AC9: cli-reference.md, review-with-a-record.md, help start/required, таблица флагов review-orchestrator (bundled + mirror), CHANGELOG [Unreleased] (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:15:58.413Z - ac-confirmed: AC10: отпечатки до/после совпали: 22fb0c4fd574 (107), 177cf8df20ef (19), 885570e002e9 (25); см. verification.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:15:58.638Z - ac-confirmed: AC11: verification.md: доказательства G1-G4, расхождения (required.json, номера cli.js против src, BUNDLED_OVERLAP_GROUPS/ROLE_RULES в slice-routing.ts), не измерено и не проверено (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:17.349Z - ac-updated: AC1-AC4 were written as 'ACn (Gn):' which the parser skips; moved the tag after the colon, wording unchanged
+- 2026-10-25T19:16:23.831Z - ac-confirmed: AC1: verification.md: три cp -a копии, 25→23, 23→21, 23→21; new == old минус две роли; excluded с причиной '--style turns it on'; с --style состав равен прежнему (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:24.126Z - ac-confirmed: AC2: verification.md: g2 прогон: disabled снимает review-performance с причиной routing.config.json; core review-logic остаётся с предупреждением; неизвестные имена — предупреждения; enabled включает review-style (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:24.436Z - ac-confirmed: AC3: verification.md: --all/--gating предупреждают именем ролей и --style; light без conventions-ревьюера не подставляет review-clean-code, с --style подставляет (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:24.732Z - ac-confirmed: AC4: bun test role-switches + role-switches-complete: зелёные (в составе 253 pass, 0 fail) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:25.032Z - ac-confirmed: AC5: bun test coverage/role-switches/review-required-package: зелёные (253 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:25.332Z - ac-confirmed: AC6: bun test review-slice-paths + review.test: зелёные (253 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:25.634Z - ac-confirmed: AC7: bun test review-panel + review-inspector: зелёные (253 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:25.923Z - ac-confirmed: AC8: bun run typecheck чистый; адаптированные тесты зелёные (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:26.220Z - ac-confirmed: AC9: cli-reference.md, review-with-a-record.md, help start/required, таблица флагов review-orchestrator (bundled + mirror), CHANGELOG [Unreleased] (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:26.522Z - ac-confirmed: AC10: отпечатки до/после совпали: 22fb0c4fd574 (107), 177cf8df20ef (19), 885570e002e9 (25); см. verification.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:26.809Z - ac-confirmed: AC11: verification.md: доказательства G1-G4, расхождения (required.json, номера cli.js против src, BUNDLED_OVERLAP_GROUPS/ROLE_RULES в slice-routing.ts), не измерено и не проверено (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-25T19:16:48.856Z - ac-confirmed: AC12: оператор дал слово на коммит/push/draft PR (опрос 308); сканирование диффа и файлов флоу на AI-подпись: 0 совпадений; автор MrCipherSmith (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-26T05:27:19.204Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1088 (warning: PR is not a draft) (base: main)

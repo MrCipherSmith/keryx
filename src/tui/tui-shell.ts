@@ -428,6 +428,7 @@ import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
 import { collectRenderableText, mountSidebarCards, openSidebarCard, type SidebarSnapshot } from "./sidebar-cards";
+import { workSidebarSnapshot, renderWorkInspector } from "./sidebar-work";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -5487,8 +5488,12 @@ export async function launchTuiAgentShell(opts: {
         if (text !== "") sections[section] = text;
       }
       const hold = leaseView()?.banner();
+      const work = workSidebarSnapshot(sessions.list(), jobs.list());
+      delete sections.subagents;
+      delete sections.jobs;
       return {
-        sections,
+        sections: { ...sections, ...work.sections },
+        items: work.items,
         approvalsPending: liveApprovals?.pending() ?? 0,
         ...(hold !== undefined ? { hold } : {}),
         ...(updateAvailableVersion !== undefined ? { updateAvailable: updateAvailableVersion } : {}),
@@ -5502,7 +5507,20 @@ export async function launchTuiAgentShell(opts: {
       snapshot: () => cardSnapshot,
       onOpenCard: (cardId) => {
         // A fresh read, not the last tick's: the modal shows the value as of the click.
-        openSidebarCard(otui, chrome, cardId, { snapshot: sidebarSnapshot, runCommand: (command) => runLine(command) });
+        openSidebarCard(otui, chrome, cardId, {
+          snapshot: sidebarSnapshot, runCommand: (command) => runLine(command),
+          subscribe: (refresh) => {
+            const offAgents = sessions.subscribe(refresh);
+            const offJobs = jobs.subscribe(refresh);
+            return () => { offAgents(); offJobs(); };
+          },
+          renderItem: (section, item, body) => renderWorkInspector(otui, chrome, body, section, item.id, {
+            agents: sessions, jobs,
+            registry: { kill: (id) => deps.jobRegistry !== undefined
+              ? deps.jobRegistry.kill(id)
+              : Promise.resolve({ ok: false, error: "Job registry is unavailable." }) },
+          }),
+        });
       },
     });
     const tickSidebarCards = (): void => {
@@ -7289,7 +7307,21 @@ export async function launchTuiAgentShell(opts: {
       foregroundOperation.invalidateSession();
       io.resetStream();
       blockIo.resetReasoningLiveState();
-      forceHandoff.clear();
+      // Not `forceHandoff.clear()`: a forced line has already been taken out of
+      // the visible queue, so clearing the handoff on `/new`, `/clear` or
+      // `/resume` deleted the operator's message. Give the parked lines back to
+      // the queue; the waiter that owns the handoff then finds it empty and adds
+      // nothing twice.
+      const parked = forceHandoff.drainPending();
+      if (parked.length > 0) {
+        turnLoop.replaceQueue([...parked, ...turnLoop.queue]);
+        paintMainQueue();
+        io.onSystem?.(
+          parked.length === 1
+            ? "◇ the forced line is back in the main queue.\n"
+            : `◇ ${parked.length} forced lines are back in the main queue.\n`,
+        );
+      }
       suggestionGate.cancel();
       if (sessionPersistTimer !== undefined) {
         clearTimeout(sessionPersistTimer);
@@ -9080,7 +9112,26 @@ export async function launchTuiAgentShell(opts: {
       // guard was therefore covered only by a source-text audit — which review
       // showed stays green with the guard deleted.
       void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {
-        announce: () => io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`),
+        // Only claim an interruption the owner performed: with nothing active
+        // `cancel` is a no-op, and the old unconditional line said the main turn
+        // was interrupted when nothing had been.
+        announce: (interrupted) =>
+          io.onSystem?.(
+            interrupted
+              ? `◇ main turn interrupted — q${index + 1} will run next.\n`
+              : `◇ q${index + 1} will run next.\n`,
+          ),
+        // `runQueued` goes through `runLine`, whose busy branch diverts the line
+        // to the recipient dock or a side worker. Ask before dispatching, and hand
+        // the line back to the queue while the chrome is still busy.
+        isBusy: () => chrome.isBusy(),
+        resume: () => drainSites.onLeaseRelease(),
+        requeue: (items) => {
+          if (foregroundOperation.isDisposed) return;
+          turnLoop.replaceQueue([...items, ...turnLoop.queue]);
+          paintMainQueue();
+          drainSites.onLeaseRelease();
+        },
         run: (next) => remoteQueue.runQueued(next),
       });
     };

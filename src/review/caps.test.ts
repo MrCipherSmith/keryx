@@ -247,6 +247,15 @@ test("AC6: reviewers map to the logic-and-security, frontend-and-backend, style-
   expect(reviewerDomain("some-project-reviewer")).toBe("domain");
 });
 
+test("flow 479 TP-003: review-degradation is a core reviewer and waves with its regression and architecture siblings", () => {
+  expect(reviewerDomain("review-degradation")).toBe("core");
+  expect(reviewerDomain("review-degradation")).toBe(reviewerDomain("review-regression"));
+  const plan = planReviewerWaves(["review-style", "review-degradation", "review-frontend", "review-regression", "review-logic"]);
+  expect(plan.waves[0]).toEqual(expect.arrayContaining(["review-degradation", "review-regression", "review-logic"]));
+  expect(plan.waves.flat()).toContain("review-degradation");
+  expect(plan.waves.at(-1)).toEqual(["review-style"]);
+});
+
 test("AC6: a set of 3 reviewers is split by diff domain, core first, nothing is dropped", () => {
   const plan = planReviewerWaves(["review-style", "review-frontend", "review-logic"]);
 

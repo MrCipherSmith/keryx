@@ -602,6 +602,44 @@ describe("the legacy parser is held to the same contract as the structured one",
       expect(existsSync(path.join(root, ".metaproject", "reviews", "2026-08-29-bad-line"))).toBe(false);
     });
   });
+  test("flow 479: a degradation report's Class and Evidence kind lines are read, with emphasis taken off, for that reviewer only", async () => {
+    await withTempRoot(async (root) => {
+      const report = [
+        "### [F-001] minor: the retry budget no longer applies",
+        "- **Reviewer**: review-degradation",
+        "- **Class**: **debt**",
+        "- **Evidence kind**: `red-test`",
+        "",
+        "### [F-002] minor: another reviewer's note",
+        "- **Reviewer**: review-logic",
+        "- **Class**: debt",
+        "- **Evidence kind**: probe",
+        "",
+        "### [F-003] minor: the template line was pasted",
+        "- **Reviewer**: review-degradation",
+        "- **Class**: debt | behaviour-delta",
+        "- **Evidence kind**: probe | red-test",
+        "",
+      ].join("\n");
+      const result = await createManagedReviewPackage({
+        cwd: root,
+        mode: "ingest",
+        reviewId: "2026-10-28-degradation-markdown",
+        target: { kind: "report", ref: "review.md" },
+        reportText: report,
+        now: new Date("2026-10-28T10:00:00Z"),
+      });
+      const findings = JSON.parse(
+        await readFile(path.join(root, result.path, "findings.json"), "utf8"),
+      ) as StructuredReviewFinding[];
+      const byId = new Map(findings.map((finding) => [finding.id, finding]));
+      expect(byId.get("F-001")).toMatchObject({ degradation_class: "debt", evidence_kind: "red-test" });
+      expect(byId.get("F-002")?.degradation_class).toBeUndefined();
+      expect(byId.get("F-002")?.evidence_kind).toBeUndefined();
+      expect(byId.get("F-003")?.degradation_class).toBeUndefined();
+      expect(byId.get("F-003")?.evidence_kind).toBeUndefined();
+    });
+  });
 });
 
 describe("the machine-readable block", () => {

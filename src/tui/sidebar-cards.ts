@@ -40,7 +40,14 @@ const MIN_CARD_LINES = 3;
 const NOTHING_TO_SHOW = "Nothing to show yet.";
 
 /** What the card builders read. Every field is optional: an empty snapshot is a quiet sidebar. */
+export interface SidebarItem {
+  id: string;
+  label: string;
+  text: string;
+}
+
 export interface SidebarSnapshot {
+  items?: Partial<Record<string, readonly SidebarItem[]>> | undefined;
   /** Display text per former section; multi-line values keep their lines. */
   sections?: Partial<Record<string, string>> | undefined;
   /** Remote approvals waiting for an answer. */
@@ -157,8 +164,9 @@ const CARD_DEFS: readonly CardDef[] = [
     ],
     rows: [
       { sections: ["status"], required: true, fallback: "idle" },
+      { sections: ["subagents"], required: false, fallback: "" },
+      { sections: ["jobs"], required: false, fallback: "" },
       { sections: ["plan"], required: false, fallback: "" },
-      { sections: ["subagents", "jobs"], required: true, fallback: "no workers" },
     ],
   },
   {
@@ -565,6 +573,9 @@ export function mountSidebarCards(otui: OpenTui, renderer: Renderer, parent: Par
 // ---------------------------------------------------------------------------
 
 export interface OpenSidebarCardOptions {
+  subscribe?: ((refresh: () => void) => () => void) | undefined;
+  renderItem?: ((section: string, item: SidebarItem, body: unknown,
+    ctx: { width: number; height: number }) => void | (() => void)) | undefined;
   snapshot: () => SidebarSnapshot;
   initialTab?: string | undefined;
   /** Runs the slash command of the tab Enter was pressed on (the shell's `runLine`). */
@@ -601,6 +612,38 @@ export function openSidebarCard(
     renderTab: (tabId, body, ctx) => {
       const tab = tabOf(tabId);
       if (tab === undefined) return;
+      if (options.snapshot().items?.[tabId] !== undefined) {
+        const rows = new otui.BoxRenderable(chrome.renderer, {
+          id: `sb-card-items-${tabId}`, flexDirection: "column", flexShrink: 0,
+        });
+        (body as Parent).add(rows);
+        const paint = (): void => {
+          for (const child of [...rows.getChildren()]) {
+            rows.remove(child);
+            child.destroy();
+          }
+          const snapshot = options.snapshot();
+          rows.add(new otui.TextRenderable(chrome.renderer, {
+            id: `sb-card-items-${tabId}-header`,
+            content: snapshot.sections?.[tabId] ?? "Nothing to show yet.", fg: roleColor("text"),
+          }));
+          for (const item of snapshot.items?.[tabId] ?? []) {
+            rows.add(new otui.TextRenderable(chrome.renderer, {
+              id: `sb-card-item-${tabId}-${item.id}`, content: item.text, fg: roleColor("text"),
+              onMouseDown: () => {
+                if (options.renderItem === undefined) return;
+                handle?.addTab({
+                  id: `detail:${tabId}:${item.id}`, label: item.label, temporary: true,
+                  renderTab: (_id, target, context) => options.renderItem?.(tabId, item, target, context),
+                }, tabId);
+              },
+            }));
+          }
+          chrome.renderer.requestRender();
+        };
+        paint();
+        return options.subscribe?.(paint);
+      }
       const lines = tab.lines(ctx.width);
       const parent = body as Parent;
       parent.add(new otui.TextRenderable(chrome.renderer, { id: `sb-card-detail-${tabId}`, content: lines.join("\n"), fg: roleColor("text") }));

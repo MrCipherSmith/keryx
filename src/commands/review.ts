@@ -39,11 +39,13 @@ import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
+import { installedRosterRoles } from "../review/roster";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
+import { optInRolesFromArgs, optionalRolesLine, packageEnabledRoles, recordEnabledRoles } from "../review/role-switches";
+import { packageEstimateLine } from "../review/estimate-actual";
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
-import { manifestRosterRoles } from "../review/round-split";
 import { printPlanHelp, runPlan } from "./review-plan";
 import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -154,6 +156,13 @@ import {
   type BlastRadius,
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
+import { renderDegradationScreenLines } from "../review/degradation";
+import {
+  barrelsOf,
+  buildDegradationConsumers,
+  changedExportsOf,
+  renderDegradationPayloadBrief,
+} from "../review/degradation-payload";
 import { loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
@@ -364,6 +373,9 @@ export const CREATE_FLAGS = [
   "--prior",
   // The base the round's merge-base is read from, ahead of origin/main (a merged PR's merge-base with origin/main is its head).
   "--base",
+  // R5: `start` records the optional roles the round asks for (`--style`: review-clean-code and review-style; `--with-role <name>`: one more) in <package>/round-roles.json. Refused on attach and ingest.
+  "--style",
+  "--with-role",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -551,6 +563,8 @@ const BLAST_RADIUS_FLAGS = [
   "--package",
   "--reach",
   "--no-text-links",
+  "--degradation",
+  "--degradation-cap",
 ] as const;
 
 const TIER_FLAGS = [
@@ -576,10 +590,10 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-cov
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--no-bail", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
+export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--style", "--with-role", "--package", "--json"] as const;
 export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
@@ -1047,6 +1061,10 @@ export async function refreshCreatedPackageLayers(
 
 async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
   rejectUnknownFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
+  if (mode !== "review-flow" && (args.includes("--style") || flagTokens(args).some((token) => token.name === "--with-role"))) {
+    throw new Error(`--style and --with-role belong to \`keryx review start\`, which records the roles a round runs; \`${mode === "ingest" ? "ingest" : "attach"}\` takes a round already run. Refused rather than ignored.`);
+  }
+  const optIn = optInRolesFromArgs(args);
   const targetKind = targetKindFromArgs(mode, args);
   const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
   if (!targetRef) {
@@ -1118,6 +1136,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
     await writeRunProfile(result.path, profile, { stampManifest: true });
     await startOrchestratorLog(cwd, result.reviewId, result.path, profile.callerToken);
+    if (mode === "review-flow") {
+      await recordEnabledRoles(result.path, optIn);
+      const roster = await requiredReviewers(cwd, "all", input.scope?.files === undefined ? undefined : [...input.scope.files], { enabledRoles: optIn });
+      for (const warning of roster.warnings ?? []) console.error(`warning: ${warning}`);
+      if (roster.rolesOff !== undefined && roster.rolesOff.length > 0) console.log(`roles off: ${roster.rolesOff.join(", ")} (--style or --with-role <role> at \`keryx review start|required\`, or reviewRoles in routing.config.json, brings them back)`);
+    }
     console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
     console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
     for (const line of renderSkillDrift(reviewSkillDrift({ projectRoot: resolveProjectRoot(cwd), bundledRoot: defaultBundledReviewRoot() }))) console.error(line);
@@ -1254,6 +1278,18 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
         `  exempted ${exemption.finding.id ?? "<unidentified>"} [${exemption.rule} not applied]: ${exemption.detail}`,
       );
     }
+  }
+  // Flow 479: the degradation evidence screen, on the terminal as well as in scope.md. A downgrade nobody sees
+  // reads as a reviewer that found less than it did.
+  for (const line of renderDegradationScreenLines(result.degradationScreen)) {
+    console.log(line);
+  }
+  // A chunk pass that raised findings is part of the round once ingested; say how many came in, so the count is not a silence.
+  const chunkPass = result.chunkPass;
+  if (chunkPass.brought.length > 0 || chunkPass.alreadyReported.length > 0) {
+    console.log(`chunk-pass findings: brought_in=${chunkPass.brought.length} already_in_report=${chunkPass.alreadyReported.length}`);
+    for (const id of chunkPass.brought) console.log(`  brought in ${id}`);
+    for (const line of chunkPass.alreadyReported) console.log(`  already in the report: ${line}`);
   }
   const concurrency = caps.concurrency;
   if (concurrency !== undefined) {
@@ -3358,7 +3394,10 @@ async function runRequired(args: string[]): Promise<void> {
   const files = scope?.files !== undefined ? [...scope.files] : packageFiles;
   const forceFull = args.includes("--all") ? "--all" : args.includes("--gating") ? "--gating" : undefined;
   const decision = await decideRoundDepth(process.cwd(), depthArg, { files, changedLines, forceFull });
+  // The opt-in is the flags plus what the package recorded (`start --style`), so a later `required --package` cannot drop it.
+  const optIn = [...new Set([...optInRolesFromArgs(args), ...(packageDir === undefined ? [] : await packageEnabledRoles(packageDir))])];
   const baseSet = await requiredReviewers(process.cwd(), mode, files, {
+    enabledRoles: optIn,
     blastRadius:
       radiusFile !== undefined
         ? await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))
@@ -3371,16 +3410,21 @@ async function runRequired(args: string[]): Promise<void> {
   });
   // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
   const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
-  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? manifestRosterRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
+  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? (await installedRosterRoles(process.cwd(), sliceManifest)).filter((role) => !baseSet.required.includes(role)) : [];
   const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
     // The one write: `ledger build` reads the round's depth back from the package.
     // The decision is tied to the head, file list and line count it was made for; `ledger build` drops it when any of them moved.
     const basis = await packageDepthBasis(packageDir);
     await writeFileAtomic(path.join(packageDir, ROUND_DEPTH_FILE), `${JSON.stringify({ ...decision, head: basis.head, files: files === undefined ? undefined : [...files].sort(), changedLines }, null, 2)}\n`);
+    await recordEnabledRoles(packageDir, optInRolesFromArgs(args));
   }
+  // `--all` and `--gating` widen the depth, not the roster: the switched-off roles stay off, and the output says so.
+  const warnings = [...(set.warnings ?? [])];
+  if (forceFull !== undefined && set.rolesOff !== undefined && set.rolesOff.length > 0) warnings.push(`${forceFull} does not bring back ${set.rolesOff.join(", ")}: they are switched off; pass --style (or --with-role <role>) to run them`);
+  const shown = { ...set, ...(warnings.length === 0 ? {} : { warnings }) };
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...set, ...(fixRoles.length === 0 ? {} : { fixRoles }), depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
+    console.log(JSON.stringify({ ...shown, ...(fixRoles.length === 0 ? {} : { fixRoles }), depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
     return;
   }
   console.log(`depth: ${set.depth} (${decision.reason})`);
@@ -3388,6 +3432,7 @@ async function runRequired(args: string[]): Promise<void> {
   console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
   if (fixRoles.length > 0) console.log(`fix slices add: ${fixRoles.join(", ")} (they authored findings a fix slice answers)`);
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+  for (const warning of warnings) console.log(`warning: ${warning}`);
 }
 
 async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<void> {
@@ -3442,12 +3487,14 @@ async function runMutate(args: string[]): Promise<void> {
   const scratchArg = optionValue(args, "--scratch");
   if (scratchArg !== undefined && !SCRATCH_MODES.includes(scratchArg as ScratchMode)) throw new Error(`--scratch must be one of ${SCRATCH_MODES.join(", ")}`);
   const scratch = scratchArg as ScratchMode | undefined;
+  const noBail = flagTokens(args).find((token) => token.name === "--no-bail");
+  if (noBail?.value !== undefined) throw new Error(`--no-bail takes no value (got "${noBail.value}"); pass it alone to run the mutants without --bail`);
   const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
   // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
   const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
   let record;
   try {
-    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch });
+    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch, bail: noBail === undefined });
   } catch (error) {
     // A red baseline still leaves evidence: the command, its cwd and the output tail say why no mutant ran.
     if (error instanceof BaselineError) {
@@ -3956,6 +4003,14 @@ async function runBlastRadius(args: string[]): Promise<void> {
   const maxFiles = parseNonNegativeInteger(optionValue(args, "--max-files"), "--max-files");
   const includeRelatedTests = !args.includes("--no-related-tests");
   const isFinalRound = args.includes("--final");
+  const wantsDegradation = args.includes("--degradation");
+  if (wantsDegradation) {
+    const clash = ["--json", "--brief", "--out"].find((flag) => (flag === "--out" ? optionValue(args, flag) !== undefined : args.includes(flag)));
+    if (clash !== undefined) throw new Error(`--degradation prints the review-degradation payload to stdout and cannot be combined with ${clash}; run blast-radius again for that output.`);
+  } else if (args.some((arg) => arg === "--degradation-cap")) {
+    throw new Error("--degradation-cap only applies together with --degradation.");
+  }
+  const degradationCap = wantsDegradation ? parseNonNegativeInteger(optionValue(args, "--degradation-cap"), "--degradation-cap") : undefined;
 
   const explicit = optionValue(args, "--changed");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
@@ -4000,8 +4055,13 @@ async function runBlastRadius(args: string[]): Promise<void> {
     depth,
     maxFiles,
   });
-  console.error(`recompute: ${decision.recompute ? "yes" : "no"} — ${decision.reason}`);
-  if (!decision.recompute && previous !== undefined) {
+  const reuse = !decision.recompute && previous !== undefined;
+  // The degradation payload is built from the code graph, which a reused record does not carry.
+  const recomputeForDegradation = reuse && wantsDegradation;
+  const recompute = decision.recompute || recomputeForDegradation;
+  const recomputeReason = recomputeForDegradation ? "the degradation payload needs the graph" : decision.reason;
+  console.error(`recompute: ${recompute ? "yes" : "no"} — ${recomputeReason}`);
+  if (reuse && !wantsDegradation) {
     await emitBlastRadius(previous, args);
     return;
   }
@@ -4061,7 +4121,20 @@ async function runBlastRadius(args: string[]): Promise<void> {
     textLinks,
     testCommand: detectTestCommand(projectRoot),
   });
-  await emitBlastRadius(radius, args);
+  // Flow 479 AC5: `--degradation` swaps the stdout brief for the `review-degradation` payload, whose consumers are the
+  // graph's one-hop answer for each changed shared export, with the cap and what it dropped recorded.
+  const degradationBrief = wantsDegradation
+    ? renderDegradationPayloadBrief(
+        buildDegradationConsumers({
+          graph,
+          changedExports: changedExportsOf(radius),
+          changedFiles: radius.changedFiles,
+          barrels: barrelsOf(radius),
+          cap: degradationCap,
+        }),
+      )
+    : undefined;
+  await emitBlastRadius(radius, args, degradationBrief);
   const reasoned =
     (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0) + (radius.counts.droppedTestConsumer ?? 0);
   if (reasoned > 0) {
@@ -4080,7 +4153,8 @@ async function runBlastRadius(args: string[]): Promise<void> {
       `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
         `Cut blast radius: run the waves — keryx review chunks plan --package ${packageOption ?? "<review>"}`,
     );
-    if (packageOption !== undefined) {
+    // The degradation payload is read-only: it must not overwrite the package's own record or re-cut its chunks.
+    if (packageOption !== undefined && !wantsDegradation) {
       const planned = await recordRadiusAndPlan(resolvePackageDir(args, cwd), resolveProjectRoot(cwd), radius, packageOption);
       console.error(planned);
     }
@@ -4092,8 +4166,10 @@ async function runBlastRadius(args: string[]): Promise<void> {
   }
 }
 
-async function emitBlastRadius(radius: BlastRadius, args: string[]): Promise<void> {
-  if (args.includes("--json")) {
+async function emitBlastRadius(radius: BlastRadius, args: string[], degradationBrief?: string): Promise<void> {
+  if (degradationBrief !== undefined) {
+    console.log(degradationBrief);
+  } else if (args.includes("--json")) {
     console.log(JSON.stringify(radius, null, 2));
   } else if (args.includes("--brief")) {
     console.log(renderBlastRadiusDispatchBrief(radius));
@@ -4347,6 +4423,9 @@ async function runStatus(args: string[]): Promise<void> {
   // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
   for (const line of parityLines(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
   for (const line of readinessDepthLines(await computeReadiness(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
+  // The plan against the time the raw replies show, read-only; a round that is not closed says "so far".
+  const timing = await packageEstimateLine(await resolveReviewPackagePath(process.cwd(), ref), { open: manifest.status !== "closed" }).catch(() => undefined);
+  if (timing !== undefined) console.log(timing);
 
   // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
   // manifest on disk, by a different invocation from the one that wrote it — and
@@ -4568,7 +4647,9 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     dispositions: tally,
     coverageWaiver,
     readiness,
+    rolesNotRun,
     warnings,
+    estimateLine,
   } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
@@ -4578,6 +4659,9 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   if (readiness !== undefined) console.log(readinessLine(readiness));
+  if (estimateLine !== undefined) console.log(estimateLine);
+  const rolesLine = optionalRolesLine(rolesNotRun ?? []);
+  if (rolesLine !== undefined) console.log(rolesLine);
   console.log(`dispositions recorded: ${dispositions.length}`);
   // The price, now that both halves are known. This is the first moment the
   // round's cost and what survived it are on the same screen, and it is the
@@ -4851,7 +4935,12 @@ function printStartHelp(): void {
   console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                    [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
-                   [--no-prior-round | --prior <package|reviewId>]
+                   [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]
+
+--style turns on the readability roles (review-clean-code, review-style), which are off by default; --with-role <role>
+turns on any one role that is off (repeatable). The choice is kept in <package>/round-roles.json for the later
+\`review required --package\` calls. Roles can also be switched off or on for the project with reviewRoles.disabled and
+reviewRoles.enabled in routing.config.json. Refused on attach and ingest.
 
 The previous round of the same target is found in the local packages, the packages in git history (any branch), the
 keryx round block on the pull request, other PR comments (prior findings with no head) and the flow's rounds; the newest
@@ -4878,29 +4967,38 @@ function printIngestHelp(): void {
 
 Records a finished review report as a package. All accepted flags: ${CREATE_FLAGS.join(" ")}.
 Without --research the package stays PENDING and \`review complete\` refuses.
+With --review-id of a package whose chunk pass found something, each finding the report does not already hold at the same
+file:line is recorded as \`review-regression/<chunk>\`: the scope-B screen does not apply outside-set or no-link-to-change to it,
+and a minor is still dropped. A major without a class_scope of its own carries one that says NOT ENUMERATED.
 ${GRAPH_TIMEOUT_HELP}`);
 }
 
 function printMutateHelp(): void {
   console.log(`keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>]
-                    [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
+                    [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--no-bail] [--json]
 
 Runs the reviewers' proposed mutants (default spec: <review-dir>/research-evidence/mutants.json) in a scratch copy of
 the worktree; the worktree is never written. The baseline must pass first. --cap bounds the mutants run.
+A plain "bun test <paths>" command runs each mutant with --bail (the baseline runs in full); --no-bail turns that off.
 Writes mutation-<n>.json and .md to research-evidence/.`);
 }
 
 function printBlastRadiusHelp(): void {
   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief] [--out <file>]
+                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief | --degradation [--degradation-cap <n>]] [--out <file>]
 
 The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
 --reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
 high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
 Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
 --no-text-links. With --package the changed files are base...head at the package's pinned head.
---package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
+--package stores the record in the package; --previous/--final carry the dropped files across rounds.
+--degradation prints the review-degradation payload instead: the one-hop importers of the module that holds each changed
+shared export (and of a barrel that re-exports it), from the code graph, under one cap shared by all of them
+(--degradation-cap, default 40), with the cap stated and the files it dropped named (the first 20, then a count).
+It always recomputes from the graph, also with --previous, never rewrites the package's record, and is refused together
+with --json, --brief or --out; --degradation-cap is refused without --degradation.`);
 }
 
 function printCompleteHelp(): void {
@@ -4909,19 +5007,28 @@ function printCompleteHelp(): void {
 
 Marks the review complete once scope, raw reconciliation, dispatch evidence and coverage hold. --finding, --disposition
 and --evidence record one finding's disposition (repeatable); --waive-coverage and --waive record an operator waiver;
---head is the pull request head the round must match.`);
+--head is the pull request head the round must match. A chunk-pass finding that findings.json does not hold is a warning, in the
+output and in report.md, never a refusal: "keryx review ingest --review-id <id>" brings it in.
+
+It also writes one line, "Plan estimate vs actual:", into report.md and prints it: the plan range from plan.json (else
+plan-confirmation.json), the time from the first to the last file in raw/, and the pauses longer than 10 minutes between
+neighbouring raw replies. The line is replaced, never repeated, by a later close; it does not measure the time after the
+last raw reply, and it says "actual not shown" when the raw files' times cannot be the round's (copied or restored).`);
 }
 
 function printStatusHelp(): void {
-  console.log("keryx review status <review-id-or-path>\n\nPrints the package's mode, status, target, head, flow, coverage and what the round left open. Takes no flags.");
+  console.log("keryx review status <review-id-or-path>\n\nPrints the package's mode, status, target, head, flow, coverage, what the round left open and the plan estimate against the time of the raw replies. Takes no flags.");
 }
 
 function printRequiredHelp(): void {
   console.log(`keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"]
                       [--blast-radius <file>] [--pr-context <file>] [--depth auto|light|full] [--diff-lines <n>]
-                      [--all] [--gating] [--package <review-dir>] [--json]
+                      [--all] [--gating] [--style] [--with-role <role>] [--package <review-dir>] [--json]
 
-The reviewer set a round must dispatch. --depth auto (default) picks a light round (logic, testing, the stack's conventions
+The reviewer set a round must dispatch. review-clean-code and review-style are off by default and listed under excluded
+with the reason; --style or --with-role <role> turns them (or any role that is off) on, and with --package the choice is
+kept in round-roles.json. reviewRoles.disabled in routing.config.json switches off any built-in role (a core role cannot
+be switched off; an unknown name is a warning). --all, --gating and --depth light do not bring a switched-off role back. --depth auto (default) picks a light round (logic, testing, the stack's conventions
 reviewer) for at most 5 files and 300 changed lines outside the risk class; --all, --gating and --depth full keep the full set.
 --depth light is honoured only when those same checks pass; otherwise the round is full and the reason is printed.
 Changed lines: --diff-lines, else --scope's changedLinesRetained, else the count start/ingest stored in the package
@@ -4944,7 +5051,7 @@ Usage:
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
-                     [--no-prior-round | --prior <package|reviewId>]  (writes <package>/round.json)
+                     [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]  (writes <package>/round.json)
   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
   keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
   keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
@@ -4971,7 +5078,7 @@ Usage:
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
   keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
-                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--json]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--no-bail] [--json]
                         Runs the reviewers' proposed mutants (default spec:
                         <review-dir>/research-evidence/mutants.json) in a scratch
                         copy of the worktree; the worktree is never written. The
@@ -4979,7 +5086,9 @@ Usage:
                         (--scratch repo, default, so ancestor node_modules still
                         resolve) or in the OS temp dir (--scratch tmp). The
                         baseline must pass first; a red one exits non-zero and
-                        prints the command, its cwd and the last 60 output lines. A survivor means no assertion
+                        prints the command, its cwd and the last 60 output lines.
+                        A plain "bun test <paths>" command runs each mutant with
+                        --bail (baseline in full); --no-bail turns that off. A survivor means no assertion
                         pins that behaviour; it raises a finding only where no
                         mutant in the same file was killed. Writes mutation-<n>.json and .md to
                         research-evidence/.
@@ -5007,7 +5116,10 @@ Usage:
   keryx review required [--mode all|diff] [--scope <scope.json>]
                         [--operator-quote "<words>"] [--blast-radius <blast-radius.json>]
                         [--depth auto|light|full] [--diff-lines <n>] [--all] [--gating]
-                        [--package <review-dir>] [--json]
+                        [--style] [--with-role <role>] [--package <review-dir>] [--json]
+                        review-clean-code and review-style are off by default (--style or
+                        --with-role <role> turns a role on; reviewRoles in routing.config.json
+                        switches roles off or on for the project).
                         --depth auto (default) runs a light round (logic, testing and
                         the stack's conventions reviewer; no mandatory mutation pass)
                         for a diff of at most 5 files and 300 changed lines outside

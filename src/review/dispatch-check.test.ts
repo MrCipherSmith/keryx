@@ -164,6 +164,7 @@ describe("an over-threshold plan is refused until the operator confirms it", () 
       await mkdir(path.join(pkg, "slices"), { recursive: true });
       await mkdir(path.join(pkg, "raw"), { recursive: true });
       await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ version: 1, files: [], changedLines: 10 }));
+      await writeFile(path.join(pkg, "round-roles.json"), JSON.stringify({ enabled: ["review-clean-code", "review-style"] }));
       const manifestPath = path.join(pkg, "slices", "manifest.json");
       await writeFile(manifestPath, JSON.stringify(manifestOf(10, 100, 100)));
 
@@ -214,6 +215,7 @@ async function gatedPackage(): Promise<{ root: string; pkg: string; manifestPath
   await mkdir(path.join(pkg, "raw"), { recursive: true });
   await mkdir(path.join(pkg, "drivers"), { recursive: true });
   await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ version: 1, files: [], changedLines: 10 }));
+  await writeFile(path.join(pkg, "round-roles.json"), JSON.stringify({ enabled: ["review-clean-code", "review-style"] }));
   await writeRunProfile(pkg, buildRunProfile({ env: {} }));
   return { root, pkg, manifestPath: path.join(pkg, "slices", "manifest.json") };
 }

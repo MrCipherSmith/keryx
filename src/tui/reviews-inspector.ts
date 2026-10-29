@@ -4,7 +4,7 @@
 
 import { paritySummary } from "../review/parity";
 import { memoryLogNote } from "../review/readiness";
-import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewDepthRow } from "./review-panel";
+import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDegradationText, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewDepthRow } from "./review-panel";
 import { createReviewLayersActions, type ReviewLayersActions } from "./review-layers-actions";
 import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -48,7 +48,7 @@ export function isReviewReadinessCommand(line: string): boolean {
   return token === "/review" && sub === "readiness";
 }
 
-export { renderReviewLayersText, renderReviewParityText, renderReviewReadinessText };
+export { renderReviewDegradationText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText };
 
 /** The sidebar's Readiness block: per review, the verdict and the failing item ids, wrapped to the sidebar width. */
 export function projectReviewsReadinessLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {

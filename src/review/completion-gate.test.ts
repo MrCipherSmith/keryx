@@ -656,6 +656,15 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
     expect(VALUELESS_FLAGS.has("--waive-coverage")).toBe(false);
   });
 
+  test("--degradation is a switch and --degradation-cap takes a value (flow 479 TP-002)", () => {
+    const named = (line: string): string[] => keryxReviewInvocations(line, root).flatMap((invocation) => explicitReviewIds(invocation));
+    expect(VALUELESS_FLAGS.has("--degradation")).toBe(true);
+    expect(VALUELESS_FLAGS.has("--degradation-cap")).toBe(false);
+    expect(named("keryx review attach --degradation pr-9")).toEqual(["pr-9"]);
+    expect(named("keryx review attach --degradation-cap 12 pr-9")).toEqual(["pr-9"]);
+    expect(named("keryx review attach --degradation-cap pr-9")).toEqual([]);
+  });
+
   test("a flag's value is not taken for the positional review id", () => {
     expect(sessionReviewNames([reviewCall("c1", "keryx review readiness --flow 460 pr-7975-r02 --json")], root).reviewIds).toEqual(["pr-7975-r02"]);
     expect(sessionReviewNames([reviewCall("c1", "keryx review complete --json pr-7975-r03")], root).reviewIds).toEqual(["pr-7975-r03"]);
