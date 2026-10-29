@@ -1,0 +1,1714 @@
+[
+  {
+    "id": "ARCH-001",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The diff passes the degradation brief to emitBlastRadius only from the main path. With --previous and blastRadiusRecomputeDecision returning recompute:false, the command prints the previous blast-radius record and returns before the graph is loaded, so --degradation prints that record, not the SCOPE: degradation payload, with no error. --degradation-cap is not part of the recompute bounds either.",
+    "impact": "A dispatch that carries a previous record gets no consumer list and no cap statement; the reviewer guesses its own consumers or silently covers less. AC5 does not hold on that path.",
+    "suggested_fix": "Make --degradation force recompute (a reason in blastRadiusRecomputeDecision) or refuse --degradation with --previous; add a test that runs both flags and asserts the output starts with SCOPE: degradation.",
+    "evidence": "src/commands/review.ts: early return after blastRadiusRecomputeDecision calls emitBlastRadius(previous, args) with two arguments; the main path calls emitBlastRadius(radius, args, degradationBrief). src/review/blast-radius.ts blastRadiusRecomputeDecision compares changedFiles, depth and maxFiles only, so same set + not final gives recompute:false. Read, not run.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 4051,
+    "quote": "await emitBlastRadius(previous, args);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "degradation-payload-lost-on-previous-path",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts: emitBlastRadius(previous, args) early return (about line 4051)",
+        "src/commands/review.ts: emitBlastRadius(radius, args, degradationBrief) main path (about line 4082)"
+      ],
+      "enumeration_method": "searched src/commands/review.ts for emitBlastRadius( : 2 call sites, 1 passes degradationBrief, 1 does not; read blastRadiusRecomputeDecision in src/review/blast-radius.ts for what makes the first one fire"
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#ARCH-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-ARCH-001-1.txt (keryx review verify-run): second run `keryx review blast-radius --changed src/review/degradation.ts --previous prev.json --degradation` exit 0 printed 'recompute: no' then '## Blast radius' / 'scope: blast-radius (regression check)' and no 'SCOPE: degradation' brief. Site check: src/commands/review.ts:4051 `await emitBlastRadius(previous, args);` has no degradationBrief and returns; :4122 `emitBlastRadius(radius, args, degradationBrief)` has it.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Verified by execution (verifications.json: the --previous path at review.ts:4051 returns before the degradationBrief that :4122 passes). degradation-payload.ts header says the payload and blast-radius cannot disagree, so the missing brief on one path is not intended; no prior-intent signal or accepted practice supports it."
+    }
+  },
+  {
+    "id": "F1",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The role is added to fix slices by content alone. manifestRosterRoles feeds review.ts:3412, estimate.ts:311, wave-drivers.ts:35 and review-ledger.ts:299 without an install or profile filter, so a project that does not have the full-profile reviewer installed still requires, estimates and drives it.",
+    "impact": "On a recommended-profile project a delta fix touching any export makes the round require a deep reviewer that is not installed; the completion gate cannot be satisfied, and the printed reason (it authored findings a fix slice answers) is wrong. Contradicts PRD AC6.",
+    "suggested_fix": "Filter fix-slice and content-derived roster roles against the installed roster and profile (or leave profile-gated roles out of fixContentRoles when not installed), and add a round-split test where review-degradation is not installed.",
+    "evidence": "Read, not run: slice-02.diff slice-routing.ts ROLE_RULES entry; round-split.ts fixSliceRoster/fixContentRoles/manifestRosterRoles; review.ts:3395-3434 appends fixRoles to required with no filter; wave-drivers.ts:35; estimate.ts:311; review-ledger.ts:299; round-split test expects the role without install.",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 122,
+    "quote": "{ role: DEGRADATION_ROLE, why: \"shared (exported) symbol changed\", content: SHARED_SYMBOL_CHANGE, codeOnly: true }",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 122
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/slice-routing.ts:122",
+        "src/review/round-split.ts:72",
+        "src/review/round-split.ts:296",
+        "src/review/round-split.ts:330-332",
+        "src/review/round-split.ts:350-370",
+        "src/commands/review.ts:3412",
+        "src/review/estimate.ts:311",
+        "src/review/wave-drivers.ts:35",
+        "src/review/review-ledger.ts:299"
+      ],
+      "enumeration_method": "keryx ctx rg manifestRosterRoles (11 matches in 5 files), then read each caller for an install or profile filter; none found"
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#F1",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "deepRosterRoles (slice-routing.ts:147, pre-existing since 84b16992e5) says 'only the round's own roles are dispatched'; the new role is added with no path gate, so the roster/profile-filter concern follows from code that predates the branch. No signal that the behaviour is intended."
+    }
+  },
+  {
+    "id": "DG-W2-001",
+    "reviewer": "review-degradation",
+    "severity": "major",
+    "problem": "The new ROLE_RULES entry also feeds the fix-slice roster in a delta round. On base every content-routed role was in profile `recommended`; review-degradation is `full` only (src/gdskills/catalog.ts). A fix slice whose hunk touches an `export` line now lists review-degradation (base-diff: round-split.test.ts expectation changed from [architecture, logic, regression] to [architecture, degradation, logic, regression]). Fix-slice roles are added to the required set (round-split.ts fixSliceRoles/manifestRosterRoles ~350-370; fixSliceCoverage ~407) and flow into review.ts ~3412 (fixRoles appended without an installed check), review-ledger.ts ~299, wave-drivers.ts ~35, estimate.ts ~311 and ledger.ts ~585. None filters by installed or profile.",
+    "impact": "On a project at profile `recommended` (the default), any delta round whose fix slice touches an export line requires a reviewer that is not installed and not dispatched. The coverage gate reports 'not read by review-degradation', which cannot be closed by reading; only an operator-confirmed skip clears it. That is a new blocker-shaped gate on the common path, and it contradicts PRD AC6 ('profile full, not recommended; delta round does not dispatch it unless the slice touches a shared symbol') in spirit: it is not dispatched, yet it is required.",
+    "suggested_fix": "Filter the fix-slice roster and the required set by the reviewers the round installs/dispatches (or exclude full-only roles unless the profile is full) at one place, fixSliceRoster. Add a test: project at `recommended`, fix slice with an export hunk, assert the roster and required set exclude review-degradation and coverage closes.",
+    "evidence": "read, not run. Traced the roster path file by file: slice-routing.ts:122 -> fixSliceRoster -> round-split.ts fixSliceRoles/manifestRosterRoles -> fixSliceCoverage; compared catalog.ts profiles (degradation `full` only; sibling content roles `recommended`,`full`); base-diff of round-split.test.ts shows the roster expectation now includes the role. Not probed: I did not run a delta round at profile recommended.",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 122,
+    "quote": "{ role: DEGRADATION_ROLE, why: \"shared (exported) symbol changed\", content: SHARED_SYMBOL_CHANGE, codeOnly: true },",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 122
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/round-split.ts:350",
+        "src/review/round-split.ts:407",
+        "src/commands/review.ts:3412",
+        "src/review/review-ledger.ts:299",
+        "src/review/wave-drivers.ts:35",
+        "src/review/estimate.ts:311",
+        "src/review/ledger.ts:585"
+      ],
+      "enumeration_method": "keryx ctx rg for the fix-slice role consumers (fixSliceRoles, fixRoles, manifestRosterRoles); each site takes the roster as given with no installed or profile check. No graph consumer payload was supplied."
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#DG-W2-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Same roster/profile-filter issue as F1 and REG-1; it rests on the pre-existing deepRosterRoles and profile filtering and on the PRD requirement of profile full only. No signal that the filter gap is deliberate."
+    }
+  },
+  {
+    "id": "HL-001",
+    "reviewer": "review-highload",
+    "severity": "major",
+    "problem": "`keryx review blast-radius --degradation --previous <prev.json>` on a round where blastRadiusRecomputeDecision says no recompute returns through the early `emitBlastRadius(previous, args)` before the degradation brief is built, so the command prints the previous blast-radius record (markdown or JSON) instead of the SCOPE: degradation payload. `--degradation` is only honoured after the graph load.",
+    "impact": "On every repeat or delta round that passes --previous with an unchanged changed-file set, review-degradation is dispatched with a record that has no consumer list, cap line or NOT TRACED lines. It then reports no consumers or chooses its own set, which is what the graph-derived payload exists to prevent. The failure is silent (exit 0). It occurs at any PR size once a --previous round exists.",
+    "suggested_fix": "Refuse `--degradation` together with `--previous`, or skip the no-recompute early return when `--degradation` is set (it recomputes from the current graph). Add a test with --previous and an unchanged changed-file set. Also reject or document `--out` with `--degradation` (it writes the radius record while stdout shows the payload) and `--degradation-cap` without `--degradation` (silently ignored).",
+    "evidence": "src/commands/review.ts runBlastRadius: the `if (!decision.recompute && previous !== undefined) { await emitBlastRadius(previous, args); return; }` block (about lines 4050-4053) precedes the loadGraph call and the new degradationBrief construction (diff hunk at 4090-4176). `--degradation` is added to BLAST_RADIUS_FLAGS so the flag parses cleanly. Read, not executed; no test in the slice covers --degradation with --previous.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 4051,
+    "quote": "await emitBlastRadius(previous, args);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts:4051"
+      ],
+      "enumeration_method": "read runBlastRadius from its flag parsing to its end: the only return that precedes the new --degradation branch and prints a record is the no-recompute early return; the recountRefusal return prints an error and sets exitCode 1. The --out behaviour in emitBlastRadius is a related minor and is described in the fix."
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Same defect as ARCH-001 and CB-001, confirmed by execution."
+    }
+  },
+  {
+    "id": "L-01",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The routing rule that gives a delta round (FIX slice) the degradation reviewer matches only a changed `export ...` declaration line (SHARED_SYMBOL_CHANGE = /^[+-]\\s*export\\s+(...)/m, applied to the +/- lines of the region). Editing the body of an exported function, class method, or the value of an exported const without touching its `export` line does not match. The payload side defines 'changed shared symbol' differently: changedExportsOf() reads the symbol walk seeds (names of exported symbols whose body changed). The two definitions disagree on exactly the case the reviewer exists for: behaviour or default of an exported symbol moves while its signature stays.",
+    "impact": "In a delta round a fix that changes the behaviour, default or speed of an exported function leaves the degradation reviewer undispatched; the consumers of that function are not traced. Full-round deep slices are unaffected, because deepRosterRoles adds every routable role with no path gate, review-degradation included.",
+    "suggested_fix": "Decide the delta-round trigger from the same source as the payload: run changedExportsOf(radius) (or its file-level fallback) and route the role when touchesSharedSymbol() is true, instead of a line regex. If routing must stay pure and model-free over the diff text, widen the regex to also fire when a hunk header or context line shows the changed lines sit inside an `export` declaration; at minimum document that body-only edits do not route and add a test that pins it. Add a slice-routing test: a hunk that edits only the body of `export function f()` and expects review-degradation in roles.",
+    "evidence": "slice-routing.ts:96 defines SHARED_SYMBOL_CHANGE on `^[+-]\\s*export` only; slice-routing.ts:122 uses it as the sole content gate; contentRolesOf (slice-routing.ts:208-219) tests it against changedLinesOf(region.text), which keeps only +/- lines, so unchanged `export function f(` context lines never count. degradation-payload.ts:110-120 changedExportsOf takes names from radius.reach.seeds. touchesSharedSymbol (degradation-payload.ts:123) is the function that states the delta-round rule and is not what routing calls.",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 122,
+    "quote": "{ role: DEGRADATION_ROLE, why: \"shared (exported) symbol changed\", content: SHARED_SYMBOL_CHANGE, codeOnly: true },",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/review/slice-routing.ts:96 SHARED_SYMBOL_CHANGE",
+        "src/review/slice-routing.ts:122 DEGRADATION_ROLE rule",
+        "src/review/degradation-payload.ts:110 changedExportsOf (symbol-based definition)",
+        "src/review/degradation-payload.ts:123 touchesSharedSymbol (rule statement, not used by routing)"
+      ],
+      "enumeration_method": "Read both definitions of 'changed shared symbol' in the slice: the regex in slice-routing.ts and changedExportsOf/touchesSharedSymbol in degradation-payload.ts; git grep for the callers of touchesSharedSymbol and DEGRADATION_ROLE. How the delta round composes roles for a retryOf slice was not traced (routeSlices leaves retryOf slices as given), so whether the regex is the only gate there is unverified."
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#L-01",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Delta-trigger meaning: the regex only sees changed export lines while the stated trigger and the payload header speak of a changed exported symbol. The code comment and the PRD wording are on the finding's side; the fix (align rule or text) is sound. Same definition mismatch as CB-004 and DEG-002."
+    }
+  },
+  {
+    "id": "RL-W2-1",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Consumers are direct importers of the changed file only. Barrel re-exports (radius.reach.barrels) are ignored, so a symbol exported through an index.ts yields only the barrel as its consumer. The summary still states the cap dropped no consumer.",
+    "impact": "The reviewer gets a consumer list that looks complete but omits the real importers behind a barrel. The consumer sweep (AC5) can report verified clean over a set that was never listed.",
+    "suggested_fix": "Seed the payload from the symbol reach (barrels followed) or walk through barrel nodes. List barrel-only consumers as unresolved or not answerable instead of complete.",
+    "evidence": "Read, not run: degradation-payload.ts:66-85 uses computeAffected depth 1; blast-radius.ts symbol-mode reach computes barrels (~444-467); changedExportsOf does not carry them.",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 73,
+    "quote": "result = computeAffected(input.graph, entry.file, { depth: 1, ranked: true });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 73
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/degradation-payload.ts:66-85",
+        "src/commands/review.ts:4110-4122",
+        "cap summary string in degradation-payload.ts"
+      ],
+      "enumeration_method": "read of the three call sites plus keryx ctx rg for computeAffected and reach.barrels"
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#RL-W2-1",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Roster/profile-filter issue; follows from pre-existing roster code and the PRD scope of profile full. No signal that it is intended."
+    }
+  },
+  {
+    "id": "REG-1",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "A fix or second-look slice can be routed to review-degradation in a project whose installed review tree does not have it, and the role enters the required set with no roster check. Changed symbols: src/review/slice-routing.ts (the ROLE_RULES entry for DEGRADATION_ROLE, and ROUTABLE_ROLES) and src/gdskills/catalog.ts (skill review-degradation, profile [\"full\"]). manifestRosterRoles returns fixSliceRoles as routing assigned them, plus the always-dispatched routed roles. requiredReviewers (coverage.ts) builds the roster from the project's installed review tree, so a project installed below profile full has no review-degradation. Before this change every routable role was in profile recommended, so routing and roster agreed; review-degradation is the first routable role outside it. A delta round whose fix slice adds or removes an export line now gets review-degradation on that slice (codeOnly rule SHARED_SYMBOL_CHANGE), and the role is unioned into the selected set without a check that it is installed.",
+    "impact": "ledger.ts records the selected reviewer as a not-run run with the gap \"no result recorded\"; routedOut does not apply because a fix slice owns the role. The same name flows into the wave drivers, where it has no definition, and into the estimate. The round cannot close without an operator override or a skip decision. AC6 says only that a delta round does not dispatch the reviewer unless the slice touches a shared symbol; it does not say what happens when the reviewer is not installed.",
+    "suggested_fix": "Filter the fix-slice and second-look roles against the installed roster when building the selected set (or have routing drop a routable role the roster lacks), and add a test for a delta round on a non-full install.",
+    "evidence": "Read-through of the code paths, not executed (read-only run). src/review/round-split.ts:367-370 manifestRosterRoles unions fixSliceRoles(manifest) with no roster check; src/commands/review-ledger.ts:299 builds selected = required + manifestRosterRoles(manifest); src/review/ledger.ts (about lines 498-524) turns a selected reviewer with no raw into a not-run run with a gap; src/review/wave-drivers.ts:35 and src/review/estimate.ts:311 also add manifestRosterRoles; src/review/coverage.ts requiredReviewers reads the installed tree. All of these are in the blast-radius set.",
+    "confidence": "medium",
+    "file": "src/review/round-split.ts",
+    "line": 367,
+    "quote": "export function manifestRosterRoles(manifest: { slices: readonly SliceEntry[] }): string[] {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "review-regression:roster-extension-unchecked-against-install:manifestRosterRoles",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/review/round-split.ts:367 manifestRosterRoles (source of the unchecked union)",
+        "src/commands/review-ledger.ts:299 selected set = required + manifestRosterRoles",
+        "src/review/ledger.ts:498-524 not-run run with a gap for a selected reviewer with no raw",
+        "src/review/wave-drivers.ts:35 package reviewers include manifestRosterRoles; the driver has no definition",
+        "src/review/estimate.ts:311 counts the role as a dispatch",
+        "src/commands/review.ts:3412 other consumer of manifestRosterRoles (changed file)"
+      ],
+      "enumeration_method": "Walk over the blast-radius set (blast-radius.json, depth 2, maxFiles 40) taking every consumer of manifestRosterRoles and fixSliceRoles, the two functions that add routed roles to the required set without a roster check. Anchor files confirmed in the set: round-split.ts, review-ledger.ts, ledger.ts, estimate.ts, review-slice.ts. The listing of in-set files was read in part (first 150 of 563 entries, plus targeted lookups), so a consumer outside the cap is not covered."
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#REG-1",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Same roster/profile-filter issue as F1 and DG-W2-001; each reviewer read the same pre-existing code, and the code is the evidence, not their agreement."
+    }
+  },
+  {
+    "id": "SEC-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "Reviewer-controlled finding id and reviewer are written to scope.md, the terminal and the TUI with only pipe and CRLF escaping. ESC sequences, a lone CR and U+2028/U+2029 pass through escapeCell, renderDegradationScreenLines (id printed raw) and degradationLines in src/tui/review-panel.ts (id and file raw).",
+    "impact": "A pull request author who steers the reviewer through prompt injection can emit an id with ANSI escape sequences that overwrite the 'downgraded ... [degradation-no-evidence]' line on the operator's terminal and in the TUI, hiding that an unproven claim was lowered, and can write attacker-shaped text into scope.md that PRE_FILTER_SCOPE_BLOCK (/m) re-reads on the next ingest. No code execution, no data exfiltration.",
+    "suggested_fix": "Add one shared control-character strip ([\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029], as oneLine in coverage-md.ts and nudgeLine in completion-gate.ts already do) and apply it to id and reviewer in both degradation renderers and to id, file, class and evidence kind in degradationLines; optionally add an id pattern to both schema copies. Test ESC, lone CR and U+2028 through all three renderers.",
+    "evidence": "src/review/degradation.ts:124-126 (escapeCell), :155 (cell), :175 (terminal line, entry.id raw); src/commands/review.ts print loop console.log(line); src/tui/review-panel.ts:138-176 (str() checks non-empty string only, lines built raw); schema id and reviewer are unconstrained strings; coerceStructured lets the finding's own reviewer win. Precedent: src/review/coverage-md.ts:17-19, src/review/completion-gate.ts:792-796, src/review/layers-payload.ts:261. Read, not executed.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 125,
+    "quote": "return value.replace(/\\|/g, \"\\\\|\").replace(/\\r?\\n/g, \" \");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "degradation-render-control-characters",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/review/degradation.ts:155 (scope.md cell: id, reviewer)",
+        "src/review/degradation.ts:175 (terminal line: id)",
+        "src/tui/review-panel.ts:173 (TUI line: id, file, class, evidence kind)",
+        "src/review/blast-radius.ts:1219 (pre-existing, escapePipes only)",
+        "src/review/blast-radius.ts:1365 (pre-existing, escapePipes only)",
+        "src/review/blast-radius.ts:1398 (pre-existing, escapePipes only)"
+      ],
+      "enumeration_method": "keryx ctx rg over src/review and src/tui for the escape helpers (escapeCell, escapePipes, oneLine, nudgeLine) and for every console.log or line builder that interpolates a finding id, reviewer or file; the first three sites are new in this diff, the blast-radius sites are pre-existing siblings."
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SEC-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    }
+  },
+  {
+    "id": "ARCH-002",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "--degradation is documented as one of [--json | --brief | --degradation] but nothing refuses a combination. --degradation --json prints the brief and drops the JSON; --degradation --out file.json writes the blast-radius record while stdout shows the brief; --degradation-cap without --degradation is accepted and ignored.",
+    "impact": "Silent winner between output flags: the caller gets output they did not ask for and no signal.",
+    "suggested_fix": "Refuse --degradation with --json, --brief or --out, and --degradation-cap without --degradation; or move the payload to its own subcommand that reuses computeBlastRadius for the seeds.",
+    "evidence": "emitBlastRadius checks degradationBrief first, then --json, then --brief; --out always writes the radius. printBlastRadiusHelp shows the three as alternatives.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 4154,
+    "quote": "if (degradationBrief !== undefined) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "blast-radius-degradation-flag-precedence",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#ARCH-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no PRD/AC or pre-branch comment making the behaviour deliberate; the fix is local and does not conflict with surrounding conventions."
+    }
+  },
+  {
+    "id": "ARCH-003",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The ratchet was raised from 72 to 73 to fit the new skill, which has no metadata.origin. The file header and the constant's comment say the counts may only be lowered, never raised. Recent skills (review-premise, review-pr-contract) carry origin: \"authored\".",
+    "impact": "The ratchet no longer holds new skills to the rule; the next skill can cite this change.",
+    "suggested_fix": "Add origin: \"authored\" under metadata in both review-degradation SKILL.md copies (keep them byte-identical), revert the ratchet to 72, raise the review/review-degradation line ceiling from 187 to 188.",
+    "evidence": "Header of authoring-lint-guard.test.ts: \"may only be lowered by a real fix, never raised to clear a finding\"; review-premise and review-pr-contract frontmatter has origin: \"authored\"; the diff changes 72 to 73.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/authoring-lint-guard.test.ts",
+    "line": 54,
+    "quote": "\"metadata-origin\": 73,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "lint-ratchet-raised-metadata-origin",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#ARCH-003",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "The authoring-lint-guard.test.ts header (pre-existing, line 18) states 'RATCHET: the pinned ceiling here is today's count', so raising a ceiling contradicts the file's own stated intent; the bump in this commit cannot ratify itself."
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The degradation gate reuses the scope-B helper, so its reviewer matching is the regression screen's containment rule.",
+    "impact": "A change to blast-radius matching silently changes which findings the degradation screen examines.",
+    "suggested_fix": "Use a local matcher or extract a shared reviewer-name normaliser used by both.",
+    "evidence": "Read, not run: degradation.ts:1 and :80; blast-radius.ts:889-948 (name.includes(declared) after normalisation).",
+    "confidence": "high",
+    "file": "src/review/degradation.ts",
+    "line": 1,
+    "quote": "import { isBlastRadiusScopedFinding } from \"./blast-radius\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 1
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#F2",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Plain code reading; no intent signal or accepted-practice source against it, and the proposed fix is local."
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The TUI reader uses strict equality, a field fallback and a hard-coded string, while ingest matches by containment on DEGRADATION_REVIEWER. It also re-parses findings.json in the presentation layer, unlike readReviewParity.",
+    "impact": "Panel counts can differ from what the screen processed; the reviewer name lives in two places.",
+    "suggested_fix": "Export a typed reader from src/review/ that uses DEGRADATION_REVIEWER and the same matcher as ingest; the panel only renders.",
+    "evidence": "Read, not run: review-panel.ts:138-147; degradation.ts:22 and :80.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 147,
+    "quote": "if (f.reviewer !== \"review-degradation\" && !hasField) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 147
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#F3",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Exact-match TUI behaviour is not stated as intended in the PRD; the same defect is raised independently as RL-W2-2, and the fix is sound and small."
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The legacy markdown parser reads problem, impact, fix, evidence, confidence and class_scope only; it ignores Class and Evidence kind, which the new SKILL.md markdown format advertises.",
+    "impact": "A review-degradation reply in markdown has every blocker and major downgraded to info by the screen, a silent loss of real findings.",
+    "suggested_fix": "Parse the Class and Evidence kind labels, or have the SKILL.md state that the structured REVIEW_RESULT path is required.",
+    "evidence": "Read, not run: managed.ts:2217-2383 (fromStructuredSource/coerceStructured pass the fields through; parseLegacyReport does not).",
+    "confidence": "medium",
+    "file": "src/review/managed.ts",
+    "line": null,
+    "quote": "parseLegacyReport",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places as a substring of a line (lines 1401, 2327, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 2327
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        1401,
+        2327
+      ]
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#F5",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "The skill's own markdown template asks for Class and Evidence kind, which the prose parser (managed.ts parseLegacyReport) does not read; the contradiction is inside the branch, with no intent signal making it deliberate."
+    }
+  },
+  {
+    "id": "CB-001",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "`--degradation` only takes effect on the recompute path: with `--previous` and an unchanged changed set the command prints the previous blast-radius markdown before loading the graph; `--degradation --json` ignores `--json`; `--degradation --out x.json` writes the radius record, not the payload.",
+    "impact": "A later round using the documented --previous flag hands review-degradation a regression brief with no consumer list and no signal that the payload was skipped; the payload and its recorded cap have no durable copy in the package.",
+    "suggested_fix": "Rebuild the payload on the no-recompute path or refuse the combination; refuse or document --degradation with --json; consider writing the payload into the package.",
+    "evidence": "src/commands/review.ts:4050-4053 early return precedes loadGraph; emitBlastRadius checks degradationBrief before --json; --out writes JSON.stringify(radius).",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 4051,
+    "quote": "await emitBlastRadius(previous, args);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 4050
+    },
+    "dedupe_key": "degradation-flag-ignored-on-no-recompute",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#CB-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Same defect as ARCH-001, which was confirmed by execution; the PRD requires the degradation brief from blast-radius."
+    }
+  },
+  {
+    "id": "CB-002",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "The metadata-origin ratchet was raised from 72 to 73 to admit the new skill, whose frontmatter lacks `origin: \"authored\"`; the file's own comment says the ceiling is never raised to clear a finding.",
+    "impact": "The ratchet no longer ratchets: the next skill can do the same.",
+    "suggested_fix": "Add `origin: \"authored\"` under metadata in both SKILL.md copies (ceiling 187 becomes 188) and restore the value to 72.",
+    "evidence": "review-premise and review-pr-contract frontmatter carry origin: \"authored\"; the review-degradation metadata block does not; the diff changes 72 to 73.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/authoring-lint-guard.test.ts",
+    "line": 54,
+    "quote": "\"metadata-origin\": 73,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 54
+    },
+    "dedupe_key": "lint-ratchet-raised",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#CB-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Same ratchet issue as ARCH-003; the pre-existing guard header states the ceiling may only be lowered."
+    }
+  },
+  {
+    "id": "CB-003",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "The new review-degradation paragraph sits between the --blast-radius explanation and 'Two channels, and both work', so the channels (flag, handoff slot) now read as belonging to the degradation reviewer.",
+    "impact": "An orchestrating agent can take the consumed blast-radius.json slot as also holding the degradation payload, which has none.",
+    "suggested_fix": "Move the degradation paragraph after the channel list and the 'Do not write the record inside the package directory' paragraph (both copies).",
+    "evidence": "Diff hunk: '...to bound the round.' / added paragraph / 'Two channels, and both work:'.",
+    "confidence": "high",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "line": 272,
+    "quote": "Two channels, and both work:",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 270
+    },
+    "dedupe_key": "orchestrator-two-channels-dangling",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#CB-003",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is consistent with the surrounding module boundaries."
+    }
+  },
+  {
+    "id": "CB-004",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "A delta round's 'shared symbol changed' is a regex over changed export declaration lines; the payload's changedExportsOf uses the symbol walk, which counts an edit inside an exported body. touchesSharedSymbol (degradation-payload.ts) is not used by the routing. The orchestrator text and CHANGELOG say 'changes an exported symbol'.",
+    "impact": "A FIX slice that changes only the body or default of an exported symbol routes no degradation reviewer although the payload would list consumers for it; the docs promise more than the code does.",
+    "suggested_fix": "Word the docs as 'adds, removes or edits an export declaration line', or route from the same symbol-level source as the payload.",
+    "evidence": "slice-routing.ts:96,122; slice-routing.test.ts 'a change that touches no shared symbol does not route it' includes '+  return total + 1;'; slice-routing.ts:275 leaves retry slices unrouted by depth.",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 96,
+    "quote": "const SHARED_SYMBOL_CHANGE =",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 96
+    },
+    "dedupe_key": "shared-symbol-two-definitions",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#CB-004",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Routing definition mismatch: slice-routing.ts line 29 describes routing by a changed exported symbol, while the regex (line 96) matches only added or removed export lines. The PRD wording ('only when the slice changes an exported symbol') and the code comment point the same way as the finding; the fix (align comment or rule) is simple."
+    }
+  },
+  {
+    "id": "CB-005",
+    "reviewer": "review-core-boundaries",
+    "severity": "minor",
+    "problem": "The consumer list is every direct importer of the changed module, ranked by the importer's fan-in; the changed export names are carried in ChangedExport.names and never used. The skill, docs and CHANGELOG say consumers of each changed export.",
+    "impact": "For a module with more than 40 importers the cap keeps the most imported importers and can drop the real consumer of the changed name; the drop is disclosed but the claim of 'consumers of the changed export' is wider than the set.",
+    "suggested_fix": "Filter or rank by use of a changed name (the blast-radius symbol reach has it), or call the set 'importers of each changed module' and drop `names` from the type.",
+    "evidence": "degradation-payload.ts:66-87 reads entry.file only; ranking by fanIn at :87.",
+    "confidence": "high",
+    "file": "src/review/degradation-payload.ts",
+    "line": 66,
+    "quote": "for (const entry of input.changedExports) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 66
+    },
+    "dedupe_key": "consumers-are-module-importers",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#CB-005",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no signal that the behaviour is deliberate; the proposed fix does not conflict with existing practice."
+    }
+  },
+  {
+    "id": "DEG-001",
+    "reviewer": "review-degradation",
+    "severity": "minor",
+    "problem": "The skill's markdown finding template (review-degradation/SKILL.md, 'Class' and 'Evidence kind' lines) tells the reviewer to write '- **Class**:' and '- **Evidence kind**:'. parseLegacyReport (managed.ts, around line 2327) reads neither line, so on the prose path (no keryx:findings block, no JSON input) degradation_class and evidence_kind are never set. The new screen then sees no evidence_kind on a major/blocker and lowers it to info with rule degradation-no-evidence, although the reviewer supplied the evidence.",
+    "impact": "not recorded: the reviewer gave no impact for this finding",
+    "suggested_fix": "not recorded: the reviewer gave no fix for this finding",
+    "evidence": "Read: SKILL.md lines 126-136 (template), src/review/managed.ts parseLegacyReport (no class or evidence-kind field read) and the ingest source selection at lines 1391-1401 (input / block / prose), src/review/degradation.ts hasEvidenceKind (requires evidence_kind in REVIEW_EVIDENCE_KINDS). Not run: no command was permitted.",
+    "confidence": "low",
+    "file": "src/review/managed.ts",
+    "line": 2327,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#DEG-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "The skill template asks for the Class and Evidence kind lines but parseLegacyReport does not read them, so an evidenced major on the prose path is lowered to info. The skill and the code of the same commit disagree, so the behaviour cannot be called intended."
+    }
+  },
+  {
+    "id": "DG-W2-002",
+    "reviewer": "review-degradation",
+    "severity": "minor",
+    "problem": "mergeCluster keeps the canonical finding and does not carry degradation_class, evidence_kind or evidence_screen from merged members. When a degradation finding is folded into another reviewer's canonical, those fields are lost. readDegradationFindings (review-panel.ts:138) filters on the exact reviewer string `review-degradation`, while the screen matches by normalised containment, so the merged finding disappears from the TUI degradation block and an UNPROVEN marker with it.",
+    "impact": "A downgraded (unproven) degradation finding that duplicates another reviewer's finding is shown without class, evidence kind or UNPROVEN marker; the operator reads it as an ordinary proven finding. Narrow: only on duplicate clusters.",
+    "suggested_fix": "In mergeCluster carry the three fields from the degradation member when the canonical lacks them (or keep the degradation member as canonical when it holds evidence_screen). Add a dedupe test with a mixed cluster.",
+    "evidence": "read, not run. Traced mergeCluster (dedupe.ts ~225-400) to its return and readDegradationFindings to its filter. No probe.",
+    "confidence": "medium",
+    "file": "src/review/dedupe.ts",
+    "line": 348,
+    "quote": "...canonical",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 300
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#DG-W2-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Field loss on merge is a code-reading finding; the PRD requires the evidence kind and class to survive to the screen, and no comment states the loss is intended."
+    }
+  },
+  {
+    "id": "HL-002",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "renderDegradationPayloadBrief prints only `cap` consumers but then lists every dropped consumer by path on the NOT TRACED line, so the brief grows with the fan-in of the changed export rather than with the cap.",
+    "impact": "For a shared export with thousands of importers the brief carries a path list of roughly 100 KB per 2,000 dropped consumers into the reviewer payload, defeating the cap's purpose of bounding what a dispatch carries. Whether an oversized brief is refused or truncated by dispatch-check was not read.",
+    "suggested_fix": "Print the dropped count and the first N paths in the brief with a pointer to the full list in the record or --out file; keep the full `dropped` array in the data.",
+    "evidence": "src/review/degradation-payload.ts:149-152, `ranked.slice(cap)` becomes `dropped` and is joined in full. Default cap 40 (line 19).",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 151,
+    "quote": "NOT TRACED (${payload.dropped.length}): ${payload.dropped.map((consumer) => consumer.file).join(\", \")}",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "NOT TRACED list is unbounded while the cap is global (degradation-payload.ts); the file's cap exists to bound reviewer context, so an unbounded list defeats its stated purpose. Same defect as PERF-001."
+    }
+  },
+  {
+    "id": "HL2-001",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "The cap is applied once, over the merged consumer list of every changed export, ranked by fan-in. Consumers are deduplicated across exports into `best`, then `ranked.slice(0, cap)` keeps the 40 most-imported. A changed export whose consumers all have low fan-in (leaf screens, fan-in 0, the shape the skill's own example uses) is left with zero traced consumers once other exports supply 40 higher-fan-in ones. `summary` and the brief report only the global counts (`dropped N of M`), and the `NOT TRACED` line lists file names without `via`, so neither the reviewer nor the operator can see that a given changed export was not traced at all. The tests only cover one changed export under a cap, never several.",
+    "impact": "A large PR is where degradation review matters and where K changed exports compete for 40 slots. Failure mode: at about 40 total consumers across 3 or more changed exports, the export with only leaf consumers gets no consumer trace, while the brief reads as a capped-but-fair sweep; a default or normalisation change in that export (the PRD's second class) is then not looked at, and no 'NOT ANSWERABLE' style marker says so per export. The cap is recorded, so this is a reporting and fairness gap, not a silent drop.",
+    "suggested_fix": "Either reserve a per-export quota before the global rank (e.g. at least floor(cap / exports) per export, then fill by fan-in), or record per changed export how many consumers were kept and dropped (`kept`/`dropped` counts next to `via`) and print them in `CHANGED SHARED EXPORTS` and in `NOT TRACED` (`file imports via`). Add a test with two changed exports where one has only fan-in 0 consumers and the cap is below the total.",
+    "evidence": "Read, not run. degradation-payload.ts: `best` keyed by dependent.path with `via: entry.file` of the first export seen; `ranked.slice(0, cap)`; `dropped` = remainder; renderDegradationPayloadBrief prints `NOT TRACED (...)` as a bare file list. Test 'more imported consumers rank first, so the cap drops the least shared ones' pins the rank order for a single export. Enumeration: changedExports is sorted by file in changedExportsOf, so which export wins ties is alphabetical, not by need.",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 87,
+    "quote": "const ranked = [...best.values()].sort((a, b) => (a.fanIn !== b.fanIn ? b.fanIn - a.fanIn : a.file < b.file ? -1 : a.file > b.file ? 1 : 0));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 87
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL2-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    }
+  },
+  {
+    "id": "HL2-002",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "ROLE_RULES gets a content-gated rule for DEGRADATION_ROLE, but `ROUTABLE_ROLES` is built from every ROLE_RULES role, and `deepRosterRoles` adds every routable role whose bundled path gate is absent or matches. `review-degradation` has no entry in BUNDLED_PATH_GATES, so every deep slice (any non-test source file is deep) gets it in its roster, whether or not the slice touches an exported symbol. The new test pins this ('it is a routable role, so a deep slice's roster carries it'). The content gate therefore decides only for delta FIX slices. The comment says 'not by depth alone', which is false for round-1 deep slices.",
+    "impact": "Failure mode in a profile `full` round: dispatch count grows by one deep-tier reviewer per deep slice, e.g. 40 deep slices add 40 deep-tier dispatches (4 more waves at the 10-per-wave ceiling in caps.ts), most of them on slices that change no shared symbol and so have no consumers to trace. Only installed `full` rounds pay it, and the spend cap still applies, so this is cost and wall time, not an outage. If the PRD intended per-slice symbol gating in round 1 as well (AC6 only states it for delta rounds), the code does not do it.",
+    "suggested_fix": "Decide and say which: (a) keep round-1 behaviour and correct the comment and the PRD/skill text to say 'every deep slice in a full round, and a delta FIX slice only on a shared symbol'; or (b) exclude DEGRADATION_ROLE from `deepRosterRoles` (add a gate that requires the content rule) so round 1 also dispatches it only for slices that change an exported symbol. If (a), consider dispatching it once per round over the consumer list instead of once per slice, since the consumer payload is per round.",
+    "evidence": "Read, not run. slice-routing.ts: `if (deep) for (const role of deepRosterRoles(files)) roles.add(role)`; `deepRosterRoles` = `gate === undefined || files.some(gate)`; `ROUTABLE_ROLES = new Set([ALWAYS_ROLE, ...DEEP_ROLES, ...ROLE_RULES.map(rule => rule.role)])`. slice-routing.test.ts in the diff asserts `deepRosterRoles(['src/ui/field.ts'])` contains review-degradation. Whether the consumer payload is built per round or per slice was not visible in this slice (the caller is outside slice-02).",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 29,
+    "quote": "/** The generic degradation reviewer (flow 479): profile `full`, routed by a changed exported symbol, not by depth alone. */",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 30
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL2-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    }
+  },
+  {
+    "id": "HL2-003",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "mergeCluster builds the surviving record from `canonical` only and carries over a fixed list of fields from the others (reported_by, merged_from, evidence text, premise, blocking_merge, class_scope). The new fields `degradation_class`, `evidence_kind` and `evidence_screen` are not in that list. When a review-degradation finding is merged with a duplicate from another reviewer that wins on severity or confidence, the survivor has none of them: the proven `evidence_kind` is gone from findings.json, and the TUI's `readDegradationFindings` (which keys on `reviewer === 'review-degradation'` or those fields) no longer lists the finding. For an unproven one the marker is gone too, so a finding that scope.md lists as downgraded for missing evidence is absent from the panel. Cross-lens (logic/contract); noted because it is the idempotency-of-a-record question for a merge of two reporters of one defect.",
+    "impact": "Under a round where several reviewers hit the same defect (the case flow 458 merges), the degradation reviewer's class and evidence kind are lost from the canonical record, and AC7's 'class and evidence kind shown, unproven marked' does not hold for merged findings. No data loss in the evidence text (`Also reported by ...` keeps it).",
+    "suggested_fix": "In mergeCluster, when the canonical record carries none of the three fields, copy them from the member that has them (and for `evidence_screen` only if the surviving severity is still the lowered one), or have readDegradationFindings also look at `reported_by` and `merged_from` provenance. Add a dedupe test with a degradation finding absorbed by a logic finding.",
+    "evidence": "Read, not run. dedupe.ts lines 307-392: `finding` is `{...canonical, evidence, reported_by, merged_from, merged_problems?}` plus premise, blocking_merge, learning_candidate, class_scope. The screen in managed.ts runs before `mergeDuplicates(degradation.retained)`, so the merge sees the lowered record. review-panel.ts `readDegradationFindings` filters `f.reviewer !== 'review-degradation' && !hasField`.",
+    "confidence": "medium",
+    "file": "src/review/dedupe.ts",
+    "line": 347,
+    "quote": "const finding: T = {\n    ...canonical,",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": 347
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL2-003",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Merge field loss, same family as DG-W2-002 and L-04; nothing states the loss is intended."
+    }
+  },
+  {
+    "id": "L-02",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "hasEvidenceKind() treats a value outside REVIEW_EVIDENCE_KINDS as 'no evidence' and the finding is downgraded to info, but the spread keeps the invalid `evidence_kind` string on the lowered finding. The managed ingest then runs the schemaErrors contract gate, which refuses the whole ingest on an enum violation. The same holds for an invalid `degradation_class`, which the screen does not look at at all.",
+    "impact": "One typo in `evidence_kind` (for example `consumer_trace`) does not give 'downgraded, not rejected': the screen reports a downgrade and then the whole round's ingest is refused, so every other reviewer's findings in that ingest are not written. The screen's contract (nothing is dropped) is true only for findings the schema already accepts.",
+    "suggested_fix": "Either validate the closed lists before the screen and turn an out-of-list value into a downgrade with the invalid value moved into the `detail` text and removed from the finding (delete lowered.evidence_kind when it is not in REVIEW_EVIDENCE_KINDS), or state in the skill and the PRD that an out-of-list value refuses the ingest, and add a test for that outcome.",
+    "evidence": "degradation.ts:60-63 hasEvidenceKind; degradation.ts:92 spread keeps evidence_kind; managed.ts pipeline: screenDegradationFindings runs (about line 406) before the schemaErrors contract gate; coerceStructured is a passthrough so nothing normalises the value between the two.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 92,
+    "quote": "const lowered: T = { ...finding, severity: \"info\", evidence_screen: marker };",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#L-02",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    }
+  },
+  {
+    "id": "L-03",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "parseLegacyReport (the prose path used when a reviewer returns no structured block) never extracts `**Evidence kind**` or `**Class**`, so a prose-format review-degradation major/blocker that states its evidence kind arrives with evidence_kind undefined and is downgraded to info.",
+    "impact": "Fails safe (a true claim survives as info, labelled unproven) but a properly evidenced prose finding is demoted with a reason that is false for it ('without evidence_kind'). A reviewer that falls back to prose loses its severity for no fault of its own.",
+    "suggested_fix": "Either parse `Evidence kind` and `Class` lines in parseLegacyReport into evidence_kind and degradation_class, or have the screen's detail text say that a prose report carries no evidence kind and the structured block is required.",
+    "evidence": "managed.ts parseLegacyReport and its field helpers (about lines 2327-2526) read the existing labelled fields only; no occurrence of evidence_kind or degradation_class is produced there, while fromStructuredSource passes the structured fields through.",
+    "confidence": "medium",
+    "file": "src/review/managed.ts",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#L-03",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Prose-path ingest gap, same as DEG-001 and F5; template and parser of the same commit disagree."
+    }
+  },
+  {
+    "id": "L-04",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The screen runs before mergeDuplicates. When a downgraded degradation finding clusters with a finding of another reviewer that is chosen as canonical (higher severity or confidence), mergeCluster spreads the canonical finding's fields, so evidence_screen, degradation_class and evidence_kind of the degradation member are not carried to the merged record.",
+    "impact": "The 'unproven' marker and the scope.md row exist, but the merged finding in findings.json shows no trace that a degradation reviewer raised it without proof. Low: the downgrade itself is recorded in the screen block.",
+    "suggested_fix": "In mergeCluster carry evidence_screen, degradation_class and evidence_kind from the first member that has them when the canonical finding has none, or state in the PRD that merge keeps the canonical member's fields only.",
+    "evidence": "dedupe.ts mergeCluster (about lines 260-392) picks the canonical member and spreads it; blocking_merge is OR-ed over members, the new fields are not.",
+    "confidence": "low",
+    "file": "src/review/dedupe.ts",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#L-04",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Merge field loss, same family as DG-W2-002 and HL2-003; no intent signal."
+    }
+  },
+  {
+    "id": "RL-W2-2",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The TUI matches the reviewer by exact string; ingest matches by normalised-name containment.",
+    "impact": "Chunked or re-cased reviewer names are screened at ingest but not listed in the panel. Other reviewers' findings with degradation_class show as evidence none.",
+    "suggested_fix": "Share one reviewer-name predicate between ingest and the TUI.",
+    "evidence": "Read, not run: review-panel.ts:147 versus isBlastRadiusScopedFinding in blast-radius.ts:932.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 147,
+    "quote": "if (f.reviewer !== \"review-degradation\" && !hasField) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 147
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#RL-W2-2",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "TUI exact-match issue, same as F3; no intent signal, local fix."
+    }
+  },
+  {
+    "id": "RL-W2-3",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "review-degradation is added to every deep slice with no gate, NEW slices in delta rounds included. The orchestrator doc says a delta round dispatches it when a slice changes an exported symbol.",
+    "impact": "Extra reviewer cost on NEW slices that touch no export; doc and code disagree. FIX slices comply with AC6.",
+    "suggested_fix": "Gate NEW-slice dispatch on SHARED_SYMBOL_CHANGE or reword the orchestrator sentence.",
+    "evidence": "Read, not run: slice-routing.ts:147 and :277.",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 277,
+    "quote": "if (deep) for (const role of deepRosterRoles(files)) roles.add(role);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 277
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#RL-W2-3",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    }
+  },
+  {
+    "id": "PERF-001",
+    "reviewer": "review-performance",
+    "severity": "minor",
+    "problem": "The cap bounds the consumers the reviewer must trace, but every dropped consumer path is still printed into the same payload, so the payload is O(total consumers), not O(cap).",
+    "impact": "On a hub change where the cap fires, the deep-tier reviewer's prompt grows by one path per dropped consumer, for a list it is told not to trace. This works against the cap's purpose of keeping reviewer context small. The repo's real fan-in was not measured.",
+    "suggested_fix": "Print the count and the first 10 to 20 dropped paths in the brief; write the full dropped array to the package record (--out / JSON) so the not-traced claim stays auditable.",
+    "evidence": "Read src/review/degradation-payload.ts lines 99-101 (summary) and 150-152 (NOT TRACED join over payload.dropped). `ranked.slice(cap)` at line 89 is the unbounded source. The docs in this diff (cli-reference, review blast-radius) state that an unbounded second scope makes later rounds worse.",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 151,
+    "quote": "lines.push(`NOT TRACED (${payload.dropped.length}): ${payload.dropped.map((consumer) => consumer.file).join(\", \")}`);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#PERF-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "NOT TRACED list is joined over all dropped consumers (degradation-payload.ts), so the payload is not bounded by the cap whose purpose is to keep reviewer context small. Local fix: count plus a bounded list."
+    }
+  },
+  {
+    "id": "PERF-W2-001",
+    "reviewer": "review-performance",
+    "severity": "minor",
+    "problem": "loadReviewDepth awaits, in series per package, parity, mutation, layers, readiness and now a full readFile+JSON.parse of findings.json; readiness.ts and parity.ts also reference findings.json, so the file is likely parsed several times per package per load (grep hits only, not confirmed).",
+    "impact": "Extra latency on each /reviews open or refresh, growing with the number of packages and the size of findings.json. Milliseconds per package; operator-triggered, not an outage.",
+    "suggested_fix": "Parse findings.json once per package and hand the array to the parity, readiness and degradation readers, or run the independent per-package reads under Promise.all.",
+    "evidence": "Read of slice-02 lines 2267-2332 and a keryx ctx rg hit list of findings.json in readiness.ts and parity.ts. Read, not run; not measured.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 194,
+    "quote": "const degradation = await readDegradationFindings(review.dir);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 2329
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#PERF-W2-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    }
+  },
+  {
+    "id": "SC2-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Reviewer-written finding id and file reach the operator terminal (no escaping), the scope.md table cell (escapeCell misses lone CR, U+2028/9, markdown links) and the TUI/readline degradation lines unsanitised; the id schema has no pattern.",
+    "impact": "A hostile diff that injects the reviewer can spoof or erase the downgrade audit line the screen exists to show. Display integrity only.",
+    "suggested_fix": "One shared control-character stripper (extend stripAnsi in src/lib/live-render.ts) at the three sinks, and a pattern on id in review-finding.schema.json to close the class at ingest.",
+    "evidence": "Read, not run. degradation.ts:155 and :175, review-panel.ts:173, review.ts:1283; id schema is a bare string, ingest refuses only '#'.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 175,
+    "quote": "lines.push(`  downgraded ${entry.id} ${entry.from} -> ${entry.to} [${entry.rule}]: ${entry.detail}`);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 175
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/degradation.ts:155",
+        "src/review/degradation.ts:175",
+        "src/tui/review-panel.ts:173",
+        "src/tui/review-panel.ts:renderReviewDegradationText"
+      ],
+      "enumeration_method": "every use of entry.id / f.id / f.file in the new render functions of slice-02"
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SC2-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    }
+  },
+  {
+    "id": "SC2-002",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The screen runs only over the internal partition and selects findings by the reviewer's own reviewer string; source:external with a forged external_ref, a per-finding reviewer override (managed.ts:2225) or a non-matching name each skip it.",
+    "impact": "An unproven blocker keeps its severity and blocking_merge, and an external-marked one is also exempt from verifier and cap. Over-block or laundered severity, not compromise.",
+    "suggested_fix": "Attribute by the dispatch record rather than the finding field; screen scoped.external too, or refuse source:external not matched to a fetched comment.",
+    "evidence": "Read, not run. managed.ts:385 partitionExternalFindings, :406, :2225; review-finding.schema.json accepts source and external_ref.",
+    "confidence": "medium",
+    "file": "src/review/managed.ts",
+    "line": 406,
+    "quote": "const degradation = screenDegradationFindings(scopeB.retained);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 406
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/managed.ts:385",
+        "src/review/managed.ts:406",
+        "src/review/managed.ts:2225",
+        "src/review/degradation.ts:DEGRADATION_REVIEWER match"
+      ],
+      "enumeration_method": "followed one finding from coerceStructured through partition to screenDegradationFindings"
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SC2-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    }
+  },
+  {
+    "id": "SC2-003",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The skill lowers unproven major/blocker to info yet defines probe, red-test and merge-trace as executing head code, while line 38 permits commands only with allowed_tools run-tests; the link is not stated.",
+    "impact": "On a host with a shell, a hostile PR's code can run under the reviewer's credentials because the reviewer is pushed to produce execution evidence.",
+    "suggested_fix": "State that probe/red-test/merge-trace need allowed_tools run-tests and its sandbox; otherwise use consumer-trace/base-diff or file a question.",
+    "evidence": "Read, not run. SKILL.md lines 38, 66-70, 74-79, 158.",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/skills/review/review-degradation/SKILL.md",
+    "line": 66,
+    "quote": "| `probe` | you ran the code, or a script against it, on head and on base, and the outputs differ |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 66
+    },
+    "class_scope": {
+      "sites": [
+        "review-degradation/SKILL.md:66",
+        "review-degradation/SKILL.md:68",
+        "review-degradation/SKILL.md:69",
+        "review-degradation/SKILL.md:158"
+      ],
+      "enumeration_method": "evidence table rows plus every sentence mentioning ran/run in the skill"
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SC2-003",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    }
+  },
+  {
+    "id": "TP-001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC4 requires the downgrade to be printed on the terminal. The only test that names the terminal (\"the record names the rule on its own heading, and the terminal gets the same lines\") asserts on the pure renderer renderDegradationScreenLines. The loop that prints in the command is not exercised by any test in the slice.",
+    "impact": "Deleting the print loop leaves the suite green (by reading; not run), so the terminal clause of AC4 is unimplemented-proof: an operator would stop seeing the lowered findings on the terminal and only find them in scope.md.",
+    "suggested_fix": "Add a command-level test that runs ingest through the review command with a degradation major lacking evidence_kind and asserts the captured console.log lines contain 'degradation screen: screened=1 downgraded=1' and the 'downgraded D-001 major -> info [degradation-no-evidence]' line. If the command is hard to drive, extract the print into a small exported function and test that it forwards every line.",
+    "evidence": "src/review/degradation-screen.test.ts asserts only on renderDegradationScreenLines(record). No test imports the command's ingest print path. Mutant M3 proposes the deletion.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 1283,
+    "quote": "for (const line of renderDegradationScreenLines(result.degradationScreen)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; a test pinning behaviour in the same commit is not prior intent, and no accepted-practice source runs against it."
+    }
+  },
+  {
+    "id": "TP-002",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The --degradation and --degradation-cap flags of `keryx review blast-radius` (src/commands/review.ts) and the --degradation entry in VALUELESS_FLAGS have no test. Only buildDegradationConsumers and renderDegradationPayloadBrief are tested.",
+    "impact": "Without the VALUELESS_FLAGS entry, --degradation would be read as a flag that takes a value and swallow the next argument, a silent misparse. A dropped or wrongly parsed --degradation-cap would make the recorded cap differ from the one the operator asked for, and the CAP line in the brief would still read as true.",
+    "suggested_fix": "Add a completion-gate test that the arg parser treats --degradation as valueless (next token stays positional), and a command test that `blast-radius --degradation --degradation-cap 2` on a fixture graph with three consumers emits cap 2 and a NOT TRACED line.",
+    "evidence": "git show 47ea38789 -- src/review/completion-gate.ts adds the entry with no test change; src/review/degradation-payload.test.ts calls the builder directly and never goes through parseNonNegativeInteger. Mutants M2 and M4.",
+    "confidence": "medium",
+    "file": "src/review/completion-gate.ts",
+    "line": 173,
+    "quote": "\"--degradation\",",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-003",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC6 lists 'src/review/caps tests' among its checks, but the commit adds review-degradation to CORE_REVIEWERS with no caps test.",
+    "impact": "Removing the line changes the reviewer's domain classification (wave and concurrency placement) with the suite green (by reading; not run); the next edit to the core set is unprotected.",
+    "suggested_fix": "In the caps test file add a case that the domain classifier returns 'core' for review-degradation, next to the existing case for review-regression.",
+    "evidence": "git show 47ea38789 --stat lists no caps.test.ts change. Mutant M1.",
+    "confidence": "medium",
+    "file": "src/review/caps.ts",
+    "line": 362,
+    "quote": "\"review-regression\",\n  \"review-degradation\",",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-003",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-004",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The title claims the reviewer is required in both modes and needs no blast radius. The only mode-diff assertion is `expect(diff.required).not.toContain(\"review-regression\")` with blastRadius:false, which is about a neighbour. Nothing asserts review-degradation in mode diff. Separately, 'profile full only, not recommended' is pinned only by a regex over catalog.ts text in src/gdskills/review-degradation-skill.test.ts, and the 'not installed' test never reaches the profile.",
+    "impact": "A change that gated review-degradation on a blast radius, or made it exist only in mode all, passes this test. The profile pin fails on harmless reformatting yet passes if the profile is changed by another route.",
+    "suggested_fix": "Add `expect(diff.required).toContain(\"review-degradation\")` to the mode-diff call (and a second call with blastRadius:true if both are meant to hold), and rename the test to what it asserts. Replace the catalog text regex with an assertion on the parsed catalog entry's profiles (installed via the profile resolver) so it checks behaviour, not spelling.",
+    "evidence": "Test body in git show 47ea38789 -- src/review/coverage.test.ts; regex at /skill\\(\"review-degradation\", \"review\", \\[\"full\"\\],/ in src/gdskills/review-degradation-skill.test.ts.",
+    "confidence": "high",
+    "file": "src/review/coverage.test.ts",
+    "line": 105,
+    "quote": "installed (profile full), it is required in both modes' deep rounds and never needs a blast radius",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-004",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-005",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The routing tests cover a function, a removed export, export *, export { } from, export default and export type. The alternatives declare, abstract, enum, interface, class, let and var are not pinned individually.",
+    "impact": "Deleting one alternative stops the degradation reviewer being sent on a changed exported class, enum, interface or let/var with the suite green (by reading; not run). That is the exact shared-symbol case AC6 routes on.",
+    "suggested_fix": "Table-drive the 'exported symbol changed' test over one added line per alternative (class, interface, enum, let, var, abstract class, declare) and assert the role and the why text for each.",
+    "evidence": "src/review/slice-routing.test.ts describe 'review-degradation routing (flow 479 AC6)' as listed in git show 47ea38789. Mutants M5 and M6.",
+    "confidence": "medium",
+    "file": "src/review/slice-routing.ts",
+    "line": 96,
+    "quote": "const SHARED_SYMBOL_CHANGE = /^[+-]\\s*export\\s+(\\*|\\{|default\\b|declare\\b|abstract\\b|(async\\s+)?(function|class|interface|type|const|let|var|enum)\\b)/m;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-005",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-006",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Both degradation fixtures (F-001, F-002) carry reviewer review-degradation and a degradation field, so neither side of the OR is exercised alone. In the test 'a proven finding is never marked unproven, and a screened one never names an evidence kind', the screened row is built with evidenceKind undefined, so `not.toContain(\"evidence \")` cannot fail on the claim in the title.",
+    "impact": "Dropping the field-based inclusion (a finding carrying a degradation_class from another reviewer) or the reviewer-based one leaves the tests green (by reading; not run). A change that printed an evidence kind on an UNPROVEN row would also pass.",
+    "suggested_fix": "Add a fixture with reviewer review-logic and degradation_class set (included by the field clause) and one with reviewer review-degradation and no fields (included by the reviewer clause). Give the screened row in degradationLines an evidenceKind value and assert the line still shows only UNPROVEN.",
+    "evidence": "Fixtures FINDINGS and the degradationLines call in git show 47ea38789 -- src/tui/review-panel.test.ts. Mutant M9.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 147,
+    "quote": "if (f.reviewer !== \"review-degradation\" && !hasField) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-006",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-007",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The ambiguous-target catch branch and the cap normalisation (non-finite fallback, Math.max(0, ...)) have no test. cap 0 and NaN are reachable from --degradation-cap.",
+    "impact": "Replacing the catch body with `continue` makes an unanswerable module read as 'no consumers', the very confusion the NOT ANSWERABLE line exists to prevent, with the suite green (by reading; not run). A negative or non-finite cap is unpinned.",
+    "suggested_fix": "Add a graph fixture where computeAffected throws for a path present twice, and assert the file lands in `unresolved`. Add cases for cap 0 (all dropped, capped true) and cap NaN (default cap).",
+    "evidence": "src/review/degradation-payload.test.ts has no test for the catch or for cap 0. Mutants M7 and M8.",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 75,
+    "quote": "// An ambiguous target is a module we cannot resolve; recorded as unresolved, not as \"no consumers\".",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-007",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-011",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "No test asserts the CONSUMERS or CHANGED SHARED EXPORTS lines of renderDegradationPayloadBrief; the callers assert only CAP, NOT TRACED and NOT ANSWERABLE.",
+    "impact": "Deleting either loop leaves the suite green, so a payload with an empty consumer list would reach the reviewer unseen; this is the AC5 deliverable.",
+    "suggested_fix": "Assert on the brief in the capped test: the consumer line with via and fan-in, the export line with names, and a names '*' case printing '(every export)'.",
+    "evidence": "Proposed mutants M1 and M2 (delete the loops), read, not run: the render tests at degradation-payload.test.ts:70-72 and the unresolved test contain no consumer or export line.",
+    "confidence": "high",
+    "file": "src/review/degradation-payload.ts",
+    "line": 145,
+    "quote": "for (const consumer of payload.consumers) {\n    lines.push(`  - ${consumer.file}  imports ${consumer.via}  [fan-in ${consumer.fanIn}]`);",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": 140
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-011",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-012",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Four gates have no fixture that separates them from the condition beside them: the changedExports half of inDiff, names '*' in symbol mode (degradation-payload.ts:115), the screened>0/downgraded 0 markdown text (degradation.ts:144) and escapeCell (degradation.ts:124).",
+    "impact": "The next edit to any of the four is unprotected.",
+    "suggested_fix": "One fixture each: a graph where changed export A imports changed export B and no changedFiles; a symbol seed with names '*'; renderDegradationScreenMarkdown({screened: 2, downgraded: []}); an id containing '|'.",
+    "evidence": "Proposed mutants M3-M6, read, not run. Enumeration: read every new branch of degradation.ts and degradation-payload.ts against the inputs in degradation-screen.test.ts and degradation-payload.test.ts.",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 61,
+    "quote": "const inDiff = new Set([...(input.changedFiles ?? []), ...input.changedExports.map((entry) => entry.file)]);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 61
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-012",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "TP-013",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "renderReviewDegradationText is exported, re-exported by reviews-inspector.ts and asserted in two tests, but no non-test code calls it: no /review degradation command, nothing in tui-shell.ts or commands/shell.ts, unlike renderReviewParityText.",
+    "impact": "The tests claim coverage of a text surface the operator cannot reach; AC7 is met only through the depth lines.",
+    "suggested_fix": "Wire /review degradation with an isReviewDegradationCommand test like parity, or remove the export and its two assertions.",
+    "evidence": "keryx ctx rg for renderReviewDegradationText and degradation over src/tui and src/commands/shell.ts outside tests: definition, import and re-export only. Read, not run.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 293,
+    "quote": "export function renderReviewDegradationText(rows: readonly ReviewDepthRow[]): string {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 293
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-013",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-sonnet-5-5",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  },
+  {
+    "id": "ARCH-004",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The degradation screen takes its reviewer-name matcher from blast-radius.ts, whose contract describes it as the scope-B question matcher defaulting to review-regression. Today it is a pure name matcher and nothing breaks.",
+    "impact": "A future scope-B-driven change to that matcher would change which findings the evidence rule screens, although the PRD says the regression side stays untouched. No failing path exists now.",
+    "suggested_fix": "Move the name normalisation and containment match into a small shared module, or match locally, so the two screens share nothing with scope-B semantics.",
+    "evidence": "src/review/degradation.ts lines 1 and 80; doc comment of isBlastRadiusScopedFinding in src/review/blast-radius.ts.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 1,
+    "quote": "import { isBlastRadiusScopedFinding } from \"./blast-radius\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "degradation-screen-imports-scope-b-matcher",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#ARCH-004"
+  },
+  {
+    "id": "F4",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The renderer is exported and re-exported by reviews-inspector.ts, but no shell or TUI command calls it; only tests do.",
+    "impact": "PRD AC7 (panel and inspector show class and evidence kind) is met in code but an operator cannot reach it.",
+    "suggested_fix": "Wire /review degradation (tui-shell.ts, commands/shell.ts), or drop the export until a command exists.",
+    "evidence": "Read, not run: keryx ctx rg for renderReviewDegradationText callers shows tests only; /review parity|layers|readiness are wired, degradation is not.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 293,
+    "quote": "export function renderReviewDegradationText(rows: readonly ReviewDepthRow[]): string {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 293
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#F4"
+  },
+  {
+    "id": "F6",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The screen checks only that an evidence_kind label is present, not that the evidence text matches it. The verifier runs before the screen, so a confirmed verdict can sit beside a lowered severity.",
+    "impact": "A bare label passes the gate; verdict and severity can disagree in the output.",
+    "suggested_fix": "Accept as a documented limit, or require non-empty evidence text and reconcile the verdict when a downgrade fires.",
+    "evidence": "Read, not run: degradation.ts:73-130; managed.ts:406 screen order.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 73,
+    "quote": "export function screenDegradationFindings",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 73
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#F6"
+  },
+  {
+    "id": "CB-006",
+    "reviewer": "review-core-boundaries",
+    "severity": "info",
+    "problem": "The row is inserted after review-premise; the list is alphabetical and review-degradation belongs after review-core-boundaries. Same in .metaproject/modules/gdskills.md.",
+    "impact": "A regeneration would move the row and show an unrequested diff; no test is shown to pin the order.",
+    "suggested_fix": "Place the rows alphabetically or regenerate the files.",
+    "evidence": "Diff context lines around the added rows in both files.",
+    "confidence": "medium",
+    "file": ".metaproject/skills/catalog.md",
+    "line": 113,
+    "quote": "| review-degradation | review |",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 762
+    },
+    "dedupe_key": "catalog-order",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#CB-006"
+  },
+  {
+    "id": "DEG-002",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "Delta-round routing of review-degradation goes through fixContentRoles/fixSliceRoster (round-split.ts lines 65-74), which test contentRolesOf over changed +/- lines only, and the role's rule is SHARED_SYMBOL_CHANGE = /^[+-]\\s*export\\s+(...)/m. An edit inside the body of an exported function changes no line that begins with 'export', so the role is not routed; round-split.test.ts pins this ('a fix inside a function body does not [bring review-degradation]'). The payload module's header comment says the routing and changedExportsOf 'cannot disagree about what changed', but changedExportsOf takes its names from the blast-radius symbol walk, which I did not read and which may count a body edit as a changed export.",
+    "impact": "not recorded: the reviewer gave no impact for this finding",
+    "suggested_fix": "not recorded: the reviewer gave no fix for this finding",
+    "evidence": "Read: round-split.ts lines 50-100 (changed-lines-only walk), the slice-routing.ts hunks in the diff (regex, codeOnly), the round-split test name, degradation-payload.ts header and changedExportsOf. Not read: the symbol walk in blast-radius.ts (seeds, names) and the PRD paragraph that defines the trigger, so I cannot show the two definitions differ.",
+    "confidence": "low",
+    "file": "src/review/slice-routing.ts",
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#DEG-002"
+  },
+  {
+    "id": "DG-W2-003",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "The screen is satisfied by a bare enum label. `evidence` text is not checked, although the SKILL says evidence must say what was run or read. A finding with evidence_kind `probe` and an empty `evidence` keeps major/blocker.",
+    "impact": "The fail-closed rule is weaker than the skill prose suggests; PRD AC4 requires only the kind, so this is within spec. Observation, not a defect.",
+    "suggested_fix": "Optionally also require a non-empty `evidence` string; decide with the operator since AC4 is frozen.",
+    "evidence": "read, not run. Read hasEvidenceKind and degradation-screen.test.ts; no test with empty evidence.",
+    "confidence": "high",
+    "file": "src/review/degradation.ts",
+    "line": 60,
+    "quote": "function hasEvidenceKind(finding: Partial<StructuredReviewFinding>): boolean {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 60
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#DG-W2-003"
+  },
+  {
+    "id": "DG-W2-004",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "Routing (slice-routing.ts:96, any changed `export` line, including brand-new exports with no consumers) and payload (changedExportsOf graph seeds) use different predicates. touchesSharedSymbol is referenced only by degradation-payload.test.ts, so a claim that the two cannot disagree is not backed by code.",
+    "impact": "A slice can be routed to review-degradation and then receive an empty consumers payload (recorded as unresolved), or the reverse. Cost is a wasted deep reviewer, not a wrong result. The body-only miss is already reported on slice-01.",
+    "suggested_fix": "Have routing call the same predicate, or drop the dead export and say the routing is deliberately wider.",
+    "evidence": "read, not run. keryx ctx rg for touchesSharedSymbol: definition at degradation-payload.ts:123 and the test only.",
+    "confidence": "high",
+    "file": "src/review/degradation-payload.ts",
+    "line": 123,
+    "quote": "export function touchesSharedSymbol(changedExports: readonly ChangedExport[]): boolean {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 123
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#DG-W2-004"
+  },
+  {
+    "id": "HL-003",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "computeAffected rebuilds the reverse adjacency and fan-in maps over all graph edges on each call, and buildDegradationConsumers calls it once per changed export, so the cost is K x (E + N).",
+    "impact": "No size at which it breaks is established. At the repo's cited 1,041-node graph it is negligible. A PR with hundreds of changed shared modules on a graph of tens of thousands of edges costs millions of edge visits in a one-off CLI run.",
+    "suggested_fix": "If measurement shows it matters, build the reverse index once and pass it to a one-hop lookup.",
+    "evidence": "src/gdgraph/affected.ts:52-65 (index built per call) and src/review/degradation-payload.ts:66-85 (loop over changedExports). Not measured. What would settle it: time `keryx review blast-radius --degradation` on the largest real graph with the largest realistic number of changed exports.",
+    "confidence": "low",
+    "file": "src/review/degradation-payload.ts",
+    "line": 73,
+    "quote": "result = computeAffected(input.graph, entry.file, { depth: 1, ranked: true });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL-003"
+  },
+  {
+    "id": "HL2-004",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "The screen runs before `applyFindingsCap`, so its record covers every finding the reviewer emitted, not the capped set. The terminal gets one line per downgrade, scope.md one table row per downgrade, and the TUI (`degradationLines`, `renderReviewDegradationText`) one line per degradation finding in findings.json, with no bound or 'and N more'. A reviewer that files N unproven majors produces N lines in each place. The same is true of the existing scope-B screen, so this follows a sibling pattern.",
+    "impact": "Output size is linear in the number of findings a single reviewer can emit. No load level was named at which this breaks: findings.json is post-cap, so the TUI is bounded by the cap, and only the terminal and scope.md are pre-cap. What would settle it: whether a round has been seen with hundreds of degradation findings. Also, `loadReviewDepth` now reads and parses findings.json once more per package on every sidebar refresh (it runs per package, sequentially, beside heavier work such as computeReadiness); the extra cost is small.",
+    "suggested_fix": "Optional: print at most a fixed number of downgrade lines (for example 20) and 'and N more, see scope.md'; in loadReviewDepth, pass the already-parsed findings if another step has them.",
+    "evidence": "Read, not run. managed.ts: `screenDegradationFindings(scopeB.retained)` precedes `applyFindingsCap(premisedInternal, ...)`. review-panel.ts loadReviewDepth calls `readDegradationFindings(review.dir)` per package.",
+    "confidence": "low",
+    "file": "src/review/degradation.ts",
+    "line": 174,
+    "quote": "for (const entry of record.downgraded) {\n    lines.push(`  downgraded ${entry.id} ${entry.from} -> ${entry.to} [${entry.rule}]: ${entry.detail}`);",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": 171
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#HL2-004"
+  },
+  {
+    "id": "L-05",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The screen runs after verification merging. A degradation finding that a verifier confirmed but that carries no evidence_kind is still lowered to info, and the verifier's verdict is not shown next to the marker.",
+    "impact": "Intended by the PRD wording (evidence kind is the rule), but a human reading findings.json sees a confirmed finding at info with no word on why.",
+    "suggested_fix": "Say it in the skill's Verification section, or add the verdict to the screen's detail text.",
+    "evidence": "managed.ts orders mergeVerifications before screenDegradationFindings; degradation.ts decides on evidence_kind alone.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 86,
+    "quote": "if (severity === undefined || !SCREENED_SEVERITIES.includes(severity) || hasEvidenceKind(finding)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#L-05"
+  },
+  {
+    "id": "L-06",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "With `--degradation --out <file>` emitBlastRadius still writes the blast-radius record to the file; the consumer payload is only printed to stdout. A caller that redirects with --out to hand the payload to a dispatch gets the wrong document.",
+    "impact": "Surprise for a script, no data loss. The payload is regenerated from the graph on demand.",
+    "suggested_fix": "Either write the degradation brief to --out when --degradation is set, or reject the combination with a one-line message.",
+    "evidence": "review.ts emitBlastRadius(radius, args, degradationBrief?) prints the brief when defined; the --out branch writes the radius JSON/markdown.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 4112,
+    "quote": "const degradationBrief = args.includes(\"--degradation\")",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#L-06"
+  },
+  {
+    "id": "RL-W2-4",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The screen checks only that a valid evidence_kind label is present, not that evidence is non-empty or was produced. SHARED_SYMBOL_CHANGE misses export namespace, export = and export import.",
+    "impact": "A label satisfies the gate; scope.md text about evidence can be vacuous when only minor/info were screened.",
+    "suggested_fix": "Record in the trial (AC10); optionally require a non-empty evidence string for major and above.",
+    "evidence": "Read, not run.",
+    "confidence": "low",
+    "file": "src/review/degradation.ts",
+    "line": null,
+    "quote": "hasEvidenceKind",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places as a substring of a line (lines 60, 86, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 1
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        60,
+        86
+      ]
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#RL-W2-4"
+  },
+  {
+    "id": "PERF-002",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "computeAffected rebuilds the reverse adjacency, the fan-in map and the dependencies filter over all edges on every call, and it is called once per changed export, so the work is O(K x E).",
+    "impact": "One CLI call per round on a graph of about 1k nodes; I cannot name a workload where this costs more than milliseconds. Observation only. It would be settled by timing the command on the largest reviewed PR.",
+    "suggested_fix": "Only if measured slow: build the reverse index once and reuse it across the changed exports.",
+    "evidence": "src/gdgraph/affected.ts lines 52-65 and 98-101 run per call; src/review/degradation-payload.ts line 73 calls it inside the loop over input.changedExports.",
+    "confidence": "high",
+    "file": "src/review/degradation-payload.ts",
+    "line": 73,
+    "quote": "result = computeAffected(input.graph, entry.file, { depth: 1, ranked: true });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#PERF-002"
+  },
+  {
+    "id": "PERF-003",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "The --degradation branch runs after findTextLinks and computeBlastRadius have already done the full walk, including the repo-wide text-link search, and uses only radius.reach.seeds, changedFiles and unresolved from the result.",
+    "impact": "Avoidable work on one invocation per round, bounded in size. It would be settled by timing with and without --no-text-links. Not a regression of an existing path.",
+    "suggested_fix": "If measured to matter, skip findTextLinks when --degradation is set.",
+    "evidence": "src/commands/review.ts hunk @@ 4090-4176: findTextLinks(...) and computeBlastRadius(...) precede the new degradationBrief expression; changedExportsOf (src/review/degradation-payload.ts:110-120) reads only reach.seeds, changedFiles and unresolved.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 4112,
+    "quote": "const degradationBrief = args.includes(\"--degradation\")",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#PERF-003"
+  },
+  {
+    "id": "PERF-W2-002",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "degradationLines emits one line per degradation finding with no cap in the depth tab and readline text.",
+    "impact": "Only a very large package would make the block long; the per-reviewer findings cap and the scrolling modal bound it in practice.",
+    "suggested_fix": "None required; add an 'and N more' tail only if the findings cap is ever lifted.",
+    "evidence": "Read of the diff; applyFindingsCap is referenced in managed.ts context. Read, not run.",
+    "confidence": "low",
+    "file": "src/tui/review-panel.ts",
+    "line": 171,
+    "quote": "...findings.map((f) => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 2300
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#PERF-W2-002"
+  },
+  {
+    "id": "PERF-W2-003",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "One computeAffected call per changed shared export, each rebuilding the reverse adjacency and fanIn map over all edges and running the forward dependencies filter that this caller never uses. Same class as the slice-01 reverse-index finding; reported here only for the extra discarded work.",
+    "impact": "O(K x E) on a CLI run once per review round; negligible unless a diff changes hundreds of exported modules on a large graph.",
+    "suggested_fix": "Build the adjacency and fanIn once and walk it per export (fix together with the slice-01 finding).",
+    "evidence": "Read of src/gdgraph/affected.ts lines 41-114 against degradation-payload.ts lines 391-410. Read, not run.",
+    "confidence": "medium",
+    "file": "src/review/degradation-payload.ts",
+    "line": 73,
+    "quote": "result = computeAffected(input.graph, entry.file, { depth: 1, ranked: true });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 398
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#PERF-W2-003"
+  },
+  {
+    "id": "SEC-002",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "The evidence gate is an enum-membership check on a self-declared field, and the screen applies only when the finding's own reviewer name matches by containment.",
+    "impact": "A steered reviewer can name an evidence kind with nothing behind it, or file under another name, and keep a major. Worst case is a false merge-blocker; same design as the scope-B sibling.",
+    "suggested_fix": "Derive the reviewer from the dispatch record or the raw file name rather than the finding's own field.",
+    "evidence": "src/review/degradation.ts:60-63; src/review/blast-radius.ts:932-944.",
+    "confidence": "medium",
+    "file": "src/review/degradation.ts",
+    "line": 62,
+    "quote": "return typeof kind === \"string\" && (REVIEW_EVIDENCE_KINDS as readonly string[]).includes(kind);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "degradation-self-declared-evidence",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SEC-002"
+  },
+  {
+    "id": "SEC-003",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "File paths taken from the diff and the graph are interpolated into the reviewer brief with no control-character guard.",
+    "impact": "A path containing a newline could forge extra brief lines, a prompt-injection vector aimed at the reviewer. gdgraph affected itself is in-process (computeAffected), so there is no command-injection surface.",
+    "suggested_fix": "Refuse or strip control characters in changed and consumer paths, as layers-payload.ts:261 does.",
+    "evidence": "src/review/degradation-payload.ts:131-160 and :73; src/review/layers-payload.ts:261.",
+    "confidence": "low",
+    "file": "src/review/degradation-payload.ts",
+    "line": 146,
+    "quote": "lines.push(`  - ${consumer.file}  imports ${consumer.via}  [fan-in ${consumer.fanIn}]`);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "degradation-brief-path-interpolation",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SEC-003"
+  },
+  {
+    "id": "SEC-004",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "The schema says only ingest writes evidence_screen, but toContractFinding and coerceStructured pass a reviewer-written evidence_screen through. Not verified whether ingest strips it before the screen runs.",
+    "impact": "A finding could arrive already marked UNPROVEN, or have a real marker overwritten; display only.",
+    "suggested_fix": "Drop evidence_screen from reviewer input in coerceStructured, and test that a finding carrying one is dropped or overwritten.",
+    "evidence": "src/review/managed.ts toContractFinding (about 1730-1790) and coerceStructured (about 2217-2295); schema description of evidence_screen.",
+    "confidence": "low",
+    "file": "src/review/managed.ts",
+    "dedupe_key": "reviewer-writes-evidence-screen",
+    "blocking_merge": false,
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SEC-004"
+  },
+  {
+    "id": "SC2-004",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Graph paths are interpolated raw into the line-oriented reviewer brief; a tracked path with a newline could forge the CAP / NOT TRACED lines.",
+    "impact": "Could make the reviewer believe the sweep was complete. Unconfirmed whether the graph builder keeps such names.",
+    "suggested_fix": "JSON-quote paths in the brief, or treat any path with a control character as unresolved.",
+    "evidence": "Read, not run. What would settle it: run keryx review blast-radius --degradation over a repo holding a file named with a newline.",
+    "confidence": "low",
+    "file": "src/review/degradation-payload.ts",
+    "line": 146,
+    "quote": "lines.push(`  - ${consumer.file}  imports ${consumer.via}  [fan-in ${consumer.fanIn}]`);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#SC2-004"
+  },
+  {
+    "id": "TP-008",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "Existing expectation changed: the fix slice's roles in the 'review slice in a delta round' test went from [review-architecture, review-logic, review-regression] to include review-degradation, and the comment now says a shared symbol changed.",
+    "impact": "The change is consistent with AC6 because the fix region's changed line is an export, and the new describe pins the no-export case at unit level (fixContentRoles, fixSliceRoster). The slice-level test now holds only the positive case, so the no-export fix is not pinned through `review slice`.",
+    "suggested_fix": "Keep the new expectation. Add a second delta-round case at the same level with a fix region that has no exported-symbol line and assert the roster is the old three roles.",
+    "evidence": "git show 47ea38789 -- src/review/round-split.test.ts: the roles array and comment changed; fixSliceRoster added to the imports.",
+    "confidence": "high",
+    "file": "src/review/round-split.test.ts",
+    "line": null,
+    "quote": "\"review-architecture\", \"review-degradation\", \"review-logic\", \"review-regression\"",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places as a substring of a line (lines 94, 581, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        94,
+        581
+      ]
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-008"
+  },
+  {
+    "id": "TP-009",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The screen runs before the duplicate merge. No test covers a degradation finding that duplicates another reviewer's finding. The ingest-level 'other reviewers are not touched' case uses a minor finding, so it cannot fail if the screen touched another reviewer's major.",
+    "impact": "A later reorder of the stages, or a screen that matched another reviewer's major at ingest, would not turn a test red at the ingest level. The unit test with a major from review-regression covers the matching rule.",
+    "suggested_fix": "At ingest, add one review-logic major without evidence_kind (expect it stays major) and one review-degradation info that duplicates it via dedupe_key (expect the merged severity and reporters).",
+    "evidence": "src/review/degradation-screen.test.ts ingest cases use finding({ id: \"R-001\", reviewer: \"review-logic\", severity: \"minor\" }).",
+    "confidence": "low",
+    "file": "src/review/managed.ts",
+    "line": 408,
+    "quote": "const deduped = mergeDuplicates(degradation.retained);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-009"
+  },
+  {
+    "id": "TP-010",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "depthRow is cast with `as never` and the degradation entries are hand-built, so a change to the ReviewDepthRow shape cannot fail this test at compile time. Separately, the AC11 denylist test covers the skill text only; the bundled copy rides on the byte-identity test and the docs are not checked in the skill test.",
+    "impact": "Low: the loader-to-line chain is covered in review-panel.test.ts, and the bundle is byte-identical to the checked skill. A shape drift would show up only as a runtime mismatch.",
+    "suggested_fix": "Build the row through loadReviewDepth over a temp package, or type the fixture as ReviewDepthRow instead of `never`. Run the denylist over the bundle and the docs pages that mention the reviewer.",
+    "evidence": "git show 47ea38789 -- src/tui/reviews-inspector.test.ts; denylist test in src/gdskills/review-degradation-skill.test.ts reads the skill text only.",
+    "confidence": "medium",
+    "file": "src/tui/reviews-inspector.test.ts",
+    "line": 507,
+    "quote": "degradation,\n  } as never;",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": null
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-010"
+  },
+  {
+    "id": "TP-014",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The display fallbacks (evidence none, no class, UNPROVEN without '(was ...)', no unproven suffix when none) are driven by no test input.",
+    "impact": "Copy or fallback edits go unnoticed; presentation only.",
+    "suggested_fix": "Add a proven-only list and a screened finding with no original severity to the degradationLines test.",
+    "evidence": "Proposed mutant M7, kind presentation, read, not run.",
+    "confidence": "medium",
+    "file": "src/tui/review-panel.ts",
+    "line": 168,
+    "quote": "const head = `degradation: ${findings.length} finding(s)${unproven > 0 ? `, ${unproven} unproven` : \"\"}`;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 168
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-014"
+  },
+  {
+    "id": "TP-015",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "Repeats three assertions already in coverage.test.ts (required in all, refused when skipped, excluded in a light round); neither copy asserts mode 'diff' for review-degradation.",
+    "impact": "Maintenance duplication, and the 'both modes' claim in the coverage test title is unbacked for degradation.",
+    "suggested_fix": "Keep one copy and add the mode 'diff' assertion for review-degradation.",
+    "evidence": "Compared the two test bodies in the slice diff. Read, not run.",
+    "confidence": "high",
+    "file": "src/review/dispatch.test.ts",
+    "line": 113,
+    "quote": "test(\"review-degradation joins a deep round's set when installed, and its absence from a dispatch is refused (flow 479 AC6)\"",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 1702
+    },
+    "global_id": "2026-10-28-review-flow-feat-review-degradation#TP-015"
+  }
+]
