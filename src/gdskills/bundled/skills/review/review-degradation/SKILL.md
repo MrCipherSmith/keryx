@@ -95,23 +95,30 @@ Without a way to show it, file `info`, or a question.
 
 ## How to look
 
-1. Read the diff against the description. Anything the description calls unchanged
-   and the diff edits is a `diff-vs-description` candidate.
-2. For each changed shared symbol, read its consumers before the symbol: the
-   assumption sits at the consumer, and the change moves what the consumer receives.
-3. Compare behaviour, not text. An event, a default, a fallback, an ordering, a
-   number of times a step runs: show it on head and on base.
-4. Count work per trigger: what runs on each keystroke, render, request.
-5. For each test the change added or leaned on, ask whether it would fail if the
-   regression were real.
+Two passes, in this order. Done when every candidate of the sweep is filed, refuted or placed in a lane with its reason.
+
+1. **Sweep**, no severity floor. Read the diff against the description: anything it calls
+   unchanged and the diff edits is a `diff-vs-description` candidate. For each changed shared
+   symbol, default, stored field, mode or signature, read its consumers before the symbol: the
+   assumption sits at the consumer, and the change moves what the consumer receives. Compare
+   behaviour, not text (an event, a default, a fallback, an ordering, how many times a step runs):
+   show it on head and on base. Count work per trigger (each keystroke, render, request). For each
+   test the change added or leaned on, ask whether it would fail if the regression were real.
+2. **Refute** every candidate you would file as `blocker`, `major` or suspicion. Try to prove
+   yourself wrong with a `file:line` read: does the base do the same on this path, is there a
+   guard upstream or downstream, does a comment, commit or sibling give a reason (law 4), does
+   the description name it. Put the attempt in `evidence` ("refute: read a.ts:12, no guard").
+   What survives keeps its severity; what falls is dropped or goes to pre-existing.
 
 ## Output lanes
 
 Four lanes, no more:
 
 - **Findings**: worse than base, with a class, evidence and `class_scope`.
-- **Questions**: `info` with `publication: "question"` when you suspect and cannot
-  show. A question is not a weak finding; it is a different thing to the reader.
+- **Suspicions**: `info` with `publication: "question"` when the trigger or the outcome sits
+  outside the code (a backend reply, data, timing) and you cannot show it. `problem` ends with
+  "If true: <major|minor>, <outcome>"; `fix` is "Check: <the one request, test or command that
+  settles it>", which the author can run. Without both it is noise, not a suspicion.
 - **Pre-existing**: `location_class: "pre-existing"`. True, not caused by this change, not blocking.
 - **Verified clean**: in `summary`, one line per thing traced, and each line names
   what was traced (the symbol, the consumers, the command). Silence must not read as "nothing found".
@@ -158,7 +165,8 @@ Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severi
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "It looks worse, so it is a `major`." | Without an `evidence_kind` the ingest lowers it to `info` and marks it unproven. Show it, or file it as a question. |
+| "It looks worse, so it is a `major`." | Without an `evidence_kind` the ingest lowers it to `info` and marks it unproven. Show it, or file a suspicion with its check. |
+| "My first read is enough for a `major`." | Pass 2 tries to refute it first: the base, a guard, a stated reason. A `major` without a refutation attempt in `evidence` is not ready. |
 | "This code was already messy, and the change sits next to it." | Worse than the base is the question. Pre-existing goes in its own lane, not in findings. |
 | "I will name the consumers I think matter." | The graph's list comes first. A model-chosen set is the sweep that misses the consumer nobody thought of; extra users you find by search are added, labelled `search-derived`. |
 | "I could not run it, so it is a question or a `minor`." | A traced trigger and outcome is a finding without a run, and `major` when a user gets a wrong, lost or blocked result. Ask only what the code cannot answer. |
@@ -176,7 +184,8 @@ Report done only once all of these hold:
 - Every finding has one `degradation_class` and one `evidence_kind`, and `evidence` says what was run or read.
 - Every `blocker` and `major` carries `class_scope` whose `enumeration_method` is the walk over the graph's consumer list.
 - Every consumer in the payload was traced, or the summary says which were not and why, and whether the cap dropped any.
-- Anything you could neither trace nor show is `info`, a question, or pre-existing, not a `major`.
+- Every `major`, `blocker` and suspicion names its refutation attempt; every suspicion has "If true" and "Check".
+- Anything you could neither trace nor show is `info`, a suspicion, or pre-existing, not a `major`.
 - The summary has a verified-clean line for each thing traced without a finding, naming what was traced.
 
 <!-- keryx:layers-block:start -->
