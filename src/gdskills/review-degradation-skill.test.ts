@@ -102,6 +102,12 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
     expect(skill).toMatch(/A `major` without a refutation attempt in `evidence` is not ready/);
   });
 
+  test("the sweep lists what a swapped mechanism did implicitly and what the work scales with", () => {
+    expect(skill).toMatch(/swaps a mechanism/);
+    expect(skill).toMatch(/what the old one did implicitly/);
+    expect(skill).toMatch(/and what it\s+scales with/);
+  });
+
   test("it is generic: no project-specific rule name, path, PR number or reviewer name", () => {
     for (const forbidden of ["vantage", "presight", "b091", "mobx-stores", ".claude/rules"]) {
       expect(skill.toLowerCase()).not.toContain(forbidden);
