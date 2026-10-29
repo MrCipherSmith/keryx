@@ -575,6 +575,12 @@ test('uncertain owned stop keeps the native lease and an unknown claim that neve
 },30000);
 const ledgerFile=(state:{configDir:string;hubId:string})=>path.join(machineStateDir(state.configDir,state.hubId),'control.sqlite');
 const runState=(runId:string)=>async()=>success<{state:string;version:number}>(await f!.call(`/hub/v2/projects/${f!.project.id}/runs/${runId}`,{cookie:f!.cookie}));
+/**
+ * Hub settles an accepted session command (a controller claim) only on the machine's receipt, which follows the session events the
+ * command emitted: the claimed controller is visible in the record first, and until the receipt Hub refuses the next mutation as
+ * session-busy. Waits on Hub's own session row for the exact state its idle fence reads: no accepted operation awaiting the machine.
+ */
+const hubApplied=(sessionId:string)=>wait(async()=>{const {Database}=await import('bun:sqlite');const hub=new Database(path.join(f!.dataDir,'hub.sqlite'),{readonly:true});try{const row=hub.query<{body:string},[string]>('SELECT body FROM remote_session WHERE id=?').get(sessionId);return row?JSON.parse(row.body) as {pending?:unknown}:undefined;}finally{hub.close();}},row=>row!==undefined&&row.pending===undefined);
 test('a full local ledger refuses a new launch visibly while an admitted run still persists its critical events',async()=>{
  const o=await ownerFixture();let unblock!:()=>void;const blocked=new Promise<void>(resolve=>{unblock=resolve;});const original=o.provider.provider.stream;let calls=0;
  o.provider.provider.stream=(request,options)=>(async function*(){calls++;await blocked;yield* original(request,options);})();
@@ -619,7 +625,9 @@ test('a serve crash leaves the run fenced until owned process absence is proven,
   const inventory=await wait(async()=>success<{inventory:{inventoryVersion:number;checkouts:Array<{headSha:string}>}|null}>(await f!.call(`/hub/v2/machines/${state.machine.machineId}`,{cookie:f!.cookie})),v=>v.inventory!==null);const digest=canonicalDigest(state.policy);
   const created=await success<Control['SessionOperationReceipt']>(await f!.call(`/hub/v2/projects/${f!.project.id}/sessions`,{method:'POST',cookie:f!.cookie,body:{machineId:state.machine.machineId,checkoutId:'checkout',agentProfileId:'fixture',expectedInventoryVersion:inventory.inventory!.inventoryVersion,expectedHeadSha:inventory.inventory!.checkouts[0]!.headSha,capabilityDigest:digest,policyDigest:digest,title:'Crash recovery session'}}));
   const sessionPath=`/hub/v2/projects/${f!.project.id}/sessions/${created.sessionId}`;const read=async()=>success<Control['SessionRecord']>(await f!.call(sessionPath,{cookie:f!.cookie}));const idle=await wait(read,v=>v.state==='idle');
-  const claim=await success<Control['ControllerReceipt']>(await f!.call(`${sessionPath}/controller/claim`,{method:'POST',cookie:f!.cookie,body:{expectedSessionVersion:idle.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'}}));const controlled=await wait(read,v=>v.controller?.controllerLeaseId===claim.lease.controllerLeaseId);
+  const claim=await success<Control['ControllerReceipt']>(await f!.call(`${sessionPath}/controller/claim`,{method:'POST',cookie:f!.cookie,body:{expectedSessionVersion:idle.version,expectedControllerVersion:0,requestedLeaseSeconds:60,mode:'claim'}}));
+  // The crashing daemon is its own process: its receipt for the claim can land after the controller already shows in the record.
+  await hubApplied(created.sessionId);const controlled=await wait(read,v=>v.controller?.controllerLeaseId===claim.lease.controllerLeaseId);
   const turn=await success<Control['TurnReceipt']>(await f!.call(`${sessionPath}/messages`,{method:'POST',cookie:f!.cookie,key:'crash-run',body:{expectedSessionVersion:controlled.version,expectedConfigVersion:controlled.config.configVersion,controller:{controllerLeaseId:claim.lease.controllerLeaseId,expectedControllerVersion:claim.lease.version},text:'Run a supervised sleep',interpretation:'literal-message',busyPolicy:'reject',association:{mode:'ad-hoc',profileConsentVersion:1}}}));
   expect(turn.status).toBe('admitted');const runId=turn.runId!;await wait(runState(runId),v=>v.state==='running');
   // The supervised sleep's identity is durable before the crash: its process group and start time, recorded by the crashing daemon.

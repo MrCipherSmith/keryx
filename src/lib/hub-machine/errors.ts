@@ -8,7 +8,8 @@ const aborted=(cause:unknown):boolean=>cause instanceof Error&&cause.name==='Abo
 /**
  * Notice code for a bridge failure. A transport abort is never a generic state failure: during
  * stop() it is the shutdown race (`machine-stopping`); otherwise an in-flight Hub request died with
- * its connection (`machine-request-aborted`). Anything else unclassified keeps the generic fallback.
+ * its connection (`machine-request-aborted`). A Hub request the network refused or reset is typed where it is made
+ * (`machine-request-failed`, `MachineConnection.request`). Anything else unclassified keeps the generic fallback.
  */
 export function machineNoticeCode(cause:unknown,stopping:boolean):string{
  if(cause instanceof MachineError)return cause.code;

@@ -1,10 +1,16 @@
 import{expect,test}from'bun:test';import{existsSync,lstatSync,readFileSync,readdirSync,rmSync,writeFileSync}from'node:fs';import path from'node:path';
 import{startMachineTrial,SERVE_ENTRY,TRIAL_CONTEXT,TRIAL_INDEX,TRIAL_PROFILE,supervisedMarker,trialTurn,type TrialTarget}from'./trial.test-support';
-import{canonicalDigest,type Control,type FrameOf}from'../../remote-control/protocol';import{createMachineCommandCatalogue}from'./production';import{localControlPath}from'./local-control';import{resolveRemoteProfile}from'../../harness/policy/profiles';
+import{canonicalDigest,type Control,type FrameOf}from'../../remote-control/protocol';import{createMachineCommandCatalogue}from'./production';import{localControlPath}from'./local-control';import{resolveRemoteProfile}from'../../harness/policy/profiles';import{detectSandboxLauncher}from'../../harness/process/sandbox/detect';
 type Trial=Awaited<ReturnType<typeof startMachineTrial>>;type RunEvent=FrameOf<'run-event'>['payload'];
 type Inventory={connected:boolean;inventory:{inventoryVersion:number;checkouts:{checkoutId:string;headSha:string;clean:boolean;available:boolean;agentProfiles:{profileId:string;adapter:string;readiness:string;reason:string;capabilityDigest:string;policyDigest:string}[]}[]}|null};
 /** Production resolution refuses a profile with `adapter-unsupported` while the shipped command catalogue still lists an implementation gap. */
 const catalogueGaps=createMachineCommandCatalogue(canonicalDigest([])).entries.filter(entry=>entry.availability==='implementation-gap').map(entry=>entry.commandName);
+/**
+ * The trial serves the production `remote-restricted` profile, whose isolation is required-fail-closed: production resolution
+ * reports it `containment-missing` on a host without the platform sandbox launcher (sandbox-exec on macOS, bwrap on Linux), so no
+ * session can start. These tests skip only there; the macOS real-host CI job runs this file with zero skips.
+ */
+const launcher=detectSandboxLauncher();const needsSandbox=launcher.available?'':` (skipped: production profiles need the OS sandbox launcher; ${launcher.reason})`;
 function hubClient(trial:Trial){
  let cookie='';
  const raw=async(route:string,body?:unknown)=>{const response=await fetch(`${trial.origin}${route}`,{method:body===undefined?'GET':'POST',headers:{Origin:trial.origin,...(cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID()})},...(body===undefined?{}:{body:JSON.stringify(body)})});if(route==='/hub/v1/session'&&response.ok)cookie=response.headers.get('set-cookie')!.split(';')[0]!;return{status:response.status,data:await response.json() as unknown};};
@@ -53,7 +59,7 @@ async function recover(trial:Trial,target:TrialTarget,args:string[]):Promise<{ok
  return result.exitCode===0?{ok:true,value:JSON.parse(result.stdout.trim()) as Record<string,unknown>}:{ok:false,code:result.stderr.trim()};
 }
 
-test('two keryx serve processes start their machine bridges through the shipped startup path and production profile resolution',async()=>{
+test.skipIf(!launcher.available)(`two keryx serve processes start their machine bridges through the shipped startup path and production profile resolution${needsSandbox}`,async()=>{
  const trial=await startMachineTrial();try{
  const hub=hubClient(trial);await hub.login();
  expect(trial.targets).toHaveLength(2);expect(new Set(trial.targets.map(t=>t.serve.pid)).size).toBe(2);expect(new Set(trial.targets.map(t=>t.configDir)).size).toBe(2);
@@ -84,7 +90,7 @@ test('two keryx serve processes start their machine bridges through the shipped 
  }finally{await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
 },60000);
 
-test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and a real supervised cancellation on production profiles${catalogueGaps.length>0?` (pending P3: production resolution refuses adapter-unsupported while the catalogue lists ${catalogueGaps.join(', ')})`:''}`,async()=>{
+test.skipIf(catalogueGaps.length>0||!launcher.available)(`two serve machines run a real tool turn and a real supervised cancellation on production profiles${catalogueGaps.length>0?` (pending P3: production resolution refuses adapter-unsupported while the catalogue lists ${catalogueGaps.join(', ')})`:''}${needsSandbox}`,async()=>{
  const trial=await startMachineTrial();try{
  const hub=hubClient(trial);await hub.login();expect(trial.targets).toHaveLength(2);
  const calls=(target:TrialTarget,ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});
@@ -118,7 +124,7 @@ test.skipIf(catalogueGaps.length>0)(`two serve machines run a real tool turn and
  }finally{await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
 },120000);
 
-test.skipIf(catalogueGaps.length>0)('a serve killed mid-run stays uncertain until the operator recovers it locally and a human resolves it in Hub, then resumes on the restarted daemon with history and the owned baseline kept and queued work never replayed, while a commit made with serve connected reaches Hub',async()=>{
+test.skipIf(catalogueGaps.length>0||!launcher.available)(`a serve killed mid-run stays uncertain until the operator recovers it locally and a human resolves it in Hub, then resumes on the restarted daemon with history and the owned baseline kept and queued work never replayed, while a commit made with serve connected reaches Hub${needsSandbox}`,async()=>{
  const trial=await startMachineTrial({spareCheckout:true});const[target,other]=trial.targets as [TrialTarget,TrialTarget];const marker=supervisedMarker(target.machine,2);try{
  const hub=hubClient(trial);await hub.login();
  const calls=(ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});
@@ -245,7 +251,7 @@ test.skipIf(catalogueGaps.length>0)('a serve killed mid-run stays uncertain unti
  }finally{killGroup(marker);await trial.stop();rmSync(trial.root,{recursive:true,force:true});}
 },180000);
 
-test.skipIf(catalogueGaps.length>0)('a Hub restart while both serve machines stay up keeps running and approval-paused work owned: no restart, no repeated tool or provider round, no takeover',async()=>{
+test.skipIf(catalogueGaps.length>0||!launcher.available)(`a Hub restart while both serve machines stay up keeps running and approval-paused work owned: no restart, no repeated tool or provider round, no takeover${needsSandbox}`,async()=>{
  const trial=await startMachineTrial();const[target,other]=trial.targets as [TrialTarget,TrialTarget];const marker=supervisedMarker(target.machine,1);try{
  const hub=hubClient(trial);await hub.login();
  const calls=(ordinal:number)=>trial.provider.calls.filter(c=>c.machine===target.machine&&c.ordinal===ordinal).map(({reply,toolName})=>toolName?{reply,toolName}:{reply});

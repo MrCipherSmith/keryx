@@ -95,3 +95,20 @@ test('a grant the actual Hub issues across a clock tick spans exactly the protoc
  expect(await application.apply(()=>'applied')).toEqual({ok:true,value:'applied'});
  }finally{Date.now=realNow;await f.close();}
 });
+test('a Hub request the network refuses or resets is a typed transport failure, never the generic state failure, and an abort keeps its own class',async()=>{
+ const{machineNoticeCode}=await import('./errors');
+ const connection=(hubUrl:string)=>new MachineConnection({hubUrl,machineId:'m',secret:'s'.repeat(43),ledgerId:'l',daemonId:'d',agentVersion:'test',onFrame:()=>{}});
+ /** A Hub that holds every request open and says when one arrived. */
+ const holding=()=>{let arrived!:()=>void;const received=new Promise<void>(resolve=>{arrived=resolve;});const server=Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>{arrived();return new Promise<Response>(()=>{});}});return{server,received,origin:`http://127.0.0.1:${server.port}`};};
+ // Refused: the Hub is gone before the request.
+ const gone=holding();await gone.server.stop(true);
+ const refused:unknown=await connection(gone.origin).request('/hub/v2/machines/m').catch((cause:unknown)=>cause);
+ expect(refused).toMatchObject({name:'MachineError',code:'machine-request-failed'});expect(machineNoticeCode(refused,false)).toBe('machine-request-failed');
+ // Reset: the Hub stops while the request is in flight, as when a Hub restart lands on a result upload.
+ const stopping=holding();const inflight=connection(stopping.origin).request('/hub/v2/machines/m',{}).catch((cause:unknown)=>cause);await stopping.received;await stopping.server.stop(true);
+ const reset:unknown=await inflight;expect(reset).toMatchObject({name:'MachineError',code:'machine-request-failed'});expect(machineNoticeCode(reset,false)).toBe('machine-request-failed');
+ // Abort: this connection closing aborts its own requests; that stays an abort, classified by the bridge's stop state.
+ const held=holding();try{const own=connection(held.origin);const pending=own.request('/hub/v2/machines/m').catch((cause:unknown)=>cause);await held.received;own.close();
+  const aborted:unknown=await pending;expect(aborted).toMatchObject({name:'AbortError'});expect(machineNoticeCode(aborted,false)).toBe('machine-request-aborted');expect(machineNoticeCode(aborted,true)).toBe('machine-stopping');
+ }finally{await held.server.stop(true);}
+});

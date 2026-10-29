@@ -5,13 +5,22 @@ import { join, resolve } from "node:path";
 import { canonicalDigest } from "../src/remote-control/protocol";
 import { buildNativeCoverageDescriptor, checkNativeCommandCoverage, currentNativeCoverageSubject, receiptParity, registeredNativeCommandNames, type NativeCoverageDescriptor, type NativeNormalizedOutcome } from "../src/session/commands/coverage";
 import { checkEmbeddedDescriptor, collectParityRun, DESCRIPTOR_PATH, INVENTORY_PATH, judgeNativeCoverage, readInventory, receiptsFor, sourceHashes } from "./verify-native-coverage";
+import { detectSandboxLauncher } from "../src/harness/process/sandbox/detect";
 
 const root = resolve(import.meta.dir, "..");
+/**
+ * The parity variants that run a live owned turn (approvals, questions, interrupt, the full inventory) run under a profile
+ * whose isolation is required-fail-closed, so the built-in gate hooks stay sandboxed: on a host without the platform
+ * launcher (sandbox-exec on macOS, bwrap on Linux) `keryx.security-check-input` refuses every such turn before the
+ * provider. Those tests skip only where the launcher is absent; the macOS real-host CI job runs this file with zero skips.
+ */
+const launcher = detectSandboxLauncher();
+const needsSandbox = launcher.available ? "" : ` (skipped: live turns need the OS sandbox launcher; ${launcher.reason})`;
 async function embedded(): Promise<NativeCoverageDescriptor> {
   return (await import("../src/session/native-coverage.generated")).NATIVE_COVERAGE_DESCRIPTOR as NativeCoverageDescriptor;
 }
 
-test("receipts come from executing the same variant through the real terminal adapter and headless host, and expose failing parity", async () => {
+test.skipIf(!launcher.available)(`receipts come from executing the same variant through the real terminal adapter and headless host, and expose failing parity${needsSandbox}`, async () => {
   const inventory = await readInventory(root);
   const run = await collectParityRun(root, inventory, ["status.default", "reasoning.high", "reasoning.off", "trail.tool-NAME", "intake.list", "interrupt.default", "model.select", "history.N-1-20",
     "tasks.kill", "demote.task-id", "flows.list", "flows.detail", "rewind.picker", "approvals.allow-once", "status.questions-answer", "goal.-workspace", "queue.remove-N", "queue.force-N"]);
@@ -58,7 +67,7 @@ test("lifecycle variants run bridge-hosted: both paths reach a real enrolled Mac
   for (const id of ["sessions.open", "sessions.resume", "sessions.fork"]) expect(parity[id]).toMatchObject({ matched: true, admitted: true, receipt: { local: { outcome: { status: "applied", errorCode: null } }, headless: { outcome: { status: "applied", errorCode: null } } } });
 }, 180_000);
 
-test("release guard re-executes the committed inventory: the embedded descriptor is current and release-ready, and a gap or stale/tampered/missing evidence fails closed", async () => {
+test.skipIf(!launcher.available)(`release guard re-executes the committed inventory: the embedded descriptor is current and release-ready, and a gap or stale/tampered/missing evidence fails closed${needsSandbox}`, async () => {
   const inventory = await readInventory(root);
   const hashes = await sourceHashes(root, inventory);
   const run = await collectParityRun(root, inventory);

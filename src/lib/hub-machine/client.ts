@@ -159,7 +159,18 @@ export class MachineConnection {
             throw new MachineError('invalid-idempotency-key');
         if (!route.startsWith('/hub/v2/') || route.includes('..') || (route.includes('?') && !/^\/hub\/v2\/machines\/[A-Za-z0-9._:-]+\/recovery\?after=\d+$/.test(route)))
             throw new MachineError('invalid-machine-route');
-        const response = await fetch(`${trustedHubUrl(this.options.hubUrl)}${route}`, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${this.options.secret}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey ?? randomUUID() }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.any([AbortSignal.timeout(30000), this.transportAbort.signal]), redirect: 'error' });
+        const url = `${trustedHubUrl(this.options.hubUrl)}${route}`, payload = body === undefined ? {} : { body: JSON.stringify(body) };
+        let response: Response;
+        try {
+            response = await fetch(url, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${this.options.secret}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey ?? randomUUID() }, ...payload, signal: AbortSignal.any([AbortSignal.timeout(30000), this.transportAbort.signal]), redirect: 'error' });
+        }
+        catch (cause) {
+            // Fetch rejects with a TypeError only for a network error: the Hub refused, reset or dropped the connection, as when it
+            // stops mid-request. That is a typed transport failure, never the generic state failure; an abort keeps its own class.
+            if (cause instanceof TypeError)
+                throw new MachineError('machine-request-failed', { cause });
+            throw cause;
+        }
         if (!response.ok) {
             await response.body?.cancel();
             throw new MachineError(`machine-http-${response.status}`);
