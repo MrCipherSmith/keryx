@@ -72,7 +72,7 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
   });
 
   test("it has the four output lanes and the ingest downgrade rule", () => {
-    for (const lane of ["**Findings**", "**Questions**", "**Pre-existing**", "**Verified clean**"]) expect(skill).toContain(lane);
+    for (const lane of ["**Findings**", "**Suspicions**", "**Pre-existing**", "**Verified clean**"]) expect(skill).toContain(lane);
     expect(skill).toContain("degradation-no-evidence");
     expect(skill).toMatch(/lowers a `major` or\s+`blocker`/);
     expect(skill).toContain("## Degradation evidence screen");
@@ -82,10 +82,35 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
     expect(skill).toMatch(/`blocker`, `major`, `minor`, `info`/);
   });
 
-  test("the consumer set is the graph's, never the model's", () => {
+  test("the consumer set is the graph's first; search-found users are added and labelled", () => {
     expect(skill).toContain("keryx gdgraph affected");
-    expect(skill).toMatch(/graph's, not yours/);
+    expect(skill).toMatch(/Trace those first/);
+    expect(skill).toContain("`search-derived`");
     expect(skill).toMatch(/cap/);
+  });
+
+  test("reading is evidence: a traced trigger and outcome is a finding, major when a user gets a wrong result", () => {
+    expect(skill).toMatch(/`consumer-trace` and `base-diff` are still evidence/);
+    expect(skill).toMatch(/`major` when a user who reaches it\s+gets a wrong, lost or blocked result/);
+    expect(skill).toMatch(/I could not run it, so it is a question or a `minor`/);
+  });
+
+  test("a suspicion states its severity if true and a check; a major is refuted before it is filed", () => {
+    expect(skill).toMatch(/"If true: <major\|minor>, <outcome>"/);
+    expect(skill).toMatch(/"Check: <the one request, test or command that\s+settles it>"/);
+    expect(skill).toMatch(/\*\*Refute\*\* every candidate you would file as `blocker`, `major` or suspicion/);
+    expect(skill).toMatch(/A `major` without a refutation attempt in `evidence` is not ready/);
+  });
+
+  test("the sweep lists what a swapped mechanism did implicitly and what the work scales with", () => {
+    expect(skill).toMatch(/swaps a mechanism/);
+    expect(skill).toMatch(/what the old one did implicitly/);
+    expect(skill).toMatch(/and what it\s+scales with/);
+  });
+
+  test("a diff-vs-description gap is major at most, blocker only when the exposed change is one itself", () => {
+    expect(skill).toMatch(/`diff-vs-description` is `major` at most/);
+    expect(skill).toMatch(/`blocker` only when the change it exposes has a blocker shape/);
   });
 
   test("it is generic: no project-specific rule name, path, PR number or reviewer name", () => {

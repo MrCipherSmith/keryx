@@ -30,7 +30,6 @@ How this differs from `review-regression`, before anything else:
 | Looks at | dependents of the change only | the diff itself plus the importers of each changed shared export's module |
 | Floor | `major`; below it the ingest screen refuses the finding | none: `blocker`, `major`, `minor`, `info` |
 | Set | the blast-radius files, refused in code if outside them | the consumers `keryx gdgraph affected` lists, never chosen by you |
-| Question | does the change break something that worked | is the code worse than on the base, and can you show it |
 
 `review-regression` is untouched by this reviewer and keeps its own screen. Do not re-file its findings; do not widen yours into its question.
 
@@ -71,51 +70,54 @@ minor, major or blocker carries one `evidence_kind`, and `evidence` says what yo
 | `base-diff` | you read the same path on base and on head and quote both |
 
 `probe`, `red-test` and `merge-trace` run code, so they need `allowed_tools` to include
-`run-tests` and run in its sandbox. Without it, use `consumer-trace` or `base-diff`,
-or file a question.
+`run-tests`. Without it, `consumer-trace` and `base-diff` are still evidence: a trigger and outcome you
+read in the code is a finding, `major` when a user who reaches it gets a wrong, lost or blocked result.
+A question is for what the code cannot answer (a backend reply, data, timing), not for what you did not run.
 
 This is enforced, not requested. `keryx review ingest` lowers a `major` or
 `blocker` of this reviewer that has no `evidence_kind` to `info`, marks it unproven
 and lists it in `scope.md` under `## Degradation evidence screen` with the rule
-`degradation-no-evidence`. It is not rejected: a true claim survives, labelled. A
-finding with evidence keeps its severity; findings of other reviewers are not touched.
-Without a way to show it, file `info`, or a question.
+`degradation-no-evidence`. A true claim survives, labelled; other reviewers' findings are not touched.
 
 ## What you are given
 
 - the diff, and the PR description when there is one;
-- the importers of the module that holds each changed shared export (and of a barrel
-  that re-exports it), from the code graph, under one cap shared by all exports, with
-  what it dropped. The set is the graph's, not yours: trace those. If the cap
-  dropped consumers, say so in your summary; do not imply a complete sweep;
+- the importers of the module that holds each changed shared export (and of a barrel that re-exports it), from the code graph, under one cap shared by all exports, with what it dropped. Trace those first. If the cap dropped consumers, say so in your summary; do not imply a complete sweep.
+  Where the graph lists no importers for a changed export (a barrel, a re-export, a file it has no node for), search for the users of the symbol, mark them `search-derived` in `enumeration_method`, and name in the summary the exports the graph could not answer;
 - the flow's frozen acceptance criteria, and the previous round's findings.
-
-A change to a file the graph has no node for (a skill, a schema, a config) has no
-computed consumers. That is recorded as unresolved, not as clean; say the set could
-not answer the question.
 
 ## How to look
 
-1. Read the diff against the description. Anything the description calls unchanged
-   and the diff edits is a `diff-vs-description` candidate.
-2. For each changed shared symbol, read its consumers before the symbol: the
-   assumption sits at the consumer, and the change moves what the consumer receives.
-3. Compare behaviour, not text. An event, a default, a fallback, an ordering, a
-   number of times a step runs: show it on head and on base.
-4. Count work per trigger: what runs on each keystroke, render, request.
-5. For each test the change added or leaned on, ask whether it would fail if the
+Two passes, in this order. Done when every candidate of the sweep is filed, refuted or placed in a lane with its reason.
+
+1. **Sweep**, no severity floor. Read the diff against the description: anything it calls
+   unchanged and the diff edits is a `diff-vs-description` candidate. For each changed shared
+   symbol, default, stored field, mode or signature, read its consumers before the symbol: the
+   assumption sits at the consumer, and the change moves what the consumer receives. When the
+   change swaps a mechanism (a native attribute for a custom one, a reset on load for a rule, sync
+   for async), list what the old one did implicitly (styling and focus keyed on it, form submit, an
+   event default, a reset of dependent fields) and check the new path still does each. Compare
+   behaviour, not text (an event, a default, a fallback, an ordering, how many times a step runs):
+   show it on head and on base. Count work per trigger (each keystroke, render, request) and what it
+   scales with. For each test the change added or leaned on, ask whether it would fail if the
    regression were real.
+2. **Refute** every candidate you would file as `blocker`, `major` or suspicion. Try to prove
+   yourself wrong with a `file:line` read: does the base do the same on this path, is there a
+   guard upstream or downstream, does a comment, commit or sibling give a reason (law 4), does
+   the description name it. Put the attempt in `evidence` ("refute: read a.ts:12, no guard").
+   What survives keeps its severity; what falls is dropped or goes to pre-existing.
 
 ## Output lanes
 
 Four lanes, no more:
 
 - **Findings**: worse than base, with a class, evidence and `class_scope`.
-- **Questions**: `info` with `publication: "question"` when you suspect and cannot
-  show. A question is not a weak finding; it is a different thing to the reader.
+- **Suspicions**: `info` with `publication: "question"` when the trigger or the outcome sits
+  outside the code (a backend reply, data, timing) and you cannot show it. `problem` ends with
+  "If true: <major|minor>, <outcome>"; `fix` is "Check: <the one request, test or command that
+  settles it>", which the author can run. Without both it is noise, not a suspicion.
 - **Pre-existing**: `location_class: "pre-existing"`. True, not caused by this change, not blocking.
-- **Verified clean**: in `summary`, one line per thing traced, and each line names
-  what was traced (the symbol, the consumers, the command). Silence must not read as "nothing found".
+- **Verified clean**: in `summary`, one line per thing traced, naming it (the symbol, the consumers, the command).
 
 ## Class scope: required for `blocker` and `major`
 
@@ -141,7 +143,7 @@ class_scope:
 - **Fix**: concrete suggestion
 ```
 
-Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; no table here. When dispatched, follow the `reviewer-input.schema.json` payload and return a `REVIEW_RESULT` object compatible with
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md` (`blocker` is its four merge-blocking shapes; `major` and `minor` split on the trigger-and-outcome test); no table here. A `diff-vs-description` is `major` at most, `blocker` only when the change it exposes has a blocker shape itself. When dispatched, follow the `reviewer-input.schema.json` payload and return a `REVIEW_RESULT` object compatible with
 `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess. On a FIX slice, also return `prior_dispositions: [{id, disposition}]` for every attached finding id.
 
 ### Shared laws (every reviewer)
@@ -151,21 +153,17 @@ Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; 
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
-Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severity (canonical)**. This reviewer does not restate them: `blocker` is the four merge-blocking shapes named there and nothing else, and the `major`/`minor` boundary is the trigger-and-outcome test.
-
 ---
 
 ## Red Flags
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "It looks worse, so it is a `major`." | Without an `evidence_kind` the ingest lowers it to `info` and marks it unproven. Show it, or file it as a question. |
+| "My first read is enough for a `major`." | Pass 2 tries to refute it first: the base, a guard, a stated reason. A `major` without a refutation attempt in `evidence` is not ready. |
 | "This code was already messy, and the change sits next to it." | Worse than the base is the question. Pre-existing goes in its own lane, not in findings. |
-| "I will name the consumers I think matter." | The consumer list is the graph's. A model-chosen set is the sweep that misses the consumer nobody thought of. |
-| "The set was capped, but I covered the important ones." | The cap is recorded. If it dropped consumers, say so; a report that implies a full sweep over a truncated set is a false claim about coverage. |
-| "The description says nothing changed, so I will trust it." | Reading the description against the diff is the check. `diff-vs-description` is a class because the two disagree often. |
+| "I will name the consumers I think matter." | The graph's list comes first. A model-chosen set is the sweep that misses the consumer nobody thought of; extra users you find by search are added, labelled `search-derived`. |
+| "I could not run it, so it is a question or a `minor`." | A traced trigger and outcome is a finding without a run, and `major` when a user gets a wrong, lost or blocked result. Ask only what the code cannot answer. |
 | "The new test passes, so the change is covered." | A test that uses the one input that works cannot see the regression. Ask whether it fails when the behaviour is wrong. |
-| "No findings, so I will say nothing about what I looked at." | Silence reads as "nothing found". Every verified-clean line names what was traced. |
 
 ---
 
@@ -176,7 +174,7 @@ Report done only once all of these hold:
 - Every finding has one `degradation_class` and one `evidence_kind`, and `evidence` says what was run or read.
 - Every `blocker` and `major` carries `class_scope` whose `enumeration_method` is the walk over the graph's consumer list.
 - Every consumer in the payload was traced, or the summary says which were not and why, and whether the cap dropped any.
-- Anything you could not show is `info`, a question, or pre-existing, not a `major`.
+- Every `major`, `blocker` and suspicion names its refutation attempt; every suspicion has "If true" and "Check".
 - The summary has a verified-clean line for each thing traced without a finding, naming what was traced.
 
 <!-- keryx:layers-block:start -->
