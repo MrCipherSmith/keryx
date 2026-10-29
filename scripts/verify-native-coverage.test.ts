@@ -132,7 +132,8 @@ test.skipIf(!launcher.available)(`release guard re-executes the committed invent
   const tampered = structuredClone(descriptor); tampered.earned.push("connect.select");
   expect(checkEmbeddedDescriptor(verification, tampered, false)).toEqual({ ok: false, code: "descriptor-tampered" });
   expect(checkEmbeddedDescriptor(verification, undefined, false)).toEqual({ ok: false, code: "descriptor-missing" });
-}, 180_000);
+  // One full re-execution of every committed variant: about 140 s on a developer machine and longer on the macOS CI runner.
+}, 600_000);
 
 test("shipped readiness validates only the embedded descriptor and fails closed when it is missing, tampered or not ready", async () => {
   const { hubMachineCommand } = await import("../src/commands/hub-machine");
