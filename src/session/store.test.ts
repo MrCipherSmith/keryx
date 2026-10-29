@@ -757,3 +757,36 @@ test("listSessions survives a session whose history generation is gone", () => {
     rmSync(proj, { recursive: true, force: true });
   }
 });
+
+
+test("WI-5: context and archive retain timestamp paths but redact neighboring phones", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-wi5-session-"));
+  try {
+    const handle = createSession({ cwd: proj, dataDir });
+    const stamp = "2026-10-25T" + ["08", "19", "00", "123"].join("-") + "Z";
+    const artifact = `gdctx/${stamp}-abcdef_tool.txt`;
+    const phone = ["415", "555", "2671"].join("-");
+    persistHistory(handle, [
+      { role: "tool", content: `${artifact} / ${phone}`, provenance: "tool", toolCallId: "wi5" },
+      {
+        role: "assistant", content: artifact, provenance: "model",
+        toolCalls: [{ id: "wi5-read", name: "read_file", arguments: JSON.stringify({ path: artifact }) }],
+      },
+    ]);
+    for (const file of ["context.jsonl", "archive.jsonl", "transcript.jsonl"]) {
+      const raw = readFileSync(path.join(handle.dir, file), "utf8");
+      expect(raw).toContain(artifact);
+      expect(raw).not.toContain(phone);
+      expect(raw).toContain("[REDACTED:phone]");
+    }
+    for (const history of [loadContext(proj, handle.summary.id, dataDir), loadArchive(proj, handle.summary.id, dataDir)]) {
+      expect(history[0]?.content).toContain(artifact);
+      expect(history[0]?.content).not.toContain(phone);
+      expect(history[1]?.toolCalls?.[0]?.arguments).toBe(JSON.stringify({ path: artifact }));
+    }
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});

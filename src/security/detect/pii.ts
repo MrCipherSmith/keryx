@@ -1150,14 +1150,69 @@ function hasPhoneSeparatorShape(value: string): boolean {
 // The detector matches that came from a phone rescan.
 const rescanTag = new WeakSet<DetectorMatch>();
 
+type TimestampSpan = { start: number; end: number };
+type TimestampContext = {
+  spans: readonly TimestampSpan[];
+  first: number;
+  original?: (start: number, end: number) => [number, number];
+};
+
+// Parse only the original ASCII spelling. Each attempt examines a bounded window,
+// so malformed or repeated starts cannot make the timestamp pass quadratic.
+function timestampSpans(content: string): TimestampSpan[] {
+  const spans: TimestampSpan[] = [];
+  const extended = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(:)(\d{2})\5(\d{2})(?:([.,])(\d{1,9}))?(Z|[+-]\d{2}(?::?\d{2})?)?/;
+  const filename = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(-)(\d{2})\5(\d{2})(?:([.,]|-(?!\d{2}:))(\d{1,9}))?(Z|[+-]\d{2}(?::?\d{2})?)?/;
+  const compact = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(?:[.,](\d{1,9}))?(Z)?/;
+  for (let start = 0; start < content.length; start += 1) {
+    if (!/[0-9]/.test(content[start] ?? "") || /[0-9]/.test(content[start - 1] ?? "")) continue;
+    const sample = content.slice(start, start + 64);
+    const separated = (sample[13] === ":" ? extended : filename).exec(sample);
+    const match = separated ?? compact.exec(sample);
+    if (match === null) continue;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[separated === null ? 5 : 6]);
+    const second = Number(match[separated === null ? 6 : 7]);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (year === 0 || month < 1 || month > 12 || day < 1 || day > (days[month - 1] ?? 0)
+      || hour > 23 || minute > 59 || second > 59) continue;
+    let zone = match[separated === null ? 8 : 10] ?? "";
+    // A terminal two/four digit hyphen group can be an offset, not a fraction.
+    // Fail closed when that ambiguous spelling would be an invalid offset.
+    if (separated?.[8] === "-" && zone === "" && (separated[9]?.length === 2 || separated[9]?.length === 4)) {
+      zone = "-" + separated[9];
+    }
+    if (zone !== "" && zone !== "Z") {
+      const digits = zone.slice(1).replace(":", "");
+      if (Number(digits.slice(0, 2)) > 23 || Number(digits.slice(2) || "0") > 59) continue;
+    }
+    const end = start + match[0].length;
+    const next = content[end] ?? "";
+    const producer = zone === "Z" && /^-[a-fA-F0-9]{6}_[A-Za-z]/.test(content.slice(end, end + 9));
+    // Reject malformed continuations rather than exempting their valid prefix.
+    // Filename extensions and the ctx producer nonce are explicit delimiters.
+    if (/[A-Za-z0-9:+,\u0080-\uffff]/.test(next) || (next === "-" && !producer)
+      || (next === "." && !/^[.][A-Za-z]/.test(content.slice(end, end + 2)))) continue;
+    spans.push({ start, end });
+    start = end - 1;
+  }
+  return spans;
+}
+
 function scanWith(
   content: string,
   rule: Rule,
   scanner: Scanner,
   validate: ((value: string) => boolean) | undefined,
   accept: ExtraScan["accept"],
+  timestamps?: TimestampContext,
 ): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
+  let timestampIndex = timestamps?.first ?? 0;
   scanner.reset?.();
   scanner.lastIndex = 0;
   let m: ScanMatch | null;
@@ -1174,6 +1229,15 @@ function scanWith(
     }
     const start = group === 0 ? m.index : m.index + (m[0] as string).indexOf(value);
     const end = start + value.length;
+    // Filter before extra-scanner and normalized-view coalescing, and only for phones.
+    if (rule.policyId === "pii.phone" && timestamps !== undefined) {
+      const [a, b] = timestamps.original?.(start, end) ?? [start, end];
+      while (timestampIndex < timestamps.spans.length && (timestamps.spans[timestampIndex] as TimestampSpan).end <= a) {
+        timestampIndex += 1;
+      }
+      const span = timestamps.spans[timestampIndex];
+      if (span !== undefined && span.start <= a && b <= span.end) continue;
+    }
     if ((rule.accept && !rule.accept(content, start, end)) || (accept && !accept(content, start, end))) {
       if (m.index === scanner.lastIndex) {
         scanner.lastIndex += 1;
@@ -1202,8 +1266,8 @@ function scanWith(
   return matches;
 }
 
-function scanRule(content: string, rule: Rule): DetectorMatch[] {
-  const matches = scanWith(content, rule, rule.regex, rule.validate, undefined);
+function scanRule(content: string, rule: Rule, timestamps?: TimestampContext): DetectorMatch[] {
+  const matches = scanWith(content, rule, rule.regex, rule.validate, undefined, timestamps);
   if (rule.also === undefined) {
     return matches;
   }
@@ -1211,7 +1275,7 @@ function scanRule(content: string, rule: Rule): DetectorMatch[] {
   // still reported, and spans that overlap become one.
   let result = matches;
   for (const extra of rule.also) {
-    const found = scanWith(content, rule, extra.regex, extra.validate ?? rule.validate, extra.accept);
+    const found = scanWith(content, rule, extra.regex, extra.validate ?? rule.validate, extra.accept, timestamps);
     const added = found.filter((match) => !containedIn(result, match.start, match.end));
     if (added.length > 0) {
       result = coalesce(content, [...result, ...added].sort((x, y) => x.start - y.start || y.end - x.end));
@@ -1220,8 +1284,8 @@ function scanRule(content: string, rule: Rule): DetectorMatch[] {
   return result;
 }
 
-function scanRules(content: string): DetectorMatch[][] {
-  return RULES.map((rule) => scanRule(content, rule));
+function scanRules(content: string, timestamps?: TimestampContext): DetectorMatch[][] {
+  return RULES.map((rule) => scanRule(content, rule, timestamps));
 }
 
 // ---------------------------------------------------------------------------
@@ -1508,7 +1572,8 @@ function viewsOf(content: string, nonAscii: boolean): ViewOptions[] {
 }
 
 export function detectPii(content: string): DetectorMatch[] {
-  const perRule = scanRules(content);
+  const spans = timestampSpans(content);
+  const perRule = scanRules(content, { spans, first: 0 });
   const nonAscii = NON_ASCII.test(content);
   if (nonAscii) {
     // An address the Unicode flavour reads differently (it ends at a letter or digit the ASCII rule stopped at)
@@ -1523,6 +1588,7 @@ export function detectPii(content: string): DetectorMatch[] {
   }
   const views = viewsOf(content, nonAscii);
   for (const options of views) {
+    let timestampFirst = 0;
     for (let from = 0; from < content.length; ) {
       let start = from;
       let to = Math.min(content.length, from + NORMALIZE_CHUNK);
@@ -1534,7 +1600,14 @@ export function detectPii(content: string): DetectorMatch[] {
       }
       const window = normalizeWindow(content, start, to, options);
       if (window !== null) {
-        const extra = scanRules(window.text);
+        while (timestampFirst < spans.length && (spans[timestampFirst] as TimestampSpan).end <= start) {
+          timestampFirst += 1;
+        }
+        const extra = scanRules(window.text, {
+          spans,
+          first: timestampFirst,
+          original: (a, b) => toOriginal(window, content, a, b),
+        });
         extra.forEach((found, index) => {
           if (options.breaks && !NUMBER_RULES.has(index)) {
             return; // a line break next to a dot is not a reason to read an address or a name differently
