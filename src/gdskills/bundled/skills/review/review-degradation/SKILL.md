@@ -71,8 +71,9 @@ minor, major or blocker carries one `evidence_kind`, and `evidence` says what yo
 | `base-diff` | you read the same path on base and on head and quote both |
 
 `probe`, `red-test` and `merge-trace` run code, so they need `allowed_tools` to include
-`run-tests` and run in its sandbox. Without it, use `consumer-trace` or `base-diff`,
-or file a question.
+`run-tests`. Without it, `consumer-trace` and `base-diff` are still evidence: when the trigger
+and the outcome both follow from code you read, that is a finding, `minor` or `major`. A question
+is for what the code you can read cannot answer (a backend reply, data, timing), not for what you did not run.
 
 This is enforced, not requested. `keryx review ingest` lowers a `major` or
 `blocker` of this reviewer that has no `evidence_kind` to `info`, marks it unproven
@@ -86,13 +87,11 @@ Without a way to show it, file `info`, or a question.
 - the diff, and the PR description when there is one;
 - the importers of the module that holds each changed shared export (and of a barrel
   that re-exports it), from the code graph, under one cap shared by all exports, with
-  what it dropped. The set is the graph's, not yours: trace those. If the cap
-  dropped consumers, say so in your summary; do not imply a complete sweep;
+  what it dropped. Trace those first. If the cap dropped consumers, say so in your summary;
+  do not imply a complete sweep. Where the graph lists no importers for a changed export
+  (a barrel, a re-export, a file it has no node for), search for the users of the symbol,
+  mark them `search-derived` in `enumeration_method`, and name in the summary the exports the graph could not answer;
 - the flow's frozen acceptance criteria, and the previous round's findings.
-
-A change to a file the graph has no node for (a skill, a schema, a config) has no
-computed consumers. That is recorded as unresolved, not as clean; say the set could
-not answer the question.
 
 ## How to look
 
@@ -161,7 +160,8 @@ Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severi
 |----------------|-----------------|
 | "It looks worse, so it is a `major`." | Without an `evidence_kind` the ingest lowers it to `info` and marks it unproven. Show it, or file it as a question. |
 | "This code was already messy, and the change sits next to it." | Worse than the base is the question. Pre-existing goes in its own lane, not in findings. |
-| "I will name the consumers I think matter." | The consumer list is the graph's. A model-chosen set is the sweep that misses the consumer nobody thought of. |
+| "I will name the consumers I think matter." | The graph's list comes first. A model-chosen set is the sweep that misses the consumer nobody thought of; extra users you find by search are added, labelled `search-derived`. |
+| "I could not run it, so it is only a question." | A traced trigger and outcome is a finding without a run. Ask only what the code cannot answer. |
 | "The set was capped, but I covered the important ones." | The cap is recorded. If it dropped consumers, say so; a report that implies a full sweep over a truncated set is a false claim about coverage. |
 | "The description says nothing changed, so I will trust it." | Reading the description against the diff is the check. `diff-vs-description` is a class because the two disagree often. |
 | "The new test passes, so the change is covered." | A test that uses the one input that works cannot see the regression. Ask whether it fails when the behaviour is wrong. |
@@ -176,7 +176,7 @@ Report done only once all of these hold:
 - Every finding has one `degradation_class` and one `evidence_kind`, and `evidence` says what was run or read.
 - Every `blocker` and `major` carries `class_scope` whose `enumeration_method` is the walk over the graph's consumer list.
 - Every consumer in the payload was traced, or the summary says which were not and why, and whether the cap dropped any.
-- Anything you could not show is `info`, a question, or pre-existing, not a `major`.
+- Anything you could neither trace nor show is `info`, a question, or pre-existing, not a `major`.
 - The summary has a verified-clean line for each thing traced without a finding, naming what was traced.
 
 <!-- keryx:layers-block:start -->

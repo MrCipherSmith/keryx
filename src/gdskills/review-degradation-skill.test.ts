@@ -82,10 +82,16 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
     expect(skill).toMatch(/`blocker`, `major`, `minor`, `info`/);
   });
 
-  test("the consumer set is the graph's, never the model's", () => {
+  test("the consumer set is the graph's first; search-found users are added and labelled", () => {
     expect(skill).toContain("keryx gdgraph affected");
-    expect(skill).toMatch(/graph's, not yours/);
+    expect(skill).toMatch(/Trace those first/);
+    expect(skill).toContain("`search-derived`");
     expect(skill).toMatch(/cap/);
+  });
+
+  test("reading is evidence: a traced trigger and outcome is a finding without a run", () => {
+    expect(skill).toMatch(/`consumer-trace` and `base-diff` are still evidence/);
+    expect(skill).toMatch(/I could not run it, so it is only a question/);
   });
 
   test("it is generic: no project-specific rule name, path, PR number or reviewer name", () => {
