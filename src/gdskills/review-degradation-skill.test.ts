@@ -108,6 +108,11 @@ describe("flow 479 AC1/AC2: the review-degradation skill", () => {
     expect(skill).toMatch(/and what it\s+scales with/);
   });
 
+  test("a diff-vs-description gap is major at most, blocker only when the exposed change is one itself", () => {
+    expect(skill).toMatch(/`diff-vs-description` is `major` at most/);
+    expect(skill).toMatch(/`blocker` only when the change it exposes has a blocker shape/);
+  });
+
   test("it is generic: no project-specific rule name, path, PR number or reviewer name", () => {
     for (const forbidden of ["vantage", "presight", "b091", "mobx-stores", ".claude/rules"]) {
       expect(skill.toLowerCase()).not.toContain(forbidden);
