@@ -1,0 +1,41 @@
+{
+  "done": false,
+  "package": "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr",
+  "dispatches": [
+    {
+      "reviewer": "review-pr-contract",
+      "wave": 6,
+      "wavesLeft": 2,
+      "slices": [
+        "slice-04",
+        "slice-05",
+        "slice-06",
+        "slice-07"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-04.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-05.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-06.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-07.diff"
+      ],
+      "bytes": 53251,
+      "reason": "missing",
+      "detail": "DONE; 7 slice(s) are uncovered — dispatch the next wave (2 left), no attempt is spent",
+      "result": "raw/review-pr-contract-w6.txt",
+      "driver": "drivers/review-pr-contract-w2-payload.json"
+    }
+  ],
+  "notRun": [
+    {
+      "reviewer": "review-flow-graph",
+      "reason": "no reply recorded and no slice routed to it, so it never ran"
+    },
+    {
+      "reviewer": "review-layout",
+      "reason": "no reply recorded and no slice routed to it, so it never ran"
+    }
+  ],
+  "blocked": [],
+  "escalated": [],
+  "applied": false
+}

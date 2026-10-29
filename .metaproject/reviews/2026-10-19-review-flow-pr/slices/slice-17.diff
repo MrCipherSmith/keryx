@@ -1,0 +1,355 @@
+--- src/review/estimate.ts
+@@ 13,19 @@
+ import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
+ import { requiredSlices, sliceGraph } from "./waves";
+ import { manifestRosterRoles, splitCounts } from "./round-split";
++import { HOST_QUESTION_SOURCES, type HostQuestion } from "./types";
+ 
+ /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
+ export const CHILD_DEADLINE_MINUTES = 5;
+
+--- src/review/estimate.ts
+@@ 186,193 @@
+ // `keryx review estimate --confirm --quote` at a terminal. Nothing else may write it.
+ // ---------------------------------------------------------------------------
+ 
+-export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal";
+-const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal"];
++export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal" | "host-question";
++const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal", "host-question"];
+ 
+ export type PlanConfirmation = {
+   planKey: string;
+
+--- src/review/estimate.ts
+@@ 199,215 @@
+   /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
+   pressedBy?: number | undefined;
+   pressedAt?: string | undefined;
++  /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
++  hostQuestion?: HostQuestion | undefined;
+ };
+ 
++function isHostQuestion(value: unknown): boolean {
++  if (value === null || typeof value !== "object") return false;
++  const hq = value as Record<string, unknown>;
++  const filled = (field: unknown): boolean => typeof field === "string" && field.trim() !== "";
++  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);
++}
++
+ function isPlanConfirmation(value: unknown): value is PlanConfirmation {
+   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+   const v = value as Record<string, unknown>;
+
+--- src/review/estimate.ts
+@@ 218,224 @@
+     && Array.isArray(v.minutes) && v.minutes.length === 2 && v.minutes.every((m) => typeof m === "number" && Number.isFinite(m))
+     && typeof v.quote === "string" && v.quote.trim() !== ""
+     && typeof v.confirmedVia === "string" && (CONFIRMED_VIA as readonly string[]).includes(v.confirmedVia)
++    && (v.confirmedVia !== "host-question" || isHostQuestion(v.hostQuestion))
+     && typeof v.at === "string" && v.at !== "";
+ }
+ 
+
+--- src/review/operator-decisions.ts
+@@ 18,24 @@
+ import path from "node:path";
+ import { withFileLock, writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+-import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
++import { HOST_QUESTION_SOURCES, cardPressFields, type CardPress, type ConfirmedVia, type HostQuestion } from "./types";
+ 
+ export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
+ /**
+
+--- src/review/operator-decisions.ts
+@@ 35,47 @@
+ /** Every kind the file may hold. */
+ export type AnyOperatorDecisionKind = OperatorDecisionKind | typeof PREMISE_DECISION_KIND;
+ 
+-/** How the operator's words reached the package: a shell card, its remote mirror, or a terminal prompt. */
+-export type OperatorDecisionVia = ConfirmedVia | "terminal";
+-const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal"];
++/**
++ * How the operator's words reached the package: a shell card, its remote mirror, a terminal prompt, or (flow 467) a
++ * question the host asked with its own tool and the agent recorded: weaker than a card, because keryx did not see the
++ * press and takes the question and the answer as the agent reports them. A record of it carries `hostQuestion`.
++ */
++export type OperatorDecisionVia = ConfirmedVia | "terminal" | "host-question";
++const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal", "host-question"];
+ 
+ /** Who answers a premise question. Both writers record this one label; how it was confirmed is `confirmedVia`. */
+ export const PREMISE_DECISION_ACTOR = "operator";
+
+--- src/review/operator-decisions.ts
+@@ 61,68 @@
+   confirmedVia: OperatorDecisionVia;
+   at: string;
+   subject?: OperatorDecisionSubject | undefined;
++  /** Set with `confirmedVia: "host-question"` only (flow 467); absent on every older record. */
++  hostQuestion?: HostQuestion | undefined;
+ } & CardPress;
+ 
+ /**
+
+--- src/review/operator-decisions.ts
+@@ 90,97 @@
+   subject: PremiseDecisionSubject;
+   /** Set when the answer was copied from an earlier round's package for a carried finding (flow 459): that package's path. */
+   carriedFrom?: string | undefined;
++  /** Set with `confirmedVia: "host-question"` only (flow 467); absent on every older record. */
++  hostQuestion?: HostQuestion | undefined;
+ } & CardPress;
+ 
+ /** What a writer passes: the store fills in the kind and the actor, so both writers record the same convention. */
+
+--- src/review/operator-decisions.ts
+@@ 107,124 @@
+   return text(subject.severity) && text(subject.verdict) && text(subject.problemSha256);
+ }
+ 
++/** A complete host question; one is required exactly when a record says it was confirmed by one. */
++function validHostQuestion(value: unknown): value is HostQuestion {
++  if (value === null || typeof value !== "object") return false;
++  const hq = value as Record<string, unknown>;
++  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && text(hq.ref) && text(hq.questionText) && text(hq.answerText) && text(hq.time);
++}
++
++/** Older records have no `hostQuestion`; a record that says `host-question` must carry a complete one. */
++function viaConsistent(d: Record<string, unknown>): boolean {
++  return d.confirmedVia === "host-question" ? validHostQuestion(d.hostQuestion) : true;
++}
++
+ function validPremise(entry: unknown): entry is PremiseQuestionDecision {
+   if (entry === null || typeof entry !== "object") return false;
+   const d = entry as Record<string, unknown>;
+
+--- src/review/operator-decisions.ts
+@@ 131,137 @@
+     text(d.at) &&
+     text(d.actor) &&
+     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
++    viaConsistent(d) &&
+     validPremiseSubject(d.subject)
+   );
+ }
+
+--- src/review/operator-decisions.ts
+@@ 144,150 @@
+     text(d.quote) &&
+     text(d.reason) &&
+     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
++    viaConsistent(d) &&
+     text(d.at) &&
+     (d.subject === undefined || validSubject(d.subject))
+   );
+
+--- src/review/operator-decisions.ts
+@@ 255,261 @@
+     ...cardPressFields(input),
+     subject: input.subject,
+     ...(input.carriedFrom === undefined ? {} : { carriedFrom: input.carriedFrom }),
++    ...(input.hostQuestion === undefined ? {} : { hostQuestion: input.hostQuestion }),
+   };
+   if (!validPremise(kept)) {
+     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
+
+--- src/review/plan-confirmation.ts
+@@ 19,25 @@
+   type RoundEstimate,
+ } from "./estimate";
+ import type { OperatorDecisionVia } from "./operator-decisions";
+-import { cardPressFields, type CardPress } from "./types";
++import { cardPressFields, type CardPress, type HostQuestion } from "./types";
+ 
+ export { PLAN_CONFIRMATION_FILE };
+ 
+
+--- src/review/plan-confirmation.ts
+@@ 30,37 @@
+   quote: string;
+   confirmedVia: OperatorDecisionVia;
+   at: string;
++  /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
++  hostQuestion?: HostQuestion | undefined;
+ } & CardPress;
+ 
+ /** The default threshold, as estimate.ts holds it (routing.config.json may change it per project). */
+
+--- src/review/plan-confirmation.ts
+@@ 66,75 @@
+ export async function recordPlanConfirmation(
+   packageDir: string,
+   estimate: PlanNumbers,
+-  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string } & CardPress,
++  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string; hostQuestion?: HostQuestion | undefined } & CardPress,
+ ): Promise<PlanConfirmation> {
+   if (confirmation.quote.trim() === "") throw new Error("a plan confirmation needs the operator's own words");
++  if (confirmation.confirmedVia === "host-question" && confirmation.hostQuestion === undefined) throw new Error("a host-question plan confirmation needs the question and the answer");
+   const record: PlanConfirmation = {
+     planKey: planKeyOf(estimate),
+     dispatches: estimate.dispatches,
+
+--- src/review/plan-confirmation.ts
+@@ 78,84 @@
+     confirmedVia: confirmation.confirmedVia,
+     ...cardPressFields(confirmation),
+     at: confirmation.at,
++    ...(confirmation.hostQuestion === undefined ? {} : { hostQuestion: confirmation.hostQuestion }),
+   };
+   await writeFileAtomic(path.join(packageDir, PLAN_CONFIRMATION_FILE), `${JSON.stringify(record, null, 2)}\n`);
+   return record;
+
+--- src/review/premise-question.ts
+@@ 10,16 @@
+ import { readJsonFileOr } from "../lib/json";
+ import { readPremiseDecisions, recordPremiseDecision, recordPremiseDecisionAfter, type AppliedFirst, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
+ import { isReviewPackageDir } from "./package-location";
+-import { cardPressFields, type CardPress } from "./types";
++import { cardPressFields, type CardPress, type HostQuestion } from "./types";
+ import { applyPremiseDecision, isHeldVerdict, latestPremiseDecision, premiseHoldState, premiseSubjectOf } from "./premise";
+ import { recordFinishedRound, registryVouchesPackage } from "./round-registry";
+ 
+
+--- src/review/premise-question.ts
+@@ 129,136 @@
+   quote: string;
+   at: string;
+   confirmedVia: OperatorDecisionVia;
++  /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
++  hostQuestion?: HostQuestion | undefined;
+ } & CardPress;
+ 
+ /**
+
+--- src/review/premise-question.ts
+@@ 159,165 @@
+ export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer, registry: RegistryOptions = {}): Promise<PremiseQuestionDecision> {
+   const { decision, applied: vouched } = await recordPremiseDecisionAfter(
+     packageDir,
+-    { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, ...cardPressFields(input), subject: input.finding.subject },
++    { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, ...cardPressFields(input), subject: input.finding.subject, ...(input.hostQuestion === undefined ? {} : { hostQuestion: input.hostQuestion }) },
+     (kept) => applyAnswerToFindings(packageDir, kept, registry),
+   );
+   if (vouched === true) reRecordRegistry(packageDir, registry);
+
+--- src/review/premise.ts
+@@ 697,703 @@
+     at: decision.at,
+     actor: decision.actor,
+     confirmedVia: decision.confirmedVia,
++    ...(decision.hostQuestion === undefined ? {} : { hostQuestion: decision.hostQuestion }),
+   };
+   const { disposition: existing, ...rest } = record;
+   const current = isRecord(existing) ? existing : undefined;
+
+--- src/review/premise.ts
+@@ 708,714 @@
+     ...(ownDismissal ? rest : record),
+     premise: { ...premise, operator },
+     ...(decision.answer === "dismiss" && open
+-      ? { disposition: { state: "dismissed-incorrect", evidence: `operator (${decision.confirmedVia}, ${decision.at}) on the premise question: ${decision.reason}` } }
++      ? { disposition: { state: "dismissed-incorrect", evidence: `operator (${decision.confirmedVia}${decision.hostQuestion === undefined ? "" : ` ${decision.hostQuestion.source}:${decision.hostQuestion.ref}`}, ${decision.at}) on the premise question: ${decision.reason}` } }
+       : {}),
+   } as unknown as T;
+ }
+
+--- src/review/readiness.ts
+@@ 18,24 @@
+ import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+ import { readRunProfile } from "./run-profile";
+ import type { PremiseQuestionDecision } from "./operator-decisions";
+-import { awaitingOperator, premiseHoldState } from "./premise";
++import { awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
+ import { premiseRecords } from "./verdict";
+ import { packageParityWarnings } from "./parity";
+ import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
+
+--- src/review/readiness.ts
+@@ 246,260 @@
+   const held = records.filter((finding) => premiseHoldState(finding, decisions) !== "none");
+   if (held.length === 0) return ok("no finding is held by the premise judge");
+   const awaiting = awaitingOperator(records, decisions);
+-  if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
++  if (awaiting.length === 0) {
++    // Flow 467: an answer the agent recorded from the host's own question is not a card press; say so and from where.
++    const hostQuestions = held.flatMap((finding) => {
++      const decision = latestPremiseDecision(finding, decisions);
++      return decision?.confirmedVia === "host-question" && decision.hostQuestion !== undefined ? [`${decision.hostQuestion.source}:${decision.hostQuestion.ref}`] : [];
++    });
++    const viaHost = hostQuestions.length === 0 ? "" : `; ${hostQuestions.length} confirmed via host-question (${hostQuestions.join(", ")}), not by a card`;
++    return ok(`${held.length} held finding(s), every one with an operator decision${viaHost}`);
++  }
+   const evidence = `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`;
+   // Before an ingest the held records come from raw results and premises.json, and the answer commands read
+   // findings.json only (review F-002): the first repair is the ingest.
+
+--- src/review/types.ts
+@@ 99,117 @@
+   };
+ }
+ 
++/**
++ * Flow 467: the hosts whose own question tool can carry an operator's answer to the four standalone review verbs.
++ * `keryx review <verb> --answered-by <source>:<ref>` names one of these.
++ */
++export const HOST_QUESTION_SOURCES = ["claude-code", "codex", "keryx-shell", "helyx-poll", "other"] as const;
++export type HostQuestionSource = (typeof HOST_QUESTION_SOURCES)[number];
++
++/**
++ * Flow 467: a question the host asked the operator and the answer that came back, kept verbatim next to the decision it
++ * produced. Set only with `confirmedVia: "host-question"`; it is what the agent reports, not something keryx verified.
++ */
++export type HostQuestion = { source: HostQuestionSource; ref: string; questionText: string; answerText: string; time: string };
++
+ export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+ 
+ export type ManagedReviewManifest = {
+
+--- src/review/types.ts
+@@ 444,450 @@
+  * What the operator answered to a held finding, as applied to the record: the fields of the `premise-question`
+  * decision it came from. The decision in the package's decisions store is the answer; this copy is its audit trail.
+  */
+-export type PremiseOperatorAnswer = Pick<PremiseQuestionDecision, "answer" | "reason" | "quote" | "at" | "actor" | "confirmedVia">;
++export type PremiseOperatorAnswer = Pick<PremiseQuestionDecision, "answer" | "reason" | "quote" | "at" | "actor" | "confirmedVia" | "hostQuestion">;
+ 
+ /**
+  * One premise judgement, as it is recorded on the finding. `severity` is present for
+
+--- src/trigger/unattended.ts
+@@ 113,132 @@
+   /\bloginctl\b/,
+ ];
+ 
++/**
++ * Flow 467: the four review verbs that take the operator's answer to a question the host asked (`--answered-by`). An
++ * unattended run has no operator to ask, so it never records one. The run's own environment refuses it too
++ * (`runOperatorCommand`); this is the floor under a command that never reaches that check.
++ */
++const HOST_QUESTION_VERBS = /\b(?:decide-premise|confirm-plan|waive-mutation|override-reviewers)\b/;
++const HOST_QUESTION_FLAG = /--answered-by\b/;
++
++/** True when `text` records a host question: one of the four verbs together with `--answered-by`, however quoted or wrapped. */
++function recordsHostQuestion(text: string): boolean {
++  const bare = text.replace(/["'\\]/g, "");
++  return HOST_QUESTION_VERBS.test(bare) && HOST_QUESTION_FLAG.test(bare);
++}
++
+ /** Git subcommands that move shared history, rewrite refs directly, or publish. */
+ const FORBIDDEN_GIT_VERBS = new Set(["push", "merge", "tag", "update-ref"]);
+ 
+
+--- src/trigger/unattended.ts
+@@ 173,183 @@
+   const text = command.trim();
+   if (text.length === 0) return undefined;
+ 
++  if (recordsHostQuestion(text)) {
++    return "`--answered-by` records the operator's answer to a question the host asked — an unattended run has no operator to ask, so it never records one";
++  }
++
+   for (const pattern of FORBIDDEN_FLOW_VERBS) {
+     const match = pattern.exec(text);
+     if (match !== null) {
+

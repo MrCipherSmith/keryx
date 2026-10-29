@@ -1,0 +1,130 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Completed static PR-contract review of assigned slices 04–07 at 5974c976823e1a7134723edf3a9140b991246d45. No substantiated disagreement between the original PR body and these slices. Historical-body context is resolved; this is not a role-wide completion claim.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-04",
+      "status": "DONE",
+      "coverage": "Read every supplied hunk of review-orchestrator/SKILL.md: four host-question acts, card preference, weaker provenance, plan confirmation, reviewer override and mutation waiver."
+    },
+    {
+      "id": "slice-05",
+      "status": "DONE",
+      "coverage": "Read every supplied hunk across review-orchestrator/SKILL.md, review-premise/SKILL.md and README.md. Held-finding instructions and public documentation support the original Summary."
+    },
+    {
+      "id": "slice-06",
+      "status": "DONE",
+      "coverage": "Read every supplied TM-04 hunk and pinned-source sections 6b–8. Explicitly documents reversal of section 5 for four acts, unverified provenance and unchanged completion/waiver paths."
+    },
+    {
+      "id": "slice-07",
+      "status": "DONE",
+      "coverage": "Read every supplied CLI-reference hunk and pinned-source host-question explanation. Flag syntax, recording metadata, card preference and exclusions agree with the original PR claims."
+    }
+  ],
+  "context_resolution": {
+    "historical_body": "RESOLVED. pr-body-history.json reports lastEditedAt null; pr-body-edits.json contains no edits and hasNextPage false. The supplied body is usable as the original PR contract.",
+    "previous_result": "Read raw/review-pr-contract-w5.txt fully. Independently reread assigned slices 04–07 against the original body; no missing-original-body request remains.",
+    "head_boundary": "The body-history response and pr-context.md name newer head 208a4d2. Neither that source tree nor its CI results were used as historical verification."
+  },
+  "claim_rows": [
+    {
+      "claim": "accept ... without a TTY and record confirmedVia: \"host-question\" ... plus a keryx decisions entry",
+      "state": "Summary assertion",
+      "diff_evidence": "TM-04 section 6b and the CLI-reference additions explicitly describe these flags, metadata and decisions entry.",
+      "expectation": "Documentation agrees within assigned scope; runtime implementation was not assessed by this dispatch."
+    },
+    {
+      "claim": "keryx does not verify the answer. This reverses TM-04 §5 ... the docs, limitations page and skills say so",
+      "state": "Summary assertion",
+      "diff_evidence": "Slice-04 says 'keryx does not verify them'; slice-06 explicitly reverses section 5 for four acts and explains invented answers; slices 05 and 07 disclose weaker provenance.",
+      "expectation": "Assigned documentation supports the disclosure. Limitations-page coverage belongs to another slice."
+    },
+    {
+      "claim": "review complete (and its --waive flags), unattended runs and a nested keryx still refuse",
+      "state": "Summary assertion",
+      "diff_evidence": "Slice-07 says complete and its waiver flags 'refuse these flags'; slice-06 preserves the existing plain-complete behavior and documents unattended/nested refusal.",
+      "expectation": "Read in context as refusal of the new host-question flags, not a new blanket TTY requirement for plain complete. No contradiction established."
+    },
+    {
+      "claim": "Skills ... TM-04 §6b, README, CLI reference and guides updated",
+      "state": "Summary assertion",
+      "diff_evidence": "Assigned slices update review-orchestrator, review-premise, TM-04, README and CLI reference.",
+      "expectation": "Named updates within this dispatch are present; job-orchestrator and guides are outside assigned slices."
+    },
+    {
+      "claim": "AC11 ... and AC12 ... follow after merge",
+      "state": "Explicit deferral",
+      "diff_evidence": "Assigned documentation does not claim those follow-ups were completed.",
+      "expectation": "No contrary assertion found in assigned scope."
+    }
+  ],
+  "checklist_rows": [
+    {
+      "claim": "bun test src/commands/review-host-question.test.ts (41 tests)",
+      "state": "[x]",
+      "diff_evidence": "No test implementation is in assigned slices 04–07.",
+      "expectation": "Execution and count not independently verified by this dispatch; scope absence is not a contradiction."
+    },
+    {
+      "claim": "existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+      "state": "[x]",
+      "diff_evidence": "Assigned slices contain documentation and skill changes, not those test suites.",
+      "expectation": "Historical execution remains unverified; no passing result inferred."
+    },
+    {
+      "claim": "bun test src/gdskills src/docs and the CLI reference coverage tests",
+      "state": "[x]",
+      "diff_evidence": "Assigned slices change skills and CLI documentation but supply no historical execution output.",
+      "expectation": "Execution unverified, not contradicted merely by absent logs."
+    },
+    {
+      "claim": "bun run typecheck",
+      "state": "[x]",
+      "diff_evidence": "No pinned-head typecheck output in assigned evidence.",
+      "expectation": "Execution unverified; newer CI excluded."
+    },
+    {
+      "claim": "review round",
+      "state": "[ ]",
+      "diff_evidence": "Assigned changes do not establish completion of a review round when the original body was written.",
+      "expectation": "No contradiction established."
+    }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "project_context_applied": [
+    "drivers/review-pr-contract-w6.json — read fully.",
+    ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md — read fully; quote-both-sides threshold and checklist requirements applied.",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully.",
+    "skills_resolve_context for assigned paths returned no must_read or on_demand entries.",
+    "pr-context.md, slices/manifest.json and complete slices 04–07.",
+    "research-evidence/pr-body-history.json, pr-body-edits.json and raw/review-pr-contract-w5.txt.",
+    "Pinned-source TM-04 and CLI-reference host-question sections."
+  ],
+  "verification": {
+    "reviewed_head": "5974c976823e1a7134723edf3a9140b991246d45",
+    "evidence_level": "static only",
+    "shell_commands_run": false,
+    "tests_run": false,
+    "files_modified": false,
+    "live_source_used": false,
+    "newer_ci_used_as_evidence": false,
+    "role_wide_completion_claimed": false
+  }
+}
+```
+
+**Parent summary:** Slices 04–07 are covered with no PR-contract findings and no open context request. Close the historical-body gap. Preserve the static-only evidence boundary; this result does not establish test execution or role-wide completion.
+KERYX_USAGE {"tokens_in":107637,"tokens_out":2594,"model":"openai-codex/gpt-6.1-sol","by":"host"}

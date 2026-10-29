@@ -1,0 +1,65 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Reviewed assigned slices 14–17 of historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45. No verifiable architectural violations found in the assigned changes. Host-question provenance is carried through review decision storage, premise application, readiness reporting and the finding contract; the weaker confirmation path is an explicit historical design decision.",
+  "slices": [
+    {
+      "id": "slice-14",
+      "status": "DONE",
+      "coverage": "Reviewed bundled job/review orchestration instruction changes and the separation between verified cards and agent-reported host answers."
+    },
+    {
+      "id": "slice-15",
+      "status": "DONE",
+      "coverage": "Reviewed remaining bundled review-orchestrator changes for plan confirmation, reviewer overrides, mutation waivers and held-premise decisions."
+    },
+    {
+      "id": "slice-16",
+      "status": "DONE",
+      "coverage": "Reviewed bundled premise-review instructions and finding-schema additions for host-question provenance."
+    },
+    {
+      "id": "slice-17",
+      "status": "DONE",
+      "coverage": "Reviewed review-domain provenance types, validation, persistence and propagation changes, plus the unattended shell refusal. Checked pinned supporting source for dependency direction and existing storage boundaries."
+    }
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    {
+      "path": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+      "application": "Read fully; applied diff-only scope, structural-review boundaries and deliberate-choice rules."
+    },
+    {
+      "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "application": "Read fully; applied reviewer-result output contract."
+    },
+    {
+      "path": ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-architecture-w3.json",
+      "application": "Read fully; restricted review to assigned slices and the historical pin."
+    },
+    {
+      "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "application": "Read fully; section 6b expressly accepts agent-reported host answers for four review acts while retaining the stronger card path and its distinct provenance."
+    }
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "limitations": [
+    "Source-only review; no tests, shell commands or edits performed.",
+    "Current pr-context files identify newer head 208a4d2faa4dfbf71b2992d027bda25762b34456. Their CI and test claims were not used as evidence for the historical pin.",
+    "Commit/blame history was not supplied or read; intentional design was checked against the pinned TM-04 decision record."
+  ],
+  "follow_ups": []
+}
+```
+
+Assigned slices completed with no architecture findings. This result does not assess other slices or establish runtime correctness.
+KERYX_USAGE {"tokens_in":175765,"tokens_out":2029,"model":"openai-codex/gpt-6.1-sol","by":"host"}

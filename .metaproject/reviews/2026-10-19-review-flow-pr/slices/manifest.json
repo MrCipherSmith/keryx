@@ -1,0 +1,519 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 18000,
+  "waveBytes": 54000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 12940,
+      "contentHash": "1c0c344ac8cdbfec0085aa4b8234edd44895589ba4bc87031d765a21ed939611",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json"
+      ],
+      "domain": ".metaproject",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/review-finding.schema.json"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 16990,
+      "contentHash": "a3abebb48705d371c9fa57046d7c00664d642aaa2d6816ad050be03e3e9a0b04",
+      "files": [
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 12182,
+      "contentHash": "ce29d81179cd7a0c81f62c0075022c66436c2244d738911f8203c7afc2906315",
+      "files": [
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 17911,
+      "contentHash": "1021368c2635f4210209539e4bb03908bc7b038bbd0dac9abb9e91319ddda846",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "hunk",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md"
+        ]
+      }
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 8643,
+      "contentHash": "c10198b70872816f1d178f15efee784de76f8e800311881fb75a99bfcb5128ad",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        "README.md"
+      ],
+      "domain": ".metaproject [docs], . [docs]",
+      "split": "hunk",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, .metaproject/skills/gdskills/review/review-premise/SKILL.md"
+        ]
+      }
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 10246,
+      "contentHash": "8fc77b7f72a78dc5b41c7b2d4bba6d43520d8a0f5616b390c02598fb04ca27bd",
+      "files": [
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md"
+      ],
+      "domain": "docs [docs]",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 16451,
+      "contentHash": "f8941e378b25ac3ab0e47bc771c3eb6a03b5aacaeebdbfa386a5ef84f4e86212",
+      "files": [
+        "docs/docs/cli-reference.md"
+      ],
+      "domain": "docs [docs]",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-highload",
+        "review-logic",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "audit sample: a light slice read deep to measure light routing"
+        ]
+      },
+      "audit": true
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 10697,
+      "contentHash": "348bb732246bfab34e60c118e4ba6b4d4eb89c693f6215c69218dd3aa4ccabc9",
+      "files": [
+        "docs/docs/guides/autonomous-review.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/docs/limitations.md",
+        "docs/requirements/keryx-card-any-host/prd.md"
+      ],
+      "domain": "docs [docs]",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-09",
+      "path": "slice-09.diff",
+      "bytes": 9215,
+      "contentHash": "078a37bd2623ec0ebfd13cc5505b6539020a25c7eb71e9a7766476295b67329d",
+      "files": [
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review-operator.ts"
+      ],
+      "domain": "src/commands",
+      "split": "hunk",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/operator-confirm-review.ts, src/commands/review-operator.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-10",
+      "path": "slice-10.diff",
+      "bytes": 12185,
+      "contentHash": "8db4733d70d72a2fcca9d1d1f6bf22030f638aaf054c4696704b1baf3cb9f6cd",
+      "files": [
+        "src/commands/review-operator.ts"
+      ],
+      "domain": "src/commands",
+      "split": "hunk",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/review-operator.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-11",
+      "path": "slice-11.diff",
+      "bytes": 17961,
+      "contentHash": "8b9ede8e4075ec9a1229b8c82937551f996cd3d625624464c852a974243632d5",
+      "files": [
+        "src/commands/review-host-question.test.ts"
+      ],
+      "domain": "src/commands [test]",
+      "split": "hunk",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-12",
+      "path": "slice-12.diff",
+      "bytes": 12841,
+      "contentHash": "6f8a3fb25acc4501f6988cf72500f08cd7ef01733e0054d1d3e24b9f94a9e7e3",
+      "files": [
+        "src/commands/review-host-question.test.ts"
+      ],
+      "domain": "src/commands [test]",
+      "split": "hunk",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-13",
+      "path": "slice-13.diff",
+      "bytes": 11201,
+      "contentHash": "fb2e0c57d1143b20cf767ab26948f9b1284f88e2808e1f957db5a6580cf99cc1",
+      "files": [
+        "src/decisions/journal.ts",
+        "src/decisions/report.ts",
+        "src/decisions/service.ts",
+        "src/decisions/sources.ts",
+        "src/decisions/types.ts"
+      ],
+      "domain": "src/decisions",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/decisions/journal.ts, src/decisions/report.ts, src/decisions/service.ts (+1)",
+          "schema: src/decisions/types.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-14",
+      "path": "slice-14.diff",
+      "bytes": 15668,
+      "contentHash": "0e9c1277dee44e49afb1ca9a0db792b4a7992222963be9f1f41c05cb7cf5a288",
+      "files": [
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": "src/gdskills [docs]",
+      "split": "hunk",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+        ]
+      }
+    },
+    {
+      "id": "slice-15",
+      "path": "slice-15.diff",
+      "bytes": 16809,
+      "contentHash": "8e04f8fb144b33af1ff4fd2ed2840156ceed0b1dacc6e73f2efb472305376d9b",
+      "files": [
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": "src/gdskills [docs]",
+      "split": "hunk",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+        ]
+      }
+    },
+    {
+      "id": "slice-16",
+      "path": "slice-16.diff",
+      "bytes": 2841,
+      "contentHash": "d6b45100a56b2ae5b2e242ee5376eae02c8e51f13b54fbff1e49a994c6785aca",
+      "files": [
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/gdskills/contracts/review-finding.schema.json"
+      ],
+      "domain": "src/gdskills [docs], src/gdskills",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/contracts/review-finding.schema.json",
+          "agent instructions: src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+          "schema: src/gdskills/contracts/review-finding.schema.json"
+        ]
+      }
+    },
+    {
+      "id": "slice-17",
+      "path": "slice-17.diff",
+      "bytes": 17251,
+      "contentHash": "863790510934a2516e4c943509506c5fa1037980af90e125782b5f0ab1523014",
+      "files": [
+        "src/review/estimate.ts",
+        "src/review/operator-decisions.ts",
+        "src/review/plan-confirmation.ts",
+        "src/review/premise-question.ts",
+        "src/review/premise.ts",
+        "src/review/readiness.ts",
+        "src/review/types.ts",
+        "src/trigger/unattended.ts"
+      ],
+      "domain": "src/review, src/trigger",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/estimate.ts, src/review/operator-decisions.ts, src/review/plan-confirmation.ts (+4)",
+          "schema: src/review/types.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 17,
+    "bytes": 222032,
+    "files": 40,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "keryx-shell"
+}

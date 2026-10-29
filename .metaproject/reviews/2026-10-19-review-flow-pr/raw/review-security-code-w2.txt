@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Reviewed assigned slices 07, 09, 10 and 13 against pinned-source at 5974c976823e1a7134723edf3a9140b991246d45. Found one consent-validation weakness. Assigned-slice review is complete; overall review-security-code role scope is incomplete because this dispatch covers only these four slices. No tests, shell commands or edits performed; newer-head CI was not used as evidence.",
+  "findings": [
+    {
+      "id": "SEC-W2-001",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "function refuseDecline(answerText: string, verb: HostVerb): void {\n  const words = wordsOf(answerText);\n  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "The three non-premise host-question verbs accept any nonblank answer whose first word is not in LEAD_DECLINE, rather than requiring the confirming option. In particular, `keep` is explicitly the declining option for waive-mutation and override-reviewers, but `--answer-text keep` with --answer omitted passes validation and records the waiver or override. Arbitrary free text such as `maybe` also confirms a plan when its question contains the current estimate numbers. The journal then unconditionally records the confirming choice, contradicting the preserved answer.",
+      "impact": "A host integration or agent that forwards the operator's actual declining option through the advertised answer-text interface can relax review gates against the operator's decision. Exploitation requires that caller to invoke the affirmative verb for the negative answer; this review does not establish an external attack path or treat the deliberately accepted ability of a hostile same-user agent to fabricate answers as a new vulnerability.",
+      "attack_vector": "An agent or host adapter submits `keryx review waive-mutation --package <valid-attended-package> --reason <reason> --answered-by codex:q1 --question-text \"Waive or keep the mutation pass?\" --answer-text keep`, omitting --answer as permitted. The command records a mutation waiver and journals choice waive despite the supplied operator answer selecting keep. override-reviewers has the same path.",
+      "suggested_fix": "Validate an explicit affirmative choice for each non-premise verb before writing. Reject keep, ambiguous/free-text responses and conflicting choices; do not infer confirmation solely from the absence of a leading negative word. Add refusal cases for answer-text keep on both waiver verbs and answer-text maybe on confirm-plan, checking that neither package records nor journal entries are written.",
+      "evidence": "Static tracing of pinned-source src/commands/review-operator.ts: HOST_OPTIONS declares keep as the decline option for both waiver verbs; recordHostQuestion permits --answer to be omitted; refuseDecline only checks the first token against LEAD_DECLINE, which lacks keep; callers at lines 385 and 411 then install affirmative recorders, and answerDecision receives premiseAnswer ?? choices.confirm. Pinned operator-decisions.ts accepts these complete host-question records, and confirmedDecision returns them as gate decisions. TM-04 section 6b deliberately permits unverified host provenance, but separately promises that non-options/declines record nothing and that free text is not a decision. This finding concerns that validation promise, not the accepted weaker provenance. No execution performed.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:385 (confirm-plan)",
+          "src/commands/review-operator.ts:411 (waive-mutation and override-reviewers)"
+        ],
+        "enumeration_method": "Enumerated all four HostVerb entries in HOST_OPTIONS and every refuseDecline(answerText, command) call in pinned review-operator.ts. confirm-plan and the shared waiver/override branch lack affirmative-text validation. decide-premise at line 395 additionally invokes refuseOtherChoice and is not affected by this missing validation."
+      }
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    "slice-07",
+    "slice-09",
+    "slice-10",
+    "slice-13"
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (canonical severity)",
+    "Pinned TM-04 sections 4c and 6b",
+    "Pinned flow 467 acceptance criteria"
+  ],
+  "overall_role_scope_complete": false
+}
+```
+
+Parent handoff: Require explicit affirmative answer validation for the three non-premise verbs. Assigned slices are covered; consolidate with the remaining security-review dispatches before claiming overall role completion. Historical commit/blame history was not supplied or read.
+KERYX_USAGE {"tokens_in":281947,"tokens_out":2683,"model":"openai-codex/gpt-6.1-sol","by":"host"}

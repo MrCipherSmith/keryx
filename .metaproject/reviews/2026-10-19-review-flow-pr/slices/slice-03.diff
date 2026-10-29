@@ -1,0 +1,104 @@
+--- .metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md
+@@ 1,23 @@
++# Implementation Plan
++
++Status: approved scheme; details below are the implementer's starting point.
++
++## Approach
++
++One parser in `src/commands/review-operator.ts` reads `--answered-by`, `--answer-text`, `--question-text`. When `--answered-by` is present the verb skips `requireTerminal` and the terminal `ask`, builds the same question text from disk state as today, checks the supplied answer against the verb's options, and records through the existing recorders (`recordOperatorDecision`, `recordPlanConfirmation`, `answerPremiseQuestion`) with `confirmedVia: "host-question"` plus a `hostQuestion` object (source, ref, questionText, answerText). A second write goes to the `keryx decisions` journal. Refusals happen before any write. Unattended runs and `KERYX_TOOL_CALL=1` refuse the flag. `review complete` keeps its flag list.
++
++Rejected: a keryx-run card with its own press verification for hosts outside the shell (draft v1 of the PRD; the operator called it too heavy); an MCP card tool (operator: it must be a plain question every harness can ask).
++
++## Steps
++
++1. Type: add `"host-question"` to `OperatorDecisionVia` (and `ConfirmedVia` consumers) and a `hostQuestion` field on the records; keep older records readable.
++2. Verb flags and refusals for the four verbs (AC1-AC3, AC5, AC7); tests first.
++3. `keryx decisions` entry (AC6) and the report/`/decisions` display (AC8).
++4. Help text, skills (both bundled copies, line ceilings), TM-04, limitations, CLI reference, README, docs site (AC9, AC10).
++5. Record the PR 1052 decisions through the verb (AC11) after merge to the branch that carries the verb.
++
++## Risks
++
++- An agent can invent an answer; the record keeps the verbatim question, answer and poll or message id so a reviewer can check them against the Telegram log. keryx cannot.
++- Skill byte-identity and line-ceiling tests are tight; edit both copies together.
++- Existing tests assert the "needs a terminal" message: keep it byte-identical when the flag is absent.
+
+--- .metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md
+@@ 1186,1193 @@
+ ```
+ 
+ A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks
+-the job until answered. Ask the operator about each one as `review-orchestrator` "Wave
+-D" says; an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and
++the job until answered. Ask the operator about each one with the host's question tool and record the answer with `keryx review decide-premise --answered-by …` as `review-orchestrator` "Wave
++D" says (never send them to a terminal); an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and
+ `premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one
+ carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report
+ the HELD list; never let the loop end reading clean while HELD is non-empty.
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 663,669 @@
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+-11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
++11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere ask the operator with the host's question tool and record the answer with `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>" --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>"` (SKILL.md "Wave D"; the record reads `confirmedVia: "host-question"`). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+ `keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic). An agent completes a review only through that card; `keryx review complete` is for a human in a terminal. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 776,792 @@
+ A survivor is evidence for the finding that names it.
+ 
+ `keryx review complete` refuses while proposed mutants are unrun on an attended round, unless the
+-operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or `keryx review
+-waive-mutation --package <review-dir> --reason "<why>"` in their terminal (it writes
+-`operator-decisions.json`; a `dispatch.mutationWaiver` quote you write is not enough on a package
++operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or their answer to
++the host question recorded with `keryx review waive-mutation --package <review-dir> --reason "<why>"
++--answered-by … --answer-text … --question-text …` (it writes `operator-decisions.json`; a `dispatch.mutationWaiver` quote you write is not enough on a package
+ `keryx review start` created). Attended is what the start recorded in `run-profile.json`: every round
+ except `review start --unattended` and `keryx review run --autonomous`, which record `Not run: mutation
+ pass` without asking.
+ 
+-These operator gates (cards, terminal-only commands, plan confirmation, decision records) keep a
++These operator gates (cards, terminal-only commands, host questions, plan confirmation, decision records) keep a
+ cooperating agent from cutting corners and make every decision visible and attributable; they do not
+-stop a hostile same-user agent, which can fake a pty or write the JSON records itself (the TM-03/TM-04
+-boundary). The autonomous runner's mutation-gate exemption predates flow 457 and is kept on purpose.
++stop a hostile same-user agent, which can fake a pty, invent a host-question answer or write the JSON
++records itself (the TM-03/TM-04 boundary). The autonomous runner's mutation-gate exemption predates flow 457 and is kept on purpose.
+ 
+ `keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`
+ in `mutation-<n>.json`. The table then prints `Not run: N candidates` (and the report must carry
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 857,863 @@
+ 1. On a PR target read merged / approved / CI (`gh pr view <n> --json state,reviewDecision,statusCheckRollup`). Say in one line what the state means for the round: an approved PR with green CI can merge any minute, and a merged PR makes the rest of the round a post-merge audit.
+ 2. **Later, once the package and slices exist** (after `review scope`, `review start` and `review slice --package`, before the first reviewer starts): `keryx review required --mode all --scope .metaproject/data/review/scope.json --depth auto --package <review-dir>` prints the reviewer set and the depth it chose (see "Depth floor"); auto needs the file list and a line count, else the round is full. `keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>]` prints assignments, waves and a duration range; the manifest defaults to `<package>/slices/manifest.json`, then `.metaproject/data/review/slices/manifest.json`.
+ 3. Show the operator depth + estimate and the merge risk before the first dispatch. Attended: let them choose `full` over a light default. Unattended: record both in the report and continue.
+-4. **An over-threshold plan waits for the operator.** `estimate` flags a plan over `reviewPlan.maxDispatches` (default 40) or `reviewPlan.maxMinutes` (default 90) in `routing.config.json`; `dispatch-check --package` and `ledger build` refuse it (`REVIEWER_INPUT_PLAN_UNCONFIRMED`) until `<review-dir>/plan-confirmation.json` exists. Only the operator writes it: the `review_confirm_plan` card in keryx shell, or `keryx review confirm-plan --package <review-dir>` (or `keryx review estimate --package <review-dir> --confirm --quote "<their words>"`) in their terminal; both refuse without a TTY. Unattended, the plan is not dispatched: report the estimate and stop.
++4. **An over-threshold plan waits for the operator.** `estimate` flags a plan over `reviewPlan.maxDispatches` (default 40) or `reviewPlan.maxMinutes` (default 90) in `routing.config.json`; `dispatch-check --package` and `ledger build` refuse it (`REVIEWER_INPUT_PLAN_UNCONFIRMED`) until `<review-dir>/plan-confirmation.json` exists. Only the operator writes it: the `review_confirm_plan` card in keryx shell, or the operator's answer to the host question recorded with `keryx review confirm-plan --package <review-dir> --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>"` (`confirmedVia: "host-question"`), or `keryx review confirm-plan` / `keryx review estimate --package <review-dir> --confirm --quote "<their words>"` in their terminal (the terminal forms refuse without a TTY). Unattended, the plan is not dispatched: report the estimate and stop.
+ 
+ ## Early verdict — the verdict is interim until `complete`
+ 

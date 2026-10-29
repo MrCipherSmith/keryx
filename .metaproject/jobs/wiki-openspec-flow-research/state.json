@@ -1,0 +1,91 @@
+{
+  "phase": "COMPLETION",
+  "intent": "analyze",
+  "job_name": "wiki-openspec-flow-research",
+  "context": {
+    "project_dir": "/Users/Goodea/goodea/keryx"
+  },
+  "plan": {
+    "steps": [
+      {
+        "id": "analyze",
+        "type": "analyze",
+        "agent": "issue-analyzer",
+        "depends": [],
+        "status": "completed"
+      },
+      {
+        "id": "context",
+        "type": "context",
+        "agent": "context-collector",
+        "depends": [
+          "analyze"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "report",
+        "type": "report",
+        "agent": "orchestrator",
+        "depends": [
+          "context"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "proposal",
+        "type": "proposal",
+        "agent": "orchestrator",
+        "depends": [
+          "report"
+        ],
+        "status": "completed"
+      }
+    ]
+  },
+  "documentation": {
+    "job_path": ".metaproject/jobs/wiki-openspec-flow-research",
+    "documents_created": [
+      "analysis.md",
+      "verification-report.md"
+    ]
+  },
+  "metrics": {
+    "steps": [
+      {
+        "step_id": "analyze",
+        "retries": 0,
+        "started_at": "2026-10-24T21:10:40.227Z",
+        "status": "completed",
+        "completed_at": "2026-10-24T21:17:41.528Z",
+        "duration_ms": 421301
+      },
+      {
+        "step_id": "context",
+        "retries": 0,
+        "started_at": "2026-10-24T21:17:41.761Z",
+        "status": "completed",
+        "completed_at": "2026-10-24T21:20:10.424Z",
+        "duration_ms": 148663
+      },
+      {
+        "step_id": "report",
+        "retries": 0,
+        "started_at": "2026-10-24T21:20:10.697Z",
+        "status": "completed",
+        "completed_at": "2026-10-24T21:21:31.829Z",
+        "duration_ms": 81132
+      },
+      {
+        "step_id": "proposal",
+        "retries": 0,
+        "started_at": "2026-10-24T21:21:32.089Z",
+        "status": "completed",
+        "completed_at": "2026-10-24T21:21:32.366Z",
+        "duration_ms": 277
+      }
+    ]
+  },
+  "jobs_root": ".metaproject/jobs",
+  "updated_at": "2026-10-24T21:21:32.628Z"
+}

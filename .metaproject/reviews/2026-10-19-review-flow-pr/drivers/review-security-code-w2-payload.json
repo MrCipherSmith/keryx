@@ -1,0 +1,124 @@
+{
+  "review_context": {
+    "request": {
+      "task": "Historical PR1058 managed review; read-only; no local tests"
+    },
+    "git": {
+      "head": "5974c976823e1a7134723edf3a9140b991246d45",
+      "pinned_source": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+      "diff": ".metaproject/reviews/2026-10-19-review-flow-pr/pinned.diff"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+        ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        "README.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/docs/limitations.md",
+        "docs/requirements/keryx-card-any-host/prd.md",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review-host-question.test.ts",
+        "src/commands/review-operator.ts",
+        "src/decisions/journal.ts",
+        "src/decisions/report.ts",
+        "src/decisions/service.ts",
+        "src/decisions/sources.ts",
+        "src/decisions/types.ts",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/gdskills/contracts/review-finding.schema.json",
+        "src/review/estimate.ts",
+        "src/review/operator-decisions.ts",
+        "src/review/plan-confirmation.ts",
+        "src/review/premise-question.ts",
+        "src/review/premise.ts",
+        "src/review/readiness.ts",
+        "src/review/types.ts",
+        "src/trigger/unattended.ts"
+      ]
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "No execution or local tests; runtime verification not performed",
+        "PR context may describe a newer head: its CI is NOT evidence for historical 5974c976. Use pinned-source and pinned.diff only for code claims."
+      ]
+    }
+  },
+  "reviewer": "review-security-code",
+  "scope_mode": "diff",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "openai-codex",
+    "model": "gpt-6.1-sol",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "openrouter",
+      "candidates": [
+        "openai/gpt-4o-mini",
+        "google/gemini-2.0-flash-001",
+        "qwen/qwen-2.5-7b-instruct",
+        "meta-llama/llama-3.1-8b-instruct"
+      ],
+      "ranked": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "rank": -1
+        },
+        {
+          "model": "google/gemini-2.0-flash-001",
+          "rank": -1
+        }
+      ],
+      "session_rank": null,
+      "fallback_reason": "the session model \"minimax/minimax-m3\" carries no size marker the hints recognise, so no candidate can be called larger or smaller than it"
+    },
+    "routed": true
+  },
+  "budget": {
+    "max_findings": 30
+  },
+  "slices": [
+    "slice-07",
+    "slice-09",
+    "slice-10",
+    "slice-13"
+  ],
+  "pr_context": "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/pr-context.md",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0
+}

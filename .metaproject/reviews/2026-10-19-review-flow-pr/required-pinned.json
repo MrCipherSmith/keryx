@@ -1,0 +1,45 @@
+{
+  "mode": "all",
+  "depth": "full",
+  "required": [
+    "review-architecture",
+    "review-clean-code",
+    "review-core-boundaries",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-pr-contract",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "excluded": [
+    {
+      "reviewer": "review-backend",
+      "reason": "stack: none of [nestjs, prisma] detected in package.json (detected from /Users/Goodea/goodea/keryx/package.json (10 declared dependencies))"
+    },
+    {
+      "reviewer": "review-frontend",
+      "reason": "stack: none of [react, mobx] detected in package.json (detected from /Users/Goodea/goodea/keryx/package.json (10 declared dependencies))"
+    },
+    {
+      "reviewer": "review-frontend-conventions",
+      "reason": "stack: none of [react, mobx] detected in package.json (detected from /Users/Goodea/goodea/keryx/package.json (10 declared dependencies))"
+    },
+    {
+      "reviewer": "review-flow-graph",
+      "reason": "no-matching-paths: no scope-A file matches its path triggers"
+    },
+    {
+      "reviewer": "review-layout",
+      "reason": "no-matching-paths: no scope-A file matches its path triggers"
+    },
+    {
+      "reviewer": "review-regression",
+      "reason": "no blast radius computed for the package: there is no scope B to review"
+    }
+  ],
+  "filesKnown": true,
+  "depthReason": "auto: 40 files exceeds 5",
+  "depthRequested": "auto"
+}

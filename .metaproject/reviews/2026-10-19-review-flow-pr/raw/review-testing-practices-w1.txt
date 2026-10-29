@@ -1,0 +1,171 @@
+STATUS: DONE
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Reviewed slices 11 and 12 against pinned-source for head 5974c976823e1a7134723edf3a9140b991246d45. No substantiated testing-practices findings. Mutation execution and runtime verification were prohibited; no survivor or killed-mutant results are claimed.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-11",
+      "status": "COVERED",
+      "coverage": "Read all supplied test additions: host-question acceptance, source parsing, persisted records, refusals, package snapshots, premise choices and plan-number checks."
+    },
+    {
+      "id": "slice-12",
+      "status": "COVERED",
+      "coverage": "Read all supplied test additions: terminal compatibility, unattended and nested-process refusals, decisions journal/report, complete flag rejection, presentation and older-record compatibility."
+    }
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md — Severity (canonical)"
+  ],
+  "evidence": [
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "quote": "expect(snapshot(dir)).toEqual(before);",
+      "observation": "expectRefused checks package bytes after rejection and separately checks that the decisions journal does not exist."
+    },
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "quote": "expect(asked).toEqual([]);",
+      "observation": "The terminal-with-host-flags case checks both successful recording and the absence of an interactive prompt."
+    },
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "quote": "await writeRunProfile(dir, buildRunProfile({ unattended: true, env: {} }));",
+      "observation": "The package-profile refusal case uses the profile producer rather than manufacturing its JSON shape; environment and package refusals are exercised separately."
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "quote": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "observation": "Pinned production source confirms that the separate unattended fixtures target distinct operands."
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "quote": "return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;",
+      "observation": "Pinned reader explicitly distinguishes host-question records from older terminal/card records."
+    }
+  ],
+  "limitations": [
+    "No tests, shell commands, edits or mutation execution performed.",
+    "Mutation table: no executions; 0 mutated, all 16 proposed candidates unexecuted. No predicted outcomes are reported.",
+    "Candidate list covers selected load-bearing production gates exercised by these slices, not an exhaustive branch inventory of the entire PR.",
+    "pr-context.md identifies collection head 208a4d2faa4dfbf71b2992d027bda25762b34456, unlike the driver's pinned head. Its CI and test-plan claims were treated as background, not verification of 5974c976.",
+    "Pinned-source contains changed files only. src/review/premise-fixtures.ts was unavailable, so the heldFinding producer could not be independently checked. History was unavailable.",
+    "resolve-context returned no must_read or on_demand project documents."
+  ],
+  "mutant_candidates": [
+    {
+      "id": "TP-HQ-01",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (own.some((arg) => arg === \"--answered-by\" || arg.startsWith(\"--answered-by=\"))) {",
+      "replacement": "if (false) {"
+    },
+    {
+      "id": "TP-HQ-02",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (raw === undefined) return refuse();",
+      "replacement": "if (raw === undefined) return { source: \"other\", ref: \"missing\" };"
+    },
+    {
+      "id": "TP-HQ-03",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source) || ref === \"\") return refuse();",
+      "replacement": "if (ref === \"\") return refuse();"
+    },
+    {
+      "id": "TP-HQ-04",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source) || ref === \"\") return refuse();",
+      "replacement": "if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source)) return refuse();"
+    },
+    {
+      "id": "TP-HQ-05",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "replacement": "if (LEAD_DECLINE.has(words[0] as string)) {"
+    },
+    {
+      "id": "TP-HQ-06",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "replacement": "if (words.length === 0) {"
+    },
+    {
+      "id": "TP-HQ-07",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!named || namesOther || negated) {",
+      "replacement": "if (namesOther || negated) {"
+    },
+    {
+      "id": "TP-HQ-08",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!named || namesOther || negated) {",
+      "replacement": "if (!named || negated) {"
+    },
+    {
+      "id": "TP-HQ-09",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (!named || namesOther || negated) {",
+      "replacement": "if (!named || namesOther) {"
+    },
+    {
+      "id": "TP-HQ-10",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (env[\"KERYX_TOOL_CALL\"] === \"1\") {",
+      "replacement": "if (false) {"
+    },
+    {
+      "id": "TP-HQ-11",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "replacement": "if (readRunProfile(packageDir)?.mode === \"unattended\") {"
+    },
+    {
+      "id": "TP-HQ-12",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "replacement": "if (isAutonomousEnv(env)) {"
+    },
+    {
+      "id": "TP-HQ-13",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "} else if (answerArg !== undefined && answerArg !== choices.confirm) {",
+      "replacement": "} else if (false) {"
+    },
+    {
+      "id": "TP-HQ-14",
+      "file": "src/commands/review-operator.ts",
+      "anchor": "if (![estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every((value) => shown.has(String(value)))) {",
+      "replacement": "if (false) {"
+    },
+    {
+      "id": "TP-HQ-15",
+      "file": "src/review/operator-decisions.ts",
+      "anchor": "return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;",
+      "replacement": "return true;"
+    },
+    {
+      "id": "TP-HQ-16",
+      "file": "src/review/plan-confirmation.ts",
+      "anchor": "if (confirmation.confirmedVia === \"host-question\" && confirmation.hostQuestion === undefined) throw new Error(\"a host-question plan confirmation needs the question and the answer\");",
+      "replacement": ""
+    }
+  ]
+}
+```
+
+Both assigned slices are covered. No defects established; mutation efficacy remains unverified. Parent should preserve the pinned-head distinction and use the candidates only in a separately authorized execution phase.
+KERYX_USAGE {"tokens_in":229404,"tokens_out":3348,"model":"openai-codex/gpt-6.1-sol","by":"host"}

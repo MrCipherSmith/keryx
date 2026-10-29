@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-10-19T19:21:21.871Z - flow created
+- 2026-10-19T19:22:01.788Z - origin-set: unknown -> human-request; quote: "Это должен быть просто вопрос, все харнесы умеют это делать. И Claude может создавать вот тут вопрос/опрос, прям щас этим пользуемся."; source: helyx-channel message 214878, 2026-10-19 (Operator asked that every harness record review acts through its plain question tool)
+- 2026-10-19T19:22:53.157Z - task-added: T5: Tests first: host-question flags on the four verbs (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:22:53.701Z - task-added: T6: Implement flags, refusals and host-question record (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:22:54.189Z - task-added: T7: Decisions journal entry and report/modal display (AC6, AC8)
+- 2026-10-19T19:22:54.736Z - task-added: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
+- 2026-10-19T19:22:55.285Z - task-added: T9: Verify: run AC verification commands and the full local test slice for touched areas
+- 2026-10-19T19:22:55.808Z - task-added: T10: Review through the project review orchestrator and open the PR
+- 2026-10-19T19:23:00.022Z - frozen: 11 criteria; checksum recorded
+- 2026-10-19T19:23:00.027Z - warning: no verification kind on AC5 — add [verify: …] or accept them unclassified
+- 2026-10-19T19:23:00.602Z - started
+- 2026-10-19T19:23:10.187Z - ac-updated: AC5: "Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5`] · sensitive: failure-scenario" -> "Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5` · sensitive: failure-scenario]" (marker must be last on the line)
+- 2026-10-19T19:23:19.393Z - task-done: T1: Collect remaining context
+- 2026-10-19T19:23:19.923Z - task-done: T2: Implement per plan
+- 2026-10-19T19:23:20.357Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-19T19:23:20.800Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-19T19:23:21.243Z - task-depends-set: T6: dependsOn T5 (was empty) — tests first
+- 2026-10-19T19:23:21.881Z - task-depends-set: T7: dependsOn T6 (was empty) — journal entry builds on the verb
+- 2026-10-19T19:23:22.528Z - task-depends-set: T9: dependsOn T6, T7, T8 (was empty) — verify after implementation
+- 2026-10-19T19:23:23.159Z - task-depends-set: T10: dependsOn T9 (was empty) — review after verify
+- 2026-10-19T19:44:44.579Z - task-done: T5: Tests first: host-question flags on the four verbs (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:44:44.806Z - task-done: T6: Implement flags, refusals and host-question record (AC1-AC3, AC5, AC7)
+- 2026-10-19T19:44:45.037Z - task-done: T7: Decisions journal entry and report/modal display (AC6, AC8)
+- 2026-10-19T19:44:45.265Z - task-done: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
+- 2026-10-19T19:44:51.761Z - task-done: T9: Verify: run AC verification commands and the full local test slice for touched areas

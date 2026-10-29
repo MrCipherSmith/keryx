@@ -1,0 +1,39 @@
+STATUS: DONE
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "2 findings site-checked; site existence does not establish runtime behavior.",
+  "verifications": [
+    {
+      "finding": "2026-10-19-review-flow-pr#HL-W2-001",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Inspected only the pinned mirror at 5974c976. The named sites exist: review-operator.ts contains recordHostQuestion and calls openDecision followed by answerDecision; journal.ts contains findOpenTwin and openLocked, with openLocked returning resultOf(twin) when a twin is found. These site checks do not establish the alleged concurrent runtime outcome."
+    },
+    {
+      "finding": "2026-10-19-review-flow-pr#SEC-W2-001",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Inspected only the pinned mirror at 5974c976. The named validation/recorder sites exist: refuseDecline checks whether the first word is in LEAD_DECLINE; the confirm-plan and shared waiver/override branches call refuseDecline and assign affirmative recorders. These site checks do not establish runtime behavior."
+    }
+  ],
+  "stats": {
+    "confirmed": 0,
+    "refuted": 0,
+    "unverifiable": 2,
+    "not_checked": 0
+  }
+}
+```
+
+### Exact pinned-source quotes
+
+- **HL-W2-001 — `src/commands/review-operator.ts`:** `await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });`
+- **HL-W2-001 — `src/decisions/journal.ts`:** `if (twin !== undefined) return resultOf(twin);`
+- **SEC-W2-001 — `src/commands/review-operator.ts`:** `if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {`
+- **SEC-W2-001 — `src/commands/review-operator.ts`:** `refuseDecline(answerText, command);` (present in both the confirm-plan and shared waiver/override branches).
+
+Both supplied findings remain unchanged; site existence alone does not verify their behavioral claims. No tests, shell commands, or edits were performed.
+KERYX_USAGE {"tokens_in":211173,"tokens_out":1005,"model":"openai-codex/gpt-6-luna","by":"host"}

@@ -1,0 +1,74 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Reviewed assigned slices 14–17 at historical head 5974c976823e1a7134723edf3a9140b991246d45. One minor maintainability issue: the new HostQuestion validation duplicates the same record-shape checks in two modules. No major style findings. Source evidence came from research-evidence/pinned-source; newer pr-context CI was excluded. No shell commands, tests, or edits were performed; commit history was not read.",
+  "findings": [
+    {
+      "id": "STYLE-W4-001",
+      "severity": "minor",
+      "file": "src/review/estimate.ts",
+      "line": null,
+      "quote": "function isHostQuestion(value: unknown): boolean {\n  if (value === null || typeof value !== \"object\") return false;\n  const hq = value as Record<string, unknown>;\n  const filled = (field: unknown): boolean => typeof field === \"string\" && field.trim() !== \"\";\n  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);\n}",
+      "problem": "The newly added isHostQuestion in estimate.ts and validHostQuestion in operator-decisions.ts independently implement the same HostQuestion shape validation: source membership plus five nonblank string fields.",
+      "impact": "Maintainers must update two equivalent validators when the shared HostQuestion record changes, increasing maintenance effort and making their intended equivalence harder to see. This is a DRY observation, not a claim of an existing functional failure.",
+      "suggested_fix": "Extract one shared isHostQuestion(value: unknown): value is HostQuestion predicate into an appropriate shared review validation module and use it from both readers.",
+      "evidence": "At pin 5974c976823e1a7134723edf3a9140b991246d45, research-evidence/pinned-source/src/review/estimate.ts contains isHostQuestion and research-evidence/pinned-source/src/review/operator-decisions.ts contains validHostQuestion. Both newly added functions check HOST_QUESTION_SOURCES and ref, questionText, answerText, and time with equivalent trimmed-nonempty string predicates. Both additions appear in slice-17.diff. Surrounding comments describe the same completeness requirement and give no reason for separate implementations.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style-host-question-validator-duplication",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-14",
+      "status": "DONE",
+      "coverage": "Reviewed changed bundled job/review orchestration instructions for readability, naming, comments, and deliberate host-question provenance wording."
+    },
+    {
+      "id": "slice-15",
+      "status": "DONE",
+      "coverage": "Reviewed remaining changed bundled review-orchestrator instructions; did not treat intentional mirrored skill content as accidental duplication."
+    },
+    {
+      "id": "slice-16",
+      "status": "DONE",
+      "coverage": "Reviewed changed bundled premise instructions and hostQuestion schema additions for style and clarity."
+    },
+    {
+      "id": "slice-17",
+      "status": "DONE",
+      "coverage": "Reviewed changed review and unattended-command hunks for naming, readability, DRY, imports, comments, and console noise; reported equivalent duplicated validators once."
+    }
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    {
+      "path": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+      "application": "Read fully; applied style-only scope, diff-only findings, minor severity for duplication, deliberate-choice exclusions, and formatter-noise exclusions."
+    },
+    {
+      "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "application": "Read fully; used the result fields and verbatim quote with null line."
+    },
+    {
+      "source": "skills_resolve_context",
+      "application": "Resolved review context for all assigned files; returned no must_read or on_demand entries."
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```
+
+Parent summary: assigned slices complete; one optional minor cleanup to consolidate duplicate `HostQuestion` validators. No merge-blocking style concerns.
+KERYX_USAGE {"tokens_in":157624,"tokens_out":2236,"model":"openai-codex/gpt-6.1-sol","by":"host"}

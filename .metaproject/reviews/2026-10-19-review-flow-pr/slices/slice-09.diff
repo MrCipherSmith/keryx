@@ -1,0 +1,132 @@
+--- src/commands/operator-confirm-review.ts
+@@ 756,762 @@
+   for (const decision of await readOperatorDecisions(dir)) {
+     const items = decision.subject?.items ?? [];
+     const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
+-    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia})`);
++    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia}${decision.hostQuestion === undefined ? "" : ` ${cardSafe(decision.hostQuestion.source)}:${cardSafe(decision.hostQuestion.ref)}`})`);
+   }
+   return {
+     reviewId: manifest.reviewId ?? path.basename(dir),
+
+--- src/commands/review-operator.ts
+@@ 8,32 @@
+ //
+ // The first four record the operator's own decision, so each asks at the terminal and refuses when stdin or stdout
+ // is not a TTY: an agent's shell cannot answer for the operator. verify-run only runs a command and saves its output.
++//
++// Flow 467: the same four also take the operator's answer to a question the HOST asked through its own tool (Claude Code,
++// Codex, keryx shell, a Telegram poll), with no TTY:
++//
++//   keryx review <verb> ... --answered-by <source>:<ref> --answer-text "<the operator's words>" --question-text "<the question as asked>"
++//
++// The record says `confirmedVia: "host-question"` with the source, the ref, both texts and the time. keryx cannot see the
++// host's question: it records what the agent reports, and says so in the record, the review report and `keryx decisions`.
++// An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag; `review complete` does not take it at all.
+ 
+ import { createInterface } from "node:readline/promises";
++import { DECISION_SOURCES, answerDecision, openDecision } from "../decisions/service";
+ import { optionValue } from "../lib/args";
+ import { operatorDecisionSubject } from "../review/coverage";
+ import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
+ import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
+ import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
++import { isAutonomousEnv, readRunProfile } from "../review/run-profile";
++import { HOST_QUESTION_SOURCES, type HostQuestion } from "../review/types";
+ import { verifyRun } from "../review/verify-run";
+ import { cardSafe } from "../lib/card-safe";
+ import { resolvePackageDir } from "./review-layers";
+
+--- src/commands/review-operator.ts
+@@ 40,47 @@
+   ask?: (question: string) => Promise<string>;
+   cwd?: string;
+   log?: (line: string) => void;
++  /** The process environment, for the host-question refusals (default `process.env`). */
++  env?: Readonly<Record<string, string | undefined>>;
+ };
+ 
+ const CARD: Record<Exclude<OperatorCommand, "verify-run">, string> = {
+
+--- src/commands/review-operator.ts
+@@ 57,98 @@
+ 
+ Records the operator's waiver of the mutation pass in <review-dir>/operator-decisions.json: the review may
+ record \`Not run: mutation pass\` with unrun mutants. Asks at the terminal; refused without a TTY. In keryx
+-shell the review_waive_mutation tool asks the same as a card.`,
++shell the review_waive_mutation tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review waive-mutation --package <review-dir> --reason "<why>" --answered-by <source>:<ref> \\
++    --answer-text "<the operator's words>" --question-text "<the question as asked>"
++<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question (a poll
++or message id). The record says confirmedVia host-question with both texts, and \`keryx decisions\` keeps the question.
++keryx cannot see the question: it records what you report. Refused, with nothing recorded, for a decline (n, no, an
++empty answer), a blank text, a missing --reason, in an unattended run and under KERYX_TOOL_CALL=1.`,
+     "override-reviewers": `keryx review override-reviewers --package <review-dir> --reason "<why>" [--selected a,b]
+ 
+ Records the operator's decision to run a smaller reviewer set than \`keryx review required\` names (an
+ override or mode diff) in <review-dir>/operator-decisions.json. Asks at the terminal; refused without a TTY.
+-In keryx shell the review_override_reviewers tool asks the same as a card.`,
++In keryx shell the review_override_reviewers tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review override-reviewers --package <review-dir> --reason "<why>" [--selected a,b] --answered-by <source>:<ref> \\
++    --answer-text "<the operator's words>" --question-text "<the question as asked>"
++<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question. The
++record says confirmedVia host-question; keryx cannot see the question, it records what you report. Refused, with
++nothing recorded, for a decline (n, no, an empty answer), a blank text, a missing --reason, in an unattended run and
++under KERYX_TOOL_CALL=1.`,
+     "confirm-plan": `keryx review confirm-plan --package <review-dir>
+ 
+ Shows the plan's dispatches and minutes (\`keryx review estimate\`) and records the operator's yes in
+ <review-dir>/plan-confirmation.json for exactly this plan. Asks at the terminal; refused without a TTY. In
+-keryx shell the review_confirm_plan tool asks the same as a card.`,
++keryx shell the review_confirm_plan tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review confirm-plan --package <review-dir> --answered-by <source>:<ref> \\
++    --answer-text "<the operator's words>" --question-text "<the question as asked>"
++The question must show this plan's dispatches and minutes (as \`keryx review estimate\` prints them): a question that
++does not is refused as a stale plan, so ask again with the current numbers. <source> is claude-code, codex,
++keryx-shell, helyx-poll or other; <ref> is the host's own id for the question. The record says confirmedVia
++host-question; keryx cannot see the question, it records what you report. Refused, with nothing recorded, for a
++decline (n, no, an empty answer), a blank text, in an unattended run and under KERYX_TOOL_CALL=1.`,
+     "decide-premise": `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+ 
+ Answers the premise question on a finding the premise judge held (verdict challenged or owner-decision) and
+
+--- src/commands/review-operator.ts
+@@ 100,116 @@
+ (so the next round and the published round block read the answer too). uphold returns the finding to kept at its original
+ severity; dismiss records it dismissed-incorrect with your reason as the evidence. Refused for an unknown
+ finding, a finding that is not held, or a missing reason. Asks at the terminal; refused without a TTY. In
+-keryx shell the review_decide_premise tool asks the same as a card.`,
++keryx shell the review_decide_premise tool asks the same as a card.
++
++Without a TTY, record the operator's answer to a question you asked through the host's own question tool:
++  keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>" \\
++    --answered-by <source>:<ref> --answer-text "<the operator's words>" --question-text "<the question as asked>"
++<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question (a poll
++or message id). The operator's words must name the same choice as --answer (uphold or dismiss, or the same in
++Russian) and no other. The record says confirmedVia host-question with both texts, the finding changes as on the
++terminal path, and \`keryx decisions\` keeps the question. keryx cannot see the question: it records what you report.
++Refused, with nothing recorded, for a decline (n, no, an empty answer), words that name the other choice or none, a
++blank text, a missing --reason, an unknown or not-held finding, in an unattended run and under KERYX_TOOL_CALL=1.`,
+     "verify-run": `keryx review verify-run --package <review-dir> --finding <id> [--timeout <seconds>] -- <command…>
+ 
+ Runs a verification command in this (the parent's) session and saves its stdout, stderr and exit status to
+
+--- src/commands/review-operator.ts
+@@ 162,172 @@
+     return 0;
+   }
+ 
++  // Flow 467: the host asked the operator; the agent records the answer. No terminal, no ask: a different path with its own refusals.
++  if (own.some((arg) => arg === "--answered-by" || arg.startsWith("--answered-by="))) {
++    return recordHostQuestion(command, own, packageDir, { cwd, log, env: seams.env ?? process.env });
++  }
++
+   const isTerminal = seams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+   requireTerminal(command, isTerminal);
+   const ask = seams.ask ?? terminalAsk;

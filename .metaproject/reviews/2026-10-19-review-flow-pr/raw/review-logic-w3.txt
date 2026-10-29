@@ -1,0 +1,67 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Reviewed assigned slices 08–11 against pinned source 5974c976823e1a7134723edf3a9140b991246d45. Found one answer-validation defect affecting three host-question verbs. No tests, shell commands, or edits performed; newer pr-context CI was excluded as historical evidence.",
+  "slices": ["slice-08", "slice-09", "slice-10", "slice-11"],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    {
+      "path": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+      "application": "Read fully; applied correctness scope, reproducible-path requirement, class enumeration, and read-only restrictions."
+    },
+    {
+      "path": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "application": "Read canonical severity and finding-format sections."
+    },
+    {
+      "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "application": "Read fully; applied result and finding schema."
+    },
+    {
+      "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/.metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      "application": "Checked relevant criteria against assigned slices; scope explicitly excludes free-text decisions."
+    },
+    {
+      "source": "skills_resolve_context",
+      "application": "Resolved assigned files for review; no must_read or on_demand project entries returned."
+    }
+  ],
+  "findings": [
+    {
+      "id": "LOGIC-W3-001",
+      "severity": "blocker",
+      "reviewer": "review-logic",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "confirm-plan, waive-mutation, and override-reviewers treat any nonblank answer not beginning with a listed decline word as approval. Unlike decide-premise, these branches never establish that the operator selected the confirming option. In particular, the offered decline option 'keep' is accepted by both waiver/override verbs when --answer is omitted.",
+      "impact": "For a valid interactive package, `waive-mutation --package <dir> --reason \"test\" --answered-by codex:q1 --question-text \"Waive the mutation pass?\" --answer-text \"keep\"` records a mutation waiver and journals choice 'waive', despite the operator selecting 'Keep: run the mutation pass'. The analogous override-reviewers call records an override. confirm-plan similarly accepts 'maybe' once the question contains the current estimate numbers. These are persisted decisions contrary to the supplied answer and the approved requirement that free text is never a decision.",
+      "suggested_fix": "Validate answer-text against verb-specific confirming and declining choices before any write. Recognize 'keep' as a decline for waiver and reviewer override, reject unsupported/free-text answers, and reject contradictions between --answer and answer-text. Preserve explicitly supported affirmative phrases rather than treating absence of a negative prefix as consent. Add refusal tests covering 'keep' for both verbs and 'maybe' for all three.",
+      "evidence": "At pinned head 5974c976, HOST_OPTIONS defines waiver/override decline='keep'. recordHostQuestion permits omitted --answer for all three non-premise verbs. confirm-plan and the shared waiver/override branch call only refuseDecline(answerText, command), whose LEAD_DECLINE set lacks 'keep' and whose predicate accepts arbitrary other words. Both branches then persist the confirming action, and answerDecision uses premiseAnswer ?? choices.confirm. The pinned PRD requires an answer to be one of the verb's options; the pinned acceptance-criteria scope says 'A free-text answer is never a decision.' Existing assigned tests cover declines such as n/no and invalid explicit --answer, but not a declining 'keep' in answer-text. This finding concerns interpreting the reported answer, not the deliberately accepted inability to authenticate host answers.",
+      "confidence": "high",
+      "dedupe_key": "host-question-nonpremise-answer-text-not-validated",
+      "blocking_merge": true,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:recordHostQuestion confirm-plan branch",
+          "src/commands/review-operator.ts:recordHostQuestion shared waive-mutation/override-reviewers branch",
+          "src/commands/review-operator.ts:recordHostQuestion decide-premise branch (choice validation present)"
+        ],
+        "enumeration_method": "Enumerated the complete HOST_OPTIONS/HostVerb set and all three branches of recordHostQuestion in pinned source: confirm-plan, decide-premise, and shared waive-mutation/override-reviewers. Only decide-premise calls refuseOtherChoice; the remaining three verbs use prefix-only refusal."
+      }
+    }
+  ],
+  "stats": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Parent summary: one actionable defect—reported `keep` answers become persisted waivers/overrides. Validate each verb’s answer text before recording; add negative cases for `keep` and unsupported free text. Historical runtime verification was not performed.
+KERYX_USAGE {"tokens_in":180324,"tokens_out":2333,"model":"openai-codex/gpt-6.1-sol","by":"host"}

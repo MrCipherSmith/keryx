@@ -1,0 +1,288 @@
+{
+  "depth": "full",
+  "sliced": true,
+  "roles": 11,
+  "slices": 17,
+  "assignments": 93,
+  "waveBytes": 54000,
+  "dispatches": 26,
+  "sequentialBatches": 7,
+  "minutes": {
+    "min": 14,
+    "max": 35
+  },
+  "perRole": [
+    {
+      "role": "review-architecture",
+      "slices": 12,
+      "waves": 3
+    },
+    {
+      "role": "review-clean-code",
+      "slices": 11,
+      "waves": 3
+    },
+    {
+      "role": "review-core-boundaries",
+      "slices": 1,
+      "waves": 1
+    },
+    {
+      "role": "review-flow-graph",
+      "slices": 0,
+      "waves": 0
+    },
+    {
+      "role": "review-highload",
+      "slices": 12,
+      "waves": 3
+    },
+    {
+      "role": "review-layout",
+      "slices": 0,
+      "waves": 0
+    },
+    {
+      "role": "review-logic",
+      "slices": 17,
+      "waves": 5
+    },
+    {
+      "role": "review-performance",
+      "slices": 11,
+      "waves": 3
+    },
+    {
+      "role": "review-security-code",
+      "slices": 12,
+      "waves": 3
+    },
+    {
+      "role": "review-style",
+      "slices": 15,
+      "waves": 4
+    },
+    {
+      "role": "review-testing-practices",
+      "slices": 2,
+      "waves": 1
+    }
+  ],
+  "assumptions": "2-5 min per dispatch (a child is killed at 5 min), 4 dispatches in parallel; excludes the verifier, retries and the mutation pass",
+  "slicePlan": [
+    {
+      "id": "slice-01",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-02",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light"
+    },
+    {
+      "id": "slice-03",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-04",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-05",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-06",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light"
+    },
+    {
+      "id": "slice-07",
+      "roles": [
+        "review-architecture",
+        "review-highload",
+        "review-logic",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-08",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light"
+    },
+    {
+      "id": "slice-09",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-10",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-11",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light"
+    },
+    {
+      "id": "slice-12",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light"
+    },
+    {
+      "id": "slice-13",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-14",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-15",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-16",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    },
+    {
+      "id": "slice-17",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep"
+    }
+  ],
+  "routing": {
+    "deep": 12,
+    "light": 5,
+    "audit": 1
+  },
+  "routedOut": [
+    "review-flow-graph",
+    "review-layout"
+  ],
+  "thresholds": {
+    "maxDispatches": 40,
+    "maxMinutes": 90
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "c5ec6e17b13ea61d",
+  "escalated": [],
+  "manifest": ".metaproject/reviews/2026-10-19-review-flow-pr/slices/manifest.json",
+  "confirmed": false
+}

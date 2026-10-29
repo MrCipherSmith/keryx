@@ -1,0 +1,37 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Reviewed historical PR1058 at pinned head 5974c976823e1a7134723edf3a9140b991246d45, covering the supplied changes in slices 01, 03, 04 and 05. No verifiable architectural violations found in these slices. The host-question path is an explicit architectural decision documented in the pinned implementation plan and TM-04 section 6b, not an accidental weakening to flag as a structural defect. This is a static, assigned-scope conclusion, not a verdict on all implementation slices.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    "slice-01",
+    "slice-03",
+    "slice-04",
+    "slice-05"
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json"
+  ],
+  "limitations": [
+    "Git history was unavailable and was not read.",
+    "No shell commands, local tests, edits or runtime verification were performed.",
+    "pr-context.md describes later head 208a4d2faa4dfbf71b2992d027bda25762b34456; it was read for intent, not used as evidence of the pinned implementation.",
+    "Full-source context was read only from the package's research-evidence/pinned-source, not working-tree src."
+  ]
+}
+```
+
+**Parent summary:** No architecture findings in the four assigned slices. The pinned plan explicitly rejects a heavier cross-host card mechanism, and pinned TM-04 §6b records the operator-approved, weaker host-question proof. No additional architecture-specific follow-up identified.
+KERYX_USAGE {"tokens_in":130822,"tokens_out":1268,"model":"openai-codex/gpt-6.1-sol","by":"host"}

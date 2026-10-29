@@ -1,0 +1,60 @@
+REVIEW_RESULT
+```json
+{
+  "status": "NEEDS_CONTEXT",
+  "reviewer": "review-pr-contract",
+  "summary": "Read assigned slices 04–07 and evaluated their documentation changes statically against pinned flow467 acceptance criteria. No substantiated PR-contract finding identified. The supplied pr-context.md describes head 208a4d2f, not reviewed head 5974c976; its checklist and newer CI results were not used as historical evidence. The original PR body/checklist is needed to finish this lane.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-04",
+      "status": "DONE",
+      "coverage": "Read all supplied hunks. Operator-decision instructions distinguish the four host-question acts from completion/readiness waivers and retain card preference and unattended refusal, consistent with pinned AC9."
+    },
+    {
+      "id": "slice-05",
+      "status": "DONE",
+      "coverage": "Read all supplied hunks. Held-finding instructions and README describe host-question recording and its weaker, unverified provenance. No contradiction with pinned AC9–AC10 established."
+    },
+    {
+      "id": "slice-06",
+      "status": "DONE",
+      "coverage": "Read all supplied hunks. TM-04 section 6b explicitly records the operator-directed reversal of section 5, what host questions prove and do not prove, refusal conditions, and the unchanged scope of other operator acts, addressing pinned AC10 statically."
+    },
+    {
+      "id": "slice-07",
+      "status": "DONE",
+      "coverage": "Read all supplied hunks. CLI reference documents the four verbs, provenance flags, plan-question freshness requirement, refusal conditions, and exclusion of completion flags. Executable documentation checks were not run."
+    }
+  ],
+  "inputs_unreadable": [
+    "Original PR1058 body and checklist at reviewed head 5974c976823e1a7134723edf3a9140b991246d45: not supplied; package pr-context.md instead identifies head 208a4d2faa4dfbf71b2992d027bda25762b34456."
+  ],
+  "needs_context": [
+    "Supply the historical PR1058 body/checklist corresponding to head 5974c976 so each original claim and checklist box can be compared with the assigned slices without using newer CI evidence."
+  ],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md — read fully; findings require a quoted PR claim and contradictory diff/document evidence.",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully; result structure and incomplete-input reporting applied.",
+    "skills_resolve_context returned no must_read or on_demand entries.",
+    ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/.metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md — read fully; AC9–AC10 used as historical static requirements."
+  ],
+  "verification": {
+    "reviewed_head": "5974c976823e1a7134723edf3a9140b991246d45",
+    "evidence_level": "static only",
+    "shell_commands_run": false,
+    "tests_run": false,
+    "files_modified": false,
+    "newer_ci_used_as_evidence": false
+  }
+}
+```
+
+Assigned slices were read; no supported finding was established. Parent should supply the historical PR body/checklist to close the remaining PR-contract evidence gap.
+KERYX_USAGE {"tokens_in":122016,"tokens_out":1938,"model":"openai-codex/gpt-6.1-sol","by":"host"}

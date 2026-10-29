@@ -1,0 +1,114 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Reviewed slices 08–11 against historical pin 5974c976823e1a7134723edf3a9140b991246d45. Found one minor disagreement between the unconditional decisions-journal promise and the explicitly best-effort implementation. Newer-head CI and test-pass claims were not used as historical evidence. No execution, tests, shell commands or edits performed.",
+  "findings": [
+    {
+      "id": "PC-W3-001",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);",
+      "problem": "The PR summary promises that the four verbs record the answer \"plus a `keryx decisions` entry\". Slice 08 repeats this unconditionally in review-with-a-record.md and limitations.md. However, slice 10 deliberately catches journal failures after the review record has been written, logs a warning, and returns success without guaranteeing that entry.",
+      "impact": "A reader can reasonably treat a successful host-question command as assurance that the decision is discoverable through `keryx decisions`, although a journal failure leaves only the review-package record. This is a reporting-contract discrepancy, not a claim that the deliberate write-order decision is itself defective.",
+      "suggested_fix": "Qualify the PR and user-facing documentation: the review-package decision is authoritative, journal recording is best effort, and a warning means the journal entry may be absent. If unconditional journaling remains the intended AC6 contract, reconcile that requirement separately with the deliberately nonfatal implementation.",
+      "evidence": "All source evidence was read under .metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source at 5974c976823e1a7134723edf3a9140b991246d45. PR claim: \"plus a `keryx decisions` entry\". docs/docs/guides/review-with-a-record.md: \"a `keryx decisions` entry is written\"; docs/docs/limitations.md repeats that promise. Flow 467 AC6 states: \"Each accepted host question also writes a `keryx decisions` entry\". src/commands/review-operator.ts explicitly explains that a journal which cannot be written produces a warning rather than undoing or duplicating the already-written review record, then catches the error and returns 0. The deliberate rationale was read and is not challenged by this finding.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff",
+      "blocking_merge": false,
+      "dedupe_key": "pr-contract-host-question-journal-best-effort"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-08",
+      "status": "DONE",
+      "coverage": "Read all supplied documentation changes and compared their historical promises with the assigned command implementation."
+    },
+    {
+      "id": "slice-09",
+      "status": "DONE",
+      "coverage": "Read host-question routing, command help and confirmation-card rendering changes."
+    },
+    {
+      "id": "slice-10",
+      "status": "DONE",
+      "coverage": "Read all host-question parsing, refusals, decision writes and best-effort journaling changes; checked against pinned original source and flow 467."
+    },
+    {
+      "id": "slice-11",
+      "status": "DONE",
+      "coverage": "Read the assigned test-file portion statically; made no execution or historical pass-count claim."
+    }
+  ],
+  "checklist_rows": [
+    {
+      "claim": "bun test src/commands/review-host-question.test.ts (41 tests)",
+      "state": "[x]",
+      "diff_signal": "slice-11 adds review-host-question.test.ts coverage.",
+      "expectation": "Test changes are present; execution and total count at the historical pin are not established by the newer-head context."
+    },
+    {
+      "claim": "existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+      "state": "[x]",
+      "diff_signal": "Assigned slices change command implementations but provide no historical execution results.",
+      "expectation": "Unverified execution claim; not treated as historical passing evidence."
+    },
+    {
+      "claim": "bun test src/gdskills src/docs and the CLI reference coverage tests",
+      "state": "[x]",
+      "diff_signal": "slice-08 contains documentation changes, not execution evidence.",
+      "expectation": "Unverified execution claim; not treated as historical passing evidence."
+    },
+    {
+      "claim": "bun run typecheck",
+      "state": "[x]",
+      "diff_signal": "Static slices do not establish a typecheck result.",
+      "expectation": "Unverified execution claim; not treated as historical passing evidence."
+    },
+    {
+      "claim": "review round",
+      "state": "[ ]",
+      "diff_signal": "No assigned diff line contradicts this process-state checkbox.",
+      "expectation": "No finding."
+    }
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    {
+      "path": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+      "application": "Read fully; applied quote-both-sides, minor severity for PR-claim disagreements, and deliberate-choice safeguards."
+    },
+    {
+      "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "application": "Read fully; used result fields, PC-prefixed finding identity and null line with verbatim quote."
+    },
+    {
+      "path": ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-pr-contract-w3.json",
+      "application": "Read dispatch; limited review to assigned slices and historical static evidence."
+    },
+    {
+      "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/.metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      "application": "Read historical requirements, including AC6; did not execute verification commands."
+    }
+  ],
+  "context_resolution": "Project-context resolution for the assigned files returned no must_read or on_demand entries.",
+  "limitations": [
+    "pr-context.md identifies newer head 208a4d2; its CI results and test-pass assertions do not verify historical pin 5974c976.",
+    "Only assigned slices were covered; no conclusion is made about the entire PR.",
+    "Runtime verification was not performed."
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```
+
+Parent summary: qualify the unconditional decisions-journal promise to match its deliberately best-effort implementation; do not use the newer-head CI for this historical review.
+KERYX_USAGE {"tokens_in":145418,"tokens_out":3129,"model":"openai-codex/gpt-6.1-sol","by":"host"}

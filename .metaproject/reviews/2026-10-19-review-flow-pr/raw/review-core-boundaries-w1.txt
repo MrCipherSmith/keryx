@@ -1,0 +1,61 @@
+STATUS: DONE
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-core-boundaries",
+  "summary": "Reviewed slice-01 against pinned head 5974c976823e1a7134723edf3a9140b991246d45. No actionable core-boundary findings. The existing review-specific contract is extended additively, its installed and source copies agree on the changed fields, and the premise decision writer preserves the new audit data. No history available. No tests, shell commands, or edits performed.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-01",
+      "status": "DONE",
+      "coverage": "Reviewed the contract extension and complete Flow 467 record; checked pinned schema counterpart and premise-decision producer/validation path."
+    }
+  ],
+  "source_evidence": [
+    {
+      "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "quote": "\"confirmedVia\": { \"type\": \"string\", \"enum\": [\"tui-card\", \"remote-card\", \"terminal\", \"host-question\"] }",
+      "observation": "Adds a confirmation mode within the existing review-domain audit contract; existing modes remain accepted."
+    },
+    {
+      "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "quote": "\"required\": [\"source\", \"ref\", \"questionText\", \"answerText\", \"time\"]",
+      "observation": "Source counterpart contains the same hostQuestion object shape as the installed contract."
+    },
+    {
+      "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+      "file": "src/review/premise.ts",
+      "quote": "...(decision.hostQuestion === undefined ? {} : { hostQuestion: decision.hostQuestion }),",
+      "observation": "applyPremiseDecision preserves host-question evidence in premise.operator."
+    },
+    {
+      "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+      "file": "src/review/operator-decisions.ts",
+      "quote": "return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;",
+      "observation": "Decision-store validation requires a complete hostQuestion for the new mode."
+    },
+    {
+      "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      "quote": "\"status\": \"in-progress\",",
+      "observation": "Flow metadata introduces no shared-module imports or public infrastructure APIs."
+    }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+The PR context names a later head (`208a4d2…`); it was treated as intent only. Source conclusions use the assigned pinned snapshot. No changes recommended from this review lane.
+KERYX_USAGE {"tokens_in":131368,"tokens_out":1460,"model":"openai-codex/gpt-6.1-sol","by":"host"}

@@ -1,0 +1,109 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Reviewed slice-01, slice-02 and slice-03 against pr-context.md and supplied pinned-source evidence for 5974c976823e1a7134723edf3a9140b991246d45. No concrete PR-contract contradiction established in these slices. Context provenance is imperfect: pr-context.md identifies head 208a4d2faa4dfbf71b2992d027bda25762b34456, not the assigned pinned head. Historical review history was not supplied; no prior dispositions inferred. Tests, typecheck and CI were not executed or independently verified.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-01",
+      "status": "COVERED",
+      "coverage": "Schema adds host-question and its provenance fields, consistent with the PR summary. Flow remains in-progress with review task T10 todo; no claim that post-merge operator checks are complete."
+    },
+    {
+      "id": "slice-02",
+      "status": "COVERED",
+      "coverage": "Acceptance criteria, description and journal align with the four-verb scope, explicit weaker-proof decision and retained complete/unattended/nested refusals. AC11 and AC12 are explicitly deferred by the PR body."
+    },
+    {
+      "id": "slice-03",
+      "status": "COVERED",
+      "coverage": "Plan and skill changes replace terminal handoffs for the four acts with host-question recording, retain complete on its existing operator path, and explicitly acknowledge answer fabrication as outside the trust boundary."
+    }
+  ],
+  "checklist_rows": [
+    {
+      "claim": "[x] `bun test src/commands/review-host-question.test.ts` (41 tests)",
+      "state": "checked",
+      "evidence": "Pinned src/commands/review-host-question.test.ts contains dedicated AC1–AC8 cases, including no-TTY recording, refusals, decisions journal and report/modal assertions.",
+      "expectation": "Relevant test changes are present. Claimed execution and exact historical run result remain unverified."
+    },
+    {
+      "claim": "[x] existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+      "state": "checked",
+      "evidence": "The driver changed-file scope does not list edits to those existing test files; the new test file separately exercises unchanged terminal refusal wording.",
+      "expectation": "No file-list contradiction to 'unedited'; passing results cannot be established by static review."
+    },
+    {
+      "claim": "[x] `bun test src/gdskills src/docs` and the CLI reference coverage tests",
+      "state": "checked",
+      "evidence": "Slice-03 updates skill guidance. Pinned documentation search locates host-question updates in TM-04 §6b, limitations.md:212–219, cli-reference.md:4893–4926 and review-with-a-record.md:615–624.",
+      "expectation": "Documentation and skill changes support the stated scope; historical test success remains unverified."
+    },
+    {
+      "claim": "[x] `bun run typecheck`",
+      "state": "checked",
+      "evidence": "No execution evidence was supplied or generated in this read-only assignment.",
+      "expectation": "Treat as the author's reported result, not independently confirmed."
+    },
+    {
+      "claim": "[ ] review round",
+      "state": "unchecked",
+      "evidence": "Slice-01 flow.json leaves T10, 'Review through the project review orchestrator and open the PR', at todo.",
+      "expectation": "An unfinished review checkbox is consistent with the supplied flow state."
+    }
+  ],
+  "claim_checks": [
+    {
+      "claim": "Four verbs accept host-question flags without a TTY and record provenance plus a decisions entry.",
+      "evidence": "Pinned src/commands/review-operator.ts branches on --answered-by before requireTerminal; recordHostQuestion constructs source/ref/questionText/answerText/time and calls the existing recorders with confirmedVia: host-question, then openDecision/answerDecision.",
+      "assessment": "Supported statically; journal-write failures are explicitly warning-only."
+    },
+    {
+      "claim": "keryx does not verify the answer; docs and skills disclose the weaker proof.",
+      "evidence": "Pinned TM-04 §6b states 'keryx never sees the question or the answer, only what the agent passes'; slice-03 explicitly names invented host-question answers in the threat boundary.",
+      "assessment": "Supported; the deliberate trust-policy reversal is not itself a defect."
+    },
+    {
+      "claim": "Unattended runs and nested keryx refuse the flag.",
+      "evidence": "Pinned review-operator.ts refuseHostQuestionHere rejects KERYX_TOOL_CALL=1 and autonomous/unattended profiles; pinned trigger/unattended.ts recordsHostQuestion triggers an early shell refusal.",
+      "assessment": "Supported for the stated checks; no claim of a hostile-agent security boundary inferred."
+    },
+    {
+      "claim": "review complete does not accept the new flags.",
+      "evidence": "Pinned review-host-question.test.ts AC7 explicitly asserts all three flags are unknown, together and separately.",
+      "assessment": "Supporting test evidence present; runtime outcome not independently verified."
+    },
+    {
+      "claim": "Skills, TM-04, README, CLI reference and guides updated.",
+      "evidence": "Slice-03 changes job-orchestrator and review-orchestrator guidance. Pinned README.md:1181 and documentation search hits show the new host-question path and its limitations.",
+      "assessment": "No documentation-update contradiction established."
+    }
+  ],
+  "limitations": [
+    "pr-context.md was read before reviewing the slices, but its recorded head differs from the assigned historical pinned head.",
+    "Historical review history and prior findings were not supplied.",
+    "No tests, shell commands or edits performed.",
+    "Source inspection used research-evidence/pinned-source, not checkout src.",
+    "Coverage is limited to assigned slices and targeted supporting evidence; it is not a whole-PR correctness verdict."
+  ],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    "skills_resolve_context returned no additional must_read entries."
+  ],
+  "inputs_unreadable": []
+}
+```
+
+Parent summary: No actionable contract findings in the assigned slices. Preserve the PR-context head mismatch and unverified historical test/CI results as report limitations.
+KERYX_USAGE {"tokens_in":169786,"tokens_out":2497,"model":"openai-codex/gpt-6.1-sol","by":"host"}

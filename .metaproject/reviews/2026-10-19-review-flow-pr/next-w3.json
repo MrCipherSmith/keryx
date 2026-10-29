@@ -1,0 +1,188 @@
+{
+  "done": false,
+  "package": "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr",
+  "dispatches": [
+    {
+      "reviewer": "review-architecture",
+      "wave": 3,
+      "wavesLeft": 1,
+      "slices": [
+        "slice-14",
+        "slice-15",
+        "slice-16",
+        "slice-17"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-14.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-15.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-16.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-17.diff"
+      ],
+      "bytes": 52569,
+      "reason": "missing",
+      "detail": "DONE; 4 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent",
+      "result": "raw/review-architecture-w3.txt"
+    },
+    {
+      "reviewer": "review-clean-code",
+      "wave": 3,
+      "wavesLeft": 1,
+      "slices": [
+        "slice-15",
+        "slice-16",
+        "slice-17"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-15.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-16.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-17.diff"
+      ],
+      "bytes": 36901,
+      "reason": "missing",
+      "detail": "DONE_WITH_CONCERNS; 3 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent",
+      "result": "raw/review-clean-code-w3.txt"
+    },
+    {
+      "reviewer": "review-highload",
+      "wave": 3,
+      "wavesLeft": 1,
+      "slices": [
+        "slice-14",
+        "slice-15",
+        "slice-16",
+        "slice-17"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-14.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-15.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-16.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-17.diff"
+      ],
+      "bytes": 52569,
+      "reason": "missing",
+      "detail": "DONE_WITH_CONCERNS; 4 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent",
+      "result": "raw/review-highload-w3.txt"
+    },
+    {
+      "reviewer": "review-logic",
+      "wave": 3,
+      "wavesLeft": 3,
+      "slices": [
+        "slice-08",
+        "slice-09",
+        "slice-10",
+        "slice-11"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-08.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-09.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-10.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-11.diff"
+      ],
+      "bytes": 50058,
+      "reason": "missing",
+      "detail": "DONE; 10 slice(s) are uncovered — dispatch the next wave (3 left), no attempt is spent",
+      "result": "raw/review-logic-w3.txt"
+    },
+    {
+      "reviewer": "review-performance",
+      "wave": 3,
+      "wavesLeft": 1,
+      "slices": [
+        "slice-15",
+        "slice-16",
+        "slice-17"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-15.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-16.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-17.diff"
+      ],
+      "bytes": 36901,
+      "reason": "missing",
+      "detail": "DONE; 3 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent",
+      "result": "raw/review-performance-w3.txt"
+    },
+    {
+      "reviewer": "review-pr-contract",
+      "wave": 3,
+      "wavesLeft": 3,
+      "slices": [
+        "slice-08",
+        "slice-09",
+        "slice-10",
+        "slice-11"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-08.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-09.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-10.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-11.diff"
+      ],
+      "bytes": 50058,
+      "reason": "retry",
+      "detail": "NEEDS_CONTEXT; answer 3 open question(s) and re-dispatch the uncovered slices — the scope is not closed",
+      "result": "raw/review-pr-contract-w3.txt",
+      "needsContext": [
+        "PR body/checklist captured at historical head 5974c976, or confirmation that the supplied round-1 intent and test-plan text applied unchanged to that head.",
+        "Historical execution evidence for the checked test-plan claims; newer-head CI cannot substantiate them.",
+        "Results covering the remaining review-pr-contract slices before declaring overall role scope complete."
+      ]
+    },
+    {
+      "reviewer": "review-security-code",
+      "wave": 3,
+      "wavesLeft": 1,
+      "slices": [
+        "slice-14",
+        "slice-15",
+        "slice-16",
+        "slice-17"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-14.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-15.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-16.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-17.diff"
+      ],
+      "bytes": 52569,
+      "reason": "missing",
+      "detail": "DONE_WITH_CONCERNS; 4 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent",
+      "result": "raw/review-security-code-w3.txt"
+    },
+    {
+      "reviewer": "review-style",
+      "wave": 3,
+      "wavesLeft": 2,
+      "slices": [
+        "slice-08",
+        "slice-09",
+        "slice-10",
+        "slice-13"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-08.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-09.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-10.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-13.diff"
+      ],
+      "bytes": 43298,
+      "reason": "missing",
+      "detail": "DONE; 8 slice(s) are uncovered — dispatch the next wave (2 left), no attempt is spent",
+      "result": "raw/review-style-w3.txt"
+    }
+  ],
+  "notRun": [
+    {
+      "reviewer": "review-flow-graph",
+      "reason": "no reply recorded and no slice routed to it, so it never ran"
+    },
+    {
+      "reviewer": "review-layout",
+      "reason": "no reply recorded and no slice routed to it, so it never ran"
+    }
+  ],
+  "blocked": [],
+  "escalated": [],
+  "applied": false
+}

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "review-clean-code-w2:CC-W2-001",
+    "status": "finding",
+    "finding": "CC-W2-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-clean-code-w2.txt",
+    "reason": "Retained unchanged"
+  },
+  {
+    "id": "review-clean-code-w3:CC-W3-001",
+    "status": "finding",
+    "finding": "CC-W3-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-clean-code-w3.txt",
+    "reason": "Retained unchanged"
+  },
+  {
+    "id": "review-highload-w2:HL-W2-001",
+    "status": "finding",
+    "finding": "HL-W2-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-highload-w2.txt",
+    "reason": "Retained unchanged"
+  },
+  {
+    "id": "review-logic-w2:LOGIC-W2-01",
+    "status": "finding",
+    "finding": "LOGIC-W3-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-logic-w2.txt",
+    "reason": "Duplicate root cause of LOGIC-W3-001; original severity and full observation preserved in raw evidence"
+  },
+  {
+    "id": "review-logic-w3:LOGIC-W3-001",
+    "status": "finding",
+    "finding": "LOGIC-W3-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-logic-w3.txt",
+    "reason": "Retained unchanged"
+  },
+  {
+    "id": "review-logic-w4:LOG-W4-001",
+    "status": "finding",
+    "finding": "HL-W2-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-logic-w4.txt",
+    "reason": "Duplicate root cause of HL-W2-001; original severity and full observation preserved in raw evidence"
+  },
+  {
+    "id": "review-pr-contract-w3:PC-W3-001",
+    "status": "finding",
+    "finding": "PC-W3-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-pr-contract-w3.txt",
+    "reason": "Retained unchanged"
+  },
+  {
+    "id": "review-security-code-w2:SEC-W2-001",
+    "status": "finding",
+    "finding": "LOGIC-W3-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-security-code-w2.txt",
+    "reason": "Duplicate root cause of LOGIC-W3-001; original severity and full observation preserved in raw evidence"
+  },
+  {
+    "id": "review-style-w3:STYLE-W3-001",
+    "status": "finding",
+    "finding": "STYLE-W3-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-style-w3.txt",
+    "reason": "Retained unchanged"
+  },
+  {
+    "id": "review-style-w4:STYLE-W4-001",
+    "status": "finding",
+    "finding": "STYLE-W4-001",
+    "evidence": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-style-w4.txt",
+    "reason": "Retained unchanged"
+  }
+]

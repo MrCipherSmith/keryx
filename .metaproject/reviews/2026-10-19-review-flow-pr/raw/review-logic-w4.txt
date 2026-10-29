@@ -1,0 +1,66 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Reviewed assigned slices 12–14 at historical head 5974c976823e1a7134723edf3a9140b991246d45 using pinned sources. Found one host-question journal identity defect. No shell commands, tests, edits, live implementation sources, or newer CI evidence were used.",
+  "findings": [
+    {
+      "id": "LOG-W4-001",
+      "severity": "major",
+      "file": "src/decisions/journal.ts",
+      "line": null,
+      "quote": "  const twin = findOpenTwin(records, questionHash(question, [...ids]), input.session, now);\n  if (twin !== undefined) return resultOf(twin);",
+      "problem": "Host questions use the existing unanswered-question deduplication without including their host reference or metadata in the identity. Two concurrent accepted host answers with identical question text and option IDs can reuse one open record: after the first open releases the journal lock but before its answer is appended, the second open returns that record and discards its own hostQuestion metadata.",
+      "impact": "For example, two concurrent waive-mutation recordings with the same question but different poll references produce two package decisions but can produce only one host-question report row. That row retains the first poll's reference and answer text, losing attribution for the second accepted answer. This conflicts with AC6's requirement that each accepted host question write an entry containing its source and reference.",
+      "suggested_fix": "Separate host-question identity from recommendation-question deduplication. Either always create a distinct open record for an accepted host-question recording, or deduplicate using an explicit host-question identity that includes source, reference, verb and the relevant review subject. Add a deterministic interleaving regression test that opens two identical questions with different host references before answering either and verifies that both report rows retain their metadata.",
+      "evidence": "Pinned src/commands/review-operator.ts records the package decision, then awaits openDecision with hostQuestion metadata and no session, then separately awaits answerDecision. Pinned src/decisions/journal.ts findOpenTwin matches only normalized question, option IDs, session and age; openLocked returns its result before constructing the new hostQuestion field. Pinned src/decisions/report.ts emits one hostQuestions row per distinct open ID. The existing comment explains deduplication as preventing arm rerolls; that justification does not distinguish separately answered host questions, which this PR explicitly treats as records rather than recommendation draws. Static interleaving analysis only; not executed.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/decisions/journal.ts:openLocked",
+          "src/commands/review-operator.ts:recordHostQuestion"
+        ],
+        "enumeration_method": "Read the shared recordHostQuestion producer and HOST_OPTIONS table in the pinned command source: decide-premise, confirm-plan, waive-mutation and override-reviewers all use the same openDecision-then-answerDecision sequence. Read the complete pinned journal source: its single findOpenTwin/openLocked path handles all four and does not inspect hostQuestion identity."
+      }
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-12",
+      "status": "DONE",
+      "coverage": "Read the full assigned test diff and pinned test setup; checked refusal, journal visibility and backward-compatibility assertions statically."
+    },
+    {
+      "id": "slice-13",
+      "status": "DONE",
+      "coverage": "Reviewed journal, report, service, source and type changes, including report filtering and host-question attribution."
+    },
+    {
+      "id": "slice-14",
+      "status": "DONE",
+      "coverage": "Reviewed all supplied bundled-skill instruction changes against the pinned acceptance criteria and command behavior."
+    }
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-logic/SKILL.md — read fully",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully",
+    ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-logic-w4.json — read fully",
+    ".metaproject/reviews/2026-10-19-review-flow-pr/slices/manifest.json — read fully",
+    "Pinned flow-467 acceptance-criteria.md — applied AC6 and AC9",
+    "skills_resolve_context for assigned files returned no must_read or on_demand entries"
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Parent summary: one major attribution-loss finding in the shared journal deduplication path. Recommended next step is to preserve distinct host-question identities and add an interleaving regression test. Optional dependency `pinned-source/src/decisions/store.ts` was unavailable; no claim relies on its contents.
+KERYX_USAGE {"tokens_in":210795,"tokens_out":2371,"model":"openai-codex/gpt-6.1-sol","by":"host"}

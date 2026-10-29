@@ -1,0 +1,126 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Completed static PR-contract review of slices 12–14 at 5974c976823e1a7134723edf3a9140b991246d45. No substantiated PR-body/diff disagreement found. Resolved w2/w4's missing-original-body context using the supplied body history and empty edit history, then reassessed their already-read slices 04–07 against that body. Historical test execution remains unverified; checked boxes are author claims, not execution evidence.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-12",
+      "status": "DONE",
+      "coverage": "Read every supplied hunk: src/commands/review-host-question.test.ts lines 283–500. Compared refusal, journal/report, completion-flag, provenance-display and compatibility assertions with the original Summary and checklist. Also read the complete pinned test file."
+    },
+    {
+      "id": "slice-13",
+      "status": "DONE",
+      "coverage": "Read every supplied hunk across src/decisions/{journal,report,service,sources,types}.ts. Host-question journal metadata, separate report rows and rendering support the claimed keryx decisions entry; no quoted PR claim was contradicted."
+    },
+    {
+      "id": "slice-14",
+      "status": "DONE",
+      "coverage": "Read every supplied hunk across bundled job-orchestrator/SKILL.md and review-orchestrator/SKILL.detail.md and SKILL.md. Instructions document four host-question acts, weaker unverified provenance, card preference and exclusions, consistent with the Summary."
+    }
+  ],
+  "context_resolution": {
+    "historical_body": "RESOLVED: supplied pr-body-history.json reports createdAt 2026-10-19T19:45:33Z and lastEditedAt null; pr-body-edits.json has no edits and hasNextPage false. The supplied Summary/checklist is therefore usable as the original PR contract. Its current headRefOid 208a4d2 is not historical source or CI evidence.",
+    "w2": "Read raw/review-pr-contract-w2.txt fully. It explicitly reviewed slices 04–07; those slices were not missing reads. Its original-body request is resolved. Re-read their supplied pinned diff slices against the original claims: no PR-contract mismatch established. Its execution-evidence caveat remains valid; role-wide coverage must be assessed from the other dispatches.",
+    "w4": "Read raw/review-pr-contract-w4.txt fully. It explicitly reviewed slices 04–07; those slices were not missing reads. Its original-body/checklist request, including the formerly unreadable input, is resolved. Reassessment supports its no-finding conclusion for that scope.",
+    "prior_logic_follow_up": "w2's free-text acceptance observation is not resolved merely by supplying the body. The original Summary does not claim strict option-text validation; this remains a separate review-logic/documentation-consistency matter, not a newly established PR-body contradiction."
+  },
+  "claim_rows": [
+    {
+      "claim": "accept ... without a TTY and record confirmedVia: \"host-question\" with the verbatim question and answer, plus a keryx decisions entry",
+      "state": "Summary assertion",
+      "diff_evidence": "Slice-12 asserts journal fields and per-verb options; slice-13 adds hostQuestion metadata and hostQuestions reporting; slice-14 documents the recording path. Pinned test source also asserts confirmedVia and stored texts.",
+      "expectation": "Static support within assigned scope; no contradiction established. Assertions were not executed."
+    },
+    {
+      "claim": "keryx does not verify the answer ... reverses TM-04 §5 ... the docs, limitations page and skills say so",
+      "state": "Summary assertion",
+      "diff_evidence": "Slice-14 says keryx does not verify the question/answer and names invented answers as a limit. Reassessed slices 04–07 explicitly document the weaker path and TM-04 reversal; pinned.diff also adds the limitations explanation.",
+      "expectation": "Disclosure is present; deliberate weaker provenance is not itself a defect."
+    },
+    {
+      "claim": "review complete (and its --waive flags), unattended runs and a nested keryx still refuse. A shell floor ... refuses the flag",
+      "state": "Summary assertion",
+      "diff_evidence": "Slice-12 contains explicit AC5 refusal assertions and AC7 assertions that the host-question flags are unknown to complete; its own waiver flags remain accepted. Skills retain other operator acts on their existing paths.",
+      "expectation": "Read as refusal of the new host-question flags, not a claim that plain review complete always requires a TTY. Static assertions support this reading; no execution claimed."
+    },
+    {
+      "claim": "Skills ... TM-04 §6b, README, CLI reference and guides updated",
+      "state": "Summary assertion",
+      "diff_evidence": "Slice-14 changes bundled skills; reassessed slices 04–07 change project skills, README, TM-04 and CLI reference. Pinned.diff contains the guide and limitations changes.",
+      "expectation": "Named updates are present."
+    },
+    {
+      "claim": "AC11 ... and AC12 ... follow after merge",
+      "state": "Explicit deferred work",
+      "diff_evidence": "Pinned.diff defines these criteria and the plan explicitly schedules recording the PR1052 decisions after merge.",
+      "expectation": "Not represented as completed in the PR body; no contradiction established."
+    }
+  ],
+  "checklist_rows": [
+    {
+      "claim": "bun test src/commands/review-host-question.test.ts (41 tests)",
+      "state": "[x]",
+      "diff_evidence": "Pinned source contains 41 test declarations in the named added file; slice-12 covers its latter portion.",
+      "expectation": "File and declaration count supported statically; successful execution is unverified."
+    },
+    {
+      "claim": "existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+      "state": "[x]",
+      "diff_evidence": "The pinned diff's changed-file headers contain no edits to those existing test suites.",
+      "expectation": "Unedited aspect supported; passing execution is unverified."
+    },
+    {
+      "claim": "bun test src/gdskills src/docs and the CLI reference coverage tests",
+      "state": "[x]",
+      "diff_evidence": "Skill and CLI-reference updates are present, but no historical execution output is supplied by the assigned evidence.",
+      "expectation": "Execution unverified; neither inferred successful nor contradicted by absence of logs."
+    },
+    {
+      "claim": "bun run typecheck",
+      "state": "[x]",
+      "diff_evidence": "No pinned-head typecheck output supplied.",
+      "expectation": "Execution unverified; checkbox is not proof."
+    },
+    {
+      "claim": "review round",
+      "state": "[ ]",
+      "diff_evidence": "These static changes do not establish that a review round had completed when the body was written.",
+      "expectation": "No contradiction established."
+    }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "project_context_applied": [
+    ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-pr-contract-w5.json — read fully.",
+    ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md — read fully; quote-both-sides finding threshold and checklist-row requirements applied.",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully; result and coverage semantics applied.",
+    "skills_resolve_context for assigned source/test/bundled-skill paths returned no must_read or on_demand entries.",
+    "Supplied pr-body-history.json and pr-body-edits.json — original contract context, not newer-head execution evidence.",
+    "Package slices/manifest.json, assigned slices 12–14, reassessed slices 04–07, targeted pinned.diff evidence and pinned-source mirror.",
+    "raw/review-pr-contract-w2.txt and raw/review-pr-contract-w4.txt — read fully for explicit context reconciliation."
+  ],
+  "verification": {
+    "reviewed_head": "5974c976823e1a7134723edf3a9140b991246d45",
+    "evidence_level": "static only",
+    "shell_commands_run": false,
+    "tests_run": false,
+    "files_modified": false,
+    "live_source_used": false,
+    "newer_ci_used_as_evidence": false,
+    "role_wide_completion_claimed": false
+  }
+}
+```
+
+Parent summary: **No PR-contract findings in slices 12–14.** Close w2/w4’s original-body context gaps without discarding their recorded slice coverage. Keep historical test execution unverified and retain the separate logic follow-up already raised by w2.
+KERYX_USAGE {"tokens_in":239618,"tokens_out":3586,"model":"openai-codex/gpt-6.1-sol","by":"host"}

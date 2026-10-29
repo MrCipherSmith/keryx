@@ -1,0 +1,157 @@
+[
+  {
+    "id": "CC-W2-001",
+    "severity": "minor",
+    "file": "src/commands/review-operator.ts",
+    "line": null,
+    "quote": "async function recordHostQuestion(\n  command: HostVerb,\n  own: string[],\n  packageDir: string,\n  context: { cwd: string; log: (line: string) => void; env: Readonly<Record<string, string | undefined>> },\n): Promise<number> {",
+    "problem": "recordHostQuestion combines raw CLI parsing, shared refusal rules, three verb-specific preparation/persistence paths, result formatting, and secondary journal synchronization in one function. Its branch-dependent validation is carried into deferred callbacks through assertions such as `premiseAnswer as \"uphold\" | \"dismiss\"` and `reason as string`, rather than represented by validated branch-specific values.",
+    "impact": "Changing a verb's validation or persistence requires navigating unrelated verb implementations and preserving their shared write ordering. The deferred callbacks also lose TypeScript's validation narrowing, making the validation-to-write contract harder to maintain.",
+    "suggested_fix": "Extract verb-specific preparation helpers that return a validated operation and its journal choice. Keep recordHostQuestion as the coordinator: apply shared refusals, prepare without writes, execute the prepared review operation, then update the journal with the existing warning-only failure behavior.",
+    "evidence": "Pinned-source src/commands/review-operator.ts, slice-10: recordHostQuestion contains confirm-plan estimate-number parsing, decide-premise finding lookup and choice validation, waiver/reviewer subject preparation, deferred record writes, and openDecision/answerDecision synchronization. The comments explicitly justify validating before writing and warning on secondary-journal failure; the proposed extraction preserves both decisions rather than changing them.",
+    "confidence": "high",
+    "reviewer": "review-clean-code",
+    "dedupe_key": "clean-code:recordHostQuestion:mixed-responsibilities",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "reported_by": [
+      "review-clean-code"
+    ]
+  },
+  {
+    "id": "CC-W3-001",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "file": "src/review/estimate.ts",
+    "line": null,
+    "quote": "export type PlanConfirmedVia = \"tui-card\" | \"remote-card\" | \"terminal\" | \"host-question\";",
+    "problem": "The newly supported host-question confirmation contradicts the persistence-boundary documentation immediately above it. That comment still says plan-confirmation.json is written by the card or a terminal command and explicitly states, \"Nothing else may write it.\" Related module headers in operator-decisions.ts and plan-confirmation.ts likewise still describe card/terminal-only provenance.",
+    "impact": "Maintainers tracing which writers and provenance are legitimate encounter conflicting descriptions of the same record boundary: the updated types and validators accept host-question records, while the module-level explanations exclude them.",
+    "suggested_fix": "Update these module-level provenance comments together to include the host-question path and distinguish agent-reported question/answer evidence from a card press. Preserve the intentional weaker-trust explanation already present on OperatorDecisionVia.",
+    "evidence": "Slice-17 adds host-question to PlanConfirmedVia and validates its hostQuestion payload. The pinned-source estimate.ts section immediately preceding that union still restricts writers to the card or terminal. Pinned-source operator-decisions.ts opens with card/terminal-only writer descriptions, and plan-confirmation.ts opens with the same restriction. The updated OperatorDecisionVia comment explicitly explains that host-question evidence is agent-reported and weaker than a card; the finding concerns contradictory documentation, not that deliberate policy.",
+    "confidence": "high",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "reported_by": [
+      "review-clean-code"
+    ]
+  },
+  {
+    "id": "HL-W2-001",
+    "severity": "blocker",
+    "reviewer": "review-highload",
+    "file": "src/commands/review-operator.ts",
+    "line": null,
+    "quote": "      hostQuestion: { source: by.source, ref: by.ref, verb: command, answerText },\n      salt: \"host-question\",\n    });\n    await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });",
+    "problem": "Concurrent host-question recordings can reuse one journal decision and silently discard the second question's provenance. The new caller uses openDecision followed by answerDecision, but openDecision's unanswered-twin identity includes only normalized question text, option IDs and session\u2014not host source/ref, verb or package. This caller supplies no session. Consequently, distinct host questions with identical wording and options can be merged while the first recording is between open and answer.",
+    "impact": "Failure mode at two overlapping recordings in one repository: record two valid waive-mutation commands for separate packages, using the same generic question text but different --answered-by refs. Interleave A's open append, B's open/twin lookup, then the answers. B receives A's decision ID without appending B's hostQuestion metadata. Both package waivers can succeed, but the decisions report contains only A's source/ref/answerText for the two acts. This silently loses persisted audit provenance. With concurrent decide-premise recordings of identical question text and different choices, the displayed choice can also cease to correspond to the retained answerText.",
+    "suggested_fix": "Give recorded host questions a separate identity domain from ordinary unanswered questions. Match host twins only by an explicit host-event identity such as source/ref plus verb and package, and never reuse an ordinary decision as a host twin or vice versa. Prefer recording a completed host event under one journal lock, with retry deduplication by that identity. Add a controlled-interleaving regression test for two distinct refs with identical question/options and verify both provenance records survive.",
+    "evidence": "Pinned src/commands/review-operator.ts routes all four new host verbs through this one openDecision/answerDecision pair. Pinned src/decisions/journal.ts defines questionHash from normalized question and sorted option IDs; findOpenTwin filters by unanswered status, session and age, then returns a matching record without checking hostQuestion. openLocked immediately returns resultOf(twin), so the second input's hostQuestion is never appended. The journal lock protects each open operation, but not the caller's complete open-plus-answer sequence. Pinned src/decisions/report.ts builds hostQuestions from retained open records and takes answerText/source/ref from each open, so the missing second metadata is not recovered. The existing twin rationale prevents recommendation-arm rerolls; distinct already-answered host events are not a recommendation draw and must not share that identity. This is a static interleaving proof, not an executed reproduction.",
+    "confidence": "high",
+    "blocking_merge": true,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/commands/review-operator.ts:recordHostQuestion",
+        "src/decisions/journal.ts:findOpenTwin",
+        "src/decisions/journal.ts:openLocked"
+      ],
+      "enumeration_method": "Read the complete recordHostQuestion dispatcher and pinned journal implementation; searched pinned src/decisions for openDecision, hostQuestion and findOpenTwin. All four HOST_OPTIONS verbs converge on the single new journal call, whose shared twin lookup is the collision point."
+    },
+    "reported_by": [
+      "review-highload",
+      "review-logic"
+    ],
+    "merged_from": [
+      "LOG-W4-001"
+    ]
+  },
+  {
+    "id": "LOGIC-W3-001",
+    "severity": "blocker",
+    "reviewer": "review-logic",
+    "file": "src/commands/review-operator.ts",
+    "line": null,
+    "quote": "  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+    "problem": "confirm-plan, waive-mutation, and override-reviewers treat any nonblank answer not beginning with a listed decline word as approval. Unlike decide-premise, these branches never establish that the operator selected the confirming option. In particular, the offered decline option 'keep' is accepted by both waiver/override verbs when --answer is omitted.",
+    "impact": "For a valid interactive package, `waive-mutation --package <dir> --reason \"test\" --answered-by codex:q1 --question-text \"Waive the mutation pass?\" --answer-text \"keep\"` records a mutation waiver and journals choice 'waive', despite the operator selecting 'Keep: run the mutation pass'. The analogous override-reviewers call records an override. confirm-plan similarly accepts 'maybe' once the question contains the current estimate numbers. These are persisted decisions contrary to the supplied answer and the approved requirement that free text is never a decision.",
+    "suggested_fix": "Validate answer-text against verb-specific confirming and declining choices before any write. Recognize 'keep' as a decline for waiver and reviewer override, reject unsupported/free-text answers, and reject contradictions between --answer and answer-text. Preserve explicitly supported affirmative phrases rather than treating absence of a negative prefix as consent. Add refusal tests covering 'keep' for both verbs and 'maybe' for all three.",
+    "evidence": "At pinned head 5974c976, HOST_OPTIONS defines waiver/override decline='keep'. recordHostQuestion permits omitted --answer for all three non-premise verbs. confirm-plan and the shared waiver/override branch call only refuseDecline(answerText, command), whose LEAD_DECLINE set lacks 'keep' and whose predicate accepts arbitrary other words. Both branches then persist the confirming action, and answerDecision uses premiseAnswer ?? choices.confirm. The pinned PRD requires an answer to be one of the verb's options; the pinned acceptance-criteria scope says 'A free-text answer is never a decision.' Existing assigned tests cover declines such as n/no and invalid explicit --answer, but not a declining 'keep' in answer-text. This finding concerns interpreting the reported answer, not the deliberately accepted inability to authenticate host answers.",
+    "confidence": "high",
+    "dedupe_key": "host-question-nonpremise-answer-text-not-validated",
+    "blocking_merge": true,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/commands/review-operator.ts:recordHostQuestion confirm-plan branch",
+        "src/commands/review-operator.ts:recordHostQuestion shared waive-mutation/override-reviewers branch",
+        "src/commands/review-operator.ts:recordHostQuestion decide-premise branch (choice validation present)"
+      ],
+      "enumeration_method": "Enumerated the complete HOST_OPTIONS/HostVerb set and all three branches of recordHostQuestion in pinned source: confirm-plan, decide-premise, and shared waive-mutation/override-reviewers. Only decide-premise calls refuseOtherChoice; the remaining three verbs use prefix-only refusal."
+    },
+    "reported_by": [
+      "review-logic",
+      "review-security-code"
+    ],
+    "merged_from": [
+      "LOGIC-W2-01",
+      "SEC-W2-001"
+    ]
+  },
+  {
+    "id": "PC-W3-001",
+    "severity": "minor",
+    "file": "src/commands/review-operator.ts",
+    "line": null,
+    "quote": "log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);",
+    "problem": "The PR summary promises that the four verbs record the answer \"plus a `keryx decisions` entry\". Slice 08 repeats this unconditionally in review-with-a-record.md and limitations.md. However, slice 10 deliberately catches journal failures after the review record has been written, logs a warning, and returns success without guaranteeing that entry.",
+    "impact": "A reader can reasonably treat a successful host-question command as assurance that the decision is discoverable through `keryx decisions`, although a journal failure leaves only the review-package record. This is a reporting-contract discrepancy, not a claim that the deliberate write-order decision is itself defective.",
+    "suggested_fix": "Qualify the PR and user-facing documentation: the review-package decision is authoritative, journal recording is best effort, and a warning means the journal entry may be absent. If unconditional journaling remains the intended AC6 contract, reconcile that requirement separately with the deliberately nonfatal implementation.",
+    "evidence": "All source evidence was read under .metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source at 5974c976823e1a7134723edf3a9140b991246d45. PR claim: \"plus a `keryx decisions` entry\". docs/docs/guides/review-with-a-record.md: \"a `keryx decisions` entry is written\"; docs/docs/limitations.md repeats that promise. Flow 467 AC6 states: \"Each accepted host question also writes a `keryx decisions` entry\". src/commands/review-operator.ts explicitly explains that a journal which cannot be written produces a warning rather than undoing or duplicating the already-written review record, then catches the error and returns 0. The deliberate rationale was read and is not challenged by this finding.",
+    "confidence": "high",
+    "reviewer": "review-pr-contract",
+    "location_class": "in-diff",
+    "blocking_merge": false,
+    "dedupe_key": "pr-contract-host-question-journal-best-effort",
+    "reported_by": [
+      "review-pr-contract"
+    ]
+  },
+  {
+    "id": "STYLE-W3-001",
+    "severity": "minor",
+    "reviewer": "review-style",
+    "file": "src/commands/review-operator.ts",
+    "line": null,
+    "quote": "/** The options of the question each verb records: the one that records the decision, the one that declines it. */",
+    "problem": "HOST_OPTIONS describes every verb as having a recording option and a declining option, and names decide-premise's dismiss option `decline`. Unlike the other verbs' negative options, dismiss is a decision that is recorded, not a refusal to record.",
+    "impact": "The shared configuration and its comment give maintainers the wrong interpretation of premise dismissal. Understanding the exception requires tracing recordHostQuestion rather than trusting the configuration's names.",
+    "suggested_fix": "Clarify that both premise options are recorded outcomes, while the other verbs have a confirm/refuse pair. Prefer separating premise options from the confirm/decline configuration, or at minimum explicitly document this exception beside HOST_OPTIONS.",
+    "evidence": "slice-10 adds the comment and HOST_OPTIONS.decide-premise with confirm: \"uphold\" and decline: \"dismiss\". The pinned recordHostQuestion handles decide-premise before the choices.decline refusal branch, accepts either premiseAnswer, passes it to answerPremiseQuestion, and journals premiseAnswer rather than choices.confirm. This is a readability issue, not a claim of incorrect runtime behavior.",
+    "confidence": "high",
+    "location_class": "in-diff",
+    "blocking_merge": false,
+    "reported_by": [
+      "review-style"
+    ]
+  },
+  {
+    "id": "STYLE-W4-001",
+    "severity": "minor",
+    "file": "src/review/estimate.ts",
+    "line": null,
+    "quote": "function isHostQuestion(value: unknown): boolean {\n  if (value === null || typeof value !== \"object\") return false;\n  const hq = value as Record<string, unknown>;\n  const filled = (field: unknown): boolean => typeof field === \"string\" && field.trim() !== \"\";\n  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);\n}",
+    "problem": "The newly added isHostQuestion in estimate.ts and validHostQuestion in operator-decisions.ts independently implement the same HostQuestion shape validation: source membership plus five nonblank string fields.",
+    "impact": "Maintainers must update two equivalent validators when the shared HostQuestion record changes, increasing maintenance effort and making their intended equivalence harder to see. This is a DRY observation, not a claim of an existing functional failure.",
+    "suggested_fix": "Extract one shared isHostQuestion(value: unknown): value is HostQuestion predicate into an appropriate shared review validation module and use it from both readers.",
+    "evidence": "At pin 5974c976823e1a7134723edf3a9140b991246d45, research-evidence/pinned-source/src/review/estimate.ts contains isHostQuestion and research-evidence/pinned-source/src/review/operator-decisions.ts contains validHostQuestion. Both newly added functions check HOST_QUESTION_SOURCES and ref, questionText, answerText, and time with equivalent trimmed-nonempty string predicates. Both additions appear in slice-17.diff. Surrounding comments describe the same completeness requirement and give no reason for separate implementations.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "dedupe_key": "style-host-question-validator-duplication",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "reported_by": [
+      "review-style"
+    ]
+  }
+]

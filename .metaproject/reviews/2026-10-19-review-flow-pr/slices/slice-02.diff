@@ -1,0 +1,150 @@
+--- .metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md
+@@ 1,29 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++Scope (operator, poll 227, 2026-10-19): the four standalone review verbs `decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers` accept a recorded host question. `review complete` accepts none, and so do its `--waive` and `--waive-coverage` flags, which exist only on `complete`. A free-text answer is never a decision.
++
++## Criteria
++
++- AC1: `keryx review decide-premise --package <dir> --finding <id> --reason "<why>" --answer uphold|dismiss --answered-by <source>:<ref> --answer-text "<operator's words>" --question-text "<question as asked>"` records the decision with no TTY: `operator-decisions.json` and the finding change exactly as on the terminal path, and the record carries `confirmedVia: "host-question"`, the source, the ref, the verbatim question and answer text, and the time. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC1`]
++- AC2: The same flags work with no TTY on `confirm-plan`, `waive-mutation` and `override-reviewers`, each with the same effect and record fields as its terminal path. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC2`]
++- AC3: Each refusal records nothing and exits non-zero with a message: an `--answer` that is not one of the verb's options (decide-premise: uphold or dismiss), an empty or blank `--answer-text` or `--question-text`, a missing or malformed `--answered-by` (source not one of claude-code, codex, keryx-shell, helyx-poll, other; empty ref), an unknown package, an unknown or not-held finding, a stale plan, a missing `--reason`, and an `--answer-text` that is a decline (empty, `n`, `no`) or, for decide-premise, does not name the same choice as `--answer`. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC3`]
++- AC4: With no TTY and no `--answered-by` the four verbs refuse exactly as before (same message), and with a TTY and no `--answered-by` they behave as before; the existing review-operator tests pass without edits. [verify: exec `bun test src/commands/review-operator-cli.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/harness-robustness.test.ts`]
++- AC5: Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5` · sensitive: failure-scenario]
++- AC6: Each accepted host question also writes a `keryx decisions` entry (question text, the options, the choice, the source and ref), readable with `keryx decisions report --json`; a refused one writes none. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC6`]
++- AC7: `keryx review complete` refuses `--answered-by`, `--answer-text` and `--question-text` (its flag check names them as unknown), and its terminal and card paths are unchanged. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC7`]
++- AC8: The record is visible as a host question, distinct from a card: `confirmedVia` and the source show in the review report and in the `/decisions` modal of keryx shell. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC8`]
++- AC9: The skills `review-orchestrator`, `job-orchestrator` and `review-premise` (every bundled copy, within the line ceilings and byte-identity checks) tell the agent to ask the operator with the host's question tool, then record the answer with the verb, and no longer send the operator to a terminal for these four acts; `complete` still goes to the operator. [verify: exec `bun test src/gdskills`]
++- AC10: TM-04 has a section for the host-question path: what it proves (the operator answered a question the agent reports), what it does not (keryx cannot verify the agent reported it truthfully), and the reversal of §5 on the operator's instruction (polls 225 and 227). `docs/docs/limitations.md`, the CLI reference, README, `keryx review <verb> --help` and the docs site match, and the docs coverage tests stay green. [verify: exec `bun test src/docs src/cli-docs-structure.test.ts src/cli-reference-coverage.test.ts`]
++- AC11: The PR 1052 decisions are recorded through the new verb into the packages' `operator-decisions.json` with the poll references: C-05 uphold, C-10 uphold, C-25 dismiss (poll 223) and E-42 uphold (poll 227). Only what the operator answered is recorded. [verify: judged]
++- AC12 (operator-only): The operator asks for a held finding in a live review, answers a question in Telegram, and sees the decision recorded with `confirmedVia: "host-question"`. The agent does not confirm this criterion. [verify: judged]
+
+--- .metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md
+@@ 1,57 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-10-19T19:21:20.869Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [2.006] A shell allowlist matched against the raw command string is not a security boundary (lesson/accepted) - lessons/allowlist-not-a-boundary.md
++   A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt.
++   claimType: lesson | confidence: high | version: 1.0.0
++   scope: module:src/lib, src/commands, src/tui, entity:shell-permissions, command-risk, approval gate
++   provenance: source=flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/` link=docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md author=unknown confirmedBy=unknown
++2. [1.939] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++3. [1.876] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++4. [1.817] OpenTUI: alignSelf on a transcript box collapses its intrinsic height (lesson/accepted) - lessons/tui-alignself-height-collapse.md
++   In a `@opentui/core` ScrollBox column, a child `BoxRenderable` carrying `alignSelf: "flex-start"` stops measuring its intrinsic HEIGHT: it collapses to the viewport height, squeezes its children, and makes the ScrollBox under-report `scrollHeight`. Hug content with `maxWidth` instead.
++   claimType: lesson | confidence: high | version: 1.0.0
++   scope: module:tui, entity:transcript-blocks, shell-chrome
++   provenance: source=flow 115 link=.metaproject/flows/115-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a author=unknown confirmedBy=unknown
++5. [1.814] gdctx-stem-classifier-misreads-stdout (known-mistake/accepted) - known-mistakes/gdctx-stem-classifier-misreads-stdout.md
++   A keyword-stem classifier applied to raw stdout regardless of exit code turns ordinary English ("refuse," "cannot," "crash") into a false tool-failure signal. Gate stem-matching on stderr or a non-zero exit code, not on the words alone.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:ctx, classification, output-analysis, entity:classifyLine, importantLines, compactLines, FAILURE_STEMS
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-1) author=unknown confirmedBy=Reproduced this session via `keryx ctx run -- printf 'refuse this\n'`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
+
+--- .metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md
+@@ 1,26 @@
++# Operator acts answered by the host's own question
++
++Status: approved scheme (operator polls 225 and 227, 2026-10-19). Full PRD: `docs/requirements/keryx-card-any-host/prd.md`.
++Source: user description (origin: human-request)
++
++## Problem
++
++The review verbs that record an operator decision (`decide-premise`, `confirm-plan`, `waive-mutation`, `override-reviewers`) refuse without a TTY, and the keryx MCP server has no card tool. An agent in Claude Code or Codex that already asked the operator through the host's own question tool (or a Telegram poll through Helyx) and got an answer cannot record it. PR 1052's held findings C-05, C-10, C-25 and E-42 stayed unrecorded for that reason.
++
++## Expected Outcome
++
++Each of the four verbs accepts `--answered-by <source>:<ref> --answer-text "<verbatim>" --question-text "<as asked>"` with no TTY. keryx builds the effect from disk state, refuses what the CLI refuses today, and records `confirmedVia: "host-question"` with the source, ref, question, answer and time, plus a `keryx decisions` entry. keryx does not verify the answer: this reverses TM-04 §5 on the operator's instruction (the trade already made for `flow ac confirm`, poll 222) and the docs say so. `review complete`, unattended runs and a nested keryx stay refused.
++
++## Outcome criteria
++
++- Запрос (дословно): «Это должен быть просто вопрос, все харнесы умеют это делать. И Claude может создавать вот тут вопрос/опрос, прям щас этим пользуемся.» (source: helyx-channel message 214878, 2026-10-19)
++- Эффект (формализация агента): агент в любом харнесе (Claude Code, Codex, keryx shell) задаёт оператору обычный вопрос с вариантами и записывает ответ одной командой keryx; запись хранит дословные вопрос и ответ и помечена `host-question`, а не картой.
++- Как наблюдать (предложение агента): оператор отвечает на опрос в Telegram по реальной удержанной находке, и в `operator-decisions.json` пакета появляется запись `confirmedVia: "host-question"` с id опроса; тот же ответ виден в `keryx decisions report` и в `/decisions`.
++
++## Out of Scope
++
++- Proving who answered, or that a person did (TM-03 §5 and TM-04 §4 limits stay; this flow loosens the proof and says so).
++- Any new transport, token, serve route or MCP tool.
++- `review complete` and its `--waive` / `--waive-coverage` flags (they exist only on `complete`).
++- Other TM-04 acts: learn, schedule, external apply, flow confirm.
++- Free-text answers as decisions.
+
+--- .metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md
+@@ 1,27 @@
++# Flow Journal
++
++- 2026-10-19T19:21:21.871Z - flow created
++- 2026-10-19T19:22:01.788Z - origin-set: unknown -> human-request; quote: "Это должен быть просто вопрос, все харнесы умеют это делать. И Claude может создавать вот тут вопрос/опрос, прям щас этим пользуемся."; source: helyx-channel message 214878, 2026-10-19 (Operator asked that every harness record review acts through its plain question tool)
++- 2026-10-19T19:22:53.157Z - task-added: T5: Tests first: host-question flags on the four verbs (AC1-AC3, AC5, AC7)
++- 2026-10-19T19:22:53.701Z - task-added: T6: Implement flags, refusals and host-question record (AC1-AC3, AC5, AC7)
++- 2026-10-19T19:22:54.189Z - task-added: T7: Decisions journal entry and report/modal display (AC6, AC8)
++- 2026-10-19T19:22:54.736Z - task-added: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
++- 2026-10-19T19:22:55.285Z - task-added: T9: Verify: run AC verification commands and the full local test slice for touched areas
++- 2026-10-19T19:22:55.808Z - task-added: T10: Review through the project review orchestrator and open the PR
++- 2026-10-19T19:23:00.022Z - frozen: 11 criteria; checksum recorded
++- 2026-10-19T19:23:00.027Z - warning: no verification kind on AC5 — add [verify: …] or accept them unclassified
++- 2026-10-19T19:23:00.602Z - started
++- 2026-10-19T19:23:10.187Z - ac-updated: AC5: "Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5`] · sensitive: failure-scenario" -> "Failure scenario: `--answered-by` is refused, with nothing recorded, in an unattended run and in a nested keryx (`KERYX_TOOL_CALL=1`), on every one of the four verbs. [verify: exec `bun test src/commands/review-host-question.test.ts -t AC5` · sensitive: failure-scenario]" (marker must be last on the line)
++- 2026-10-19T19:23:19.393Z - task-done: T1: Collect remaining context
++- 2026-10-19T19:23:19.923Z - task-done: T2: Implement per plan
++- 2026-10-19T19:23:20.357Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-10-19T19:23:20.800Z - task-done: T4: Self-review and prepare draft PR
++- 2026-10-19T19:23:21.243Z - task-depends-set: T6: dependsOn T5 (was empty) — tests first
++- 2026-10-19T19:23:21.881Z - task-depends-set: T7: dependsOn T6 (was empty) — journal entry builds on the verb
++- 2026-10-19T19:23:22.528Z - task-depends-set: T9: dependsOn T6, T7, T8 (was empty) — verify after implementation
++- 2026-10-19T19:23:23.159Z - task-depends-set: T10: dependsOn T9 (was empty) — review after verify
++- 2026-10-19T19:44:44.579Z - task-done: T5: Tests first: host-question flags on the four verbs (AC1-AC3, AC5, AC7)
++- 2026-10-19T19:44:44.806Z - task-done: T6: Implement flags, refusals and host-question record (AC1-AC3, AC5, AC7)
++- 2026-10-19T19:44:45.037Z - task-done: T7: Decisions journal entry and report/modal display (AC6, AC8)
++- 2026-10-19T19:44:45.265Z - task-done: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
++- 2026-10-19T19:44:51.761Z - task-done: T9: Verify: run AC verification commands and the full local test slice for touched areas

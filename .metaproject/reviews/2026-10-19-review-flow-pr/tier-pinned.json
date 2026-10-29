@@ -1,0 +1,34 @@
+{
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "openai-codex",
+    "model": "gpt-6.1-sol",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "openrouter",
+      "candidates": [
+        "openai/gpt-4o-mini",
+        "google/gemini-2.0-flash-001",
+        "qwen/qwen-2.5-7b-instruct",
+        "meta-llama/llama-3.1-8b-instruct"
+      ],
+      "ranked": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "rank": -1
+        },
+        {
+          "model": "google/gemini-2.0-flash-001",
+          "rank": -1
+        }
+      ],
+      "session_rank": null,
+      "fallback_reason": "the session model \"minimax/minimax-m3\" carries no size marker the hints recognise, so no candidate can be called larger or smaller than it"
+    },
+    "routed": true
+  }
+}

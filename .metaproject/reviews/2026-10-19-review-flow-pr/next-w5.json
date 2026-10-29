@@ -1,0 +1,60 @@
+{
+  "done": false,
+  "package": "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr",
+  "dispatches": [
+    {
+      "reviewer": "review-logic",
+      "wave": 5,
+      "wavesLeft": 1,
+      "slices": [
+        "slice-15",
+        "slice-16",
+        "slice-17"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-15.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-16.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-17.diff"
+      ],
+      "bytes": 36901,
+      "reason": "missing",
+      "detail": "DONE_WITH_CONCERNS; 3 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent",
+      "result": "raw/review-logic-w5.txt"
+    },
+    {
+      "reviewer": "review-pr-contract",
+      "wave": 5,
+      "wavesLeft": 2,
+      "slices": [
+        "slice-12",
+        "slice-13",
+        "slice-14"
+      ],
+      "paths": [
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-12.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-13.diff",
+        "/Users/Goodea/goodea/keryx/.metaproject/reviews/2026-10-19-review-flow-pr/slices/slice-14.diff"
+      ],
+      "bytes": 39710,
+      "reason": "retry",
+      "detail": "NEEDS_CONTEXT; answer 1 open question(s) and re-dispatch the uncovered slices — the scope is not closed",
+      "result": "raw/review-pr-contract-w5.txt",
+      "needsContext": [
+        "Supply the historical PR1058 body/checklist corresponding to head 5974c976 so each original claim and checklist box can be compared with the assigned slices without using newer CI evidence."
+      ]
+    }
+  ],
+  "notRun": [
+    {
+      "reviewer": "review-flow-graph",
+      "reason": "no reply recorded and no slice routed to it, so it never ran"
+    },
+    {
+      "reviewer": "review-layout",
+      "reason": "no reply recorded and no slice routed to it, so it never ran"
+    }
+  ],
+  "blocked": [],
+  "escalated": [],
+  "applied": false
+}

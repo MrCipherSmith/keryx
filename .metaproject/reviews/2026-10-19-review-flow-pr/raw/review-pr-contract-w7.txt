@@ -1,0 +1,41 @@
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Reviewed assigned slices 15–17 only against the original historical PR body. No substantiated PR-contract disagreement found within that scope. This is not a review of other slices or confirmation of historical test execution.",
+  "slices": ["slice-15", "slice-16", "slice-17"],
+  "findings": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0},
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md — read in full",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md — Severity (canonical)",
+    "skills_resolve_context for all assigned files returned no must_read or on_demand entries",
+    ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-pr-contract-w7.json",
+    "Historical body: research-evidence/pr-body-history.json and pr-body-edits.json",
+    "Assigned slice diffs and pinned-source at 5974c976823e1a7134723edf3a9140b991246d45"
+  ],
+  "limitations": [
+    "No shell commands, tests, edits, live source, or newer CI evidence used.",
+    "PR-context collection identifies a later head; its CI section was excluded. Historical body evidence reports lastEditedAt null and an empty edit history.",
+    "Documentation and command implementation outside slices 15–17 were not reviewed."
+  ]
+}
+```
+
+### Historical checklist reconciliation
+
+| Box or claim (quoted) | State | Assigned-scope evidence | Expectation / result |
+|---|---|---|---|
+| `bun test src/commands/review-host-question.test.ts` `(41 tests)` | `[x]` | Test path appears in supplied scope metadata, outside assigned slices. | Historical execution and count not verified; no contradiction established. |
+| `existing review-operator, operator-confirm-review and harness-robustness tests pass unedited` | `[x]` | Assigned slices contain no changes to those tests. | “Unedited” is compatible with scope; passing not verified. |
+| `bun test src/gdskills src/docs` and CLI reference coverage | `[x]` | Slices 15–16 change bundled skills and schema. | Execution not verified; source changes alone do not contradict the claim. |
+| `bun run typecheck` | `[x]` | Slice 17 adds host-question types and propagation. | Execution not verified; no demonstrated disagreement. |
+| `review round` | `[ ]` | No assigned diff line contradicts the original pending state. | Do not treat this retrospective review as evidence the original box was wrong. |
+
+The assigned changes support the relevant summary claims: slices 15–16 update operator-question instructions and add `"host-question"` schema support; slice 17 preserves question/answer provenance and adds an unattended-shell refusal. The deliberate, unverified-answer trust model is explicitly acknowledged, not itself a contract defect.
+
+**Parent handoff:** No findings from slices 15–17. Preserve the historical-evidence and execution limitations when consolidating; do not extend this result to other dispatch coverage.
+KERYX_USAGE {"tokens_in":134339,"tokens_out":1814,"model":"openai-codex/gpt-6.1-sol","by":"host"}

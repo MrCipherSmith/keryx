@@ -1,0 +1,56 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Static review of historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45, covering assigned slices 07, 09, 10 and 13 using the supplied diffs and pinned-source mirror. Found one concurrency-related audit-record corruption path in the new host-question journal integration. Overall highload role scope remains incomplete: this result covers only this dispatch's four slices, not other waves or the full PR. No shell, tests, edits or runtime verification performed; newer-head CI was not used.",
+  "findings": [
+    {
+      "id": "HL-W2-001",
+      "severity": "blocker",
+      "reviewer": "review-highload",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "      hostQuestion: { source: by.source, ref: by.ref, verb: command, answerText },\n      salt: \"host-question\",\n    });\n    await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });",
+      "problem": "Concurrent host-question recordings can reuse one journal decision and silently discard the second question's provenance. The new caller uses openDecision followed by answerDecision, but openDecision's unanswered-twin identity includes only normalized question text, option IDs and session—not host source/ref, verb or package. This caller supplies no session. Consequently, distinct host questions with identical wording and options can be merged while the first recording is between open and answer.",
+      "impact": "Failure mode at two overlapping recordings in one repository: record two valid waive-mutation commands for separate packages, using the same generic question text but different --answered-by refs. Interleave A's open append, B's open/twin lookup, then the answers. B receives A's decision ID without appending B's hostQuestion metadata. Both package waivers can succeed, but the decisions report contains only A's source/ref/answerText for the two acts. This silently loses persisted audit provenance. With concurrent decide-premise recordings of identical question text and different choices, the displayed choice can also cease to correspond to the retained answerText.",
+      "suggested_fix": "Give recorded host questions a separate identity domain from ordinary unanswered questions. Match host twins only by an explicit host-event identity such as source/ref plus verb and package, and never reuse an ordinary decision as a host twin or vice versa. Prefer recording a completed host event under one journal lock, with retry deduplication by that identity. Add a controlled-interleaving regression test for two distinct refs with identical question/options and verify both provenance records survive.",
+      "evidence": "Pinned src/commands/review-operator.ts routes all four new host verbs through this one openDecision/answerDecision pair. Pinned src/decisions/journal.ts defines questionHash from normalized question and sorted option IDs; findOpenTwin filters by unanswered status, session and age, then returns a matching record without checking hostQuestion. openLocked immediately returns resultOf(twin), so the second input's hostQuestion is never appended. The journal lock protects each open operation, but not the caller's complete open-plus-answer sequence. Pinned src/decisions/report.ts builds hostQuestions from retained open records and takes answerText/source/ref from each open, so the missing second metadata is not recovered. The existing twin rationale prevents recommendation-arm rerolls; distinct already-answered host events are not a recommendation draw and must not share that identity. This is a static interleaving proof, not an executed reproduction.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:recordHostQuestion",
+          "src/decisions/journal.ts:findOpenTwin",
+          "src/decisions/journal.ts:openLocked"
+        ],
+        "enumeration_method": "Read the complete recordHostQuestion dispatcher and pinned journal implementation; searched pinned src/decisions for openDecision, hostQuestion and findOpenTwin. All four HOST_OPTIONS verbs converge on the single new journal call, whose shared twin lookup is the collision point."
+      }
+    }
+  ],
+  "stats": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    "slice-07",
+    "slice-09",
+    "slice-10",
+    "slice-13"
+  ],
+  "inputs_unreadable": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md — Severity (canonical)"
+  ]
+}
+```
+
+Parent summary: four assigned slices covered; one audit-provenance collision found at two concurrent host recordings. Recommended fix: host-event-specific identity and atomic completed-event recording. Full-role coverage is not claimed.
+KERYX_USAGE {"tokens_in":320550,"tokens_out":2472,"model":"openai-codex/gpt-6.1-sol","by":"host"}

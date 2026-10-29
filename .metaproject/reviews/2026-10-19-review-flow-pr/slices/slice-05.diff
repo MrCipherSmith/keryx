@@ -1,0 +1,55 @@
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 1126,1132 @@
+ - Before dispatch, renumber any display id that another finding, carried or new, already has, in the saved reviewer results, so the judge, its claims and ingest all see the same ids. A new finding has no `global_id` yet (ingest mints `<reviewId>#<id>` after Wave D); ingest refuses two findings under one key, and a claim naming an id two findings share is rejected as `ambiguous-finding`.
+ - Dispatch it once after the last verifier pass (no verifier ran: after the last reviewer), over the canonical findings of severity ≥ minor, each with its display `id`, the **real** `reviewer` and `source`, and, for a finding carried from an earlier round, its `global_id`. External (PR-comment, `source: external`) findings are included: they can be challenged, never downgraded. In a delta round only findings without a carried premise. On keryx shell the judge has no shell and no git tool: run `git log -L` and `git blame -L` for each cited site first and pass the output in `context_files`.
+ - The judge's claims name the `id`, or a carried finding's `global_id`. Save its claims object unchanged to `research-evidence/premises.json` (the verdict reads it there) and pass that file with `keryx review ingest --premises <file>`; never apply verdicts by hand. The merge is delete-only: `upheld` changes nothing, `downgraded` lowers the severity, and a claim that adds, raises or rewrites is rejected and listed in `scope.md`.
+-- `challenged` and `owner-decision` **hold** a finding: it is neither fixable nor clean — not an open blocker or major, never in a fix loop's `fix_context.review_feedback`, and it blocks until answered; the verdict lists it as awaiting the operator. **Asking about a held finding** (every skill that meets one points here): at the tail, after `ingest --premises` wrote `findings.json` (never during Wave D, before the ingest: the answer commands read `findings.json`), in keryx shell call the card `review_decide_premise`, which records the answer; elsewhere put its `question` and `options` to the operator with the host's question tool, then give them the exact command to run in their own terminal, `keryx review decide-premise --package <package> --finding <global_id> --answer uphold|dismiss --reason "<why>"`, and wait. Never run it yourself (it needs a terminal) and never write their reason. In a flow, journal the recorded answer. Readiness and the flow review gate fail while a held finding has no decision. Unattended: leave it held and report it.
++- `challenged` and `owner-decision` **hold** a finding: it is neither fixable nor clean — not an open blocker or major, never in a fix loop's `fix_context.review_feedback`, and it blocks until answered; the verdict lists it as awaiting the operator. **Asking about a held finding** (every skill that meets one points here): at the tail, after `ingest --premises` wrote `findings.json` (never during Wave D, before the ingest: the answer commands read `findings.json`), in keryx shell call the card `review_decide_premise`, which records the answer; elsewhere put its `question` and `options` to the operator with the host's question tool (`uphold` or `dismiss`; never send them to a terminal), then record what they chose: `keryx review decide-premise --package <package> --finding <global_id> --answer uphold|dismiss --reason "<why>" --answered-by <source>:<ref> --answer-text "<their words, verbatim>" --question-text "<the question as asked>"` (`confirmedVia: "host-question"`; "Hosts", Operator decisions). Record only an answer they gave and never write their words or their reason yourself. In a flow, journal the recorded answer. Readiness and the flow review gate fail while a held finding has no decision. Unattended: leave it held and report it.
+ 
+ ### `verification_mode`
+ 
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 1567,1572 @@
+ | "The spawn tool's output has the reviewer's answer" | It is cut (16000 characters on keryx shell) or only the last message. Parse `<package>/raw/<reviewer>.txt` |
+ | "The plan is over threshold, but the reviewers are ready, so I'll dispatch" | `dispatch-check` and `ledger build` refuse an unconfirmed over-threshold plan; the operator confirms it first ("Round plan" 6) |
+ | "I'll keep the results in the shared `.metaproject/data/review/raw`" | It holds other rounds' replies, which then leak into this verdict and retry plan. Results live in `<package>/raw` on every host |
+-| "The operator is busy, I'll pass `--yes` / `--mode automatic` / write the quote" | An operator decision is their card or their terminal ("Hosts"); a quote you typed is not theirs |
++| "The operator is busy, I'll pass `--yes` / `--mode automatic` / write the quote" | An operator decision is their card, their answer to the host question, or their terminal ("Hosts"); words you typed are not theirs |
+ | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
+ | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |
+
+--- .metaproject/skills/gdskills/review/review-premise/SKILL.md
+@@ 96,102 @@
+ 
+ `challenged` and `owner-decision` **hold** the finding: it does not count as an open
+ blocker or major, it is not sent to a fixer, and the verdict lists it as awaiting the
+-operator, who answers with the `review_decide_premise` card in keryx shell (never send them to a terminal) or `keryx review decide-premise` outside it (`uphold` or `dismiss`). You never
++operator, who answers with the `review_decide_premise` card in keryx shell (the stronger path) or, elsewhere, to the host's own question tool (`uphold` or `dismiss`), which the caller records with `keryx review decide-premise --answered-by …` (a host question; never a terminal). You never
+ dismiss. `upheld` is the normal answer: a finding with a trigger, an outcome, no intent
+ signal and no practice source against it is upheld.
+ 
+
+--- .metaproject/skills/gdskills/review/review-premise/SKILL.md
+@@ 165,171 @@
+ | Lowering a severity, holding a finding for the operator | YES | — |
+ | Whether a finding reproduces | NO | `review-verifier` |
+ | Adding a finding, raising a severity, editing one | **NO** | a domain reviewer in a new round |
+-| Dismissing a finding | NO | the operator: `keryx review decide-premise --answer dismiss` |
++| Dismissing a finding | NO | the operator, by card or host question: `keryx review decide-premise --answer dismiss` |
+ 
+ ## Red Flags
+ 
+
+--- README.md
+@@ 1176,1185 @@
+ 
+ `keryx review complete` on a pull-request package (one that targets a PR, or whose `--ref` is a PR URL under any `--target`) refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
+ 
++### Operator decisions in a review: a card, or a host question
++
++Four review acts are the operator's: `keryx review confirm-plan`, `waive-mutation`, `override-reviewers` and `decide-premise` (a held finding's premise). In `keryx shell` the agent calls a card and you answer it in the shell or in the Telegram topic; a card press is verified by keryx. In Claude Code, Codex or another host there is no card: the agent asks you with the host's own question tool (or a Telegram poll through Helyx) and records your answer with `--answered-by <source>:<ref> --answer-text "<your words, verbatim>" --question-text "<the question as asked>"`, with no terminal. That record carries `confirmedVia: "host-question"` and is weaker than a card: keryx does not verify the answer. Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path. See [limitations](docs/docs/limitations.md#a-host-question-is-a-weaker-proof-than-a-card) and the [CLI reference](docs/docs/cli-reference.md#review).
++
+ ### Review bot on pull requests
+ 
+ A GitHub Action reviews each same-repository pull request, has a second model

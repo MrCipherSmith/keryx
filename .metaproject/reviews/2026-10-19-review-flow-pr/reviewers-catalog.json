@@ -1,0 +1,195 @@
+{
+  "bundled": [
+    {
+      "name": "code-ai-review",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/code-ai-review",
+      "description": "Use when the legacy strict AI review profile (code-review-ai-assistant.mdc) is asked for by name — reviews the current branch from its merge-base, committed and uncommitted changes together. NOT for: a code review request that names no profile (review-orchestrator)."
+    },
+    {
+      "name": "code-learned-review",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/code-learned-review",
+      "description": "Use when a project has a learned review skill — built by `keryx review learn` from its own pull-request comments — and wants those accumulated conventions applied to the current branch. Ships with an empty checklist: the content comes from the project, never from the tool. NOT for: a project with no learned skill, or a review request that names no profile (review-orchestrator)."
+    },
+    {
+      "name": "code-mobx-store-review",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/code-mobx-store-review",
+      "description": "Use when MobX store changes need a focused review — actions, computed values, reactions, async runInAction, state typing, and View↔Store boundaries. NOT for: a general frontend review (review-frontend) or a review request that names no domain (review-orchestrator)."
+    },
+    {
+      "name": "code-style-review",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/code-style-review",
+      "description": "Use when a caller wants the style/architecture checklist in code-style-patterns.mdc applied by its own name — checks naming, module and file layout, and TypeScript usage patterns against that specific ruleset, over this branch's diff. Narrower than a general style pass, and separate from the correctness-and-security AI review baseline. NOT for: a general style review (review-style) or an architecture review (review-architecture)."
+    },
+    {
+      "name": "review-architecture",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-architecture",
+      "description": "Use when: reviewing code for architectural violations — layer violations, dependency direction mistakes, module boundary coupling, SOLID principle breaches, NestJS module/provider structure, React MVVM boundary violations, or MobX store layer misplacement. Dispatched by review-orchestrator with --architecture or --backend. NOT for: style/naming preferences, logic correctness bugs, or security vulnerabilities."
+    },
+    {
+      "name": "review-backend",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-backend",
+      "description": "Use when: reviewing NestJS backend changes — API design, service layer, DTO validation, database patterns, and TypeScript correctness. Dispatched by review-orchestrator with the --backend flag. NOT for: frontend patterns, MobX, React components, general security vulnerabilities (use review-security-code for XSS/injection/auth-bypass), or performance profiling (use review-performance)."
+    },
+    {
+      "name": "review-clean-code",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-clean-code",
+      "description": "Use when: reviewing code against Clean Code principles (Uncle Bob) and SOLID at the function/class level — meaningful names, small functions, single level of abstraction, argument count, error handling, DRY, comment quality, and SOLID (SRP, OCP, LSP, ISP, DIP) as applied to individual classes and functions. Dispatched by review-orchestrator. NOT for: architectural layer violations (review-architecture), naming convention formatting (review-style), logic correctness bugs (review-logic), or security (review-security-code)."
+    },
+    {
+      "name": "review-core-boundaries",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-core-boundaries",
+      "description": "Use when reviewing shared core/infrastructure module changes for dependency direction, feature-boundary leakage, abstraction stability, composition, and blast-radius risks. Dispatched by review-orchestrator for --core-boundaries, --project-conventions, --all, or src/core/** changes. NOT for: logic correctness in code that happens to live in core (review-logic), naming and readability (review-style), or SOLID and layering inside a feature module (review-architecture)."
+    },
+    {
+      "name": "review-flow-graph",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-flow-graph",
+      "description": "Use when reviewing generic ReactFlow or graph-surface abstraction changes: public graph surface, store subclassing, layout lifecycle, internal helper boundaries, selection lifecycle, and large-graph performance. Dispatched by review-orchestrator for --flow-graph, --project-conventions, --all, or src/core/flow/** / graph abstraction changes. NOT for: React and MobX component structure outside the graph surface (review-frontend), render cost elsewhere in the app (review-performance), or the domain rules a graph happens to display (review-logic)."
+    },
+    {
+      "name": "review-frontend",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-frontend",
+      "description": "Use when a frontend review is requested, checking React component patterns, MobX state management (observer, actions, computed, reactions, lifecycle), View-Store boundaries, and TypeScript safety in changed frontend code. NOT for backend patterns, security vulnerabilities, performance bottlenecks, or cross-layer architecture.",
+      "overlapGroup": "frontend"
+    },
+    {
+      "name": "review-frontend-conventions",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-frontend-conventions",
+      "description": "Use when reviewing frontend code against repository-local conventions commonly captured in CLAUDE.md or similar project guides: React/MobX boundaries, TypeScript strictness, i18n placement, storage wrappers, error handling, styling tokens, Storybook expectations, and local tooling rules. Dispatched by review-orchestrator for --frontend-conventions, --project-conventions, --all, or frontend src/**/*.ts(x) changes when local convention docs exist. NOT for: generic React and MobX correctness with no local rule behind it (review-frontend), what the CSS actually renders (review-layout), or naming and readability as a matter of taste (review-style).",
+      "overlapGroup": "frontend",
+      "overlapRank": "generic"
+    },
+    {
+      "name": "review-highload",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-highload",
+      "description": "Use when: reviewing code that will run under high concurrency or high traffic — race conditions, connection pool exhaustion, cache invalidation, missing indexes, unbounded queues, missing backpressure, retry storms, idempotency gaps, hot-path blocking I/O, and distributed systems anti-patterns. Dispatched by review-orchestrator. NOT for: frontend re-render performance (review-performance), general N+1 queries (review-performance), clean code style (review-clean-code), or NestJS module structure (review-architecture)."
+    },
+    {
+      "name": "review-jev-comments",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-jev-comments",
+      "engine": "jev",
+      "description": "Use when: an ADDITIONAL, machine-scored pass is wanted over open PR review comments already in the existing ledger — never replacing any other reviewer, and never auto-replying or auto-resolving. Dispatched by review-orchestrator in Wave B, via the CLI (`keryx review jev-comments`), when `review.jev.comments: true` in .metaproject/tasks.config.json and a Jev/OpenRouter credential is resolvable. It is not an LLM sub-agent: there is nothing to dispatch through a platform-native agent mechanism, and no prose is generated by a model — Jev only answers a `choice` among resolved-by-fix/still-open/not-actionable/needs-escalation per open comment; keryx writes every word of every finding. NOT for: posting a reply, resolving a thread, or deciding what `keryx review comments reply` sends — this reviewer only ever reads the ledger and labels."
+    },
+    {
+      "name": "review-jev-contract",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-jev-contract",
+      "engine": "jev",
+      "description": "Use when: an ADDITIONAL, machine-scored check of a PR description's own CLAIMS — and, when a flow is linked, that flow's frozen acceptance criteria — against the diff is wanted, never replacing any other reviewer. Dispatched by review-orchestrator in Wave B, via the CLI (`keryx review jev-contract`), when `review.jev.contract: true` in .metaproject/tasks.config.json and a Jev/OpenRouter credential is resolvable. It is not an LLM sub-agent: there is nothing to dispatch through a platform-native agent mechanism, and no prose is generated by a model — Jev only answers one `noul` probability per claim; keryx writes every word of every finding. Replaces the orchestrator's by-eye Stage 1 \"description vs diff\" judgement with a scored input when the opt-in is on; the by-eye check stays the fallback when it is off. NOT for: judging a flow's frozen criteria from scratch (that machinery is flow 328's `check-ac.ts`, reused, not duplicated), and not a substitute for a human reviewer reading the claim list it produces."
+    },
+    {
+      "name": "review-jev-docs",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-jev-docs",
+      "engine": "jev",
+      "description": "Use when: an ADDITIONAL, machine-scored pass is wanted over documentation sections that may have gone STALE because of a diff — never replacing any other reviewer. Dispatched by review-orchestrator in Wave B, via the CLI (`keryx review jev-docs`), when `review.jev.docs: true` in .metaproject/tasks.config.json and a Jev/OpenRouter credential is resolvable. It is not an LLM sub-agent: there is nothing to dispatch through a platform-native agent mechanism, and no prose is generated by a model — Jev only answers a `noul` staleness probability per doc section; keryx writes every word of every finding, and one class of finding (a removed/renamed CLI flag still documented) is found with no Jev call at all. NOT for: judging whether documentation is well-written, complete, or accurate about something the diff never touched — this reviewer only ever looks at sections deterministically linked to code the diff changed."
+    },
+    {
+      "name": "review-jev-risk",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-jev-risk",
+      "engine": "jev",
+      "description": "Use when: an ADDITIONAL, machine-scored RISK MAP is wanted over every changed hunk — never replacing any other reviewer. Dispatched by review-orchestrator in Wave B, via the CLI (`keryx review jev-risk`), when `review.jev.risk: true` in .metaproject/tasks.config.json and a Jev/OpenRouter credential is resolvable. It is not an LLM sub-agent: there is nothing to dispatch through a platform-native agent mechanism, and no prose is generated by a model — Jev only answers one `noul` probability per (hunk, risk dimension) pair; keryx writes every word of every finding. NOT for: judgement calls a risk dimension does not state (style, architecture beyond risk-flagging — those stay with the reviewers that already cover them), and not a substitute for a human reviewer reading the ranked map it produces."
+    },
+    {
+      "name": "review-jev-rules",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-jev-rules",
+      "engine": "jev",
+      "description": "Use when: an ADDITIONAL, machine-scored pass is wanted over every changed hunk against every applicable project rule clause — never replacing any other reviewer. Dispatched by review-orchestrator in Wave B, via the CLI (`keryx review jev-rules`), when `review.jev.rules: true` in .metaproject/tasks.config.json and a Jev/OpenRouter credential is resolvable. It is not an LLM sub-agent: there is nothing to dispatch through a platform-native agent mechanism, and no prose is generated by a model — Jev only answers a `noul` violation probability per (hunk, rule clause) pair; keryx writes every word of every finding. NOT for: judgement calls a rule clause does not state (logic bugs, architecture, security, performance — those stay with the reviewers that already cover them), and not a substitute for reading the rules yourself. A finding here says a hunk likely contradicts a clause of a rule this project already wrote down; it says nothing about code that violates no documented rule."
+    },
+    {
+      "name": "review-jev-scenarios",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-jev-scenarios",
+      "engine": "jev",
+      "description": "Use when: an ADDITIONAL, machine-scored FUNCTIONAL review is wanted — which user scenarios a PR likely changes — never replacing any other reviewer. Dispatched by review-orchestrator in Wave B, via the CLI (`keryx review jev-scenarios`), when `review.jev.scenarios: true` in .metaproject/tasks.config.json and a Jev/OpenRouter credential is resolvable. It is not an LLM sub-agent: there is nothing to dispatch through a platform-native agent mechanism, and no prose is generated by a model — Jev only answers one `noul` \"does this change alter this scenario's behaviour?\" per scenario whose linked code the diff touches; keryx writes every word of every finding. NOT for: discovering scenarios nobody documented (it reads existing gdwiki user-scenario pages, PRD requirement/scenario sections, and README/docs \"how to\" sections — a scenario that exists only in someone's head is invisible to it), and not a substitute for manually walking the checklist it produces."
+    },
+    {
+      "name": "review-layout",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-layout",
+      "description": "Use when reviewing changes to rendered layout: flex and grid sizing, intrinsic vs extrinsic sizing, overflow and collapse, logical properties and RTL, and sensitivity to translated text length. Every finding is measured in a real layout engine, never reasoned from class names in a DOM stub. Dispatched by review-orchestrator for --layout, --all, or when the diff touches sizing/spacing utilities on a rendered element. NOT for: whether a class exists or comes from the theme (review-frontend-conventions), naming and readability (review-style), re-render cost (review-performance), React or MobX structure (review-frontend)."
+    },
+    {
+      "name": "review-logic",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-logic",
+      "description": "Use when: reviewing code for logic correctness, algorithmic bugs, missing error handling, async/await mistakes, null/undefined risks, race conditions, type contract violations, or spec compliance. Dispatched by review-orchestrator for --frontend, --backend, and --all. Also invoked directly: \"review logic\", \"check correctness\", \"are there any bugs here\". NOT for: security vulnerabilities, performance profiling, style/naming preferences, or architectural pattern concerns — those belong in their respective specialized reviewers."
+    },
+    {
+      "name": "review-orchestrator",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-orchestrator",
+      "description": "Use when: a code review is requested and the user does not name a specialized reviewer — \"review\", \"code review\", \"review this PR\", \"review --all\". Dispatches the relevant specialized reviewers in parallel and consolidates their findings into one unified report, and owns the fan-out flags \"--all\", \"--project-conventions\" and \"--legacy-profiles\". NOT for: running a single specialized reviewer — invoke it directly by name instead, which is also how a flag that names one domain reaches its reviewer."
+    },
+    {
+      "name": "review-performance",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-performance",
+      "description": "Use when a performance review is requested, checking for N+1 queries, unnecessary re-renders, memory leaks, missing indexes, large bundle imports, and synchronous blocking in changed code. NOT for security, logic correctness, style, or architecture."
+    },
+    {
+      "name": "review-pr-contract",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-pr-contract",
+      "description": "Use when a review package carries pr-context.md and the claims the author made there need checking against the diff: a checklist box (\"Documentation needed\", \"Tests updated\", \"Breaking change\") that the diff contradicts, and documentation outside the diff that still describes the behaviour the change altered. Dispatched by review-orchestrator for --pr-contract, --all, or whenever pr-context.md is in the package. NOT for: whether the code is correct (review-logic), whether the tests can fail (review-testing-practices), or comments that the diff itself adds (review-jev-comments)."
+    },
+    {
+      "name": "review-pr-feedback",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-pr-feedback",
+      "description": "Use when: a developer has received PR review comments and wants to understand them, check whether they are still true of the code, act on them, or extract patterns from them. With `--fix`, also validates every comment, plans the fix, drives it to a merged state and answers each reviewer. NOT for: reviewing code directly — this skill reads human or bot PR feedback and makes it actionable. To review code, use the domain review skills."
+    },
+    {
+      "name": "review-premise",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-premise",
+      "description": "Use when: findings exist and someone is about to act on them — after the verifier in a review round (Wave D), or before a fix loop implements a finding that came from a follow-up issue or an external review comment. Judges whether each finding is a defect at all, on intent, accepted practice, consistency and fix soundness, and returns upheld | downgraded | challenged | owner-decision. It can only lower a severity or hold a finding for the operator; it never adds a finding, raises a severity or edits its text. NOT for: first-pass review (run domain reviewers first); checking whether a finding reproduces (review-verifier); dismissing a finding, which only the operator does."
+    },
+    {
+      "name": "review-regression",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-regression",
+      "description": "Use when: reviewing the BLAST RADIUS of a change — the code a change can break, as opposed to the change itself. Dispatched by review-orchestrator under scope B of a deep round, over the set `keryx review blast-radius` computes. NOT for: reviewing the diff (that is scope A and the ordinary reviewers), and NOT for style, naming or architecture in code the change did not touch."
+    },
+    {
+      "name": "review-security-code",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-security-code",
+      "description": "Use when a code-level security review is requested, checking for injection vulnerabilities, auth gaps, insecure cryptography, secrets, and OWASP Top 10 patterns in changed code. NOT for infrastructure, deployment, or dependency audits."
+    },
+    {
+      "name": "review-style",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-style",
+      "description": "Use when: reviewing code for style, naming conventions, readability, and DRY violations — without touching logic, architecture, security, or performance. Dispatched by review-orchestrator with the --style flag. NOT for: logic bugs, architectural violations, security vulnerabilities, performance anti-patterns, or any finding that could cause a functional regression."
+    },
+    {
+      "name": "review-testing-practices",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-testing-practices",
+      "description": "Use when reviewing unit, integration, Storybook, component, or e2e tests against repository-local testing conventions: co-location, network mocking, MSW-style boundary mocks, behaviour assertions, deterministic waits, smoke/full split, locator priority, and screenshot-test discipline. Runs a bounded mutation pass over the gates the diff added, so a suite that cannot fail is found by executing it rather than by reading it. Dispatched by review-orchestrator for --testing-practices, --project-conventions, --all, or changed test/e2e/story files. NOT for: the correctness of the production code a suite covers (review-logic), or naming and readability inside a test with no effect on what it pins (review-style)."
+    },
+    {
+      "name": "review-verifier",
+      "source": "bundled",
+      "path": ".metaproject/skills/gdskills/review/review-verifier",
+      "description": "Use when: consolidated findings from other reviewers need to be checked before they are reported — by RUNNING something that fails if the finding is real, or by confirming the sites the finding named actually exist. Dispatched by review-orchestrator as Wave C. This reviewer can only DELETE. It cannot raise a severity, add a finding, or change a finding's text. NOT for: first-pass review (run domain reviewers first); re-scoring findings by re-reading them, which is the operation this skill replaced and which is measured to degrade accuracy."
+    }
+  ],
+  "bundledSource": "project",
+  "project": []
+}

@@ -1,0 +1,42 @@
+STATUS: DONE
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Completed static review of slices 04–07 for historical head 5974c976823e1a7134723edf3a9140b991246d45. Found one documentation/implementation contract mismatch. The deliberately weaker host-question proof is explicitly accepted by the pinned requirements and TM-04 amendment, so it is not itself a defect. Overall review-logic role scope remains incomplete: this result covers only the assigned slices, not the whole PR.",
+  "findings": [
+    {
+      "id": "LOGIC-W2-01",
+      "severity": "minor",
+      "file": "README.md",
+      "line": null,
+      "quote": "Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path.",
+      "problem": "The added documentation promises that arbitrary free text cannot record a decision, but the pinned implementation does not enforce that for confirm-plan, waive-mutation or override-reviewers. recordHostQuestion calls refuseDecline for these verbs, which rejects only empty answers and certain leading decline words; it never requires an affirmative option. For example, --answer-text \"banana\" passes the answer check on waive-mutation and override-reviewers when their other prerequisites are satisfied.",
+      "impact": "Readers are told that option-only validation protects these operator decisions when it does not. The same unsupported guarantee appears in the assigned orchestrator instructions, TM-04 §6b and CLI reference.",
+      "suggested_fix": "Preserve the approved option-only contract by validating the affirmative answer for all three verbs before recording anything, and add rejection coverage for non-option free text. Reconcile the affected documentation with the resulting behavior.",
+      "evidence": "Static evidence at pinned head 5974c976: research-evidence/pinned-source/src/commands/review-operator.ts, recordHostQuestion and refuseDecline. The three non-premise branches use only refuseDecline(answerText, command); only decide-premise additionally checks choice words. The pinned PRD explicitly states that free text is not a decision. No command or test was executed.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "dedupe_key": "host-question-non-option-answer-accepted"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  },
+  "slices": ["slice-04", "slice-05", "slice-06", "slice-07"],
+  "inputs_unreadable": [],
+  "project_context_applied": [],
+  "scope_complete": false,
+  "executionRequired": false,
+  "executionReason": "Read-only historical documentation and steering review; tests, shell commands and edits prohibited."
+}
+```
+
+Parent summary: Assigned slices are covered. Reconcile the non-option-answer mismatch with the implementation reviewers, deduplicating any corresponding runtime finding. No tests, shell, edits or newer-head CI evidence were used; other review-logic dispatches are still needed for overall role completion.
+KERYX_USAGE {"tokens_in":181093,"tokens_out":1969,"model":"openai-codex/gpt-6.1-sol","by":"host"}

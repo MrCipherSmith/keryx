@@ -1,0 +1,679 @@
+[
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-architecture-w1.txt",
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "slices": [
+      "slice-01",
+      "slice-03",
+      "slice-04",
+      "slice-05"
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-architecture-w2.txt",
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-07",
+        "status": "DONE",
+        "coverage": "Reviewed CLI documentation changes and their alignment with the explicitly accepted host-question architecture."
+      },
+      {
+        "id": "slice-09",
+        "status": "DONE",
+        "coverage": "Reviewed command imports, host-question routing, help text and completion-card provenance display."
+      },
+      {
+        "id": "slice-10",
+        "status": "DONE",
+        "coverage": "Reviewed host-question command orchestration, delegation to existing review services and decisions-facade integration."
+      },
+      {
+        "id": "slice-13",
+        "status": "DONE",
+        "coverage": "Reviewed journal metadata, report separation, facade exports, count changes and supporting types."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-architecture-w3.txt",
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-14",
+        "status": "DONE",
+        "coverage": "Reviewed bundled job/review orchestration instruction changes and the separation between verified cards and agent-reported host answers."
+      },
+      {
+        "id": "slice-15",
+        "status": "DONE",
+        "coverage": "Reviewed remaining bundled review-orchestrator changes for plan confirmation, reviewer overrides, mutation waivers and held-premise decisions."
+      },
+      {
+        "id": "slice-16",
+        "status": "DONE",
+        "coverage": "Reviewed bundled premise-review instructions and finding-schema additions for host-question provenance."
+      },
+      {
+        "id": "slice-17",
+        "status": "DONE",
+        "coverage": "Reviewed review-domain provenance types, validation, persistence and propagation changes, plus the unattended shell refusal. Checked pinned supporting source for dependency direction and existing storage boundaries."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-clean-code-w1.txt",
+    "reviewer": "review-clean-code",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "DONE",
+        "coverage": "Reviewed hostQuestion schema naming, required fields and descriptions, plus the new flow record. Cross-checked the schema against its pinned-source declaration."
+      },
+      {
+        "id": "slice-03",
+        "status": "DONE",
+        "coverage": "Reviewed implementation-plan intent, task documentation and changed job/review-orchestrator instructions for explanatory clarity and inconsistent terminology."
+      },
+      {
+        "id": "slice-04",
+        "status": "DONE",
+        "coverage": "Reviewed host mapping, four-act operator-decision instructions, plan confirmation, memory-waiver boundary and reviewer-override guidance. Repeated instructions describe distinct workflow entry points rather than an actionable three-site code duplication."
+      },
+      {
+        "id": "slice-05",
+        "status": "DONE",
+        "coverage": "Reviewed held-finding instructions, premise-review guidance and README explanation. The new prose consistently distinguishes operator answers from agent-authored words and identifies host questions as weaker than verified cards."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-clean-code-w2.txt",
+    "reviewer": "review-clean-code",
+    "status": "DONE_WITH_CONCERNS",
+    "slices": [
+      {
+        "id": "slice-09",
+        "status": "COVERED",
+        "coverage": "Operator-command routing/help and completion-card waiver rendering."
+      },
+      {
+        "id": "slice-10",
+        "status": "COVERED",
+        "coverage": "Host-question options, validation helpers, preparation/write sequencing, and secondary-journal error handling."
+      },
+      {
+        "id": "slice-13",
+        "status": "COVERED",
+        "coverage": "Journal changes, report segregation/rendering, service counts, sources, and public types."
+      },
+      {
+        "id": "slice-14",
+        "status": "COVERED",
+        "coverage": "Bundled job/review-orchestrator instruction changes and stated host-question trust boundary."
+      }
+    ],
+    "findings": [
+      {
+        "id": "CC-W2-001",
+        "severity": "minor",
+        "file": "src/commands/review-operator.ts",
+        "line": null,
+        "quote": "async function recordHostQuestion(\n  command: HostVerb,\n  own: string[],\n  packageDir: string,\n  context: { cwd: string; log: (line: string) => void; env: Readonly<Record<string, string | undefined>> },\n): Promise<number> {",
+        "problem": "recordHostQuestion combines raw CLI parsing, shared refusal rules, three verb-specific preparation/persistence paths, result formatting, and secondary journal synchronization in one function. Its branch-dependent validation is carried into deferred callbacks through assertions such as `premiseAnswer as \"uphold\" | \"dismiss\"` and `reason as string`, rather than represented by validated branch-specific values.",
+        "impact": "Changing a verb's validation or persistence requires navigating unrelated verb implementations and preserving their shared write ordering. The deferred callbacks also lose TypeScript's validation narrowing, making the validation-to-write contract harder to maintain.",
+        "suggested_fix": "Extract verb-specific preparation helpers that return a validated operation and its journal choice. Keep recordHostQuestion as the coordinator: apply shared refusals, prepare without writes, execute the prepared review operation, then update the journal with the existing warning-only failure behavior.",
+        "evidence": "Pinned-source src/commands/review-operator.ts, slice-10: recordHostQuestion contains confirm-plan estimate-number parsing, decide-premise finding lookup and choice validation, waiver/reviewer subject preparation, deferred record writes, and openDecision/answerDecision synchronization. The comments explicitly justify validating before writing and warning on secondary-journal failure; the proposed extraction preserves both decisions rather than changing them.",
+        "confidence": "high",
+        "reviewer": "review-clean-code",
+        "dedupe_key": "clean-code:recordHostQuestion:mixed-responsibilities",
+        "blocking_merge": false,
+        "location_class": "in-diff"
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-clean-code-w3.txt",
+    "reviewer": "review-clean-code",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-15",
+        "status": "DONE",
+        "coverage": "Read all supplied changed hunks in the bundled review-orchestrator instructions."
+      },
+      {
+        "id": "slice-16",
+        "status": "DONE",
+        "coverage": "Read all supplied changed hunks in the bundled review-premise instructions and finding schema."
+      },
+      {
+        "id": "slice-17",
+        "status": "DONE",
+        "coverage": "Read all supplied changed hunks across review and unattended modules; inspected pinned-source estimate, operator-decisions and plan-confirmation implementations for supporting context."
+      }
+    ],
+    "findings": [
+      {
+        "id": "CC-W3-001",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/review/estimate.ts",
+        "line": null,
+        "quote": "export type PlanConfirmedVia = \"tui-card\" | \"remote-card\" | \"terminal\" | \"host-question\";",
+        "problem": "The newly supported host-question confirmation contradicts the persistence-boundary documentation immediately above it. That comment still says plan-confirmation.json is written by the card or a terminal command and explicitly states, \"Nothing else may write it.\" Related module headers in operator-decisions.ts and plan-confirmation.ts likewise still describe card/terminal-only provenance.",
+        "impact": "Maintainers tracing which writers and provenance are legitimate encounter conflicting descriptions of the same record boundary: the updated types and validators accept host-question records, while the module-level explanations exclude them.",
+        "suggested_fix": "Update these module-level provenance comments together to include the host-question path and distinguish agent-reported question/answer evidence from a card press. Preserve the intentional weaker-trust explanation already present on OperatorDecisionVia.",
+        "evidence": "Slice-17 adds host-question to PlanConfirmedVia and validates its hostQuestion payload. The pinned-source estimate.ts section immediately preceding that union still restricts writers to the card or terminal. Pinned-source operator-decisions.ts opens with card/terminal-only writer descriptions, and plan-confirmation.ts opens with the same restriction. The updated OperatorDecisionVia comment explicitly explains that host-question evidence is agent-reported and weaker than a card; the finding concerns contradictory documentation, not that deliberate policy.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "location_class": "in-diff"
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-core-boundaries-w1.txt",
+    "reviewer": "review-core-boundaries",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "DONE",
+        "coverage": "Reviewed the contract extension and complete Flow 467 record; checked pinned schema counterpart and premise-decision producer/validation path."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-highload-w1.txt",
+    "reviewer": "review-highload",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "DONE",
+        "coverage": "Reviewed host-question schema extension and flow metadata; no load-related failure path identified."
+      },
+      {
+        "id": "slice-03",
+        "status": "DONE",
+        "coverage": "Reviewed implementation plan, task definitions, and orchestration guidance changes, including operator gating and unattended behavior."
+      },
+      {
+        "id": "slice-04",
+        "status": "DONE",
+        "coverage": "Reviewed host-question instructions, dispatch confirmation, memory-stage waiver boundaries, reviewer overrides, and mutation-waiver guidance."
+      },
+      {
+        "id": "slice-05",
+        "status": "DONE",
+        "coverage": "Reviewed held-finding decision guidance, premise-review boundaries, and README explanation of the weaker host-question proof."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-highload-w2.txt",
+    "reviewer": "review-highload",
+    "status": "DONE_WITH_CONCERNS",
+    "slices": [
+      "slice-07",
+      "slice-09",
+      "slice-10",
+      "slice-13"
+    ],
+    "findings": [
+      {
+        "id": "HL-W2-001",
+        "severity": "blocker",
+        "reviewer": "review-highload",
+        "file": "src/commands/review-operator.ts",
+        "line": null,
+        "quote": "      hostQuestion: { source: by.source, ref: by.ref, verb: command, answerText },\n      salt: \"host-question\",\n    });\n    await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });",
+        "problem": "Concurrent host-question recordings can reuse one journal decision and silently discard the second question's provenance. The new caller uses openDecision followed by answerDecision, but openDecision's unanswered-twin identity includes only normalized question text, option IDs and session\u2014not host source/ref, verb or package. This caller supplies no session. Consequently, distinct host questions with identical wording and options can be merged while the first recording is between open and answer.",
+        "impact": "Failure mode at two overlapping recordings in one repository: record two valid waive-mutation commands for separate packages, using the same generic question text but different --answered-by refs. Interleave A's open append, B's open/twin lookup, then the answers. B receives A's decision ID without appending B's hostQuestion metadata. Both package waivers can succeed, but the decisions report contains only A's source/ref/answerText for the two acts. This silently loses persisted audit provenance. With concurrent decide-premise recordings of identical question text and different choices, the displayed choice can also cease to correspond to the retained answerText.",
+        "suggested_fix": "Give recorded host questions a separate identity domain from ordinary unanswered questions. Match host twins only by an explicit host-event identity such as source/ref plus verb and package, and never reuse an ordinary decision as a host twin or vice versa. Prefer recording a completed host event under one journal lock, with retry deduplication by that identity. Add a controlled-interleaving regression test for two distinct refs with identical question/options and verify both provenance records survive.",
+        "evidence": "Pinned src/commands/review-operator.ts routes all four new host verbs through this one openDecision/answerDecision pair. Pinned src/decisions/journal.ts defines questionHash from normalized question and sorted option IDs; findOpenTwin filters by unanswered status, session and age, then returns a matching record without checking hostQuestion. openLocked immediately returns resultOf(twin), so the second input's hostQuestion is never appended. The journal lock protects each open operation, but not the caller's complete open-plus-answer sequence. Pinned src/decisions/report.ts builds hostQuestions from retained open records and takes answerText/source/ref from each open, so the missing second metadata is not recovered. The existing twin rationale prevents recommendation-arm rerolls; distinct already-answered host events are not a recommendation draw and must not share that identity. This is a static interleaving proof, not an executed reproduction.",
+        "confidence": "high",
+        "blocking_merge": true,
+        "location_class": "in-diff",
+        "class_scope": {
+          "sites": [
+            "src/commands/review-operator.ts:recordHostQuestion",
+            "src/decisions/journal.ts:findOpenTwin",
+            "src/decisions/journal.ts:openLocked"
+          ],
+          "enumeration_method": "Read the complete recordHostQuestion dispatcher and pinned journal implementation; searched pinned src/decisions for openDecision, hostQuestion and findOpenTwin. All four HOST_OPTIONS verbs converge on the single new journal call, whose shared twin lookup is the collision point."
+        }
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-highload-w3.txt",
+    "reviewer": "review-highload",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-14",
+        "status": "DONE",
+        "coverage": "Reviewed bundled orchestration instructions for changes to dispatch sequencing and operator-decision handling."
+      },
+      {
+        "id": "slice-15",
+        "status": "DONE",
+        "coverage": "Reviewed bundled review instructions for plan gating, reviewer overrides, mutation waivers, and held-finding answers."
+      },
+      {
+        "id": "slice-16",
+        "status": "DONE",
+        "coverage": "Reviewed premise instructions and host-question schema additions; no load-related failure path established."
+      },
+      {
+        "id": "slice-17",
+        "status": "DONE",
+        "coverage": "Reviewed metadata validation and propagation, plan-confirmation persistence, locked decision appends, premise-answer application, readiness reporting, and unattended command refusal."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-logic-w1.txt",
+    "reviewer": "review-logic",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "COVERED",
+        "coverage": "Reviewed the supplied schema and flow-record diff. Checked the schema against research-evidence/pinned-source/.metaproject/core/gdskills/contracts/review-finding.schema.json: confirmedVia includes \"host-question\", and hostQuestion requires source, ref, questionText, answerText and time."
+      },
+      {
+        "id": "slice-02",
+        "status": "COVERED",
+        "coverage": "Reviewed all supplied acceptance-criteria, context, description and journal changes. Compared their intended boundary with pinned-source/docs/requirements/keryx-card-any-host/prd.md: four standalone verbs accept recorded host answers; complete remains excluded; unattended and nested execution remain refused. PR context explicitly says AC11 and AC12 follow after merge."
+      },
+      {
+        "id": "slice-03",
+        "status": "COVERED",
+        "coverage": "Reviewed all supplied plan, tasks and orchestration-skill hunks. Cross-checked the detailed orchestration instructions against pinned-source/src/commands/review-operator.ts: host-question routing records the four verbs, validates required provenance texts, and refuses unattended execution and KERYX_TOOL_CALL=1. No executable implementation changes outside these slices were independently adjudicated."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-logic-w2.txt",
+    "reviewer": "review-logic",
+    "status": "DONE",
+    "slices": [
+      "slice-04",
+      "slice-05",
+      "slice-06",
+      "slice-07"
+    ],
+    "findings": [
+      {
+        "id": "LOGIC-W2-01",
+        "severity": "minor",
+        "file": "README.md",
+        "line": null,
+        "quote": "Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path.",
+        "problem": "The added documentation promises that arbitrary free text cannot record a decision, but the pinned implementation does not enforce that for confirm-plan, waive-mutation or override-reviewers. recordHostQuestion calls refuseDecline for these verbs, which rejects only empty answers and certain leading decline words; it never requires an affirmative option. For example, --answer-text \"banana\" passes the answer check on waive-mutation and override-reviewers when their other prerequisites are satisfied.",
+        "impact": "Readers are told that option-only validation protects these operator decisions when it does not. The same unsupported guarantee appears in the assigned orchestrator instructions, TM-04 \u00a76b and CLI reference.",
+        "suggested_fix": "Preserve the approved option-only contract by validating the affirmative answer for all three verbs before recording anything, and add rejection coverage for non-option free text. Reconcile the affected documentation with the resulting behavior.",
+        "evidence": "Static evidence at pinned head 5974c976: research-evidence/pinned-source/src/commands/review-operator.ts, recordHostQuestion and refuseDecline. The three non-premise branches use only refuseDecline(answerText, command); only decide-premise additionally checks choice words. The pinned PRD explicitly states that free text is not a decision. No command or test was executed.",
+        "confidence": "high",
+        "reviewer": "review-logic",
+        "location_class": "in-diff",
+        "dedupe_key": "host-question-non-option-answer-accepted"
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-logic-w3.txt",
+    "reviewer": "review-logic",
+    "status": "DONE_WITH_CONCERNS",
+    "slices": [
+      "slice-08",
+      "slice-09",
+      "slice-10",
+      "slice-11"
+    ],
+    "findings": [
+      {
+        "id": "LOGIC-W3-001",
+        "severity": "blocker",
+        "reviewer": "review-logic",
+        "file": "src/commands/review-operator.ts",
+        "line": null,
+        "quote": "  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+        "problem": "confirm-plan, waive-mutation, and override-reviewers treat any nonblank answer not beginning with a listed decline word as approval. Unlike decide-premise, these branches never establish that the operator selected the confirming option. In particular, the offered decline option 'keep' is accepted by both waiver/override verbs when --answer is omitted.",
+        "impact": "For a valid interactive package, `waive-mutation --package <dir> --reason \"test\" --answered-by codex:q1 --question-text \"Waive the mutation pass?\" --answer-text \"keep\"` records a mutation waiver and journals choice 'waive', despite the operator selecting 'Keep: run the mutation pass'. The analogous override-reviewers call records an override. confirm-plan similarly accepts 'maybe' once the question contains the current estimate numbers. These are persisted decisions contrary to the supplied answer and the approved requirement that free text is never a decision.",
+        "suggested_fix": "Validate answer-text against verb-specific confirming and declining choices before any write. Recognize 'keep' as a decline for waiver and reviewer override, reject unsupported/free-text answers, and reject contradictions between --answer and answer-text. Preserve explicitly supported affirmative phrases rather than treating absence of a negative prefix as consent. Add refusal tests covering 'keep' for both verbs and 'maybe' for all three.",
+        "evidence": "At pinned head 5974c976, HOST_OPTIONS defines waiver/override decline='keep'. recordHostQuestion permits omitted --answer for all three non-premise verbs. confirm-plan and the shared waiver/override branch call only refuseDecline(answerText, command), whose LEAD_DECLINE set lacks 'keep' and whose predicate accepts arbitrary other words. Both branches then persist the confirming action, and answerDecision uses premiseAnswer ?? choices.confirm. The pinned PRD requires an answer to be one of the verb's options; the pinned acceptance-criteria scope says 'A free-text answer is never a decision.' Existing assigned tests cover declines such as n/no and invalid explicit --answer, but not a declining 'keep' in answer-text. This finding concerns interpreting the reported answer, not the deliberately accepted inability to authenticate host answers.",
+        "confidence": "high",
+        "dedupe_key": "host-question-nonpremise-answer-text-not-validated",
+        "blocking_merge": true,
+        "location_class": "in-diff",
+        "class_scope": {
+          "sites": [
+            "src/commands/review-operator.ts:recordHostQuestion confirm-plan branch",
+            "src/commands/review-operator.ts:recordHostQuestion shared waive-mutation/override-reviewers branch",
+            "src/commands/review-operator.ts:recordHostQuestion decide-premise branch (choice validation present)"
+          ],
+          "enumeration_method": "Enumerated the complete HOST_OPTIONS/HostVerb set and all three branches of recordHostQuestion in pinned source: confirm-plan, decide-premise, and shared waive-mutation/override-reviewers. Only decide-premise calls refuseOtherChoice; the remaining three verbs use prefix-only refusal."
+        }
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-performance-w1.txt",
+    "reviewer": "review-performance",
+    "status": "DONE",
+    "slices": [
+      "slice-01",
+      "slice-03",
+      "slice-04",
+      "slice-05"
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-performance-w2.txt",
+    "reviewer": "review-performance",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-09",
+        "status": "DONE",
+        "coverage": "Reviewed completion-card provenance rendering, new imports, command help and host-question dispatch."
+      },
+      {
+        "id": "slice-10",
+        "status": "DONE",
+        "coverage": "Reviewed host-question parsing, validation, per-command recording and decisions-journal integration."
+      },
+      {
+        "id": "slice-13",
+        "status": "DONE",
+        "coverage": "Reviewed journal sequence filtering, host-question report construction/rendering, decision counting, exports and types."
+      },
+      {
+        "id": "slice-14",
+        "status": "DONE",
+        "coverage": "Reviewed bundled orchestration guidance changes; no executable performance changes."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-performance-w3.txt",
+    "reviewer": "review-performance",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-15",
+        "status": "DONE",
+        "coverage": "Reviewed all supplied orchestrator instruction changes; no introduced performance bottleneck identified."
+      },
+      {
+        "id": "slice-16",
+        "status": "DONE",
+        "coverage": "Reviewed all supplied premise instruction and finding-schema changes; no introduced performance bottleneck identified."
+      },
+      {
+        "id": "slice-17",
+        "status": "DONE",
+        "coverage": "Reviewed all supplied runtime changes, including host-question validation and propagation, readiness reporting, and unattended command scanning. Inspected pinned readiness, premise decision lookup, decision storage, and unattended guard context."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-pr-contract-w1.txt",
+    "reviewer": "review-pr-contract",
+    "status": "DONE_WITH_CONCERNS",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "COVERED",
+        "coverage": "Schema adds host-question and its provenance fields, consistent with the PR summary. Flow remains in-progress with review task T10 todo; no claim that post-merge operator checks are complete."
+      },
+      {
+        "id": "slice-02",
+        "status": "COVERED",
+        "coverage": "Acceptance criteria, description and journal align with the four-verb scope, explicit weaker-proof decision and retained complete/unattended/nested refusals. AC11 and AC12 are explicitly deferred by the PR body."
+      },
+      {
+        "id": "slice-03",
+        "status": "COVERED",
+        "coverage": "Plan and skill changes replace terminal handoffs for the four acts with host-question recording, retain complete on its existing operator path, and explicitly acknowledge answer fabrication as outside the trust boundary."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-pr-contract-w2.txt",
+    "reviewer": "review-pr-contract",
+    "status": "NEEDS_CONTEXT",
+    "slices": [
+      "slice-04",
+      "slice-05",
+      "slice-06",
+      "slice-07"
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-pr-contract-w3.txt",
+    "reviewer": "review-pr-contract",
+    "status": "DONE_WITH_CONCERNS",
+    "slices": [
+      {
+        "id": "slice-08",
+        "status": "DONE",
+        "coverage": "Read all supplied documentation changes and compared their historical promises with the assigned command implementation."
+      },
+      {
+        "id": "slice-09",
+        "status": "DONE",
+        "coverage": "Read host-question routing, command help and confirmation-card rendering changes."
+      },
+      {
+        "id": "slice-10",
+        "status": "DONE",
+        "coverage": "Read all host-question parsing, refusals, decision writes and best-effort journaling changes; checked against pinned original source and flow 467."
+      },
+      {
+        "id": "slice-11",
+        "status": "DONE",
+        "coverage": "Read the assigned test-file portion statically; made no execution or historical pass-count claim."
+      }
+    ],
+    "findings": [
+      {
+        "id": "PC-W3-001",
+        "severity": "minor",
+        "file": "src/commands/review-operator.ts",
+        "line": null,
+        "quote": "log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);",
+        "problem": "The PR summary promises that the four verbs record the answer \"plus a `keryx decisions` entry\". Slice 08 repeats this unconditionally in review-with-a-record.md and limitations.md. However, slice 10 deliberately catches journal failures after the review record has been written, logs a warning, and returns success without guaranteeing that entry.",
+        "impact": "A reader can reasonably treat a successful host-question command as assurance that the decision is discoverable through `keryx decisions`, although a journal failure leaves only the review-package record. This is a reporting-contract discrepancy, not a claim that the deliberate write-order decision is itself defective.",
+        "suggested_fix": "Qualify the PR and user-facing documentation: the review-package decision is authoritative, journal recording is best effort, and a warning means the journal entry may be absent. If unconditional journaling remains the intended AC6 contract, reconcile that requirement separately with the deliberately nonfatal implementation.",
+        "evidence": "All source evidence was read under .metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source at 5974c976823e1a7134723edf3a9140b991246d45. PR claim: \"plus a `keryx decisions` entry\". docs/docs/guides/review-with-a-record.md: \"a `keryx decisions` entry is written\"; docs/docs/limitations.md repeats that promise. Flow 467 AC6 states: \"Each accepted host question also writes a `keryx decisions` entry\". src/commands/review-operator.ts explicitly explains that a journal which cannot be written produces a warning rather than undoing or duplicating the already-written review record, then catches the error and returns 0. The deliberate rationale was read and is not challenged by this finding.",
+        "confidence": "high",
+        "reviewer": "review-pr-contract",
+        "location_class": "in-diff",
+        "blocking_merge": false,
+        "dedupe_key": "pr-contract-host-question-journal-best-effort"
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-security-code-w1.txt",
+    "reviewer": "review-security-code",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "DONE",
+        "coverage": "Reviewed host-question schema extension and flow metadata; no executable injection surface or exposed credential identified."
+      },
+      {
+        "id": "slice-03",
+        "status": "DONE",
+        "coverage": "Reviewed implementation-plan threat disclosure and job/review-orchestrator instructions concerning operator decisions."
+      },
+      {
+        "id": "slice-04",
+        "status": "DONE",
+        "coverage": "Reviewed host routing, four-act restriction, card preference, unverified-answer disclosure, and unattended/nested refusal instructions."
+      },
+      {
+        "id": "slice-05",
+        "status": "DONE",
+        "coverage": "Reviewed held-finding decision instructions, premise-reviewer boundaries, and README security claims."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-security-code-w2.txt",
+    "reviewer": "review-security-code",
+    "status": "DONE_WITH_CONCERNS",
+    "slices": [
+      "slice-07",
+      "slice-09",
+      "slice-10",
+      "slice-13"
+    ],
+    "findings": [
+      {
+        "id": "SEC-W2-001",
+        "severity": "major",
+        "file": "src/commands/review-operator.ts",
+        "line": null,
+        "quote": "function refuseDecline(answerText: string, verb: HostVerb): void {\n  const words = wordsOf(answerText);\n  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+        "problem": "The three non-premise host-question verbs accept any nonblank answer whose first word is not in LEAD_DECLINE, rather than requiring the confirming option. In particular, `keep` is explicitly the declining option for waive-mutation and override-reviewers, but `--answer-text keep` with --answer omitted passes validation and records the waiver or override. Arbitrary free text such as `maybe` also confirms a plan when its question contains the current estimate numbers. The journal then unconditionally records the confirming choice, contradicting the preserved answer.",
+        "impact": "A host integration or agent that forwards the operator's actual declining option through the advertised answer-text interface can relax review gates against the operator's decision. Exploitation requires that caller to invoke the affirmative verb for the negative answer; this review does not establish an external attack path or treat the deliberately accepted ability of a hostile same-user agent to fabricate answers as a new vulnerability.",
+        "attack_vector": "An agent or host adapter submits `keryx review waive-mutation --package <valid-attended-package> --reason <reason> --answered-by codex:q1 --question-text \"Waive or keep the mutation pass?\" --answer-text keep`, omitting --answer as permitted. The command records a mutation waiver and journals choice waive despite the supplied operator answer selecting keep. override-reviewers has the same path.",
+        "suggested_fix": "Validate an explicit affirmative choice for each non-premise verb before writing. Reject keep, ambiguous/free-text responses and conflicting choices; do not infer confirmation solely from the absence of a leading negative word. Add refusal cases for answer-text keep on both waiver verbs and answer-text maybe on confirm-plan, checking that neither package records nor journal entries are written.",
+        "evidence": "Static tracing of pinned-source src/commands/review-operator.ts: HOST_OPTIONS declares keep as the decline option for both waiver verbs; recordHostQuestion permits --answer to be omitted; refuseDecline only checks the first token against LEAD_DECLINE, which lacks keep; callers at lines 385 and 411 then install affirmative recorders, and answerDecision receives premiseAnswer ?? choices.confirm. Pinned operator-decisions.ts accepts these complete host-question records, and confirmedDecision returns them as gate decisions. TM-04 section 6b deliberately permits unverified host provenance, but separately promises that non-options/declines record nothing and that free text is not a decision. This finding concerns that validation promise, not the accepted weaker provenance. No execution performed.",
+        "confidence": "high",
+        "reviewer": "review-security-code",
+        "blocking_merge": false,
+        "location_class": "in-diff",
+        "class_scope": {
+          "sites": [
+            "src/commands/review-operator.ts:385 (confirm-plan)",
+            "src/commands/review-operator.ts:411 (waive-mutation and override-reviewers)"
+          ],
+          "enumeration_method": "Enumerated all four HostVerb entries in HOST_OPTIONS and every refuseDecline(answerText, command) call in pinned review-operator.ts. confirm-plan and the shared waiver/override branch lack affirmative-text validation. decide-premise at line 395 additionally invokes refuseOtherChoice and is not affected by this missing validation."
+        }
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-security-code-w3.txt",
+    "reviewer": "review-security-code",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-14",
+        "status": "DONE",
+        "coverage": "Reviewed changed bundled operator instructions, host-question attribution, card preference and unattended restrictions."
+      },
+      {
+        "id": "slice-15",
+        "status": "DONE",
+        "coverage": "Reviewed changed dispatch, waiver and premise-answer instructions for security-relevant authorization inconsistencies."
+      },
+      {
+        "id": "slice-16",
+        "status": "DONE",
+        "coverage": "Reviewed premise instructions and hostQuestion schema additions; no demonstrated exploitable path identified."
+      },
+      {
+        "id": "slice-17",
+        "status": "DONE",
+        "coverage": "Reviewed changed provenance validators, decision persistence and propagation, plan confirmation, readiness reporting and unattended command floor. Read pinned writer and reader implementations and pinned CLI caller context."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-style-w1.txt",
+    "reviewer": "review-style",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-01",
+        "status": "COVERED",
+        "coverage": "Host-question schema additions and flow metadata."
+      },
+      {
+        "id": "slice-02",
+        "status": "COVERED",
+        "coverage": "Acceptance criteria, context, description, and journal documentation."
+      },
+      {
+        "id": "slice-03",
+        "status": "COVERED",
+        "coverage": "Plan, task documentation, and changed job/review orchestration instructions."
+      }
+    ],
+    "findings": []
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-style-w3.txt",
+    "reviewer": "review-style",
+    "status": "DONE",
+    "slices": [
+      "slice-08",
+      "slice-09",
+      "slice-10",
+      "slice-13"
+    ],
+    "findings": [
+      {
+        "id": "STYLE-W3-001",
+        "severity": "minor",
+        "reviewer": "review-style",
+        "file": "src/commands/review-operator.ts",
+        "line": null,
+        "quote": "/** The options of the question each verb records: the one that records the decision, the one that declines it. */",
+        "problem": "HOST_OPTIONS describes every verb as having a recording option and a declining option, and names decide-premise's dismiss option `decline`. Unlike the other verbs' negative options, dismiss is a decision that is recorded, not a refusal to record.",
+        "impact": "The shared configuration and its comment give maintainers the wrong interpretation of premise dismissal. Understanding the exception requires tracing recordHostQuestion rather than trusting the configuration's names.",
+        "suggested_fix": "Clarify that both premise options are recorded outcomes, while the other verbs have a confirm/refuse pair. Prefer separating premise options from the confirm/decline configuration, or at minimum explicitly document this exception beside HOST_OPTIONS.",
+        "evidence": "slice-10 adds the comment and HOST_OPTIONS.decide-premise with confirm: \"uphold\" and decline: \"dismiss\". The pinned recordHostQuestion handles decide-premise before the choices.decline refusal branch, accepts either premiseAnswer, passes it to answerPremiseQuestion, and journals premiseAnswer rather than choices.confirm. This is a readability issue, not a claim of incorrect runtime behavior.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "blocking_merge": false
+      }
+    ]
+  },
+  {
+    "file": ".metaproject/reviews/2026-10-19-review-flow-pr/raw/review-testing-practices-w1.txt",
+    "reviewer": "review-testing-practices",
+    "status": "DONE",
+    "slices": [
+      {
+        "id": "slice-11",
+        "status": "COVERED",
+        "coverage": "Read all supplied test additions: host-question acceptance, source parsing, persisted records, refusals, package snapshots, premise choices and plan-number checks."
+      },
+      {
+        "id": "slice-12",
+        "status": "COVERED",
+        "coverage": "Read all supplied test additions: terminal compatibility, unattended and nested-process refusals, decisions journal/report, complete flag rejection, presentation and older-record compatibility."
+      }
+    ],
+    "findings": []
+  }
+]

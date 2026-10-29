@@ -1,0 +1,78 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Reviewed assigned historical PR1058 slices at pinned head 5974c976823e1a7134723edf3a9140b991246d45. No exploitable code-level security defect established within these slices. The weaker, agent-reported host-question proof is an explicit accepted design choice, not an undisclosed authentication guarantee.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    {
+      "id": "slice-01",
+      "status": "DONE",
+      "coverage": "Reviewed host-question schema extension and flow metadata; no executable injection surface or exposed credential identified."
+    },
+    {
+      "id": "slice-03",
+      "status": "DONE",
+      "coverage": "Reviewed implementation-plan threat disclosure and job/review-orchestrator instructions concerning operator decisions."
+    },
+    {
+      "id": "slice-04",
+      "status": "DONE",
+      "coverage": "Reviewed host routing, four-act restriction, card preference, unverified-answer disclosure, and unattended/nested refusal instructions."
+    },
+    {
+      "id": "slice-05",
+      "status": "DONE",
+      "coverage": "Reviewed held-finding decision instructions, premise-reviewer boundaries, and README security claims."
+    }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": [],
+  "project_context_applied": [
+    ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    "skills_resolve_context returned no additional mandatory project rules."
+  ],
+  "evidence": [
+    {
+      "source": "slice-04.diff",
+      "quote": "keryx does not verify them, which is why it is weaker than a card.",
+      "assessment": "Changed operator instructions explicitly disclose the trust boundary rather than representing host answers as verified presses."
+    },
+    {
+      "source": "slice-03.diff",
+      "quote": "stop a hostile same-user agent, which can fake a pty, invent a host-question answer or write the JSON",
+      "assessment": "The documented security model expressly excludes prevention of same-user forgery."
+    },
+    {
+      "source": "research-evidence/pinned-source/docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md, section 6b",
+      "quote": "**This reverses §5 for these four acts, on the operator's instruction (polls 225 and 227, 2026-10-19).**",
+      "assessment": "Pinned decision record supplies the reason for intentionally accepting weaker proof."
+    },
+    {
+      "source": "research-evidence/pinned-source/src/commands/review-operator.ts",
+      "quote": "refuseHostQuestionHere(command, packageDir, env);",
+      "assessment": "Supporting pinned source invokes nested/unattended refusal before parsing and recording the host answer."
+    }
+  ],
+  "limitations": [
+    "Static, read-only review only; no tests, shell commands, or edits.",
+    "No history supplied; commit history and blame were not read.",
+    "pr-context.md identifies a later collection head, 208a4d2faa4dfbf71b2992d027bda25762b34456. Its intent was contextual only; code evidence came from the requested pinned-source snapshot and supplied slices.",
+    "Completion covers the four assigned slices, not the entire PR implementation."
+  ]
+}
+```
+
+No security findings to escalate. Preserve the explicit distinction between verified cards and agent-reported host questions in the parent report.
+KERYX_USAGE {"tokens_in":199781,"tokens_out":1706,"model":"openai-codex/gpt-6.1-sol","by":"host"}

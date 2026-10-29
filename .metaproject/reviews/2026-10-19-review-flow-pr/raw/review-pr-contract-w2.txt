@@ -1,0 +1,73 @@
+STATUS: NEEDS_CONTEXT
+
+REVIEW_RESULT
+```json
+{
+  "status": "NEEDS_CONTEXT",
+  "reviewer": "review-pr-contract",
+  "summary": "Reviewed assigned slices 04–07 against the supplied PR context and historical pinned-source mirror at 5974c976823e1a7134723edf3a9140b991246d45. No qualifying PR-body/diff disagreement established within these slices. Overall reviewer-role scope remains incomplete: the supplied PR context identifies newer head 208a4d2, historical execution claims cannot be verified, and this dispatch does not cover the remaining role-assigned slices. Newer CI was not used as evidence.",
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  },
+  "slices": [
+    "slice-04",
+    "slice-05",
+    "slice-06",
+    "slice-07"
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [
+    "PR body/checklist captured at historical head 5974c976, or confirmation that the supplied round-1 intent and test-plan text applied unchanged to that head.",
+    "Historical execution evidence for the checked test-plan claims; newer-head CI cannot substantiate them.",
+    "Results covering the remaining review-pr-contract slices before declaring overall role scope complete."
+  ],
+  "follow_ups": [
+    "Have review-logic assess the option-validation/documentation discrepancy at the pinned head: README and TM-04 §6b say free text is never a decision, but src/commands/review-operator.ts uses only refuseDecline for confirm-plan, waive-mutation and override-reviewers. A non-decline string such as 'maybe' passes that validator; only decide-premise additionally checks choice words. This is a static observation, not executed evidence or a qualifying PR-body disagreement filed by this lane."
+  ],
+  "checklist_rows": [
+    {
+      "claim": "bun test src/commands/review-host-question.test.ts (41 tests)",
+      "state": "[x]",
+      "diff_evidence": "The pinned mirror contains the named test file.",
+      "expectation": "Test-file presence is supported; execution and the claimed count remain unverified."
+    },
+    {
+      "claim": "existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+      "state": "[x]",
+      "diff_evidence": "Assigned slices contain documentation and skill changes, not historical test output.",
+      "expectation": "Requires pinned-head test evidence; no mismatch inferred."
+    },
+    {
+      "claim": "bun test src/gdskills src/docs and the CLI reference coverage tests",
+      "state": "[x]",
+      "diff_evidence": "Slice-07 updates CLI documentation, but supplies no execution evidence.",
+      "expectation": "Requires pinned-head test evidence; no mismatch inferred."
+    },
+    {
+      "claim": "bun run typecheck",
+      "state": "[x]",
+      "diff_evidence": "No historical typecheck output supplied.",
+      "expectation": "Requires pinned-head execution evidence."
+    },
+    {
+      "claim": "review round",
+      "state": "[ ]",
+      "diff_evidence": "These slices do not establish completion of a review round.",
+      "expectation": "No contradiction established."
+    }
+  ],
+  "project_context_applied": [
+    "Driver review-pr-contract-w2.json and its payload",
+    "review-pr-contract/SKILL.md",
+    "review-orchestrator/reviewer-finding.schema.json",
+    "skills_resolve_context returned no must_read entries"
+  ]
+}
+```
+
+**Parent summary:** All four assigned slices were read; no formal contract findings. Keep overall role coverage incomplete. Route the static free-text acceptance discrepancy to review-logic. No shell, tests, edits, or newer-CI reliance.
+KERYX_USAGE {"tokens_in":204872,"tokens_out":2175,"model":"openai-codex/gpt-6.1-sol","by":"host"}

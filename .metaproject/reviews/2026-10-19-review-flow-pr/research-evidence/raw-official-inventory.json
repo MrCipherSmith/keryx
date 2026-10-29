@@ -1,0 +1,1797 @@
+[
+  {
+    "file": "review-style-w3.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-style",
+      "summary": "Reviewed assigned slices at historical pin 5974c976823e1a7134723edf3a9140b991246d45. Found one minor naming/documentation inconsistency; no major style findings. Original-source inspection used only pinned-source, not live src. No shell commands or tests were run. Newer pr-context CI results were excluded from historical evidence; commit history was not read.",
+      "findings": [
+        {
+          "id": "STYLE-W3-001",
+          "severity": "minor",
+          "reviewer": "review-style",
+          "file": "src/commands/review-operator.ts",
+          "line": null,
+          "quote": "/** The options of the question each verb records: the one that records the decision, the one that declines it. */",
+          "problem": "HOST_OPTIONS describes every verb as having a recording option and a declining option, and names decide-premise's dismiss option `decline`. Unlike the other verbs' negative options, dismiss is a decision that is recorded, not a refusal to record.",
+          "impact": "The shared configuration and its comment give maintainers the wrong interpretation of premise dismissal. Understanding the exception requires tracing recordHostQuestion rather than trusting the configuration's names.",
+          "suggested_fix": "Clarify that both premise options are recorded outcomes, while the other verbs have a confirm/refuse pair. Prefer separating premise options from the confirm/decline configuration, or at minimum explicitly document this exception beside HOST_OPTIONS.",
+          "evidence": "slice-10 adds the comment and HOST_OPTIONS.decide-premise with confirm: \"uphold\" and decline: \"dismiss\". The pinned recordHostQuestion handles decide-premise before the choices.decline refusal branch, accepts either premiseAnswer, passes it to answerPremiseQuestion, and journals premiseAnswer rather than choices.confirm. This is a readability issue, not a claim of incorrect runtime behavior.",
+          "confidence": "high",
+          "location_class": "in-diff",
+          "blocking_merge": false
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 0
+      },
+      "slices": [
+        "slice-08",
+        "slice-09",
+        "slice-10",
+        "slice-13"
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-style/SKILL.md — read fully; applied style-only scope, supplied-diff precedence, and style laws.",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully; applied result and finding contract.",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md#severity-canonical — applied maintenance-cost severity boundary.",
+        "skills_resolve_context returned no additional must_read or on_demand entries."
+      ],
+      "follow_ups": []
+    }
+  },
+  {
+    "file": "review-style-w2.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-style",
+      "summary": "Completed the style/readability review of slices 04–07 at pinned head 5974c976823e1a7134723edf3a9140b991246d45 using the supplied diffs and pinned-source mirror. No actionable style findings. This result covers only this dispatch; the overall review-style role scope remains incomplete pending the other assigned slices.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        "slice-04",
+        "slice-05",
+        "slice-06",
+        "slice-07"
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json"
+      ],
+      "scopeComplete": false,
+      "executionRequired": false,
+      "executionReason": "Source-only documentation/style review; no tests, shell commands, or edits permitted or performed.",
+      "limitations": [
+        "Overall reviewer-role scope is incomplete: only slices 04–07 were assigned and reviewed in this dispatch.",
+        "Git history was not read; the explicit rationale in pinned TM-04 section 6b was read.",
+        "PR context describes newer head 208a4d2f; its test and CI claims were not used as evidence for historical head 5974c976."
+      ]
+    }
+  },
+  {
+    "file": "review-style-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-style",
+      "summary": "Reviewed assigned slices 01–03 for naming, readability, duplication, comments, and structure at pinned head 5974c976823e1a7134723edf3a9140b991246d45. No concrete in-scope style defects found. The changes follow surrounding schema and documentation conventions; formatter-owned wrapping and pre-existing file length were not reported.",
+      "findings": [],
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "COVERED",
+          "coverage": "Host-question schema additions and flow metadata."
+        },
+        {
+          "id": "slice-02",
+          "status": "COVERED",
+          "coverage": "Acceptance criteria, context, description, and journal documentation."
+        },
+        {
+          "id": "slice-03",
+          "status": "COVERED",
+          "coverage": "Plan, task documentation, and changed job/review orchestration instructions."
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "inputs_unreadable": [],
+      "project_context_applied": [],
+      "limitations": [
+        "History was unavailable and was not read; no intent was inferred from history.",
+        "PR context identifies a different collection head; it was used for context only, not as evidence of pinned-head behavior or verification.",
+        "No tests, shell commands, or edits were performed. Source spot-checks used research-evidence/pinned-source rather than checkout implementation files."
+      ]
+    }
+  },
+  {
+    "file": "review-highload-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-highload",
+      "summary": "Reviewed assigned slices against historical head 5974c976823e1a7134723edf3a9140b991246d45. No evidence-backed high-load findings in the schema, flow metadata, plans, or operator-question documentation changes. These slices introduce no executable concurrency, queue, cache, connection-pool, or retry implementation.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "DONE",
+          "coverage": "Reviewed host-question schema extension and flow metadata; no load-related failure path identified."
+        },
+        {
+          "id": "slice-03",
+          "status": "DONE",
+          "coverage": "Reviewed implementation plan, task definitions, and orchestration guidance changes, including operator gating and unattended behavior."
+        },
+        {
+          "id": "slice-04",
+          "status": "DONE",
+          "coverage": "Reviewed host-question instructions, dispatch confirmation, memory-stage waiver boundaries, reviewer overrides, and mutation-waiver guidance."
+        },
+        {
+          "id": "slice-05",
+          "status": "DONE",
+          "coverage": "Reviewed held-finding decision guidance, premise-review boundaries, and README explanation of the weaker host-question proof."
+        }
+      ],
+      "inputs_unreadable": [],
+      "follow_ups": [],
+      "project_context_applied": [],
+      "limitations": [
+        "Static, read-only review; no tests, shell commands, or edits.",
+        "History was not supplied and was not read.",
+        "PR context identifies a different collected head, 208a4d2f; its CI and test claims were not treated as verification of pinned head 5974c976.",
+        "Full-source research used research-evidence/pinned-source, not current implementation files.",
+        "No load profile was supplied. Runtime implementation changes outside the assigned slices were not covered."
+      ]
+    }
+  },
+  {
+    "file": "review-architecture-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-architecture",
+      "summary": "Reviewed historical PR1058 at pinned head 5974c976823e1a7134723edf3a9140b991246d45, covering the supplied changes in slices 01, 03, 04 and 05. No verifiable architectural violations found in these slices. The host-question path is an explicit architectural decision documented in the pinned implementation plan and TM-04 section 6b, not an accidental weakening to flag as a structural defect. This is a static, assigned-scope conclusion, not a verdict on all implementation slices.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        "slice-01",
+        "slice-03",
+        "slice-04",
+        "slice-05"
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json"
+      ],
+      "limitations": [
+        "Git history was unavailable and was not read.",
+        "No shell commands, local tests, edits or runtime verification were performed.",
+        "pr-context.md describes later head 208a4d2faa4dfbf71b2992d027bda25762b34456; it was read for intent, not used as evidence of the pinned implementation.",
+        "Full-source context was read only from the package's research-evidence/pinned-source, not working-tree src."
+      ]
+    }
+  },
+  {
+    "file": "review-style-w4.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-style",
+      "summary": "Reviewed assigned slices 14–17 at historical head 5974c976823e1a7134723edf3a9140b991246d45. One minor maintainability issue: the new HostQuestion validation duplicates the same record-shape checks in two modules. No major style findings. Source evidence came from research-evidence/pinned-source; newer pr-context CI was excluded. No shell commands, tests, or edits were performed; commit history was not read.",
+      "findings": [
+        {
+          "id": "STYLE-W4-001",
+          "severity": "minor",
+          "file": "src/review/estimate.ts",
+          "line": null,
+          "quote": "function isHostQuestion(value: unknown): boolean {\n  if (value === null || typeof value !== \"object\") return false;\n  const hq = value as Record<string, unknown>;\n  const filled = (field: unknown): boolean => typeof field === \"string\" && field.trim() !== \"\";\n  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);\n}",
+          "problem": "The newly added isHostQuestion in estimate.ts and validHostQuestion in operator-decisions.ts independently implement the same HostQuestion shape validation: source membership plus five nonblank string fields.",
+          "impact": "Maintainers must update two equivalent validators when the shared HostQuestion record changes, increasing maintenance effort and making their intended equivalence harder to see. This is a DRY observation, not a claim of an existing functional failure.",
+          "suggested_fix": "Extract one shared isHostQuestion(value: unknown): value is HostQuestion predicate into an appropriate shared review validation module and use it from both readers.",
+          "evidence": "At pin 5974c976823e1a7134723edf3a9140b991246d45, research-evidence/pinned-source/src/review/estimate.ts contains isHostQuestion and research-evidence/pinned-source/src/review/operator-decisions.ts contains validHostQuestion. Both newly added functions check HOST_QUESTION_SOURCES and ref, questionText, answerText, and time with equivalent trimmed-nonempty string predicates. Both additions appear in slice-17.diff. Surrounding comments describe the same completeness requirement and give no reason for separate implementations.",
+          "confidence": "high",
+          "reviewer": "review-style",
+          "dedupe_key": "style-host-question-validator-duplication",
+          "blocking_merge": false,
+          "location_class": "in-diff"
+        }
+      ],
+      "slices": [
+        {
+          "id": "slice-14",
+          "status": "DONE",
+          "coverage": "Reviewed changed bundled job/review orchestration instructions for readability, naming, comments, and deliberate host-question provenance wording."
+        },
+        {
+          "id": "slice-15",
+          "status": "DONE",
+          "coverage": "Reviewed remaining changed bundled review-orchestrator instructions; did not treat intentional mirrored skill content as accidental duplication."
+        },
+        {
+          "id": "slice-16",
+          "status": "DONE",
+          "coverage": "Reviewed changed bundled premise instructions and hostQuestion schema additions for style and clarity."
+        },
+        {
+          "id": "slice-17",
+          "status": "DONE",
+          "coverage": "Reviewed changed review and unattended-command hunks for naming, readability, DRY, imports, comments, and console noise; reported equivalent duplicated validators once."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+          "application": "Read fully; applied style-only scope, diff-only findings, minor severity for duplication, deliberate-choice exclusions, and formatter-noise exclusions."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Read fully; used the result fields and verbatim quote with null line."
+        },
+        {
+          "source": "skills_resolve_context",
+          "application": "Resolved review context for all assigned files; returned no must_read or on_demand entries."
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 0
+      }
+    }
+  },
+  {
+    "file": "review-highload-w2.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-highload",
+      "summary": "Static review of historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45, covering assigned slices 07, 09, 10 and 13 using the supplied diffs and pinned-source mirror. Found one concurrency-related audit-record corruption path in the new host-question journal integration. Overall highload role scope remains incomplete: this result covers only this dispatch's four slices, not other waves or the full PR. No shell, tests, edits or runtime verification performed; newer-head CI was not used.",
+      "findings": [
+        {
+          "id": "HL-W2-001",
+          "severity": "blocker",
+          "reviewer": "review-highload",
+          "file": "src/commands/review-operator.ts",
+          "line": null,
+          "quote": "      hostQuestion: { source: by.source, ref: by.ref, verb: command, answerText },\n      salt: \"host-question\",\n    });\n    await answerDecision({ cwd, id: opened.id, choice: premiseAnswer ?? choices.confirm });",
+          "problem": "Concurrent host-question recordings can reuse one journal decision and silently discard the second question's provenance. The new caller uses openDecision followed by answerDecision, but openDecision's unanswered-twin identity includes only normalized question text, option IDs and session—not host source/ref, verb or package. This caller supplies no session. Consequently, distinct host questions with identical wording and options can be merged while the first recording is between open and answer.",
+          "impact": "Failure mode at two overlapping recordings in one repository: record two valid waive-mutation commands for separate packages, using the same generic question text but different --answered-by refs. Interleave A's open append, B's open/twin lookup, then the answers. B receives A's decision ID without appending B's hostQuestion metadata. Both package waivers can succeed, but the decisions report contains only A's source/ref/answerText for the two acts. This silently loses persisted audit provenance. With concurrent decide-premise recordings of identical question text and different choices, the displayed choice can also cease to correspond to the retained answerText.",
+          "suggested_fix": "Give recorded host questions a separate identity domain from ordinary unanswered questions. Match host twins only by an explicit host-event identity such as source/ref plus verb and package, and never reuse an ordinary decision as a host twin or vice versa. Prefer recording a completed host event under one journal lock, with retry deduplication by that identity. Add a controlled-interleaving regression test for two distinct refs with identical question/options and verify both provenance records survive.",
+          "evidence": "Pinned src/commands/review-operator.ts routes all four new host verbs through this one openDecision/answerDecision pair. Pinned src/decisions/journal.ts defines questionHash from normalized question and sorted option IDs; findOpenTwin filters by unanswered status, session and age, then returns a matching record without checking hostQuestion. openLocked immediately returns resultOf(twin), so the second input's hostQuestion is never appended. The journal lock protects each open operation, but not the caller's complete open-plus-answer sequence. Pinned src/decisions/report.ts builds hostQuestions from retained open records and takes answerText/source/ref from each open, so the missing second metadata is not recovered. The existing twin rationale prevents recommendation-arm rerolls; distinct already-answered host events are not a recommendation draw and must not share that identity. This is a static interleaving proof, not an executed reproduction.",
+          "confidence": "high",
+          "blocking_merge": true,
+          "location_class": "in-diff",
+          "class_scope": {
+            "sites": [
+              "src/commands/review-operator.ts:recordHostQuestion",
+              "src/decisions/journal.ts:findOpenTwin",
+              "src/decisions/journal.ts:openLocked"
+            ],
+            "enumeration_method": "Read the complete recordHostQuestion dispatcher and pinned journal implementation; searched pinned src/decisions for openDecision, hostQuestion and findOpenTwin. All four HOST_OPTIONS verbs converge on the single new journal call, whose shared twin lookup is the collision point."
+          }
+        }
+      ],
+      "stats": {
+        "blocker": 1,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        "slice-07",
+        "slice-09",
+        "slice-10",
+        "slice-13"
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md — Severity (canonical)"
+      ]
+    }
+  },
+  {
+    "file": "review-architecture-w2.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-architecture",
+      "summary": "Completed read-only static architecture review of slices 07, 09, 10 and 13 at pinned head 5974c976823e1a7134723edf3a9140b991246d45. No reportable architectural violations found in these slices. Overall review-architecture role scope remains incomplete: this result covers only the four assigned slices, not the entire PR.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-07",
+          "status": "DONE",
+          "coverage": "Reviewed CLI documentation changes and their alignment with the explicitly accepted host-question architecture."
+        },
+        {
+          "id": "slice-09",
+          "status": "DONE",
+          "coverage": "Reviewed command imports, host-question routing, help text and completion-card provenance display."
+        },
+        {
+          "id": "slice-10",
+          "status": "DONE",
+          "coverage": "Reviewed host-question command orchestration, delegation to existing review services and decisions-facade integration."
+        },
+        {
+          "id": "slice-13",
+          "status": "DONE",
+          "coverage": "Reviewed journal metadata, report separation, facade exports, count changes and supporting types."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        "Pinned-source docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md, especially section 6b",
+        "skills resolve-context returned no additional must-read entries"
+      ],
+      "limitations": [
+        "Only assigned slices were reviewed; overall architecture-role coverage is incomplete.",
+        "Code context was read exclusively from the pinned-source mirror; working-tree code and newer-head CI were not used as evidence.",
+        "No shell commands, tests, runtime verification or edits were performed.",
+        "Commit history was not supplied or read."
+      ]
+    }
+  },
+  {
+    "file": "review-architecture-w3.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-architecture",
+      "summary": "Reviewed assigned slices 14–17 of historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45. No verifiable architectural violations found in the assigned changes. Host-question provenance is carried through review decision storage, premise application, readiness reporting and the finding contract; the weaker confirmation path is an explicit historical design decision.",
+      "slices": [
+        {
+          "id": "slice-14",
+          "status": "DONE",
+          "coverage": "Reviewed bundled job/review orchestration instruction changes and the separation between verified cards and agent-reported host answers."
+        },
+        {
+          "id": "slice-15",
+          "status": "DONE",
+          "coverage": "Reviewed remaining bundled review-orchestrator changes for plan confirmation, reviewer overrides, mutation waivers and held-premise decisions."
+        },
+        {
+          "id": "slice-16",
+          "status": "DONE",
+          "coverage": "Reviewed bundled premise-review instructions and finding-schema additions for host-question provenance."
+        },
+        {
+          "id": "slice-17",
+          "status": "DONE",
+          "coverage": "Reviewed review-domain provenance types, validation, persistence and propagation changes, plus the unattended shell refusal. Checked pinned supporting source for dependency direction and existing storage boundaries."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+          "application": "Read fully; applied diff-only scope, structural-review boundaries and deliberate-choice rules."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Read fully; applied reviewer-result output contract."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-architecture-w3.json",
+          "application": "Read fully; restricted review to assigned slices and the historical pin."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+          "application": "Read fully; section 6b expressly accepts agent-reported host answers for four review acts while retaining the stronger card path and its distinct provenance."
+        }
+      ],
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "limitations": [
+        "Source-only review; no tests, shell commands or edits performed.",
+        "Current pr-context files identify newer head 208a4d2faa4dfbf71b2992d027bda25762b34456. Their CI and test claims were not used as evidence for the historical pin.",
+        "Commit/blame history was not supplied or read; intentional design was checked against the pinned TM-04 decision record."
+      ],
+      "follow_ups": []
+    }
+  },
+  {
+    "file": "review-highload-w3.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-highload",
+      "summary": "Reviewed assigned slices 14–17 of historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45 using the supplied diffs and pinned-source mirror. No introduced concurrency, resource-exhaustion, retry-safety, or distributed-consistency defects were established within this scope. The host-question metadata additions preserve the existing locked operator-decision writes and premise-answer rollback path.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-14",
+          "status": "DONE",
+          "coverage": "Reviewed bundled orchestration instructions for changes to dispatch sequencing and operator-decision handling."
+        },
+        {
+          "id": "slice-15",
+          "status": "DONE",
+          "coverage": "Reviewed bundled review instructions for plan gating, reviewer overrides, mutation waivers, and held-finding answers."
+        },
+        {
+          "id": "slice-16",
+          "status": "DONE",
+          "coverage": "Reviewed premise instructions and host-question schema additions; no load-related failure path established."
+        },
+        {
+          "id": "slice-17",
+          "status": "DONE",
+          "coverage": "Reviewed metadata validation and propagation, plan-confirmation persistence, locked decision appends, premise-answer application, readiness reporting, and unattended command refusal."
+        }
+      ],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+          "application": "Read fully; applied concurrency, resource-management, idempotency, evidence, and assigned-diff scope rules."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "section": "Severity (canonical)",
+          "application": "Applied canonical severity and shared evidence laws."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Applied reviewer-result output contract."
+        },
+        {
+          "source": "skills_resolve_context",
+          "application": "Resolved all assigned file paths for review; no additional must_read or on_demand entries were returned."
+        }
+      ],
+      "inputs_unreadable": [],
+      "follow_ups": [],
+      "limitations": [
+        "Static read-only review only; no shell commands, tests, or edits.",
+        "No load profile was supplied.",
+        "Commit history was not read.",
+        "The PR context names a newer head and newer CI; neither was used as evidence for the historical pin."
+      ]
+    }
+  },
+  {
+    "file": "review-performance-w3.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-performance",
+      "summary": "Reviewed assigned slices 15–17 for historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45. No actionable performance findings in the changed code. Historical source inspection used pinned-source only; newer pr-context CI and test claims were excluded from evidence.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-15",
+          "status": "DONE",
+          "coverage": "Reviewed all supplied orchestrator instruction changes; no introduced performance bottleneck identified."
+        },
+        {
+          "id": "slice-16",
+          "status": "DONE",
+          "coverage": "Reviewed all supplied premise instruction and finding-schema changes; no introduced performance bottleneck identified."
+        },
+        {
+          "id": "slice-17",
+          "status": "DONE",
+          "coverage": "Reviewed all supplied runtime changes, including host-question validation and propagation, readiness reporting, and unattended command scanning. Inspected pinned readiness, premise decision lookup, decision storage, and unattended guard context."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-performance/SKILL.md",
+          "application": "Read fully; applied changed-code scope, concrete hot-path evidence requirements, and prohibition on speculative optimization findings."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Read result schema and applied its required result fields."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "application": "Read canonical severity and shared-law sections from the historical source."
+        },
+        {
+          "source": "skills_resolve_context",
+          "application": "Resolved context for every assigned file; returned no must_read or on_demand entries."
+        }
+      ],
+      "limitations": [
+        "No shell, tests, benchmarks, or edits performed.",
+        "Commit history was not supplied or read.",
+        "pr-context.md names newer head 208a4d2faa4dfbf71b2992d027bda25762b34456; its CI and test results were not treated as historical evidence."
+      ],
+      "follow_ups": []
+    }
+  },
+  {
+    "file": "review-performance-w2.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-performance",
+      "summary": "Completed assigned slices 09, 10, 13 and 14 against the pinned-source mirror for PR1058 head 5974c976823e1a7134723edf3a9140b991246d45. No actionable performance findings identified. This completes only the assigned wave; overall performance-role scope remains incomplete outside these slices.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-09",
+          "status": "DONE",
+          "coverage": "Reviewed completion-card provenance rendering, new imports, command help and host-question dispatch."
+        },
+        {
+          "id": "slice-10",
+          "status": "DONE",
+          "coverage": "Reviewed host-question parsing, validation, per-command recording and decisions-journal integration."
+        },
+        {
+          "id": "slice-13",
+          "status": "DONE",
+          "coverage": "Reviewed journal sequence filtering, host-question report construction/rendering, decision counting, exports and types."
+        },
+        {
+          "id": "slice-14",
+          "status": "DONE",
+          "coverage": "Reviewed bundled orchestration guidance changes; no executable performance changes."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [],
+      "scope_complete": false,
+      "limitations": [
+        "Overall performance-role coverage is incomplete; this result covers only the four assigned slices.",
+        "Static review only: no tests, shell commands, edits or runtime measurements.",
+        "Commit history was not read.",
+        "PR context describes a newer head; its CI and test claims were not used as evidence for the historical pinned head."
+      ]
+    }
+  },
+  {
+    "file": "review-performance-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-performance",
+      "summary": "Static performance review of assigned slices at pinned head 5974c976823e1a7134723edf3a9140b991246d45 found no actionable performance defects. Changes are schema additions, flow metadata, planning documents and operator-workflow instructions; they introduce no demonstrated hot-path computation, repeated queries, rendering work, subscriptions or large runtime imports.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        "slice-01",
+        "slice-03",
+        "slice-04",
+        "slice-05"
+      ],
+      "inputs_unreadable": [],
+      "follow_ups": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-performance/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        ".metaproject/reviews/2026-10-19-review-flow-pr/pr-context.md"
+      ],
+      "limitations": [
+        "Static only; no tests, shell commands or performance measurements performed.",
+        "History unavailable and not read.",
+        "PR context describes a later head (208a4d2f); reviewed supplied slices and consulted historical sources under research-evidence/pinned-source for the assigned 5974c976 head.",
+        "Coverage is limited to the four assigned slices, not the runtime implementation assigned elsewhere."
+      ]
+    }
+  },
+  {
+    "file": "review-clean-code-w3.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-clean-code",
+      "summary": "Completed the assigned diff slices 15–17 for historical PR1058 at 5974c976823e1a7134723edf3a9140b991246d45. Found one minor documentation-drift issue; no blocker or major Clean Code findings. This completes only these assigned slices, not the overall reviewer role.",
+      "findings": [
+        {
+          "id": "CC-W3-001",
+          "reviewer": "review-clean-code",
+          "severity": "minor",
+          "file": "src/review/estimate.ts",
+          "line": null,
+          "quote": "export type PlanConfirmedVia = \"tui-card\" | \"remote-card\" | \"terminal\" | \"host-question\";",
+          "problem": "The newly supported host-question confirmation contradicts the persistence-boundary documentation immediately above it. That comment still says plan-confirmation.json is written by the card or a terminal command and explicitly states, \"Nothing else may write it.\" Related module headers in operator-decisions.ts and plan-confirmation.ts likewise still describe card/terminal-only provenance.",
+          "impact": "Maintainers tracing which writers and provenance are legitimate encounter conflicting descriptions of the same record boundary: the updated types and validators accept host-question records, while the module-level explanations exclude them.",
+          "suggested_fix": "Update these module-level provenance comments together to include the host-question path and distinguish agent-reported question/answer evidence from a card press. Preserve the intentional weaker-trust explanation already present on OperatorDecisionVia.",
+          "evidence": "Slice-17 adds host-question to PlanConfirmedVia and validates its hostQuestion payload. The pinned-source estimate.ts section immediately preceding that union still restricts writers to the card or terminal. Pinned-source operator-decisions.ts opens with card/terminal-only writer descriptions, and plan-confirmation.ts opens with the same restriction. The updated OperatorDecisionVia comment explicitly explains that host-question evidence is agent-reported and weaker than a card; the finding concerns contradictory documentation, not that deliberate policy.",
+          "confidence": "high",
+          "blocking_merge": false,
+          "location_class": "in-diff"
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-15",
+          "status": "DONE",
+          "coverage": "Read all supplied changed hunks in the bundled review-orchestrator instructions."
+        },
+        {
+          "id": "slice-16",
+          "status": "DONE",
+          "coverage": "Read all supplied changed hunks in the bundled review-premise instructions and finding schema."
+        },
+        {
+          "id": "slice-17",
+          "status": "DONE",
+          "coverage": "Read all supplied changed hunks across review and unattended modules; inspected pinned-source estimate, operator-decisions and plan-confirmation implementations for supporting context."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+          "application": "Read fully; applied diff-only scope, deliberate-choice protection, comment-drift checks and minor-default maintenance severity."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Applied result schema and verbatim-quote locator contract."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "application": "Read and applied Severity (canonical)."
+        },
+        {
+          "source": "skills_resolve_context",
+          "application": "Resolved all assigned paths for review; returned no must_read or on_demand entries."
+        }
+      ],
+      "limitations": [
+        "No shell, tests or runtime verification performed.",
+        "No git history excerpts were supplied or read.",
+        "pr-context.md describes a newer head; its CI and test claims were not used as evidence for the pinned historical commit."
+      ],
+      "follow_ups": []
+    }
+  },
+  {
+    "file": "review-clean-code-w2.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-clean-code",
+      "summary": "Reviewed assigned slices against the pinned-source mirror at 5974c976823e1a7134723edf3a9140b991246d45. One minor function-design concern; no blocker or major clean-code findings. Assigned slice coverage is complete, but overall review-clean-code role scope remains incomplete because this dispatch covers only wave 2.",
+      "findings": [
+        {
+          "id": "CC-W2-001",
+          "severity": "minor",
+          "file": "src/commands/review-operator.ts",
+          "line": null,
+          "quote": "async function recordHostQuestion(\n  command: HostVerb,\n  own: string[],\n  packageDir: string,\n  context: { cwd: string; log: (line: string) => void; env: Readonly<Record<string, string | undefined>> },\n): Promise<number> {",
+          "problem": "recordHostQuestion combines raw CLI parsing, shared refusal rules, three verb-specific preparation/persistence paths, result formatting, and secondary journal synchronization in one function. Its branch-dependent validation is carried into deferred callbacks through assertions such as `premiseAnswer as \"uphold\" | \"dismiss\"` and `reason as string`, rather than represented by validated branch-specific values.",
+          "impact": "Changing a verb's validation or persistence requires navigating unrelated verb implementations and preserving their shared write ordering. The deferred callbacks also lose TypeScript's validation narrowing, making the validation-to-write contract harder to maintain.",
+          "suggested_fix": "Extract verb-specific preparation helpers that return a validated operation and its journal choice. Keep recordHostQuestion as the coordinator: apply shared refusals, prepare without writes, execute the prepared review operation, then update the journal with the existing warning-only failure behavior.",
+          "evidence": "Pinned-source src/commands/review-operator.ts, slice-10: recordHostQuestion contains confirm-plan estimate-number parsing, decide-premise finding lookup and choice validation, waiver/reviewer subject preparation, deferred record writes, and openDecision/answerDecision synchronization. The comments explicitly justify validating before writing and warning on secondary-journal failure; the proposed extraction preserves both decisions rather than changing them.",
+          "confidence": "high",
+          "reviewer": "review-clean-code",
+          "dedupe_key": "clean-code:recordHostQuestion:mixed-responsibilities",
+          "blocking_merge": false,
+          "location_class": "in-diff"
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-09",
+          "status": "COVERED",
+          "coverage": "Operator-command routing/help and completion-card waiver rendering."
+        },
+        {
+          "id": "slice-10",
+          "status": "COVERED",
+          "coverage": "Host-question options, validation helpers, preparation/write sequencing, and secondary-journal error handling."
+        },
+        {
+          "id": "slice-13",
+          "status": "COVERED",
+          "coverage": "Journal changes, report segregation/rendering, service counts, sources, and public types."
+        },
+        {
+          "id": "slice-14",
+          "status": "COVERED",
+          "coverage": "Bundled job/review-orchestrator instruction changes and stated host-question trust boundary."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json"
+      ],
+      "overall_role_scope_complete": false,
+      "limitations": [
+        "Only assigned slices 09, 10, 13, and 14 were reviewed.",
+        "No shell commands, tests, or edits were performed.",
+        "Commit history was not read; explicit design comments were considered.",
+        "pr-context.md describes newer head 208a4d2; its CI and test claims were not used as evidence for the pinned historical head."
+      ]
+    }
+  },
+  {
+    "file": "review-core-boundaries-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-core-boundaries",
+      "summary": "Reviewed slice-01 against pinned head 5974c976823e1a7134723edf3a9140b991246d45. No actionable core-boundary findings. The existing review-specific contract is extended additively, its installed and source copies agree on the changed fields, and the premise decision writer preserves the new audit data. No history available. No tests, shell commands, or edits performed.",
+      "findings": [],
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "DONE",
+          "coverage": "Reviewed the contract extension and complete Flow 467 record; checked pinned schema counterpart and premise-decision producer/validation path."
+        }
+      ],
+      "source_evidence": [
+        {
+          "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+          "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "quote": "\"confirmedVia\": { \"type\": \"string\", \"enum\": [\"tui-card\", \"remote-card\", \"terminal\", \"host-question\"] }",
+          "observation": "Adds a confirmation mode within the existing review-domain audit contract; existing modes remain accepted."
+        },
+        {
+          "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+          "file": "src/gdskills/contracts/review-finding.schema.json",
+          "quote": "\"required\": [\"source\", \"ref\", \"questionText\", \"answerText\", \"time\"]",
+          "observation": "Source counterpart contains the same hostQuestion object shape as the installed contract."
+        },
+        {
+          "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+          "file": "src/review/premise.ts",
+          "quote": "...(decision.hostQuestion === undefined ? {} : { hostQuestion: decision.hostQuestion }),",
+          "observation": "applyPremiseDecision preserves host-question evidence in premise.operator."
+        },
+        {
+          "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+          "file": "src/review/operator-decisions.ts",
+          "quote": "return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;",
+          "observation": "Decision-store validation requires a complete hostQuestion for the new mode."
+        },
+        {
+          "root": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source",
+          "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+          "quote": "\"status\": \"in-progress\",",
+          "observation": "Flow metadata introduces no shared-module imports or public infrastructure APIs."
+        }
+      ],
+      "inputs_unreadable": [],
+      "follow_ups": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      }
+    }
+  },
+  {
+    "file": "review-clean-code-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-clean-code",
+      "summary": "Reviewed assigned slices 01, 03, 04 and 05 at pinned head 5974c976823e1a7134723edf3a9140b991246d45. No actionable Clean Code/SOLID findings in the assigned changes. These slices primarily change schema declarations, flow records and operator-facing instructions; the weaker host-question provenance and synchronized skill copies are explicitly intentional.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "DONE",
+          "coverage": "Reviewed hostQuestion schema naming, required fields and descriptions, plus the new flow record. Cross-checked the schema against its pinned-source declaration."
+        },
+        {
+          "id": "slice-03",
+          "status": "DONE",
+          "coverage": "Reviewed implementation-plan intent, task documentation and changed job/review-orchestrator instructions for explanatory clarity and inconsistent terminology."
+        },
+        {
+          "id": "slice-04",
+          "status": "DONE",
+          "coverage": "Reviewed host mapping, four-act operator-decision instructions, plan confirmation, memory-waiver boundary and reviewer-override guidance. Repeated instructions describe distinct workflow entry points rather than an actionable three-site code duplication."
+        },
+        {
+          "id": "slice-05",
+          "status": "DONE",
+          "coverage": "Reviewed held-finding instructions, premise-review guidance and README explanation. The new prose consistently distinguishes operator answers from agent-authored words and identifies host questions as weaker than verified cards."
+        }
+      ],
+      "evidence": [
+        "Read drivers/review-clean-code-w1.json and the exact definition .metaproject/skills/gdskills/review/review-clean-code/SKILL.md in full.",
+        "Read pr-context.md before reviewing supplied slice text; read .metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json in full.",
+        "Pinned-source .metaproject/core/gdskills/contracts/review-finding.schema.json: premise.operator.hostQuestion declares source, ref, questionText, answerText and time, with explicit agent-reported provenance.",
+        "Pinned-source flow 467 plan.md explicitly documents rejection of heavier card verification, the possibility of invented host answers, and intentional synchronization of bundled skill copies.",
+        "Pinned-source src/commands/review-operator.ts was consulted as supporting context for the documentation: its host-question branch bypasses terminal prompting, and its comments/help explicitly name the weaker provenance and unattended/nested refusals. This was not treated as additional assigned implementation scope."
+      ],
+      "limitations": [
+        "History was not supplied and was not read; no git log, blame or historical rationale beyond the supplied documents was independently checked.",
+        "pr-context.md names collection head 208a4d2faa4dfbf71b2992d027bda25762b34456, not the assigned historical head. Its CI and test claims were treated as contextual statements, not verification of 5974c976.",
+        "Static, read-only review only. No tests, shell commands, edits or runtime verification."
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        "skills_resolve_context returned no additional must_read or on_demand entries."
+      ]
+    }
+  },
+  {
+    "file": "review-security-code-w2.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-security-code",
+      "summary": "Reviewed assigned slices 07, 09, 10 and 13 against pinned-source at 5974c976823e1a7134723edf3a9140b991246d45. Found one consent-validation weakness. Assigned-slice review is complete; overall review-security-code role scope is incomplete because this dispatch covers only these four slices. No tests, shell commands or edits performed; newer-head CI was not used as evidence.",
+      "findings": [
+        {
+          "id": "SEC-W2-001",
+          "severity": "major",
+          "file": "src/commands/review-operator.ts",
+          "line": null,
+          "quote": "function refuseDecline(answerText: string, verb: HostVerb): void {\n  const words = wordsOf(answerText);\n  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+          "problem": "The three non-premise host-question verbs accept any nonblank answer whose first word is not in LEAD_DECLINE, rather than requiring the confirming option. In particular, `keep` is explicitly the declining option for waive-mutation and override-reviewers, but `--answer-text keep` with --answer omitted passes validation and records the waiver or override. Arbitrary free text such as `maybe` also confirms a plan when its question contains the current estimate numbers. The journal then unconditionally records the confirming choice, contradicting the preserved answer.",
+          "impact": "A host integration or agent that forwards the operator's actual declining option through the advertised answer-text interface can relax review gates against the operator's decision. Exploitation requires that caller to invoke the affirmative verb for the negative answer; this review does not establish an external attack path or treat the deliberately accepted ability of a hostile same-user agent to fabricate answers as a new vulnerability.",
+          "attack_vector": "An agent or host adapter submits `keryx review waive-mutation --package <valid-attended-package> --reason <reason> --answered-by codex:q1 --question-text \"Waive or keep the mutation pass?\" --answer-text keep`, omitting --answer as permitted. The command records a mutation waiver and journals choice waive despite the supplied operator answer selecting keep. override-reviewers has the same path.",
+          "suggested_fix": "Validate an explicit affirmative choice for each non-premise verb before writing. Reject keep, ambiguous/free-text responses and conflicting choices; do not infer confirmation solely from the absence of a leading negative word. Add refusal cases for answer-text keep on both waiver verbs and answer-text maybe on confirm-plan, checking that neither package records nor journal entries are written.",
+          "evidence": "Static tracing of pinned-source src/commands/review-operator.ts: HOST_OPTIONS declares keep as the decline option for both waiver verbs; recordHostQuestion permits --answer to be omitted; refuseDecline only checks the first token against LEAD_DECLINE, which lacks keep; callers at lines 385 and 411 then install affirmative recorders, and answerDecision receives premiseAnswer ?? choices.confirm. Pinned operator-decisions.ts accepts these complete host-question records, and confirmedDecision returns them as gate decisions. TM-04 section 6b deliberately permits unverified host provenance, but separately promises that non-options/declines record nothing and that free text is not a decision. This finding concerns that validation promise, not the accepted weaker provenance. No execution performed.",
+          "confidence": "high",
+          "reviewer": "review-security-code",
+          "blocking_merge": false,
+          "location_class": "in-diff",
+          "class_scope": {
+            "sites": [
+              "src/commands/review-operator.ts:385 (confirm-plan)",
+              "src/commands/review-operator.ts:411 (waive-mutation and override-reviewers)"
+            ],
+            "enumeration_method": "Enumerated all four HostVerb entries in HOST_OPTIONS and every refuseDecline(answerText, command) call in pinned review-operator.ts. confirm-plan and the shared waiver/override branch lack affirmative-text validation. decide-premise at line 395 additionally invokes refuseOtherChoice and is not affected by this missing validation."
+          }
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 1,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        "slice-07",
+        "slice-09",
+        "slice-10",
+        "slice-13"
+      ],
+      "inputs_unreadable": [],
+      "needs_context": [],
+      "follow_ups": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md (canonical severity)",
+        "Pinned TM-04 sections 4c and 6b",
+        "Pinned flow 467 acceptance criteria"
+      ],
+      "overall_role_scope_complete": false
+    }
+  },
+  {
+    "file": "review-security-code-w3.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-security-code",
+      "summary": "Reviewed assigned slices 14–17 at historical head 5974c976823e1a7134723edf3a9140b991246d45. No distinct, evidence-supported code-security finding identified within the assigned changes. The explicitly accepted weaker host-question provenance policy was not treated as a vulnerability.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-14",
+          "status": "DONE",
+          "coverage": "Reviewed changed bundled operator instructions, host-question attribution, card preference and unattended restrictions."
+        },
+        {
+          "id": "slice-15",
+          "status": "DONE",
+          "coverage": "Reviewed changed dispatch, waiver and premise-answer instructions for security-relevant authorization inconsistencies."
+        },
+        {
+          "id": "slice-16",
+          "status": "DONE",
+          "coverage": "Reviewed premise instructions and hostQuestion schema additions; no demonstrated exploitable path identified."
+        },
+        {
+          "id": "slice-17",
+          "status": "DONE",
+          "coverage": "Reviewed changed provenance validators, decision persistence and propagation, plan confirmation, readiness reporting and unattended command floor. Read pinned writer and reader implementations and pinned CLI caller context."
+        }
+      ],
+      "inputs_unreadable": [],
+      "needs_context": [],
+      "follow_ups": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+          "application": "Read fully; applied security-only scope, explicit attack-vector requirement and deliberate-policy exception."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Applied reviewer result contract."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "application": "Read and applied historical canonical severity section."
+        },
+        {
+          "source": "skills_resolve_context",
+          "application": "Resolver returned no must_read or on_demand project rules for the supplied review paths."
+        }
+      ],
+      "limitations": [
+        "Source-only review; no tests, shell commands or edits performed.",
+        "Original implementation sources were read exclusively from research-evidence/pinned-source, not live src.",
+        "pr-context.md describes newer head 208a4d2; its CI and test claims were not used as historical evidence.",
+        "Git history was not supplied or read; policy intent was established from the supplied instructions and pinned source comments."
+      ]
+    }
+  },
+  {
+    "file": "review-security-code-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-security-code",
+      "summary": "Reviewed assigned historical PR1058 slices at pinned head 5974c976823e1a7134723edf3a9140b991246d45. No exploitable code-level security defect established within these slices. The weaker, agent-reported host-question proof is an explicit accepted design choice, not an undisclosed authentication guarantee.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "DONE",
+          "coverage": "Reviewed host-question schema extension and flow metadata; no executable injection surface or exposed credential identified."
+        },
+        {
+          "id": "slice-03",
+          "status": "DONE",
+          "coverage": "Reviewed implementation-plan threat disclosure and job/review-orchestrator instructions concerning operator decisions."
+        },
+        {
+          "id": "slice-04",
+          "status": "DONE",
+          "coverage": "Reviewed host routing, four-act restriction, card preference, unverified-answer disclosure, and unattended/nested refusal instructions."
+        },
+        {
+          "id": "slice-05",
+          "status": "DONE",
+          "coverage": "Reviewed held-finding decision instructions, premise-reviewer boundaries, and README security claims."
+        }
+      ],
+      "inputs_unreadable": [],
+      "needs_context": [],
+      "follow_ups": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        "skills_resolve_context returned no additional mandatory project rules."
+      ],
+      "evidence": [
+        {
+          "source": "slice-04.diff",
+          "quote": "keryx does not verify them, which is why it is weaker than a card.",
+          "assessment": "Changed operator instructions explicitly disclose the trust boundary rather than representing host answers as verified presses."
+        },
+        {
+          "source": "slice-03.diff",
+          "quote": "stop a hostile same-user agent, which can fake a pty, invent a host-question answer or write the JSON",
+          "assessment": "The documented security model expressly excludes prevention of same-user forgery."
+        },
+        {
+          "source": "research-evidence/pinned-source/docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md, section 6b",
+          "quote": "**This reverses §5 for these four acts, on the operator's instruction (polls 225 and 227, 2026-10-19).**",
+          "assessment": "Pinned decision record supplies the reason for intentionally accepting weaker proof."
+        },
+        {
+          "source": "research-evidence/pinned-source/src/commands/review-operator.ts",
+          "quote": "refuseHostQuestionHere(command, packageDir, env);",
+          "assessment": "Supporting pinned source invokes nested/unattended refusal before parsing and recording the host answer."
+        }
+      ],
+      "limitations": [
+        "Static, read-only review only; no tests, shell commands, or edits.",
+        "No history supplied; commit history and blame were not read.",
+        "pr-context.md identifies a later collection head, 208a4d2faa4dfbf71b2992d027bda25762b34456. Its intent was contextual only; code evidence came from the requested pinned-source snapshot and supplied slices.",
+        "Completion covers the four assigned slices, not the entire PR implementation."
+      ]
+    }
+  },
+  {
+    "file": "review-pr-contract-w3.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-pr-contract",
+      "summary": "Reviewed slices 08–11 against historical pin 5974c976823e1a7134723edf3a9140b991246d45. Found one minor disagreement between the unconditional decisions-journal promise and the explicitly best-effort implementation. Newer-head CI and test-pass claims were not used as historical evidence. No execution, tests, shell commands or edits performed.",
+      "findings": [
+        {
+          "id": "PC-W3-001",
+          "severity": "minor",
+          "file": "src/commands/review-operator.ts",
+          "line": null,
+          "quote": "log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);",
+          "problem": "The PR summary promises that the four verbs record the answer \"plus a `keryx decisions` entry\". Slice 08 repeats this unconditionally in review-with-a-record.md and limitations.md. However, slice 10 deliberately catches journal failures after the review record has been written, logs a warning, and returns success without guaranteeing that entry.",
+          "impact": "A reader can reasonably treat a successful host-question command as assurance that the decision is discoverable through `keryx decisions`, although a journal failure leaves only the review-package record. This is a reporting-contract discrepancy, not a claim that the deliberate write-order decision is itself defective.",
+          "suggested_fix": "Qualify the PR and user-facing documentation: the review-package decision is authoritative, journal recording is best effort, and a warning means the journal entry may be absent. If unconditional journaling remains the intended AC6 contract, reconcile that requirement separately with the deliberately nonfatal implementation.",
+          "evidence": "All source evidence was read under .metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source at 5974c976823e1a7134723edf3a9140b991246d45. PR claim: \"plus a `keryx decisions` entry\". docs/docs/guides/review-with-a-record.md: \"a `keryx decisions` entry is written\"; docs/docs/limitations.md repeats that promise. Flow 467 AC6 states: \"Each accepted host question also writes a `keryx decisions` entry\". src/commands/review-operator.ts explicitly explains that a journal which cannot be written produces a warning rather than undoing or duplicating the already-written review record, then catches the error and returns 0. The deliberate rationale was read and is not challenged by this finding.",
+          "confidence": "high",
+          "reviewer": "review-pr-contract",
+          "location_class": "in-diff",
+          "blocking_merge": false,
+          "dedupe_key": "pr-contract-host-question-journal-best-effort"
+        }
+      ],
+      "slices": [
+        {
+          "id": "slice-08",
+          "status": "DONE",
+          "coverage": "Read all supplied documentation changes and compared their historical promises with the assigned command implementation."
+        },
+        {
+          "id": "slice-09",
+          "status": "DONE",
+          "coverage": "Read host-question routing, command help and confirmation-card rendering changes."
+        },
+        {
+          "id": "slice-10",
+          "status": "DONE",
+          "coverage": "Read all host-question parsing, refusals, decision writes and best-effort journaling changes; checked against pinned original source and flow 467."
+        },
+        {
+          "id": "slice-11",
+          "status": "DONE",
+          "coverage": "Read the assigned test-file portion statically; made no execution or historical pass-count claim."
+        }
+      ],
+      "checklist_rows": [
+        {
+          "claim": "bun test src/commands/review-host-question.test.ts (41 tests)",
+          "state": "[x]",
+          "diff_signal": "slice-11 adds review-host-question.test.ts coverage.",
+          "expectation": "Test changes are present; execution and total count at the historical pin are not established by the newer-head context."
+        },
+        {
+          "claim": "existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+          "state": "[x]",
+          "diff_signal": "Assigned slices change command implementations but provide no historical execution results.",
+          "expectation": "Unverified execution claim; not treated as historical passing evidence."
+        },
+        {
+          "claim": "bun test src/gdskills src/docs and the CLI reference coverage tests",
+          "state": "[x]",
+          "diff_signal": "slice-08 contains documentation changes, not execution evidence.",
+          "expectation": "Unverified execution claim; not treated as historical passing evidence."
+        },
+        {
+          "claim": "bun run typecheck",
+          "state": "[x]",
+          "diff_signal": "Static slices do not establish a typecheck result.",
+          "expectation": "Unverified execution claim; not treated as historical passing evidence."
+        },
+        {
+          "claim": "review round",
+          "state": "[ ]",
+          "diff_signal": "No assigned diff line contradicts this process-state checkbox.",
+          "expectation": "No finding."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+          "application": "Read fully; applied quote-both-sides, minor severity for PR-claim disagreements, and deliberate-choice safeguards."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Read fully; used result fields, PC-prefixed finding identity and null line with verbatim quote."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-pr-contract-w3.json",
+          "application": "Read dispatch; limited review to assigned slices and historical static evidence."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/.metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+          "application": "Read historical requirements, including AC6; did not execute verification commands."
+        }
+      ],
+      "context_resolution": "Project-context resolution for the assigned files returned no must_read or on_demand entries.",
+      "limitations": [
+        "pr-context.md identifies newer head 208a4d2; its CI results and test-pass assertions do not verify historical pin 5974c976.",
+        "Only assigned slices were covered; no conclusion is made about the entire PR.",
+        "Runtime verification was not performed."
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 0
+      }
+    }
+  },
+  {
+    "file": "review-logic-w4.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-logic",
+      "summary": "Reviewed assigned slices 12–14 at historical head 5974c976823e1a7134723edf3a9140b991246d45 using pinned sources. Found one host-question journal identity defect. No shell commands, tests, edits, live implementation sources, or newer CI evidence were used.",
+      "findings": [
+        {
+          "id": "LOG-W4-001",
+          "severity": "major",
+          "file": "src/decisions/journal.ts",
+          "line": null,
+          "quote": "  const twin = findOpenTwin(records, questionHash(question, [...ids]), input.session, now);\n  if (twin !== undefined) return resultOf(twin);",
+          "problem": "Host questions use the existing unanswered-question deduplication without including their host reference or metadata in the identity. Two concurrent accepted host answers with identical question text and option IDs can reuse one open record: after the first open releases the journal lock but before its answer is appended, the second open returns that record and discards its own hostQuestion metadata.",
+          "impact": "For example, two concurrent waive-mutation recordings with the same question but different poll references produce two package decisions but can produce only one host-question report row. That row retains the first poll's reference and answer text, losing attribution for the second accepted answer. This conflicts with AC6's requirement that each accepted host question write an entry containing its source and reference.",
+          "suggested_fix": "Separate host-question identity from recommendation-question deduplication. Either always create a distinct open record for an accepted host-question recording, or deduplicate using an explicit host-question identity that includes source, reference, verb and the relevant review subject. Add a deterministic interleaving regression test that opens two identical questions with different host references before answering either and verifies that both report rows retain their metadata.",
+          "evidence": "Pinned src/commands/review-operator.ts records the package decision, then awaits openDecision with hostQuestion metadata and no session, then separately awaits answerDecision. Pinned src/decisions/journal.ts findOpenTwin matches only normalized question, option IDs, session and age; openLocked returns its result before constructing the new hostQuestion field. Pinned src/decisions/report.ts emits one hostQuestions row per distinct open ID. The existing comment explains deduplication as preventing arm rerolls; that justification does not distinguish separately answered host questions, which this PR explicitly treats as records rather than recommendation draws. Static interleaving analysis only; not executed.",
+          "confidence": "high",
+          "reviewer": "review-logic",
+          "location_class": "in-diff",
+          "class_scope": {
+            "sites": [
+              "src/decisions/journal.ts:openLocked",
+              "src/commands/review-operator.ts:recordHostQuestion"
+            ],
+            "enumeration_method": "Read the shared recordHostQuestion producer and HOST_OPTIONS table in the pinned command source: decide-premise, confirm-plan, waive-mutation and override-reviewers all use the same openDecision-then-answerDecision sequence. Read the complete pinned journal source: its single findOpenTwin/openLocked path handles all four and does not inspect hostQuestion identity."
+          }
+        }
+      ],
+      "slices": [
+        {
+          "id": "slice-12",
+          "status": "DONE",
+          "coverage": "Read the full assigned test diff and pinned test setup; checked refusal, journal visibility and backward-compatibility assertions statically."
+        },
+        {
+          "id": "slice-13",
+          "status": "DONE",
+          "coverage": "Reviewed journal, report, service, source and type changes, including report filtering and host-question attribution."
+        },
+        {
+          "id": "slice-14",
+          "status": "DONE",
+          "coverage": "Reviewed all supplied bundled-skill instruction changes against the pinned acceptance criteria and command behavior."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-logic/SKILL.md — read fully",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully",
+        ".metaproject/reviews/2026-10-19-review-flow-pr/drivers/review-logic-w4.json — read fully",
+        ".metaproject/reviews/2026-10-19-review-flow-pr/slices/manifest.json — read fully",
+        "Pinned flow-467 acceptance-criteria.md — applied AC6 and AC9",
+        "skills_resolve_context for assigned files returned no must_read or on_demand entries"
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 1,
+        "minor": 0,
+        "info": 0
+      }
+    }
+  },
+  {
+    "file": "review-pr-contract-w2.txt",
+    "result": {
+      "status": "NEEDS_CONTEXT",
+      "reviewer": "review-pr-contract",
+      "summary": "Reviewed assigned slices 04–07 against the supplied PR context and historical pinned-source mirror at 5974c976823e1a7134723edf3a9140b991246d45. No qualifying PR-body/diff disagreement established within these slices. Overall reviewer-role scope remains incomplete: the supplied PR context identifies newer head 208a4d2, historical execution claims cannot be verified, and this dispatch does not cover the remaining role-assigned slices. Newer CI was not used as evidence.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        "slice-04",
+        "slice-05",
+        "slice-06",
+        "slice-07"
+      ],
+      "inputs_unreadable": [],
+      "needs_context": [
+        "PR body/checklist captured at historical head 5974c976, or confirmation that the supplied round-1 intent and test-plan text applied unchanged to that head.",
+        "Historical execution evidence for the checked test-plan claims; newer-head CI cannot substantiate them.",
+        "Results covering the remaining review-pr-contract slices before declaring overall role scope complete."
+      ],
+      "follow_ups": [
+        "Have review-logic assess the option-validation/documentation discrepancy at the pinned head: README and TM-04 §6b say free text is never a decision, but src/commands/review-operator.ts uses only refuseDecline for confirm-plan, waive-mutation and override-reviewers. A non-decline string such as 'maybe' passes that validator; only decide-premise additionally checks choice words. This is a static observation, not executed evidence or a qualifying PR-body disagreement filed by this lane."
+      ],
+      "checklist_rows": [
+        {
+          "claim": "bun test src/commands/review-host-question.test.ts (41 tests)",
+          "state": "[x]",
+          "diff_evidence": "The pinned mirror contains the named test file.",
+          "expectation": "Test-file presence is supported; execution and the claimed count remain unverified."
+        },
+        {
+          "claim": "existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+          "state": "[x]",
+          "diff_evidence": "Assigned slices contain documentation and skill changes, not historical test output.",
+          "expectation": "Requires pinned-head test evidence; no mismatch inferred."
+        },
+        {
+          "claim": "bun test src/gdskills src/docs and the CLI reference coverage tests",
+          "state": "[x]",
+          "diff_evidence": "Slice-07 updates CLI documentation, but supplies no execution evidence.",
+          "expectation": "Requires pinned-head test evidence; no mismatch inferred."
+        },
+        {
+          "claim": "bun run typecheck",
+          "state": "[x]",
+          "diff_evidence": "No historical typecheck output supplied.",
+          "expectation": "Requires pinned-head execution evidence."
+        },
+        {
+          "claim": "review round",
+          "state": "[ ]",
+          "diff_evidence": "These slices do not establish completion of a review round.",
+          "expectation": "No contradiction established."
+        }
+      ],
+      "project_context_applied": [
+        "Driver review-pr-contract-w2.json and its payload",
+        "review-pr-contract/SKILL.md",
+        "review-orchestrator/reviewer-finding.schema.json",
+        "skills_resolve_context returned no must_read entries"
+      ]
+    }
+  },
+  {
+    "file": "review-testing-practices-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-testing-practices",
+      "summary": "Reviewed slices 11 and 12 against pinned-source for head 5974c976823e1a7134723edf3a9140b991246d45. No substantiated testing-practices findings. Mutation execution and runtime verification were prohibited; no survivor or killed-mutant results are claimed.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-11",
+          "status": "COVERED",
+          "coverage": "Read all supplied test additions: host-question acceptance, source parsing, persisted records, refusals, package snapshots, premise choices and plan-number checks."
+        },
+        {
+          "id": "slice-12",
+          "status": "COVERED",
+          "coverage": "Read all supplied test additions: terminal compatibility, unattended and nested-process refusals, decisions journal/report, complete flag rejection, presentation and older-record compatibility."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md — Severity (canonical)"
+      ],
+      "evidence": [
+        {
+          "file": "src/commands/review-host-question.test.ts",
+          "quote": "expect(snapshot(dir)).toEqual(before);",
+          "observation": "expectRefused checks package bytes after rejection and separately checks that the decisions journal does not exist."
+        },
+        {
+          "file": "src/commands/review-host-question.test.ts",
+          "quote": "expect(asked).toEqual([]);",
+          "observation": "The terminal-with-host-flags case checks both successful recording and the absence of an interactive prompt."
+        },
+        {
+          "file": "src/commands/review-host-question.test.ts",
+          "quote": "await writeRunProfile(dir, buildRunProfile({ unattended: true, env: {} }));",
+          "observation": "The package-profile refusal case uses the profile producer rather than manufacturing its JSON shape; environment and package refusals are exercised separately."
+        },
+        {
+          "file": "src/commands/review-operator.ts",
+          "quote": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+          "observation": "Pinned production source confirms that the separate unattended fixtures target distinct operands."
+        },
+        {
+          "file": "src/review/operator-decisions.ts",
+          "quote": "return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;",
+          "observation": "Pinned reader explicitly distinguishes host-question records from older terminal/card records."
+        }
+      ],
+      "limitations": [
+        "No tests, shell commands, edits or mutation execution performed.",
+        "Mutation table: no executions; 0 mutated, all 16 proposed candidates unexecuted. No predicted outcomes are reported.",
+        "Candidate list covers selected load-bearing production gates exercised by these slices, not an exhaustive branch inventory of the entire PR.",
+        "pr-context.md identifies collection head 208a4d2faa4dfbf71b2992d027bda25762b34456, unlike the driver's pinned head. Its CI and test-plan claims were treated as background, not verification of 5974c976.",
+        "Pinned-source contains changed files only. src/review/premise-fixtures.ts was unavailable, so the heldFinding producer could not be independently checked. History was unavailable.",
+        "resolve-context returned no must_read or on_demand project documents."
+      ],
+      "mutant_candidates": [
+        {
+          "id": "TP-HQ-01",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (own.some((arg) => arg === \"--answered-by\" || arg.startsWith(\"--answered-by=\"))) {",
+          "replacement": "if (false) {"
+        },
+        {
+          "id": "TP-HQ-02",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (raw === undefined) return refuse();",
+          "replacement": "if (raw === undefined) return { source: \"other\", ref: \"missing\" };"
+        },
+        {
+          "id": "TP-HQ-03",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source) || ref === \"\") return refuse();",
+          "replacement": "if (ref === \"\") return refuse();"
+        },
+        {
+          "id": "TP-HQ-04",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source) || ref === \"\") return refuse();",
+          "replacement": "if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source)) return refuse();"
+        },
+        {
+          "id": "TP-HQ-05",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+          "replacement": "if (LEAD_DECLINE.has(words[0] as string)) {"
+        },
+        {
+          "id": "TP-HQ-06",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+          "replacement": "if (words.length === 0) {"
+        },
+        {
+          "id": "TP-HQ-07",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (!named || namesOther || negated) {",
+          "replacement": "if (namesOther || negated) {"
+        },
+        {
+          "id": "TP-HQ-08",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (!named || namesOther || negated) {",
+          "replacement": "if (!named || negated) {"
+        },
+        {
+          "id": "TP-HQ-09",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (!named || namesOther || negated) {",
+          "replacement": "if (!named || namesOther) {"
+        },
+        {
+          "id": "TP-HQ-10",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (env[\"KERYX_TOOL_CALL\"] === \"1\") {",
+          "replacement": "if (false) {"
+        },
+        {
+          "id": "TP-HQ-11",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+          "replacement": "if (readRunProfile(packageDir)?.mode === \"unattended\") {"
+        },
+        {
+          "id": "TP-HQ-12",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (isAutonomousEnv(env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+          "replacement": "if (isAutonomousEnv(env)) {"
+        },
+        {
+          "id": "TP-HQ-13",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "} else if (answerArg !== undefined && answerArg !== choices.confirm) {",
+          "replacement": "} else if (false) {"
+        },
+        {
+          "id": "TP-HQ-14",
+          "file": "src/commands/review-operator.ts",
+          "anchor": "if (![estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every((value) => shown.has(String(value)))) {",
+          "replacement": "if (false) {"
+        },
+        {
+          "id": "TP-HQ-15",
+          "file": "src/review/operator-decisions.ts",
+          "anchor": "return d.confirmedVia === \"host-question\" ? validHostQuestion(d.hostQuestion) : true;",
+          "replacement": "return true;"
+        },
+        {
+          "id": "TP-HQ-16",
+          "file": "src/review/plan-confirmation.ts",
+          "anchor": "if (confirmation.confirmedVia === \"host-question\" && confirmation.hostQuestion === undefined) throw new Error(\"a host-question plan confirmation needs the question and the answer\");",
+          "replacement": ""
+        }
+      ]
+    }
+  },
+  {
+    "file": "review-pr-contract-w1.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-pr-contract",
+      "summary": "Reviewed slice-01, slice-02 and slice-03 against pr-context.md and supplied pinned-source evidence for 5974c976823e1a7134723edf3a9140b991246d45. No concrete PR-contract contradiction established in these slices. Context provenance is imperfect: pr-context.md identifies head 208a4d2faa4dfbf71b2992d027bda25762b34456, not the assigned pinned head. Historical review history was not supplied; no prior dispositions inferred. Tests, typecheck and CI were not executed or independently verified.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "COVERED",
+          "coverage": "Schema adds host-question and its provenance fields, consistent with the PR summary. Flow remains in-progress with review task T10 todo; no claim that post-merge operator checks are complete."
+        },
+        {
+          "id": "slice-02",
+          "status": "COVERED",
+          "coverage": "Acceptance criteria, description and journal align with the four-verb scope, explicit weaker-proof decision and retained complete/unattended/nested refusals. AC11 and AC12 are explicitly deferred by the PR body."
+        },
+        {
+          "id": "slice-03",
+          "status": "COVERED",
+          "coverage": "Plan and skill changes replace terminal handoffs for the four acts with host-question recording, retain complete on its existing operator path, and explicitly acknowledge answer fabrication as outside the trust boundary."
+        }
+      ],
+      "checklist_rows": [
+        {
+          "claim": "[x] `bun test src/commands/review-host-question.test.ts` (41 tests)",
+          "state": "checked",
+          "evidence": "Pinned src/commands/review-host-question.test.ts contains dedicated AC1–AC8 cases, including no-TTY recording, refusals, decisions journal and report/modal assertions.",
+          "expectation": "Relevant test changes are present. Claimed execution and exact historical run result remain unverified."
+        },
+        {
+          "claim": "[x] existing review-operator, operator-confirm-review and harness-robustness tests pass unedited",
+          "state": "checked",
+          "evidence": "The driver changed-file scope does not list edits to those existing test files; the new test file separately exercises unchanged terminal refusal wording.",
+          "expectation": "No file-list contradiction to 'unedited'; passing results cannot be established by static review."
+        },
+        {
+          "claim": "[x] `bun test src/gdskills src/docs` and the CLI reference coverage tests",
+          "state": "checked",
+          "evidence": "Slice-03 updates skill guidance. Pinned documentation search locates host-question updates in TM-04 §6b, limitations.md:212–219, cli-reference.md:4893–4926 and review-with-a-record.md:615–624.",
+          "expectation": "Documentation and skill changes support the stated scope; historical test success remains unverified."
+        },
+        {
+          "claim": "[x] `bun run typecheck`",
+          "state": "checked",
+          "evidence": "No execution evidence was supplied or generated in this read-only assignment.",
+          "expectation": "Treat as the author's reported result, not independently confirmed."
+        },
+        {
+          "claim": "[ ] review round",
+          "state": "unchecked",
+          "evidence": "Slice-01 flow.json leaves T10, 'Review through the project review orchestrator and open the PR', at todo.",
+          "expectation": "An unfinished review checkbox is consistent with the supplied flow state."
+        }
+      ],
+      "claim_checks": [
+        {
+          "claim": "Four verbs accept host-question flags without a TTY and record provenance plus a decisions entry.",
+          "evidence": "Pinned src/commands/review-operator.ts branches on --answered-by before requireTerminal; recordHostQuestion constructs source/ref/questionText/answerText/time and calls the existing recorders with confirmedVia: host-question, then openDecision/answerDecision.",
+          "assessment": "Supported statically; journal-write failures are explicitly warning-only."
+        },
+        {
+          "claim": "keryx does not verify the answer; docs and skills disclose the weaker proof.",
+          "evidence": "Pinned TM-04 §6b states 'keryx never sees the question or the answer, only what the agent passes'; slice-03 explicitly names invented host-question answers in the threat boundary.",
+          "assessment": "Supported; the deliberate trust-policy reversal is not itself a defect."
+        },
+        {
+          "claim": "Unattended runs and nested keryx refuse the flag.",
+          "evidence": "Pinned review-operator.ts refuseHostQuestionHere rejects KERYX_TOOL_CALL=1 and autonomous/unattended profiles; pinned trigger/unattended.ts recordsHostQuestion triggers an early shell refusal.",
+          "assessment": "Supported for the stated checks; no claim of a hostile-agent security boundary inferred."
+        },
+        {
+          "claim": "review complete does not accept the new flags.",
+          "evidence": "Pinned review-host-question.test.ts AC7 explicitly asserts all three flags are unknown, together and separately.",
+          "assessment": "Supporting test evidence present; runtime outcome not independently verified."
+        },
+        {
+          "claim": "Skills, TM-04, README, CLI reference and guides updated.",
+          "evidence": "Slice-03 changes job-orchestrator and review-orchestrator guidance. Pinned README.md:1181 and documentation search hits show the new host-question path and its limitations.",
+          "assessment": "No documentation-update contradiction established."
+        }
+      ],
+      "limitations": [
+        "pr-context.md was read before reviewing the slices, but its recorded head differs from the assigned historical pinned head.",
+        "Historical review history and prior findings were not supplied.",
+        "No tests, shell commands or edits performed.",
+        "Source inspection used research-evidence/pinned-source, not checkout src.",
+        "Coverage is limited to assigned slices and targeted supporting evidence; it is not a whole-PR correctness verdict."
+      ],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+        "skills_resolve_context returned no additional must_read entries."
+      ],
+      "inputs_unreadable": []
+    }
+  },
+  {
+    "file": "review-logic-w3.txt",
+    "result": {
+      "status": "DONE_WITH_CONCERNS",
+      "reviewer": "review-logic",
+      "summary": "Reviewed assigned slices 08–11 against pinned source 5974c976823e1a7134723edf3a9140b991246d45. Found one answer-validation defect affecting three host-question verbs. No tests, shell commands, or edits performed; newer pr-context CI was excluded as historical evidence.",
+      "slices": [
+        "slice-08",
+        "slice-09",
+        "slice-10",
+        "slice-11"
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        {
+          "path": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+          "application": "Read fully; applied correctness scope, reproducible-path requirement, class enumeration, and read-only restrictions."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "application": "Read canonical severity and finding-format sections."
+        },
+        {
+          "path": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+          "application": "Read fully; applied result and finding schema."
+        },
+        {
+          "path": ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/.metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+          "application": "Checked relevant criteria against assigned slices; scope explicitly excludes free-text decisions."
+        },
+        {
+          "source": "skills_resolve_context",
+          "application": "Resolved assigned files for review; no must_read or on_demand project entries returned."
+        }
+      ],
+      "findings": [
+        {
+          "id": "LOGIC-W3-001",
+          "severity": "blocker",
+          "reviewer": "review-logic",
+          "file": "src/commands/review-operator.ts",
+          "line": null,
+          "quote": "  if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+          "problem": "confirm-plan, waive-mutation, and override-reviewers treat any nonblank answer not beginning with a listed decline word as approval. Unlike decide-premise, these branches never establish that the operator selected the confirming option. In particular, the offered decline option 'keep' is accepted by both waiver/override verbs when --answer is omitted.",
+          "impact": "For a valid interactive package, `waive-mutation --package <dir> --reason \"test\" --answered-by codex:q1 --question-text \"Waive the mutation pass?\" --answer-text \"keep\"` records a mutation waiver and journals choice 'waive', despite the operator selecting 'Keep: run the mutation pass'. The analogous override-reviewers call records an override. confirm-plan similarly accepts 'maybe' once the question contains the current estimate numbers. These are persisted decisions contrary to the supplied answer and the approved requirement that free text is never a decision.",
+          "suggested_fix": "Validate answer-text against verb-specific confirming and declining choices before any write. Recognize 'keep' as a decline for waiver and reviewer override, reject unsupported/free-text answers, and reject contradictions between --answer and answer-text. Preserve explicitly supported affirmative phrases rather than treating absence of a negative prefix as consent. Add refusal tests covering 'keep' for both verbs and 'maybe' for all three.",
+          "evidence": "At pinned head 5974c976, HOST_OPTIONS defines waiver/override decline='keep'. recordHostQuestion permits omitted --answer for all three non-premise verbs. confirm-plan and the shared waiver/override branch call only refuseDecline(answerText, command), whose LEAD_DECLINE set lacks 'keep' and whose predicate accepts arbitrary other words. Both branches then persist the confirming action, and answerDecision uses premiseAnswer ?? choices.confirm. The pinned PRD requires an answer to be one of the verb's options; the pinned acceptance-criteria scope says 'A free-text answer is never a decision.' Existing assigned tests cover declines such as n/no and invalid explicit --answer, but not a declining 'keep' in answer-text. This finding concerns interpreting the reported answer, not the deliberately accepted inability to authenticate host answers.",
+          "confidence": "high",
+          "dedupe_key": "host-question-nonpremise-answer-text-not-validated",
+          "blocking_merge": true,
+          "location_class": "in-diff",
+          "class_scope": {
+            "sites": [
+              "src/commands/review-operator.ts:recordHostQuestion confirm-plan branch",
+              "src/commands/review-operator.ts:recordHostQuestion shared waive-mutation/override-reviewers branch",
+              "src/commands/review-operator.ts:recordHostQuestion decide-premise branch (choice validation present)"
+            ],
+            "enumeration_method": "Enumerated the complete HOST_OPTIONS/HostVerb set and all three branches of recordHostQuestion in pinned source: confirm-plan, decide-premise, and shared waive-mutation/override-reviewers. Only decide-premise calls refuseOtherChoice; the remaining three verbs use prefix-only refusal."
+          }
+        }
+      ],
+      "stats": {
+        "blocker": 1,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      }
+    }
+  },
+  {
+    "file": "review-logic-w2.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-logic",
+      "summary": "Completed static review of slices 04–07 for historical head 5974c976823e1a7134723edf3a9140b991246d45. Found one documentation/implementation contract mismatch. The deliberately weaker host-question proof is explicitly accepted by the pinned requirements and TM-04 amendment, so it is not itself a defect. Overall review-logic role scope remains incomplete: this result covers only the assigned slices, not the whole PR.",
+      "findings": [
+        {
+          "id": "LOGIC-W2-01",
+          "severity": "minor",
+          "file": "README.md",
+          "line": null,
+          "quote": "Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path.",
+          "problem": "The added documentation promises that arbitrary free text cannot record a decision, but the pinned implementation does not enforce that for confirm-plan, waive-mutation or override-reviewers. recordHostQuestion calls refuseDecline for these verbs, which rejects only empty answers and certain leading decline words; it never requires an affirmative option. For example, --answer-text \"banana\" passes the answer check on waive-mutation and override-reviewers when their other prerequisites are satisfied.",
+          "impact": "Readers are told that option-only validation protects these operator decisions when it does not. The same unsupported guarantee appears in the assigned orchestrator instructions, TM-04 §6b and CLI reference.",
+          "suggested_fix": "Preserve the approved option-only contract by validating the affirmative answer for all three verbs before recording anything, and add rejection coverage for non-option free text. Reconcile the affected documentation with the resulting behavior.",
+          "evidence": "Static evidence at pinned head 5974c976: research-evidence/pinned-source/src/commands/review-operator.ts, recordHostQuestion and refuseDecline. The three non-premise branches use only refuseDecline(answerText, command); only decide-premise additionally checks choice words. The pinned PRD explicitly states that free text is not a decision. No command or test was executed.",
+          "confidence": "high",
+          "reviewer": "review-logic",
+          "location_class": "in-diff",
+          "dedupe_key": "host-question-non-option-answer-accepted"
+        }
+      ],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 0
+      },
+      "slices": [
+        "slice-04",
+        "slice-05",
+        "slice-06",
+        "slice-07"
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [],
+      "scope_complete": false,
+      "executionRequired": false,
+      "executionReason": "Read-only historical documentation and steering review; tests, shell commands and edits prohibited."
+    }
+  },
+  {
+    "file": "review-pr-contract-w4.txt",
+    "result": {
+      "status": "NEEDS_CONTEXT",
+      "reviewer": "review-pr-contract",
+      "summary": "Read assigned slices 04–07 and evaluated their documentation changes statically against pinned flow467 acceptance criteria. No substantiated PR-contract finding identified. The supplied pr-context.md describes head 208a4d2f, not reviewed head 5974c976; its checklist and newer CI results were not used as historical evidence. The original PR body/checklist is needed to finish this lane.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-04",
+          "status": "DONE",
+          "coverage": "Read all supplied hunks. Operator-decision instructions distinguish the four host-question acts from completion/readiness waivers and retain card preference and unattended refusal, consistent with pinned AC9."
+        },
+        {
+          "id": "slice-05",
+          "status": "DONE",
+          "coverage": "Read all supplied hunks. Held-finding instructions and README describe host-question recording and its weaker, unverified provenance. No contradiction with pinned AC9–AC10 established."
+        },
+        {
+          "id": "slice-06",
+          "status": "DONE",
+          "coverage": "Read all supplied hunks. TM-04 section 6b explicitly records the operator-directed reversal of section 5, what host questions prove and do not prove, refusal conditions, and the unchanged scope of other operator acts, addressing pinned AC10 statically."
+        },
+        {
+          "id": "slice-07",
+          "status": "DONE",
+          "coverage": "Read all supplied hunks. CLI reference documents the four verbs, provenance flags, plan-question freshness requirement, refusal conditions, and exclusion of completion flags. Executable documentation checks were not run."
+        }
+      ],
+      "inputs_unreadable": [
+        "Original PR1058 body and checklist at reviewed head 5974c976823e1a7134723edf3a9140b991246d45: not supplied; package pr-context.md instead identifies head 208a4d2faa4dfbf71b2992d027bda25762b34456."
+      ],
+      "needs_context": [
+        "Supply the historical PR1058 body/checklist corresponding to head 5974c976 so each original claim and checklist box can be compared with the assigned slices without using newer CI evidence."
+      ],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md — read fully; findings require a quoted PR claim and contradictory diff/document evidence.",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json — read fully; result structure and incomplete-input reporting applied.",
+        "skills_resolve_context returned no must_read or on_demand entries.",
+        ".metaproject/reviews/2026-10-19-review-flow-pr/research-evidence/pinned-source/.metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md — read fully; AC9–AC10 used as historical static requirements."
+      ],
+      "verification": {
+        "reviewed_head": "5974c976823e1a7134723edf3a9140b991246d45",
+        "evidence_level": "static only",
+        "shell_commands_run": false,
+        "tests_run": false,
+        "files_modified": false,
+        "newer_ci_used_as_evidence": false
+      }
+    }
+  },
+  {
+    "file": "review-logic-w1.txt",
+    "result": {
+      "status": "DONE",
+      "reviewer": "review-logic",
+      "summary": "Reviewed assigned slices 01–03 against historical head 5974c976823e1a7134723edf3a9140b991246d45. No reproducible logic defects found in the assigned changes. The schema accepts host-question provenance, and the changed orchestration instructions preserve the distinction between reported host answers and verified cards. AC11 and AC12 are explicitly deferred by the supplied PR context, not treated as implemented or independently verified. Git history was unavailable and was not read; no historical rationale beyond the supplied documents was assumed. No tests, shell commands, or edits were performed.",
+      "findings": [],
+      "stats": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "slices": [
+        {
+          "id": "slice-01",
+          "status": "COVERED",
+          "coverage": "Reviewed the supplied schema and flow-record diff. Checked the schema against research-evidence/pinned-source/.metaproject/core/gdskills/contracts/review-finding.schema.json: confirmedVia includes \"host-question\", and hostQuestion requires source, ref, questionText, answerText and time."
+        },
+        {
+          "id": "slice-02",
+          "status": "COVERED",
+          "coverage": "Reviewed all supplied acceptance-criteria, context, description and journal changes. Compared their intended boundary with pinned-source/docs/requirements/keryx-card-any-host/prd.md: four standalone verbs accept recorded host answers; complete remains excluded; unattended and nested execution remain refused. PR context explicitly says AC11 and AC12 follow after merge."
+        },
+        {
+          "id": "slice-03",
+          "status": "COVERED",
+          "coverage": "Reviewed all supplied plan, tasks and orchestration-skill hunks. Cross-checked the detailed orchestration instructions against pinned-source/src/commands/review-operator.ts: host-question routing records the four verbs, validates required provenance texts, and refuses unattended execution and KERYX_TOOL_CALL=1. No executable implementation changes outside these slices were independently adjudicated."
+        }
+      ],
+      "inputs_unreadable": [],
+      "project_context_applied": [
+        ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json"
+      ],
+      "limitations": [
+        "Git history unavailable; no blame, log or historical choice reconstruction performed.",
+        "pr-context.md identifies collection head 208a4d2faa4dfbf71b2992d027bda25762b34456, not the assigned historical pin. Its intent and explicit deferrals were used as supplied context; its CI claims were not attributed to head 5974c976.",
+        "Runtime behavior and test results were not verified."
+      ]
+    }
+  }
+]
