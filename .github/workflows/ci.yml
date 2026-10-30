@@ -668,3 +668,66 @@ jobs:
       - name: Unit tests (logic layer, no VS Code host required)
         working-directory: vscode-extension
         run: bun run test
+
+  team-hub-distribution:
+    # The Hub image has shipped broken before: it was built without a module the
+    # Hub imports and exited at start. Every test passed and nothing between
+    # "green" and "a person ran it" noticed. The tests could not have: they run
+    # the Hub from the checkout, and the image is built from a different list of
+    # files (the packaged archive, then the Dockerfile's own COPY lines).
+    #
+    # So this job builds the image THE WAY A RELEASE DOES — from the extracted
+    # source archive, not from the checkout — starts it with throwaway tokens and
+    # fails unless /healthz answers 200. The same job then validates the install
+    # tooling that ships beside the image: `docker compose config` for every
+    # install mode, the rendered nginx / Caddy / cloudflared configs against the
+    # pinned images they will run on, and the real install, backup, restore,
+    # upgrade and rollback scripts against a real Docker daemon. `release.yml`
+    # runs the same scripts before it publishes anything.
+    name: team-hub-distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Shell scripts parse and lint
+        run: |
+          set -eu
+          for f in deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh; do
+            sh -n "$f"
+          done
+          shellcheck -s sh deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh
+
+      # No compiled binaries here: `--linux-x64` needs the registry and Bun's
+      # cross-target download, and the image does not use them. The release job
+      # builds them.
+      - name: Package the Hub source archive
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/hub-release" "$RUNNER_TEMP/hub-src"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" bun scripts/package-team-hub.ts --out "$RUNNER_TEMP/hub-release"
+          tar -xzf "$RUNNER_TEMP/hub-release/team-hub-prototype-source.tar.gz" -C "$RUNNER_TEMP/hub-src" --strip-components=1
+
+      # The context is the EXTRACTED ARCHIVE. Building from the checkout would
+      # prove nothing about what a release ships.
+      - name: Build the Hub image from the packaged archive
+        run: docker build -f "$RUNNER_TEMP/hub-src/deploy/team-hub/Dockerfile" -t keryx-team-hub:ci "$RUNNER_TEMP/hub-src"
+
+      - name: Start the image with throwaway tokens and require /healthz 200
+        run: sh deploy/team-hub/release/smoke-image.sh keryx-team-hub:ci
+
+      - name: Build the install bundle and validate every install mode
+        run: |
+          set -eu
+          sh deploy/team-hub/release/bundle.sh "$RUNNER_TEMP/hub-bundle" 0.0.0-ci
+          sh deploy/team-hub/release/check-modes.sh "$RUNNER_TEMP/hub-bundle/team-hub-install.tar.gz"
+
+      - name: Install, back up, restore, upgrade and roll back with the real scripts
+        run: sh deploy/team-hub/release/e2e.sh keryx-team-hub:ci
