@@ -1,0 +1,16 @@
+[
+  {"id": "D1", "file": "src/review/degradation.ts", "anchor": " || hasEvidenceKind(clean)", "replacement": "", "note": "screen downgrades even a finding that carries an evidence kind"},
+  {"id": "D2", "file": "src/review/degradation.ts", "anchor": "lowered.blocking_merge = false;", "replacement": "lowered.blocking_merge = true;", "note": "downgraded finding keeps blocking the merge"},
+  {"id": "D3", "file": "src/review/degradation.ts", "anchor": "[\"blocker\", \"major\"];", "replacement": "[\"blocker\"];", "note": "major is no longer screened"},
+  {"id": "D4", "file": "src/review/degradation.ts", "anchor": "severity: \"info\", evidence_screen: marker", "replacement": "severity: \"minor\", evidence_screen: marker", "note": "downgrade lands on minor, not info"},
+  {"id": "D5", "file": "src/review/degradation.ts", "anchor": "const outOfList = finding.evidence_kind !== undefined && !hasEvidenceKind(finding);", "replacement": "const outOfList = false;", "note": "out-of-list kind is kept"},
+  {"id": "D6", "file": "src/review/degradation.ts", "anchor": "    screened += 1;\n", "replacement": "", "note": "screened count never grows"},
+  {"id": "D7", "file": "src/review/degradation.ts", "anchor": "if (record.screened === 0) {\n    return [];", "replacement": "if (record.screened === 99) {\n    return [];", "note": "terminal is noisy for a round with no degradation finding"},
+  {"id": "P1", "file": "src/review/degradation-payload.ts", "anchor": "Math.max(0, Math.trunc(input.cap))", "replacement": "Math.trunc(input.cap)", "note": "negative cap is not clamped"},
+  {"id": "P2", "file": "src/review/degradation-payload.ts", "anchor": " || barrels.has(dependent.path)", "replacement": "", "note": "a barrel is traced as its own consumer"},
+  {"id": "P3", "file": "src/review/degradation-payload.ts", "anchor": "b.fanIn - a.fanIn", "replacement": "a.fanIn - b.fanIn", "note": "least-used consumers are kept first"},
+  {"id": "P4", "file": "src/review/degradation-payload.ts", "anchor": "ranked.slice(0, cap)", "replacement": "ranked.slice(0, cap + 1)", "note": "cap off by one"},
+  {"id": "P5", "file": "src/review/degradation-payload.ts", "anchor": "const capped = dropped.length > 0;", "replacement": "const capped = dropped.length >= 0;", "note": "always reported as capped"},
+  {"id": "P6", "file": "src/review/degradation-payload.ts", "anchor": "seed.names === \"*\" || seed.names.length > 0", "replacement": "seed.names === \"*\"", "note": "a named changed export is no longer a shared change"},
+  {"id": "R1", "file": "src/review/slice-routing.ts", "anchor": "/^[+-]\\s*export\\s+(\\*|", "replacement": "/^[+]\\s*export\\s+(\\*|", "note": "a removed export no longer routes to review-degradation"}
+]

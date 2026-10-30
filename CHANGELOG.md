@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.3.135] - 2026-10-29
+
+### Changed
+- **`review-degradation` is tuned against the first trial on five real pull requests.** Five rounds on the same pull requests, diffs taken at the commit the human reviewers saw, moved the share of human findings matched from 21% to a plateau of about 31-38% (regressions 7 of 12 in the last three rounds); the skill stays at profile `full` and is not wired into any project's review entry. What the rounds changed in the skill: the graph's consumer list is traced first and search-found users are labelled `search-derived`; reading a trigger and outcome in the code is evidence, and `major` when a user gets a wrong, lost or blocked result; a `suspicion` lane (`info`, `publication: question`) for what the code cannot answer, each ending "If true: <severity>, <outcome>" with a one-step "Check"; a second pass that tries to refute every candidate `blocker`, `major` or suspicion with a `file:line` read before it is filed; a sweep that lists what a swapped mechanism did implicitly and counts work per trigger; and a `diff-vs-description` finding is `major` at most, `blocker` only when the change it exposes has a blocker shape itself. The skill is 191 lines, two under the length ceiling it started from. Flow 479.
+
 ## [0.3.134] - 2026-10-28
 
 ### Added

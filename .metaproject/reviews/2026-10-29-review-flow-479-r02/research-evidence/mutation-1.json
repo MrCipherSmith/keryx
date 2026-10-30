@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f479",
+  "command": "bun test src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 701
+  },
+  "mutants": [
+    {
+      "id": "D1",
+      "file": "src/review/degradation.ts",
+      "anchor": " || hasEvidenceKind(clean)",
+      "replacement": "",
+      "note": "screen downgrades even a finding that carries an evidence kind",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 102,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 378
+    },
+    {
+      "id": "D2",
+      "file": "src/review/degradation.ts",
+      "anchor": "lowered.blocking_merge = false;",
+      "replacement": "lowered.blocking_merge = true;",
+      "note": "downgraded finding keeps blocking the merge",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 110,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 621
+    },
+    {
+      "id": "D3",
+      "file": "src/review/degradation.ts",
+      "anchor": "[\"blocker\", \"major\"];",
+      "replacement": "[\"blocker\"];",
+      "note": "major is no longer screened",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 29,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 380
+    },
+    {
+      "id": "D4",
+      "file": "src/review/degradation.ts",
+      "anchor": "severity: \"info\", evidence_screen: marker",
+      "replacement": "severity: \"minor\", evidence_screen: marker",
+      "note": "downgrade lands on minor, not info",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 108,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 630
+    },
+    {
+      "id": "D5",
+      "file": "src/review/degradation.ts",
+      "anchor": "const outOfList = finding.evidence_kind !== undefined && !hasEvidenceKind(finding);",
+      "replacement": "const outOfList = false;",
+      "note": "out-of-list kind is kept",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 99,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 617
+    },
+    {
+      "id": "D6",
+      "file": "src/review/degradation.ts",
+      "anchor": "    screened += 1;\n",
+      "replacement": "",
+      "note": "screened count never grows",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 96,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 374
+    },
+    {
+      "id": "D7",
+      "file": "src/review/degradation.ts",
+      "anchor": "if (record.screened === 0) {\n    return [];",
+      "replacement": "if (record.screened === 99) {\n    return [];",
+      "note": "terminal is noisy for a round with no degradation finding",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 190,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 626
+    },
+    {
+      "id": "P1",
+      "file": "src/review/degradation-payload.ts",
+      "anchor": "Math.max(0, Math.trunc(input.cap))",
+      "replacement": "Math.trunc(input.cap)",
+      "note": "negative cap is not clamped",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 71,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 616
+    },
+    {
+      "id": "P2",
+      "file": "src/review/degradation-payload.ts",
+      "anchor": " || barrels.has(dependent.path)",
+      "replacement": "",
+      "note": "a barrel is traced as its own consumer",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 89,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 639
+    },
+    {
+      "id": "P3",
+      "file": "src/review/degradation-payload.ts",
+      "anchor": "b.fanIn - a.fanIn",
+      "replacement": "a.fanIn - b.fanIn",
+      "note": "least-used consumers are kept first",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 96,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 625
+    },
+    {
+      "id": "P4",
+      "file": "src/review/degradation-payload.ts",
+      "anchor": "ranked.slice(0, cap)",
+      "replacement": "ranked.slice(0, cap + 1)",
+      "note": "cap off by one",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 97,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 631
+    },
+    {
+      "id": "P5",
+      "file": "src/review/degradation-payload.ts",
+      "anchor": "const capped = dropped.length > 0;",
+      "replacement": "const capped = dropped.length >= 0;",
+      "note": "always reported as capped",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 99,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 644
+    },
+    {
+      "id": "P6",
+      "file": "src/review/degradation-payload.ts",
+      "anchor": "seed.names === \"*\" || seed.names.length > 0",
+      "replacement": "seed.names === \"*\"",
+      "note": "a named changed export is no longer a shared change",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 123,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 624
+    },
+    {
+      "id": "R1",
+      "file": "src/review/slice-routing.ts",
+      "anchor": "/^[+-]\\s*export\\s+(\\*|",
+      "replacement": "/^[+]\\s*export\\s+(\\*|",
+      "note": "a removed export no longer routes to review-degradation",
+      "command": "bun test --bail src/review/degradation-screen.test.ts src/review/degradation-payload.test.ts src/review/slice-routing.test.ts src/commands/review-degradation-ingest.test.ts",
+      "line": 104,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 656
+    }
+  ],
+  "totals": {
+    "killed": 14,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "bail": true,
+  "startedAt": "2026-10-28T11:07:50.088Z",
+  "head": "c69cc5177ea0899ce85f87cc89b5a8fd42f721e2",
+  "treeHash": "aca207db8029aa1ec19a34dc63ffeef32e794b7bd77563f1df644efe145cbe36",
+  "loadavg": [
+    0.88,
+    1.58,
+    1.89
+  ],
+  "provenanceMs": 66,
+  "copyMs": 6594,
+  "mutantsMs": 8061
+}

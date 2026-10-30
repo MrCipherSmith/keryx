@@ -1,0 +1,226 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "ARCH-001",
+      "verdict": "upheld",
+      "reasoning": "Verified by execution (verifications.json: the --previous path at review.ts:4051 returns before the degradationBrief that :4122 passes). degradation-payload.ts header says the payload and blast-radius cannot disagree, so the missing brief on one path is not intended; no prior-intent signal or accepted practice supports it."
+    },
+    {
+      "finding_id": "ARCH-002",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no PRD/AC or pre-branch comment making the behaviour deliberate; the fix is local and does not conflict with surrounding conventions."
+    },
+    {
+      "finding_id": "ARCH-003",
+      "verdict": "upheld",
+      "reasoning": "The authoring-lint-guard.test.ts header (pre-existing, line 18) states 'RATCHET: the pinned ceiling here is today's count', so raising a ceiling contradicts the file's own stated intent; the bump in this commit cannot ratify itself."
+    },
+    {
+      "finding_id": "F1",
+      "verdict": "upheld",
+      "reasoning": "deepRosterRoles (slice-routing.ts:147, pre-existing since 84b16992e5) says 'only the round's own roles are dispatched'; the new role is added with no path gate, so the roster/profile-filter concern follows from code that predates the branch. No signal that the behaviour is intended."
+    },
+    {
+      "finding_id": "F2",
+      "verdict": "upheld",
+      "reasoning": "Plain code reading; no intent signal or accepted-practice source against it, and the proposed fix is local."
+    },
+    {
+      "finding_id": "F3",
+      "verdict": "upheld",
+      "reasoning": "Exact-match TUI behaviour is not stated as intended in the PRD; the same defect is raised independently as RL-W2-2, and the fix is sound and small."
+    },
+    {
+      "finding_id": "F5",
+      "verdict": "upheld",
+      "reasoning": "The skill's own markdown template asks for Class and Evidence kind, which the prose parser (managed.ts parseLegacyReport) does not read; the contradiction is inside the branch, with no intent signal making it deliberate."
+    },
+    {
+      "finding_id": "CB-001",
+      "verdict": "upheld",
+      "reasoning": "Same defect as ARCH-001, which was confirmed by execution; the PRD requires the degradation brief from blast-radius."
+    },
+    {
+      "finding_id": "CB-002",
+      "verdict": "upheld",
+      "reasoning": "Same ratchet issue as ARCH-003; the pre-existing guard header states the ceiling may only be lowered."
+    },
+    {
+      "finding_id": "CB-003",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is consistent with the surrounding module boundaries."
+    },
+    {
+      "finding_id": "CB-004",
+      "verdict": "upheld",
+      "reasoning": "Routing definition mismatch: slice-routing.ts line 29 describes routing by a changed exported symbol, while the regex (line 96) matches only added or removed export lines. The PRD wording ('only when the slice changes an exported symbol') and the code comment point the same way as the finding; the fix (align comment or rule) is simple."
+    },
+    {
+      "finding_id": "CB-005",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no signal that the behaviour is deliberate; the proposed fix does not conflict with existing practice."
+    },
+    {
+      "finding_id": "DEG-001",
+      "verdict": "upheld",
+      "reasoning": "The skill template asks for the Class and Evidence kind lines but parseLegacyReport does not read them, so an evidenced major on the prose path is lowered to info. The skill and the code of the same commit disagree, so the behaviour cannot be called intended."
+    },
+    {
+      "finding_id": "DG-W2-001",
+      "verdict": "upheld",
+      "reasoning": "Same roster/profile-filter issue as F1 and REG-1; it rests on the pre-existing deepRosterRoles and profile filtering and on the PRD requirement of profile full only. No signal that the filter gap is deliberate."
+    },
+    {
+      "finding_id": "DG-W2-002",
+      "verdict": "upheld",
+      "reasoning": "Field loss on merge is a code-reading finding; the PRD requires the evidence kind and class to survive to the screen, and no comment states the loss is intended."
+    },
+    {
+      "finding_id": "HL-001",
+      "verdict": "upheld",
+      "reasoning": "Same defect as ARCH-001 and CB-001, confirmed by execution."
+    },
+    {
+      "finding_id": "HL-002",
+      "verdict": "upheld",
+      "reasoning": "NOT TRACED list is unbounded while the cap is global (degradation-payload.ts); the file's cap exists to bound reviewer context, so an unbounded list defeats its stated purpose. Same defect as PERF-001."
+    },
+    {
+      "finding_id": "HL2-001",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    },
+    {
+      "finding_id": "HL2-002",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    },
+    {
+      "finding_id": "HL2-003",
+      "verdict": "upheld",
+      "reasoning": "Merge field loss, same family as DG-W2-002 and L-04; nothing states the loss is intended."
+    },
+    {
+      "finding_id": "L-01",
+      "verdict": "upheld",
+      "reasoning": "Delta-trigger meaning: the regex only sees changed export lines while the stated trigger and the payload header speak of a changed exported symbol. The code comment and the PRD wording are on the finding's side; the fix (align rule or text) is sound. Same definition mismatch as CB-004 and DEG-002."
+    },
+    {
+      "finding_id": "L-02",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    },
+    {
+      "finding_id": "L-03",
+      "verdict": "upheld",
+      "reasoning": "Prose-path ingest gap, same as DEG-001 and F5; template and parser of the same commit disagree."
+    },
+    {
+      "finding_id": "L-04",
+      "verdict": "upheld",
+      "reasoning": "Merge field loss, same family as DG-W2-002 and HL2-003; no intent signal."
+    },
+    {
+      "finding_id": "RL-W2-1",
+      "verdict": "upheld",
+      "reasoning": "Roster/profile-filter issue; follows from pre-existing roster code and the PRD scope of profile full. No signal that it is intended."
+    },
+    {
+      "finding_id": "RL-W2-2",
+      "verdict": "upheld",
+      "reasoning": "TUI exact-match issue, same as F3; no intent signal, local fix."
+    },
+    {
+      "finding_id": "RL-W2-3",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    },
+    {
+      "finding_id": "REG-1",
+      "verdict": "upheld",
+      "reasoning": "Same roster/profile-filter issue as F1 and DG-W2-001; each reviewer read the same pre-existing code, and the code is the evidence, not their agreement."
+    },
+    {
+      "finding_id": "PERF-001",
+      "verdict": "upheld",
+      "reasoning": "NOT TRACED list is joined over all dropped consumers (degradation-payload.ts), so the payload is not bounded by the cap whose purpose is to keep reviewer context small. Local fix: count plus a bounded list."
+    },
+    {
+      "finding_id": "PERF-W2-001",
+      "verdict": "upheld",
+      "reasoning": "A code-reading finding with no countervailing intent signal or accepted practice; the fix is local."
+    },
+    {
+      "finding_id": "SEC-001",
+      "verdict": "upheld",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    },
+    {
+      "finding_id": "SC2-001",
+      "verdict": "upheld",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    },
+    {
+      "finding_id": "SC2-002",
+      "verdict": "upheld",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    },
+    {
+      "finding_id": "SC2-003",
+      "verdict": "upheld",
+      "reasoning": "A review-security-code finding: never downgraded; no prior-intent signal found against it."
+    },
+    {
+      "finding_id": "TP-001",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; a test pinning behaviour in the same commit is not prior intent, and no accepted-practice source runs against it."
+    },
+    {
+      "finding_id": "TP-002",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-003",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-004",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-005",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-006",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-007",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-011",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-012",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    },
+    {
+      "finding_id": "TP-013",
+      "verdict": "upheld",
+      "reasoning": "Test-practice finding grounded in the test files; no prior intent signal or accepted practice against it."
+    }
+  ]
+}

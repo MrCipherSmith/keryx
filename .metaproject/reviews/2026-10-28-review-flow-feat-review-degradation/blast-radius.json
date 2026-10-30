@@ -1,0 +1,5230 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+    ".metaproject/flows/479-2026-10-28-review-degradation/acceptance-criteria.md",
+    ".metaproject/flows/479-2026-10-28-review-degradation/context.md",
+    ".metaproject/flows/479-2026-10-28-review-degradation/description.md",
+    ".metaproject/flows/479-2026-10-28-review-degradation/flow.json",
+    ".metaproject/flows/479-2026-10-28-review-degradation/journal.md",
+    ".metaproject/flows/479-2026-10-28-review-degradation/plan.md",
+    ".metaproject/flows/479-2026-10-28-review-degradation/tasks.md",
+    ".metaproject/modules/gdskills.md",
+    ".metaproject/skills/catalog.md",
+    ".metaproject/skills/gdskills/review/review-degradation/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+    "CHANGELOG.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/review-with-a-record.md",
+    "docs/requirements/keryx-review-degradation/prd.md",
+    "src/commands/review.ts",
+    "src/commands/skills.bundled-verify.test.ts",
+    "src/gdskills/bundled-eval.test.ts",
+    "src/gdskills/bundled/install-manifest.json",
+    "src/gdskills/bundled/skills/review/review-degradation/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json",
+    "src/gdskills/catalog.ts",
+    "src/gdskills/contracts/review-finding.schema.json",
+    "src/gdskills/governance/authoring-lint-guard.test.ts",
+    "src/gdskills/review-degradation-skill.test.ts",
+    "src/gdskills/skill-length-ceilings.ts",
+    "src/review/caps.ts",
+    "src/review/completion-gate.ts",
+    "src/review/coverage.test.ts",
+    "src/review/degradation-payload.test.ts",
+    "src/review/degradation-payload.ts",
+    "src/review/degradation-screen.test.ts",
+    "src/review/degradation.ts",
+    "src/review/dispatch.test.ts",
+    "src/review/managed.ts",
+    "src/review/round-split.test.ts",
+    "src/review/slice-routing.test.ts",
+    "src/review/slice-routing.ts",
+    "src/review/types.ts",
+    "src/tui/review-panel.test.ts",
+    "src/tui/review-panel.ts",
+    "src/tui/reviews-inspector.test.ts",
+    "src/tui/reviews-inspector.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/agent.ts",
+      "hop": 1,
+      "fanIn": 87,
+      "via": "src/review/completion-gate.ts",
+      "path": [
+        "src/commands/agent.ts",
+        "src/review/completion-gate.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 23,
+      "via": "src/tui/review-panel.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/review-panel.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/pr-comments.ts",
+      "hop": 1,
+      "fanIn": 23,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/pr-comments.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/tui/review-panel.ts",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "src/tui/review-panel.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/skills.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/blast-radius.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/blast-radius.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/bundled-eval.ts",
+      "hop": 1,
+      "fanIn": 14,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "path": [
+        "src/gdskills/bundled-eval.ts",
+        "src/gdskills/skill-length-ceilings.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/premise.ts",
+      "hop": 1,
+      "fanIn": 14,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/premise.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/review/slice-routing.ts",
+      "path": [
+        "src/review/round-split.ts",
+        "src/review/slice-routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/verdict.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/import-skills.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/import-skills.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/reviewers.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/review/reviewers.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/verification.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/verification.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/slice-routing.ts",
+      "path": [
+        "src/commands/review-slice.ts",
+        "src/review/slice-routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/run.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/managed.ts",
+      "path": [
+        "src/review/bot/run.ts",
+        "src/review/managed.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/install.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/install.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/metrics.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/metrics.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/loop.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/loop.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-notes.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/review-notes.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/routing-check.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/slice-routing.ts",
+      "path": [
+        "src/review/routing-check.ts",
+        "src/review/slice-routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/agents/verify.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/agents/verify.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/guarded-fs-ops.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/guarded-fs-ops.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/remove-skill.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/remove-skill.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/packages.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/packages.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/chunk-findings.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/chunk-findings.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/repair.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/repair.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/round-cut.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/slice-routing.ts",
+      "path": [
+        "src/review/round-cut.ts",
+        "src/review/slice-routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/review-layers-actions.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/review-panel.ts",
+      "path": [
+        "src/tui/review-layers-actions.ts",
+        "src/tui/review-panel.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/bot/post.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/bot/post.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/dedupe.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/plan-eval.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/slice-routing.ts",
+      "path": [
+        "src/review/plan-eval.ts",
+        "src/review/slice-routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/rebuttal-citation.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/rebuttal-citation.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "hop": 2,
+      "fanIn": 32,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/review/coverage.ts",
+        "src/review/reviewers.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "hop": 2,
+      "fanIn": 27,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/flow/review-gate.ts",
+        "src/review/loop.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "hop": 2,
+      "fanIn": 24,
+      "via": "src/review/completion-gate.ts",
+      "path": [
+        "src/harness/tool/builtin/spawn-subagent-tool.ts",
+        "src/commands/agent.ts",
+        "src/review/completion-gate.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 2,
+      "fanIn": 20,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init.ts",
+        "src/gdskills/install.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "hop": 2,
+      "fanIn": 18,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/readiness.ts",
+        "src/review/verdict.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 2,
+      "fanIn": 15,
+      "via": "src/review/completion-gate.ts",
+      "path": [
+        "src/commands/trigger-dispatch.ts",
+        "src/commands/agent.ts",
+        "src/review/completion-gate.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/memory-orchestrator-log.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {printReviewHelpFor} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-layers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-next.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-parity-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {printReviewHelpFor} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-tty-refusal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-reachability.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/agent-catalogue-xref.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/catalog-frontmatter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/catalog-single-source.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/remove-skill.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {SKILL_LENGTH_CEILINGS} of src/gdskills/skill-length-ceilings.ts (hop 1, from src/gdskills/skill-length-ceilings.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-skill-parity.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {SKILL_LENGTH_CEILINGS} of src/gdskills/skill-length-ceilings.ts (hop 1, from src/gdskills/skill-length-ceilings.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/skill-length.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {SKILL_LENGTH_CEILINGS} of src/gdskills/skill-length-ceilings.ts (hop 1, from src/gdskills/skill-length-ceilings.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/orchestrators-inline.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {renderGdskillsCatalog} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp/metaproject-orchestrator-log.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/blast-radius.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/bot/metrics.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/bot/post.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/bot/run.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/caps.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/caps.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {planReviewerWaves, reviewerDomain} of src/review/caps.ts (hop 1, from src/review/caps.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/clean-context.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {SessionReviewTracker, VALUELESS_FLAGS, explicitReviewIds, reviewRunSeenInHistory, sessionReviewNames} of src/review/completion-gate.ts (hop 1, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/dispatch-check.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeSliceRegions} of src/review/slice-routing.ts (hop 1, from src/review/slice-routing.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/estimate-actual-complete.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/estimate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/locate-ingest.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/loop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/mutate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/premise-embedded.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {StructuredReviewFinding} of src/review/types.ts (hop 1, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/prior-round.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/rebuttal-citation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/repair-ingest.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-next.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/reviewers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {BUNDLED_GDSKILLS} of src/gdskills/catalog.ts (hop 1, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/role-switches-complete.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/second-look.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/verification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createManagedReviewPackage} of src/review/managed.ts (hop 1, from src/review/managed.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/wave-events.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 1, from src/commands/review.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-parity-visibility.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {formatReviewDepthLines, loadReviewDepth, renderReviewDepthText, renderReviewParityText} of src/tui/review-panel.ts (hop 1, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {formatReviewDepthLines, loadReviewDepth, renderReviewReadinessText} of src/tui/review-panel.ts (hop 1, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "scripts/benchmark/long-runner-turn.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/agents/generate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {verifyAgents} of src/agents/verify.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/agents/verify.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {verifyAgents} of src/agents/verify.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeVerdict} of src/review/verdict.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeVerdict} of src/review/verdict.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runSlice} of src/commands/review-slice.ts (hop 2, from src/review/slice-routing.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentRepl} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentRepl} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {launchTuiAgentShell} of src/tui/tui-shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {importProjectSkills, runSkillsImportCommand} of src/gdskills/import-skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-templates.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {importProjectSkills} of src/gdskills/import-skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills-update.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {importProjectSkills} of src/gdskills/import-skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/import-skills.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {importProjectSkills} of src/gdskills/import-skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {removeStaleRuntimeBuilds} of src/gdskills/guarded-fs-ops.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/project-skills-registry-kind.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {importProjectSkills} of src/gdskills/import-skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/reviewer-triggers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {collectReviewers, loadOverlapGroups} of src/review/reviewers.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/task-implementer-contract.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {skillsCommand} of src/commands/skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/telegram-permission.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/chunk-findings.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {injectablePassFindings, passFindingToRound} of src/review/chunk-findings.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/import-reviewers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {importProjectSkills} of src/gdskills/import-skills.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/plan-eval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {evaluatePlans} of src/review/plan-eval.ts (hop 2, from src/review/slice-routing.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/pr-contract.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {collectReviewers} of src/review/reviewers.ts (hop 2, from src/gdskills/catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/premise-decision.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeVerdict} of src/review/verdict.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/repair.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {repairMechanicalOmissions} of src/review/repair.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/verdict.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {computeVerdict, writeVerdict} of src/review/verdict.ts (hop 2, from src/review/types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-layers-actions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createReviewLayersActions} of src/tui/review-layers-actions.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-layers-child.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createReviewLayersActions} of src/tui/review-layers-actions.ts (hop 2, from src/tui/review-panel.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runAgentTurn} of src/commands/agent.ts (hop 2, from src/review/completion-gate.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/automatic-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-arbiter-config.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-arbiter-eval.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-arbiter.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-blast-radius-base.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-chunks.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-rules-discovery.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-pr-base.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-result-contract.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-revision-operand.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-run.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/schedule-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/review.ts: run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/governance/catalog-index.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/gdskills/catalog.ts: run it, it is not read"
+    },
+    {
+      "file": "src/review/slice-dispatch.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/review/dispatch.test.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/review/dispatch.test.ts: run it, it is not read"
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 65 at hop 2, fan-in 12, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-agent-task.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 65 at hop 2, fan-in 11, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.ts",
+      "hop": 2,
+      "fanIn": 10,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 65 at hop 2, fan-in 10, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 65 at hop 2, fan-in 8, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 65 at hop 2, fan-in 7, reached via src/review/slice-routing.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/publish.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 65 at hop 2, fan-in 6, reached via src/review/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 65 at hop 2, fan-in 5, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/import-reviewers.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 65 at hop 2, fan-in 3, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 65 at hop 2, fan-in 2, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 65 at hop 2, fan-in 2, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/server.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 65 at hop 2, fan-in 2, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-catalog.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 65 at hop 2, fan-in 2, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 65 at hop 2, fan-in 2, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/probe/native-turn.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 65 at hop 2, fan-in 2, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/complete-gated.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 65 at hop 2, fan-in 2, reached via src/review/slice-routing.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 65 at hop 2, fan-in 2, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 65 at hop 2, fan-in 1, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 65 at hop 2, fan-in 1, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 65 at hop 2, fan-in 1, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-bot.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 65 at hop 2, fan-in 1, reached via src/review/managed.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-select.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 65 at hop 2, fan-in 1, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-plan-eval.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 65 at hop 2, fan-in 1, reached via src/review/slice-routing.ts. It was NOT reviewed."
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 65 at hop 2, fan-in 0, reached via src/tui/review-panel.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-long.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 65 at hop 2, fan-in 0, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 65 at hop 2, fan-in 0, reached via src/review/completion-gate.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, ConfirmedVia, HostQuestion, cardPressFields, hostQuestionFields, isHostQuestion} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "hop": 1,
+      "fanIn": 19,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest} from src/review/slice-routing.ts; changed: {DEGRADATION_ROLE, contentRolesOf, deepReasonOfFile, routeSliceRegions, routeSlices, summarizeRouting}"
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest} from src/review/slice-routing.ts; changed: {DEGRADATION_ROLE, contentRolesOf, deepReasonOfFile, routeSliceRegions, routeSlices, summarizeRouting}"
+    },
+    {
+      "file": "src/review/coverage-complete.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, ConfirmedVia, cardPressFields} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/retry-plan.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {escalateSlice} from src/review/slice-routing.ts; changed: {DEGRADATION_ROLE, contentRolesOf, deepReasonOfFile, routeSliceRegions, routeSlices, summarizeRouting}"
+    },
+    {
+      "file": "src/review/waves.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ROUTABLE_ROLES} from src/review/slice-routing.ts; changed: {DEGRADATION_ROLE, contentRolesOf, deepReasonOfFile, routeSliceRegions, routeSlices, summarizeRouting}"
+    },
+    {
+      "file": "src/review/chunks-estimate.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, ConfirmedVia, cardPressFields} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HOST_QUESTION_SOURCES, HostQuestion} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/autonomous-run.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest, ReviewPackageStatus} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/autonomous-summary.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REVIEW_PACKAGE_STATUSES, ReviewPackageStatus} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/trigger/run.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/caps.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SpendCapEvaluation, SpendCapOptions, evaluateSpendCap} from src/review/caps.ts; changed: {planReviewerWaves, reviewerDomain}"
+    },
+    {
+      "file": "src/review/coverage-md.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ReviewCoverageEntry} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/caps.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {FindingsCapCounts, FindingsCapDrop} from src/review/caps.ts; changed: {planReviewerWaves, reviewerDomain}"
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, HostQuestion, cardPressFields} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/verify-run.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {VerificationClaimInput} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/governance/spend.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CardPress, HostQuestion, cardPressFields} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/publish-guard.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/managed.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {reviewsRoot} from src/review/managed.ts; changed: {createManagedReviewPackage}"
+    },
+    {
+      "file": "src/review/skill-drift.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {bundledSkillMarkdownPath} from src/gdskills/catalog.ts; changed: {BUNDLED_GDSKILLS, getBundledSkillsForProfile, renderGdskillsCatalog, renderGdskillsManifest}"
+    },
+    {
+      "file": "src/commands/trigger.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/caps.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DEFAULT_SPEND_CEILING_USD} from src/review/caps.ts; changed: {planReviewerWaves, reviewerDomain}"
+    },
+    {
+      "file": "src/gdskills/package-relative-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {packageRelativePath} from src/gdskills/catalog.ts; changed: {BUNDLED_GDSKILLS, getBundledSkillsForProfile, renderGdskillsCatalog, renderGdskillsManifest}"
+    },
+    {
+      "file": "src/gdskills/review-pr-feedback-wiring.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {EXTERNAL_TERMINAL_DISPOSITIONS} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ManagedReviewManifest} from src/review/types.ts; changed: {ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding}"
+    },
+    {
+      "file": "src/review/retry-plan.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DEEP_ROLES} from src/review/slice-routing.ts; changed: {DEGRADATION_ROLE, contentRolesOf, deepReasonOfFile, routeSliceRegions, routeSlices, summarizeRouting}"
+    },
+    {
+      "file": "src/review/chunks.ts",
+      "hop": 2,
+      "fanIn": 18,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BLAST_RADIUS_SCOPE_REVIEWER, BlastRadius, DEFAULT_BLAST_RADIUS_MAX_FILES, isCapDrop} from src/review/blast-radius.ts; changed: {BlastRadiusRejection, BlastRadiusScreenResult, isBlastRadiusScopedFinding, renderBlastRadiusScreenMarkdown, screenBlastRadiusFindings}"
+    },
+    {
+      "file": "src/review/review-system.ts",
+      "hop": 2,
+      "fanIn": 18,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/gdskills/governance/catalog-index.ts",
+      "hop": 2,
+      "fanIn": 14,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/commands/agent.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps, AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/acp/permission.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/review-chunks.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DEFAULT_BLAST_RADIUS_MAX_FILES} from src/review/blast-radius.ts; changed: {BlastRadiusRejection, BlastRadiusScreenResult, isBlastRadiusScopedFinding, renderBlastRadiusScreenMarkdown, screenBlastRadiusFindings}"
+    },
+    {
+      "file": "src/review/premise-fixtures.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {premiseSubjectOf} from src/review/premise.ts; changed: {PremiseRenderInput, carriedPremiseHolds, mergePremises, renderPremiseMarkdown}"
+    },
+    {
+      "file": "src/agents/catalog.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/bundle/plan.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseAgentFrontmatter, validateAgentFrontmatter} from src/agents/service.ts; changed: {verifyAgents}"
+    },
+    {
+      "file": "src/commands/shell-approval.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-permission.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/review-learning.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PrCommentState, SeenComment, splitSentences} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/commands/approval-cause.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/gdskills/import-rules.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ImportSecurity, gateRowParts, gateText, onlyMatcher, onlyOption, portableOriginRef} from src/gdskills/import-skills.ts; changed: {importProjectSkills, runSkillsImportCommand}"
+    },
+    {
+      "file": "src/tui/settings-model.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REASONING_EFFORT_LEVELS, ReasoningEffortLevel, ReasoningEffortSource} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/wave-drivers.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {manifestRosterRoles} from src/review/round-split.ts; changed: {fixContentRoles}"
+    },
+    {
+      "file": "src/tui/foreground-operation.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApprovalMeta, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/arbiter-floor.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/prior-round.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CollectedComment, CollectedRoundBlock, collectPrComments, createGhPort} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/acp/models.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/review-plan.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {isDeltaRound} from src/review/round-split.ts; changed: {fixContentRoles}"
+    },
+    {
+      "file": "src/gdskills/governance/authoring-lint.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {frontmatterBlock} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/harness/external/acp-client.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-run.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/tests-to-run.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {BlastRadius, TestToRun} from src/review/blast-radius.ts; changed: {BlastRadiusRejection, BlastRadiusScreenResult, isBlastRadiusScopedFinding, renderBlastRadiusScreenMarkdown, screenBlastRadiusFindings}"
+    },
+    {
+      "file": "src/tui/operator-confirmations.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/acp/agent-io.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApprovalMeta, ApprovalResponse} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/review-jev-comments.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SeenComment, prCommentsStatePath, readPrCommentState, unansweredComments} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/learning/graduate.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDefinition, validateAgentDefinition} from src/agents/index.ts; changed: {verifyAgents}"
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {describeReasoningEffortSource} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveAgentMaxOutputTokens, resolveReasoningEffort} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/agents.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AGENT_EXPORT_RUNTIMES, agentBootstrapRuntimeIds, agentBootstrapStatus, installAgentBootstrap, renderAgentBootstrapBlock, resolveAgentBootstrapRuntimes, uninstallAgentBootstrap} from src/agents/service.ts; changed: {verifyAgents}"
+    },
+    {
+      "file": "src/gdskills/update-rules.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ImportSecurity, gateRowParts, gateText, portableOriginRef} from src/gdskills/import-skills.ts; changed: {importProjectSkills, runSkillsImportCommand}"
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, isApprovalFor} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/learning/signals/reviewer-comment.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PrCommentState, splitSentences} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/remote/telegram-permission.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/review/context-collect.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CollectedComment, GitHubPort, callGitHub, collectPrComments} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/flow-move.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {reviewNotesDir} from src/review/review-notes.ts; changed: {DismissibleFinding, attestDismissal, modelErrorSignal, renderReviewNote, writeReviewNotes}"
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {TuiSelection, estimateContextTokens, fmtTokens, modelPickerNotice, modelsForPicker, onKeypress, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/acp/permission.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta, isApprovalFor} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {buildAgentSystemInstruction} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, helpRequestedFor, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, shouldInterceptHelp, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps, AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, readlineAgentHelpText, runShell} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, helpRequestedFor, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, shouldInterceptHelp, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {filterConnectedDetectedProviders} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/commands/route-synonyms.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {expandQueryTokens, normalizeRouteText} from src/commands/skills.ts; changed: {skillsCommand}"
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellIO} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SignalShutdownParts, makeSignalShutdown} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {chooseShellSurface, parseShellCliFlags} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {bundledSkillFiles, defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/commands/stack-pack-judge-calibration.live.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/commands/startup-limits.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {agentContextWindow} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApproverProvenance} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/decisions/coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentDeps, offerRoundLimitReset} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/gdskills/bundled-no-persona.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HARNESS_HOME_ROOTS, PERSONAL_MARKER_PATTERNS, PERSONA_PATTERNS, homePathOffenders, personaOffenders} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/gdskills/destructive-git.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {bundledSkillDocuments, bundledSkillFiles, defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/gdskills/skill-name-matches-directory.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {bundledSkillFiles, defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/gdskills/stack-packs.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/skill-length-ceilings.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {defaultBundledRoot} from src/gdskills/bundled-eval.ts; changed: {evaluateBundledTree}"
+    },
+    {
+      "file": "src/harness/external/acp-client.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/external/acp-interop.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/harness/provider-catalog.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {withMirrorNote} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/review/context-collect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createFixturePort} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/l6-hardening.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/slice-routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {secondLookClaimBacked} from src/review/round-split.ts; changed: {fixContentRoles}"
+    },
+    {
+      "file": "src/review/review-learning.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SeenComment} from src/review/pr-comments.ts; changed: {ExternalVerdictResult, applyExternalVerdictRule, externalFindingsFromComments, partitionExternalFindings}"
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ApprovalMeta} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {onKeypress} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, runShell} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/tui/connect-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/foreground-operation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AgentIO, ApproverProvenance} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {modelPickerNotice, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {pickModelInTui, pickSessionInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {endpointMayBeAtFault, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-probe.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {probeProviderConnection} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createTuiAgentIo} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/settings-model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/completion-gate.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {REASONING_EFFORT_LEVELS} from src/commands/agent.ts; changed: {runAgentTurn}"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runLeasedChatShell} from src/commands/shell.ts; changed: {runAgentRepl, shellCommand}"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-panel.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {searchProviderWizardInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-28-review-degradation/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/modules/gdskills.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/catalog.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "CHANGELOG.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-review-degradation/prd.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/install-manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-degradation/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 47,
+    "changedFilesResolved": 24,
+    "changedFilesUnresolved": 23,
+    "candidates": 246,
+    "retained": 40,
+    "droppedByCap": 25,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 113,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 181,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 17,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 34,
+      "2": 6
+    }
+  },
+  "graph": {
+    "nodes": 3319,
+    "edges": 11954
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/review.ts",
+        "names": [
+          "printReviewHelpFor",
+          "reviewCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: printReviewHelpFor, reviewCommand"
+      },
+      {
+        "file": "src/commands/skills.bundled-verify.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/bundled-eval.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/catalog.ts",
+        "names": [
+          "BUNDLED_GDSKILLS",
+          "getBundledSkillsForProfile",
+          "renderGdskillsCatalog",
+          "renderGdskillsManifest"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: BUNDLED_GDSKILLS, getBundledSkillsForProfile, renderGdskillsCatalog, renderGdskillsManifest"
+      },
+      {
+        "file": "src/gdskills/governance/authoring-lint-guard.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/review-degradation-skill.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/gdskills/skill-length-ceilings.ts",
+        "names": [
+          "SKILL_LENGTH_CEILINGS"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: SKILL_LENGTH_CEILINGS"
+      },
+      {
+        "file": "src/review/caps.ts",
+        "names": [
+          "planReviewerWaves",
+          "reviewerDomain"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: planReviewerWaves, reviewerDomain"
+      },
+      {
+        "file": "src/review/completion-gate.ts",
+        "names": [
+          "SessionReviewTracker",
+          "VALUELESS_FLAGS",
+          "explicitReviewIds",
+          "reviewRunSeenInHistory",
+          "sessionReviewNames"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: SessionReviewTracker, VALUELESS_FLAGS, explicitReviewIds, reviewRunSeenInHistory, sessionReviewNames"
+      },
+      {
+        "file": "src/review/coverage.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/degradation-payload.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/degradation-payload.ts",
+        "names": [
+          "ChangedExport",
+          "DEFAULT_DEGRADATION_CONSUMER_CAP",
+          "DegradationConsumer",
+          "DegradationConsumers",
+          "buildDegradationConsumers",
+          "changedExportsOf",
+          "renderDegradationPayloadBrief",
+          "touchesSharedSymbol"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ChangedExport, DEFAULT_DEGRADATION_CONSUMER_CAP, DegradationConsumer, DegradationConsumers, buildDegradationConsumers, changedExportsOf, renderDegradationPayloadBrief, touchesSharedSymbol"
+      },
+      {
+        "file": "src/review/degradation-screen.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/degradation.ts",
+        "names": [
+          "DEGRADATION_NO_EVIDENCE_RULE",
+          "DEGRADATION_REVIEWER",
+          "DegradationDowngrade",
+          "DegradationScreenRecord",
+          "DegradationScreenResult",
+          "degradationScreenRecord",
+          "renderDegradationScreenLines",
+          "renderDegradationScreenMarkdown",
+          "screenDegradationFindings"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: DEGRADATION_NO_EVIDENCE_RULE, DEGRADATION_REVIEWER, DegradationDowngrade, DegradationScreenRecord, DegradationScreenResult, degradationScreenRecord, renderDegradationScreenLines, renderDegradationScreenMarkdown, screenDegradationFindings"
+      },
+      {
+        "file": "src/review/dispatch.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/managed.ts",
+        "names": [
+          "createManagedReviewPackage"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: createManagedReviewPackage"
+      },
+      {
+        "file": "src/review/round-split.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/slice-routing.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/slice-routing.ts",
+        "names": [
+          "DEGRADATION_ROLE",
+          "contentRolesOf",
+          "deepReasonOfFile",
+          "routeSliceRegions",
+          "routeSlices",
+          "summarizeRouting"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: DEGRADATION_ROLE, contentRolesOf, deepReasonOfFile, routeSliceRegions, routeSlices, summarizeRouting"
+      },
+      {
+        "file": "src/review/types.ts",
+        "names": [
+          "ManagedReviewInput",
+          "NormalizedReviewFinding",
+          "REVIEW_DEGRADATION_CLASSES",
+          "REVIEW_EVIDENCE_KINDS",
+          "ReviewDegradationClass",
+          "ReviewEvidenceKind",
+          "ReviewEvidenceScreen",
+          "ReviewFindingsSource",
+          "ReviewerResultLike",
+          "StructuredReviewFinding"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ManagedReviewInput, NormalizedReviewFinding, REVIEW_DEGRADATION_CLASSES, REVIEW_EVIDENCE_KINDS, ReviewDegradationClass, ReviewEvidenceKind, ReviewEvidenceScreen, ReviewFindingsSource, ReviewerResultLike, StructuredReviewFinding"
+      },
+      {
+        "file": "src/tui/review-panel.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/review-panel.ts",
+        "names": [
+          "ReviewDegradationFinding",
+          "ReviewDepthRow",
+          "degradationLines",
+          "formatReviewDepthLines",
+          "formatReviewDepthRowLines",
+          "loadReviewDepth",
+          "readDegradationFindings",
+          "renderReviewDegradationText",
+          "renderReviewDepthText",
+          "renderReviewLayersText",
+          "renderReviewParityText",
+          "renderReviewReadinessText"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ReviewDegradationFinding, ReviewDepthRow, degradationLines, formatReviewDepthLines, formatReviewDepthRowLines, loadReviewDepth, readDegradationFindings, renderReviewDegradationText, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText"
+      },
+      {
+        "file": "src/tui/reviews-inspector.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/reviews-inspector.ts",
+        "names": [
+          "OpenReviewsOptions",
+          "PresentReviewsOptions",
+          "ReviewsPanelOptions",
+          "mountReviewsPanel",
+          "openReviews",
+          "presentReviews",
+          "projectReviewsLayerLines",
+          "projectReviewsParityLines",
+          "projectReviewsReadinessLines",
+          "renderReviewDegradationText",
+          "renderReviewLayersText",
+          "renderReviewParityText",
+          "renderReviewReadinessText",
+          "renderReviewsText"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: OpenReviewsOptions, PresentReviewsOptions, ReviewsPanelOptions, mountReviewsPanel, openReviews, presentReviews, projectReviewsLayerLines, projectReviewsParityLines, projectReviewsReadinessLines, renderReviewDegradationText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText"
+      }
+    ],
+    "barrels": [
+      "src/agents/index.ts",
+      "src/agents/service.ts"
+    ],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "scripts/benchmark/long-runner-turn.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/agents/generate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "verifyAgents"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/agents/verify.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "verifyAgents"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/automatic-review.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/memory-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-arbiter-config.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-arbiter-eval.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-arbiter.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-blast-radius-base.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-chunks.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "printReviewHelpFor"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-rules-discovery.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-layers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeVerdict"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/commands/review-next.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeVerdict"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/commands/review-parity-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "printReviewHelpFor"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-pr-base.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-result-contract.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-revision-operand.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-run.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runSlice"
+      ],
+      "via": "src/review/slice-routing.ts"
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review-tty-refusal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/schedule-review.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentRepl"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentRepl"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "launchTuiAgentShell"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/trigger-reachability.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/commands/trigger-review.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/flow/task-project-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/agent-catalogue-xref.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/catalog-frontmatter.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/catalog-single-source.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/conditional-reads.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/governance/catalog-index.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "importProjectSkills",
+        "runSkillsImportCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-templates.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "importProjectSkills"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills-update.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "importProjectSkills"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/import-skills.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "importProjectSkills"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/install.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "removeStaleRuntimeBuilds"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/project-skills-registry-kind.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "importProjectSkills"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/remove-skill.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "SKILL_LENGTH_CEILINGS"
+      ],
+      "via": "src/gdskills/skill-length-ceilings.ts"
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-skill-parity.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "SKILL_LENGTH_CEILINGS"
+      ],
+      "via": "src/gdskills/skill-length-ceilings.ts"
+    },
+    {
+      "file": "src/gdskills/reviewer-triggers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "collectReviewers",
+        "loadOverlapGroups"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/gdskills/skill-length.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "SKILL_LENGTH_CEILINGS"
+      ],
+      "via": "src/gdskills/skill-length-ceilings.ts"
+    },
+    {
+      "file": "src/gdskills/task-implementer-contract.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "skillsCommand"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/lib/orchestrators-inline.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "renderGdskillsCatalog"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/mcp/metaproject-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/remote/telegram-permission.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/blast-radius.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/bot/metrics.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/bot/post.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/bot/run.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/caps.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "planReviewerWaves",
+        "reviewerDomain"
+      ],
+      "via": "src/review/caps.ts"
+    },
+    {
+      "file": "src/review/chunk-findings.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "injectablePassFindings",
+        "passFindingToRound"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/clean-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "SessionReviewTracker",
+        "VALUELESS_FLAGS",
+        "explicitReviewIds",
+        "reviewRunSeenInHistory",
+        "sessionReviewNames"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/dispatch-check.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeSliceRegions"
+      ],
+      "via": "src/review/slice-routing.ts"
+    },
+    {
+      "file": "src/review/estimate-actual-complete.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/estimate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/import-reviewers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "importProjectSkills"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/locate-ingest.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/loop.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/mutate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/plan-eval.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "evaluatePlans"
+      ],
+      "via": "src/review/slice-routing.ts"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/pr-contract.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "collectReviewers"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/review/premise-decision.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeVerdict"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/premise-embedded.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "StructuredReviewFinding"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/prior-round.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/rebuttal-citation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/repair-ingest.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/repair.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "repairMechanicalOmissions"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/review-next.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/reviewers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "BUNDLED_GDSKILLS"
+      ],
+      "via": "src/gdskills/catalog.ts"
+    },
+    {
+      "file": "src/review/role-switches-complete.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/second-look.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/review/slice-dispatch.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/review/dispatch.test.ts"
+    },
+    {
+      "file": "src/review/verdict.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "computeVerdict",
+        "writeVerdict"
+      ],
+      "via": "src/review/types.ts"
+    },
+    {
+      "file": "src/review/verification.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createManagedReviewPackage"
+      ],
+      "via": "src/review/managed.ts"
+    },
+    {
+      "file": "src/review/wave-events.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/commands/review.ts"
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    },
+    {
+      "file": "src/tui/review-layers-actions.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createReviewLayersActions"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/tui/review-layers-child.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createReviewLayersActions"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/tui/review-parity-visibility.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "formatReviewDepthLines",
+        "loadReviewDepth",
+        "renderReviewDepthText",
+        "renderReviewParityText"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "formatReviewDepthLines",
+        "loadReviewDepth",
+        "renderReviewReadinessText"
+      ],
+      "via": "src/tui/review-panel.ts"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runAgentTurn"
+      ],
+      "via": "src/review/completion-gate.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

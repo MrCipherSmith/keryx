@@ -1,0 +1,876 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:ARCH-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding ARCH-001 (The diff passes the degradation brief to emitBlastRadius only from the main path. With --previous an) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#ARCH-001",
+      "evidence": "raw/review-architecture-w1.txt#sha256:486e0c170480",
+      "reason": "reported by review-architecture as ARCH-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#ARCH-001"
+    },
+    {
+      "id": "review-architecture-w1:ARCH-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding ARCH-002 (--degradation is documented as one of [--json | --brief | --degradation] but nothing refuses a combi) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#ARCH-002",
+      "evidence": "raw/review-architecture-w1.txt#sha256:486e0c170480",
+      "reason": "reported by review-architecture as ARCH-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#ARCH-002"
+    },
+    {
+      "id": "review-architecture-w1:ARCH-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding ARCH-003 (The ratchet was raised from 72 to 73 to fit the new skill, which has no metadata.origin. The file he) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#ARCH-003",
+      "evidence": "raw/review-architecture-w1.txt#sha256:486e0c170480",
+      "reason": "reported by review-architecture as ARCH-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#ARCH-003"
+    },
+    {
+      "id": "review-architecture-w1:ARCH-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding ARCH-004 (The degradation screen takes its reviewer-name matcher from blast-radius.ts, whose contract describe) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#ARCH-004",
+      "evidence": "raw/review-architecture-w1.txt#sha256:486e0c170480",
+      "reason": "reported by review-architecture as ARCH-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#ARCH-004"
+    },
+    {
+      "id": "review-architecture-w1:fu1",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is the parent follow-up from review-architecture done or ruled out, and where is that recorded? Check that a test ties the enums of the four schema copies (src/gdskills/contracts, .metaproject/core/gdskills/contracts, both reviewer-finding.schema.json) to REVIEW_DEGRADATION_CLASSES and REVIEW_EV",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w2:F1",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F1 (The role is added to fix slices by content alone. manifestRosterRoles feeds review.ts:3412, estimate) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#F1",
+      "evidence": "raw/review-architecture-w2.txt#sha256:e63d93dfc21b",
+      "reason": "reported by review-architecture as F1; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#F1"
+    },
+    {
+      "id": "review-architecture-w2:F2",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F2 (The degradation gate reuses the scope-B helper, so its reviewer matching is the regression screen's ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#F2",
+      "evidence": "raw/review-architecture-w2.txt#sha256:e63d93dfc21b",
+      "reason": "reported by review-architecture as F2; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#F2"
+    },
+    {
+      "id": "review-architecture-w2:F3",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F3 (The TUI reader uses strict equality, a field fallback and a hard-coded string, while ingest matches ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#F3",
+      "evidence": "raw/review-architecture-w2.txt#sha256:e63d93dfc21b",
+      "reason": "reported by review-architecture as F3; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#F3"
+    },
+    {
+      "id": "review-architecture-w2:F4",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F4 (The renderer is exported and re-exported by reviews-inspector.ts, but no shell or TUI command calls ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#F4",
+      "evidence": "raw/review-architecture-w2.txt#sha256:e63d93dfc21b",
+      "reason": "reported by review-architecture as F4; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#F4"
+    },
+    {
+      "id": "review-architecture-w2:F5",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F5 (The legacy markdown parser reads problem, impact, fix, evidence, confidence and class_scope only; it) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#F5",
+      "evidence": "raw/review-architecture-w2.txt#sha256:e63d93dfc21b",
+      "reason": "reported by review-architecture as F5; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#F5"
+    },
+    {
+      "id": "review-architecture-w2:F6",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F6 (The screen checks only that an evidence_kind label is present, not that the evidence text matches it) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#F6",
+      "evidence": "raw/review-architecture-w2.txt#sha256:e63d93dfc21b",
+      "reason": "reported by review-architecture as F6; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#F6"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-001",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-001 (`--degradation` only takes effect on the recompute path: with `--previous` and an unchanged changed ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#CB-001",
+      "evidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+      "reason": "reported by review-core-boundaries as CB-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#CB-001"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-002",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-002 (The metadata-origin ratchet was raised from 72 to 73 to admit the new skill, whose frontmatter lacks) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#CB-002",
+      "evidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+      "reason": "reported by review-core-boundaries as CB-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#CB-002"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-003",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-003 (The new review-degradation paragraph sits between the --blast-radius explanation and 'Two channels, ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#CB-003",
+      "evidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+      "reason": "reported by review-core-boundaries as CB-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#CB-003"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-004",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-004 (A delta round's 'shared symbol changed' is a regex over changed export declaration lines; the payloa) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#CB-004",
+      "evidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+      "reason": "reported by review-core-boundaries as CB-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#CB-004"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-005",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-005 (The consumer list is every direct importer of the changed module, ranked by the importer's fan-in; t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#CB-005",
+      "evidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+      "reason": "reported by review-core-boundaries as CB-005; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#CB-005"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-006",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-006 (The row is inserted after review-premise; the list is alphabetical and review-degradation belongs af) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#CB-006",
+      "evidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+      "reason": "reported by review-core-boundaries as CB-006; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#CB-006"
+    },
+    {
+      "id": "review-degradation-w1:DEG-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-001 (The skill's markdown finding template (review-degradation/SKILL.md, 'Class' and 'Evidence kind' line) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#DEG-001",
+      "evidence": "raw/review-degradation-w1.txt#sha256:c50a9e98f075",
+      "reason": "reported by review-degradation as DEG-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#DEG-001"
+    },
+    {
+      "id": "review-degradation-w1:DEG-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-002 (Delta-round routing of review-degradation goes through fixContentRoles/fixSliceRoster (round-split.t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#DEG-002",
+      "evidence": "raw/review-degradation-w1.txt#sha256:c50a9e98f075",
+      "reason": "reported by review-degradation as DEG-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#DEG-002"
+    },
+    {
+      "id": "review-degradation-w2:DG-W2-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DG-W2-001 (The new ROLE_RULES entry also feeds the fix-slice roster in a delta round. On base every content-rou) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#DG-W2-001",
+      "evidence": "raw/review-degradation-w2.txt#sha256:971e944453c3",
+      "reason": "reported by review-degradation as DG-W2-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#DG-W2-001"
+    },
+    {
+      "id": "review-degradation-w2:DG-W2-002",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DG-W2-002 (mergeCluster keeps the canonical finding and does not carry degradation_class, evidence_kind or evid) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#DG-W2-002",
+      "evidence": "raw/review-degradation-w2.txt#sha256:971e944453c3",
+      "reason": "reported by review-degradation as DG-W2-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#DG-W2-002"
+    },
+    {
+      "id": "review-degradation-w2:DG-W2-003",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DG-W2-003 (The screen is satisfied by a bare enum label. `evidence` text is not checked, although the SKILL say) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#DG-W2-003",
+      "evidence": "raw/review-degradation-w2.txt#sha256:971e944453c3",
+      "reason": "reported by review-degradation as DG-W2-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#DG-W2-003"
+    },
+    {
+      "id": "review-degradation-w2:DG-W2-004",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DG-W2-004 (Routing (slice-routing.ts:96, any changed `export` line, including brand-new exports with no consume) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#DG-W2-004",
+      "evidence": "raw/review-degradation-w2.txt#sha256:971e944453c3",
+      "reason": "reported by review-degradation as DG-W2-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#DG-W2-004"
+    },
+    {
+      "id": "review-highload-w1:HL-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-001 (`keryx review blast-radius --degradation --previous <prev.json>` on a round where blastRadiusRecompu) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL-001",
+      "evidence": "raw/review-highload-w1.txt#sha256:a087ae38f57e",
+      "reason": "reported by review-highload as HL-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL-001"
+    },
+    {
+      "id": "review-highload-w1:HL-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-002 (renderDegradationPayloadBrief prints only `cap` consumers but then lists every dropped consumer by p) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL-002",
+      "evidence": "raw/review-highload-w1.txt#sha256:a087ae38f57e",
+      "reason": "reported by review-highload as HL-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL-002"
+    },
+    {
+      "id": "review-highload-w1:HL-003",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-003 (computeAffected rebuilds the reverse adjacency and fan-in maps over all graph edges on each call, an) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL-003",
+      "evidence": "raw/review-highload-w1.txt#sha256:a087ae38f57e",
+      "reason": "reported by review-highload as HL-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL-003"
+    },
+    {
+      "id": "review-highload-w2:HL2-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL2-001 (The cap is applied once, over the merged consumer list of every changed export, ranked by fan-in. Co) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL2-001",
+      "evidence": "raw/review-highload-w2.txt#sha256:63751e611ae7",
+      "reason": "reported by review-highload as HL2-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL2-001"
+    },
+    {
+      "id": "review-highload-w2:HL2-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL2-002 (ROLE_RULES gets a content-gated rule for DEGRADATION_ROLE, but `ROUTABLE_ROLES` is built from every ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL2-002",
+      "evidence": "raw/review-highload-w2.txt#sha256:63751e611ae7",
+      "reason": "reported by review-highload as HL2-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL2-002"
+    },
+    {
+      "id": "review-highload-w2:HL2-003",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL2-003 (mergeCluster builds the surviving record from `canonical` only and carries over a fixed list of fiel) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL2-003",
+      "evidence": "raw/review-highload-w2.txt#sha256:63751e611ae7",
+      "reason": "reported by review-highload as HL2-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL2-003"
+    },
+    {
+      "id": "review-highload-w2:HL2-004",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL2-004 (The screen runs before `applyFindingsCap`, so its record covers every finding the reviewer emitted, ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#HL2-004",
+      "evidence": "raw/review-highload-w2.txt#sha256:63751e611ae7",
+      "reason": "reported by review-highload as HL2-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#HL2-004"
+    },
+    {
+      "id": "review-logic-w1:L-01",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-01 (The routing rule that gives a delta round (FIX slice) the degradation reviewer matches only a change) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#L-01",
+      "evidence": "raw/review-logic-w1.txt#sha256:bde5283feab1",
+      "reason": "reported by review-logic as L-01; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#L-01"
+    },
+    {
+      "id": "review-logic-w1:L-02",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-02 (hasEvidenceKind() treats a value outside REVIEW_EVIDENCE_KINDS as 'no evidence' and the finding is d) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#L-02",
+      "evidence": "raw/review-logic-w1.txt#sha256:bde5283feab1",
+      "reason": "reported by review-logic as L-02; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#L-02"
+    },
+    {
+      "id": "review-logic-w1:L-03",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-03 (parseLegacyReport (the prose path used when a reviewer returns no structured block) never extracts `) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#L-03",
+      "evidence": "raw/review-logic-w1.txt#sha256:bde5283feab1",
+      "reason": "reported by review-logic as L-03; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#L-03"
+    },
+    {
+      "id": "review-logic-w1:L-04",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-04 (The screen runs before mergeDuplicates. When a downgraded degradation finding clusters with a findin) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#L-04",
+      "evidence": "raw/review-logic-w1.txt#sha256:bde5283feab1",
+      "reason": "reported by review-logic as L-04; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#L-04"
+    },
+    {
+      "id": "review-logic-w1:L-05",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-05 (The screen runs after verification merging. A degradation finding that a verifier confirmed but that) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#L-05",
+      "evidence": "raw/review-logic-w1.txt#sha256:bde5283feab1",
+      "reason": "reported by review-logic as L-05; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#L-05"
+    },
+    {
+      "id": "review-logic-w1:L-06",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-06 (With `--degradation --out <file>` emitBlastRadius still writes the blast-radius record to the file; ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#L-06",
+      "evidence": "raw/review-logic-w1.txt#sha256:bde5283feab1",
+      "reason": "reported by review-logic as L-06; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#L-06"
+    },
+    {
+      "id": "review-logic-w2:RL-W2-1",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding RL-W2-1 (Consumers are direct importers of the changed file only. Barrel re-exports (radius.reach.barrels) ar) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#RL-W2-1",
+      "evidence": "raw/review-logic-w2.txt#sha256:2ffc25145397",
+      "reason": "reported by review-logic as RL-W2-1; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#RL-W2-1"
+    },
+    {
+      "id": "review-logic-w2:RL-W2-2",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding RL-W2-2 (The TUI matches the reviewer by exact string; ingest matches by normalised-name containment.) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#RL-W2-2",
+      "evidence": "raw/review-logic-w2.txt#sha256:2ffc25145397",
+      "reason": "reported by review-logic as RL-W2-2; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#RL-W2-2"
+    },
+    {
+      "id": "review-logic-w2:RL-W2-3",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding RL-W2-3 (review-degradation is added to every deep slice with no gate, NEW slices in delta rounds included. T) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#RL-W2-3",
+      "evidence": "raw/review-logic-w2.txt#sha256:2ffc25145397",
+      "reason": "reported by review-logic as RL-W2-3; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#RL-W2-3"
+    },
+    {
+      "id": "review-logic-w2:RL-W2-4",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding RL-W2-4 (The screen checks only that a valid evidence_kind label is present, not that evidence is non-empty o) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#RL-W2-4",
+      "evidence": "raw/review-logic-w2.txt#sha256:2ffc25145397",
+      "reason": "reported by review-logic as RL-W2-4; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#RL-W2-4"
+    },
+    {
+      "id": "review-performance-w1:PERF-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-001 (The cap bounds the consumers the reviewer must trace, but every dropped consumer path is still print) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#PERF-001",
+      "evidence": "raw/review-performance-w1.txt#sha256:62f65baae77e",
+      "reason": "reported by review-performance as PERF-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#PERF-001"
+    },
+    {
+      "id": "review-performance-w1:PERF-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-002 (computeAffected rebuilds the reverse adjacency, the fan-in map and the dependencies filter over all ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#PERF-002",
+      "evidence": "raw/review-performance-w1.txt#sha256:62f65baae77e",
+      "reason": "reported by review-performance as PERF-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#PERF-002"
+    },
+    {
+      "id": "review-performance-w1:PERF-003",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-003 (The --degradation branch runs after findTextLinks and computeBlastRadius have already done the full ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#PERF-003",
+      "evidence": "raw/review-performance-w1.txt#sha256:62f65baae77e",
+      "reason": "reported by review-performance as PERF-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#PERF-003"
+    },
+    {
+      "id": "review-performance-w2:PERF-W2-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding PERF-W2-001 (loadReviewDepth awaits, in series per package, parity, mutation, layers, readiness and now a full re) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#PERF-W2-001",
+      "evidence": "raw/review-performance-w2.txt#sha256:85927aef5cc5",
+      "reason": "reported by review-performance as PERF-W2-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#PERF-W2-001"
+    },
+    {
+      "id": "review-performance-w2:PERF-W2-002",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding PERF-W2-002 (degradationLines emits one line per degradation finding with no cap in the depth tab and readline te) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#PERF-W2-002",
+      "evidence": "raw/review-performance-w2.txt#sha256:85927aef5cc5",
+      "reason": "reported by review-performance as PERF-W2-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#PERF-W2-002"
+    },
+    {
+      "id": "review-performance-w2:PERF-W2-003",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding PERF-W2-003 (One computeAffected call per changed shared export, each rebuilding the reverse adjacency and fanIn ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#PERF-W2-003",
+      "evidence": "raw/review-performance-w2.txt#sha256:85927aef5cc5",
+      "reason": "reported by review-performance as PERF-W2-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#PERF-W2-003"
+    },
+    {
+      "id": "review-regression-w1:REG-1",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding REG-1 (A fix or second-look slice can be routed to review-degradation in a project whose installed review t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#REG-1",
+      "evidence": "raw/review-regression-w1.txt#sha256:ec0350c25138",
+      "reason": "reported by review-regression as REG-1; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#REG-1"
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-001 (Reviewer-controlled finding id and reviewer are written to scope.md, the terminal and the TUI with o) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SEC-001",
+      "evidence": "raw/review-security-code-w1.txt#sha256:aae2b26b8393",
+      "reason": "reported by review-security-code as SEC-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SEC-001"
+    },
+    {
+      "id": "review-security-code-w1:SEC-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-002 (The evidence gate is an enum-membership check on a self-declared field, and the screen applies only ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SEC-002",
+      "evidence": "raw/review-security-code-w1.txt#sha256:aae2b26b8393",
+      "reason": "reported by review-security-code as SEC-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SEC-002"
+    },
+    {
+      "id": "review-security-code-w1:SEC-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-003 (File paths taken from the diff and the graph are interpolated into the reviewer brief with no contro) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SEC-003",
+      "evidence": "raw/review-security-code-w1.txt#sha256:aae2b26b8393",
+      "reason": "reported by review-security-code as SEC-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SEC-003"
+    },
+    {
+      "id": "review-security-code-w1:SEC-004",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-004 (The schema says only ingest writes evidence_screen, but toContractFinding and coerceStructured pass ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SEC-004",
+      "evidence": "raw/review-security-code-w1.txt#sha256:aae2b26b8393",
+      "reason": "reported by review-security-code as SEC-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SEC-004"
+    },
+    {
+      "id": "review-security-code-w2:SC2-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SC2-001 (Reviewer-written finding id and file reach the operator terminal (no escaping), the scope.md table c) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SC2-001",
+      "evidence": "raw/review-security-code-w2.txt#sha256:7e116d0820b3",
+      "reason": "reported by review-security-code as SC2-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SC2-001"
+    },
+    {
+      "id": "review-security-code-w2:SC2-002",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SC2-002 (The screen runs only over the internal partition and selects findings by the reviewer's own reviewer) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SC2-002",
+      "evidence": "raw/review-security-code-w2.txt#sha256:7e116d0820b3",
+      "reason": "reported by review-security-code as SC2-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SC2-002"
+    },
+    {
+      "id": "review-security-code-w2:SC2-003",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SC2-003 (The skill lowers unproven major/blocker to info yet defines probe, red-test and merge-trace as execu) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SC2-003",
+      "evidence": "raw/review-security-code-w2.txt#sha256:7e116d0820b3",
+      "reason": "reported by review-security-code as SC2-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SC2-003"
+    },
+    {
+      "id": "review-security-code-w2:SC2-004",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SC2-004 (Graph paths are interpolated raw into the line-oriented reviewer brief; a tracked path with a newlin) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#SC2-004",
+      "evidence": "raw/review-security-code-w2.txt#sha256:7e116d0820b3",
+      "reason": "reported by review-security-code as SC2-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#SC2-004"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-001 (AC4 requires the downgrade to be printed on the terminal. The only test that names the terminal (\"th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-001",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-001; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-001"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-002 (The --degradation and --degradation-cap flags of `keryx review blast-radius` (src/commands/review.ts) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-002",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-002; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-002"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-003 (AC6 lists 'src/review/caps tests' among its checks, but the commit adds review-degradation to CORE_R) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-003",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-003; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-003"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-004 (The title claims the reviewer is required in both modes and needs no blast radius. The only mode-dif) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-004",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-004; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-004"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-005 (The routing tests cover a function, a removed export, export *, export { } from, export default and ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-005",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-005; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-005"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-006",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-006 (Both degradation fixtures (F-001, F-002) carry reviewer review-degradation and a degradation field, ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-006",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-006; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-006"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-007",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-007 (The ambiguous-target catch branch and the cap normalisation (non-finite fallback, Math.max(0, ...)) ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-007",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-007; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-007"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-008",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-008 (Existing expectation changed: the fix slice's roles in the 'review slice in a delta round' test went) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-008",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-008; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-008"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-009",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-009 (The screen runs before the duplicate merge. No test covers a degradation finding that duplicates ano) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-009",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-009; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-009"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-010",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-010 (depthRow is cast with `as never` and the degradation entries are hand-built, so a change to the Revi) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-010",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:737979a844e2",
+      "reason": "reported by review-testing-practices as TP-010; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-010"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Main session: run the mutant_candidates M1 to M9 against the nearest suites (src/review/caps*, src/review/completion-gate*, src/review/slice-routing.test.ts, src/review/degradation-payload.test.ts, sr",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-011",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-011 (No test asserts the CONSUMERS or CHANGED SHARED EXPORTS lines of renderDegradationPayloadBrief; the ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-011",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:b2c510f62bbb",
+      "reason": "reported by review-testing-practices as TP-011; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-011"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-012",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-012 (Four gates have no fixture that separates them from the condition beside them: the changedExports ha) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-012",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:b2c510f62bbb",
+      "reason": "reported by review-testing-practices as TP-012; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-012"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-013",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-013 (renderReviewDegradationText is exported, re-exported by reviews-inspector.ts and asserted in two tes) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-013",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:b2c510f62bbb",
+      "reason": "reported by review-testing-practices as TP-013; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-013"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-014",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-014 (The display fallbacks (evidence none, no class, UNPROVEN without '(was ...)', no unproven suffix whe) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-014",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:b2c510f62bbb",
+      "reason": "reported by review-testing-practices as TP-014; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-014"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-015",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-015 (Repeats three assertions already in coverage.test.ts (required in all, refused when skipped, exclude) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-28-review-flow-feat-review-degradation#TP-015",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:b2c510f62bbb",
+      "reason": "reported by review-testing-practices as TP-015; the same finding is canonical 2026-10-28-review-flow-feat-review-degradation#TP-015"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-core-boundaries",
+      "review-degradation",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:486e0c170480",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:486e0c170480",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-core-boundaries",
+        "executionId": "review-core-boundaries:2a9937df5e32",
+        "rawEvidence": "raw/review-core-boundaries-w1.txt#sha256:2a9937df5e32",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-core-boundaries/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:c50a9e98f075",
+        "rawEvidence": "raw/review-degradation-w1.txt#sha256:c50a9e98f075",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:a087ae38f57e",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:a087ae38f57e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:2ffc25145397",
+        "rawEvidence": "raw/review-logic-w2.txt#sha256:2ffc25145397",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:62f65baae77e",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:62f65baae77e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:f3c8645d89b0",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:f3c8645d89b0",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:aae2b26b8393",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:aae2b26b8393",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:b2c510f62bbb",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:b2c510f62bbb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 17,
+    "known": 0,
+    "unknown": 17,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-verifier-w3.txt"
+  ]
+}

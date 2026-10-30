@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-28-review-flow-feat-review-degradation",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "origin/main",
+    "head": "47ea387892129820f63917af7f2be4ae5cadb89e"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-10-28-review-flow-feat-review-degradation/scope.md",
+    "coverage": ".metaproject/reviews/2026-10-28-review-flow-feat-review-degradation/coverage.md",
+    "report": ".metaproject/reviews/2026-10-28-review-flow-feat-review-degradation/report.md",
+    "findings": ".metaproject/reviews/2026-10-28-review-flow-feat-review-degradation/findings.json",
+    "learning": ".metaproject/reviews/2026-10-28-review-flow-feat-review-degradation/learning.md",
+    "decisions": ".metaproject/reviews/2026-10-28-review-flow-feat-review-degradation/decisions.md",
+    "research": "research.json",
+    "reviewerDispatch": "research.json"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 69,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "merged_duplicates": 0,
+    "retained": 69,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "report_fields": [
+    "evidence-level"
+  ],
+  "createdAt": "2026-10-28T08:17:27.054Z",
+  "updatedAt": "2026-10-28T08:17:27.054Z"
+}

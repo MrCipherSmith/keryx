@@ -1,0 +1,14 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "1 finding checked, 1 executed and confirmed",
+  "verifications": [
+    {
+      "finding": "ARCH-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-ARCH-001-1.txt (keryx review verify-run): second run `keryx review blast-radius --changed src/review/degradation.ts --previous prev.json --degradation` exit 0 printed 'recompute: no' then '## Blast radius' / 'scope: blast-radius (regression check)' and no 'SCOPE: degradation' brief. Site check: src/commands/review.ts:4051 `await emitBlastRadius(previous, args);` has no degradationBrief and returns; :4122 `emitBlastRadius(radius, args, degradationBrief)` has it."
+    }
+  ],
+  "stats": { "confirmed": 1, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}
