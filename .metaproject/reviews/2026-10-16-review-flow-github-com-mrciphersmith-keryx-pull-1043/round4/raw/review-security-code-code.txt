@@ -1,0 +1,48 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 4 fix delta (HEAD e9cc33c95). The long-s alias of the decisions file (SEC3-001) is closed twice over: the patch guard now refuses any non-ASCII segment and folds names with NFKC+upper+lower, and the store itself is read only by its exact name and refuses every read/write while a look-alike sits beside it. SEC2-001 and w4#F-001 close with it. No new blocker/major/minor; one info on the RG2-004 carry-forward reading an agent-writable claims file, which grants no authority the agent did not already have.",
+  "prior_dispositions": [
+    {
+      "id": "r3-review-security-code-code#SEC3-001",
+      "disposition": "closed",
+      "evidence": "src/commands/automatic-review.ts:223 PLAIN_SEGMENT /^[A-Za-z0-9._-]+$/ is required of every segment, as written and resolved (:340-341), so operator-deciſions.json, fullwidth, NFD and Kelvin spellings are refused before and after the file exists (tests automatic-review.test.ts:9-43 of the delta); :216 builds OPERATOR_ONLY_NAMES with foldFileName (operator-decisions.ts:141, NFKC+toUpperCase+toLowerCase). Defence in depth: operator-decisions.ts:152-167 decisionsStorePath reads the store only by its exact readdir name and throws on any folded look-alike; readEntries (:170) and appendDecision (:186) both go through it, so a planted alias is never read as the operator's decisions. Windows aliases also fail closed: ADS ':' and 8.3 '~' are outside PLAIN_SEGMENT, a trailing dot gives extname '.' (not a data extension)."
+    },
+    {
+      "id": "r2-review-security-code-code#SEC2-001",
+      "disposition": "closed",
+      "evidence": "(b) unchanged and still closed: automatic-review.ts:316 + :548-554 namesReviewPackage, with isReviewPackageDir moved to src/review/package-location.ts:31-44 (same realpath/manifest checks; parent must equal reviewsRoot(root) or flowsRoot(root)/<flow>/reviews exactly). (a) the last open alias (U+017F) is closed by SEC3-001's fix above."
+    },
+    {
+      "id": "review-security-code-w4#F-001",
+      "disposition": "closed",
+      "evidence": "The automatic-review guard's remaining alias is closed (automatic-review.ts:223, :337-346) and the reader no longer opens a look-alike through the plain path (operator-decisions.ts:152-170); premise.operator is still ignored and only complete records count (operator-decisions.ts readPremiseDecisions/validPremise)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "SEC4-001",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 371,
+      "quote": "inheritedPremiseClaims(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, PREMISES_FILE), undefined), ...",
+      "problem": "An ingest without --premises now re-applies research-evidence/premises.json from the package (RG2-004 carry-forward, premise.ts:730). During an automatic review that file is agent-writable: research-evidence/premises.json is a plain-ASCII .json inside the bound package, so approvesPatchTargets (automatic-review.ts:327-348) approves a patch to it without asking. An agent could add extra held or downgraded claims there, and a later plain `keryx review ingest <id>` would carry them forward while the previously held findings still match.",
+      "impact": "No attack vector beyond existing authority: the same agent can already pass any under-cwd file as --premises on an auto-approved create (automatic-review.ts:206, :312-316) and can patch findings.json directly; claims can only hold a finding for the operator or lower a severity to major/minor, never dismiss; the trust anchor (operator-decisions.json, operator-only and exact-name read) is untouched, and every previously held finding must stay held for the same subject or the ingest is refused (premise.ts:756-775). Recorded so a reader of the 'premise claims: carried forward' line (review.ts:1082) does not take the carried file as the judge's untouched output.",
+      "suggested_fix": "Optional: record a sha256 of the stored claims in the manifest at the --premises ingest and carry forward only when it still matches (refuse otherwise), or name the file's provenance in the carried-forward log line.",
+      "evidence": "managed.ts:445-450 (delta) reads PREMISES_FILE when premiseClaims is undefined; automatic-review.ts:223/:333 allow .json with plain segments; OPERATOR_ONLY_NAMES (:216) covers only the decisions file and its lock.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Summary
+
+- Prior (3): SEC3-001 closed, SEC2-001 closed, w4#F-001 closed. None open, partial or regressed.
+- New: 0 blocker, 0 major, 0 minor, 1 info (SEC4-001: the RG2-004 carry-forward reads agent-writable research-evidence/premises.json; this grants nothing beyond the agent's existing --premises/findings.json authority).
+- Checked and clean: the ASCII-segment guard as written and resolved, symlink escape (escapesPackage before segment checks), the exact-name store read on both the read and append paths, the package-location.ts move (layout checks the same), the outputAllowed reviewsRoot refactor (same semantics), the recordPremiseDecisionAfter undo path (no record lands on a failed write).

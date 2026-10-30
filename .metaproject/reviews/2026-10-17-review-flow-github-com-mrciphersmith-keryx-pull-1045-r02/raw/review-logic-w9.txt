@@ -1,0 +1,86 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 is the test side of flow 460. Two source behaviours the tests pin are wrong on a named input: the input-starved reply detector also matches ordinary clean-review prose built on the verb find, and the spend section is never refreshed once a report carries one. Two wall-clock assertions can flake, and one test title contradicts its own assertion.",
+  "stats": { "blocker": 0, "major": 2, "minor": 1, "info": 1 },
+  "findings": [
+    {
+      "id": "LG-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "line": 23,
+      "quote": "const CANNOT = \"(?:could",
+      "problem": "The flow 460 D pattern that decides a DONE reply 'could not read a mandatory input' treats 'did not' + 'find' + an optional 'any' + payload/schema/context file as such a claim. A clean summary such as 'I did not find any schema violations' or 'We did not find any payload handling issues' matches pattern 1 of UNREADABLE_INPUT (OWN_STATEMENT 'I '/'We ', CANNOT 'did not', verb 'find', INPUT_NAMED 'any schema'/'any payload'), so the run is recorded status incomplete, scopeComplete false, with a 'mandatory input could not be read' gap. The test in this slice that lists defect prose which must NOT match (src/review/ledger.test.ts, 'D: a DONE reply that states a mandatory input could not be read is incomplete') covers nine phrasings but no 'did not find any <input>' one, so this false positive is untested.",
+      "impact": "A reviewer that finished cleanly on a PR touching schemas or payloads (this PR is one) is counted as not covering its slices: ledger scopeReviewed goes false, review complete refuses, and retry-eval (src/review/retry-eval.ts:74) refuses to accept the reply, forcing a redispatch. That is the readiness/complete loop flow 460 exists to remove.",
+      "suggested_fix": "Drop 'find' from the reading verbs of pattern 1, or require a determiner naming the reviewer's own input after it (the|my|its|this, not 'any'); and add 'I did not find any schema violations' and 'we did not find any payload issues' to the must-not-match list in ledger.test.ts.",
+      "evidence": "Read UNREADABLE_INPUT at src/review/ledger.ts:20-37 at head 375279e7: INPUT_NAMED admits an 'any\\s+' prefix and MANDATORY_INPUT includes bare 'schema' and 'payload'; CANNOT includes 'did\\s+not'; pattern 1 verbs include 'find'; flags 'im'. Traced 'I did not find any schema violations' through pattern 1 by hand: every part matches and the word boundary holds after 'schema'. ledger.ts:528-529 makes the run unfinished when unreadableInputClaim returns a string.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:34", "src/review/ledger.ts:528", "src/review/retry-eval.ts:74"],
+        "enumeration_method": "Read both UNREADABLE_INPUT patterns (only pattern 1 pairs CANNOT with the verb list); grep -rn unreadableInputClaim src (non-test): 2 callers, ledger.ts:528 and retry-eval.ts:74, both treat a hit as an unfinished reply."
+      }
+    },
+    {
+      "id": "LG-002",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/review/dispatch-usage.ts",
+      "line": 133,
+      "quote": "if (report !== undefined && report.includes(",
+      "problem": "renderSpendMarkdown returns nothing whenever the report text already contains the '## Token spend' heading, and the ledger.test.ts case 'renderSpendMarkdown adds the section once' pins exactly that with a report holding 'old' spend. managed.ts:551 appends the section to report.md on ingest. A re-ingest whose --report is the package's own report.md (the path ingest's new stub check anticipates operators use) carries the earlier spend section in, so the new research.usage totals are never written and the old line stays.",
+      "impact": "After a retry wave or extra dispatches, ledger build updates research.usage, re-ingest runs, and report.md still states the first ingest's token spend: the report understates the review's cost (criterion H) with no warning.",
+      "suggested_fix": "Replace an existing '## Token spend' section (up to the next '## ' heading or end of text) with the freshly rendered one instead of skipping, and change the test to assert that 'old' is replaced by the current totals line.",
+      "evidence": "dispatch-usage.ts:132-139 returns '' when the report includes the heading line; managed.ts:551 writes renderReport(report) + renderSpendMarkdown(input.research, report); src/review/ledger.test.ts:1127 asserts the 'old' section yields ''. grep of non-test callers of renderSpendMarkdown: only managed.ts:551.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": ["src/review/dispatch-usage.ts:133", "src/review/managed.ts:551"],
+        "enumeration_method": "grep -rn 'renderSpendMarkdown(' src excluding tests: one definition, one caller."
+      }
+    },
+    {
+      "id": "LG-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/completion-gate.test.ts",
+      "line": 291,
+      "quote": "expect(performance.now() - started).toBeLessThan(1_000);",
+      "problem": "Two linear-time regression guards assert wall-clock bounds: completion-gate.test.ts:291 (<1000 ms, including building a 1 MB and a ~960 KB string and scanning both) and ledger.test.ts:1106 (<500 ms for a 200k-brace usage line). On a loaded shared CI runner or under coverage instrumentation these can fail with no code change.",
+      "impact": "Intermittent red CI unrelated to the change; a flaky guard tends to get its bound raised or deleted, losing the backtracking protection it encodes.",
+      "suggested_fix": "Keep the inputs but compare against a scaled baseline (time on n vs 4n, assert a roughly linear ratio) or raise the bound by an order of magnitude; quadratic behaviour on these sizes takes far longer, so a 10 s bound still catches it.",
+      "evidence": "Read both tests in slice-04 (completion-gate.test.ts hunk @@ 218,357 @@, ledger.test.ts hunk @@ 1081,1185 @@); line numbers confirmed at head 375279e7.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/round-split.test.ts",
+      "line": 72,
+      "quote": "is cut between them; context is shared\"",
+      "problem": "The test title says context is shared between the fix and new pieces, but its assertions (the concatenation of fix and other text equals the body, and other.startLine === fix.endLine + 1) prove each context line lands in exactly one piece, i.e. context is not shared.",
+      "impact": "A reader changing partitionRegionsByFix to duplicate context around the cut would trust the title and find the test failing for an unexpected reason.",
+      "suggested_fix": "Retitle to '... is cut between them; each line, context included, lands in exactly one piece'.",
+      "evidence": "slice-04 round-split.test.ts hunk @@ 1,176 @@: the title and the two assertions on the concatenated text and startLine.",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: fix/review-gate-consistency, head 375279e781f043c42373b29e06092a2c4177a82a (round 2 delta, base dff7a38a)
+- Slice reviewed: slice-04 (new): test files under src/review/ (completion-gate, coverage, dedupe, dispatch-check, filter-stats, ingest-locator-sha, ledger, locate-ingest, locate, managed, premise, readiness, round-split, round-trip)
+- Spec compliance gate: ran against flow 460 description.md (A-I); no unimplemented criterion is visible from this slice's tests.
+
+### Summary
+The tests are consistent with the source they exercise. Sources I checked: completion-gate session naming, the coverage cache key (which includes the target), the readiness closed-package exemption (its only coverage.md writer is managed.ts:549 and always stamps the mark), and premise agreement counting. Two pinned behaviours are wrong. The D-pattern also counts first-person "did not find any schema/payload ..." prose as an unreadable-input claim. The token-spend section is never refreshed once report.md holds one.
+
+### Stats
+- blocker: 0  |  major: 2  |  minor: 1  |  info: 1
+
+Routing: graph_used no (narrow test slice), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used: grep for targeted line numbers only.

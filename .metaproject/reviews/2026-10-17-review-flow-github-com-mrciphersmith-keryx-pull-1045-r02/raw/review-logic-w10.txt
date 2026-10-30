@@ -1,0 +1,142 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "slices": ["slice-05"],
+  "summary": "Slice-05 (completion-gate, coverage, dispatch-check, dispatch-usage, display-id, filter-stats, ledger, locate, managed, mutate, premise, prior-round) was reviewed for logic correctness at head 375279e78. The PR-target light recheck, the display-id refusals, the merged_duplicates arithmetic, the screened-findings ledger closure and the multi-file premise merge all hold on the paths traced. One major: a non-PR (branch) target with no recorded base diffs against its own ref, so the range is empty and a light dispatch is accepted. Four minors cover the gate release, session-name scope, a ledger fallback match and a misleading premise refusal. Two info notes.",
+  "stats": { "blocker": 0, "major": 1, "minor": 4, "info": 2 },
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "major",
+      "reviewer": "review-logic",
+      "file": "src/review/coverage.ts",
+      "line": 555,
+      "quote": "return target.ref === undefined ? { error: \"the package manifest records no target ref or base\" } : { base: target.ref };",
+      "problem": "resolveDiffBase sends every non-PR target that has no recorded base straight to `{ base: target.ref }`, and that path never runs emptyRangeWarning. For `review start --target branch --ref feat/x` (no --base), target.ref is the branch under review and target.head is the checkout HEAD (resolveTargetHead -> resolveGitHead). The recheck therefore runs `git diff feat/x...<HEAD sha>`. That range is empty when feat/x is checked out, and it is the wrong range when it is not. An empty range gives files [] and changedLines 0, which autoDepth reports as `light` (0 <= LIGHT_MAX_FILES, 0 <= LIGHT_MAX_CHANGED_LINES, no risk gate hit). The doc comment above packageDiffStats says an empty range 'is not a small diff: it refuses', but that only holds on the PR/base path.",
+      "impact": "Silent wrong result. For a branch review whose dispatch says depth light, the gate accepts the light reviewer set (logic + testing + one conventions reviewer) whatever the real diff size or risk class. That is the 'one depth decision' flow 460 A set out to make trustworthy.",
+      "suggested_fix": "Apply the same base resolution and empty-range refusal to non-PR targets. For kind `branch`, resolve the base the way the PR path does (recorded base, else origin/main, main, ...) and diff against it, not against the ref. Run emptyRangeWarning on every resolved base, and refuse (full set) when it fires. Only `path`/`issue`/`report` refs, which are not revisions, should fall through to the existing git-failure refusal.",
+      "evidence": "src/review/coverage.ts:553-563 (resolveDiffBase: non-PR branch returns target.ref before resolveBase/emptyRangeWarning); src/commands/review.ts:1024-1048 (target {kind: branch, ref: --ref, base only from --base}); src/commands/review-plan.ts targetKindOf('feat/review-delta-rounds') === 'branch' (ref is the reviewed branch); src/review/managed.ts resolveTargetHead falls back to resolveGitHead(cwd); src/review/coverage.ts:137-156 autoDepth returns light for files [] / changedLines 0. Pre-existing in shape (main's gitDiffStats also used target.ref), but this PR rewrote the function and states the empty-range refusal as its contract.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": ["src/review/coverage.ts:555"],
+        "enumeration_method": "Enumerated REVIEW_TARGET_KINDS (src/review/types.ts:29: pr, issue, branch, path, report) against resolveDiffBase. pr takes the resolveBase+emptyRangeWarning path. issue/path/report refs are URLs, paths or report labels, which fail assertGitRevision or git diff and so refuse (full). Only branch has a ref that is a valid revision equal to or near the head, so it is the one kind whose base=ref range is empty or wrong. The single site is where that branch is taken."
+      }
+    },
+    {
+      "id": "LG-002",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": 324,
+      "quote": "const closedAt = best === null ? Math.max(0, ...closedAtByRoot.values()) : (closedAtByRoot.get(best.root) ?? 0);",
+      "problem": "closedAt is the newest close since `since` of any review-flow/ingest package under the chosen package's root, not of the chosen package or one this session named. Scenario: two sessions share one checkout. Session B closes its PR's package at t2. Session A's open package's manifest was last written at t1 < t2. findReviewGateState then returns null and A's gate accepts, even though A's review is not complete. The new comment narrows the release to 'the root of the package this session is on', but a sibling package closed by another session in the same root still ends this session's gate.",
+      "impact": "The completion nudge is silently dropped for a review that is still open, which is the flow 460 C class (gate state taken from another run's package), now confined to one root.",
+      "suggested_fix": "Count a closed package toward closedAt only when it is this session's: its dir is best.dir, or it is named by namedBySession(named, dir, [reviewId, name]), or its manifest was created since `since` by this session's pointer. Otherwise ignore it.",
+      "evidence": "src/review/completion-gate.ts scanRoot records closedAt for every closed package with mtime >= since regardless of whose it is; findReviewGateState:324-325 returns null when closedAt > best.mtime. Project memory records concurrent agents sharing one checkout.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-003",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": 190,
+      "quote": "Taken only from the arguments of this session's `keryx review` tool calls and from the `path:` and",
+      "problem": "SessionReviewTracker.scan accepts any tool call whose arguments contain the words `keryx review` anywhere (KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/ tested on the whole arguments string). That includes a write_file whose content mentions `keryx review`, a spawn_subagent prompt, or a grep for the phrase. Every `.metaproject/reviews/<name>` path in those arguments, and every `# managed review:` line in their output, is then recorded as named by this session. An old package referenced in such text (a prior round, a notes file) can then pass the `info.mtimeMs < since` filter in scanRoot and the non-fresh pointer check in pickPackage.",
+      "impact": "Without a fresh pointer, the gate can nudge about an older package the session only mentioned in prose. That is a narrower form of the misdirection flow 460 C fixes, and it contradicts the documented 'only ... `keryx review` tool calls'.",
+      "suggested_fix": "Match only shell/exec tool calls whose command starts with (or has a command segment that is) `keryx review ...`, for example by checking call.name against the shell tool and anchoring the regex to a command boundary. Alternatively, reword the doc to state the looser rule.",
+      "evidence": "src/review/completion-gate.ts:106 (KERYX_REVIEW_COMMAND), :159-164 (any toolCalls entry, any tool name), :175-182 (namePaths over the whole arguments text), :99 (scanRoot admits an old package when namedBySession).",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-004",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/ledger.ts",
+      "line": 613,
+      "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+      "problem": "The (reviewer, bare display id) fallback matches across raw files. A reviewer dispatched in several waves commonly reuses ids (raw/review-logic-w1.txt F-001 and raw/review-logic-w2.txt F-001). If the consolidated report kept the w1 finding under the bare id `F-001` and the scope-B screen removed it, the w2 raw F-001 also matches `entry.reviewer === reviewer && entry.id === fid`. This happens when w2's F-001 is not canonical (for example, the consolidator dropped it or the cap truncated it). That obligation is then closed `out-of-scope` with the w1 finding's screen reason, though no screen ever judged it.",
+      "impact": "A raw finding the round lost is recorded as closed rather than surfacing as an unresolved gap, so the research ledger reads reconciled when it is not.",
+      "suggested_fix": "Use the bare-id fallback only when the reviewer has exactly one raw file that reports that id. Better still, record the raw source with the screened entry and match on it.",
+      "evidence": "src/review/ledger.ts:612-613 and 635-638; screenedRecord in src/review/managed.ts records only id/global_id/reviewer (no raw source), and global_id is absent at screen time because assignGlobalIds runs after the screen (managed.ts:363 vs 405).",
+      "confidence": "low"
+    },
+    {
+      "id": "LG-005",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/premise.ts",
+      "line": 184,
+      "quote": "if (Array.isArray(source) && source.length > 0 && source.every((entry) => isRecord(entry) && \"premises\" in entry)) {",
+      "problem": "When `--premises` is given two or more times, readPremises hands mergePremises an array of the parsed files. If one file lacks `premises` (for example `{judge, claims: [...]}`) the `every` test fails, and the whole array falls through to parsePremiseClaims(array). That refuses with 'must be an object `{ judge, model?, premises: [...] }`, not an array'. The refusal blames an array the CLI built, not the user's malformed file, and names neither the file nor the missing key.",
+      "impact": "The ingest is still refused, so nothing is corrupted, but the operator is sent to fix the wrong thing.",
+      "suggested_fix": "When source is an array of records (the multi-file shape), parse each entry with parsePremiseClaims and prefix any error with the entry's position (or file name from readPremises), so the error names the bad file and its missing `premises`.",
+      "evidence": "src/commands/review.ts:3634-3641 (several files kept as an array); src/review/premise.ts parsePremiseClaims throws the not-an-array message for any non-record source.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-006",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/premise.ts",
+      "line": 568,
+      "quote": "return group.every((entry) => entry.premise.verdict === head?.premise.verdict && entry.premise.severity === head?.premise.severity);",
+      "problem": "agreeingClaims treats claims as saying 'the same thing' when verdict and severity match. For held verdicts (`challenged`, `owner-decision`), two claims with different `question`/`options` are merged, and preferredClaim keeps one question. The other judge's question never reaches the operator, and no rejection row records it.",
+      "impact": "No wrong verdict is applied. One held question's wording and options are dropped without a trace.",
+      "suggested_fix": "For held verdicts, also require equal question and options, or keep the others' questions as a list on the premise.",
+      "evidence": "src/review/premise.ts:560-575 (agreeingClaims/preferredClaim); premise fields question/options are built per claim at ~470-524.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-007",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/dispatch-usage.ts",
+      "line": 36,
+      "quote": "const USAGE_LINE = /^[ \\t]*KERYX_USAGE[ \\t]+([^\\n]*)$/gm;",
+      "problem": "The old pattern removed only lines of the form `KERYX_USAGE {...}`. The new one removes from the body every line that starts with `KERYX_USAGE` followed by whitespace, whatever follows (for example, a reviewer sentence that begins `KERYX_USAGE lines are missing ...`). That text disappears from the parsed body without a trace.",
+      "impact": "No reachable path to a wrong gate decision was found. The body loses prose only in the contrived case where a line starts with the marker.",
+      "suggested_fix": "Strip only lines whose remainder trims to `{...}` (or exceeds MAX_USAGE_LINE_CHARS), as the header comment intends ('a usage line longer than this ... is removed').",
+      "evidence": "src/review/dispatch-usage.ts:36-52 and splitUsage's raw.replace(USAGE_LINE, \"\").",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `fix/review-gate-consistency` (PR #1045, round 2)
+- Parent ref: `origin/main`
+- Merge-base: `8483816bb48e1a99b3ec09e19ad0e83e814356ac`
+- Head: `375279e781f043c42373b29e06092a2c4177a82a`
+- Scope mode: slice `slice-05` (kind new) as supplied
+- Spec compliance gate: ran against flow 460 description.md (A–I). Items A, B, D, F, G and H are touched by this slice. No unimplemented criterion was found in this slice; LG-001 is a correctness gap inside A for non-PR targets.
+
+### Summary
+The PR-target light recheck now resolves a real base at the repository top level and refuses empty ranges. The override decision counts (B). The display-id '#' refusals sit at dispatch-check, ledger, ingest and premise. merged_duplicates keeps the filter_stats arithmetic consistent, because dedupe runs between the scope-B screen and the cap. Scope-B-screened findings close in the ledger, and multi-file premises merge. One major and four minors remain.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 4  |  info: 2
+
+### Logic Bugs
+- LG-001 (major): a branch target with no recorded base diffs against itself, the range is empty, and the light depth is accepted.
+- LG-004 (minor): the ledger's screened fallback matches a same-id raw finding from another wave.
+- LG-006 (info): agreeing held claims drop the differing questions.
+
+### Async & Concurrency
+- LG-002 (minor): another session's package closed in the same root releases this session's completion gate.
+
+### Error Handling
+- LG-005 (minor): a malformed file among several `--premises` gets a refusal that names the wrong thing.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+- LG-003 (minor): the session-name tracker reads any tool call that mentions `keryx review`, not only `keryx review` commands as documented.
+
+### Edge Cases
+- LG-007 (info): the usage-line strip now removes any line that starts with the marker.

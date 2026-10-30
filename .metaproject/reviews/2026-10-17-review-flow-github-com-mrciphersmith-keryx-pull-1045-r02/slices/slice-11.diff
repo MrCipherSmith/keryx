@@ -1,0 +1,490 @@
+--- src/review/readiness.ts
+@@ 4,59 @@
+ 
+ import { readFile, stat } from "node:fs/promises";
+ import path from "node:path";
+ import { shellWord } from "../lib/shell-quote";
+ import { testsNotRunWarning } from "./tests-to-run";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import { isCapDrop, isReasonedDrop } from "./blast-radius";
+ import { computeCoverage } from "./coverage-complete";
+ import { hasChunkPlan } from "./chunks";
+ import { packageScopeFiles } from "./coverage";
+ import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+ import { dispatchErrors } from "./dispatch";
+ import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
+ import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+ import { readRunProfile } from "./run-profile";
+ import type { PremiseQuestionDecision } from "./operator-decisions";
+ import { awaitingOperator, premiseHoldState } from "./premise";
+ import { premiseRecords } from "./verdict";
+ import { packageParityWarnings } from "./parity";
+-import { researchErrors } from "./research";
++import { dispatchRuns, packageCoverageErrors, researchErrors } from "./research";
+ import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
+ 
+ export const READINESS_ITEMS = [
+   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
+   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
+   { number: 3, id: "reviewers", title: "every planned reviewer was dispatched and its result ingested" },
+   { number: 4, id: "verifier", title: "the verifier checked every finding it should, or the report says how many it did not" },
+   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
+   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
+   { number: 7, id: "head", title: "the report's head matches the PR head" },
+   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
+   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
+   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
+   { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
++  { number: 12, id: "quotes-located", title: "every open finding's quote is placed in its file, or the finding is answered" },
+ ] as const;
+ 
+ export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
+ export type ReadinessStatus = "pass" | "fail" | "waived";
+ 
+ export type ReadinessItem = {
+   number: number;
+   id: ReadinessItemId;
+   title: string;
+   status: ReadinessStatus;
+   evidence: string;
+   /** The exact command (or edit) that repairs a failing item. Absent when the item passes. */
+   repair?: string;
+   /** The operator's own words, for a waived item. */
+   waiver?: { operatorQuote: string; time: string };
+ };
+ 
+ export type ReadinessReport = {
+   schemaVersion: 1;
+   review: string;
+
+--- src/review/readiness.ts
+@@ 165,221 @@
+   return { files, radius };
+ }
+ 
+ async function reviewersCheck(ctx: Context): Promise<Verdict> {
+   if (!ctx.dispatched) return ok("this package predates the dispatch record, so there is nothing to hold it against");
+   const dispatch = record(ctx.research?.dispatch);
+   if (dispatch === undefined) return bad("no reviewer dispatch is recorded in research.json", `keryx review ledger build <input-dir> --package ${ctx.arg}`);
+   const problems = dispatchErrors(dispatch);
+   const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record).filter((run): run is Record<string, unknown> => run !== undefined);
+   const selected = Array.isArray(dispatch.selected) ? dispatch.selected.filter(text) : [];
+   const ran = new Set(runs.map((run) => String(run.reviewer)));
+   const unfinished = runs.filter((run) => run.status !== "complete" || run.scopeComplete === false).map((run) => String(run.reviewer));
+   const unplanned = selected.filter((name) => !ran.has(name));
+   const lost: string[] = [];
+   for (const run of runs) {
+     const evidence = typeof run.rawEvidence === "string" ? run.rawEvidence.split("#")[0] : undefined;
+     if (run.status !== "complete" || evidence === undefined || evidence === "") continue;
+     if (!(await pathExists(path.join(ctx.dir, evidence))) && (await pathExists(path.join(ctx.dir, "raw")))) lost.push(String(run.reviewer));
+   }
+   const all = [...new Set([...unfinished, ...unplanned, ...lost])];
+-  if (problems.length === 0 && all.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk`);
++  // The coverage gate `review complete` runs, with the same options (flow 460): readiness must not say READY while
++  // complete refuses the reviewer set, the round depth or an unwaived mutation pass. Not for a package ingested before
++  // that and closed (see Context.coverageGated). Its git diff is remembered per package and head (./coverage.ts).
++  const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];
++  const gateNote = ctx.coverageGated ? "the coverage gate accepts the dispatch" : "the package was closed before readiness ran the coverage gate (flow 460), so its recorded close stands";
++  if (problems.length === 0 && all.length === 0 && coverage.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk; ${gateNote}`);
+   const parts = [
+     ...(unfinished.length > 0 ? [`not run or incomplete: ${some(unfinished)}`] : []),
+     ...(unplanned.length > 0 ? [`planned with no run recorded: ${some(unplanned)}`] : []),
+     ...(lost.length > 0 ? [`result file missing from raw/: ${some(lost)}`] : []),
+     ...problems.slice(0, 2),
++    ...coverage.map((error) => `coverage gate (as review complete runs it): ${error}`),
+   ];
+-  return bad(parts.join("; "), `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${ctx.arg}\``);
++  const repair = all.length === 0 && coverage.length > 0
++    ? "do what the coverage gate message names (dispatch the missing reviewers, or record the operator's decision), then re-run `keryx review readiness`"
++    : `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${ctx.arg}\``;
++  return bad(parts.join("; "), repair);
+ }
+ 
+ const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
+ 
+ const NOT_VERIFIED = /not\s+verified\s*[:=]?\s*(\d+)/i;
+ 
+ function verifierCheck(ctx: Context): Verdict {
+   const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
+   const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
+   if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
+   const stated = NOT_VERIFIED.exec(ctx.report);
+   if (stated !== null && Number(stated[1]) >= unverified.length) return ok(`${unverified.length} of ${heavy.length} blocker/major finding(s) unverified, and the report says so`);
+   return bad(
+     `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification and the report does not state the count`,
+     `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,
+   );
+ }
+ 
+ /**
+  * Flow 459. A finding the premise judge held (`challenged` / `owner-decision`) is a question for the operator, and a
+
+--- src/review/readiness.ts
+@@ 227,319 @@
+   const held = records.filter((finding) => premiseHoldState(finding, decisions) !== "none");
+   if (held.length === 0) return ok("no finding is held by the premise judge");
+   const awaiting = awaitingOperator(records, decisions);
+   if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
+   const evidence = `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`;
+   // Before an ingest the held records come from raw results and premises.json, and the answer commands read
+   // findings.json only (review F-002): the first repair is the ingest.
+   if (!ctx.premise.ingested) {
+     return bad(`${evidence} (not ingested yet)`, `ingest the round with its premise results first (\`keryx review ingest ... --premises ${ctx.arg}/research-evidence/premises.json\`), then ask the operator to answer each held finding`);
+   }
+   return bad(
+     evidence,
+     `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
+   );
+ }
+ 
+ /** Why `premise-decisions` is never waived (shared by `waiveReadiness` and the `review_waive_readiness` card). */
+ export const PREMISE_DECISIONS_NOT_WAIVABLE =
+   "premise-decisions cannot be waived in the operator's own words. A held finding needs its own answer: run `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`, or in keryx shell call the review_decide_premise tool (the operator answers a card).";
+ 
++/**
++ * Flow 460. `review ingest` keeps a finding whose quote is absent from its file, or in it more than once, with no line
++ * and the flag `quote_unlocated`, instead of refusing the round. Such a finding is a claim nobody could place, so it may
++ * not pass silently: while it has no disposition this item FAILS and names it. It is waivable in the operator's own
++ * words like any other item (unlike `premise-decisions`): the repair is a re-quote and re-ingest, or a disposition with
++ * evidence, and an operator may decide an unplaced claim is acceptable for this round.
++ */
++function quotesLocatedCheck(ctx: Context): Verdict {
++  const flagged = ctx.findings.filter((finding) => record(finding.quote_unlocated) !== undefined);
++  if (flagged.length === 0) return ok("every quoted finding was placed in its file at the reviewed head");
++  const name = (finding: Record<string, unknown>): string => {
++    const flag = record(finding.quote_unlocated) ?? {};
++    const lines = Array.isArray(flag.candidate_lines) ? ` lines ${flag.candidate_lines.join(", ")}` : "";
++    return `${String(finding.global_id ?? finding.id)} (${String(finding.file ?? "no file")}: ${String(flag.reason)}${lines})`;
++  };
++  const answered = (finding: Record<string, unknown>): boolean => {
++    const state = record(finding.disposition)?.state;
++    return typeof state === "string" && state !== "" && state !== "unknown";
++  };
++  const open = flagged.filter((finding) => !answered(finding));
++  if (open.length === 0) return ok(`${flagged.length} finding(s) with an unplaced quote, every one with a disposition: ${some(flagged.map(name))}`);
++  return bad(
++    `${open.length} open finding(s) quote code that could not be placed in the file at the reviewed head (kept with no line, flagged quote_unlocated): ${some(open.map(name))}`,
++    `re-quote one distinct line from \`git show <head>:<path>\` in the reviewer's result and re-ingest, or record a disposition with evidence; or the operator waives it: in keryx shell call the review_waive_readiness tool with item quotes-located; in a terminal run keryx review complete ${ctx.arg} --waive quotes-located "<operator quote>"`,
++  );
++}
++
+ function ledgerCheck(ctx: Context): Verdict {
+   if (!ctx.dispatched) return ok("this package predates the research ledger");
+   if (ctx.research === undefined) return bad("research.json is missing or unreadable", `keryx review ledger build <input-dir> --package ${ctx.arg}`);
+   const problems = researchErrors(ctx.research, ctx.findings);
+   if (problems.length === 0) return ok(`ledger READY: ${Array.isArray(ctx.research.obligations) ? ctx.research.obligations.length : 0} obligation(s) all closed`);
+   return bad(`${problems.length} ledger problem(s): ${problems.slice(0, 3).join("; ")}${problems.length > 3 ? "; …" : ""}`, `close each obligation with a disposition, then \`keryx review ledger build <input-dir> --package ${ctx.arg} --dispositions <file>\``);
+ }
+ 
+-async function coverageMdCheck(ctx: Context): Promise<Verdict> {
+-  const raw = await readFile(path.join(ctx.dir, "coverage.md"), "utf8").catch(() => undefined);
+-  const runs = (Array.isArray(record(ctx.research?.dispatch)?.runs) ? (record(ctx.research?.dispatch)!.runs as unknown[]) : []).map(record);
+-  const bad2 = new Set(runs.filter((run) => run !== undefined && run.status !== "complete").map((run) => String(run!.reviewer)));
++function coverageMdCheck(ctx: Context): Verdict {
++  const raw = ctx.coverageMd;
++  const runs = dispatchRuns(ctx.research);
++  const unfinished = new Set(runs.filter((run) => run.status !== "complete").map((run) => run.reviewer));
+   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
+-  const claimed = [...raw.matchAll(/reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g)].filter((match) => match[2] === "run").map((match) => match[1] as string);
+-  const lying = claimed.filter((name) => bad2.has(name));
++  const entries = [...raw.matchAll(COVERAGE_ENTRY)].map((match) => ({ reviewer: match[1]!, status: match[2]! }));
++  const claimed = entries.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
++  const lying = claimed.filter((name) => unfinished.has(name));
++  // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it. Only
++  // while it applies (Context.coverageGated): a closed package's older coverage.md predates ingest reading the record.
++  const listed = new Set(entries.map((entry) => entry.reviewer));
++  const omitted = ctx.coverageGated ? runs.filter((run) => !listed.has(run.reviewer)).map((run) => run.reviewer) : [];
++  if (omitted.length > 0) {
++    return bad(
++      `coverage.md omits ${some(omitted)}, which the dispatch record ran`,
++      "re-run keryx review ingest <input> for this package without --reviewers or --coverage: only then is coverage.md written from the dispatch record (an explicit list is written as given, and fails this item again)",
++    );
++  }
+   if (lying.length === 0) return ok(`${claimed.length} reviewer(s) listed as run, none contradicted by the dispatch record`);
+   return bad(`coverage.md lists ${some(lying)} as "run", but the dispatch record says they did not finish`, `re-run keryx review ingest <input> for this package: it rewrites coverage.md from the dispatch record`);
+ }
+ 
+ async function headCheck(ctx: Context, options: ReadinessOptions): Promise<Verdict> {
+   if (!isPrBound(ctx.manifest.target)) return ok("not a pull-request package");
+   if (options.headChecked === true) return ok("the head gate ran at this close");
+   if (options.prLookup === undefined) return ok("the PR head was not read (no tracker available)");
+   try {
+     const { warnings } = await completeHeadGate({ manifest: ctx.manifest, report: withoutPartialHeader(ctx.report), lookup: options.prLookup });
+     return ok(warnings.length === 0 ? "the reviewed head is the PR head" : warnings.join("; "));
+   } catch (error) {
+     const message = (error instanceof Error ? error.message : String(error)).replace(/^Cannot complete managed review;\s*/, "");
+     return bad(message, `edit the first line of report.md to name the reviewed SHA and say the PR moved, or re-run the round on the new head`);
+   }
+ }
+ 
+ async function reportNamesCheck(ctx: Context): Promise<Verdict> {
+   const warnings = await packageParityWarnings(ctx.dir, ctx.report).catch(() => []);
+   if (warnings.length === 0) return ok("every pending mutation candidate, held severity and follow-up is named in the report");
+
+--- src/review/readiness.ts
+@@ 386,452 @@
+       `no memory call in the log is attributable to the orchestrator; export ${ENV_REVIEW_CALLER_TOKEN} from the token \`keryx review start\` printed so the host's own keryx calls are attributed${warning}`,
+     );
+   }
+   if (outside.length === 0) {
+     const recorded = log.split("\n").some((line) => line.includes('"log-start"') || line.includes('"source"'));
+     const none = recorded ? "no memory call recorded by the orchestrator (log written by keryx)" : "the orchestrator made no memory call";
+     return ok(`${inStage === 0 ? none : `${inStage} memory call(s) by the orchestrator, all the stage query${stage === undefined ? "" : ` "${stage}"`}`}${warning}`);
+   }
+   return bad(
+     `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}${warning}`,
+     `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: in keryx shell call the review_waive_readiness tool with item memory-outside-stage (the operator answers a card); in a terminal run keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
+   );
+ }
+ 
+ /** The checklist, computed from what the package holds. Writes nothing. */
+ export async function computeReadiness(packageDir: string, options: ReadinessOptions = {}): Promise<ReadinessReport> {
+   const manifest = await readJson<ManagedReviewManifest>(path.join(packageDir, "manifest.json"));
+   if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
+   const research = record(await readJson<unknown>(path.join(packageDir, "research.json")));
+   const findingsRaw = await readJson<unknown>(path.join(packageDir, "findings.json"));
++  const coverageMd = await readFile(path.join(packageDir, "coverage.md"), "utf8").catch(() => undefined);
+   const ctx: Context = {
+     dir: packageDir,
+     arg: packageArg(packageDir),
+     manifest,
+     report: (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")) as string,
+     research,
+     findings: Array.isArray(findingsRaw) ? findingsRaw.map(record).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [],
+     premise: await premiseRecords(packageDir),
+     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
++    coverageMd,
++    coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
+   };
+   const { files, radius } = await filesChecks(ctx);
+   const verdicts: Record<ReadinessItemId, Verdict> = {
+     "files-covered": files,
+     "blast-radius": radius,
+     reviewers: await reviewersCheck(ctx),
+     verifier: verifierCheck(ctx),
+     ledger: ledgerCheck(ctx),
+-    "coverage-md": await coverageMdCheck(ctx),
++    "coverage-md": coverageMdCheck(ctx),
+     head: await headCheck(ctx, options),
+     "report-names": await reportNamesCheck(ctx),
+     "pr-files": await prFilesCheck(ctx, options),
+     "memory-outside-stage": await memoryStageCheck(ctx),
+     "premise-decisions": premiseDecisionsCheck(ctx),
++    "quotes-located": quotesLocatedCheck(ctx),
+   };
+   const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
+   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {
+     const verdict = verdicts[spec.id];
+     const waiver = waivers.get(spec.id);
+     if (verdict.pass) return { ...spec, status: "pass", evidence: verdict.evidence };
+     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
+     return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
+   });
+   const testsNotRun = testsNotRunWarning(packageDir);
+   return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
+ }
+ 
+ export const failingItems = (report: ReadinessReport): ReadinessItem[] => report.items.filter((item) => item.status === "fail");
+ 
+ /** The checklist as the CLI, `review status` and the panel print it. */
+ export function renderReadiness(report: ReadinessReport): string[] {
+   const lines = [`readiness: ${report.verdict} (${report.review})`];
+   for (const item of report.items) {
+     const mark = item.status === "pass" ? "pass  " : item.status === "waived" ? "waived" : "FAIL  ";
+
+--- src/review/research.ts
+@@ 1,135 @@
+ import { dispatchErrors } from "./dispatch";
+ import { pendingMutants } from "./mutate";
+ import { coverageErrors, packageChangedLines, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage } from "./coverage";
+ import { coverageGateErrors } from "./coverage-complete";
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
++
++/**
++ * Flow 460: where `review ingest` records the findings it kept out of findings.json (the scope-B screen), relative to the
++ * package. `review ledger build` reads it and closes each such raw finding `out-of-scope` with the screen's reason, so an
++ * ingest that screens findings out does not leave the research ledger stale. (A finding the duplicate merge folded into
++ * another is found through the survivor's `merged_from` in findings.json.)
++ */
++export const INGEST_SCREENED_FILE = "research-evidence/ingest-screened.json";
++
++/** One finding the ingest screened out: its display id and global_id, who raised it, and the screen's rule and words. */
++export type IngestScreened = { id: string; global_id?: string | undefined; reviewer?: string | undefined; rule: string; detail: string };
++
++/** The screened findings of an {@link INGEST_SCREENED_FILE} record, read leniently: [] for anything that is not one. */
++export function ingestScreenedOf(record: unknown): IngestScreened[] {
++  const list = record !== null && typeof record === "object" && !Array.isArray(record) ? (record as { screened?: unknown }).screened : undefined;
++  if (!Array.isArray(list)) return [];
++  return list.flatMap((entry): IngestScreened[] => {
++    if (entry === null || typeof entry !== "object") return [];
++    const row = entry as Record<string, unknown>;
++    if (typeof row.id !== "string" || row.id === "" || typeof row.rule !== "string" || typeof row.detail !== "string") return [];
++    return [{ id: row.id, ...(typeof row.global_id === "string" ? { global_id: row.global_id } : {}), ...(typeof row.reviewer === "string" ? { reviewer: row.reviewer } : {}), rule: row.rule, detail: row.detail }];
++  });
++}
++
++/** One `dispatch.runs[]` entry of research.json as `ledger build` writes it (./ledger.ts `buildLedger`), read leniently. */
++export type DispatchRun = {
++  reviewer: string;
++  /** `complete`, `incomplete` or `not-run`; anything else is passed through as written. */
++  status?: string | undefined;
++  scopeComplete?: boolean | undefined;
++  /** True for a role slice routing gave no slice: recorded complete, never dispatched. */
++  routedOut?: boolean | undefined;
++  rawEvidence?: string | undefined;
++  notRunReason?: string | undefined;
++  executionReason?: string | undefined;
++};
++
++/** The reviewer runs research.json's dispatch record holds, each with a reviewer name; [] when there is none. */
++export function dispatchRuns(research: unknown): DispatchRun[] {
++  const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
++  const runs = record(record(research)?.dispatch)?.runs;
++  if (!Array.isArray(runs)) return [];
++  const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
++  return runs.flatMap((value): DispatchRun[] => {
++    const run = record(value);
++    if (run === undefined || typeof run.reviewer !== "string" || run.reviewer === "") return [];
++    return [{
++      reviewer: run.reviewer,
++      status: str(run.status),
++      scopeComplete: typeof run.scopeComplete === "boolean" ? run.scopeComplete : undefined,
++      routedOut: run.routedOut === true ? true : undefined,
++      rawEvidence: str(run.rawEvidence),
++      notRunReason: str(run.notRunReason),
++      executionReason: str(run.executionReason),
++    }];
++  });
++}
+ export function researchErrors(value: unknown, findings: unknown): string[] {
+   if (!value || typeof value !== "object" || Array.isArray(value)) return ["research ledger must be an object"];
+   const ledger = value as Record<string, unknown>;
+   const errors: string[] = [];
+   if (ledger.version !== 1) errors.push("research ledger version must be 1");
+   if (ledger.scopeReviewed !== true) errors.push("research scope census is incomplete");
+   if (ledger.rawReconciled !== true) errors.push("raw observations are not reconciled");
+   if (!Array.isArray(ledger.obligations)) return [...errors, "research obligations must be an array"];
+   if (!Array.isArray(findings)) return [...errors, "canonical findings must be an array"];
+   const ids = new Set<string>();
+   const nonempty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
+   for (const item of ledger.obligations) {
+     if (!item || typeof item !== "object" || Array.isArray(item)) { errors.push("invalid research obligation"); continue; }
+     const o = item as Record<string, unknown>;
+     const id = nonempty(o.id) ? o.id : "<missing-id>";
+     if (!nonempty(o.id) || ids.has(id)) errors.push(`${id}: missing or duplicate obligation id`);
+     ids.add(id);
+     if (!nonempty(o.source) || !nonempty(o.question)) errors.push(`${id}: source and question are required`);
+     if (!["finding", "refuted", "out-of-scope", "narrowed"].includes(String(o.status))) errors.push(`${id}: unresolved research (${String(o.status)})`);
+     if (!nonempty(o.evidence) || !nonempty(o.reason)) errors.push(`${id}: closure needs evidence and reason`);
+     if (o.status === "narrowed" && !nonempty(o.remains)) errors.push(`${id}: narrowed needs a "what remains" text`);
+     if (o.status === "finding") {
+       const matches = findings.filter(f => f && typeof f === "object" && (f.id === o.finding || f.global_id === o.finding));
+       if (!nonempty(o.finding) || matches.length !== 1) errors.push(`${id}: finding link must resolve uniquely in canonical findings`);
+     }
+   }
+   return errors;
+ }
++/**
++ * The coverage gate over a package's recorded dispatch, with the options read from the package. `review complete`
++ * (through `packageResearchErrors`) and `review readiness` both call this, so they cannot disagree on the reviewer set
++ * or the round depth (flow 460).
++ */
++export async function packageCoverageErrors(packageDir: string, dispatch: unknown): Promise<string[]> {
++  return coverageErrors(dispatch, {
++    root: projectRootOfPackage(packageDir),
++    packageDir,
++    files: await packageScopeFiles(packageDir),
++    changedLines: await packageChangedLines(packageDir),
++    blastRadius: await packageHasBlastRadius(packageDir),
++    prContext: packageHasPrContext(packageDir),
++    pendingMutants: (await pendingMutants(packageDir)).length,
++  });
++}
++
+ /**
+  * Absent artifact identifies packages predating this contract, not completed research. `completeness: false` skips the
+  * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
+  */
+ export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<string[]> {
+   const a = artifacts && typeof artifacts === "object" ? artifacts as Record<string, unknown> : {};
+   if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : ["dispatch requires a research artifact"];
+   if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return ["invalid dispatch artifact locator"];
+   if (a.research !== "research.json") return ["invalid research artifact locator"];
+   try {
+     const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
+     // A dispatch block in research.json is checked whatever the manifest says: dropping the manifest's locator must not skip the gate.
+     const recorded = ledger?.dispatch !== undefined;
+     const checked = a.reviewerDispatch !== undefined || recorded;
+     const mismatch = recorded && a.reviewerDispatch === undefined
+       ? ['research.json records a reviewer dispatch but manifest.json does not declare it: restore artifacts.reviewerDispatch "research.json"']
+       : [];
+     const dispatch = checked ? dispatchErrors(ledger?.dispatch) : [];
+     const coverage = !checked || options.coverage === false || dispatch.length
+       ? []
+-      : await coverageErrors(ledger?.dispatch, {
+-          root: projectRootOfPackage(packageDir),
+-          packageDir,
+-          files: await packageScopeFiles(packageDir),
+-          changedLines: await packageChangedLines(packageDir),
+-          blastRadius: await packageHasBlastRadius(packageDir),
+-          prContext: packageHasPrContext(packageDir),
+-          pendingMutants: (await pendingMutants(packageDir)).length,
+-        });
++      : await packageCoverageErrors(packageDir, ledger?.dispatch);
+     const completeness = !checked || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
+     return [...researchErrors(ledger, findings), ...mismatch, ...dispatch, ...coverage, ...completeness];
+   }
+   catch { return ["research ledger unreadable or invalid JSON"]; }
+ }
+
+--- src/review/types.ts
+@@ 512,557 @@
+   merged_problems?: string[] | undefined;
+   severity: ReviewFindingSeverity;
+   problem: string;
+   impact: string;
+   suggested_fix: string;
+   evidence: string;
+   confidence: ReviewFindingConfidence;
+   file?: string | null | undefined;
+   /**
+    * DERIVED at ingest whenever {@link quote} is present — see
+    * {@link module:review/locate}. Reported by the reviewer only for a finding
+    * with nothing to quote.
+    */
+   line?: number | null | undefined;
+   /** The code the finding is about, copied out of {@link file}. */
+   quote?: string | null | undefined;
+   /** How {@link line} was arrived at. Present exactly when {@link quote} is. */
+   locator?: ReviewFindingLocator | undefined;
+   /** True when {@link file} does not exist at the reviewed head; the finding is kept and listed in `scope.md`. */
+   path_missing?: boolean | undefined;
++  /**
++   * Flow 460: set by `review ingest` when {@link quote} is absent from {@link file} at the reviewed head, or matches
++   * more than one place there (`candidate_lines`, bounded by the scan). The finding is kept with no line, never
++   * relocated by similarity, listed in `scope.md` and by readiness item `quotes-located`.
++   */
++  quote_unlocated?: { reason: "absent" | "ambiguous"; candidate_lines?: number[] | undefined } | undefined;
+   symbol?: string | null | undefined;
+   dedupe_key?: string | null | undefined;
+   blocking_merge?: boolean | undefined;
+   related_skill?: string | null | undefined;
+   learning_candidate?: boolean | undefined;
+   class_scope?: ReviewFindingClassScope | undefined;
+   /**
+    * What became of the finding. Absent reads as `unknown` — see
+    * {@link module:review/managed.findingDispositionState}.
+    *
+    * This is the one keryx-local judgement that DOES belong on the persisted
+    * record rather than in `decisions.md`, and the reason is the measurement:
+    * `decisions.md` is prose, so the disposition of 83 findings had to be
+    * reconstructed from commit messages and flow journals by a curated ledger,
+    * and the reconstruction could not find a single wrong finding because none
+    * was ever written down. A field on the record is the thing that ends that.
+    */
+   disposition?: ReviewFindingDisposition | undefined;
+   /**
+    * What an independent check found. Absent means nobody checked.

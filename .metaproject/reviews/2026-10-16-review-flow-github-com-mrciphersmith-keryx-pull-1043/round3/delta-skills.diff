@@ -1,0 +1,775 @@
+diff --git a/.metaproject/rules/core/session-plan-bridge.mdc b/.metaproject/rules/core/session-plan-bridge.mdc
+index a11fe407c..23a01ed08 100644
+--- a/.metaproject/rules/core/session-plan-bridge.mdc
++++ b/.metaproject/rules/core/session-plan-bridge.mdc
+@@ -36,7 +36,7 @@ in progress, so it never makes the agent continue on its own, which is what make
+ |---|---|---|
+ | `job-orchestrator` | the step ids `keryx job status <name> --json` reports — `analyze`, `context`, `prepare`, `tests-creator`, `implement`, `sanity-check`, `verify`, `review`, `security`, `fix`, `verify-post-fix`, `perf-check`, `report`, `pr`, `deploy` | `keryx job status <name>` (read it, never retype it) |
+ | `flow-orchestrator` | the Flow's task ids `T1..Tn` | `keryx flow status <id>` / the Flow's `tasks.md` |
+-| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |
++| `review-orchestrator` | `step-0` … `step-14` and `step-10b`, from its own numbered checklist | its Workflow section |
+ 
+ An id that exists only in the session plan is drift by construction: the operator
+ cannot reconcile it with the CLI, and a resumed run cannot match it. If a
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index d12d1dc7e..7353801d1 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -4854,7 +4854,7 @@ A package is bound to a pull request when it targets one or when its `--ref` is
+ | `start` | Create a standalone managed review package, and mark it active: from then on `keryx memory` commands, the MCP memory tools and the keryx agent's memory calls append to the package's `tool-calls/orchestrator.jsonl` (the agent never writes that file). |
+ | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
+ | `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. After those it prints what the round left behind that no count shows, and nothing when there is none: `Not run: <n> candidates (cap <c>): <mutant ids>` for proposed mutants no pass has run, `held: <finding> stays <severity> (mutant <id>): <reason>` for a severity a presentation-only survivor did not raise, and `follow-up open: <id> <text>` (or `follow-up narrowed: … (remains: …)`) for each parent follow-up no disposition closes. |
+-| `readiness` | Print the eleven-item checklist that gates `completed` and publishing (`keryx review readiness <review-id-or-path> [--json]`): every changed file covered, no file the blast radius cut left unreviewed, every planned reviewer ingested, the verifier's coverage stated, the ledger READY, coverage.md truthful, the head matching the PR, leftovers named in the report, the changed-file count equal to the PR's own list, every held finding answered by the operator (`premise-decisions`: a finding `review-premise` held as `challenged` or `owner-decision` without a recorded `decide-premise` answer fails it), and the orchestrator's memory reads confined to its one memory stage (`memory-outside-stage`: any other orchestrator `keryx memory` call in `tool-calls/orchestrator.jsonl`, which keryx writes itself, fails it; a call by a reviewer's id passes, and a call with no caller is `unattributed`, which warns in the detail and never blocks. `orchestrator log: recorded` or `orchestrator log: none`, and the unattributed count, show on `review readiness`, `review status`, the Review depth tab and the sidebar. Limits: only calls through keryx are visible; unmarked calls outside the keryx shell are `unattributed`; the log is not a sandbox; the log is a plain editable file; `review start --memory-query "<query>"` records the stage query in the manifest's `cleanContext` block). Each failing item prints its evidence and the command that repairs it. It writes nothing and exits 1 when the verdict is NOT READY. `review complete` refuses `completed` while an item fails; only the operator waives one, in a terminal (`--waive <item> "<quote>"`, recorded with the time; a reviewer's own memory lookup is never judged). `review status`, the Review depth tab, the sidebar and `/review readiness` show the same verdict from the same projection. |
++| `readiness` | Print the eleven-item checklist that gates `completed` and publishing (`keryx review readiness <review-id-or-path> [--json]`): every changed file covered, no file the blast radius cut left unreviewed, every planned reviewer ingested, the verifier's coverage stated, the ledger READY, coverage.md truthful, the head matching the PR, leftovers named in the report, the changed-file count equal to the PR's own list, and the orchestrator's memory reads confined to its one memory stage (`memory-outside-stage`: any other orchestrator `keryx memory` call in `tool-calls/orchestrator.jsonl`, which keryx writes itself, fails it; a call by a reviewer's id passes, and a call with no caller is `unattributed`, which warns in the detail and never blocks. `orchestrator log: recorded` or `orchestrator log: none`, and the unattributed count, show on `review readiness`, `review status`, the Review depth tab and the sidebar. Limits: only calls through keryx are visible; unmarked calls outside the keryx shell are `unattributed`; the log is not a sandbox; the log is a plain editable file; `review start --memory-query "<query>"` records the stage query in the manifest's `cleanContext` block), and, last, every held finding answered by the operator (`premise-decisions`: a finding `review-premise` held as `challenged` or `owner-decision` without a recorded `decide-premise` answer fails it; not waivable, each held finding needs its own answer). Each failing item prints its evidence and the command that repairs it. It writes nothing and exits 1 when the verdict is NOT READY. `review complete` refuses `completed` while an item fails; only the operator waives one, any item but `premise-decisions`, in a terminal (`--waive <item> "<quote>"`, recorded with the time; a reviewer's own memory lookup is never judged). `review status`, the Review depth tab, the sidebar and `/review readiness` show the same verdict from the same projection. |
+ | `publish` | Post a package to its pull request as a GitHub review (`keryx review publish <review-id-or-path> [--event COMMENT\|REQUEST_CHANGES\|APPROVE] [--partial] [--yes]`). It refuses a package that is not READY. `--partial` posts it anyway under a "Partial review" header and never approves. The keryx shell guard refuses a raw `gh pr review` or `gh api` review post for a package that is not READY; a publisher outside the keryx shell (CI, another agent, a script file) is not stopped. |
+ | `report-parity` | Print the Markdown to paste into `report.md` so the leftovers of a round are named (`keryx review report-parity <review-id-or-path>`): a `## Review parity` block with one line each for `Not run: <n> candidates`, `Held severity:` and `Not verified:`; with nothing to carry it says so and prints no block. It reads the package and writes nothing. `review complete` adds a warning, never a refusal, for each kind of leftover the report does not name (a line that opens with `Not run`, `Held severity` or `Not verified`, or one that mentions the mutant or obligation id). `/review parity` in the shell, the readline `/reviews` and the sidebar show the same counts from the same projection. In an automatic review, `report-parity <this review>` runs without a prompt. |
+ | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
+diff --git a/src/gdskills/bundled/rules/core/session-plan-bridge.mdc b/src/gdskills/bundled/rules/core/session-plan-bridge.mdc
+index a11fe407c..23a01ed08 100644
+--- a/src/gdskills/bundled/rules/core/session-plan-bridge.mdc
++++ b/src/gdskills/bundled/rules/core/session-plan-bridge.mdc
+@@ -36,7 +36,7 @@ in progress, so it never makes the agent continue on its own, which is what make
+ |---|---|---|
+ | `job-orchestrator` | the step ids `keryx job status <name> --json` reports — `analyze`, `context`, `prepare`, `tests-creator`, `implement`, `sanity-check`, `verify`, `review`, `security`, `fix`, `verify-post-fix`, `perf-check`, `report`, `pr`, `deploy` | `keryx job status <name>` (read it, never retype it) |
+ | `flow-orchestrator` | the Flow's task ids `T1..Tn` | `keryx flow status <id>` / the Flow's `tasks.md` |
+-| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |
++| `review-orchestrator` | `step-0` … `step-14` and `step-10b`, from its own numbered checklist | its Workflow section |
+ 
+ An id that exists only in the session plan is drift by construction: the operator
+ cannot reconcile it with the CLI, and a resumed run cannot match it. If a
+diff --git a/src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md b/src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md
+index 93c7fbec2..fa315a36d 100644
+--- a/src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md
++++ b/src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md
+@@ -39,7 +39,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
+ 
+ ### Phase 1: REQUIREMENTS + SPEC
+ 
+-1. Parse input (description or GitHub issue via `gh issue view`). An issue filed from a review finding, or an external review comment, is a premise to check: dispatch `review-premise` on it first, shaped and recorded as `flow-orchestrator` Phase 1 says ("A flow sourced from a finding": claims in `<flow-dir>/premise/<n>.json`, no `decide-premise`), and on `challenged` or `owner-decision` ask the operator its question with its options and journal their answer before writing the spec
++1. Parse input (description or GitHub issue via `gh issue view`). An issue filed from a review finding, or an external review comment, is a premise to check: dispatch `review-premise` on it first, shaped and recorded as `flow-orchestrator` Phase 1 says ("A flow sourced from a finding": no `decide-premise`; claims in `<flow-dir>/premise/<n>.json` if a flow exists; with none, its claims object goes into the Implementation Spec under **Premise**), and on `challenged` or `owner-decision` ask the operator its question with its options and journal their answer before writing the spec
+ 2. Clarify ambiguities — ask the user up to 3 questions max
+ 3. Produce the **Implementation Spec** (per `implementation-doc-mandate.mdc`):
+    - **What**: feature description in 2-3 sentences
+@@ -113,7 +113,7 @@ Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
+    - `git diff main...HEAD` — review the full diff
+    - Check for: TODOs left behind, console.logs, hardcoded values
+    - Verify all acceptance criteria from Phase 1 spec
+-3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: a held finding is neither fixable nor clean and blocks the cycle until answered; ask the operator about it as `review-orchestrator` "Wave D" says, and only an upheld one is fixed, with `premise_verdict` set on each `fix_context.review_feedback` item the judge ruled on and `premise_answer: "uphold"` on a held one the operator upheld (unattended: stop and report the held list). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
++3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: a held finding is neither fixable nor clean and blocks the cycle until answered; ask the operator about it as `review-orchestrator` "Wave D" says, and only an upheld one is fixed, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them (unattended: stop and report the held list). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
+ 4. Re-run `code-verifier` after any fixes
+ 
+ ### Phase 8: DELIVER + CHANGE REPORT
+diff --git a/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md b/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+index 0ef4d71ec..ba9abee7f 100644
+--- a/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+@@ -274,9 +274,7 @@ Know the gate's exact scope, because for years this file claimed a gate that did
+ 
+ Read the `tasks` line in the `flow complete` output. If it says `skipped`, the gate did not run and the task list is yours to verify by hand.
+ 
+-### A flow sourced from a finding: check its premise before freeze
+-
+-A follow-up issue filed from a review, or an external review comment, is a premise to check, not a settled requirement. Before `flow freeze`, dispatch `review-premise` with `source: follow-up-issue` or `external-comment` and the finding shaped as its Input Contract says: the issue or comment text, its `file:line` refs with the code there, and the issue or comment URL as `id`. No review package exists, so no `ingest` or `decide-premise` runs: save its claims as `<flow-dir>/premise/<n>.json`, and apply the merge's rules by hand (a `challenged` that cites no signal or source is upheld; an external comment is never downgraded). On `challenged` or `owner-decision` ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere), journal their answer, and plan only what the operator upholds.
++**A flow sourced from a finding: check its premise before freeze.** A follow-up issue filed from a review, or an external review comment, is a premise to check, not a settled requirement. Before `flow freeze`, dispatch `review-premise` with `source: follow-up-issue` or `external-comment` and the finding shaped as its Input Contract `source` row says (the issue number or the comment's `C-NNN` as `id`, its URL as `url`). Skip it when the dispatch says the premise is already recorded (`review-pr-feedback` rule 7 sends a `premise:` constraint). No review package exists, so no `ingest` or `decide-premise` runs: save its claims as `<flow-dir>/premise/<n>.json`, and apply every refusal of the merge by hand, as that `source` row lists them (`PREMISE_REJECTION_REASONS`, `src/review/premise.ts`): a refused claim leaves the finding upheld. On `challenged` or `owner-decision` ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere), journal their answer, and plan only what the operator upholds.
+ 
+ Then freeze and start (`--yes`: the operator already answered the kinds question, so the freeze must not prompt):
+ 
+@@ -439,7 +437,7 @@ Before accepting implementation:
+ 6. If findings require code changes, run a fix round through `task-implementer`, recorded as a flow fix task:
+    - **Scope freeze.** A fix round fixes the round's findings and nothing else. Hardening, refactors or new cells a fix suggests go to the operator as a question (as in step 4); never grow scope inside a fix round.
+    - **Red probes → ONE implementer.** When reviewers left red probes (failing tests or commands on the findings), pass them as `test_case_specs` to one `task-implementer` dispatch — no separate `tests-creator` task. `tests-creator` runs only for a new contract no probe covers.
+-   - **A held finding is not fixed.** A finding `review-premise` held (`challenged` or `owner-decision`) is neither fixable nor clean: it never goes into `fix_context.review_feedback` and it blocks the loop until answered. Ask the operator about it as `review-orchestrator` "Wave D" says (the card in keryx shell; elsewhere the question tool, then the exact `keryx review decide-premise` command for them to run in their terminal) and journal the recorded answer; only an upheld finding enters a fix round. Set `premise_verdict` on each `fix_context.review_feedback` item the judge ruled on, and `premise_answer: "uphold"` on a held one the operator upheld. A dispatched run leaves it held and journals it.
++   - **A held finding is not fixed.** A finding `review-premise` held (`challenged` or `owner-decision`) is neither fixable nor clean: it never goes into `fix_context.review_feedback` and it blocks the loop until answered. Ask the operator about it as `review-orchestrator` "Wave D" says (the card in keryx shell; elsewhere the question tool, then the exact `keryx review decide-premise` command for them to run in their terminal) and journal the recorded answer; only an upheld finding enters a fix round, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them. A dispatched run leaves it held and journals it.
+    - **`suggested_fix` is a hypothesis.** Pass each finding's `id` and `suggested_fix` in `fix_context.review_feedback`; the implementer reproduces the finding (red), checks the suggestion against the state × event matrix, then fixes (task-implementer 1.3). Journal every `suggested_fix diverged` / `did not reproduce` note it returns.
+ 7. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
+    the `skill_drift` fields from task-implementer results and the
+diff --git a/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.detail.md b/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.detail.md
+new file mode 100644
+index 000000000..57172255c
+--- /dev/null
++++ b/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.detail.md
+@@ -0,0 +1,70 @@
++# Job Orchestrator - Reference Detail
++
++Reference material moved out of `SKILL.md` to keep it within its length ceiling:
++rationale, evidence and long examples. Nothing here is an instruction the agent must
++follow at a step; each section is linked from the spot in `SKILL.md` that used it.
++
++## Dry-run plan output example
++
++```
++Dry-run plan for: issue-4141--pipeline-validation
++━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
++Step 1: analyze          [issue-analyzer]           → input: issue #4141
++Step 2: context          [context-collector]        → input: analysis result, project_dir
++Step 3: prepare          [orchestrator]             → creates: feature/pipeline-validation worktree
++Step 4: tests-creator    [tests-creator × 3]        → RED stubs, one per task
++Step 5: implement        [task-implementer × 3]     → wave-parallel, 3 tasks
++Step 6: sanity-check     [orchestrator]             → verifies commits exist
++Step 7: verify           [code-verifier]            → lint + type-check + test + imports
++Step 8: review           [review-orchestrator]      → managed round, ingested
++Step 9: security         [security-audit]           → conditional: auth/API/DB/env files
++Step 10: fix             [task-implementer]         → conditional: if NEEDS_FIX
++Step 11: verify-post-fix [code-verifier]            → conditional: after fix
++Step 12: perf-check      [perf-check]               → conditional: frontend/bundle files
++Step 13: report          [orchestrator]             → aggregates all results
++Step 14: pr              [orchestrator + gh CLI]    → conditional: if create_pr
++Step 15: deploy          [deploy]                   → conditional: if user asks
++━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
++Estimated sub-agent calls: 11-14 (varies with tasks and review findings)
++No changes will be made. Use without --dry-run to execute.
++```
++
++## Post-mortem document template
++
++```markdown
++# Post-Mortem: <job-name>
++
++## Timeline
++(from .metaproject/jobs/<job-name>/journal.md — every line as recorded)
++- <ISO timestamp> - created
++- <ISO timestamp> - step: implement in-progress (retries 0)
++- <ISO timestamp> - step: implement in-progress (retries 1)
++- <ISO timestamp> - step: implement failed (retries 1) — <reason>
++
++## What Went Wrong
++- <Step name> failed with: <error class> — <error message>
++- Recorded retries: <metrics.steps[].retries>
++- Root cause hypothesis: <analysis>
++
++## What Worked
++- <N> tasks completed successfully
++- Context collection was accurate
++
++## Recommendations for Retry
++- Fix <specific issue> before re-running
++- Consider splitting task-3 into smaller subtasks
++```
++
++## Metrics table in the report
++
++**Aggregated in the report:**
++```markdown
++## Metrics
++| Step | Duration | Retries |
++|------|----------|---------|
++| Analyze | 45s | 0 |
++| Context | 30s | 0 |
++| Implement | 5m 22s | 1 |
++| Review | 1m 10s | 0 |
++| **Total** | **7m 47s** | **1** |
++```
+diff --git a/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md b/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+index feb0f0eb9..808374ea2 100644
+--- a/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+@@ -988,7 +988,8 @@ never-bundled `code-review` 4-agent skill — are gone. They emitted prose into
+ transcript and nothing else, which is precisely the failure the managed pipeline
+ replaced.
+ 
+-A pull request driven by this orchestrator has to pass the completion gate shipped in 0.2.71. Its conditions are what 2.6 and 2.7 are built to satisfy:
++A pull request driven by this orchestrator has to pass the completion gate shipped in
++0.2.71. Its conditions are what 2.6 and 2.7 are built to satisfy:
+ 
+ | Gate condition | Satisfied by |
+ |---|---|
+@@ -1134,9 +1135,17 @@ is_fix_round:      <true on any round after the first; the round, its range and
+ pr_comments:       { enabled: <true when a PR exists> }
+ ```
+ 
+-It emits the unified report AND the fenced ```json keryx:findings``` block, runs `review-verifier` (Wave C) and then `review-premise` (Wave D) over the consolidated findings, and returns the verification claims and the premise claims as file paths.
++It emits the unified report AND the fenced ```json keryx:findings``` block, runs
++`review-verifier` (Wave C) and then `review-premise` (Wave D) over the consolidated
++findings, and returns the verification claims and the premise claims as file paths.
+ 
+-**Step 7 — verification and the premise check are part of the round, not extras.** `review-orchestrator` dispatches `review-verifier` in Wave C over the consolidated findings. The verifier **runs something** and can only delete — it never raises a severity, adds a finding, or rewrites one, and it never verifies a finding raised by the same reviewer. After it, `review-premise` (Wave D) judges whether each finding is a defect at all: it can lower a severity or hold a finding for the operator, never add one. Both claim sets are merged by the CLI, not by hand.
++**Step 7 — verification and the premise check are part of the round, not extras.**
++`review-orchestrator` dispatches `review-verifier` in Wave C over the consolidated
++findings. The verifier **runs something** and can only delete — it never raises a
++severity, adds a finding, or rewrites one, and it never verifies a finding raised by the
++same reviewer. After it, `review-premise` (Wave D) judges whether each finding is a
++defect at all: it can lower a severity or hold a finding for the operator, never add
++one. Both claim sets are merged by the CLI, not by hand.
+ 
+ **Step 8 — ingest the round.** This is what makes it citable.
+ 
+@@ -1150,7 +1159,11 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
+   --spent <usd-so-far> --outstanding <subagents in flight>
+ ```
+ 
+-An unrecognised option is **refused, not ignored** — a silently dropped flag writes nothing and still reports success. `--refuted` carries findings this round raised and then dismissed; without it the package keeps only the survivors of an unlogged triage. Without `--premises` nothing is held, and a finding the judge challenged goes to the fixer.
++An unrecognised option is **refused, not ignored** — a silently dropped flag writes
++nothing and still reports success. `--refuted` carries findings this round raised and
++then dismissed; without it the package keeps only the survivors of an unlogged triage.
++Without `--premises` nothing is held, and a finding the judge challenged goes to the
++fixer.
+ 
+ **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
+ 
+@@ -1171,7 +1184,12 @@ OPEN      = blocker + major findings not in HELD
+ NEEDS_FIX = count(OPEN) > 0
+ ```
+ 
+-A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks the job until answered. Ask the operator about each one as `review-orchestrator` "Wave D" says; an upheld one rejoins OPEN at its severity (set `premise_verdict` on each `fix_context.review_feedback` item the judge ruled on, and `premise_answer: "uphold"` on a held one the operator upheld), a dismissed one carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report the HELD list; never let the loop end reading clean while HELD is non-empty.
++A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks
++the job until answered. Ask the operator about each one as `review-orchestrator` "Wave
++D" says; an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and
++`premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one
++carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report
++the HELD list; never let the loop end reading clean while HELD is non-empty.
+ 
+ **Document:** record the report in the job package too, so the job and the review
+ record point at each other:
+@@ -1254,16 +1272,22 @@ with evidence, not silence.
+ Only runs if NEEDS_FIX is true. Default max: **3 iterations** (`max_review_iterations`).
+ 
+ Three is the self-fix bound `task-implementer` and this skill share
+-(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to four repair iterations account for
+-most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
+-correctness falls **0.820 -> 0.673** across two forced revisions while
+-cumulative ever-correct is **0.847**
+-([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
++(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to
++four repair iterations account for most achievable gains"*
++([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
++**0.820 -> 0.673** across two forced revisions while cumulative ever-correct is
++**0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
+ hardcode the same bound (`max_reflections = 3`).
+ 
+-The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless of remaining iterations** — a counter cannot tell "converging slowly" from "stuck", and an agent emitting the identical failing output three times spends the whole budget before anything notices.
++The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless
++of remaining iterations** — a counter cannot tell "converging slowly" from "stuck", and
++an agent emitting the identical failing output three times spends the whole budget
++before anything notices.
+ 
+-**A finding leaves this loop by being dispositioned, never by being absent.** The previous version of this section recomputed "unresolved" as whatever the next round still reported — so a finding the next reviewer simply did not look at was recorded as fixed. That is absence-as-evidence, and the completion gate refuses it.
++**A finding leaves this loop by being dispositioned, never by being absent.** The
++previous version of this section recomputed "unresolved" as whatever the next round
++still reported — so a finding the next reviewer simply did not look at was recorded as
++fixed. That is absence-as-evidence, and the completion gate refuses it.
+ 
+ ```
+ UNRESOLVED_FINDINGS = OPEN from step 2.6          # never a HELD finding (Classify, 2.6.1)
+@@ -1927,28 +1951,8 @@ When `dry_run: true` is set (or `--dry-run` is passed):
+ 3. **Phase 2 is skipped entirely** — no sub-agents dispatched, no git operations
+ 4. **Output:** Full plan tree with agent names, input data shapes, dependencies:
+ 
+-```
+-Dry-run plan for: issue-4141--pipeline-validation
+-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-Step 1: analyze          [issue-analyzer]           → input: issue #4141
+-Step 2: context          [context-collector]        → input: analysis result, project_dir
+-Step 3: prepare          [orchestrator]             → creates: feature/pipeline-validation worktree
+-Step 4: tests-creator    [tests-creator × 3]        → RED stubs, one per task
+-Step 5: implement        [task-implementer × 3]     → wave-parallel, 3 tasks
+-Step 6: sanity-check     [orchestrator]             → verifies commits exist
+-Step 7: verify           [code-verifier]            → lint + type-check + test + imports
+-Step 8: review           [review-orchestrator]      → managed round, ingested
+-Step 9: security         [security-audit]           → conditional: auth/API/DB/env files
+-Step 10: fix             [task-implementer]         → conditional: if NEEDS_FIX
+-Step 11: verify-post-fix [code-verifier]            → conditional: after fix
+-Step 12: perf-check      [perf-check]               → conditional: frontend/bundle files
+-Step 13: report          [orchestrator]             → aggregates all results
+-Step 14: pr              [orchestrator + gh CLI]    → conditional: if create_pr
+-Step 15: deploy          [deploy]                   → conditional: if user asks
+-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-Estimated sub-agent calls: 11-14 (varies with tasks and review findings)
+-No changes will be made. Use without --dry-run to execute.
+-```
++The full plan tree (agent names, input shapes, dependencies, no changes made):
++`SKILL.detail.md`, "Dry-run plan output example".
+ 
+ 5. Ask user: "Execute this plan? (yes / adjust / abort)"
+ 
+@@ -2149,29 +2153,7 @@ When a job ends with a step recorded `failed`, or with unresolved blocker findin
+    off `journal.md`, which `keryx job` timestamped as the job ran, and the retry counts
+    come from `keryx job status <job-name> --json`:
+ 
+-```markdown
+-# Post-Mortem: <job-name>
+-
+-## Timeline
+-(from .metaproject/jobs/<job-name>/journal.md — every line as recorded)
+-- <ISO timestamp> - created
+-- <ISO timestamp> - step: implement in-progress (retries 0)
+-- <ISO timestamp> - step: implement in-progress (retries 1)
+-- <ISO timestamp> - step: implement failed (retries 1) — <reason>
+-
+-## What Went Wrong
+-- <Step name> failed with: <error class> — <error message>
+-- Recorded retries: <metrics.steps[].retries>
+-- Root cause hypothesis: <analysis>
+-
+-## What Worked
+-- <N> tasks completed successfully
+-- Context collection was accurate
+-
+-## Recommendations for Retry
+-- Fix <specific issue> before re-running
+-- Consider splitting task-3 into smaller subtasks
+-```
++Use the template in `SKILL.detail.md`, "Post-mortem document template".
+ 
+ 2. Save to `.metaproject/jobs/<job-name>/post-mortem.md`
+ 3. Include in final user message: "Post-mortem saved to `.metaproject/jobs/<job-name>/post-mortem.md`"
+@@ -2211,16 +2193,7 @@ terminal disposition.
+ keryx job status <job-name> --json     # `retries` per step, plus phase and next_step
+ ```
+ 
+-**Aggregated in the report:**
+-```markdown
+-## Metrics
+-| Step | Duration | Retries |
+-|------|----------|---------|
+-| Analyze | 45s | 0 |
+-| Context | 30s | 0 |
+-| Implement | 5m 22s | 1 |
+-| Review | 1m 10s | 0 |
+-| **Total** | **7m 47s** | **1** |
+-```
++**Aggregated in the report:** a per-step Duration/Retries table with a total row
++(`SKILL.detail.md`, "Metrics table in the report").
+ 
+ This data identifies which steps are bottlenecks and which ones needed a second attempt.
+diff --git a/src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md b/src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+index 5da6c47bd..c82b8a6be 100644
+--- a/src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
++++ b/src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+@@ -98,7 +98,7 @@ For a description-based task, omit `issue_number` and issue references in commit
+ 
+ ```
+ FIX_CONTEXT:
+-  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix); never a finding review-premise holds for the operator: an item with a held `premise_verdict` (challenged, owner-decision) and no `premise_answer: "uphold"` is refused, not fixed
++  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix); the one statement of the premise fields (flow 459): `premise_verdict` on each item review-premise judged, and `premise_answer: "uphold"` on a held one (challenged, owner-decision) the operator upheld; an item with a held `premise_verdict` and no `premise_answer: "uphold"` is refused, not fixed
+   original_task_ids:    the tasks that introduced the findings (array)
+   iteration:            fix iteration number, 1..3 — the same repair bound as 5.4
+ ```
+diff --git a/src/gdskills/bundled/skills/review/review-architecture/SKILL.md b/src/gdskills/bundled/skills/review/review-architecture/SKILL.md
+index 045ebc0d9..81a81e747 100644
+--- a/src/gdskills/bundled/skills/review/review-architecture/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-architecture/SKILL.md
+@@ -26,7 +26,7 @@ license: "MIT"
+ 
+ Specialized reviewer for **architectural patterns and structural decisions**.
+ Reviews only changes introduced in the current branch (merge-base to HEAD).
+-Focuses exclusively on verifiable structural violations — not style opinions or hypothetical concerns. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++Focuses exclusively on verifiable structural violations — not style opinions or hypothetical concerns. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ---
+ 
+@@ -66,7 +66,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ Review scope: **changes introduced in the current branch since merge-base only**.
+ Do not review pre-existing architectural problems unless they are directly touched by the diff.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-backend/SKILL.md b/src/gdskills/bundled/skills/review/review-backend/SKILL.md
+index 5fa1bf6b0..d3a6404e8 100644
+--- a/src/gdskills/bundled/skills/review/review-backend/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-backend/SKILL.md
+@@ -26,7 +26,7 @@ license: "MIT"
+ 
+ Focused backend reviewer covering NestJS patterns, REST API design, database access patterns,
+ and TypeScript correctness for service-layer code. This skill does NOT duplicate security or
+-performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ---
+ 
+@@ -65,7 +65,7 @@ Run that script to determine `BASE_SHA` before collecting the diff.
+ 
+ Only review files changed in scope. Do not comment on legacy code outside the diff.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-clean-code/SKILL.md b/src/gdskills/bundled/skills/review/review-clean-code/SKILL.md
+index 3b6b9d64d..5a8041849 100644
+--- a/src/gdskills/bundled/skills/review/review-clean-code/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-clean-code/SKILL.md
+@@ -27,7 +27,7 @@ license: "MIT"
+ # Review: Clean Code + SOLID
+ 
+ Specialized reviewer for **Clean Code principles** (Robert C. Martin) and **SOLID** at the
+-function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ The goal is not stylistic nitpicking — every finding here points to a concrete
+ maintainability, readability, or extensibility problem that will cause friction
+@@ -71,7 +71,7 @@ Review scope: **only code introduced or modified in this branch since merge-base
+ Pre-existing problems in unchanged lines are out of scope unless a change directly
+ worsens them.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-core-boundaries/SKILL.md b/src/gdskills/bundled/skills/review/review-core-boundaries/SKILL.md
+index f3c925a74..1730eba48 100644
+--- a/src/gdskills/bundled/skills/review/review-core-boundaries/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-core-boundaries/SKILL.md
+@@ -24,7 +24,7 @@ license: "MIT"
+ # Review — Core Boundaries
+ 
+ Reviewer for shared infrastructure modules. A core module should provide stable foundations
+-used by feature modules; it should not accumulate feature-specific behaviour. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++used by feature modules; it should not accumulate feature-specific behaviour. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ---
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-flow-graph/SKILL.md b/src/gdskills/bundled/skills/review/review-flow-graph/SKILL.md
+index 31ad8791a..6fe63faa8 100644
+--- a/src/gdskills/bundled/skills/review/review-flow-graph/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-flow-graph/SKILL.md
+@@ -24,7 +24,7 @@ license: "MIT"
+ # Review — Flow Graph Abstractions
+ 
+ Reviewer for reusable ReactFlow/graph integration layers. Use it when a repository has a shared
+-graph surface consumed by domain modules. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++graph surface consumed by domain modules. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ---
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-frontend-conventions/SKILL.md b/src/gdskills/bundled/skills/review/review-frontend-conventions/SKILL.md
+index bd7444489..958f13523 100644
+--- a/src/gdskills/bundled/skills/review/review-frontend-conventions/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-frontend-conventions/SKILL.md
+@@ -26,7 +26,7 @@ license: "MIT"
+ 
+ Reviewer for frontend repository conventions that are more specific than generic React/MobX
+ correctness. Use it alongside `review-frontend`, `review-style`, `review-performance`, and
+-`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ Before reviewing, read the nearest project guide files if they exist: root `CLAUDE.md`,
+ `AGENTS.md`, `.junie/guidelines.md`, `ARCHITECTURE.md`, and module-level `CLAUDE.md` files.
+diff --git a/src/gdskills/bundled/skills/review/review-frontend/SKILL.md b/src/gdskills/bundled/skills/review/review-frontend/SKILL.md
+index 70fb8b232..d736d265d 100644
+--- a/src/gdskills/bundled/skills/review/review-frontend/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-frontend/SKILL.md
+@@ -17,7 +17,7 @@ license: "MIT"
+ 
+ ## Purpose
+ 
+-Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ This skill consolidates what was previously split between `code-style-review` (frontend parts) and `code-mobx-store-review`. It supersedes both for frontend changes.
+ 
+@@ -93,7 +93,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ 
+ Run the script from that file to determine `MERGE_BASE` (`BASE_SHA`) and `SCOPE` before proceeding.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-highload/SKILL.md b/src/gdskills/bundled/skills/review/review-highload/SKILL.md
+index e189e854b..59081cff6 100644
+--- a/src/gdskills/bundled/skills/review/review-highload/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-highload/SKILL.md
+@@ -28,7 +28,7 @@ license: "MIT"
+ 
+ Specialized reviewer for **code that will run under significant concurrent load**.
+ Focuses on correctness under concurrency, resource contention, back-pressure, failure
+-modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ Reviews only changes introduced in the current branch (merge-base to HEAD).
+ 
+@@ -71,7 +71,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ Review scope: **changes introduced in the current branch since merge-base only**.
+ Pre-existing problems in unchanged lines are out of scope unless the diff makes them worse.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-logic/SKILL.md b/src/gdskills/bundled/skills/review/review-logic/SKILL.md
+index 9da3f7f9d..1f3bfacd2 100644
+--- a/src/gdskills/bundled/skills/review/review-logic/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-logic/SKILL.md
+@@ -27,7 +27,7 @@ license: "MIT"
+ 
+ Specialized reviewer for **logic correctness and algorithmic soundness**.
+ Inherits from the original `code-ai-review` + `code-learned-review` correctness phases
+-and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ This reviewer does not care about formatting, naming, or architecture opinions.
+ Every finding must describe an observable, reproducible defect or a spec gap.
+@@ -69,7 +69,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ Review scope: **changes introduced in the current branch since merge-base only**.
+ Do not review unrelated files.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+index e3ffcf601..f8d453e81 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ -663,9 +663,9 @@ certifies the flow is the one that checked the least.
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+-11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D").
++11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 
+-`keryx review complete` refuses status `completed` while any item fails. A failing item is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
++`keryx review complete` refuses status `completed` while any item fails. A failing item but `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+index ab0ba79ce..72e733616 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ -56,7 +56,7 @@ license: "MIT"
+ 6. `keryx review estimate --package <package>`. Over threshold, the operator confirms (card `review_confirm_plan`, or `keryx review confirm-plan --package <package>` in their terminal); `dispatch-check` and `ledger build` refuse an unconfirmed plan, so never dispatch one. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
+ 7. Dispatch by slice roles: each role gets the slices that name it; a deep slice names every roster role its path gates allow, an `audit` one the whole core set. A major or worse on a light slice comes back from `review next` as an `escalated` dispatch: dispatch the core roles on it.
+ 8. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context. After it (no verifier ran: after the last reviewer), Wave D: `review-premise` (Step 10b).
+-9. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest`, `readiness`, `complete`.
++9. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest` (with `--premises`), the operator's answer to each held finding (Wave D), `readiness`, `complete`.
+ 
+ ## Clean context — the round starts empty
+ 
+@@ -85,7 +85,7 @@ Review Orchestrator Progress:
+ - [ ] Step 9: Collect reviewer-finding schema results and handle NEEDS_CONTEXT
+ - [ ] Step 9b: `jev-triage` — advisory, annotate-only severity/duplicate/verify-order annotations over the consolidated findings (opt-in `review.jev.triage`)
+ - [ ] Step 10: Wave C — when blockers/majors exist, `--verify` is set, or the PR is high-risk, dispatch `review-verifier` on the first blocker/major without waiting for other reviewers, then once per later pass over the findings held at that point
+-- [ ] Step 10b: Wave D — after the last verifier pass (none ran: after the last reviewer), dispatch `review-premise` (deep tier) over the canonical findings of severity ≥ minor (delta round: only those without a carried premise); pass its claims with `review ingest --premises <file>`; ask the operator about each held finding (see "Wave D")
++- [ ] Step 10b: Wave D — after the last verifier pass (none ran: after the last reviewer), dispatch `review-premise` (deep tier) over the canonical findings of severity ≥ minor (delta round: only those without a carried premise); pass its claims with `review ingest --premises <file>`; once that ingest wrote `findings.json` (the tail), ask the operator about each held finding (see "Wave D")
+ - [ ] Step 11: Sort by severity, deduplicate, emit unified report
+ - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
+ - [ ] Step 13: Report the stage counts: dropped by pre-filter, refuted by the verifier, downgraded and held by the premise judge, retained
+@@ -107,7 +107,7 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` and `s
+ ## How to spawn (Steps 8 and 10)
+ 
+ - One `Agent` call per reviewer, all calls of a wave in a single message, so the wave runs in parallel.
+-- Reviewers are read-only: they read the diff and the files and run no command but the read-only history commands `git log`, `git blame` and `git show` (law 4; `review-premise` too). Only you (through `keryx review verify-run --timeout <seconds>`), the verifier and at most one testing reviewer run other commands, inside a time budget. Each payload carries `allowed_tools` (`read-only` or `run-tests`) and `exec_budget_s`.
++- Reviewers are read-only: they read the diff and the files and run no command, except the read-only history commands `git log`, `git blame` and `git show` (law 4; `review-premise` too) where the host gives a read-only child git. keryx shell does not: a `spawn_subagent` child has no shell and no git tool, so you run `git log -L <start>,<end>:<file>` and `git blame -L <start>,<end> <file>` for each deliberate-looking site a reviewer must judge and pass the output in `context_files`; with neither, the reviewer says the history was not read. Only you (through `keryx review verify-run --timeout <seconds>`), the verifier and at most one testing reviewer run other commands, inside a time budget. Each payload carries `allowed_tools` (`read-only` or `run-tests`) and `exec_budget_s`.
+ - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
+ - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract. On keryx shell the slices travel in `context_files` instead (below). Run `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` on every payload before a mass dispatch; it fails `REVIEWER_INPUT_PATH_MISSING` on a missing `skill_path` or `context_doc`.
+ - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`. The one exception: a reply or dispatch error of `STATUS: RATE_LIMITED` is handled by the Rate limits rule under Control, never marked `BLOCKED`.
+@@ -133,7 +133,7 @@ A reviewer starts in the project root and reads project files; a path outside th
+ - **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`, at most 300 seconds (`MAX_RETRY_AFTER_SECONDS`). After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+ - **Early verdict.** When every reviewer and the verifier are done, save every verifier pass to `research-evidence/verifications.json`, then run `keryx review verdict <package>` (it reads `<package>/raw`; the shared `.metaproject/data/review/raw` only when passed as `--raw`, which mixes in other rounds) and give the operator the verdict then; refuted findings are excluded only once `verifications.json` exists, held ones only once Wave D's claims are saved to `research-evidence/premises.json`. A verdict given before Wave D ran is provisional, and you say so: it counts as open the findings the judge may still hold or lower. The mutation pass, ledger and `keryx review complete` continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § "Early verdict").
+ - **Recovery.** After a timeout or crash: collect, validate, ingest, then dispatch only what is missing with `keryx review next --package <package>` (all reviewers at once). Never re-dispatch a wave whose results are on disk; after a second timeout of the same reviewer change the task (fewer slices, narrower focus), not only the diff size (`SKILL.detail.md` § "Recovery").
+-- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and `keryx review complete` has run. `completed` means `keryx review readiness` passed, or each failing item is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then run `keryx review complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
++- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and `keryx review complete` has run. `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then run `keryx review complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
+ 
+ ---
+ 
+@@ -1124,9 +1124,9 @@ Dispatch rules:
+ 
+ A finding can reproduce and still not be a defect: one against a timeline pinned LTR on purpose, as platform practice advises, passed the verifier because the `dir="ltr"` really was there. `review-premise` asks the other question, on the deep tier and a clean context: intent, accepted practice, consistency, fix soundness.
+ 
+-- Dispatch it once after the last verifier pass (no verifier ran: after the last reviewer), over the canonical findings of severity ≥ minor, each carrying `global_id`, the **real** `reviewer` and `source`; a claim's `finding_id` is the `global_id` whenever reviewer-local ids can collide (two reviewers' `F-001`), or the merge rejects it as `ambiguous-finding`. External (PR-comment, `source: external`) findings are included: they can be challenged, never downgraded. In a delta round only findings without a carried premise. Never with findings it raised.
++- Dispatch it once after the last verifier pass (no verifier ran: after the last reviewer), over the canonical findings of severity ≥ minor, each with its display `id`, the **real** `reviewer` and `source`, and, for a finding carried from an earlier round, its `global_id`. A new finding has no `global_id` yet (ingest mints `<reviewId>#<id>` after Wave D), and display ids must be unique in the package (ingest refuses two findings under one key): renumber a collision before dispatch. A claim names the `id`; it names the `global_id` only when a carried finding shares a new one's display id. External (PR-comment, `source: external`) findings are included: they can be challenged, never downgraded. In a delta round only findings without a carried premise. On keryx shell the judge has no shell and no git tool: run `git log -L` and `git blame -L` for each cited site first and pass the output in `context_files`.
+ - Save its claims object unchanged to `research-evidence/premises.json` (the verdict reads it there) and pass that file with `keryx review ingest --premises <file>`; never apply verdicts by hand. The merge is delete-only: `upheld` changes nothing, `downgraded` lowers the severity, and a claim that adds, raises or rewrites is rejected and listed in `scope.md`.
+-- `challenged` and `owner-decision` **hold** a finding: it is neither fixable nor clean — not an open blocker or major, never in a fix loop's `fix_context.review_feedback`, and it blocks until answered; the verdict lists it as awaiting the operator. **Asking about a held finding** (every skill that meets one points here): after `ingest --premises` wrote `findings.json`, in keryx shell call the card `review_decide_premise`, which records the answer; elsewhere put its `question` and `options` to the operator with the host's question tool, then give them the exact command to run in their own terminal, `keryx review decide-premise --package <package> --finding <global_id> --answer uphold|dismiss --reason "<why>"`, and wait. Never run it yourself (it needs a terminal) and never write their reason. In a flow, journal the recorded answer. Readiness and the flow review gate fail while a held finding has no decision. Unattended: leave it held and report it.
++- `challenged` and `owner-decision` **hold** a finding: it is neither fixable nor clean — not an open blocker or major, never in a fix loop's `fix_context.review_feedback`, and it blocks until answered; the verdict lists it as awaiting the operator. **Asking about a held finding** (every skill that meets one points here): at the tail, after `ingest --premises` wrote `findings.json` (never during Wave D, before the ingest: the answer commands read `findings.json`), in keryx shell call the card `review_decide_premise`, which records the answer; elsewhere put its `question` and `options` to the operator with the host's question tool, then give them the exact command to run in their own terminal, `keryx review decide-premise --package <package> --finding <global_id> --answer uphold|dismiss --reason "<why>"`, and wait. Never run it yourself (it needs a terminal) and never write their reason. In a flow, journal the recorded answer. Readiness and the flow review gate fail while a held finding has no decision. Unattended: leave it held and report it.
+ 
+ ### `verification_mode`
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json
+index 80b3f3a63..ebd09c71e 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json
+@@ -185,7 +185,7 @@
+       "type": "string",
+       "enum": ["read-only", "run-tests"],
+       "default": "read-only",
+-      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, and run no command but the read-only history commands `git log`, `git blame` and `git show` (shared law 4; the premise judge too). `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
++      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, and run no command, except the read-only history commands `git log`, `git blame` and `git show` (shared law 4; the premise judge too) where the host gives a read-only child git. On keryx shell a read-only child has no shell and no git tool: the parent passes `git log -L`/`git blame` output in `context_files`. `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
+     },
+     "exec_budget_s": {
+       "type": "integer",
+diff --git a/src/gdskills/bundled/skills/review/review-performance/SKILL.md b/src/gdskills/bundled/skills/review/review-performance/SKILL.md
+index d23f02a9c..febf1999a 100644
+--- a/src/gdskills/bundled/skills/review/review-performance/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-performance/SKILL.md
+@@ -21,7 +21,7 @@ license: "MIT"
+ 
+ ## Purpose
+ 
+-Finds real, code-level performance problems introduced in the changed code of the current branch. Covers N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++Finds real, code-level performance problems introduced in the changed code of the current branch. Covers N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ This skill focuses on **measurable or high-likelihood bottlenecks** only. Premature optimization, hypothetical slowness, and style preferences are out of scope.
+ 
+@@ -66,7 +66,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ 
+ Run the script from that file to determine `MERGE_BASE` (`BASE_SHA`) and `SCOPE` before proceeding.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md b/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md
+index 25b49b51c..d6f16a68f 100644
+--- a/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md
+@@ -363,7 +363,7 @@ Rules, and each one is a way this step goes wrong:
+ 6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
+    there is nothing to establish. It is still answered in Step 10, because the
+    reply pass requires a decision for every comment it sees.
+-7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `reviewer` its author, `source: external`, the comment text, its `file:line` refs and its URL. An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: record the judge's claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry. An upheld comment is planned and passed in `fix_context.review_feedback`, with `premise_verdict` set on each item the judge ruled on and `premise_answer: "uphold"` on a held one the operator upheld; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
++7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `url` its URL, `reviewer` its author, `source: external`, the comment text and its `file:line` refs (review-premise, `source` row). An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: save the claims object unchanged beside the durable record, as `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json`, apply the merge's refusals by hand (the same `source` row lists them), and record each claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry. An upheld comment is planned and passed in `fix_context.review_feedback`, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
+ 
+ ---
+ 
+@@ -525,7 +525,7 @@ branch on purpose.
+     "review: run review-orchestrator on every round, starting each round with `keryx review start` (or `keryx review plan`) on the new head: the round, its range and the prior findings come from `round.json`. No own range, no `--all` per round, no whole-branch re-review. The loop's exit threshold is the one your own PR review/fix loop defines; do not take it from this string.",
+     "review: the fix PR is its own conversation — collect and reply on IT as normal. The round MUST NOT run a reply pass against #<n>: a reply there writes the durable record, so the post-merge answer citing the merge SHA is skipped as already-handled and the reviewer is left holding a mid-loop answer that has since stopped being true.",
+     "attempt budget: at most <max_fix_rounds> review/fix attempts. This LOWERS your bound and never raises it; absent the value, your own bound stands. The `keryx review loop` repetition check applies either way. Do not raise anything to reach a clean round; escalate instead.",
+-    "scope: the plan items only. A finding outside them is recorded as follow-up, not fixed in this flow."
++    "scope: the plan items only. A finding outside them is recorded as follow-up, not fixed in this flow.", "premise: every plan item's comment was premise-checked in review-pr-feedback rule 7 and each held one answered by the operator (its Premise entry; claims in .metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json). The premise is recorded: do not run review-premise again before freeze."
+   ]
+ }
+ ```
+diff --git a/src/gdskills/bundled/skills/review/review-premise/SKILL.md b/src/gdskills/bundled/skills/review/review-premise/SKILL.md
+index 6978e3340..c4302d940 100644
+--- a/src/gdskills/bundled/skills/review/review-premise/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-premise/SKILL.md
+@@ -45,7 +45,7 @@ only the implementation. Asked "is this standard practice?", a model refuted it
+ 
+ ```
+ review-premise Progress:
+-- [ ] Step 1: Drop every finding you raised yourself, and every finding below `minor`
++- [ ] Step 1: Drop every finding below `minor`
+ - [ ] Step 2: Per finding, read only its bare claim (title, file, quote) and the code there; form a view
+ - [ ] Step 3: Collect intent signals at and around the site (see question 1)
+ - [ ] Step 4: Answer the four questions
+@@ -60,10 +60,10 @@ judgement on it; the claim and the code read first let you see what the reviewer
+ 
+ | Field | Type | Required | Description |
+ |-------|------|----------|-------------|
+-| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its `global_id` (your claim's `finding_id` whenever reviewer-local ids can collide) or id (a claim may name a key the duplicate merge absorbed; it then targets the surviving finding), `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
++| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its display `id`, unique in the package: your claim's `finding_id` (a claim may name an id the duplicate merge absorbed; it then targets the surviving finding). Only a finding carried from an earlier round also has a `global_id` (ingest mints the rest after you run); name it when that finding shares a new one's `id`. Each has `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
+ | `judge` | string | yes | Your own name. Recorded on the claims file. |
+-| `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the issue or comment URL as `id`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims as `<flow-dir>/premise/<n>.json` and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies the merge's rules (cited challenge, no downgrade of an external) by hand. |
+-| `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review. |
++| `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the comment's `C-NNN` (review-pr-feedback) or the issue's number as `id` with its URL as `url`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims beside its own record (a flow: `<flow-dir>/premise/<n>.json`) and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies every refusal of the merge (`PREMISE_REJECTION_REASONS`, `src/review/premise.ts`) by hand. For one finding those are: an uncited `challenged` or `downgraded`; a downgrade of an external or `review-security-code` finding, of a `minor`, or below `minor`; a hold without a `question`; an `owner-decision` with fewer than two options; a judge that raised the finding. |
++| `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review, where your host gives you git; on keryx shell the caller passes their output in `context_files`. |
+ 
+ ## The four questions
+ 
+@@ -90,7 +90,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
+ | Verdict | Meaning | Must carry |
+ |---|---|---|
+ | `upheld` | The premise stands; the finding goes on unchanged. | — |
+-| `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor` or an external finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
++| `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor`, an external or a `review-security-code` finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
+ | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
+ | `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
+ 
+@@ -109,7 +109,7 @@ signal and no practice source against it is upheld.
+ | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
+ | **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
+ | **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap or a surviving mutant stays as reported unless intent or practice shrinks it, and a minor is upheld or challenged, never downgraded. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
+-| **Read-only.** Run nothing but `git log`, `git blame` and `git show`, the history commands `allowed_tools: read-only` allows every reviewer, and read files. | Executing is the verifier's job; this judgement is about meaning. |
++| **Read-only.** Read files; run nothing but `git log`, `git blame` and `git show`, and those only where your host gives a read-only child git. On keryx shell you have no shell and no git tool: read the history excerpts in `context_files`, or say the history was not read. | Executing is the verifier's job; this judgement is about meaning. |
+ | **An external finding, and a `review-security-code` finding, is held or upheld, never dismissed or downgraded.** | A human asked; the operator answers them. Severity of a security finding measures exposure, which intent does not lower. The merge rejects the downgrade (`external-downgrade`, `security-downgrade`). |
+ 
+ ## Output Contract
+@@ -118,7 +118,7 @@ signal and no practice source against it is upheld.
+ STATUS: DONE | NEEDS_CONTEXT | BLOCKED
+ ```
+ 
+-- `DONE` — every finding given was judged or explicitly left alone (yours, below `minor`).
++- `DONE` — every finding given was judged or explicitly left alone (below `minor`).
+ - `NEEDS_CONTEXT` — the code at a finding's site cannot be read; say which.
+ - `BLOCKED` — the findings input is unreadable or carries no ids.
+ 
+@@ -132,7 +132,7 @@ Then one premise claims object. The orchestrator saves it unchanged as the file
+   "model": "<model id>",
+   "premises": [
+     {
+-      "finding_id": "2026-10-16-review-pr-42#LY-003",
++      "finding_id": "LY-003",
+       "verdict": "challenged",
+       "intent_signals": [
+         { "ref": "src/player/TimelineSlider.tsx:150", "says": "explicit dir=\"ltr\" on the timeline root" },
+diff --git a/src/gdskills/bundled/skills/review/review-regression/SKILL.md b/src/gdskills/bundled/skills/review/review-regression/SKILL.md
+index c9f9aa1cf..57722148f 100644
+--- a/src/gdskills/bundled/skills/review/review-regression/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-regression/SKILL.md
+@@ -22,7 +22,7 @@ license: "MIT"
+ # Review: Regression
+ 
+ You are reviewing **scope B** of a deep round. The files you are given are not
+-under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ## The one question
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-security-code/SKILL.md b/src/gdskills/bundled/skills/review/review-security-code/SKILL.md
+index fadbb4dbe..3050e8ec1 100644
+--- a/src/gdskills/bundled/skills/review/review-security-code/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-security-code/SKILL.md
+@@ -23,7 +23,7 @@ license: "MIT"
+ 
+ ## Purpose
+ 
+-Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ This skill covers **code-level security only**. It does NOT audit npm/bun dependency trees, Docker configurations, or deployment surfaces — use `security-audit` for those.
+ 
+@@ -67,7 +67,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ 
+ Run the script from that file to determine `MERGE_BASE` (`BASE_SHA`) and `SCOPE` before proceeding.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-style/SKILL.md b/src/gdskills/bundled/skills/review/review-style/SKILL.md
+index 93824eb31..cbd1c41a2 100644
+--- a/src/gdskills/bundled/skills/review/review-style/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-style/SKILL.md
+@@ -25,7 +25,7 @@ license: "MIT"
+ 
+ Focused style reviewer. Covers naming conventions, dead code, readability, DRY violations,
+ import organization, comment quality, file length, cyclomatic complexity, and console noise.
+-Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
++Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ---
+ 
+@@ -66,7 +66,7 @@ Run that script to determine `BASE_SHA` before collecting the diff.
+ 
+ Only review code changed in scope. Do not flag style issues in lines outside the diff.
+ 
+-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
++**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+diff --git a/src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md b/src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md
+index ee4f5ef74..43c303ead 100644
+--- a/src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md
+@@ -28,7 +28,7 @@ license: "MIT"
+ 
+ # Review — Testing Practices
+ 
+-Reviewer for local testing discipline. Read project test guides first when present, then apply the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs the tests only when its payload's `allowed_tools` says `run-tests`, within `exec_budget_s`; otherwise it runs no command but the read-only `git log`, `git blame` and `git show`.
++Reviewer for local testing discipline. Read project test guides first when present, then apply the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs the tests only when its payload's `allowed_tools` says `run-tests`, within `exec_budget_s`; otherwise it runs no command, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+ 
+ ---
+ 

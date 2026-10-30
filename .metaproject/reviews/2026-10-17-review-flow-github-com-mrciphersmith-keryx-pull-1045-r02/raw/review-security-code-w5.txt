@@ -1,0 +1,67 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-10 (completion-gate, coverage light recheck, dispatch-usage, ledger, locate, managed, mutate). The ledger's new scope-B screen closure matches a raw finding to a screened entry by reviewer + display id alone, so a finding reused under the same display id in another wave can be closed out-of-scope without being ingested. The new substring locator anchors on quotes of any length. The gate's session-name tracker trusts output lines from any tool call whose arguments mention `keryx review`. No injection, path traversal or command-injection defect found: git revisions pass assertGitRevision with --end-of-options, the active-review pointer is contained, the nudge flattens control characters and sanitises the review id.",
+  "slices": ["slice-10"],
+  "findings": [
+    {
+      "id": "SEC-R2-001",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+      "problem": "screenedAs closes a raw finding `out-of-scope` when ANY screened entry has the same reviewer and the same bare display id (`entry.reviewer === reviewer && entry.id === fid`). Display ids are per-reply, not per-reviewer: every wave restarts at F-001 (round 1 of this PR alone has review-logic-w3:F-001 and review-logic-w4:F-001, both major). The obligation id `oid` (`<raw stem>:<fid>`) is wave-specific, but the fallback match ignores the raw file. So when the consolidated report uses bare ids (the schema and DISPLAY_ID_FORM allow it), and wave 1's F-001 was screened by the scope-B floor while wave 3's different F-001 was never put into findings.json, wave 3's obligation is closed `out-of-scope` with wave 1's screen reason and evidence `research-evidence/ingest-screened.json`. That file never screened that finding.",
+      "impact": "Trigger: the same reviewer reuses a display id across two dispatches (waves). One finding is screened out by scope-B, and the orchestrator leaves the other out of the consolidated report. Outcome: `ledger build` reports rawReconciled with no gap, and the dropped finding (possibly a major or blocker) passes `review complete` unreported. The ledger obligations exist to catch exactly this. A record also points at a screen decision that was never made about this finding. The attacker here is the orchestrating agent, which the gate treats as untrusted: it can lose a finding with no disposition row, so nothing is left for the operator to see.",
+      "suggested_fix": "Match a screened entry to the raw dispatch it came from, never to the reviewer alone. Have ingest record the obligation id or the raw source on each IngestScreened entry (the canonical id in stem form is already `oid`), and match only `entry.id === oid || entry.global_id === <global id of this raw finding>`. If the bare-id fallback has to stay, use it only when exactly one raw file of that reviewer carries `fid`. When several raw files do, leave the obligation unresolved and let a disposition close it.",
+      "evidence": "src/review/ledger.ts:612-613 (screenedAs) and :635-638 (closure out-of-scope); src/review/managed.ts:686-691 screenedRecord writes `id: finding.id` (the consolidated display id) and `reviewer`, with no raw source; prior_findings.json shows per-wave id reuse (review-logic-w3:F-001, review-logic-w4:F-001, review-security-code-w1:SEC-001, review-security-code-w3:SEC-001).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:613"],
+        "enumeration_method": "keryx ctx rg -n \"screenedAs|ingestScreenedOf\\(\" src: one matcher (ledger.ts:612) and one call site (ledger.ts:635). The reader commands/review-ledger.ts:324 only loads the file. canonicalByReviewer (ledger.ts reviewer+id match) can fall back the same way, but it closes as `finding` linked to a canonical finding that exists, so the omission is still recorded there."
+      }
+    },
+    {
+      "id": "SEC-R2-002",
+      "severity": "minor",
+      "file": "src/review/locate.ts",
+      "quote": "const part = (needle[0] as string).trim();",
+      "problem": "The new `substring` pass places a one-line quote on any file line that contains it, with no minimum length. A quote of one token (`x`, `)`, `return`), or of whitespace around one token, becomes a `derived` anchor whenever it occurs on exactly one line, and findings.json records it as method `substring`. The locator's stated purpose (module header: a report is attacker-influenced data, and a wrong anchor is worse than an honest `unlocatable`) is weakened. A fabricated or careless finding now gets a derived line from a fragment that proves the reviewer read nothing.",
+      "impact": "The code behaves as documented. The cost falls on whoever trusts `locator.state: derived` as proof that the reviewer quoted real code, and on the readiness item `quotes-located`, which such a fragment passes.",
+      "suggested_fix": "Give the substring pass a floor, for example a minimum trimmed length (around 12 characters) or at least one identifier-like token plus one other character. Below the floor, return `unlocatable` with kind `absent` and a reason that says the quote is too short to anchor.",
+      "evidence": "src/review/locate.ts:233-244 (substring pass), findSubstring at :156-170; no minimum length on `quote` in reviewer-finding.schema.json or review-finding.schema.json (keryx ctx rg for MIN_QUOTE / minLength found none on quote).",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-R2-003",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "quote": "if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;",
+      "problem": "SessionReviewTracker treats as keryx's own output the result of ANY tool call whose arguments contain the words `keryx review`: a bash `grep \"keryx review\" …`, a `cat` of a log, or a read of a doc whose path or arguments say it. A `# managed review: <id>` or `path: …/.metaproject/reviews/<x>` line at the start of such output (PR content, fixtures and logs carry them) is then registered as named by the session. A matching old open package passes namedBySession and can take the gate (pickPackage / scanRoot). That is the misdirected-nudge shape flow 460 C fixed. Separately, namesToken matches a package whose manifest has no reviewId by its directory name, so a directory named like a subcommand (`start`, `status`, `review`) counts as named by every `keryx review` command. No path reaches outside cwd: `inside()` and the 8-root cap bound it, so the worst case is a nudge pointed at the wrong package.",
+      "impact": "No demonstrated path. Most tool wrappers prefix match lines (file:line, list markers), and that defeats the start-of-line anchor of OWN_OUTPUT_LINE. A raw `cat` or `head` of a file with these lines, run as part of a call whose arguments say `keryx review`, would settle it.",
+      "suggested_fix": "Recognise a call as a keryx review command only when the command itself starts with `keryx review` (after an optional `cd … &&`), not when the words appear anywhere in the arguments. Or have keryx print a nonce-tagged marker that the gate checks. When the manifest has no reviewId, skip the directory-name token fallback for names that are bare words.",
+      "evidence": "src/review/completion-gate.ts:106-111 (KERYX_REVIEW_COMMAND, OWN_OUTPUT_LINE), :158-174 (scan), :207-225 (namesToken / namedBySession with [manifest.reviewId, name]).",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+## Summary
+
+Slice-10 second look (security). I found 1 major, 1 minor and 1 info.
+
+- **SEC-R2-001 (major)** — `ledger.ts` `screenedAs`: a raw finding is closed `out-of-scope` whenever a screened entry has the same reviewer and bare display id. Waves reuse display ids, so a finding the orchestrator left out of findings.json can be closed by another wave's scope-B screen. The ledger then reconciles with no gap.
+- **SEC-R2-002 (minor)** — `locate.ts`: the substring pass has no minimum quote length, so a one-token fragment produces a `derived` anchor.
+- **SEC-R2-003 (info)** — `completion-gate.ts`: the session-name tracker trusts start-of-line output from any tool call whose arguments mention `keryx review`, and it matches packages with no reviewId by directory name. The impact is bounded to cwd: a misdirected nudge at most.
+
+Clean areas I checked: command and git argument injection (assertGitRevision plus `--end-of-options` in gitDiffAt; revisionOperand in gitObjectExists), path traversal (active-review pointer containment, lexicalRelativePath, the `inside()` root filter), nudge/prompt injection (displayId and nudgeLine flatten control characters and bound length), usage-line parsing (linear regex, bounded line length, counts capped), and the reviewer-override gate (overrideRecorded binds the decision to the head and to the left-out reviewers).
+
+Routing audit: graph_used: no (not-relevant: a bounded slice review), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

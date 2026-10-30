@@ -1,0 +1,65 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Slice-01 is mostly flow data, docs and skill text; the code in it is the agent.ts review-gate call, the ledger usage plumbing and the supporting sessionReviewRoots/dispatch-usage modules. One quadratic-regex stall on the stop path, one unbounded root fan-out, one forgeable-usage observation.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "for (const match of text.matchAll(REVIEW_PACKAGE_PATH)) {",
+      "problem": "sessionReviewRoots runs REVIEW_PACKAGE_PATH over every history message and every tool-call argument. The pattern starts with a lazy run of non-delimiter characters before the literal `.metaproject`, so at each start index it expands to the end of the current delimiter-free token. A token of length L with no `.metaproject/reviews` in it costs O(L^2). agent.ts now calls it from holdReviewGate on every stop attempt once a review run is seen.",
+      "impact": "A tool result holding one long delimiter-free token (base64 image or blob, long hash list, minified text with no quotes, whitespace, parens or semicolons) of about 100 KB costs billions of regex steps, a multi-second synchronous stall of the shell event loop on every stop attempt; 1 MB is minutes. Failure mode: the shell freezes at the point the review gate is meant to nudge, repeated per stop attempt because nothing is cached.",
+      "suggested_fix": "Do not scan with a lazy-prefix regex. Find each `.metaproject/reviews/` with indexOf and walk backwards over the allowed prefix characters (bounded, e.g. 512 chars). Skip messages without the substring. Optionally cache roots per history length so a stop attempt scans only new messages.",
+      "evidence": "src/review/completion-gate.ts REVIEW_PACKAGE_PATH is a regex with a lazy `[^\\s\"'`<>|;&()]*?` prefix before `\\.metaproject`; scan() is applied to message.content and call.arguments for the whole history; called at src/commands/agent.ts holdReviewGate (diff hunk @@ 3467,3507 @@). Not executed; derived from the pattern.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "class_scope": {
+        "sites": ["src/review/completion-gate.ts:43", "src/review/completion-gate.ts:56", "src/commands/agent.ts holdReviewGate call"],
+        "enumeration_method": "keryx ctx rg for sessionReviewRoots and REVIEW_PACKAGE_PATH in src (non-test): one definition, one use inside scan(), one caller"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const scanned = await scanRoot(root, since);",
+      "problem": "The extra roots come from every path in the session transcript that matches `.metaproject/reviews/`, with no cap. findReviewGateState scans each one in sequence (readdir plus a JSON.parse of every package manifest.json, plus resolveActiveReview), on every stop attempt, with no caching.",
+      "impact": "A tool result listing many projects (a find over a workspace of several hundred checkouts) turns each stop attempt into hundreds of sequential directory scans and file reads, a seconds-long stall at 100s of roots. Bounded by transcript content, not by request rate.",
+      "suggested_fix": "Cap extraRoots (e.g. the 8 most recently named), or restrict to roots that hold a manifest younger than `since`; cache the scan per (root, history length).",
+      "evidence": "sessionReviewRoots returns [...roots] unbounded; findReviewGateState loops over roots calling scanRoot for each.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/dispatch-usage.ts",
+      "line": null,
+      "quote": "usage = usageFrom(JSON.parse(match[1]!)) ?? usage;",
+      "problem": "The module says the host measured the usage and the reviewer cannot forge it, but the parser accepts a KERYX_USAGE line anywhere in the saved reply and the last one wins. A reviewer (or text it echoes from a reviewed diff) can end its reply with such a line and replace the host's count.",
+      "impact": "Only the spend figure in research.json and report.md can be wrong (understated or overstated); no gating decision reads it. Would be settled by anchoring on the final line only, or by a host-held nonce.",
+      "suggested_fix": "Accept only the last non-empty line of the file, and have the host write it after the reply is complete.",
+      "evidence": "dispatch-usage.ts USAGE_LINE is a /gm regex over the whole body; the header comment claims the line wins because the host measured it.",
+      "confidence": "low",
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+## High-Load Review (slice-01)
+
+Scope: slice-01 only. flow.json, journals, docs, schema and skill text have no load surface. Code reviewed: the agent.ts review-gate call and the review-ledger.ts usage plumbing, plus completion-gate.ts and dispatch-usage.ts for what they call. No load profile provided; this is a CLI/shell, so "load" means transcript size.
+
+- Concurrency and race: none detected (single process, no shared mutable state added).
+- Resource management: F-001 (quadratic scan), F-002 (unbounded roots).
+- Caching, database, queues, retries, idempotency: not applicable.
+- Info: F-003.
+
+Clean areas: ledger raw read (bounded per reviewer reply), packageHasMutationRecord (one readdir), usageTotals (linear).

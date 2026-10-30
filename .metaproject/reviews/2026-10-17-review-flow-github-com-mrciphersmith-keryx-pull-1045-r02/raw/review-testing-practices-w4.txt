@@ -1,0 +1,96 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "slice-04 (14 test files): no blocker or major. The mutation pass was NOT run (this dispatch is read-only, no run-tests); 8 mutant candidates are proposed, 0 executed. Six minor findings, one info.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "TP-001", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/review/completion-gate.test.ts", "line": 283,
+      "quote": "history.splice(0, history.length, reviewCall(\"c3\", \"keryx review status c/.metaproject/reviews/r\"));",
+      "problem": "The tracker test is titled 'scans only messages added since the last call, and starts over when the history is rewritten' but cannot tell an incremental scan from a full rescan, and reaches only one of the two reset conditions. The rewrite replaces a 2-message history by a 1-message one, so only the `history.length < this.cursor` arm of the reset in SessionReviewTracker.update fires; the `history[this.cursor - 1] !== this.last` arm (a rewritten history that is as long or longer) is never driven. A call-id pairing across two update() calls (tool call in one update, its `# managed review:` result in the next, via pendingCalls) is also not driven: every history entry in the test is a call with no result.",
+      "impact": "Deleting the identity arm of the reset, or clearing pendingCalls on each update, leaves this suite green; a compacted history that regrows past the old cursor would then keep stale names and drop result lines that arrive late.",
+      "suggested_fix": "Add a case that replaces the history with a different array of the same or larger length and expects the old roots gone; add one where update(history) sees the call and a later update(history+result) sees the tool result carrying the `path:` line, expecting the reviewId/path to be named.",
+      "evidence": "src/review/completion-gate.ts:137 `if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();` and :165 pendingCalls.delete pairing; test at completion-gate.test.ts:279-284 uses reviewCall only. Reasoned from code, mutation not run.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-002", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/review/completion-gate.test.ts", "line": 291,
+      "quote": "expect(performance.now() - started).toBeLessThan(1_000);",
+      "problem": "Linear-time guarantees are pinned with wall-clock thresholds: completion-gate.test.ts:291 (<1000 ms over ~1 MB of input) and ledger.test.ts:1106 (<500 ms over a 200 000-brace line). The inputs are big enough that a backtracking regex fails by orders of magnitude, so the signal is real, but the thresholds are absolute and run on shared CI in the full parallel suite.",
+      "impact": "A loaded runner or GC pause can push a correct linear scan over the bound and fail the lane intermittently; the repository's own rule is to wait on predicates, not on clocks.",
+      "suggested_fix": "Keep the hostile inputs but widen the bound by an order of magnitude (a quadratic scan of these inputs takes minutes, so 5-10 s still separates them), or compare the time against a doubled input and assert the ratio is near 2.",
+      "evidence": "Both sites quoted; class: wall-clock assertions in the diff (rg 'toBeLessThan\\((1_000|500)\\)' src/review: 2 sites).",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-003", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/review/completion-gate.test.ts", "line": 339,
+      "quote": "await new Promise((r) => setTimeout(r, 15));",
+      "problem": "A fixed 15 ms sleep orders two manifest mtimes (the closed package must be strictly newer than the live one) in the new 'a package closed under another named root' test. It waits for nothing observable; it relies on the filesystem mtime resolution and the clock tick being finer than 15 ms. The file already imports `utimes`, which sets the order deterministically.",
+      "impact": "On a coarse-mtime filesystem or a tick of 16 ms or more the two mtimes can tie and the test either passes without exercising the ordering it names or fails intermittently.",
+      "suggested_fix": "Drop the sleep and `await utimes(manifestPath, t0, t0)` / `utimes(otherManifest, t1, t1)` with explicit times, as the neighbouring tests do.",
+      "evidence": "pickPackage/collectPackages compare info.mtimeMs (completion-gate.ts:246,252,281); the existing setTimeout at completion-gate.test.ts:146 is the same shape and predates this PR, so the class has 2 sites (146, 339).",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-004", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/review/round-split.test.ts", "line": 536,
+      "quote": "expect(await bodyLines(path.join(pkg, \"slices\"), delta)).toBeLessThanOrEqual(await bodyLines(fullDir, full));",
+      "problem": "The test 'a delta slice never exceeds the round-1 slice of the same head' used to assert `delta.totals.bytes <= full.totals.bytes`; it now compares counts of diff lines after stripping every line matching /^--- / and /^@@ \\d+,\\d+ @@$/. The comment gives a sound reason (the fix/new cut repeats section headers), but the stripped pattern /^--- / also drops genuine removed diff lines whose content starts with `-- ` (SQL or Lua comments, YAML), and a line count no longer pins the byte size the test name and the slice budget are about: a regression that makes slices wider (long lines) but not longer passes.",
+      "impact": "The size bound is weaker than the title says, and the helper miscounts for diffs that remove `-- ` lines.",
+      "suggested_fix": "Keep the byte comparison and allow the known header overhead explicitly (delta.slices.length * header bytes), or count bytes of body lines only; anchor the header strip on the slice file's section structure rather than the raw `--- ` prefix.",
+      "evidence": "Diff hunk at round-split.test.ts:528-536 removes `expect(delta.totals.bytes).toBeLessThanOrEqual(full.totals.bytes)`.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-005", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/review/round-trip.test.ts", "line": 472,
+      "quote": "await expect(createManagedReviewPackage(input)).rejects.toThrow(\"it is a stub\");",
+      "problem": "'every recorded review package still ingests' now `continue`s past any recorded report whose text holds the placeholder and no `keryx:findings`, asserting a refusal instead. The guard keeps only `reports.length > 5`; nothing requires that any report still takes the ingest path. If recorded packages drift to stubs (or the heuristic is widened), the loop turns into a refusal check and the test name stays true while pinning nothing about ingest. The stub detector in the test is also a hand copy of the production heuristic ('No reviewer findings recorded yet.' plus absence of 'keryx:findings').",
+      "impact": "The legacy-ingest guard can be emptied without going red.",
+      "suggested_fix": "Count the packages that actually ingested and `expect(ingested).toBeGreaterThan(5)` after the loop; import the production stub predicate instead of copying its text.",
+      "evidence": "round-trip.test.ts:465-476 (loop with `continue`); existing non-vacuity guard is `expect(reports.length).toBeGreaterThan(5)`.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-006", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/review/round-split.test.ts", "line": 96,
+      "quote": "a pure deletion right after a fix hunk's line counts as in it (git records it at the line before)",
+      "problem": "The partitionRegionsByFix boundary rule is pinned from one side only: a deletion recorded at the hunk's own line is fix. There is no case for a deletion recorded one line past the hunk (must be other), nor for a deletion at the line before the hunk start. The rule is an off-by-one by construction and the side that would over-claim fix (and so hand a new-code deletion to the small fix roster) is untested.",
+      "impact": "Widening the deletion tolerance by one line, or making it two-sided, leaves the suite green and quietly routes unrelated deletions to the fix roster.",
+      "suggested_fix": "Add scoped(\"src/a/a.ts\", 11, \" l11\\n-gone\") and scoped(\"src/a/a.ts\", 9, \" l9\\n-gone\") expecting `fix` to be empty and `other` to hold the region.",
+      "evidence": "round-split.test.ts:96-99 shows only the positive case; hunks = [{startLine:10,endLine:10}].",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-007", "reviewer": "review-testing-practices", "severity": "info",
+      "file": "src/review/managed.test.ts", "line": 262,
+      "quote": "as unknown as BlastRadiusScreenInput,",
+      "problem": "The ingest-screened test builds its blast radius as a bare `{ files: [{path, hop}], changedFiles }` and casts through `unknown`, so the compiler cannot flag drift against the BlastRadiusScreenInput producer. (The `{ ...FULL_FINDING, reviewer: undefined } as unknown as StructuredReviewFinding` cast in the same file is deliberate invalid input and fine.)",
+      "impact": "If the producer renames `hop` or `changedFiles`, the screen sees no radius, screens nothing, and the assertion fails with a confusing 'expected 1 entry' rather than a type error.",
+      "suggested_fix": "Build the value with the producer's builder or type it without the double cast.",
+      "evidence": "Producer type not opened in this pass; what would settle it is comparing every field of BlastRadiusScreenInput in src/review/blast-radius.ts with the literal.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 6, "info": 1 },
+  "mutation_table": "NOT RUN. Dispatch is read-only (no run-tests in allowed_tools); no command was executed that could fail the suite. No mutation result is reported. Candidates proposed: 8; executed: 0; not reached: 8.",
+  "mutant_candidates": [
+    { "id": "M1", "file": "src/review/completion-gate.ts", "anchor": "if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();", "replacement": "if (history.length < this.cursor) this.reset();", "kind": "behavior" },
+    { "id": "M2", "file": "src/review/completion-gate.ts", "anchor": "if (info.mtimeMs < since && !namedBySession(named, dir, [manifest.reviewId, name])) continue;", "replacement": "if (info.mtimeMs < since) continue;", "kind": "behavior" },
+    { "id": "M3", "file": "src/review/completion-gate.ts", "anchor": "if (root !== cwd) remember(this.roots, root, MAX_SESSION_REVIEW_ROOTS);", "replacement": "remember(this.roots, root, MAX_SESSION_REVIEW_ROOTS);", "kind": "behavior" },
+    { "id": "M4", "file": "src/review/coverage.ts", "anchor": "if (!keep(value)) cache.delete(key);", "replacement": "", "kind": "behavior" },
+    { "id": "M5", "file": "src/review/coverage.ts", "anchor": "if (cache.size > GIT_CACHE_ENTRIES) cache.delete(cache.keys().next().value as string);", "replacement": "", "kind": "behavior" },
+    { "id": "M6", "file": "src/review/filter-stats.ts", "anchor": "merged_duplicates: input.duplicatesMerged ?? 0,", "replacement": "merged_duplicates: 0,", "kind": "behavior" },
+    { "id": "M7", "file": "src/review/managed.ts", "anchor": "if (status === \"complete\" && routedOut === true) entries.push(", "replacement": "if (false) entries.push(", "kind": "behavior" },
+    { "id": "M8", "file": "src/review/dispatch-check.ts", "anchor": "errors.push({ code: \"REVIEWER_INPUT_ID_FORM\"", "replacement": "void ({ code: \"REVIEWER_INPUT_ID_FORM\"", "kind": "behavior" }
+  ]
+}
+```
+
+## Summary
+
+Slice slice-04 (14 test files). No blocker or major. The mutation pass was skipped: the dispatch was read-only and ran no tests, so the table is empty (0 of 8 proposed mutants executed; nothing predicted is reported as a result). Findings: TP-001 tracker test cannot distinguish incremental from full rescan and misses one reset arm and cross-update call pairing; TP-002 wall-clock linear-time assertions (2 sites); TP-003 fixed 15 ms sleep ordering mtimes (2 sites, one new); TP-004 the delta-size bound was weakened from bytes to header-stripped line counts; TP-005 the legacy-ingest guard can `continue` past every package with no count of ingested ones; TP-006 the partitionRegionsByFix deletion boundary is pinned from one side; TP-007 (info) a double-cast fixture hides drift against its producer. Strengths: fix and new fixtures are built from real shapes (the #1045 round-1 numbers), negative cases accompany each new gate (forged output lines, out-of-cwd roots, near-substring is absent, conflicting verdicts cancel), and the dismissed-finding exemptions were re-pinned on an input that still refuses so they cannot pass vacuously.

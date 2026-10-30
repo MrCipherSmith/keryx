@@ -1,0 +1,85 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 05 is tidy and consistent with its neighbours; three minors (stale comments, import order) and two info observations, no major.",
+  "findings": [
+    {
+      "id": "STYLE-001",
+      "severity": "minor",
+      "file": "src/gdskills/model-tier.ts",
+      "line": null,
+      "quote": "3. floors — `blast-radius` and a forced strategy change raise to `deep` and",
+      "problem": "The assignTier doc comment enumerates the ordered rules and names only two floors (blast-radius, forced strategy change); the diff adds a third floor (premiseJudge -> deep, reason floor:premise-judge) in the same step without updating the comment.",
+      "impact": "The doc comment is the stated contract of the rule order ('the order is the substance'); a reader trusting it will not know the premise judge floors at deep.",
+      "suggested_fix": "Extend rule 3: 'floors - blast-radius, a forced strategy change and the premise judge (flow 459) raise to deep ...'.",
+      "evidence": "Diff hunk model-tier.ts @@1405 adds the floor; the doc block above assignTier (lines ~1378-1391) is unchanged.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STYLE-002",
+      "severity": "minor",
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "line": null,
+      "quote": "So this test hardcodes none of the law text. It derives the three laws from",
+      "problem": "The diff renames the describe/test titles and the canonicalLaws doc from 'three' to 'four/shared' laws, but the file header comments (lines 6, 12, 25) and an inline comment near line 288 ('can carry all three') still say 'three laws' / 'three things AC3 named'.",
+      "impact": "Half-updated wording: the file now contradicts itself about how many laws it checks.",
+      "suggested_fix": "Reword those comments to 'the shared laws' as the diff already did for the describe titles; sites: lines 6, 12, 25, 288.",
+      "evidence": "grep of 'three|fourth|third' in the file returned lines 6, 12, 25, 288, 295 (295 is an unrelated 'three lines').",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STYLE-003",
+      "severity": "minor",
+      "file": "src/flow/review-gate.test.ts",
+      "line": 21,
+      "quote": "import { runOperatorCommand } from \"../commands/review-operator\";",
+      "problem": "The two new parent-relative imports are placed after the sibling './service' import, interleaving '../' and './' imports; the file otherwise orders node builtins then local imports.",
+      "impact": "Minor import-organisation inconsistency; a project import sorter may already normalise it.",
+      "suggested_fix": "Place '../commands/review-operator' and '../review/operator-decisions' before the './' imports (parent-relative first).",
+      "evidence": "Diff hunk review-gate.test.ts @@1,49 and the import list at lines 14-45.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STYLE-004",
+      "severity": "info",
+      "file": "src/flow/review-gate.test.ts",
+      "line": null,
+      "quote": "findingVerdict(finding).terminal",
+      "problem": "The new tests write `(finding) => ...` while the surrounding file uses unparenthesised `round => ...`, `p => ...`. The HELD_PREMISE and heldFinding one-liners also run to ~200 columns.",
+      "impact": "Cosmetic inconsistency inside one file; a formatter owns it if configured.",
+      "suggested_fix": "Match the file's arrow-parameter style and wrap the long fixture lines if the formatter does not.",
+      "evidence": "Diff lines 67-70 versus 100, 112, 128 and 78-79.",
+      "confidence": "low",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STYLE-005",
+      "severity": "info",
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "line": null,
+      "quote": "// Plus `review-premise` (flow 459): a delete-only judge of findings' premises.",
+      "problem": "The skill-count comment is a growing 'Plus X (flow N)' changelog next to a literal 80; the 'all 67 shipped skills' comment further down is already stale.",
+      "impact": "Every new skill needs a comment line and a literal edit; narrative drifts from the number.",
+      "suggested_fix": "Out of scope for this PR; consider deriving the count or dropping the running history.",
+      "evidence": "Diff hunk bundled-eval.test.ts @@98 and @@1857 context line 'all 67 shipped skills'.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+Slice 05 is consistent and well commented. Minors: stale assignTier rule-list comment, half-updated "three laws" wording in the iron-laws test, import ordering. Info: arrow-style and long fixture lines, running skill-count comment.
+
+Stats: major 0, minor 3, info 2.

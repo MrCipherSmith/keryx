@@ -1,0 +1,199 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Round 2 architecture review of the fix delta (c144874f..90f0861ab). All 18 in-scope round-1 architecture findings are closed; the fix reuses one hold rule (premiseHoldState) across gate, verdict, readiness and the answer commands, authenticates the answer (confirmedVia, quote, subject), and separates gate kinds from the premise kind. Three new minors and four infos came from the delta; none is a blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/review/operator-decisions.ts",
+      "line": 24,
+      "problem": "The lock that serialises answerPremiseQuestion's read-modify-write of findings.json is named and scoped as the operator-decisions lock, and only the premise-answer path (premise-question.ts:120) and the decisions writers take it. The other writers of findings.json (the disposition recorder, src/review/managed.ts:1831, and the ingest write) do not.",
+      "impact": "A `review complete` or re-ingest that overlaps a decide-premise answer can still lose one of the two updates to findings.json, the lost-update shape the lock was added to remove; the header (operator-decisions.ts:14-16) says the overlap lands both.",
+      "suggested_fix": "Either take the same lock (or a findings lock) in the managed.ts disposition writer, or state in the lock's comment that it guards only decisions-file writers and the answer's findings.json write relies on no other writer running.",
+      "evidence": "operator-decisions.ts:24,140,189; premise-question.ts:120-141 (onRecorded writes findings.json under the lock); managed.ts:1831 writeFileAtomic(findingsPath) without it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/review/readiness.ts",
+      "line": 197,
+      "problem": "Readiness item 11 now reads its records through verdict.ts premiseRecords (verdict.ts:271), which before an ingest means raw reviewer results plus research-evidence/premises.json. The remedy it prints (decide-premise / review_decide_premise) cannot act there: findHeldFinding reads findings.json only (premise-question.ts:54) and refuses 'No finding'.",
+      "impact": "On a package with raw results and a challenged claim but no findings.json, `keryx review readiness` fails item 11 with an instruction that refuses; the operator is told to answer a question the answer command will not accept until ingest. Readiness also gains a dependency on the verdict module and re-reads findings.json and raw/ a second time.",
+      "suggested_fix": "Make the item-11 evidence say 'ingest with --premises first' when the package has no findings.json, or read premise records only once ingested.",
+      "evidence": "readiness.ts:22,197-207,337; verdict.ts:219-232 (ingested flag), 271; premise-question.ts:54-66.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/commands/review-operator.ts",
+      "line": 19,
+      "problem": "review-operator.ts imports the terminal sanitiser cardSafe from src/trigger/schedules.ts; operator-confirm-review.ts:29 already did. The review command layer now depends on the scheduler module for a text-cleaning helper, in two files.",
+      "impact": "A change to the scheduler module (or its move) breaks the review operator prompt and the card; the sanitiser's real owner is a shared lib, not the trigger layer.",
+      "suggested_fix": "Move cardSafe to a lib module (for example src/lib) and import it from there in schedules.ts, review-operator.ts and operator-confirm-review.ts.",
+      "evidence": "review-operator.ts:19; operator-confirm-review.ts:29; trigger/schedules.ts:410 (definition).",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/review/premise-question.ts",
+      "line": 82,
+      "problem": "premise-question.ts now holds four jobs: the held-finding lookup, the shown-finding digest, the cross-round carry (carryPremiseDecisions, :82) and the write-through of an answer (answerPremiseQuestion, :120). The carry copies only the decision and does not apply it to the new package's findings.json, unlike the answer path.",
+      "impact": "A carried dismissal is read by the gate and verdict through the decision, but readers that read findings.json alone (publish round block, prior-round carry) see the new round's record as unanswered unless the carried finding lives only in round.json. Not shown to fail; what would settle it is a round-3 test that publishes after a carried dismissal.",
+      "suggested_fix": "If a carried finding does reach the new findings.json, apply the decision there under the same lock; consider moving the carry next to prior-round.ts.",
+      "evidence": "premise-question.ts:82-118 versus :120-141; commands/review.ts:1100-1105 calls the carry once at package creation.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/review/premise-question.ts",
+      "line": 75,
+      "problem": "Two notions of 'the same finding as shown': premiseSubjectOf hashes the problem with whitespace collapsed (premise.ts, problemSha256), while HeldFinding.digest hashes severity, problem, verdict and question with only a trim. The digest already contains the subject's inputs.",
+      "impact": "A re-wrapped problem keeps a decision valid (subject) but refuses a pending card (digest); harmless today, a drift point if either changes.",
+      "suggested_fix": "Derive the digest from the subject plus question and answer, or state why they differ.",
+      "evidence": "premise-question.ts:75; premise.ts problemSha256 and premiseSubjectOf.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/commands/automatic-review.ts",
+      "line": 212,
+      "problem": "OPERATOR_ONLY_FILES names a class of operator-written package data but registers one member. plan-confirmation.json (written by confirm-plan, plan-confirmation.ts:77) is also operator-written and stays approvable for apply_patch.",
+      "impact": "Whether that matters depends on whether an automatic review ever needs the operator's plan confirmation; if it does, the same agent-writes-operator-answer shape applies. Not shown to be reachable.",
+      "suggested_fix": "Decide per file whether it is operator-only and register or document each; the test at automatic-review.test.ts pins only operator-decisions.json.",
+      "evidence": "automatic-review.ts:212,267-268; plan-confirmation.ts:77.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/review/operator-decisions.ts",
+      "line": 140,
+      "problem": "withOperatorDecisionsLock is exported but used only inside the module, and its doc says it is not re-entrant: a caller that wraps recordPremiseDecision or recordOperatorDecision in it deadlocks on the same lock directory.",
+      "impact": "A public non-re-entrant lock helper is a trap for the next caller; nobody calls it from outside today.",
+      "suggested_fix": "Drop the export, or make the recorders take an optional already-held flag.",
+      "evidence": "operator-decisions.ts:140; no other importer (rg over src).",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3,
+    "info": 4
+  },
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w4#ARCH-001",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts:92 validPremise now requires confirmedVia, quote and subject; src/flow/review-gate.ts:431 reads the hold through premiseHoldState over the decisions store only (premise.operator ignored, src/review/premise.ts:529); apply_patch on operator-decisions.json is refused at src/commands/automatic-review.ts:212."
+    },
+    {
+      "id": "review-architecture-w4#ARCH-002",
+      "disposition": "closed",
+      "evidence": "src/flow/review-gate.ts:431-434 premiseGateState delegates to premiseHoldState (premise.ts:529) via the holdRecord projection (review-gate.ts:414); one rule for verdict, readiness and gate."
+    },
+    {
+      "id": "review-architecture-w4#ARCH-003",
+      "disposition": "closed",
+      "evidence": "Both writers now call answerPremiseQuestion (src/commands/review-operator.ts:156, src/commands/operator-confirm-review.ts:625); the store fixes actor to PREMISE_DECISION_ACTOR (operator-decisions.ts:39) and validPremise (:92) requires the quote."
+    },
+    {
+      "id": "review-architecture-w5#ARCH-001",
+      "disposition": "closed",
+      "evidence": "task-implementer/input-contract.schema.json:182 adds premise_verdict/premise_answer with an if/then that refuses a held item lacking premise_answer uphold, so the boundary checks the rule; callers set the fields (flow-orchestrator, job-orchestrator, feature-dev)."
+    },
+    {
+      "id": "review-architecture-w5#ARCH-002",
+      "disposition": "closed",
+      "evidence": "src/gdskills/contracts/review-finding.schema.json:120 states the winner (finding severity; the decision store is the answer, premise.operator the audit trail); src/review/premise.ts:216 normaliseCarriedPremise aligns severity and strips operator at ingest."
+    },
+    {
+      "id": "review-architecture-w8#ARCH-1",
+      "disposition": "closed",
+      "evidence": "src/review/premise-question.ts:54 reads the hold from the finding record only; src/review/verdict.ts:219 applies premises.json to raw results only (ingested flag), so a claim the merge rejected no longer produces a card."
+    },
+    {
+      "id": "review-architecture-w8#ARCH-2",
+      "disposition": "closed",
+      "evidence": "premiseHoldState (premise.ts:529) and latestPremiseDecision are now the one owner: used by the gate (review-gate.ts:431), readiness (via verdict.ts:271 premiseRecords, readiness.ts:197), verdict classify and premise-question.ts:54; classify takes the decisions explicitly."
+    },
+    {
+      "id": "review-architecture-w8#ARCH-3",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts:27 OPERATOR_DECISION_KINDS is gate kinds only; PREMISE_DECISION_KIND is its own export; header (lines 1-14) names both record families."
+    },
+    {
+      "id": "review-architecture-w8#ARCH-4",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:366-367 split the merged set by finding.source, not by position."
+    },
+    {
+      "id": "review-architecture-w8#ARCH-6",
+      "disposition": "closed",
+      "evidence": "src/review/types.ts:417 PremiseOperatorAnswer is a Pick of PremiseQuestionDecision; PremiseSource is used (types.ts:702); PremiseSource vs ParsedPremiseClaims is raw input vs parsed, intentional."
+    },
+    {
+      "id": "review-architecture-w8#ARCH-7",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:2488 renderScope takes one ScopeExtras options object; the premise block is appended at the call site beside the duplicates block (managed.ts:~517)."
+    },
+    {
+      "id": "review-architecture-skills#F-001",
+      "disposition": "closed",
+      "evidence": "Law 4 and review-premise now allow the read-only history commands (review-orchestrator/SKILL.md:110 'review-premise too'; review-premise/SKILL.md:112 cites allowed_tools read-only), matching the reviewer skills' own wording (review-architecture/SKILL.md:29,69)."
+    },
+    {
+      "id": "review-architecture-skills#F-002",
+      "disposition": "closed",
+      "evidence": "review-orchestrator/SKILL.md:1127 passes global_id, the real reviewer and source and says finding_id is the global_id when ids can collide; review-premise/SKILL.md:63 Input Contract says the same."
+    },
+    {
+      "id": "review-architecture-skills#F-003",
+      "disposition": "closed",
+      "evidence": "review-premise/SKILL.md:93 and :113 state an external finding is never downgraded (hold with challenged/owner-decision); review-orchestrator Wave D line 1127 repeats it."
+    },
+    {
+      "id": "review-architecture-skills#F-004",
+      "disposition": "closed",
+      "evidence": "review-pr-feedback/SKILL.md:366 rule 7: an operator-dismissed comment takes verdict disagree, citing the recorded answer, answered in Step 10 with no code change."
+    },
+    {
+      "id": "review-architecture-skills#F-005",
+      "disposition": "closed",
+      "evidence": "review-orchestrator/SKILL.md:105 and :120 publish step-10b with step-0..14 and name 10b in the 'completed only after ingest' rule."
+    },
+    {
+      "id": "review-architecture-skills#F-006",
+      "disposition": "closed",
+      "evidence": "flow-orchestrator/SKILL.md section 'A flow sourced from a finding' states the sink (<flow-dir>/premise/<n>.json), passes source, and says the uncited-challenge and external rules are applied by hand; feature-dev Phase 1 points to it."
+    },
+    {
+      "id": "review-architecture-skills#F-007",
+      "disposition": "closed",
+      "evidence": "job-orchestrator/SKILL.md Classify now defines HELD/OPEN/NEEDS_FIX, an explicit 'IF HELD is non-empty when the loop ends' step, and the unattended stop-and-report wording; feature-dev and flow-orchestrator mirror it."
+    }
+  ]
+}
+```
+
+## Summary
+
+Prior: 18 closed, 0 open, 0 partial, 0 regressed (skipped by instruction: w8#ARCH-5 and the other owner-dismissed ids; review-logic-w8#LG8-005).
+New: 0 blocker, 0 major, 3 minor (lock scope vs findings.json writers; readiness item 11 pre-ingest remedy; cardSafe imported from the trigger layer), 4 info (premise-question.ts cohesion and carry application; digest vs subject hashing; OPERATOR_ONLY_FILES covers one file; exported non-re-entrant lock).
+Routing audit: graph_used no (graph stale, delta read directly), wiki_used not-relevant, ctx_used partial, raw_rg_used no (grep used with recorded reason: ctx rg hides match lines).

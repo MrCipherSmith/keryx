@@ -1,0 +1,15 @@
+STATUS: DONE
+
+```json keryx:findings
+{"reviewer":"review-architecture","status":"DONE","findings":[]}
+```
+
+## Architecture Review
+
+### Summary
+Slice-09 is almost entirely test files (dedupe, premise-decision, premise-embedded, premise, readiness, verdict) plus one roster entry in src/trigger/unattended.ts. The tests import only through existing module boundaries (premise.ts, operator-decisions.ts, managed.ts, readiness.ts, verdict.ts). The core roster adds `review_decide_premise` as a plain string, preserving the documented rule that core must not import a command module. The registry and the roster-parity test already reference it. No layer, dependency-direction, or boundary violations in this diff.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+All sections: None detected. Framework-specific: N/A.

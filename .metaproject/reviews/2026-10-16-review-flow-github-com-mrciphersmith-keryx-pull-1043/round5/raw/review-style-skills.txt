@@ -1,0 +1,33 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r4-review-style-skills#R4-001", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:452-454: precondition 3 is re-wrapped over three lines (84/74/30 cols) with a 3-space continuation, matching items 4 and 5 at :455-456."}
+  ],
+  "findings": [
+    {
+      "id": "R5-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": 363,
+      "problem": "The delta joins rule 6 (praise takes no verdict) from three hard-wrapped lines into one 214-column line with no change of content. Rules 4 and 5 directly above (:356-362) stay hard-wrapped at ~80 cols with a 3-space continuation. This is the same wrap-inconsistency class as the closed R4-001, on an unrelated line the delta had no reason to touch.",
+      "impact": "Whitespace-only churn in the diff, and the list now mixes wrapped (4,5) and unwrapped (6) items just after the round-4 fix made item 3 consistent.",
+      "suggested_fix": "Restore rule 6 to its origin/main hard-wrapped form (3-space continuation, ~80 cols), or leave it untouched.",
+      "source": "reviewer"
+    },
+    {
+      "id": "R5-002",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 1128,
+      "problem": "The split bullets read out of order: 'Before dispatch, renumber...' (:1127) follows the 'Dispatch it once...' bullet (:1126), and 'Its claims name the id...' (:1128) has no antecedent for 'Its' because the preceding bullet is about renumbering, not the judge.",
+      "impact": "A reader can take 'Its' to mean the renumbering or a finding; ordering puts the pre-dispatch action after the dispatch.",
+      "suggested_fix": "Place the renumber bullet before the dispatch bullet, and begin :1128 with 'The judge's claims name...'.",
+      "source": "reviewer"
+    }
+  ]
+}
+```
+
+Summary: round 5 skills delta. The one prior review-style finding (R4-001) is closed. The delta introduces one minor (unrelated re-flow of review-pr-feedback rule 6, same class as R4-001) and one info (bullet order and a dangling "Its" in review-orchestrator Wave D). The job-orchestrator line at :1165 is 85 cols and consistent with its block. No blockers or majors.

@@ -1,0 +1,97 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B over slice-08 (coverage.ts, dedupe.ts, managed.ts, operator-decisions.ts, premise-question.ts, premise.ts, readiness.ts, types.ts, verdict.ts, verification.ts). I walked the dependents of these files in the blast-radius set (prior-round.ts, publish.ts, review-gate.ts, ledger.ts, research.ts, wave-drivers.ts, review-panel.ts, reviews-inspector.ts, publish-guard.ts, bot/run.ts, loop.ts) and the consumers of every changed enumeration (OPERATOR_DECISION_KINDS, READINESS_ITEMS, NOT_ROSTER, InterimVerdict, ManagedReviewPackageResult). One regression: the PR adds a second place where a finding can be dismissed (the operator's premise answer in operator-decisions.json), and nothing writes it back to findings.json. The round-to-round carry and the published round block read status only from findings.json through round-record.ts findingStatus, so a finding the operator dismissed comes back as open in the next round. The flow review gate, readiness and the interim verdict all read the decisions store, so they are consistent with each other. Two scope-A notes are included below major, as the caller asked; the scope-B screen will reject them as non-regression-severity, and they belong under scope A. Radius limits: 40 files kept, 31 dropped by the cap, and 92 of the 131 changed files are unresolved non-code files (skills, schemas, docs). For those files the radius gives no answer, which is not the same as clean.",
+  "findings": [
+    {
+      "id": "RG8-001",
+      "severity": "major",
+      "file": "src/review/prior-round.ts",
+      "line": 241,
+      "quote": "status: findingStatus(raw),",
+      "problem": "A finding the operator dismissed through the new premise path (keryx review decide-premise / review_decide_premise -> recordPremiseDecision in src/review/operator-decisions.ts) is still read as `open` by the round-to-round carry and by the published round block. findingStatus (src/review/round-record.ts:81) takes status only from the findings.json record's disposition or verification. The premise answer is written only to operator-decisions.json: neither the CLI (src/commands/review-operator.ts:150) nor the card (src/commands/operator-confirm-review.ts:622) rewrites findings.json, and applyPremiseDecision (src/review/premise.ts) runs only in memory, inside the verdict, readiness and gate readers.",
+      "impact": "This breaks an invariant that held before the change: a dismissed finding is not carried as open. Trigger: round 1 has a finding the judge held; the operator answers dismiss; the author pushes a change to that finding's hunk; then `keryx review start` runs round 2. Outcome: priorFindingsOf gives the finding status `open`, and splitDelta (prior-round.ts:723, isOpenStatus) attaches it to a fix slice. fixSliceCoverage (round-split.ts) then wants a prior_disposition for it from every reviewer on that slice's roster, so the reviewers are asked again about a finding the operator already closed. round.json also records it as carried with disposition `open` (prior-round.ts:936). The same status goes into the published PR round block (publish.ts:137), so the PR says open about a finding the package dismissed. A held finding the operator has not answered also reads as plain `open`, so the carry cannot tell 'awaiting the operator' apart from 'unfixed'.",
+      "suggested_fix": "Give the carry one place to read the answer from. Option 1: make decide-premise / the card also rewrite findings.json with applyPremiseDecision (premise.operator plus the dismissed-incorrect disposition), so findingStatus sees it. Option 2: have findingStatus's callers (priorFindingsOf, buildRoundBlock) apply readPremiseDecisions(packageDir) through applyPremiseDecisions before reading status, the way review-gate.ts withPremiseAnswers already does, and map an awaiting hold to its own status (for example `held`) rather than `open`.",
+      "evidence": "src/review/round-record.ts:81-88: findingStatus reads disposition.state, then verification.verdict === 'refuted', then raw.status, and defaults to 'open'. It has no premise branch. src/review/prior-round.ts:224-247 (priorFindingsOf) calls it on each record of the previous package's findings.json. prior-round.ts:723 keeps only isOpenStatus findings and attaches them to fix hunks. prior-round.ts:936 carries `disposition: finding.status`. src/review/publish.ts:137 puts `status: findingStatus(raw)` into the round block. The recording paths, review-operator.ts:150 and operator-confirm-review.ts:622, call only recordPremiseDecision, which writes operator-decisions.json and nothing else (operator-decisions.ts recordPremiseDecision). The readers that do honour the answer all read the decisions store themselves: review-gate.ts:508 (withPremiseAnswers), readiness.ts:1733 in the slice (readPremiseDecisions), verdict.ts computeVerdict (applyPremiseDecisions). The graph path is prior-round.ts -> review-gate.ts (hop 1) and publish.ts -> readiness.ts (hop 1). Verdict: plausible. I traced this path by reading the code; I ran no test.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/review/prior-round.ts:241",
+          "src/review/prior-round.ts:723",
+          "src/review/prior-round.ts:936",
+          "src/review/publish.ts:137"
+        ],
+        "enumeration_method": "keryx ctx rg 'findingStatus|isOpenStatus' over src/review. findingStatus has two callers, prior-round.ts:241 and publish.ts:137, and both are in the blast-radius set. isOpenStatus/status are consumed downstream in prior-round.ts:723 (fix-hunk attachment) and :936 (carried disposition). round-split.ts:161 reads reviewer-given dispositions, not this status. review-gate.ts, readiness.ts and verdict.ts read readPremiseDecisions themselves, so they are not in the class."
+      }
+    },
+    {
+      "id": "RG8-002",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 440,
+      "quote": "export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string,",
+      "problem": "The new readiness item 11 `premise-decisions` can be waived through the generic readiness waiver (`keryx review complete --waive premise-decisions \"<quote>\"` or the review_waive_readiness card). waiveReadiness accepts any READINESS_ITEMS id, which contradicts premiseDecisionsCheck's own contract: \"The repair is the answer, not a waiver of the question.\"",
+      "impact": "Trigger: a PR review that is not attached to a flow has a held finding with no answer; the operator waives item 11. Outcome: computeReadiness returns READY, `keryx review complete` and `keryx review publish` go through, and the held question is never answered. The flow review gate (review-gate.ts:1446) still blocks for flows, so only flow-less rounds are affected. Scope A: this is about the changed file, not a regression in a dependent.",
+      "suggested_fix": "Refuse `premise-decisions` in waiveReadiness, and point to decide-premise / review_decide_premise as the repair. Or, if a waiver is meant to be possible, change the check's doc comment to say so.",
+      "evidence": "readiness.ts:445-449 maps every selector through readinessItemId with no exclusion list. Slice lines 1674-1688 hold the doc comment and the repair text, which name only the answer.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "RG8-003",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 4857,
+      "quote": "Print the ten-item checklist that gates `completed` and publishing",
+      "problem": "The PR adds readiness item 11 `premise-decisions` (readiness.ts READINESS_ITEMS), but the docs it also edits still describe ten items. docs/docs/cli-reference.md:4857 says \"ten-item checklist\". .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:654 says \"prints ten items\", and its numbered list stops at 10 (line 665). The bundled copy src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md has the same text.",
+      "impact": "An operator or orchestrator who sees `11 premise-decisions FAIL` finds no entry for it in the readiness section of the skill or the CLI reference. Scope A, docs only.",
+      "suggested_fix": "Change 'ten' to 'eleven' in both places, and add `11. premise-decisions — every held finding has an operator decision; repair with review_decide_premise / keryx review decide-premise` to both SKILL.detail.md copies.",
+      "evidence": "keryx ctx rg 'premise-decisions' over docs, src/gdskills and .metaproject/skills finds no match outside readiness.ts. git diff --name-only main...HEAD lists cli-reference.md and both SKILL.detail.md copies as changed by this PR.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [
+    "The ingest-versus-verdict split over research-evidence/premises.json, where premise-question.ts and verdict.ts read the claims file but readiness and the gate read only findings.json, is already reported by review-logic (LG8-001). I did not file it again here."
+  ],
+  "stats": {
+    "files_reviewed": 10,
+    "blast_radius_files_walked": 11,
+    "findings": 3,
+    "blocker": 0,
+    "major": 1,
+    "minor": 2,
+    "info": 0
+  }
+}
+```
+
+## review-regression (wave 8, slice-08): summary
+
+**Question:** does the premise-judge wiring in slice-08 break existing behaviour in its dependents?
+
+### [RG8-001] An operator's premise dismissal does not reach the next round or the PR round block (major, plausible)
+- **File**: src/review/prior-round.ts:241 (also :723, :936, and src/review/publish.ts:137)
+- **Problem**: `round-record.ts findingStatus` reads status only from findings.json. The operator's `dismiss` (recordPremiseDecision in operator-decisions.ts) is written only to operator-decisions.json, so a dismissed finding is carried as `open`, attached to a fix slice when its hunk changes, and published as `open`.
+- **Why it matters**: Before this change, a dismissed finding was never carried as open. Now reviewers are asked again about a finding the operator closed, round.json says it is open, and so does the PR round block.
+- **Fix**: Make decide-premise / the card write the applied decision into findings.json, or have priorFindingsOf and buildRoundBlock apply `readPremiseDecisions` as review-gate's `withPremiseAnswers` does.
+
+### [RG8-002] Readiness item 11 can be waived (minor, scope A)
+- **File**: src/review/readiness.ts:440. The generic `--waive` accepts `premise-decisions`, against the check's stated contract. Flow-less PR reviews can then publish with unanswered held questions.
+
+### [RG8-003] The docs still describe ten readiness items (minor, scope A, docs)
+- **File**: docs/docs/cli-reference.md:4857 and both review-orchestrator SKILL.detail.md copies (:654, :665).
+
+### Radius and coverage
+- Blast radius: 40 files kept (37 at hop 1, 3 at hop 2), 31 **dropped by the cap**, and 231 test consumers dropped. 92 of 131 changed files are **unresolved** non-code files (skills, schemas, docs). The radius cannot answer for them; that is not a clean result.
+- I checked the consumers of every changed enumeration and found no break: OPERATOR_DECISION_KINDS (the gate-relaxing `valid()` excludes premise-question; recordOperatorDecision now keeps premise entries), READINESS_ITEMS (waiver and selector paths are generic), NOT_ROSTER, and InterimVerdict / ManagedReviewPackageResult (the new required fields come from the only producers).
+- The flow review gate, readiness and the interim verdict all apply the decisions store. Only findings.json-only readers (findingStatus) fall behind.
+- RG8-002 and RG8-003 are below major. The scope-B screen will reject them as `non-regression-severity`; they are reported because the caller asked for every severity, and they belong under scope A.
+
+Routing audit: graph_used: yes (blast-radius.json from the package graph); wiki_used: not-relevant (the contract is in the code and skills); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

@@ -1,0 +1,60 @@
+STATUS: DONE
+
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "review-regression-skills#RG-001", "disposition": "closed", "evidence": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md:366 rule 7 no longer names decide-premise; it says no package exists and records the claim and the operator's answer on the Step 7 entry (**Premise**, line 390); precondition 3 (line 454) points at the entry. Residual: the record is the Step 7 entry, not the durable pr-comments JSON (see NEW-2)."},
+    {"id": "review-regression-skills#RG-002", "disposition": "partial", "evidence": "review-orchestrator/SKILL.md:1128 now saves claims to research-evidence/premises.json and the early-verdict bullet (line 134) reads them there, and line 1129 asks only after `ingest --premises` wrote findings.json; but ingest still runs in the tail after `review verdict` (line 59), and nothing says the operator question is asked at the tail, so Wave D (step 8) still reads as asking before ingest."},
+    {"id": "review-regression-skills#RG-004", "disposition": "closed", "evidence": "SKILL.md:110 and reviewer-input.schema.json allowed_tools description now allow git log/blame/show under read-only; review-regression/SKILL.md:25 and review-premise/SKILL.md Read-only row agree; same wording in review-logic:30 and review-style:28."},
+    {"id": "review-regression-skills#RG-005", "disposition": "closed", "evidence": "review-premise/SKILL.md verdict table (downgraded row: never for a minor or external) and Iron Laws row at line 113 (external-downgrade, security-downgrade) match src/review/premise.ts:320-345; the input table's findings row now says `source` per finding marks externals."},
+    {"id": "review-regression-w8#RG8-003", "disposition": "closed", "evidence": "docs/docs/cli-reference.md:4857 says eleven-item; review-orchestrator/SKILL.detail.md:654 says eleven and :666 lists `11. premise-decisions`; no 'ten items' text remains under src/gdskills/bundled/skills."}
+  ],
+  "findings": [
+    {
+      "id": "NEW-1",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 1127,
+      "quote": "each carrying `global_id`, the **real** `reviewer` and `source`; a claim's `finding_id` is the `global_id` whenever reviewer-local ids can collide",
+      "problem": "Wave D dispatches the judge before the tail `ingest`, but `global_id` is minted only at ingest (src/review/managed.ts assignGlobalIds, `<reviewId>#<id>`), and reviewer-finding.schema.json says a reviewer mints nothing. A new finding has no global_id at dispatch, and two reviewers' `F-001` would get the same minted key anyway, so the disambiguator the text relies on does not exist when ids collide.",
+      "impact": "The orchestrator cannot do what the bullet says in a round-1 collision; the claim is rejected as `ambiguous-finding` and the held finding is lost from the premise record (listed in scope.md only).",
+      "suggested_fix": "Say that global_id is present only on carried findings; for new findings the orchestrator gives the judge unique ids (reviewer-prefixed display ids in the payload) and the claim names that id, which claimTargets resolves through id or merged_from; or run Wave D after ingest.",
+      "evidence": "premise.ts:201-208 (claimTargets, 'judge runs before ingest'), managed.ts:1665-1672, reviewer-finding.schema.json:47.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "NEW-2",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": 366,
+      "quote": "`id` its collected `C-NNN`, `reviewer` its author, `source: external`",
+      "problem": "review-premise/SKILL.md:63 says that for `external-comment` the issue or comment URL is the finding `id`; pr-feedback rule 7 says `id` is `C-NNN` and the URL a separate field. The two contracts name different ids. Also the premise record lives only on the Step 7 entry, not in the durable pr-comments JSON that precondition 2 requires.",
+      "impact": "The judge's claim `finding_id` may not match the id the caller later looks up, and the held/answered state is not recoverable from the durable record after the chat entry is gone.",
+      "suggested_fix": "Make both say the same id (C-NNN, with the URL in a field) and say where the entry is persisted, or add a premise field to the pr-comments record.",
+      "evidence": "review-premise/SKILL.md:63; review-pr-feedback/SKILL.md:366,390,454.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "NEW-3",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
+      "line": 39,
+      "quote": "| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |",
+      "problem": "The delta adds a `step-10b` plan id to review-orchestrator (SKILL.md:105,120) but the plan-bridge rule table, which the skill cites, still lists only step-0..step-14, and session-plan-bridge-contract.test.ts:106 pins that literal.",
+      "impact": "A host or reader following the rule publishes 15 ids and treats `step-10b` as unknown, so Wave D's plan item may be missing or rejected; the rule and the skill disagree.",
+      "suggested_fix": "Update the rule row to name `step-10b` and the test expectation with it.",
+      "evidence": "session-plan-bridge.mdc:39; session-plan-bridge-contract.test.ts:106; SKILL.md:105.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ]
+}
+```
+
+Summary: 5 prior regression findings checked (owner-dismissed ids skipped): 4 closed, 1 partial (RG-002), 0 open, 0 regressed. New: 0 blocker, 0 major, 3 minor (global_id not available at Wave D dispatch; premise comment id and persistence mismatch; session-plan-bridge rule lacks step-10b), 0 info. The .metaproject copy matches the bundled skills for the changed files (diff -rq shows only unrelated .metaproject-only skills).

@@ -1,0 +1,121 @@
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 (spawn_subagent empty-reply outcome and KERYX_USAGE line, quote_unlocated schema and orchestrator docs, plan->ingest->fix->plan e2e test, ledger skip test) is logically sound: the empty-reply branch fires only on a clean Completed finish with no text, usage is summed once per provider request, and the new tests assert the intended behaviour. Findings are minor: a stale readiness item count, an ingest rule rewritten without the refusal that still exists, token spend that is lost or understated on the empty-reply and timeout paths while totals can read complete, plus two info observations.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "problem": "The diff adds item 12 `quotes-located` to the readiness list, but the sentence that introduces the list still says readiness prints eleven items. readiness.ts now defines twelve (`{ number: 12, id: \"quotes-located\", ... }`).",
+      "impact": "An orchestrator or operator reading the steering text expects eleven items and may treat the twelfth as unexpected or stop reading at eleven; the doc contradicts the CLI output.",
+      "suggested_fix": "Change \"prints eleven items\" to \"prints twelve items\" (or drop the count).",
+      "evidence": "SKILL.detail.md line 654 (head) says eleven; the same hunk adds `12. quotes-located`; src/review/readiness.ts:39 registers item 12.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "`review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA",
+      "problem": "The rewritten rule replaces \"refuses\" with \"keeps ... instead of refusing the round\" but drops the cases that still refuse. `refuseUnresolvedLocators` (src/review/managed.ts:1478-1505) still throws `Cannot ingest review` for an internal finding whose quote could not be checked at all: the head commit is not in the checkout, the finding quotes code but names no file, or a size bound stopped the match.",
+      "impact": "An orchestrator following SKILL.md expects ingest never to refuse over quotes, so when one of the remaining refusal cases fires it has no instruction for it and may treat the refusal as a tool fault instead of re-quoting or dismissing the finding.",
+      "suggested_fix": "Append the remaining refusal: \"It still refuses a quote it could not check at all (the commit is not in this checkout, no file named, or a size bound stopped the match); re-quote or dismiss that finding with evidence.\"",
+      "evidence": "src/review/managed.ts:1467-1477 doc comment: \"What still refuses is what could not be checked at all\"; the filter at 1486-1493 excludes only quote_unlocated/path_missing findings.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, `${partial}${usageSuffix()}`);",
+      "problem": "The usage line is written only where a file is saved, and only with what has been reported by then. (a) Timeout: `usageSuffix()` is evaluated when the deadline fires, before the in-flight request has emitted its `usage_update`, so the line understates that dispatch but is written as an ordinary known count. A timed-out child with no text writes no file at all. (b) The new empty-reply branch returns with no `saveChildResult` call, so the tokens that child spent are never recorded. `usageTotals` (src/review/ledger.ts:631) counts dispatches from the raw files, so an empty-reply dispatch is not counted as a dispatch and the totals can report `complete: true` (\"token spend: X over N dispatch(es)\") while omitting it.",
+      "impact": "The review's stated spend, which the flow adds so cost can be stated (H), is silently low on the two failure paths most likely to burn tokens (timeouts, empty replies that are then re-dispatched), and it is labelled complete rather than a lower bound.",
+      "suggested_fix": "On the empty-reply path, when save_result_to is set and usage is known, write the usage line (or a usage-only sidecar the ledger counts as a dispatch with an empty body). On the timeout path, mark the line as partial (for example `\"partial\":true`) and have usageTotals treat a partial dispatch as making the totals a lower bound.",
+      "evidence": "spawn-subagent-tool.ts timeout branch (head ~2244) and the empty-reply branch (~2316-2335) that returns before the save at ~2363; dispatch-usage.ts usageTotals sets complete when every counted usage is known; ledger.ts:631 builds totals from raws.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "The `turnResult?.submittedResult === undefined` clause cannot be false while `status === \"Completed\"`: `submittedResult` is set only by the budget wrap-up (`finishWithSubmitResult`, src/commands/agent.ts:3452-3471), whose finishReason maps to a non-Completed status. The clause is dead but harmless.",
+      "impact": "None today. A reader could take it to mean a clean Completed finish can carry a submitted result.",
+      "suggested_fix": "Drop the clause or comment that it is defensive against a future path that sets submittedResult on a clean finish.",
+      "evidence": "Searched submittedResult in src/commands/agent.ts: the only writer is line 3469, inside the budget-stop return.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-005",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "\"treat the task as not done and re-dispatch it.\",",
+      "problem": "The empty-reply branch writes nothing to `save_result_to`. If a file already exists at that path from an earlier dispatch of the same reviewer, it stays, and the orchestrator contract says the file, not the tool output, is the result. Whether a re-dispatch reuses the same raw path was not established from this slice.",
+      "impact": "If a re-dispatch reuses the path, ledger/retry-plan would parse the earlier reply as this dispatch's result. Not shown reachable.",
+      "suggested_fix": "Settle it: if retries reuse the path, remove or rename the existing file on an empty reply (as saveTimedOutPartial avoids overwriting a complete result, the empty case should not leave a prior one looking current).",
+      "evidence": "saveChildResult is called only on the post-status path; the empty-reply branch returns earlier.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `fix/review-gate-consistency` (PR #1045), head dff7a38a1
+- Slice: slice-02 (review-ledger.test.ts, review-plan.test.ts, orchestrator SKILL.md / SKILL.detail.md, review-finding.schema.json, spawn-subagent-tool.ts and its test)
+- Scope mode: supplied slice diff
+- Spec compliance gate: ran against flow 460 description (E empty child reply, G ingest keeps unplaced quotes, H per-dispatch token use, B override counts without dispatch field). The slice's parts of E, G, H and B are implemented; no criterion gap found in this slice.
+
+### Summary
+The empty-reply branch correctly turns a clean finish with no text into an Error outcome and a `failed` fleet event. Token use is summed once per provider `usage_update` (one per request in every adapter) and appended as a `KERYX_USAGE` line that `splitUsage` strips before parsing. The e2e plan, ingest, fix, plan test exercises the real steps and asserts the delta round. Remaining issues are documentation drift and an understated spend figure on failure paths.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 2
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+- F-001 (minor) SKILL.detail.md still says readiness prints eleven items after adding item 12.
+- F-002 (minor) SKILL.md ingest rule drops the cases where ingest still refuses (quote not checkable).
+- F-004 (info) `submittedResult === undefined` clause unreachable under `status === "Completed"`.
+
+### Async & Concurrency
+- F-003 (minor) timeout writes the usage line before the in-flight request reports usage; the empty-reply path records no usage. Totals can read complete while low.
+
+### Error Handling
+- F-005 (info) empty-reply path leaves any earlier file at `save_result_to` in place; reachability not established.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+Covered under F-003.
+
+### Routing audit
+- graph_used: no (not-relevant: bounded slice review, callers read directly)
+- wiki_used: no (not-relevant: intent supplied by flow description)
+- ctx_used: yes (keryx ctx rg / read)
+- raw_rg_used: no

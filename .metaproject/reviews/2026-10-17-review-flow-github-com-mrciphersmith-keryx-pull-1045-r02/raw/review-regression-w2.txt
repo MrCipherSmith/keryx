@@ -1,0 +1,79 @@
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check of slice-02 (kind new) at head 375279e78: schema/doc/flow-record edits plus test moves for flow 460 L5/L6. One major: moving the plan -> ingest -> fix -> plan sequence out of src/commands/review-plan.test.ts into the new src/commands/review-plan.e2e.test.ts leaves frozen AC6's exec check running only the old file, so the AC confirms without the test it names. One minor: the CLI reference prose still says quote matching stops after the whitespace pass, which this slice's schema change (locator method `substring`) contradicts. One info about the over-threshold plan approved in chat but not recorded in the package.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "RG-001",
+      "severity": "major",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "line": 366,
+      "quote": "\"check\": \"bun test src/review/managed.test.ts src/commands/review-plan.test.ts\"",
+      "problem": "Slice-02 moves the AC6 sequence test (`plan -> ingest with an unplaceable quote -> fix commit -> plan`) and the new L6 fix-roster test out of src/commands/review-plan.test.ts into the new file src/commands/review-plan.e2e.test.ts. Frozen AC6 (acceptance-criteria.md:21, \"Tests including the plan → ingest → fix → plan sequence\") still verifies with `bun test src/review/managed.test.ts src/commands/review-plan.test.ts`. That path does not match review-plan.e2e.test.ts, either as an exact file or as a bun path-substring filter, so the AC's exec check no longer runs the test it was frozen for.",
+      "impact": "Trigger: `keryx flow ac confirm 460 AC6` (or the flow gate) runs the recorded check. Outcome: it passes with only the faked-step tests in review-plan.test.ts, so the confirmation evidence never runs the end-to-end sequence AC6 requires. A regression in the G path (round recorded despite an unplaced quote, delta round 2 planned with a fix slice) would still let AC6 confirm green. CI's test:core (`bun test ... src/commands/`) still runs the e2e file, so this is a gap in the flow's evidence, not in CI.",
+      "suggested_fix": "Add src/commands/review-plan.e2e.test.ts to AC6's verify command through `keryx flow ac update 460 AC6` (the AC file is checksum-frozen; do not hand-edit it). Example: `bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts`. Or keep the sequence test in review-plan.test.ts.",
+      "evidence": "flow.json:364-367 acKinds.AC6.check; acceptance-criteria.md:21 `[verify: exec \\`bun test src/review/managed.test.ts src/commands/review-plan.test.ts\\`]`; slice-02 removes the describe block from review-plan.test.ts (diff lines 1033-1124) and adds it with the L6 test to review-plan.e2e.test.ts (diff lines 830-970). package.json test:core includes src/commands/, so CI still runs it.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json:366",
+          ".metaproject/flows/460-2026-10-17-review-gate-consistency/acceptance-criteria.md:21"
+        ],
+        "enumeration_method": "keryx ctx rg for 'review-plan.test.ts' and 'AC6' over the flow 460 directory: these are the only places that name the moved file as verification. AC1-AC5 and AC7 name files this slice does not move (coverage/readiness/complete-coverage-gate/completion-gate/spawn-subagent-tool/ledger/managed tests)."
+      }
+    },
+    {
+      "id": "RG-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 6674,
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops — nothing",
+      "problem": "Slice-02 updates review-finding.schema.json (both copies) so the quote description and the `locator.method` enum include a third pass, `substring`: a one-line quote that is an exact substring of exactly one line. src/review/locate.ts:235-243 implements it. The CLI reference's \"A finding points at the code it quotes\" section still says matching stops after the whitespace pass, and its outcome table does not mention the substring method.",
+      "impact": "A reader of the CLI reference (an operator or a reviewer choosing what to quote) is told that a partial-line quote cannot be placed. Placement now accepts it, and a finding's `locator.method: substring` is undocumented there. Documentation only; no runtime path changes.",
+      "suggested_fix": "Change the sentence to \"exact first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops: nothing fuzzy\". In the `derived` row, mention that `locator.method` records which pass placed it.",
+      "evidence": "slice-02 diff lines 23-24 and 35-36 (schema description and enum); docs/docs/cli-reference.md:6674-6675 at 375279e78; src/review/locate.ts:17-18, 233-243.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["docs/docs/cli-reference.md:6674"],
+        "enumeration_method": "keryx ctx rg 'then it stops|whitespace-normalised' over docs, src and .metaproject skills/core: the only prose statement of the matcher order that lacks the substring pass. The schema copies and the locate.ts header already mention it."
+      }
+    },
+    {
+      "id": "RG-003",
+      "severity": "info",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+      "line": 27,
+      "quote": "The package's plan confirmation stays unrecorded in keryx.",
+      "problem": "The journal records that this round's plan (55 dispatches, over the 40 threshold) was approved in chat and that the package's plan confirmation stays unrecorded. The CLI reference (docs/docs/cli-reference.md:4887) says `dispatch-check` and `ledger` refuse an over-threshold plan until the operator confirms it.",
+      "impact": "Observation, not a code regression. `keryx review ledger build` for this r02 package can be expected to refuse on the unconfirmed plan, or need a waiver, so round 2 will not close through the normal gate as the flow's outcome criterion (\"раунд 2 планируется как delta автоматически\") implies. To settle it, run `keryx review ledger build` on the r02 package and see whether it refuses on plan confirmation.",
+      "suggested_fix": "Record the confirmation through the supported path when an operator terminal is available (`keryx review confirm-plan`), or note the expected ledger refusal and its waiver in the round report, so the package does not claim a confirmation it lacks.",
+      "evidence": "journal.md:27 at 375279e78; docs/docs/cli-reference.md:4887 (`estimate` row).",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+Summary
+
+- Slice reviewed: slice-02 (kind new), at head 375279e781f0. It covers the review-finding schema (locator `substring`), flow 460's flow.json and journal, the review-orchestrator and review-premise skill docs, the CLI reference and guide, the managed-review-package schema (`merged_duplicates`), and tests (agent-review-gate, review-ledger, review-plan split into review-plan.e2e, review-premises-cli, review-slice).
+- Blast radius: the record caps at 40 files and dropped 384, mostly test consumers marked "run it, it is not read". 13 changed files are unresolved because they are not graph nodes. That includes every schema, flow and doc file in this slice, so for most of slice-02 the radius could not answer the question. I checked the dependents by hand instead:
+  - locator.method consumers: src/review/types.ts:633 and src/review/managed.ts:1430 accept `substring`.
+  - Both review-finding.schema.json copies are byte-identical, and so are the installed and bundled skill copies.
+  - filter_stats readers and renderers handle a missing `merged_duplicates` as 0. No existing findings.json holds a `#` display id, so the new ledger refusal does not break a recorded package.
+  - The `--premises` usage lines match src/commands/review.ts help.
+  - The fix roster in the docs matches src/review/round-split.ts.
+  - The agent-review-gate fixture change fits the AC3 rule that an older package counts only when the session names it. Production stamps `ts` on user messages, so `since` is the session start.
+- Regressions found:
+  - RG-001 (major): AC6's frozen verify command no longer runs the moved end-to-end sequence test. CI still runs it through test:core.
+  - RG-002 (minor): the CLI reference prose about quote matching is stale.
+  - RG-003 (info): process observation about the unrecorded plan confirmation.

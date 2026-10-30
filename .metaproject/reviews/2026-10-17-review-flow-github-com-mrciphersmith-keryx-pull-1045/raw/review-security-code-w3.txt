@@ -1,0 +1,110 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Security review of slice-04 (completion-gate, coverage diff recomputation, dispatch-usage, ledger, locate, managed ingest, mutate, readiness, research, types, test helpers). One major: the new REVIEW_PACKAGE_PATH regex runs an unbounded lazy prefix over every message of the session history, which is quadratic on long whitespace-free tokens that attacker-controlled PR content can put into tool results. One minor: roots harvested from untrusted tool-result text widen the gate's package search, and a closed package under any such root can release the gate. Three info notes. Git argument handling, active-review pointer containment and the operator-decision binding were checked and are sound.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "major",
+      "reviewer": "review-security-code",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\\s\"'`<>|;&()]*?)\\.metaproject[\\\\/]reviews[\\\\/]([^\\\\/\\s\"'`<>|;&()]+)/g;",
+      "problem": "sessionReviewRoots runs REVIEW_PACKAGE_PATH with matchAll over the content of every history message and every tool-call argument. The pattern opens with an unanchored lazy class `[^\\s\"'`<>|;&()]*?` that must be followed by the literal `.metaproject`. On a run of L characters with no whitespace/quote/delimiter and no `.metaproject`, every start position scans forward to the end of the run before failing, so one scan costs O(L^2). Attack vector: the author of the PR under review adds a long unbroken token (a minified bundle, a base64 fixture, a single-line JSON/SVG with no spaces or quotes, a long URL) to a file in the PR; the reviewing agent reads the diff or the file, the tool result is pushed into `history`, and from then on holdReviewGate (src/commands/agent.ts:3487) calls sessionReviewRoots(history, process.cwd()) on every turn end of a session that has run `keryx review ...`. A 100 KB token is ~5e9 regex steps, a 1 MB token ~5e11, repeated at each stop and up to MAX_REVIEW_GATE_CONTINUES times.",
+      "impact": "The interactive keryx shell stalls (CPU-bound, synchronous regex on the main loop) at every stop of a review session whose transcript holds such a token, i.e. a denial of service triggered by content of the PR being reviewed. Major rather than blocker: whether a token that long reaches history unbroken depends on tool-result size limits this diff does not establish; the quadratic shape itself is in the code.",
+      "suggested_fix": "Do not scan with an unbounded lazy prefix. Find each occurrence with indexOf('.metaproject/reviews/') (and the backslash form), then walk backwards to the nearest delimiter to recover the prefix, which is linear. Alternatively cap the prefix (`{0,1024}?`) and skip messages longer than a fixed bound, or scan only toolCalls arguments and the outputs of `keryx review start|attach` instead of all message content. Add a test with a 1 MB unbroken token asserting the scan finishes under a time bound.",
+      "evidence": "src/review/completion-gate.ts:43 (pattern), :61-64 (scan over every message.content and call.arguments), src/commands/agent.ts:3487 (called on each stop when reviewRunSeenInHistory is true). Complexity follows from the pattern: the only fixed text is after the lazy class, so a failing start position consumes the whole delimiter-free run. Not measured here (read-only review); a one-line bun timing of matchAll over 'a'.repeat(200000) would settle the magnitude.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": ["src/review/completion-gate.ts:43"],
+        "enumeration_method": "keryx ctx rg for regexes applied to the session history in src/review/completion-gate.ts (loops at lines 61, 160, 171): reviewRunSeenInHistory's /keryx review (start|scope|slice|ingest|complete)/ starts with a literal and is linear; sessionStartedAt uses no regex; the new USAGE_LINE (dispatch-usage.ts:18) and UNREADABLE_INPUT (ledger.ts) patterns are line-anchored or bounded {0,80} and run on reviewer replies, not history. One site holds the shape."
+      }
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "reviewer": "review-security-code",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if (typeof message.content === \"string\") scan(message.content);",
+      "problem": "Extra gate roots are taken from any message content, including tool results that carry untrusted text (fetched pages, the PR's own files and diff), and absolute paths are accepted unchanged. findReviewGateState then folds closedAt from every root into one value and returns null (gate released) when any root holds a review-flow package closed since session start that is newer than the chosen package's manifest. Attack vector: a PR adds `docs/.metaproject/reviews/x/manifest.json` with mode review-flow and status closed and mentions that path in its text; when the PR head is checked out after the round's manifest was last written, the file's mtime is >= since, the agent reads the path into history, and the gate releases while the real package is still open. Separately, an open package another concurrent session opened in a named sibling worktree can be chosen as `best` when cwd has no active pointer, holding this session on the wrong review.",
+      "impact": "The completion gate (which keeps the model working until `keryx review complete` accepts) can be released or misdirected by content the reviewer does not control. `review complete` itself still refuses, so no false completion is recorded; the harm is an unfinished round the model stops on. Minor: hardening of a workflow gate whose bypass leaves the record honest.",
+      "suggested_fix": "Harvest roots only from the agent's own tool-call arguments (not tool results), and accept an extra root only when it holds an active-review pointer written in this session or is inside the cwd's git top level. Compute closedAt only for the root (or reviewId) of the package actually chosen, so a closed package elsewhere cannot release the gate for this one.",
+      "evidence": "src/review/completion-gate.ts:61-64 (content and call.arguments scanned alike), :65 (path.resolve accepts absolute prefixes), :129-136 (closedAt = max over all roots, compared with best.mtime). History passed from src/commands/agent.ts:3487 includes tool messages.",
+      "confidence": "medium"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "info",
+      "reviewer": "review-security-code",
+      "file": "src/review/dispatch-usage.ts",
+      "line": null,
+      "quote": "usage = usageFrom(JSON.parse(match[1]!)) ?? usage;",
+      "problem": "The header states the KERYX_USAGE line wins over the result envelope 'because the host measured it and the reviewer cannot', but the line lives in the same raw file as the reviewer's reply and the last well-formed line wins. A reviewer can print its own KERYX_USAGE line; it is overridden only when a host appends its line after the reply. keryx shell does; a Claude Code or Codex parent that saves the reply without appending one records the reviewer's self-reported counts as measured.",
+      "impact": "Token-spend telemetry in research.json and report.md can be self-reported by a reviewer while presented as host-measured. No gate reads it, so no attack vector reaches a decision.",
+      "suggested_fix": "Either have hosts write usage outside the reply (a sidecar such as raw/<reviewer>.usage.json), or strip any KERYX_USAGE lines from the reviewer body before the host appends its own and record the source (host vs reviewer) alongside the counts.",
+      "evidence": "src/review/dispatch-usage.ts:1-11 (header comment), :18 (USAGE_LINE), splitUsage loop; src/review/ledger.ts rawUsage prefers raw.usage.",
+      "confidence": "high"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "reviewer": "review-security-code",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "return typeof state === \"string\" && state !== \"\" && state !== \"unknown\";",
+      "problem": "Ingest no longer refuses a finding whose quote is absent or ambiguous; it keeps it with no line and readiness item quotes-located holds it until it has any non-unknown disposition. The item therefore inherits the existing disposition trust model (agent-recorded dispositions, required only to carry evidence by unevidencedDispositions) and refuseUnresolvedLocators already exempted dispositioned findings before this diff. Not a new weakness; noted because the change moves an ingest refusal into a readiness item an agent-recorded disposition can satisfy.",
+      "impact": "None established: no path was found where a reviewer's own result sets a disposition (the reviewer schema deliberately does not declare one). Settled by confirming normalizeFindings drops reviewer-supplied `disposition`.",
+      "suggested_fix": "Optionally require the disposition evidence for an unlocated finding to name a re-quote or a commit, or list quotes-located findings in report.md so a human sees them.",
+      "evidence": "src/review/readiness.ts:244; src/review/managed.ts refuseUnresolvedLocators filter now excludes quote_unlocated findings; unevidencedDispositions at managed.ts:471.",
+      "confidence": "medium"
+    },
+    {
+      "id": "SEC-005",
+      "severity": "info",
+      "reviewer": "review-security-code",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "if (status === \"complete\") entries.push({ reviewer, status: \"run\", reason: \"dispatched; the research ledger records it complete\" });",
+      "problem": "coverageFromResearch copies reviewer names from research.json dispatch.runs into coverage.md without rejecting newlines or whitespace, and coverageMdCheck later parses coverage.md with /reviewer:\\s*(\\S+)\\s*\\n\\s*status:\\s*(\\S+)/. A name holding a newline could forge a `reviewer:/status: run` pair. The names come from the dispatch `selected` set the CLI writes, not from reviewer output, so no attacker reaches it today.",
+      "impact": "None in the current code path; defence-in-depth for a file a readiness check parses.",
+      "suggested_fix": "Accept only names matching /^[a-z0-9][a-z0-9-]*$/ in coverageFromResearch (and renderCoverage), skipping others.",
+      "evidence": "src/review/managed.ts coverageFromResearch; src/review/readiness.ts coverageMdCheck regex.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 3 }
+}
+```
+
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review: slice-04 (PR #1045, flow 460)
+
+### Scope
+- Branch: `fix/review-gate-consistency`, head `dff7a38a1`
+- Slice: `slice-04`. Files: completion-gate.ts, coverage.ts, dispatch-usage.ts, dispatch.test-helpers.ts, git-fixture.test-helpers.ts, ledger.ts, locate.ts, managed.ts, mutate.ts, readiness.ts, research.ts, types.ts
+- Scope mode: supplied slice diff, with context read at head
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 1
+- Info: 3
+
+### Findings
+- **SEC-001 (major).** The new `REVIEW_PACKAGE_PATH` regex in completion-gate.ts has an unbounded lazy prefix. It runs over the whole session history on every stop, so it is quadratic on long delimiter-free tokens. A PR can put such a token into tool results and stall the shell. Fix: an indexOf-based scan, or a bounded prefix.
+- **SEC-002 (minor).** Gate roots are harvested from untrusted tool-result text, and absolute paths are accepted. Also, `closedAt` is taken as the maximum over all roots. So a closed package under any named root can release the gate, and a sibling worktree's open package can be chosen in place of this one. `review complete` still refuses, so the record stays honest.
+- **SEC-003 (info).** A reviewer can forge the `KERYX_USAGE` line when the host does not append its own line. This affects telemetry only.
+- **SEC-004 (info).** The `quotes-located` item inherits the existing trust model for agent-recorded dispositions. This is not a new weakness.
+- **SEC-005 (info).** Reviewer names written into coverage.md are not sanitised. No attacker reaches them today.
+
+### Clean Areas
+- **Git argument injection:** `gitDiffAt` asserts both revisions and uses `--end-of-options`. `resolveBase` skips refs that start with `-`, and `mergeBaseOf` uses `--end-of-options`. Values in error strings are not executed.
+- **Path traversal:** `resolveActiveReview` keeps the pointer inside the project root. The locator reads go through `lexicalRelativePath` and `git show` (unchanged). `dirSignature` skips symlinks.
+- **Operator-decision binding:** `overrideRecorded` requires a decision bound to the head that covers a superset of the left-out reviewers. This fails safe, and it is no weaker than the agent-written dispatch override that ungated packages already accepted.
+- **Ledger:** `DONE` without `slices` no longer claims coverage, and a reply stating an unreadable mandatory input stays incomplete. Both fail safe. The new regexes are bounded or line-anchored.
+- **Test helpers:** test-only, with no production reach.
+- **Injection, secrets, crypto (sha256 only), CSRF, open redirect:** nothing in this slice.

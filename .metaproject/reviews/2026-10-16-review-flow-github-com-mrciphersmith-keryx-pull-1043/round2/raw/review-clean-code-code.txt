@@ -1,0 +1,186 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round 2 clean-code review of the fix delta (round 1 head c144874f). 15 of 17 prior findings closed, 2 partial (w9 CC-002 fixture duplication, skills CC-005 'findings it raised' clause), none open or regressed. The fix delta is clean at function level: mergePremises split into helpers, extras object, appendDecision, tabled severity rules, shared fixtures. New: 3 minors (shadowed `first`, five-site restatement of the premise_verdict/premise_answer rule, stale step-0..step-14 in session-plan-bridge.mdc), 3 infos.",
+  "findings": [
+    {
+      "id": "CC2-1",
+      "severity": "minor",
+      "file": "src/review/premise.test.ts",
+      "line": 99,
+      "problem": "The test 'a finding with no claim is returned untouched' declares `const first = finding();`, shadowing the module-level `first(result)` helper this fix added at line 57. Two meanings of `first` in one file, the same shape as the w9 CC-003 `finding` shadow that was fixed in verdict.test.ts.",
+      "impact": "A later edit in that test that calls first(result) gets a finding, not a result; no call misuses it today.",
+      "suggested_fix": "Rename the local to `untouched` (or `one`).",
+      "evidence": "premise.test.ts:57 vs :99 (delta-code.diff 1816, 1856)",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "principle": "Clean Code A1/A3"
+    },
+    {
+      "id": "CC2-2",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": 1171,
+      "problem": "The held-finding fix-prompt rule ('set premise_verdict on each fix_context.review_feedback item the judge ruled on and premise_answer: \"uphold\" on a held one the operator upheld', plus 'unattended: stop and report the held list') is restated, with different wording, in five skills: job-orchestrator:1171, flow-orchestrator:442, feature-dev:44, review-pr-feedback:366 and task-implementer's FIX_CONTEXT line. Round 1 CC-007 asked for one statement and pointers; this round put the single statement in Wave D for the asking but copied the field rule five times.",
+      "impact": "A change to the contract (a third value, a rename) needs five edits across two mirrored trees; the wordings already differ.",
+      "suggested_fix": "State the field rule once, in task-implementer's FIX_CONTEXT (the schema owner) or Wave D, and make the others 'set premise_verdict/premise_answer as Wave D says'.",
+      "evidence": "delta-skills.diff 32, 56, 153, 219, 604",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "principle": "Clean Code E1 (5 sites)"
+    },
+    {
+      "id": "CC2-3",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
+      "line": 39,
+      "problem": "The rule table still names review-orchestrator's plan ids as `step-0` \u2026 `step-14`; this round added `step-10b` to the checklist, Step 6a and item 0 of review-orchestrator/SKILL.md (105, 120). The rule that the plan bridge cites for the set of ids now omits one.",
+      "impact": "A host that builds the plan from the rule publishes 15 ids and step-10b is never moved, so a Wave D that ran leaves its item pending (the shell then continues the turn on an open item).",
+      "suggested_fix": "Name step-10b in the rule row, or say 'its numbered checklist, ids as the skill lists them'.",
+      "evidence": "session-plan-bridge.mdc:39; review-orchestrator/SKILL.md:105,120 (delta-skills.diff 505, 520)",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "principle": "Clean Code C1a (doc drift)"
+    },
+    {
+      "id": "CC2-4",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 473,
+      "problem": "RESOLVED_DISPOSITIONS (acted-on, fixed) is defined again, with a comment calling it 'the verdict's own set', next to hasTerminalOutcome, which restates classify()'s refuted/dismissed/resolved rules from verdict.ts:136-138. Two copies of one rule; verdict.ts cannot be imported here (it imports premise.ts), so a shared export from premise.ts or a small module would do.",
+      "impact": "If a disposition state is added to the verdict's resolved set, the hold state still reads such a finding as awaiting and readiness fails while the verdict counts it fixed.",
+      "suggested_fix": "Export the set and the predicate from one place and use it in both.",
+      "evidence": "premise.ts:473-480 vs verdict.ts:27,136-138 (two occurrences: info by law 3)",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "principle": "Clean Code E1 (2 sites)"
+    },
+    {
+      "id": "CC2-5",
+      "severity": "info",
+      "file": "src/flow/review-gate.ts",
+      "line": 414,
+      "problem": "holdRecord copies seven GateFinding fields into the record shape premiseHoldState reads, by hand. A field premiseHoldState starts reading (it already reads disposition, verification and premise) must also be added here or the gate and the verdict disagree again, which is the divergence this round fixed.",
+      "impact": "Only on a future change to premiseHoldState; no current disagreement.",
+      "suggested_fix": "Have GateFinding keep the raw record's relevant keys, or add a test that derives the keys premiseHoldState reads and checks holdRecord carries each.",
+      "evidence": "delta-code.diff 422-432",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "principle": "SOLID OCP / DRY"
+    },
+    {
+      "id": "CC2-6",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 1726,
+      "problem": "carryPremiseDecisions calls the synchronous existsSync inside an async function whose siblings all use the async readJsonFileOr (which already yields the fallback for a missing dir), so the guard is redundant and blocks the loop for no gain.",
+      "impact": "None observable.",
+      "suggested_fix": "Drop the guard; readPremiseDecisions on a missing dir already returns [].",
+      "evidence": "delta-code.diff 1726",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "principle": "Clean Code B3"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3,
+    "info": 3
+  },
+  "prior_dispositions": [
+    {
+      "id": "review-clean-code-w5#F-002",
+      "disposition": "closed",
+      "evidence": "src/gdskills/contracts/review-finding.schema.json:166 allOf if/then: downgraded requires severity+original_severity, challenged/owner-decision require question, owner-decision requires options"
+    },
+    {
+      "id": "review-clean-code-w8#CC-2",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:2488 optional trailing params folded into extras: ScopeExtras; call site managed.ts:516 passes one object"
+    },
+    {
+      "id": "review-clean-code-w8#CC-3",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:366-367 split by finding.source !== 'external' (same predicate as partitionExternalFindings, pr-comments.ts:1023), no index arithmetic"
+    },
+    {
+      "id": "review-clean-code-w8#CC-4",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:165 MALFORMED_CLAIM symbol carries the position; merge rejects 'malformed-claim' naming premises[i] (premise.ts ~267)"
+    },
+    {
+      "id": "review-clean-code-w8#CC-5",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:424 plain for loop replaces the ignoring forEach; premiseHoldState doc (premise.ts ~523) now states only the decisions store lifts a hold"
+    },
+    {
+      "id": "review-clean-code-w8#CC-7",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts:145 appendDecision used by recordPremiseDecision (189) and recordOperatorDecision (222); the unknown[] cast is gone"
+    },
+    {
+      "id": "review-clean-code-w8#CC-8",
+      "disposition": "closed",
+      "evidence": "src/review/dedupe.ts:283,288 SEVERITY_RULE_LABEL / OUTRANKED_WORDS tables, severityRuleOf, and one `decides` predicate; render at dedupe.ts:437-440"
+    },
+    {
+      "id": "review-clean-code-w9#CC-001",
+      "disposition": "closed",
+      "evidence": "src/review/premise.test.ts:57 `first` helper; only the two non-mergePremises casts remain"
+    },
+    {
+      "id": "review-clean-code-w9#CC-002",
+      "disposition": "partial",
+      "evidence": "shared src/review/premise-fixtures.ts (heldFinding, premiseAnswer) now used by premise-decision, readiness, verdict-input and review-gate tests, but local held builders remain: src/flow/review-gate.test.ts:1609, src/commands/review-operator-cli.test.ts:64, src/commands/operator-confirm-review-tools.test.ts:365, src/review/verdict.test.ts:32 (verdict.test.ts keeps its own `held` for the owner-decision options branch)"
+    },
+    {
+      "id": "review-clean-code-w9#CC-003",
+      "disposition": "closed",
+      "evidence": "src/review/verdict.test.ts:33 `decision` parameter renamed `record`, no longer shadows `finding`"
+    },
+    {
+      "id": "review-clean-code-skills#CC-001",
+      "disposition": "closed",
+      "evidence": "review-orchestrator/SKILL.md:1129 states once: card in keryx shell, elsewhere question tool then the exact decide-premise command for the operator's terminal, 'Never run it yourself'; flow-orchestrator:442, feature-dev:44, job-orchestrator:1171 point at it"
+    },
+    {
+      "id": "review-clean-code-skills#CC-002",
+      "disposition": "closed",
+      "evidence": "job-orchestrator/SKILL.md:1000 gate-table row, :1139 Step 7 names Wave D, :1149 Step 8 ingest carries --premises, :1169 HELD/OPEN/NEEDS_FIX classify"
+    },
+    {
+      "id": "review-clean-code-skills#CC-003",
+      "disposition": "closed",
+      "evidence": "law 4 and the read-only sentence now agree: review-clean-code/SKILL.md:30,74 allow git log/blame/show; review-orchestrator/SKILL.md:110 and reviewer-input.schema.json:188 say the same; review-premise/SKILL.md read-only row updated"
+    },
+    {
+      "id": "review-clean-code-skills#CC-004",
+      "disposition": "closed",
+      "evidence": "review-orchestrator/SKILL.md:132 Waves names D, :134 early verdict is provisional before Wave D, Step 13 counts premise verdicts, Step 10b has an id (105,120)"
+    },
+    {
+      "id": "review-clean-code-skills#CC-005",
+      "disposition": "partial",
+      "evidence": "review-premise/SKILL.md downgraded row and rule row now bar downgrade of minor, external and security findings; review-pr-feedback rule 7 maps a dismissal to `disagree`; but review-orchestrator/SKILL.md Wave D still says 'Never with findings it raised' (guards a case that cannot occur, the judge adds no findings)"
+    },
+    {
+      "id": "review-clean-code-skills#CC-006",
+      "disposition": "closed",
+      "evidence": "flow-orchestrator/SKILL.md:277-279 own heading, states the source/finding shape, saves claims under <flow-dir>/premise/<n>.json, journals the answer, no decide-premise"
+    },
+    {
+      "id": "review-clean-code-skills#CC-007",
+      "disposition": "closed",
+      "evidence": "one full statement in review-orchestrator Wave D (:1129); flow-orchestrator:442, feature-dev:44 and job-orchestrator:1169/1269 are pointers; the job-orchestrator assignment is now executable (UNRESOLVED_FINDINGS = OPEN from step 2.6)"
+    }
+  ]
+}
+```
+
+## Summary
+
+Prior: 15 closed, 2 partial (review-clean-code-w9#CC-002, review-clean-code-skills#CC-005), 0 open, 0 regressed. Skipped as instructed: owner-dismissed ids and review-logic-w8#LG8-005. New: 0 blocker, 0 major, 3 minor, 3 info (see JSON).

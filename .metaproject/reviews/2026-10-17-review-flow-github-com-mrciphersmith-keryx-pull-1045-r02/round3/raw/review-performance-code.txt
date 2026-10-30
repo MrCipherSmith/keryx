@@ -1,0 +1,60 @@
+REVIEW_RESULT
+```json keryx:findings
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "Every prior performance record in scope is closed at HEAD except PERF-002 (partial). The delta adds two minors (flowPackageDirs reads every standalone manifest per flow; ledgerOmissions copies an array per region) and one info.",
+  "prior_dispositions": [
+    {"id": "r2-review-performance-w1:PERF-R2-001", "disposition": "closed", "evidence": "src/review/dispatch-usage.ts:124 `kept.reverse().join(\"\\n\").trimEnd()` replaces the `/\\s+$/` replace; splitUsage (:102-126) is one linear pass over lines and short-circuits at :102 without the marker."},
+    {"id": "r2-review-performance-w1:PERF-R2-002", "disposition": "closed", "evidence": "src/review/completion-gate.ts SessionReviewTracker (class doc ~:244-250, scan ~:284-314) keeps no command text; only ids, dirs and roots in capped Maps (remember at :233, caps at :52-56). namedBySession (:345) tests set membership."},
+    {"id": "r2-review-performance-w4:PF-001", "disposition": "closed", "evidence": "Same as PERF-R2-002: scan() at completion-gate.ts:~284-314 stores extracted ids (explicitReviewIds -> remember) and package dirs, never call.arguments."},
+    {"id": "r2-review-performance-w4:PF-002", "disposition": "closed", "evidence": "src/review/git-base.ts:53-69: the recorded base is probed alone first (:55-58, one git spawn in the common case); the defaults run together only when there is no recorded base or it fails to resolve."},
+    {"id": "r2-review-performance-w5:PERF-001", "disposition": "closed", "evidence": "src/review/round-split.ts:128-150 labelLines: two linear passes (before[]/after[] arrays), no per-line filter/find over changedAt."},
+    {"id": "review-performance-w3:PERF-007", "disposition": "closed", "evidence": "src/review/completion-gate.ts:432 scans roots with Promise.all (no longer sequential). Candidates are still collected before pickPackage (:433-434), but roots are capped at 8 (:52); info only."},
+    {"id": "review-performance-w3:PERF-006", "disposition": "closed", "evidence": "src/review/ledger.ts:29-31 reads the structured inputs_unreadable list; the UNREADABLE_INPUT regexes and the summary scan no longer exist (no match in src/review/*.ts)."},
+    {"id": "review-performance-w3:PERF-005", "disposition": "closed", "evidence": "Same fix as PERF-R2-001: dispatch-usage.ts:124 trimEnd."},
+    {"id": "review-performance-w3:PERF-004", "disposition": "closed", "evidence": "src/review/coverage.ts:516 gitTopLevel and :559 packageDiffStatsCached are processCache-memoised with a TTL and entry cap (:495-512); resolveDiffBases (:570) probes in Promise.all. The key covers packageDir, root and the whole target, so a changed recorded base or head misses the cache; a moved ref under the same name is bounded by the TTL."},
+    {"id": "review-performance-w3:PERF-002", "disposition": "partial", "evidence": "The history scan is incremental (SessionReviewTracker.update cursor). scanRoot (completion-gate.ts:354: readdir + manifest head + stat per package) and dirSignature (:24-38, which reads and sha256-hashes every file under the package, raw/ outputs included, and under the working data dir; called at :441 and :455) still run from scratch on every stop. Bounded by 8 roots; no cache was added."}
+  ],
+  "findings": [
+    {
+      "id": "PERF-R3-001",
+      "severity": "minor",
+      "file": "src/review/package-location.ts",
+      "line": 71,
+      "problem": "flowPackageDirs now reads and parses manifest.json of every directory under reviews/ (sequential awaits) on each call, to find the standalone packages bound to a flow. collectFlowGovernance calls readFlowReviewManifests once per flow (aggregate.ts:47-49), so a project-wide governance read does flows x packages manifest reads. Before the delta it was one readdir per flow.",
+      "quote": "for (const dir of await dirsUnder(reviewsRoot(cwd))) {\n    const head = await readManifestHead(dir);",
+      "impact": "In this checkout that is 434 flows x 31 standalone packages, about 13,000 sequential file reads and JSON parses per governance collection, growing with both counts. The flow review gate, loop detector and spend each pay it per flow.",
+      "suggested_fix": "Read the standalone manifest heads once per pass (a short-lived per-cwd memo, or an index of manifest.flow -> dirs built before the per-flow loop), and read the heads with bounded concurrency.",
+      "confidence": "high",
+      "evidence": "package-location.ts:61-76 (loop at :71-74); governance/aggregate.ts:47-49 loops all flows and calls readFlowReviewManifests, which calls flowPackageDirs (spend.ts:23). Counts: .metaproject/flows 434 entries, .metaproject/reviews 31."
+    },
+    {
+      "id": "PERF-R3-002",
+      "severity": "minor",
+      "file": "src/review/slice.ts",
+      "line": 418,
+      "problem": "ledgerOmissions groups regions per file by rebuilding the array on every region (`[...(byFile.get(path) ?? []), region]`), which is O(R^2) in the number of regions of one file. The sibling grouping in buildSlices (:444-448) pushes in place.",
+      "quote": "for (const region of regions) byFile.set(region.path, [...(byFile.get(region.path) ?? []), region]);",
+      "impact": "The function exists for large ledger files (big json) in delta rounds, which are the files with the most hunks; thousands of regions means millions of element copies at plan time.",
+      "suggested_fix": "Use the push-in-place pattern from :444-448 (get the list, create it on a miss, push).",
+      "confidence": "high",
+      "evidence": "slice.ts:411-426 (ledgerOmissions) versus :444-448 (buildSlices grouping)."
+    },
+    {
+      "id": "PERF-R3-003",
+      "severity": "info",
+      "file": "src/review/coverage.ts",
+      "line": 580,
+      "problem": "diffOfTarget runs the per-base git diffs one after another; when a recorded base differs from the default, two full diffs run in series on the coverage gate's path.",
+      "quote": "for (const base of resolved.bases) {\n    const result = await gitDiffAt(cwd, base, target.head, pathspec);",
+      "impact": "At most two diffs, memoised by processCache; latency only, and only when the recorded base differs from the default.",
+      "suggested_fix": "Run the (at most two) gitDiffAt calls with Promise.all.",
+      "confidence": "medium",
+      "evidence": "coverage.ts diffOfTarget loop over resolved.bases (at most 2 entries, resolveDiffBases)."
+    }
+  ]
+}
+```
+
+Summary: all prior performance records in scope are closed at HEAD (trimEnd in splitUsage, the tracker keeps ids not command text, resolveBase probes the recorded base alone, labelLines is linear, the ledger reads the structured list, roots scan in parallel, git lookups are memoised) except PERF-002, which stays partial: the per-stop scanRoot and the recursive hashing dirSignature are unchanged. The delta adds two minors (flowPackageDirs reading every standalone manifest per flow; the quadratic array spread in ledgerOmissions) and one info (serial git diffs).

@@ -1,0 +1,95 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "scope": "round 6 final-fix delta (round6/delta-code.diff) at HEAD 539ba65b7",
+  "summary": "All three round-5 review-logic findings are closed. The redesigned carry reads only findings.json and never premises.json. It refuses when a held finding is gone or its subject changed. It strips any planted operator answer through normaliseCarriedPremise, so the operator-only guarantees hold. Two new minors and two infos, none of them blocking.",
+  "prior_dispositions": [
+    {
+      "id": "r5-review-logic-code#LG5-001",
+      "disposition": "closed",
+      "evidence": "src/review/prior-round.ts:902 filters skipped rounds by `round.reviewId !== deps.excludeReviewId`. The note is built at :903 and passed into record() at :904, so it is appended to the flow attempt's own detail (:870) instead of being patched onto tried.at(-1). Test: prior-round.test.ts 'the package being started is never named as a skipped round'."
+    },
+    {
+      "id": "r5-review-logic-code#LG5-002",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:3617 now resolves the package with packageDirById (src/review/package-location.ts:29-33). It uses the standalone dir when that exists, otherwise the first flow reviews root that has the id, so a flow-bound package's verify-run records are found and promoted to execution. Test: harness-robustness.test.ts 'a flow-bound package is found by its review id'. A remaining edge case is filed below as LG6-002."
+    },
+    {
+      "id": "r5-review-logic-code#LG5-003",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:746-763: carriedPremiseHolds takes no claims file. A hold in the previous findings.json carries to the unchanged finding whether or not premises.json exists. managed.ts:369 reads only findings.json. Test: review-premises-cli.test.ts 'carries a hold with no premises.json left'."
+    }
+  ],
+  "findings": [
+    {
+      "id": "LG6-001",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 369,
+      "quote": "carriedPremiseHolds(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, \"findings.json\"), undefined))",
+      "problem": "The previous findings.json is now the only source of the carry. readJsonFileOr turns an unreadable or unparseable file into `undefined` (src/lib/json.ts:13-18). heldRecords then also returns [] for a non-array (premise.ts:767). So a truncated, corrupted or wrong-shaped findings.json reads as 'nothing was held', and carriedPremiseHolds returns undefined (premise.ts:748). The ingest goes on without the holds. Because carriedHolds is undefined, premises.json is also moved aside (managed.ts:512-516). The comment at :367-368 says the ingest 'never silently drops a hold', and this path does exactly that. The read itself predates the delta. What changed is that the delta made this read the only thing that guards the carry.",
+      "impact": "Trigger: re-ingest without --premises over a package whose findings.json is damaged, for example a half-written file from an interrupted writer or an agent edit that left invalid JSON. Every held finding goes back to the fix loop as an ordinary open finding, without an operator answer and with no warning. The premise record is renamed to the superseded name, which hides what was held.",
+      "suggested_fix": "Tell 'absent' apart from 'unreadable': if findings.json exists but does not parse, or does not parse to an array, refuse with refuseInheritance('findings.json cannot be read (...)') instead of treating it as a first ingest.",
+      "evidence": "src/review/managed.ts:367-370, :512-516; src/lib/json.ts:13-18; src/review/premise.ts:746-748, :766-769.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG6-002",
+      "severity": "minor",
+      "file": "src/review/package-location.ts",
+      "line": 31,
+      "quote": "if (existsSync(standalone)) return standalone;",
+      "problem": "packageDirById picks a directory without regard to where this ingest will write. The ingest writes to the flow root whenever a flow matches (managed.ts:1115-1116). packageDirById prefers any existing directory `.metaproject/reviews/<id>`, even one with no manifest.json, unlike resolveReviewPackagePath (managed.ts:2790). Among flows it takes the first match in readdirSync order (:32, :38). If a standalone directory with the same id exists, for example from an earlier standalone start or a stray `verify-run --package` against that path, the flow-bound ingest's own verify-run records are looked up in the wrong package.",
+      "impact": "Trigger: the same review id exists both under .metaproject/reviews/ and under a flow, and the ingest is flow-bound. The parent-execution claims stay at their declared method, so verification stats under-count executions with no warning. This is rare, and it fails toward 'reasoning', not toward a false 'execution'.",
+      "suggested_fix": "Resolve verify-run records against the directory the ingest actually allocates (packagePath with the flow match), for example by moving promoteParentExecutions after allocation. Otherwise, at least require manifest.json as resolveReviewPackagePath does, and sort flowDirs for a deterministic choice.",
+      "evidence": "src/review/package-location.ts:29-42; src/commands/review.ts:3617; src/review/managed.ts:1109-1122, :2789-2801.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG6-003",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 756,
+      "quote": "{ ...current, premise: record.premise as ReviewFindingPremise }",
+      "problem": "The carried premise is cast, not re-validated against the merge's rules. The docstring (:736-737) says 'which that ingest's merge already validated', which holds only while findings.json is exactly what ingest wrote. An agent can write that file (premise.ts:528-530 says so). So an edited held premise skips the self-judgement, challenged-without-evidence and security rules of mergePremises (:361, :378, :429) on re-ingest. The schema check at managed.ts:495 still enforces the shape. normaliseCarriedPremise strips `operator` (premise.ts:245-246 via :484). The gate already trusts a findings.json premise directly (verdict.ts:141), so the carry gives an agent no capability it did not already have, and operator-only answers still come only from the decisions store. Recorded so the docstring's 'validated' is not read as a guarantee.",
+      "evidence": "src/review/premise.ts:736-745, :751-760, :238-254, :481-488; src/review/managed.ts:495, :1583-1586; src/review/verdict.ts:141.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG6-004",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 371,
+      "quote": "const premised = mergePremises(carriedHolds?.ok === true ? carriedHolds.findings : premiseSet, premiseClaims);",
+      "problem": "On the carry path mergePremises gets no claims, so counts.judge is undefined, claims and rejected are 0, and the rejections are empty. scope.md's Premise check then says 'premise_judge: not named' and '_none_' discarded, over findings that are still held (premise.ts:683-691, :713-714). The earlier ingest's rejection table is replaced. On the LG5-003 path, where no premises.json is left, verdict also omits its 'premise results' line (verdict.ts:229, :372). By design (:743), only holds carry: an earlier `downgraded` or `upheld` judgement is dropped without a note, and a downgraded finding returns at the reviewer's severity. All of this fails safe and is reporting only.",
+      "evidence": "src/review/managed.ts:369-371, :521; src/review/premise.ts:676-721, :743; src/review/verdict.ts:228-231, :372.",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2, "prior_closed": 3, "prior_open": 0, "prior_partial": 0, "prior_regressed": 0 }
+}
+```
+
+## Logic Review: round 6 (final-fix delta)
+
+- Scope: round6/delta-code.diff at HEAD 539ba65b7. Spec gate skipped: no issue or task was given. I ran no tests (read-only).
+- Priors: 3 closed, 0 open, partial or regressed.
+  - LG5-001: the starting package is excluded from the 'skipped' list (prior-round.ts:902).
+  - LG5-002: verify-run records are found under flow roots (package-location.ts:29-33, review.ts:3617).
+  - LG5-003: no claims file is needed to carry a hold (premise.ts:746-763).
+- The carry redesign meets each requirement:
+  - It reads only findings.json (managed.ts:369) and never premises.json.
+  - It carries only held records (premise.ts:766-769).
+  - It refuses with the finding named when a held finding is gone or its severity, verdict or problem digest changed (:758, :761).
+  - A finding that arrives already judged keeps its own premise.
+  - A planted `operator` answer is stripped by normaliseCarriedPremise.
+  - The result still goes through the review-finding schema check (managed.ts:495).
+  - No operator-only guarantee is weakened.
+- New:
+  - LG6-001 (minor): an unreadable or non-array findings.json reads as 'nothing held', and the holds are dropped silently. The read predates the delta, but the delta made it the only source of the carry.
+  - LG6-002 (minor): packageDirById prefers any existing standalone directory over the flow package the ingest actually writes, and picks among flows by readdir order.
+  - LG6-003 (info): a carried premise is cast, not re-run through the merge rules. It gives an agent nothing new, because the gate already trusts findings.json.
+  - LG6-004 (info): on the carry path, scope.md reports 'judge not named' and 0 claims, and carried downgrades and upholds are dropped without a note.
+- Stats: blocker 0 | major 0 | minor 2 | info 2.
+- Routing audit: graph_used: no (the delta diff and targeted reads were enough; per memory, gdgraph is unreliable on this repo). wiki_used: not-relevant. ctx_used: yes (keryx ctx rg/run). raw_rg_used: no.

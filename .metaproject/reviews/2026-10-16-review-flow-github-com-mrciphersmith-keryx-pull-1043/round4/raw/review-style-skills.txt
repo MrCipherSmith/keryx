@@ -1,0 +1,38 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-style-skills",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r3-review-style-skills#R3-001", "disposition": "closed", "evidence": "feature-dev/SKILL.md:50 adds the conditional **Premise** bullet to the Implementation Spec list (:43-50), matching the :42 pointer."},
+    {"id": "r3-review-style-skills#R3-002", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:527-528: the scope: and premise: constraints are each on their own line."},
+    {"id": "r3-review-style-skills#R3-003", "disposition": "closed", "evidence": "review-orchestrator/SKILL.detail.md:668 now reads 'A failing item other than `premise-decisions` is waived only by the operator.'"},
+    {"id": "r2-review-style-skills#R2-002", "disposition": "closed", "evidence": "job-orchestrator/SKILL.md:1273-1284 (arXiv bound and 'The bound is a ceiling' paragraphs) have the same wrap as origin/main:1260-1271."},
+    {"id": "r2-review-style-skills#R2-004", "disposition": "closed", "evidence": "feature-dev/SKILL.md:42 names where claims go and the field list now has the Premise field at :50 (same fix as R3-001)."},
+    {"id": "review-style-w8#F-005", "disposition": "open", "evidence": "code finding in src/review/managed.ts, outside the skills delta; not assessed here."}
+  ],
+  "findings": [
+    {
+      "id": "R4-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": 454,
+      "problem": "The delta joined list item 3 of the --fix preconditions into one 190-char line, while items 4 and 5 (:455-456) and the origin/main original (:456-457) hard-wrap. The item now differs from its neighbours.",
+      "suggested_fix": "Re-wrap item 3 at the file's ~85-col width with a 3-space continuation indent, as items 4 and 5 do.",
+      "source": "reviewer"
+    },
+    {
+      "id": "R4-002",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "line": 1165,
+      "problem": "The shortened 'Without `--premises` a first ingest holds nothing: ...' sentence is a single ~105-char line inside a paragraph hard-wrapped at ~88 cols (:1161-1164). The sentence is new to the PR (absent on origin/main), so it is not wrap-preserved prose.",
+      "suggested_fix": "Wrap it at the paragraph width.",
+      "source": "reviewer"
+    }
+  ]
+}
+```
+
+Summary: all three round-3 style findings and the two skills-side round-2 findings are closed at HEAD; F-005 is a code finding outside this delta (still open, not assessed). The delta introduced no major defects. Two wrap nits: review-pr-feedback:454 (minor) and job-orchestrator:1165 (info).

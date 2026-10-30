@@ -1,0 +1,1249 @@
+--- .metaproject/core/gdskills/contracts/review-finding.schema.json
+@@ 175,217 @@
+         {
+           "if": { "required": ["verdict"], "properties": { "verdict": { "const": "owner-decision" } } },
+           "then": { "required": ["options"] }
+         }
+       ]
+     },
+     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
+     "repo": {
+       "type": ["string", "null"],
+       "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
+     },
+     "file": { "type": ["string", "null"] },
+     "line": {
+       "title": "Where the finding points — DERIVED when the finding quotes code",
+       "description": "Reported by the reviewer only when there is nothing to quote. When `quote` is present this field is OUTPUT: `review ingest` finds the quote in `file` at the round's head and writes the line the match started on, overwriting whatever the reviewer said and recording both in `locator`. The reason is the failure it replaces — nothing compared a reported line to anything, so a number that had drifted travelled into findings.json, into the report, and into the disposition recorded against it. On a fix round the file has moved under the finding by construction, which is when the reported number is least trustworthy and most acted upon.",
+       "type": ["integer", "null"],
+       "minimum": 1
+     },
+     "quote": {
+       "title": "The code this finding is about, copied verbatim out of `file`",
+-      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
++      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
+       "type": ["string", "null"]
+     },
+     "locator": {
+       "title": "How `line` was arrived at",
+       "description": "Present exactly when the finding carries a quote. `derived` means the quote was found and `line` is where; `unlocatable` means it was not, and then `line` is null rather than a number nobody checked. `reported_line` keeps what the reviewer said, so a round can measure how far the claims drifted from the code — which is the only way to know whether deriving them repaired anything or is insurance.",
+       "type": "object",
+       "additionalProperties": false,
+       "required": ["state"],
+       "properties": {
+         "state": { "type": "string", "enum": ["derived", "unlocatable"] },
+-        "method": { "type": "string", "enum": ["exact", "whitespace-normalised"] },
++        "method": { "type": "string", "enum": ["exact", "whitespace-normalised", "substring"] },
+         "reason": { "type": ["string", "null"] },
+         "reported_line": { "type": ["integer", "null"], "minimum": 1 }
+       },
+       "allOf": [
+         {
+           "if": { "properties": { "state": { "const": "derived" } }, "required": ["state"] },
+           "then": { "required": ["method"] }
+         },
+         {
+           "if": { "properties": { "state": { "const": "unlocatable" } }, "required": ["state"] },
+           "then": { "required": ["reason"] }
+
+--- .metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "460",
+   "slug": "review-gate-consistency",
+   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
+   "status": "in-progress",
+   "createdAt": "2026-10-17T03:45:43.162Z",
+-  "updatedAt": "2026-10-17T04:19:24.450Z",
++  "updatedAt": "2026-10-17T08:45:06.969Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": "sha256:5bff430626e9d18805624d0b54c508c157ee1df1199e5f71ab0ed82dec57fe1e",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "owner": {
+     "value": "MrCipherSmith",
+     "basis": "stated",
+     "source": "`--owner` flag on `flow init`"
+   },
+   "outcomeAuthor": "agent",
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+
+--- .metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json
+@@ 187,255 @@
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {}
+     },
+     {
+       "id": "T11",
+       "title": "CHANGELOG, release 0.3.122",
+       "kind": "docs",
+       "status": "todo",
+       "dependsOn": [
+         "T10"
+       ],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {}
++    },
++    {
++      "id": "T12",
++      "title": "L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T13",
++      "title": "L6 fix slices get the fix roster; fix hunks are the ones touching a finding",
++      "kind": "implement",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-10-17T03:45:43.162Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-10-17T03:47:33.699Z",
+       "event": "task-done",
+       "detail": "T2: Implement per plan"
+     },
+     {
+       "at": "2026-10-17T03:47:33.848Z",
+       "event": "task-done",
+       "detail": "T3: Add/adjust tests and make them pass"
+     },
+     {
+       "at": "2026-10-17T03:47:34.000Z",
+       "event": "task-done",
+
+--- .metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json
+@@ 306,360 @@
+     },
+     {
+       "at": "2026-10-17T03:54:05.947Z",
+       "event": "task-done",
+       "detail": "T6: L2 nudge names this session's review (C)"
+     },
+     {
+       "at": "2026-10-17T04:03:59.562Z",
+       "event": "task-done",
+       "detail": "T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)"
+     },
+     {
+       "at": "2026-10-17T04:15:45.258Z",
+       "event": "task-done",
+       "detail": "T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)"
+     },
+     {
+       "at": "2026-10-17T04:19:24.450Z",
+       "event": "task-done",
+       "detail": "T7: L3 child results and artifacts reconcile (D, E, F)"
++    },
++    {
++      "at": "2026-10-17T07:55:48.359Z",
++      "event": "task-added",
++      "detail": "T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)"
++    },
++    {
++      "at": "2026-10-17T08:36:33.775Z",
++      "event": "task-done",
++      "detail": "T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)"
++    },
++    {
++      "at": "2026-10-17T08:45:06.969Z",
++      "event": "task-added",
++      "detail": "T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding"
+     }
+   ],
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "bun test src/review/coverage.test.ts src/review/readiness.test.ts src/review/complete-coverage-gate.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "bun test src/review/complete-coverage-gate.test.ts"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "bun test src/review/completion-gate.test.ts"
+     },
+     "AC4": {
+       "kind": "exec",
+       "check": "bun test src/harness/tool/builtin/spawn-subagent-tool.test.ts src/review/ledger.test.ts"
+     },
+     "AC5": {
+
+--- .metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md
+@@ 1,27 @@
+ # Flow Journal
+ 
+ - 2026-10-17T03:45:43.162Z - flow created
+ - 2026-10-17T03:47:33.699Z - task-done: T2: Implement per plan
+ - 2026-10-17T03:47:33.848Z - task-done: T3: Add/adjust tests and make them pass
+ - 2026-10-17T03:47:34.000Z - task-done: T4: Self-review and prepare draft PR
+ - 2026-10-17T03:47:34.153Z - task-done: T1: Collect remaining context
+ - 2026-10-17T03:47:34.301Z - task-added: T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)
+ - 2026-10-17T03:47:34.451Z - task-added: T6: L2 nudge names this session's review (C)
+ - 2026-10-17T03:47:34.606Z - task-added: T7: L3 child results and artifacts reconcile (D, E, F)
+ - 2026-10-17T03:47:34.756Z - task-added: T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)
+ - 2026-10-17T03:47:34.908Z - task-added: T9: Close flows 458 and 459 (I)
+ - 2026-10-17T03:47:35.062Z - task-added: T10: PR review clean
+ - 2026-10-17T03:47:35.229Z - task-added: T11: CHANGELOG, release 0.3.122
+ - 2026-10-17T03:47:35.402Z - frozen: 9 criteria; checksum recorded
+ - 2026-10-17T03:47:35.559Z - started
+ - 2026-10-17T03:54:05.947Z - task-done: T6: L2 nudge names this session's review (C)
+ - 2026-10-17T04:03:59.562Z - task-done: T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)
+ - 2026-10-17T04:15:45.258Z - task-done: T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)
+ - 2026-10-17T04:19:24.450Z - task-done: T7: L3 child results and artifacts reconcile (D, E, F)
++- 2026-10-17T07:55:48.359Z - task-added: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
++- 2026-10-17T08:36:33.775Z - task-done: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
++- 2026-10-17T08:45:06.969Z - task-added: T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding
++
++## 2026-10-17 — PR #1045 round 2 plan (owner approval in chat)
++
++`review plan` detected round 2 by itself (source local-package, delta dff7a38..HEAD) — G works on a live PR. After L6 the plan is fix 1 slice/10, new 4 slices/35 (L5 code), second-look 5/10 = 55 dispatches, over the 40 threshold. The owner has no terminal for `review confirm-plan`; the owner approved running all 55 in chat (question tool, 2026-10-17). The package's plan confirmation stays unrecorded in keryx.
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 634,674 @@
+ 
+ | Round | Scope A | Scope B |
+ |---|---|---|
+ | 1 (first after the draft PR) | yes | yes |
+ | 2..N | yes | recomputed only if the changed-file set moved |
+ | final | yes | **yes, always** |
+ 
+ Do not decide this by memory:
+ 
+ ```bash
+ keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+ ```
+ 
+ It prints the decision and the reason, and reuses the previous record when
+ nothing moved. The final round recomputes whatever the file set did — otherwise a
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+-`keryx review readiness <review-id-or-path> [--json]` reads the package and prints eleven items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
++`keryx review readiness <review-id-or-path> [--json]` reads the package and prints twelve items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+ 4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+ 7. `head` — the report's head is the PR head.
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+ `keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 274,314 @@
+   later round cannot be screened against a set nobody recomputed.
+ 
+ Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
+ 
+ `--refuted` takes the findings this round **raised and then dismissed**, in the
+ same finding shape, each carrying `disposition: {state, evidence}` with one of
+ the `dismissed-*` states. Without it a package keeps only the survivors of an
+ unlogged triage — which is why precision measured over the recorded corpus
+ returns 100% whatever the reviewers actually got right.
+ 
+ `review complete --finding <id> --disposition <state> --evidence <ref>` records
+ what became of a finding when the fix round closes; the triple is repeatable, one
+ group per finding. States: `unknown`, `acted-on`, `dismissed-incorrect`,
+ `dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`.
+ Everything except `unknown` must cite where the outcome is written down — the
+ commit, the test, the decision. A recorded state and its citation cannot be
+ overwritten by a later close; record a correction as a new round.
+ 
+ `review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
+ `review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
+-`review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
++`review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition); it still refuses, naming the finding, a quote it could not check at all (commit not in the checkout, no file named, or a size bound), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
+ A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".
+ 
+ **Closing a fix round without dispositions leaves every finding reading `unknown`.** That is not "the reviewers were right"; it is "nobody wrote down what happened", and it is the single reason the precision figure cannot be read.
+ 
+ Managed modes:
+ 
+ - `lightweight`: report-only; no flow or managed review artifacts are created, and nothing is posted — no `comments reply`.
+ - `attach-review`: write under
+   `.metaproject/flows/<flow-dir>/reviews/<review-id>/`.
+ - `review-flow`: write under `.metaproject/reviews/<review-id>/`.
+ - `ingest`: convert an existing review report into managed findings, decisions,
+   and learning handoff, attached to a flow when one is explicit or matched.
+ 
+ Required artifacts for managed modes:
+ 
+ - `manifest.json`
+ - `scope.md`
+ - `coverage.md`
+ - `report.md`
+ - `findings.json`
+
+--- .metaproject/skills/gdskills/review/review-premise/SKILL.md
+@@ 43,83 @@
+ 
+ ## Workflow
+ 
+ ```
+ review-premise Progress:
+ - [ ] Step 1: Drop every finding below `minor`
+ - [ ] Step 2: Per finding, read only its bare claim (title, file, quote) and the code there; form a view
+ - [ ] Step 3: Collect intent signals at and around the site (see question 1)
+ - [ ] Step 4: Answer the four questions
+ - [ ] Step 5: Only now read the reviewer's problem, impact, evidence and suggested_fix; revise if they show something you missed
+ - [ ] Step 6: Emit one premise claim per finding judged, and nothing else
+ ```
+ 
+ The order of steps 2 and 5 is the point. A reviewer's argument read first anchors the
+ judgement on it; the claim and the code read first let you see what the reviewer did not.
+ 
+ ## Input Contract
+ 
+ | Field | Type | Required | Description |
+ |-------|------|----------|-------------|
+-| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its display `id`, unique in the package (the caller renumbers a collision, a new finding sharing a carried one's id included, in the saved reviewer results before you run): your claim's `finding_id` (a claim may name an id the duplicate merge absorbed; it then targets the surviving finding). Only a finding carried from an earlier round also has a `global_id` (ingest mints the rest after you run); a claim may name a carried finding by it. Each has `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
++| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its display `id`, unique in the package (the caller renumbers a collision, a new finding sharing a carried one's id included, in the saved reviewer results before you run): your claim's `finding_id` (a claim may name an id the duplicate merge absorbed; it then targets the surviving finding). A display `id` holds no `#`, the global_id separator (`<reviewId>#<id>`): ingest refuses one, so the caller names a finding of several waves `<raw stem>:<id>` (`review-logic-w1:F-001`), never `review-logic-w1#F-001`. Several judge dispatches each return one claims file; `review ingest --premises` takes them all. Only a finding carried from an earlier round also has a `global_id` (ingest mints the rest after you run); a claim may name a carried finding by it. Each has `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
+ | `judge` | string | yes | Your own name. Recorded on the claims file. |
+ | `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the comment's `C-NNN` (review-pr-feedback) or the issue's number as `id` with its URL as `url`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims beside its own record (a flow: `<flow-dir>/premise/<n>.json`) and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies every refusal of the merge (`PREMISE_REJECTION_REASONS`, `src/review/premise.ts`) by hand. For one finding those are: any claim on a finding below `minor` (`below-minor`); an uncited `challenged` or `downgraded`; a `downgraded` with no `severity`, or with the finding's own severity (`not-a-downgrade`) or a higher one (`raise-severity`); a `severity` on any other verdict (`severity-without-downgrade`); a downgrade of an external or `review-security-code` finding, of a `minor`, or below `minor`; a hold without a `question`; an `owner-decision` with fewer than two options; a judge that raised the finding. |
+ | `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review, where your host gives you git; on keryx shell the caller passes their output in `context_files`. |
+ 
+ ## The four questions
+ 
+ 1. **Intent.** Is the thing called a defect a deliberate choice? Look for an explicit
+    override (`dir="ltr"`, `!important`, a pinned version, a forced flag), a suppression or
+    exemption (a lint disable, a `@ts-expect-error` with a reason, an allowlist entry), a
+    comment or commit message giving a reason (`git log -L <start>,<end>:<file>`, `git blame`, `git show <sha>`
+    where your host gives you git; on keryx shell, the history excerpts the caller passes in `context_files`), and
+    sibling code doing the same. A signal does not prove the choice right; it proves someone chose, so the finding has to show their reason wrong.
+    A signal the branch under review itself introduces (in `git log <base>..<head>`, or in lines
+    the diff adds) is not evidence of a prior deliberate choice: the change cannot ratify itself.
+ 2. **Accepted practice.** What do platform guidelines (Material Design, Apple HIG, WCAG,
+    the framework's own docs), the language's idioms, clean-code principles and common
+    patterns say? Then the project's own rules, with their known exceptions. A project rule
+    applied where accepted practice makes an exception is not a defect.
+ 3. **Consistency.** Would the suggested fix make the system more consistent or less? A fix
+    that makes one site differ from siblings doing the same thing is evidence against the
+
+--- docs/docs/cli-reference.md
+@@ 4723,4763 @@
+ 
+ Create and manage durable review packages. Managed reviews preserve target
+ identity, reviewer coverage, findings, decisions, learning candidates, and an
+ optional flow relationship instead of leaving review state only in chat output.
+ 
+ `--automatic` on `start`, `attach` and `ingest` marks the package as an
+ **automatic review** run (`manifest.automatic: true`; `review status` prints
+ `run mode: automatic review`). The mark is a run mode, not a permission mode and
+ not a way around the gate: `review complete` and every one of its refusals work
+ exactly as without it. Inside `keryx shell` it is what lets a turn run the
+ review's own commands without a prompt — see
+ [Automatic review](guides/permission-modes.md#automatic-review).
+ 
+ ```text
+ keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                     [--reviewers a,b] [--report <path>] [--automatic]
+ keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                    [--memory-query "<query>"] [--automatic]
+ keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
+                     [--verifications <file|->] [--verification-mode off|annotate|filter]
+-                    [--premises <file|->]
++                    [--premises <file|->]...
+                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                     [--refuted <file|->]
+                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                     [--parallel <n>] [--outstanding <n>]
+ keryx review run --autonomous --target pr --ref <pull request URL>
+                  [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
+ keryx review budget [--spent <usd>] [--ceiling <usd>]
+                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+ keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                   [--findings <n>] [--diff-lines <n>]
+                   [--verifier execution|site-check|reasoning] [--security] [--premise]
+                   [--session-provider <id>] [--session-model <id>]
+                   [--catalog <file|->] [--json]
+ keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                               [--self <login>] [--round <n>]
+                               [--out <findings.json>] [--json] [--fixtures <dir>]
+ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                             --sha <head-sha> --final [--result <file>] [--review <review-id>]
+                             [--round <n>] [--dry-run] [--self <login>]
+                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+
+--- docs/docs/cli-reference.md
+@@ 4869,4908 @@
+ | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
+ | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
+ | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
+ | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
+ | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
+ | `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
+ | `jev-risk` | ADDITIONAL orchestrator reviewer (`engine: jev`): a deterministic risk map of every changed hunk, ranked, with a routing hint. See below. |
+ | `jev-scenarios` | ADDITIONAL orchestrator reviewer (`engine: jev`): which user scenarios a diff likely changes. See below. |
+ | `jev-docs` | ADDITIONAL orchestrator reviewer (`engine: jev`): find doc sections that went stale because of a diff. See below. |
+ | `jev-comments` | ADDITIONAL orchestrator reviewer (`engine: jev`): check whether open PR review comments were addressed. See below. |
+ | `jev-contract` | ADDITIONAL orchestrator reviewer (`engine: jev`): check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff. See below. |
+ | `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
+ | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
+ | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `flagWarnings`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. `paths` come from `metadata.paths`, else from the globs in the description plus any literal file path named beside them; a description with no glob gives `pathsSource: none` (dispatched on every round) even when it names a file. `flags` come from `metadata.flags` when it has at least one non-empty entry — entries split on commas/whitespace, trimmed, lower-cased and `--`-prefixed; one that is still not `--name` is dropped and reported in `flagWarnings` (a `warning:` line in the text output), and the description's flags are not used even if none survives or the list holds only `--all` (no flags, and no warning for `--all`) — else from the description; an empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. `metadata.flags` and `metadata.paths` accept a comma-separated string, a flow list or a YAML block list; the frontmatter reader accepts a BOM and CRLF, drops trailing `#` comments, counts only keys directly under `metadata:`, and reads any shape outside that subset as not declared. `drift` is `clean`, `changed`, `missing`, or `none` when no origin was recorded (the text row reads `(no recorded origin)`). The top-level `bundledSource` says where the bundled half was read: `project` (this project's installed `.metaproject/skills/gdskills/review`), `package` (that directory is absent, so the keryx package's own review skills are listed — not evidence of what is installed here) or `not-found` (neither; exit `1`). |
+ | `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-contract, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. `review-pr-contract` joins the set, in both modes, only when `pr-context.md` is in the package (`--pr-context` names it, as `--blast-radius` does for `review-regression`); without it the reviewer prints as excluded with that reason. The rule binds a package whose `research.json` was written by `review ledger build` of this version, which stamps `dispatch.roles` with the roles it knows; a `dispatch` without that stamp predates the role, so a package already in flight is not newly refused: the gate passes and `review complete` warns `review-pr-contract not run (package predates the role)`. |
+ | `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
+ | `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
+ | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
+ | `estimate` | Print the plan's reviewer dispatches and minutes from the slice manifest and roles, and flag a plan over the threshold: `dispatch-check` and `ledger` refuse such a plan until the operator confirms it (`confirm-plan` or `estimate --confirm --quote` at a terminal, or the `review_confirm_plan` card in keryx shell). Limits: `routing.config.json` `reviewPlan.maxDispatches` (default 40) and `reviewPlan.maxMinutes` (default 90). |
+-| `plan` | The round plan in one command, without dispatching (`keryx review plan --target <pr-url\|branch> [--ref <base>] [--head <sha>] [--host <host>] [--json]`): `review start` (which finds the previous round of the target in the local packages, git history, the PR's round block and comments, and the flow, and writes `round.json`), `scope`, `blast-radius --package`, `slice --package` (a delta round slices only prevHead..head; each slice is `kind: fix` with its `findingIds`, read deep by review-logic, review-regression, the reviewers that authored those findings and every role its own content routes, or `kind: new`, routed as in round 1), `required --depth auto --scope --package` and `estimate`. Writes `<review-dir>/plan.json` (round, slices by kind, roster, dispatches, minutes, `overThreshold`, `next`: `dispatch`, or confirm the plan with the `review_confirm_plan` card / `keryx review confirm-plan`) and prints a short summary. A fix slice is covered once every reviewer on its roster read it and every finding attached to it has a disposition (`closed`, `open`, `partial`, `regressed` or `withdrawn`, in the `prior_dispositions` of a finished result of that roster); findings carried over from the previous round keep their recorded disposition but cover no fix slice. A previous round is cut from only when it is ours and finished — a round block from our own login, or a package with completion evidence (published.json, a scopeReviewed ledger, a closed status) that no commit of merge-base..head added or changed; anything else is a full round with its findings as context. `--memory-query` and `--unattended` are passed to `review start`. |
++| `plan` | The round plan in one command, without dispatching (`keryx review plan --target <pr-url\|branch> [--ref <base>] [--head <sha>] [--host <host>] [--json]`): `review start` (which finds the previous round of the target in the local packages, git history, the PR's round block and comments, and the flow, and writes `round.json`), `scope`, `blast-radius --package`, `slice --package` (a delta round slices only prevHead..head; the lines in a fix hunk are cut apart from every other changed line, even in the same file; a slice of fix lines is `kind: fix` with its `findingIds`, read deep by exactly review-logic, review-regression, the reviewers that authored those findings and review-security-code when one is a security finding; every other slice is `kind: new`, routed as in round 1), `required --depth auto --scope --package` and `estimate`. Writes `<review-dir>/plan.json` (round, slices by kind, roster, dispatches, minutes, `overThreshold`, `next`: `dispatch`, or confirm the plan with the `review_confirm_plan` card / `keryx review confirm-plan`) and prints a short summary. A fix slice is covered once every reviewer on its roster read it and every finding attached to it has a disposition (`closed`, `open`, `partial`, `regressed` or `withdrawn`, in the `prior_dispositions` of a finished result of that roster); findings carried over from the previous round keep their recorded disposition but cover no fix slice. A previous round is cut from only when it is ours and finished — a round block from our own login, or a package with completion evidence (published.json, a scopeReviewed ledger, a closed status) that no commit of merge-base..head added or changed; anything else is a full round with its findings as context. `--memory-query` and `--unattended` are passed to `review start`. |
+ | `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
+ | `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
+ | `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead. |
+ | `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_decide_premise` card. |
+ | `verify-run` | Run a verification command in the parent session and save its stdout, stderr and exit status to `<review-dir>/research-evidence/verify-<id>-<n>.txt`, for the verifier to cite as executed evidence. |
+ | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
+ | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
+ 
+ Target kinds are validated by the runtime. Review packages are stored under the
+ linked flow when attached, or in the managed standalone review location selected
+ by the review service.
+ 
+ ### `review run` {#review-run}
+ 
+ ```text
+ keryx review run --autonomous --target pr --ref <pull request URL>
+                  [--budget-minutes N] [--budget-tokens N] [--stall-minutes N]
+                  [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+ ```
+ 
+
+--- docs/docs/cli-reference.md
+@@ 6639,6679 @@
+ their severity with no new evidence. That operation is measured to make accuracy
+ worse — GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across self-correction rounds and
+ GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al., ICLR 2024,
+ arXiv:2310.01798) — so it was removed rather than improved.
+ 
+ | Flag | Description |
+ |---|---|
+ | `--verifications <file\|->` | The verifier's result: an array of claims, or `{verifier, verifications}`. |
+ | `--verification-mode <mode>` | `off`, `annotate` (default), or `filter`. |
+ | `--scope <scope.json>` | The **whole** `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped and why. Handing over only its `counts` object is refused: eight integers carry no reason for any individual drop. |
+ | `--tokens-in <n>`, `--tokens-out <n>` | What the round actually used. Recorded on the package; absent means **nobody reported**, which is not zero. |
+ 
+ ### Premise — `--premises`
+ 
+ `ingest` also accepts the output of the `review-premise` skill, run after the verifier over the canonical findings. A finding can reproduce and still be no defect: the code may carry an explicit override, an exemption note or a sibling doing the same, and accepted platform practice may support it. The judge answers `upheld`, `downgraded`, `challenged` or `owner-decision` per finding. **The merge can only hold or lower.** It never adds a finding, raises a severity or edits a finding's text, and it never dismisses one: `challenged` and `owner-decision` hold the finding for the operator, who answers with `keryx review decide-premise`. A held finding is not an open blocker or major, is listed as "awaiting operator", and fails readiness and the flow review gate until it has an answer.
+ 
+ Claims that name an unknown finding, come from the finding's own reporter, challenge without a cited intent signal or practice source, or hold without a question (an `owner-decision` without at least two options) are discarded whole and listed in `scope.md`. Accepted claims are stored in `research-evidence/premises.json` and on each finding record.
+ 
+ | Flag | Description |
+ |---|---|
+-| `--premises <file\|->` | The judge's result: the bare `{judge, model?, premises}` object, or a reply or report holding it in one fenced ` ```json keryx:premises ` block. A bare array is refused: it names no judge. |
++| `--premises <file\|->` | The judge's result: the bare `{judge, model?, premises}` object, or a reply or report holding it in one fenced ` ```json keryx:premises ` block. A bare array is refused: it names no judge. Repeatable (one file per judge dispatch): the files merge as one set of claims, each keeping its own judge; two claims on one finding that agree (the same verdict, across files, or on a finding and the duplicate ingest folded into it) apply once, and claims that disagree apply neither (`duplicate-claim`). A finding id holds no `#`, the global_id separator. |
+ 
+ ### A finding points at the code it quotes
+ 
+ A finding does not report a line number. It reports `quote` — the code it is
+ about, copied out of `file` — and `review ingest` locates that quote at the
+ commit the round records, writing the line the match started on. `line` is
+ therefore **output**, and a number a reviewer puts there is overwritten.
+ 
+ The reason is the failure it replaces: nothing compared a reported line to
+ anything, so a number that had drifted travelled into `findings.json`, into the
+ report, and into the disposition somebody later recorded against it. On a fix
+ round the file has moved under the finding by construction, which is when the
+ reported number is least trustworthy and most acted upon.
+ 
+ Matching is exact first, then with whitespace collapsed, then it stops — nothing
+ fuzzy. Three outcomes, all recorded in `locator`:
+ 
+ | Outcome | What it means |
+ |---|---|
+ | `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. |
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 12,52 @@
+ ## Start one
+ 
+ Standalone, or attached to a managed flow:
+ 
+ ```bash
+ keryx review start  --target branch --ref feature/example --reviewers a,b
+ keryx review attach --flow 001 --target pull-request --ref 42
+ ```
+ 
+ The full surface:
+ 
+ ```console
+ $ keryx review
+ Usage:
+   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                       [--reviewers a,b] [--report <path>]
+   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                      [--memory-query "<query>"]
+   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                       [--verifications <file|->] [--verification-mode off|annotate|filter]
+-                      [--premises <file|->]
++                      [--premises <file|->]...
+                       [--scope <scope.json>] [--refuted <file|->]
+                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                       [--parallel <n>] [--outstanding <n>]
+   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                      [--json | --scoped-diff] [--append <file>]
+   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                             [--package <review-dir>] [--json | --brief] [--out <file>]
+   keryx review budget [--spent <usd>] [--ceiling <usd>]
+                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                 [--self <login>] [--round <n>]
+                                 [--out <findings.json>] [--json] [--fixtures <dir>]
+   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                               --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
+                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                               [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+   keryx review loop --flow <flow-id> [--task <Tn>]
+   keryx review stack [--json]
+   keryx review status <review-id-or-path>
+
+--- docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json
+@@ 234,278 @@
+         "dropped_prefilter": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
+         "dropped_low_confidence": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
+         "dropped_refuted": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
+         "dropped_scope_b": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
+         "dropped_findings_cap": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
++        "merged_duplicates": {
++          "description": "Records the duplicate merge folded into a surviving finding (flow 460). Not a drop; counted so that total minus the finding-stage drops minus merged_duplicates equals retained. Absent on records written before it, read as 0.",
++          "type": "integer",
++          "minimum": 0
++        },
+         "retained": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
+         "dismissed_by_round": {
+           "type": ["integer", "null"],
+           "minimum": 0
+         },
+         "by_reason": {
+           "type": "object",
+           "additionalProperties": {
+             "type": "integer",
+             "minimum": 0
+           }
+         },
+         "not_measured": {
+           "type": "array",
+           "items": {
+             "type": "object",
+             "additionalProperties": false,
+
+--- src/commands/agent-review-gate.test.ts
+@@ 51,98 @@
+ 
+ const probe: InteractiveTool = {
+   definition: {
+     name: "probe",
+     description: "fails identically on every attempt",
+     inputSchema: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false },
+     risk: "read",
+   },
+   invoke: async () => ({ output: "probe failure", isError: true }),
+ };
+ 
+ function reviewHistory(): NormalizedMessage[] {
+   return [
+     { role: "user", content: "review PR 7435", provenance: "trusted" },
+     {
+       role: "assistant",
+       content: "",
+       toolCalls: [{ id: "s1", name: "skill_load", arguments: JSON.stringify({ name: "review-orchestrator" }) }],
+     },
+     { role: "tool", content: "loaded", toolCallId: "s1" } as NormalizedMessage,
++    // The package was opened before this turn began; this session's own `review status` names it, so the gate
++    // recognises it (flow 460 review: a resumed review named in history is used).
++    {
++      role: "assistant",
++      content: "",
++      toolCalls: [{ id: "s2", name: "bash", arguments: JSON.stringify({ command: "keryx review status pr-1-all" }) }],
++    },
++    { role: "tool", content: "status: draft", toolCallId: "s2" } as NormalizedMessage,
+   ];
+ }
+ 
+ let root: string;
+ let previousCwd: string;
+ 
+ beforeEach(async () => {
+   previousCwd = process.cwd();
+   root = await mkdtemp(path.join(tmpdir(), "agent-review-gate-"));
+   const pkg = path.join(root, ".metaproject", "reviews", "pr-1-all");
+   await mkdir(pkg, { recursive: true });
+   await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ reviewId: "pr-1-all", mode: "review-flow", status: "draft" }));
+   process.chdir(root);
+ });
+ 
+ afterEach(async () => {
+   process.chdir(previousCwd);
+   await rm(root, { recursive: true, force: true });
+ });
+ 
+
+--- src/commands/review-ledger.test.ts
+@@ 1,33 @@
+ import { describe, expect, test } from "bun:test";
+ import { existsSync } from "node:fs";
+ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { recordOperatorDecision } from "../review/operator-decisions";
+ import { coverageErrors, isAttendedRun, operatorDecisionSubject, requiredReviewers } from "../review/coverage";
+ import type { RawFile } from "../review/ledger";
+ import { pendingMutants } from "../review/mutate";
+ import { runCoverage } from "./review-chunks";
+ import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, parseSkips, readDrivers, runLedger } from "./review-ledger";
+ import { computeVerdict, renderVerdict } from "../review/verdict";
++import { INGEST_SCREENED_FILE, researchErrors } from "../review/research";
+ 
+ describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
+   test("a rule file is found under definition, skill_path, or either key inside payload", () => {
+     expect(definitionCandidates({ definition: "a.md" })).toEqual(["a.md"]);
+     expect(definitionCandidates({ skill_path: "b.md" })).toEqual(["b.md"]);
+     expect(definitionCandidates({ payload: { skill_path: "c.md", definition: "d.md" } })).toEqual(["d.md", "c.md"]);
+     expect(definitionCandidates({ definition: "", payload: {} })).toEqual([]);
+   });
+ 
+   test("readDrivers resolves a payload skill_path and still names a missing definition as no rule", async () => {
+     const root = await mkdtemp(path.join(tmpdir(), "keryx-f430-"));
+     try {
+       await mkdir(path.join(root, "in", "drivers"), { recursive: true });
+       await mkdir(path.join(root, "rules"), { recursive: true });
+       await writeFile(path.join(root, "rules", "logic.md"), "# logic\n");
+       const put = (name: string, body: object) => writeFile(path.join(root, "in", "drivers", name), JSON.stringify(body));
+       await put("review-logic.json", { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt", payload: { skill_path: "rules/logic.md" } });
+       await put("review-style.json", { reviewer: "review-style", slices: [{ id: "S2", status: "DONE" }], result: "raw/review-style.txt", definition: "rules/missing.md" });
+       const drivers = await readDrivers(path.join(root, "in"), root);
+       expect(drivers.ruleFiles).toEqual({ "review-logic": path.join("rules", "logic.md") });
+
+--- src/commands/review-ledger.test.ts
+@@ 124,203 @@
+     for (const [name, body] of Object.entries(drivers)) await writeFile(path.join(pkg, "drivers", name), JSON.stringify(body));
+     return { pkg, cleanup: () => rm(root, { recursive: true, force: true }) };
+   }
+ 
+   async function build(pkg: string): Promise<Out> {
+     const lines: string[] = [];
+     const log = console.log;
+     const exitCode = process.exitCode;
+     console.log = (...args: unknown[]) => { lines.push(args.join(" ")); };
+     try {
+       await runLedger(["build", pkg, "--mode", "all", "--json"], { rejectUnknownFlags: () => undefined });
+     } finally {
+       console.log = log;
+       process.exitCode = exitCode;
+     }
+     return JSON.parse(lines.join("\n")) as Out;
+   }
+ 
+   const noBlock = (out: Out, file: string) => out.gaps.filter((gap) => gap.detail.includes(`raw/${file}`) && gap.detail.includes("no parseable REVIEW_RESULT block"));
+ 
++  test("flow 460: ingest's merges and screens close their raw findings with no hand-written rows", async () => {
++    const result = (findings: object[]) => `REVIEW_RESULT ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "s", findings, needs_context: [] })}`;
++    const raw = (id: string) => ({ id, severity: "minor", problem: `p ${id}`, impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" });
++    const { pkg, cleanup } = await fixture({ "review-logic-w1.txt": result([raw("F-001"), raw("F-002"), raw("F-003")]) });
++    try {
++      const gid = (id: string) => `2026-10-17-round#${id}`;
++      const canonical = [
++        { ...raw("review-logic-w1:F-001"), reviewer: "review-logic", global_id: gid("review-logic-w1:F-001") },
++        { ...raw("review-arch-w1:F-009"), reviewer: "review-architecture", global_id: gid("review-arch-w1:F-009"), merged_from: [gid("review-logic-w1:F-002")], reported_by: ["review-architecture", "review-logic"] },
++      ];
++      await writeFile(path.join(pkg, "findings.json"), JSON.stringify(canonical));
++      await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
++      await writeFile(path.join(pkg, INGEST_SCREENED_FILE), JSON.stringify({ version: 1, screened: [{ id: "review-logic-w1:F-003", reviewer: "review-logic", rule: "outside-set", detail: "src/z.ts is outside the computed set" }] }));
++      const out = await build(pkg);
++      const obligations = out.ledger.obligations as Array<{ id: string; status: string; finding?: string; reason?: string }>;
++      expect(obligations.map((o) => [o.id, o.status, o.finding ?? null])).toEqual([
++        ["review-logic-w1:F-001", "finding", gid("review-logic-w1:F-001")],
++        ["review-logic-w1:F-002", "finding", gid("review-arch-w1:F-009")],
++        ["review-logic-w1:F-003", "out-of-scope", null],
++      ]);
++      expect(obligations[2]?.reason).toContain("outside-set");
++      // Readiness item 5 reads these through researchErrors: no obligation is open and every link resolves.
++      expect(researchErrors(out.ledger, canonical).filter((error) => error.includes("review-logic-w1"))).toEqual([]);
++      expect(out.ledger.rawReconciled).toBe(true);
++    } finally {
++      await cleanup();
++    }
++  });
++
++  test("flow 460: canonical findings whose display id holds '#' are refused by ledger build, naming the id form", async () => {
++    const { pkg, cleanup } = await fixture({});
++    try {
++      await writeFile(path.join(pkg, "findings.json"), JSON.stringify([{ id: "review-logic-w1#F-001", reviewer: "review-logic" }]));
++      await expect(build(pkg)).rejects.toThrow('ledger build refused: 1 finding id(s) in');
++      await expect(build(pkg)).rejects.toThrow('a display id holds no "#"');
++    } finally {
++      await cleanup();
++    }
++  });
++
+   test("a verification payload filed in raw/ is set aside, listed, kept on disk, and does not block the ledger", async () => {
+     const { pkg, cleanup } = await fixture({ "verification.txt": '{"claims": []}' });
+     try {
+       const out = await build(pkg);
+       expect(out.ignored).toHaveLength(1);
+       expect(out.ignored[0]).toContain("raw/verification.txt (set aside:");
+       expect(noBlock(out, "verification.txt")).toEqual([]);
+       expect(out.ledger.rawReconciled).toBe(true);
+       expect(out.ledger.setAside).toEqual(["raw/verification.txt"]);
+       expect(JSON.parse(await readFile(path.join(pkg, "research.json"), "utf8")).setAside).toEqual(["raw/verification.txt"]);
+       expect(existsSync(path.join(pkg, "raw", "verification.txt"))).toBe(true);
+     } finally {
+       await cleanup();
+     }
+   });
+ 
+   test("a file that holds REVIEW_RESULT but no parseable block is a gap that blocks, never set aside", async () => {
+     const { pkg, cleanup } = await fixture({ "notes.txt": "REVIEW_RESULT: this is where the block should be, but it is cut off" });
+     try {
+       const out = await build(pkg);
+
+--- src/commands/review-ledger.test.ts
+@@ 416,459 @@
+   }
+ 
+   test("a skip of a required reviewer needs the operator's recorded decision (M5); with it the skip leaves the selection as Not run", async () => {
+     const { root, pkg, cleanup } = await packageAt(["reviews", "pkg"]);
+     try {
+       const required = (await requiredReviewers(root, "all", ["src/a.ts"])).required;
+       const skipped = required.find((name) => name !== "review-logic")!;
+       // The agent's flag alone is refused, and names the card and the terminal command.
+       await expect(run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).rejects.toThrow(/needs the operator's decision.*review_override_reviewers/s);
+       const subject = await operatorDecisionSubject(pkg, "reviewer-override", required.filter((name) => name !== skipped));
+       expect(subject.items).toEqual([skipped]);
+       await recordOperatorDecision(pkg, { kind: "reviewer-override", quote: "yes, skip it", reason: "hotfix", confirmedVia: "terminal", at: new Date().toISOString(), subject });
+       const out = JSON.parse((await run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text) as Out;
+       expect(out.ledger.dispatch.skipped).toEqual([{ reviewer: skipped, reason: "operator: no style pass on a hotfix" }]);
+       expect(out.ledger.dispatch.notRun).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+       expect(out.ledger.dispatch.selected).not.toContain(skipped);
+       expect(out.gaps.some((gap) => gap.reviewer === skipped)).toBe(false);
+       expect(out.blockers.join("\n")).not.toContain(skipped);
+       // The gate on the dispatch: the skip counts with the package's recorded decision, never as a dispatch entry alone.
+       const dispatch = out.ledger.dispatch;
+-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
++      expect(await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).toEqual([]);
+       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).toContain("dispatch.skipped is not accepted");
+       // Flow 460 (B): the recorded decision itself accounts for the reviewer it left out, with or without a dispatch field.
+-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
++      expect(await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).toEqual([]);
+ 
+       const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
+       expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);
+       const verdict = await computeVerdict(pkg);
+       expect(verdict.notRun?.[0]).toBe(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+       // M6: a reviewer the required set dropped by an overlap group or a supersede is named in the verdict, with why.
+       expect(verdict.notRun).toContain("excluded: review-frontend-conventions — overlap group frontend: review-frontend reads the same lines");
+       expect(renderVerdict(verdict, "pkg")).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+     } finally {
+       await cleanup();
+     }
+   });
+ 
+   test("a skip without a reason or a reason without a skip is refused; a skip of a reviewer the round does not require is only recorded", async () => {
+     expect(() => parseSkips(["--skip", "review-style"])).toThrow("needs --reason");
+     expect(() => parseSkips(["--reason", "why"])).toThrow("must follow");
+     expect(() => parseSkips(["--skip", "a", "--skip", "b", "--reason", "x"])).toThrow("has no --reason");
+     expect(() => parseSkips(["--skip", "a", "--reason", ""])).toThrow("needs a value");
+     expect(parseSkips(["--package", "p", "--skip", "a", "--reason", "x", "--skip", "b", "--reason", "y"])).toEqual([
+       { reviewer: "a", reason: "x" },
+
+--- src/commands/review-plan.e2e.test.ts
+@@ 1,141 @@
++// Flow 460 (G, AC6): one quote the locator cannot place used to refuse the whole round, so no round was recorded and the
++// next `review plan` found no previous round. Real steps end to end, in a real git repository (hence the e2e tier, apart
++// from review-plan.test.ts, whose steps are faked): plan → ingest with an unplaceable quote → fix commit → plan. The
++// ambiguous-quote branch is pinned at the ingest level (src/review/ingest-locator-sha.test.ts).
++
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { existsSync } from "node:fs";
++import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { PLAN_FILE, type ReviewPlan } from "./review-plan";
++import { reviewCommand } from "./review";
++import { computeReadiness } from "../review/readiness";
++
++describe("plan → ingest with an unplaceable quote → fix commit → plan", () => {
++  const ORIGINAL_CWD = process.cwd();
++  const EMAIL = "200531777+MrCipherSmith@users.noreply.github.com";
++  const realLog = console.log;
++  const realError = console.error;
++  const realXdg = process.env.XDG_DATA_HOME;
++  let repo = "";
++
++  const git = (...args: string[]): string => {
++    const run = Bun.spawnSync(["git", ...args], { cwd: repo, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: EMAIL, GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: EMAIL } });
++    if (run.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${run.stderr.toString()}`);
++    return run.stdout.toString().trim();
++  };
++  const source = (fixed: boolean): string =>
++    [
++      ...Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`),
++      "export function total(items: number[]): number {",
++      fixed ? "  return items.reduce((sum, item) => sum + item, 0);" : "  return items.reduce((sum, item) => sum + item);",
++      "}",
++      "",
++    ].join("\n");
++  const finding = (id: string, quote: string) => ({ id, reviewer: "review-logic", severity: "minor", file: "src/a.ts", line: 14, quote, problem: `problem ${id}`, impact: "wrong total", suggested_fix: "seed the reduce", evidence: "read the function", confidence: "high" });
++
++  beforeEach(async () => {
++    repo = await mkdtemp(path.join(tmpdir(), "keryx-plan-e2e-"));
++    process.env.XDG_DATA_HOME = path.join(repo, ".xdg");
++    await mkdir(path.join(repo, ".metaproject"), { recursive: true });
++    await mkdir(path.join(repo, "src"), { recursive: true });
++    git("init", "-q", "-b", "main");
++    await writeFile(path.join(repo, "src", "a.ts"), Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`).join("\n") + "\n");
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "base");
++    git("checkout", "-q", "-b", "feature");
++    await writeFile(path.join(repo, "src", "a.ts"), source(false));
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "add total");
++    process.chdir(repo);
++    console.log = () => {};
++    console.error = () => {};
++    process.exitCode = 0;
++  });
++  afterEach(async () => {
++    console.log = realLog;
++    console.error = realError;
++    process.exitCode = 0;
++    process.chdir(ORIGINAL_CWD);
++    if (realXdg === undefined) delete process.env.XDG_DATA_HOME;
++    else process.env.XDG_DATA_HOME = realXdg;
++    await rm(repo, { recursive: true, force: true });
++  });
++
++  /** Runs `review plan` and returns the plan of the newest round (the highest round number among packages with a plan). */
++  const plan = async (): Promise<ReviewPlan> => {
++    await reviewCommand(["plan", "--target", "feature", "--ref", "main", "--json"]);
++    expect(process.exitCode ?? 0).toBe(0);
++    const reviewsDir = path.join(repo, ".metaproject", "reviews");
++    const planned = (await readdir(reviewsDir)).filter((name) => existsSync(path.join(reviewsDir, name, PLAN_FILE)));
++    const plans = await Promise.all(planned.map(async (name) => JSON.parse(await readFile(path.join(reviewsDir, name, PLAN_FILE), "utf8")) as ReviewPlan));
++    return plans.reduce((newest, candidate) => (candidate.round.number > newest.round.number ? candidate : newest));
++  };
++
++  test("the round with the unplaced quote is recorded, and the plan after the fix is a delta round with a fix slice for the finding", async () => {
++    const first = await plan();
++    expect(first.round.mode).toBe("first");
++    // `plan --ref main` starts the round with `--base main`, which the target records: the coverage gate's light recheck
++    // diffs against it before any default branch.
++    expect(JSON.parse(await readFile(path.join(first.package, "manifest.json"), "utf8")).target.base).toBe("main");
++    const firstId = path.basename(first.package);
++
++    const report = ["# Round 1", "", "```json keryx:findings", JSON.stringify([finding("F-1", "  return items.reduce((sum, item) => sum + item);"), finding("F-2", "  return items.total();")]), "```", ""].join("\n");
++    await writeFile(path.join(repo, "report.md"), report);
++    await writeFile(path.join(repo, "research.json"), JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] }));
++    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", firstId, "--report", "report.md", "--research", "research.json"]);
++    expect(process.exitCode ?? 0).toBe(0);
++    const recorded = JSON.parse(await readFile(path.join(first.package, "findings.json"), "utf8")) as Array<Record<string, unknown>>;
++    const byId = Object.fromEntries(recorded.map((entry) => [entry.id, entry]));
++    expect(byId["F-1"]).toMatchObject({ line: 14, locator: { state: "derived" } });
++    expect(byId["F-2"]).toMatchObject({ line: null, quote_unlocated: { reason: "absent" } });
++    expect(await readFile(path.join(first.package, "scope.md"), "utf8")).toContain("## Quotes not located at the reviewed head");
++    expect((await computeReadiness(first.package)).items.find((item) => item.id === "quotes-located")).toMatchObject({ status: "fail" });
++
++    await writeFile(path.join(repo, "src", "a.ts"), source(true));
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "fix F-1: seed the reduce");
++
++    const second = await plan();
++    expect(second.package).not.toBe(first.package);
++    expect(second.round).toMatchObject({ number: 2, mode: "delta", previous: firstId });
++    expect(second.round.fixHunks).toBeGreaterThan(0);
++    expect(second.slices.fix.length).toBeGreaterThan(0);
++    const fix = second.slices.fix.find((slice) => slice.findingIds?.includes("F-1"));
++    expect(fix?.files).toContain("src/a.ts");
++    expect(fix?.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression"]));
++  }, 60_000);
++
++  test("flow 460 L6: a fix of F-1 and an unrelated new function in the same file plan as one fix slice with the fix roster and one new slice with round-1 roles", async () => {
++    const first = await plan();
++    const firstId = path.basename(first.package);
++    const report = ["# Round 1", "", "```json keryx:findings", JSON.stringify([finding("F-1", "  return items.reduce((sum, item) => sum + item);")]), "```", ""].join("\n");
++    await writeFile(path.join(repo, "report.md"), report);
++    await writeFile(path.join(repo, "research.json"), JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] }));
++    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", firstId, "--report", "report.md", "--research", "research.json"]);
++    expect(process.exitCode ?? 0).toBe(0);
++
++    await writeFile(path.join(repo, "src", "a.ts"), source(true));
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "fix F-1: seed the reduce");
++    // Far below the fix, in its own commit that names no finding: new code.
++    const padding = Array.from({ length: 40 }, (_, i) => `export const pad${i} = ${i};`).join("\n");
++    await writeFile(path.join(repo, "src", "a.ts"), `${source(true)}${padding}\nexport function run(cmd: string[]) { return Bun.spawn(cmd); }\n`);
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "add a runner");
++
++    const second = await plan();
++    expect(second.round).toMatchObject({ number: 2, mode: "delta" });
++    expect(second.slices.fix).toHaveLength(1);
++    // Exactly the fix roster: logic and regression (F-1's author is review-logic); nothing the fix's content would route.
++    expect(second.slices.fix[0]).toMatchObject({ files: ["src/a.ts"], findingIds: ["F-1"], roles: ["review-logic", "review-regression"] });
++    // The runner, in the same file, is a new slice routed as in round 1: spawning a process brings security-code.
++    const fresh = second.slices.new.filter((slice) => slice.files.includes("src/a.ts"));
++    expect(fresh).toHaveLength(1);
++    expect(fresh[0]!.roles).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
++    // The fix slice's roster joins the round; nothing its content routes does (no union with round-1 routing).
++    expect(second.split?.fix).toMatchObject({ slices: 1, dispatches: 2 });
++    expect(second.dispatches).toBeLessThanOrEqual(40);
++  }, 60_000);
++});
+
+--- src/commands/review-plan.test.ts
+@@ 1,32 @@
+ // Flow 458 AC8: `keryx review plan` runs the round's planning steps in order, writes plan.json and never dispatches.
+ // The steps are replaced by a fake that leaves the files the real ones leave; the plan's own reading of them is real.
++// The real steps end to end, in a real git repository, are in review-plan.e2e.test.ts.
+ 
+-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { afterEach, beforeEach, expect, test } from "bun:test";
+ import { existsSync } from "node:fs";
+-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import type { RoundRecord } from "../review/round-record";
+ import { PLAN_FILE, PLAN_FLAGS, nextStepOf, packagePathOf, runPlan, slicesByKind, targetKindOf, type ReviewPlan, type StepResult } from "./review-plan";
+-import { printReviewHelpFor, reviewCommand } from "./review";
+-import { computeReadiness } from "../review/readiness";
++import { printReviewHelpFor } from "./review";
+ 
+ const realLog = console.log;
+ let root = "";
+ let pkg = "";
+ let out: string[] = [];
+ let calls: string[][] = [];
+ 
+ beforeEach(async () => {
+   root = await mkdtemp(path.join(tmpdir(), "keryx-review-plan-"));
+   pkg = path.join(root, ".metaproject", "reviews", "r2");
+   await mkdir(pkg, { recursive: true });
+   out = [];
+   calls = [];
+   console.log = (...args: unknown[]) => void out.push(args.map(String).join(" "));
+ });
+ 
+ afterEach(async () => {
+   console.log = realLog;
+   await rm(root, { recursive: true, force: true });
+ });
+
+--- src/commands/review-plan.test.ts
+@@ 163,183 @@
+   expect(out.join("\n")).toContain("keryx review plan --target <pr-url|branch>");
+   expect(calls).toEqual([]);
+   expect(PLAN_FLAGS).toContain("--head");
+ });
+ 
+ test("small readers: target kind, the package path of start's output, slices by kind", () => {
+   expect(targetKindOf("https://github.com/o/r/pull/12")).toBe("pr");
+   expect(targetKindOf("o/r#12")).toBe("pr");
+   expect(targetKindOf("12")).toBe("pr");
+   expect(targetKindOf("feat/review-delta-rounds")).toBe("branch");
+   expect(packagePathOf("a\npath: .metaproject/reviews/r2\nb", root)).toBe(path.join(root, ".metaproject/reviews/r2"));
+   expect(packagePathOf("nothing", root)).toBeUndefined();
+   expect(slicesByKind({ slices: SPLIT as never }).fix.length).toBe(1);
+   expect(slicesByKind({ slices: [{ ...(SPLIT[1] as object), retryOf: ["slice-02"] }] as never })).toEqual({ fix: [], new: [] });
+ });
+ 
+ test("review plan has its own help entry", () => {
+   printReviewHelpFor(["plan"]);
+   expect(out.join("\n")).toContain("keryx review plan --target");
+ });
+-
+-// Flow 460 (G, AC6): one quote the locator cannot place used to refuse the whole round, so no round was recorded and the
+-// next `review plan` found no previous round. Real steps end to end: plan → ingest with an unplaceable quote → fix → plan.
+-describe("plan → ingest with an unplaceable quote → fix commit → plan", () => {
+-  const ORIGINAL_CWD = process.cwd();
+-  const EMAIL = "200531777+MrCipherSmith@users.noreply.github.com";
+-  const realError = console.error;
+-  const realXdg = process.env.XDG_DATA_HOME;
+-  let repo = "";
+-
+-  const git = (...args: string[]): string => {
+-    const run = Bun.spawnSync(["git", ...args], { cwd: repo, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: EMAIL, GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: EMAIL } });
+-    if (run.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${run.stderr.toString()}`);
+-    return run.stdout.toString().trim();
+-  };
+-  const source = (fixed: boolean): string =>
+-    [
+-      ...Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`),
+-      "export function total(items: number[]): number {",
+-      fixed ? "  return items.reduce((sum, item) => sum + item, 0);" : "  return items.reduce((sum, item) => sum + item);",
+-      "}",
+-      "",
+-    ].join("\n");
+-  const finding = (id: string, quote: string) => ({ id, reviewer: "review-logic", severity: "minor", file: "src/a.ts", line: 14, quote, problem: `problem ${id}`, impact: "wrong total", suggested_fix: "seed the reduce", evidence: "read the function", confidence: "high" });
+-
+-  beforeEach(async () => {
+-    repo = await mkdtemp(path.join(tmpdir(), "keryx-plan-e2e-"));
+-    process.env.XDG_DATA_HOME = path.join(repo, ".xdg");
+-    await mkdir(path.join(repo, ".metaproject"), { recursive: true });
+-    await mkdir(path.join(repo, "src"), { recursive: true });
+-    git("init", "-q", "-b", "main");
+-    await writeFile(path.join(repo, "src", "a.ts"), Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`).join("\n") + "\n");
+-    git("add", "src/a.ts");
+-    git("commit", "-q", "-m", "base");
+-    git("checkout", "-q", "-b", "feature");
+-    await writeFile(path.join(repo, "src", "a.ts"), source(false));
+-    git("add", "src/a.ts");
+-    git("commit", "-q", "-m", "add total");
+-    process.chdir(repo);
+-    console.log = () => {};
+-    console.error = () => {};
+-    process.exitCode = 0;
+-  });
+-  afterEach(async () => {
+-    console.log = realLog;
+-    console.error = realError;
+-    process.exitCode = 0;
+-    process.chdir(ORIGINAL_CWD);
+-    if (realXdg === undefined) delete process.env.XDG_DATA_HOME;
+-    else process.env.XDG_DATA_HOME = realXdg;
+-    await rm(repo, { recursive: true, force: true });
+-  });
+-
+-  const plan = async (): Promise<ReviewPlan> => {
+-    await reviewCommand(["plan", "--target", "feature", "--ref", "main", "--json"]);
+-    expect(process.exitCode ?? 0).toBe(0);
+-    const latest = (await readdir(path.join(repo, ".metaproject", "reviews"))).filter((name) => existsSync(path.join(repo, ".metaproject", "reviews", name, PLAN_FILE))).sort();
+-    const found = await Promise.all(latest.map(async (name) => JSON.parse(await readFile(path.join(repo, ".metaproject", "reviews", name, PLAN_FILE), "utf8")) as ReviewPlan));
+-    return found.sort((a, b) => a.round.number - b.round.number)[found.length - 1]!;
+-  };
+-
+-  test("the round with the unplaced quote is recorded, and the plan after the fix is a delta round with a fix slice for the finding", async () => {
+-    const first = await plan();
+-    expect(first.round.mode).toBe("first");
+-    const firstId = path.basename(first.package);
+-
+-    const report = ["# Round 1", "", "```json keryx:findings", JSON.stringify([finding("F-1", "  return items.reduce((sum, item) => sum + item);"), finding("F-2", "  return items.total();")]), "```", ""].join("\n");
+-    await writeFile(path.join(repo, "report.md"), report);
+-    await writeFile(path.join(repo, "research.json"), JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] }));
+-    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", firstId, "--report", "report.md", "--research", "research.json"]);
+-    expect(process.exitCode ?? 0).toBe(0);
+-    const recorded = JSON.parse(await readFile(path.join(first.package, "findings.json"), "utf8")) as Array<Record<string, unknown>>;
+-    const byId = Object.fromEntries(recorded.map((entry) => [entry.id, entry]));
+-    expect(byId["F-1"]).toMatchObject({ line: 14, locator: { state: "derived" } });
+-    expect(byId["F-2"]).toMatchObject({ line: null, quote_unlocated: { reason: "absent" } });
+-    expect(await readFile(path.join(first.package, "scope.md"), "utf8")).toContain("## Quotes not located at the reviewed head");
+-    expect((await computeReadiness(first.package)).items.find((item) => item.id === "quotes-located")).toMatchObject({ status: "fail" });
+-
+-    await writeFile(path.join(repo, "src", "a.ts"), source(true));
+-    git("add", "src/a.ts");
+-    git("commit", "-q", "-m", "fix F-1: seed the reduce");
+-
+-    const second = await plan();
+-    expect(second.package).not.toBe(first.package);
+-    expect(second.round).toMatchObject({ number: 2, mode: "delta", previous: firstId });
+-    expect(second.round.fixHunks).toBeGreaterThan(0);
+-    expect(second.slices.fix.length).toBeGreaterThan(0);
+-    const fix = second.slices.fix.find((slice) => slice.findingIds?.includes("F-1"));
+-    expect(fix?.files).toContain("src/a.ts");
+-    expect(fix?.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression"]));
+-  }, 60_000);
+-});
+
+--- src/commands/review-premises-cli.test.ts
+@@ 46,111 @@
+ const PREMISES = {
+   judge: "review-premise",
+   premises: [{ finding_id: "LY-003", verdict: "challenged", practice_sources: [{ name: "Material Design bidirectionality", says: "timelines do not mirror" }], question: "Mirror the timeline?" }],
+ };
+ 
+ async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
+   process.chdir(ROOT);
+   await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", reviewId, ...extra]);
+   return path.join(ROOT, ".metaproject", "reviews", reviewId);
+ }
+ 
+ test("ingest --premises reaches the merge: the finding carries the premise and the claims file is kept", async () => {
+   await writeFile(path.join(ROOT, "report.md"), REPORT);
+   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+   const dir = await ingest("2026-10-16-premises", ["--premises", "premises.json"]);
+   const [finding] = JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as Array<{ premise?: { verdict: string; question: string } }>;
+   expect(finding?.premise).toMatchObject({ verdict: "challenged", question: "Mirror the timeline?" });
+   expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
+ });
+ 
++test("flow 460: --premises is repeatable — files merge with their own judges, and a disagreement across files applies neither", async () => {
++  const report = REPORT.replace(
++    JSON.stringify([{ id: "LY-003", reviewer: "review-layout", severity: "minor", problem: "timeline pinned LTR", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" }]),
++    JSON.stringify([
++      { id: "LY-003", reviewer: "review-layout", severity: "minor", problem: "timeline pinned LTR", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" },
++      { id: "LG-001", reviewer: "review-logic", severity: "minor", problem: "retry counter never resets", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" },
++    ]),
++  );
++  await writeFile(path.join(ROOT, "report.md"), report);
++  const code = { judge: "review-premise-code", premises: [{ finding_id: "LG-001", verdict: "upheld" }, { finding_id: "LY-003", verdict: "upheld" }] };
++  const rest = { judge: "review-premise-rest", premises: [PREMISES.premises[0]] };
++  await writeFile(path.join(ROOT, "code.json"), JSON.stringify(code));
++  await writeFile(path.join(ROOT, "rest.json"), JSON.stringify(rest));
++  const dir = await ingest("2026-10-17-premises-many", ["--premises", "code.json", "--premises", "rest.json"]);
++  const findings = JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as Array<{ id: string; premise?: { verdict: string; judge: string } }>;
++  // LG-001: judged by one file only, with that file's judge.
++  expect(findings.find((finding) => finding.id === "LG-001")?.premise).toMatchObject({ verdict: "upheld", judge: "review-premise-code" });
++  // LY-003: upheld in one file, challenged in the other — a conflict, so neither is applied.
++  expect(findings.find((finding) => finding.id === "LY-003")?.premise).toBeUndefined();
++  const scope = await readFile(path.join(dir, "scope.md"), "utf8");
++  expect(scope).toContain("duplicate-claim");
++  expect(scope).toContain("premise files name this finding and do not agree");
++  // The claims are kept as received, one entry per file.
++  expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual([code, rest]);
++});
++
+ type HeldRecord = { premise?: { verdict: string } };
+ const readFindings = async (dir: string): Promise<HeldRecord[]> => JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as HeldRecord[];
+ 
+ test("a re-ingest without --premises carries the held claims forward while they still hold the same finding (review RG2-004)", async () => {
+   await writeFile(path.join(ROOT, "report.md"), REPORT);
+   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+   const dir = await ingest("2026-10-16-reingest", ["--premises", "premises.json"]);
+   const lines: string[] = [];
+   console.log = (...args: unknown[]) => void lines.push(args.map(String).join(" "));
+   await ingest("2026-10-16-reingest");
+   expect(process.exitCode).toBe(0);
+   expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
+   expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
+   expect(lines.join("\n")).toContain("premise claims: carried forward");
+ });
+ 
+ test("a re-ingest without --premises is not refused over a stored held claim the first ingest rejected (review RG4-001)", async () => {
+   await writeFile(path.join(ROOT, "report.md"), REPORT);
+   const withTypo = { ...PREMISES, premises: [...PREMISES.premises, { ...PREMISES.premises[0], finding_id: "LY-999" }] };
+   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(withTypo));
+
+--- src/commands/review-slice.test.ts
+@@ 175,227 @@
+   expect(plan.collectedLate).toBe(0);
+   await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE", slices: ids })}\n`);
+   plan = JSON.parse(await nextWave());
+   expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+   expect(plan.collectedLate).toBe(0);
+ });
+ 
+ test("retry-plan --package: a late result counts the slices it reported, not the whole assignment (same rule as the ledger)", async () => {
+   await writeFile(path.join(root, "change.diff"), ["a", "b", "c"].map((n) => gitFile(`src/m/${n}.ts`, 40)).join(""), "utf8");
+   await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "1500", "--out", "out"]);
+   expect(process.exitCode).toBe(0);
+   const ids = (JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string }> }).slices.map((slice) => slice.id);
+   logs = [];
+   expect(ids.length).toBeGreaterThanOrEqual(3);
+   await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: [ids[0]] })}\n`);
+   const plan = JSON.parse(await nextWave());
+   expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids.slice(1));
+   expect(plan.collectedLate).toBe(1);
+ });
+ 
++test("retry-plan --package: a late DONE result that names no slices covers none (flow 460 D, same rule as the ledger)", async () => {
++  const { ids } = await sliceOnce();
++  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", findings: [] })}\n`);
++  let plan = JSON.parse(await nextWave());
++  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
++  expect(plan.collectedLate).toBe(0);
++  // A finished reply that says it could not read a mandatory input covers nothing either.
++  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "I could not read the payload, so I reviewed the diff only", slices: ids })}\n`);
++  plan = JSON.parse(await nextWave());
++  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
++  expect(plan.collectedLate).toBe(0);
++});
++
+ test("retry-plan --package: a late result for a different scope fingerprint covers nothing", async () => {
+   const { ids } = await sliceOnce();
+   await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", scopeFingerprint: "stale", slices: ids })}\n`);
+   const plan = JSON.parse(await nextWave());
+   expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+   expect(plan.collectedLate).toBe(0);
+ });
+ 
+ test("retry-plan --package: two drivers naming the same raw file are collected once", async () => {
+   const { ids } = await sliceOnce();
+   await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids })}\n`);
+   await writeFile(path.join(root, "pkg", "drivers", "review-logic-2.json"), JSON.stringify({ reviewer: "review-logic", slices: ids, result: "raw/review-logic.txt" }), "utf8");
+   const plan = JSON.parse(await nextWave());
+   expect(plan.dispatch).toEqual([]);
+   expect(plan.collectedLate).toBe(1);
+ });
+ 
+ test("slice writes the routing into the manifest: roles from content, review-logic on every slice, a depth", async () => {
+   await sliceOnce();
+   const manifest = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ roles?: string[]; depth?: string; risk?: { score: number } }> };

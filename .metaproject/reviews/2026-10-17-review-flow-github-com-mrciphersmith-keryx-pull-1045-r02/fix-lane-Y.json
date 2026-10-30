@@ -1,0 +1,1530 @@
+[
+ {
+  "id": "r2-review-architecture-w3:AR-002",
+  "severity": "minor",
+  "file": "src/commands/review.ts",
+  "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+  "problem": "readPremises returns a polymorphic value: one --premises file yields the bare premises object, several yield an array of PremiseSource, so ManagedReviewInput[\"premises\"] has to admit both. The ingest merge must branch on the shape, and the multi-file branch needs an `as PremiseSource` cast because readPremiseFile is typed with the wider union.",
+  "impact": "Two shapes for one input is a standing source of drift in the merge (every consumer must normalise); the cast hides a mismatch the compiler would otherwise catch.",
+  "suggested_fix": "Normalise at the boundary: readPremises always returns PremiseSource[] (one element for a single file), readPremiseFile returns PremiseSource, ManagedReviewInput.premises narrows to the array form; drop the cast.",
+  "evidence": "readPremises (review.ts, diff lines 670-689) returns readPremiseFile(sources[0]) for one file and a PremiseSource[] otherwise.",
+  "_src": "review-architecture-w3"
+ },
+ {
+  "id": "r2-review-architecture-w3:AR-003",
+  "severity": "minor",
+  "file": "src/commands/review-slice.ts",
+  "quote": "const fixBuilt = parts === undefined || parts.fix.length === 0 ? undefined : buildSlices({ ...source, regions: parts.fix, drops: [] }, { maxBytes, waveBytes });",
+  "problem": "The slice command now runs three build/route/classify pipelines (new, fix, second-look) inline in one function, each with its own conditional and omission merge, then renumbers across them. The partition lives in round-split, but the orchestration of the three cuts, the manual `drops: []` that avoids double-counting, and the omissions de-duplication are all inlined in the command body.",
+  "impact": "Each new slice kind adds another branch to an already long command function and another place that must remember to suppress duplicated drops/omissions; a missed `drops: []` double-counts omitted files in totals.",
+  "suggested_fix": "Move the delta cut (partition, three builds, routing, classification, omission merge) behind one function in src/review/round-split.ts or slice.ts returning {slices, omissions}; the command only calls it.",
+  "evidence": "review-slice.ts diff lines 463-493: fixBuilt, secondBuilt, fixSlices, second and the omissions filter are all assembled in the command.",
+  "_src": "review-architecture-w3"
+ },
+ {
+  "id": "r2-review-architecture-w4:AR-001",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": null,
+  "quote": "const { defaultGitRunner, emptyRangeWarning, resolveBase } = await import(\"./prior-round\");",
+  "problem": "The coverage gate now reaches into prior-round (round planning) for base resolution and breaks the resulting import cycle (prior-round -> publish -> readiness -> coverage) with a lazy dynamic import inside diffOfTarget.",
+  "impact": "A cycle hidden behind await import() is invisible to static import checks and to gdgraph; the next edit that adds a top-level import in any of the four modules can turn it into a load-time undefined.",
+  "suggested_fix": "Move resolveBase, emptyRangeWarning and defaultGitRunner (pure git helpers) into a leaf module (e.g. ./git-base.ts) that both prior-round and coverage import statically.",
+  "evidence": "Comment on the import: 'prior-round imports publish, which imports readiness, which imports this module'. Only dynamic import in src/review/*.ts per grep.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "_src": "review-architecture-w4"
+ },
+ {
+  "id": "r2-review-architecture-w4:AR-002",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "if (/keryx review (start|scope|slice|ingest|complete)/.test(call.arguments)) return true;",
+  "problem": "Two definitions of 'this session ran a review' now coexist: reviewRunSeenInHistory (a closed list of five subcommands) and SessionReviewTracker (KERYX_REVIEW_COMMAND = any `keryx review`). The new NO_PACKAGE nextStep tells the model to continue an earlier-session review with `keryx review status <id-or-path>`, and OWN_OUTPUT_LINE documents `attach`, yet neither status nor attach counts as runSeen.",
+  "impact": "decideReviewGate returns accept when !runSeen, so a session that only names an earlier package via status/attach is never nudged: the flow-460 C scenario (continuing a package) is only gated once a listed subcommand also runs.",
+  "suggested_fix": "Derive runSeen from the same predicate/tracker (any keryx review call) or extend the list with status and attach; keep one definition.",
+  "evidence": "completion-gate.ts: reviewRunSeenInHistory regex vs `const KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/;` and nextStep text 'name its package (`keryx review status <review-id-or-path>`)'.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "_src": "review-architecture-w4"
+ },
+ {
+  "id": "r2-review-architecture-w4:AR-003",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": null,
+  "quote": "const gitTopLevel = processCache(uncachedGitTopLevel, (top) => top !== undefined);",
+  "problem": "gitTopLevel is memoised in a module-level Map for the life of the process, and the doc says it 'does not change within a command'. The same gate code (reviewCompletionBlockers via completion-gate) runs in the long-lived keryx shell, where the process outlives many commands, worktree moves and checkouts.",
+  "impact": "Hidden mutable module state in a gate: a positive answer for a directory is never re-validated, so a removed or re-created worktree at the same path keeps its old top level until restart. Likely rare; settle by checking whether the shell harness calls coverageErrors in-process across commands.",
+  "suggested_fix": "Scope the cache to a call (pass a cache or memo via CoverageOptions) or give entries a short TTL; at least correct the comment to say per process.",
+  "evidence": "processCache keeps GIT_CACHE_ENTRIES=64 entries per process; the shell nudge path imports ./managed in-process (completion-gate.ts imports reviewCompletionBlockers).",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "_src": "review-architecture-w4"
+ },
+ {
+  "id": "r2-review-architecture-w4:AR-004",
+  "severity": "minor",
+  "file": "src/review/managed.ts",
+  "line": null,
+  "quote": "async function readManifestHead(packageDir: string)",
+  "problem": "A new private manifest.json reader (mode and flow.id via an ad hoc cast) is added in managed.ts while completion-gate.ts scanRoot parses manifest.json with its own inline cast type and review/active-review does the same elsewhere. There is no shared manifest-header reader, so each caller re-declares the shape of the fields it trusts.",
+  "impact": "Manifest field renames or a version bump must be chased through N private casts; none is covered by validateManagedReviewManifest.",
+  "suggested_fix": "Export one readManifestHead (mode, status, reviewId, flow.id) from a small package-manifest module and use it in managed.ts and completion-gate.ts.",
+  "evidence": "managed.ts readManifestHead; completion-gate.ts scanRoot `JSON.parse(await readFile(path.join(dir, \"manifest.json\"), \"utf8\")) as { mode?: string; status?: string; reviewId?: string }`.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "_src": "review-architecture-w4"
+ },
+ {
+  "id": "r2-review-architecture-w5:AR-001",
+  "severity": "minor",
+  "file": "src/review/research.ts",
+  "line": 46,
+  "title": "dispatchRuns is introduced as the shared dispatch.runs reader but only two of the readers use it",
+  "problem": "research.ts now exports dispatchRuns (typed DispatchRun) as the lenient reader of research.json dispatch.runs, and coverageMdCheck and managed.ts use it. reviewersCheck in the same file as coverageMdCheck still re-parses the same array by hand (record + Array.isArray), and coverage-complete.ts (lines 63, 80, 96) and tui/review-panel.ts (line 96) each keep their own parse. The dispatch.runs shape is now read through one typed accessor and four ad hoc ones; a field added to a run (status values, routedOut) has to be taught to each.",
+  "why_it_matters": "A second reading of the same record is the drift the new helper was meant to end; readiness and the coverage gate can disagree on what a run is.",
+  "suggested_fix": "Route reviewersCheck (readiness.ts) and the coverage-complete.ts readers through dispatchRuns, or state in its doc comment why they are exempt.",
+  "evidence": "export function dispatchRuns(research: unknown): DispatchRun[] {",
+  "_src": "review-architecture-w5"
+ },
+ {
+  "id": "r2-review-architecture-w5:AR-002",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": 137,
+  "title": "The coverage.md format contract lives in the checker (readiness), and the writer imports it from there",
+  "problem": "COVERAGE_MD_MARK and COVERAGE_ENTRY (the reader of the `reviewer:`/`status:` layout) are defined in readiness.ts, while the writer renderCoverage in managed.ts imports the mark from readiness and hard-codes the `reviewer: ..\\nstatus: ..` layout in its own template. The ingest (producer) therefore depends on the verification layer for a constant of the artifact it owns, and the two halves of one format (template and regex) sit in different modules with no shared definition.",
+  "why_it_matters": "Dependency direction runs from producer to checker, and a change to the layout in renderCoverage silently breaks the regex in readiness without a compile-time link.",
+  "suggested_fix": "Move COVERAGE_MD_MARK, the entry regex and a small parseCoverageEntries/renderCoverageEntry pair into one coverage-md module that both managed.ts and readiness.ts import.",
+  "evidence": "export const COVERAGE_MD_MARK = \"<!-- keryx: coverage.md written from the dispatch record (flow 460) -->\";",
+  "_src": "review-architecture-w5"
+ },
+ {
+  "id": "r2-review-architecture-w5:AR-003",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": 173,
+  "title": "reviewersCheck keeps a private parse of dispatch.runs next to the new dispatchRuns",
+  "problem": "Within the same diff, coverageMdCheck was moved to dispatchRuns while reviewersCheck, three functions above, continues to build its own runs array from record(ctx.research?.dispatch). One file reads one record two ways.",
+  "why_it_matters": "Same class as AR-001, local to this module; the two items (reviewers, coverage-md) can classify a malformed run differently (dispatchRuns drops runs with an empty reviewer, reviewersCheck keeps them via String(run.reviewer)).",
+  "suggested_fix": "Build runs in reviewersCheck from dispatchRuns(ctx.research).",
+  "evidence": "const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record).filter((run): run is Record<string, unknown> => run !== undefined);",
+  "_src": "review-architecture-w5"
+ },
+ {
+  "id": "r2-review-architecture-w5:AR-004",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 251,
+  "title": "secondLookClaimBacked repeats the changed-line walk that walkRegion and lineInHunk now centralise, with different removed-line semantics",
+  "problem": "The diff adds walkRegion/lineInHunk/onlyFixLines so that fix claims are judged by the slice's changed lines, and fixClaimBacked now delegates to onlyFixLines. secondLookClaimBacked, the sibling check of the same kind, keeps its own inline walk over region.text. The two walks treat a removed line differently: walkRegion/lineInHunk accept a removed line at `line` or `line - 1`, the inline one tests only the running line without a `\\` no-newline guard. regionInSecondLook is a third overlap predicate.",
+  "why_it_matters": "A removed line on the edge of a hunk can count as fix and not as second-look, and the disjointness the comment in secondLookClaimBacked relies on is held by two different line conventions.",
+  "suggested_fix": "Express secondLookClaimBacked through walkRegion plus a generalised hunk-membership helper taking the hunk list, so fix and second-look share one definition of 'a changed line lies in a hunk'.",
+  "evidence": "for (const entryLine of region.text.split(\"\\n\")) {",
+  "_src": "review-architecture-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w1:CC-002",
+  "severity": "minor",
+  "file": "src/review/locate.ts",
+  "line": 62,
+  "quote": "/** How a finding's `line` was arrived at. */",
+  "problem": "Carried from CC-2 (prior round), still present: two doc blocks are stacked at 62-68, so the `How a finding's line was arrived at` comment documents LocateMethod's block and LocatorRecord (line 70) has none.",
+  "impact": "Editor hovers and generated docs show the wrong comment on LocatorRecord; the stray line reads as a mistake to the next editor.",
+  "suggested_fix": "Delete the line at 62 or move it onto LocatorRecord.",
+  "confidence": "high",
+  "reviewer": "review-clean-code",
+  "evidence": "/** How a finding's `line` was arrived at. */ at src/review/locate.ts:62",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "r2-review-clean-code-w1:CC-003",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": 531,
+  "quote": "return packageDiffStatsCached(JSON.stringify([options.packageDir, options.root, target]));",
+  "problem": "processCache is keyed by a string, so packageDiffStats serialises its arguments with JSON.stringify and packageDiffStatsCached parses them straight back (line 548) with an `as [string, string, PackageTarget]` cast. The typed values are encoded to a string and decoded with a cast to satisfy the cache's key type.",
+  "impact": "The cast can drift from the tuple built at the call site with no compiler error; the round trip also hides that `target.head!` is asserted non-null at line 549 only because the caller checked it.",
+  "suggested_fix": "Make processCache generic over the argument (key function plus compute(arg)), or close over the arguments and use the string only as the Map key.",
+  "confidence": "medium",
+  "reviewer": "review-clean-code",
+  "evidence": "return packageDiffStatsCached(JSON.stringify([options.packageDir, options.root, target])); at src/review/coverage.ts:531",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "r2-review-clean-code-w1:CC-004",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 52,
+  "quote": "const MAX_SESSION_REVIEW_PACKAGES = 32;",
+  "problem": "MAX_SESSION_REVIEW_PACKAGES caps two different maps: packageDirs (line 180) and reviewIds (line 171). A review id is not a package. pendingCalls (line 128) is the one tracker collection with no cap and is only cleaned when a matching tool result arrives.",
+  "impact": "A reader changing the package cap also changes the id cap; an unanswered keryx review call stays in pendingCalls for the whole session.",
+  "suggested_fix": "Name the cap for what it bounds (MAX_SESSION_REVIEW_NAMES) or give reviewIds its own constant, and drop the oldest pending call once pendingCalls passes a cap.",
+  "confidence": "medium",
+  "reviewer": "review-clean-code",
+  "evidence": "const MAX_SESSION_REVIEW_PACKAGES = 32; at src/review/completion-gate.ts:52",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "r2-review-clean-code-w3:CC-002",
+  "severity": "minor",
+  "reviewer": "review-clean-code",
+  "file": "src/commands/review.ts",
+  "line": null,
+  "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+  "problem": "readPremises casts at three points (`sources[0] as string`, `readPremiseFile(source)) as PremiseSource`, and readPremiseFile's own `parsed as ManagedReviewInput[\"premises\"]`). readPremiseFile is typed to return the wide union ManagedReviewInput[\"premises\"] (single object | list | undefined), so the caller has to cast it back to the single-file type to build the list. Clean Code B3/D: the types do not carry what the function knows.",
+  "impact": "A future change to the premises union can make the casts lie without a compile error.",
+  "suggested_fix": "Type readPremiseFile as returning PremiseSource, and return `sources[0]`-based results without casts (a `for` over `sources` with noUncheckedIndexedAccess handled by destructuring).",
+  "evidence": "review.ts readPremises: `return readPremiseFile(sources[0] as string);` and the loop pushing the cast result.",
+  "confidence": "medium",
+  "_src": "review-clean-code-w3"
+ },
+ {
+  "id": "r2-review-clean-code-w3:CC-003",
+  "severity": "minor",
+  "reviewer": "review-clean-code",
+  "file": "src/commands/operator-confirm-review.ts",
+  "line": null,
+  "quote": "Item 11 (premise-decisions) is never waived",
+  "problem": "The same description string was made dynamic for the range (`1-${READINESS_ITEMS.length}`) but still hard-codes 'Item 11 (premise-decisions)'. The two numbers come from the same list and will drift when an item is inserted before premise-decisions. Clean Code E2 (magic number).",
+  "impact": "Adding or reordering a readiness item makes the operator-facing tool description name the wrong item number.",
+  "suggested_fix": "Derive the number from the item id (look up premise-decisions in READINESS_ITEMS) or name the item by id only: 'premise-decisions is never waived'.",
+  "evidence": "The inputSchema description in waiveReadinessSpec mixes `${READINESS_ITEMS.length}` with the literal 11; the SKILL.detail text also hard-codes 'twelve' and item numbers in prose.",
+  "confidence": "high",
+  "_src": "review-clean-code-w3"
+ },
+ {
+  "id": "r2-review-clean-code-w4:CC-001",
+  "severity": "minor",
+  "file": "src/review/managed.ts",
+  "line": 1239,
+  "quote": "when the operator named none: never a coverage entry",
+  "title": "ATTRIBUTION_FALLBACK doc says it is never a coverage entry, but normalizeCoverage emits it as one",
+  "problem": "The doc comment on ATTRIBUTION_FALLBACK says the reviewer is 'never a coverage entry'. Sixteen lines below, normalizeCoverage builds `selected = named ? reviewers : [ATTRIBUTION_FALLBACK]` and maps it to coverage entries with status 'run'. Only the attribution call site (line 279) avoids it by re-running normalizeCoverage without research. The comment misleads the next reader (Clean Code C1).",
+  "impact": "A reader editing normalizeCoverage or the attribution default believes the fallback cannot reach coverage.",
+  "suggested_fix": "State what holds: the fallback becomes a coverage entry when neither coverage, reviewers nor research.json name one; attribution of unnamed findings uses only the reviewers the input names.",
+  "evidence": "src/review/managed.ts:1239-1255 (comment vs `const selected = named ? reviewers : [ATTRIBUTION_FALLBACK];`)",
+  "principle": "Clean Code C1 (comment contradicts code)",
+  "confidence": "high",
+  "_src": "review-clean-code-w4"
+ },
+ {
+  "id": "r2-review-clean-code-w4:CC-002",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": 548,
+  "quote": "const [packageDir, root, target] = JSON.parse(key) as [string, string, PackageTarget];",
+  "title": "packageDiffStatsCached encodes its arguments as a JSON cache key and decodes them back with a cast",
+  "problem": "processCache takes a single string key, so packageDiffStats serialises (packageDir, root, target) with JSON.stringify and the compute callback JSON.parses them back under an `as` cast, then passes `target.head!` (a non-null assertion on a value the caller already checked at line 530) as a fourth argument `head` to diffOfTarget, which also receives `target` (coverage.ts:565). The cache key doubles as the argument transport, so a type mismatch in the tuple is invisible and head travels twice.",
+  "impact": "Maintenance cost: a new PackageTarget field changes key and decode silently; the cast and the `!` hide mismatches.",
+  "suggested_fix": "Give processCache a key function plus typed arguments (`processCache(compute, keep, keyOf)`), narrow head once, and drop diffOfTarget's separate head parameter.",
+  "evidence": "src/review/coverage.ts:547-549 and :565",
+  "principle": "Clean Code B2 (redundant argument), B3",
+  "confidence": "high",
+  "_src": "review-clean-code-w4"
+ },
+ {
+  "id": "r2-review-clean-code-w4:CC-005",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 373,
+  "quote": "claim.finding_id.includes(\"#\")",
+  "title": "premise.ts re-implements the display-id '#' test that display-id.ts exports",
+  "problem": "display-id.ts exists so that 'a display id holds no #' is stated once (displayIdHasHash, DISPLAY_ID_FORM). dispatch-check.ts, ledger.ts and managed.ts use it; mergePremises tests `.includes(\"#\")` inline, and hashInDisplayIdDetail (premise.ts:194) repeats the 'e.g. review-logic-w1:F-001' example and rule text already in DISPLAY_ID_FORM. Two statements of one rule drift.",
+  "impact": "Changing the id form updates the message in three modules but not here.",
+  "suggested_fix": "Use displayIdHasHash(claim.finding_id) and build the detail from DISPLAY_ID_FORM (or move hashInDisplayIdDetail into display-id.ts).",
+  "evidence": "src/review/premise.ts:194 and :373; src/review/display-id.ts",
+  "principle": "Clean Code E1/E2 (DRY, repeated rule string)",
+  "confidence": "high",
+  "_src": "review-clean-code-w4"
+ },
+ {
+  "id": "r2-review-clean-code-w4:CC-006",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 187,
+  "quote": "return [parsePremiseClaims(source) as ParsedPremiseClaims];",
+  "title": "`as ParsedPremiseClaims` casts away the undefined parsePremiseClaims can return",
+  "problem": "parsePremiseClaims returns ParsedPremiseClaims | undefined and both branches of parsePremiseClaimSets cast the result to the defined type. The early `source === undefined` return makes it true today, but the compiler stops checking it if parsePremiseClaims gains another undefined path.",
+  "impact": "A future undefined would reach mergePremises as an entry and throw at `parsed.claims`.",
+  "suggested_fix": "Give parsePremiseClaims an overload for defined input, or throw instead of casting.",
+  "evidence": "src/review/premise.ts:183-187",
+  "principle": "Clean Code D1 (type safety)",
+  "confidence": "medium",
+  "_src": "review-clean-code-w4"
+ },
+ {
+  "id": "r2-review-clean-code-w4:CC-007",
+  "severity": "minor",
+  "file": "src/review/managed.ts",
+  "line": 265,
+  "quote": "export async function createManagedReviewPackage(",
+  "title": "createManagedReviewPackage and checkDispatch keep growing: this slice adds more gates inline",
+  "problem": "createManagedReviewPackage is already several hundred lines of mixed levels (allocation, normalising, locating, verifying, merging, rendering, writing). This slice adds a stub-report refusal, a '#' id refusal and a second normalizeCoverage call (line 279, which builds a whole coverage list only to take the names of the 'run' entries). checkDispatch (dispatch-check.ts:86) takes a 15-line nested-tuple id check inline in the same way.",
+  "impact": "Each flow adds another inline gate to functions that are hard to hold in mind; cost to the next editor.",
+  "suggested_fix": "Extract the pre-write refusals into one `refuseUnacceptableRound(...)`, the attribution names into `attributionReviewers(input)`, and the id extraction in dispatch-check into `findingIdsOf(payload)`.",
+  "evidence": "src/review/managed.ts:265, 279, 288-293; src/review/dispatch-check.ts:121-130",
+  "principle": "Clean Code B1 (function size, mixed abstraction)",
+  "confidence": "high",
+  "_src": "review-clean-code-w4"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-001",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 597,
+  "title": "partitionRegionsByFix is ~50 lines mixing classification, context labelling and piece building",
+  "problem": "partitionRegionsByFix classifies each changed line, labels context lines by nearest change (half-and-half), and builds the ScopedRegion pieces in one body, with a tri-state boolean|undefined array (kinds) and a boolean array (labels) carrying different meanings. The labelling step (the before/after nearest-change search) is the non-obvious part and has no name of its own.",
+  "suggested_fix": "Extract labelContextLines(kinds) and cutRegionByLabels(region, lines, labels) so the exported function reads as classify, label, cut.",
+  "evidence": "export function partitionRegionsByFix(regions: readonly ScopedRegion[], hunks: readonly FixHunk[]): { fix: ScopedRegion[]; other: ScopedRegion[] } {",
+  "principle": "Clean Code - Functions B1",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 561,
+  "title": "Hunk containment and region line walking exist in three variants; the new walkRegion/lineInHunk are not used by secondLookClaimBacked",
+  "problem": "lineInHunk takes an inline structural type identical to RoundHunk (round-record.ts) instead of naming it. Three sites test whether a changed line lies in a hunk: lineInHunk (handles removed lines via line-1), regionInSecondLook (region overlap), and secondLookClaimBacked, which still hand-rolls its own region walk (let line = region.startLine; for (const entryLine of region.text.split(newline))) and checks line >= hunk.startLine && line <= hunk.endLine. The new helpers do the same walk with different removed-line and backslash-line handling, so the two walks can disagree on one slice.",
+  "suggested_fix": "Type the hunk parameter as RoundHunk and reuse walkRegion/lineInHunk in secondLookClaimBacked (and an onlyInHunks(text, hunks) helper shared with onlyFixLines).",
+  "evidence": "function lineInHunk(hunk: { file: string; startLine: number; endLine: number }, file: string, line: number, removed: boolean): boolean {",
+  "principle": "Clean Code - DRY E1 (sites: round-split.ts lineInHunk, regionInSecondLook, secondLookClaimBacked)",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-003",
+  "severity": "minor",
+  "file": "src/review/research.ts",
+  "line": 344,
+  "title": "Local record / str coercion helpers re-declared again (4 modules define `record`)",
+  "problem": "dispatchRuns declares its own `record` closure on every call, plus `str`; ingestScreenedOf inlines the same object check. `const record = (value: unknown)` is already defined in readiness.ts, coverage-complete.ts and round-record.ts (grep over src/review), so the shape exists in four modules and this diff adds a fourth copy plus a fifth inline form.",
+  "suggested_fix": "Export one asRecord helper from src/lib/json (or similar) and import it; hoist str to module level if still needed.",
+  "evidence": "const record = (value: unknown): Record<string, unknown> | undefined =>",
+  "principle": "Clean Code - DRY E1",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-004",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 769,
+  "title": "expectedFixRoles takes text optionally while fixClaimBacked now requires it; omitting it silently narrows the roster",
+  "problem": "The same fix-claim rule is checked by fixClaimBacked(entry, context, text) with text mandatory, but expectedFixRoles(entry, context, text?) treats a missing text as touched = [], so the roster is computed from the manifest's findingIds alone. That is the 'drop an id from the manifest to drop its author' hole the new doc comment says the function closes, left open by an optional parameter. Today routing-check passes text, but the signature invites a caller that does not.",
+  "suggested_fix": "Make text required, or split into a roster-from-ids function and the text-aware one.",
+  "evidence": "export function expectedFixRoles(entry: Pick<SliceEntry, \"findingIds\">, context: FixContext, text?: string): string[] {",
+  "principle": "Clean Code - Functions B2 (optional argument changing behaviour)",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-005",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": 83,
+  "title": "COVERAGE_MD_MARK, a coverage.md write-format constant, is owned by the readiness reader",
+  "problem": "The marker line is written by `review ingest` and only read here, yet it is defined and exported from readiness.ts. The writer must import the checklist module (with its heavy imports) to emit one string; changing the writer's format means editing the checker.",
+  "suggested_fix": "Define COVERAGE_MD_MARK next to the coverage.md writer (or in a light module) and import it into readiness.ts.",
+  "evidence": "export const COVERAGE_MD_MARK = \"<!-- keryx: coverage.md written from the dispatch record (flow 460) -->\";",
+  "principle": "SOLID - SRP F1 (reader owns the writer's format)",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-006",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": 137,
+  "title": "reviewersCheck is ~45 lines mixing path I/O, set arithmetic, gate invocation and message composition",
+  "problem": "reviewersCheck reads raw/ files, computes four name lists, runs the coverage gate, builds an ok note, a failure message and a repair string. The diff adds the coverageGated branch and gateNote on top, pushing it further past one abstraction level; the missing-result-file scan (`lost`) is a self-contained unit.",
+  "suggested_fix": "Extract runsMissingResultFile(ctx, runs) and the failure-message composition; keep reviewersCheck as gather, gate, decide.",
+  "evidence": "const gateNote = ctx.coverageGated ? \"the coverage gate accepts the dispatch\"",
+  "principle": "Clean Code - Functions B1/B3",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-007",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 538,
+  "title": "SECURITY_PROBLEM alternation contains redundant branches",
+  "problem": "security|secur\\w+ (the second subsumes the first) and injection|inject\\w* (likewise) read as a keyword list but several terms are dead; a maintainer adding a term cannot tell which entries matter. A readability cost, not a behaviour defect.",
+  "suggested_fix": "Collapse to secur\\w*|inject\\w*|... and add one comment line stating the intended bias (recall over precision, since a false positive only adds a reviewer).",
+  "evidence": "const SECURITY_PROBLEM = /\\b(security|secur\\w+|injection|inject\\w*|travers\\w+|secret|credential|password|token leak|xss|csrf|ssrf|rce|privilege|auth(entication|orization)?|sandbox escape|untrusted)\\b/i;",
+  "principle": "Clean Code - Names A2",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-008",
+  "severity": "minor",
+  "file": "src/review/verdict.ts",
+  "line": 993,
+  "title": "readPremiseClaimsFile name and doc now understate what it returns",
+  "problem": "The function now returns parsePremiseClaimSets output (a list of claim sets), while its name and the doc comment above it ('premise claims file, parsed') still describe one claims object.",
+  "suggested_fix": "Rename to readPremiseClaimSetsFile and update the doc line.",
+  "evidence": "async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typeof parsePremiseClaimSets>> {",
+  "principle": "Clean Code - Names A3",
+  "_src": "review-clean-code-w5"
+ },
+ {
+  "id": "r2-review-core-boundaries-w1:CB-002",
+  "severity": "minor",
+  "reviewer": "review-core-boundaries",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "if (!isSeparator(text[sep]) || !text.startsWith(REVIEWS, sep + 1)",
+  "problem": "reviewPackagePaths is run over `call.arguments`, which is JSON text. A Windows path in a command is JSON-escaped there (C:\\\\w\\\\.metaproject\\\\reviews\\\\r9): after `.metaproject` comes a backslash pair, so text.startsWith(REVIEWS, sep + 1) sees a backslash and the occurrence is skipped. The unit test passes the raw string with single backslashes, which a tool call never carries. The old regex had the same single-separator limit, so this is not a regression, but the new tracker is documented as covering both separators.",
+  "impact": "On Windows a package named by path in a keryx review command is never recorded as named, so a review opened in an earlier session is not recognised and the gate falls back to the placeholder.",
+  "suggested_fix": "Accept one or two separators (or JSON-decode the arguments' string values before scanning) and add a test that feeds a JSON.stringify'd Windows command.",
+  "evidence": "completion-gate.ts:74; completion-gate.test.ts 'package path matching is linear' asserts only the unescaped Windows string; reviewCall() builds arguments with JSON.stringify.",
+  "confidence": "medium",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "r2-review-core-boundaries-w1:CB-003",
+  "severity": "minor",
+  "reviewer": "review-core-boundaries",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "const fresh = Date.parse(pointer.startedAt) >= since;",
+  "problem": "A pointer wins when it was written after THIS session started, whoever wrote it. The active-review pointer is one file per project root, and several sessions share a checkout. A concurrent session that runs `keryx review start` after this one began makes its pointer fresh here, so pickPackage returns that session's package even though this session's own commands name a different one; if that other review then closes, best.mtime < closedAt releases this session's gate too. Flow 460 C (nudge pointing at another PR's package) is fixed for an older pointer and left open for a newer foreign one.",
+  "impact": "A session reviewing PR A is nudged about, and finally stopped on, PR B's package when a second session in the same checkout starts B.",
+  "suggested_fix": "Prefer a package this session's commands name (packageDirs / reviewIds / commands) over a merely fresh pointer, and use the pointer as a tie-breaker only when this session named none.",
+  "evidence": "completion-gate.ts:279-282 returns the pointer's package once fresh; namedBySession is consulted only when the pointer is NOT fresh.",
+  "confidence": "medium",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "r2-review-core-boundaries-w1:CB-005",
+  "severity": "minor",
+  "reviewer": "review-core-boundaries",
+  "file": "src/review/locate.ts",
+  "line": null,
+  "quote": "export type LocateMethod = \"exact\" | \"whitespace-normalised\" | \"substring\";",
+  "problem": "Two doc comments are stacked: `/** How a finding's line was arrived at. */` (line 62) sits directly above LocateMethod's own block, and LocatorRecord, the type that sentence describes, has none. Round 1 raised the same stacking (review-clean-code-w3:CC-2); the diff moved the orphan rather than removing it.",
+  "impact": "Tooling shows only the nearer comment, so the orphaned sentence documents nothing.",
+  "suggested_fix": "Delete line 62, or move it above `export type LocatorRecord`.",
+  "evidence": "locate.ts:62-67 and :69.",
+  "confidence": "high",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "r2-review-highload-w1:HL-001",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 161,
+  "quote": "remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+  "title": "Whole tool-call arguments retained and rescanned per stale package",
+  "problem": "The tracker keeps the full arguments string of the last 64 `keryx review` calls, and namedBySession (completion-gate.ts:217) runs namesToken (an indexOf loop) over every one of them, for each review id of each stale open package scanRoot meets (:252), on every gate evaluation. Argument length is not bounded: a call that inlines a report or findings JSON is hundreds of KB.",
+  "impact": "Failure mode: a checkout with ~100 stale open drafts, 64 retained calls of ~100 KB and two ids per package scans on the order of 1 GB per stop, up to 20 continues plus stalls, on the event loop of the shell; memory holds up to ~6 MB of argument text for the session. Small for ordinary short calls; it grows with the stale-draft count and argument size.",
+  "suggested_fix": "At scan time keep, per call, the Set of id-shaped tokens (split on the id boundary class, capped, e.g. 256 tokens of at most 120 chars) instead of the string, and make namedBySession a Set lookup.",
+  "evidence": "completion-gate.ts:161 stores call.arguments whole; :211-220 namedBySession; :252 called per stale open package; :203-208 namesToken.",
+  "confidence": "medium",
+  "reviewer": "review-highload",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "r2-review-highload-w1:HL-002",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 137,
+  "quote": "if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();",
+  "title": "A compaction forgets which packages the session named",
+  "problem": "agent.ts rewrites the history in place on compaction (history.splice(0, history.length, ...compacted.context) at agent.ts:2997, 3625, 3992). The next update() sees a shorter history or a different last message, resets, and rescans only the compacted context, so a package named only by an earlier, now-dropped `keryx review` call is no longer named. sessionStartedAt(history) is also taken from the first remaining message.",
+  "impact": "Failure mode: in a long review session that compacted after the last write to its package manifest (or after a resumed review's pointer predates the new `since`), the gate stops finding the package (completion-gate.ts:252, :280) and nudges with NO_PACKAGE_BLOCKER ('no package this session opened or named') for up to 20 continues, sending the model to run `keryx review start` or name the package again. Settle: whether the compacted context keeps the first `keryx review` call or a summary naming the id.",
+  "suggested_fix": "Keep the named sets across a reset (clear only the cursor, or merge the previous sets into the rebuilt ones), and bound them by the existing caps; derive `since` from the session start recorded outside the history.",
+  "evidence": "completion-gate.ts:137-156 reset() clears roots, packageDirs, reviewIds and commands; agent.ts:2997 history.splice(0, history.length, ...compacted.context).",
+  "confidence": "medium",
+  "reviewer": "review-highload",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "r2-review-highload-w1:HL-004",
+  "severity": "minor",
+  "file": "src/review/locate.ts",
+  "line": 62,
+  "quote": "/** How a finding's `line` was arrived at. */",
+  "title": "Orphaned doc comment above LocateMethod",
+  "problem": "The doc comment describing how `line` was arrived at is stacked on top of the new LocateMethod JSDoc and no longer sits above LocatorRecord, which it described. Prior finding review-clean-code-w3:CC-2, still present.",
+  "impact": "Reads as documentation of LocateMethod twice and leaves LocatorRecord undocumented; no runtime effect.",
+  "suggested_fix": "Delete line 62 and put the sentence above `export type LocatorRecord`.",
+  "evidence": "locate.ts:62-69.",
+  "confidence": "high",
+  "reviewer": "review-highload",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "r2-review-highload-w4:HL-001",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 217,
+  "quote": "if ((named.commands ?? []).some((command) => namesToken(command, id))) return true;",
+  "problem": "namedBySession re-scans the full text of every retained command for every stale open package, on every stop. The tracker keeps whole tool-call argument strings (up to 64) and only the count is capped, not their size.",
+  "impact": "Failure mode: per-stop CPU stall in the keryx shell. A session that ran 64 `keryx review ingest`-style commands with inline reports of ~1 MB, in a checkout carrying ~50 stale open drafts (the case the comment names), does 50 x 2 ids x 64 x 1 MB, about 6 GB of indexOf scanning per model stop, on the event loop, plus the memory for the retained strings. Realistic argument sizes (KBs) make it negligible, so this is a bound that is missing, not a measured stall.",
+  "suggested_fix": "When the tracker scans a call, extract only the review-id tokens it names (SAFE_REVIEW_ID-shaped words next to `keryx review`) into a capped Set and test membership; or truncate the stored arguments to a few KB. Then namedBySession is O(ids).",
+  "evidence": "completion-gate.ts remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS) stores the whole argument string; scanRoot calls namedBySession for each open package older than the session.",
+  "confidence": "medium",
+  "_src": "review-highload-w4"
+ },
+ {
+  "id": "r2-review-highload-w4:HL-002",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": 559,
+  "quote": "const resolved = await resolveBase(defaultGitRunner(cwd)",
+  "problem": "The light-round recheck now runs git through defaultGitRunner, which spawns with no timeout and no kill signal, unlike gitTopLevel and gitDiffAt (15 s, SIGKILL). The result goes through processCache, which stores the pending promise and removes it only after it settles.",
+  "impact": "Failure mode: if one `git merge-base` hangs (stalled network or FUSE file system, wedged git), the promise never settles and stays cached under that key. Every later readiness, complete and panel refresh in the same process awaits the same hung promise, so the gate and panel freeze until the process restarts. The other git calls in this path would fail after 15 s and be retried.",
+  "suggested_fix": "Give defaultGitRunner (or the resolveBase call here) the same timeout and killSignal as gitDiffAt, and have processCache drop an entry that has not settled after a deadline.",
+  "evidence": "coverage.ts spawns gitTopLevel/gitDiffAt with `timeout: 15_000, killSignal: \"SIGKILL\"`; prior-round.ts defaultGitRunner spawns with `stdout: \"pipe\", stderr: \"ignore\"` only.",
+  "confidence": "medium",
+  "_src": "review-highload-w4"
+ },
+ {
+  "id": "r2-review-highload-w5:HL-001",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line_quote": "const before = changedAt.filter((at) => at < index).at(-1);",
+  "title": "partitionRegionsByFix is quadratic in region length",
+  "problem": "For every context line of a mixed region the loop re-filters and re-scans changedAt (O(changes) each), and every line also runs hunks.some(...) in the kinds map. Cost is O(lines x changes) per region. Failure mode: a delta round whose scoped region is a very large mixed fix/new block (a regenerated or moved file, ~20k lines with thousands of changes) costs on the order of 1e8 operations on the single-threaded CLI/shell process, stalling it (including an in-process keryx shell) for seconds. Regions are normally small, so this is a minor tuning cost, not a defect at ordinary sizes.",
+  "evidence": "slice-06 round-split.ts partitionRegionsByFix: const before = changedAt.filter((at) => at < index).at(-1); const after = changedAt.find((at) => at > index); inside the per-line loop.",
+  "suggested_fix": "Precompute previous/next changed index with two linear passes, and index fix hunks by file so hunks.some is not a full scan per line.",
+  "_src": "review-highload-w5"
+ },
+ {
+  "id": "r2-review-logic-w10:LG-001",
+  "severity": "major",
+  "reviewer": "review-logic",
+  "file": "src/review/coverage.ts",
+  "line": 555,
+  "quote": "return target.ref === undefined ? { error: \"the package manifest records no target ref or base\" } : { base: target.ref };",
+  "problem": "resolveDiffBase sends every non-PR target that has no recorded base straight to `{ base: target.ref }`, and that path never runs emptyRangeWarning. For `review start --target branch --ref feat/x` (no --base), target.ref is the branch under review and target.head is the checkout HEAD (resolveTargetHead -> resolveGitHead). The recheck therefore runs `git diff feat/x...<HEAD sha>`. That range is empty when feat/x is checked out, and it is the wrong range when it is not. An empty range gives files [] and changedLines 0, which autoDepth reports as `light` (0 <= LIGHT_MAX_FILES, 0 <= LIGHT_MAX_CHANGED_LINES, no risk gate hit). The doc comment above packageDiffStats says an empty range 'is not a small diff: it refuses', but that only holds on the PR/base path.",
+  "impact": "Silent wrong result. For a branch review whose dispatch says depth light, the gate accepts the light reviewer set (logic + testing + one conventions reviewer) whatever the real diff size or risk class. That is the 'one depth decision' flow 460 A set out to make trustworthy.",
+  "suggested_fix": "Apply the same base resolution and empty-range refusal to non-PR targets. For kind `branch`, resolve the base the way the PR path does (recorded base, else origin/main, main, ...) and diff against it, not against the ref. Run emptyRangeWarning on every resolved base, and refuse (full set) when it fires. Only `path`/`issue`/`report` refs, which are not revisions, should fall through to the existing git-failure refusal.",
+  "evidence": "src/review/coverage.ts:553-563 (resolveDiffBase: non-PR branch returns target.ref before resolveBase/emptyRangeWarning); src/commands/review.ts:1024-1048 (target {kind: branch, ref: --ref, base only from --base}); src/commands/review-plan.ts targetKindOf('feat/review-delta-rounds') === 'branch' (ref is the reviewed branch); src/review/managed.ts resolveTargetHead falls back to resolveGitHead(cwd); src/review/coverage.ts:137-156 autoDepth returns light for files [] / changedLines 0. Pre-existing in shape (main's gitDiffStats also used target.ref), but this PR rewrote the function and states the empty-range refusal as its contract.",
+  "confidence": "medium",
+  "class_scope": {
+   "sites": [
+    "src/review/coverage.ts:555"
+   ],
+   "enumeration_method": "Enumerated REVIEW_TARGET_KINDS (src/review/types.ts:29: pr, issue, branch, path, report) against resolveDiffBase. pr takes the resolveBase+emptyRangeWarning path. issue/path/report refs are URLs, paths or report labels, which fail assertGitRevision or git diff and so refuse (full). Only branch has a ref that is a valid revision equal to or near the head, so it is the one kind whose base=ref range is empty or wrong. The single site is where that branch is taken."
+  },
+  "_src": "review-logic-w10"
+ },
+ {
+  "id": "r2-review-logic-w10:LG-002",
+  "severity": "minor",
+  "reviewer": "review-logic",
+  "file": "src/review/completion-gate.ts",
+  "line": 324,
+  "quote": "const closedAt = best === null ? Math.max(0, ...closedAtByRoot.values()) : (closedAtByRoot.get(best.root) ?? 0);",
+  "problem": "closedAt is the newest close since `since` of any review-flow/ingest package under the chosen package's root, not of the chosen package or one this session named. Scenario: two sessions share one checkout. Session B closes its PR's package at t2. Session A's open package's manifest was last written at t1 < t2. findReviewGateState then returns null and A's gate accepts, even though A's review is not complete. The new comment narrows the release to 'the root of the package this session is on', but a sibling package closed by another session in the same root still ends this session's gate.",
+  "impact": "The completion nudge is silently dropped for a review that is still open, which is the flow 460 C class (gate state taken from another run's package), now confined to one root.",
+  "suggested_fix": "Count a closed package toward closedAt only when it is this session's: its dir is best.dir, or it is named by namedBySession(named, dir, [reviewId, name]), or its manifest was created since `since` by this session's pointer. Otherwise ignore it.",
+  "evidence": "src/review/completion-gate.ts scanRoot records closedAt for every closed package with mtime >= since regardless of whose it is; findReviewGateState:324-325 returns null when closedAt > best.mtime. Project memory records concurrent agents sharing one checkout.",
+  "confidence": "medium",
+  "_src": "review-logic-w10"
+ },
+ {
+  "id": "r2-review-logic-w10:LG-003",
+  "severity": "minor",
+  "reviewer": "review-logic",
+  "file": "src/review/completion-gate.ts",
+  "line": 190,
+  "quote": "Taken only from the arguments of this session's `keryx review` tool calls and from the `path:` and",
+  "problem": "SessionReviewTracker.scan accepts any tool call whose arguments contain the words `keryx review` anywhere (KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/ tested on the whole arguments string). That includes a write_file whose content mentions `keryx review`, a spawn_subagent prompt, or a grep for the phrase. Every `.metaproject/reviews/<name>` path in those arguments, and every `# managed review:` line in their output, is then recorded as named by this session. An old package referenced in such text (a prior round, a notes file) can then pass the `info.mtimeMs < since` filter in scanRoot and the non-fresh pointer check in pickPackage.",
+  "impact": "Without a fresh pointer, the gate can nudge about an older package the session only mentioned in prose. That is a narrower form of the misdirection flow 460 C fixes, and it contradicts the documented 'only ... `keryx review` tool calls'.",
+  "suggested_fix": "Match only shell/exec tool calls whose command starts with (or has a command segment that is) `keryx review ...`, for example by checking call.name against the shell tool and anchoring the regex to a command boundary. Alternatively, reword the doc to state the looser rule.",
+  "evidence": "src/review/completion-gate.ts:106 (KERYX_REVIEW_COMMAND), :159-164 (any toolCalls entry, any tool name), :175-182 (namePaths over the whole arguments text), :99 (scanRoot admits an old package when namedBySession).",
+  "confidence": "medium",
+  "_src": "review-logic-w10"
+ },
+ {
+  "id": "r2-review-logic-w11:LG-001",
+  "severity": "major",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+  "problem": "Context.coverageGated says a closed package's recorded state is final and publish, the publish guard and the panel must not suddenly call it NOT READY. The flag is true for every package whose coverage.md carries COVERAGE_MD_MARK, which includes every package closed after flow 460. So for those closed packages reviewersCheck still runs packageCoverageErrors. For a light dispatch, that call re-derives the depth from live state: coverage.ts effectiveDepth runs packageDiffStats, which does a git diff of base...head at the repository top level, and then decideRoundDepth against the current project config. If the diff cannot be resolved, the depth falls back to full ('if (\"error\" in stats) return { depth: \"full\", refused: stats.error }'), and the full reviewer set then refuses the light dispatch.",
+  "impact": "Trigger: a light-round PR package that closed READY after flow 460 is read again (readiness, the publish guard, the panel) in a checkout without the PR head commit, such as a fresh clone after a squash merge and branch delete. A later change to the depth thresholds or the risk-class config triggers it too. Outcome: item 3 fails with 'coverage gate (as review complete runs it): ... the diff could not be resolved', and a closed review flips to NOT READY. This is the same flip the flag was added to prevent, and the repair it names (dispatch the missing reviewers) cannot apply to a closed round.",
+  "suggested_fix": "On a closed package, do not re-derive the depth from live git or config. Gate packageCoverageErrors on manifest.status !== 'closed' (open packages only), or have the closed path read the depth decision recorded at close (round-depth.json or the dispatch's own depth) instead of rechecking it. Keep the COVERAGE_MD_MARK test only for the item-6 omitted-reviewer check, which reads files and not live state.",
+  "evidence": "src/review/readiness.ts:188 and :417 (coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\"). src/review/managed.ts:2736 writes COVERAGE_MD_MARK on every ingest, explicit --reviewers included, so every post-460 package carries it. src/review/coverage.ts:565-572 (diffOfTarget: git diff at gitTopLevel against resolveDiffBase, falling back to origin/main/main). src/review/coverage.ts:592-598 (effectiveDepth: a stats error, or a config decision that is not light, returns depth full). Read at head 375279e78.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "class_scope": {
+   "sites": [
+    "src/review/readiness.ts:188",
+    "src/review/readiness.ts:417",
+    "src/review/coverage.ts:594",
+    "src/review/coverage.ts:597"
+   ],
+   "enumeration_method": "Searched for every readiness consumer of coverageGated (keryx ctx rg coverageGated in src/review/readiness.ts: the item 3 gate at :188, the item 6 omitted check, and the definition at :417). Then traced packageCoverageErrors to effectiveDepth, whose two live-state inputs are the diff stats (:594) and the config depth decision (:597). The item 6 check reads only coverage.md and research.json, so it is not a member."
+  },
+  "_src": "review-logic-w11"
+ },
+ {
+  "id": "r2-review-logic-w11:LG-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": null,
+  "quote": "contextTruncated: region.contextTruncated,",
+  "problem": "partitionRegionsByFix splits a region that holds both fix and new lines, and the context between the two kinds is shared half and half. On the split side, each piece therefore has fewer context lines than the configured window. Each piece still copies the parent's contextTruncated. If the parent window was complete, every piece says false.",
+  "impact": "ScopedRegion documents contextTruncated as the signal that a window is narrower than asked, so a reviewer does not assume it saw the enclosing code. A fix or new piece cut from a mixed region claims a full window while it can hold as little as one context line on the cut side. The reviewer of the piece loses that warning. No wrong routing results: the cost is to the reader of the slice.",
+  "suggested_fix": "Set contextTruncated to true on every piece that has a neighbouring piece on the split side, for example region.contextTruncated || pieces > 1 per cut. Alternatively, keep the full context on both pieces instead of halving it.",
+  "evidence": "src/review/round-split.ts:121 inside partitionRegionsByFix. src/review/scope.ts:145-152 ScopedRegion, with the doc above it that contextTruncated reports a window narrower than asked.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "_src": "review-logic-w11"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-002",
+  "severity": "major",
+  "file": "src/review/completion-gate.ts",
+  "line": 178,
+  "quote": "const root = path.resolve(cwd, prefix === \"\" ? \".\" : prefix);",
+  "problem": "SessionReviewTracker resolves every path it learns against the session cwd (the shell's root): the paths in `keryx review` call arguments, and the `path:` line keryx prints. shell_exec always runs `sh -c` at that root (shell-exec-tool.ts:248), so a package under a subdirectory's `.metaproject` (the flow 460 C/A layout `output/review-pr-7975/.metaproject/reviews/...`) can only be opened by a command such as `cd output/review-pr-7975 && keryx review start ...`. keryx then prints `path: .metaproject/reviews/<id>` relative to ITS cwd (managed.ts:588 `path.relative(input.cwd, packageDir)`), and the tracker records `<session cwd>/.metaproject/reviews/<id>` with no new root. The subdirectory is never added to `roots`, so neither its packages nor its active-review pointer are scanned. The review id is recorded, but namedBySession only applies to candidates found under the scanned roots.",
+  "impact": "In the layout the flow was written for, findReviewGateState returns the NO_PACKAGE_BLOCKER placeholder while the session's own package is open, and nudges the model with 'no review package this session opened or named'. After a successful `review complete` in the subdirectory it never sees the closed package (closedAt is read only under the scanned roots). It keeps nudging until the stall cap, then stops with a report claiming the review is not complete. The PR's outcome criterion (nudges about this session's own PR) is not met for a review started by `cd <sub> && keryx review ...`.",
+  "suggested_fix": "Have `keryx review start|attach|ingest|status` print the absolute package path (or an extra `package: <absolute dir>` line) and parse that in OWN_OUTPUT_LINE. Alternatively, resolve the paths of one call, and of its output, against a leading `cd <dir> &&|;` in that call's command before falling back to the session cwd. Add a test where the start command is `cd sub && keryx review start` and the output is `path: .metaproject/reviews/<id>`.",
+  "evidence": "completion-gate.ts:160-173: the tracker reads only call.arguments and the `path:`/`# managed review:` lines. namePaths (completion-gate.ts:176-183) resolves `prefix` against `this.cwd`. review.ts:1082 prints `path: ${result.path}` and managed.ts:588 makes it relative to keryx's own cwd. shell-exec-tool.ts:248 runs every command at `cwd: root`. findReviewGateState (completion-gate.ts:316) scans only cwd plus named.roots.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "src/review/completion-gate.ts:178",
+    "src/review/completion-gate.ts:170"
+   ],
+   "enumeration_method": "Every input to SessionReviewTracker.namePaths: call.arguments (completion-gate.ts:163) and the OWN_OUTPUT_LINE `path:` capture (completion-gate.ts:170). Both reach the single path.resolve(cwd, prefix) at :178. No other code adds to `roots` or `packageDirs`."
+  },
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-003",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 160,
+  "quote": "if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;",
+  "problem": "The tracker treats any tool call whose JSON arguments contain the words `keryx review` as one of this session's `keryx review` commands, whatever the tool is: write_file or apply_patch writing a report, a doc or a note that mentions `keryx review status <id>` or `.metaproject/reviews/<id>`, for example. The doc comment says the gate looks only at the session's own `keryx review` commands. HistoryMessage drops the tool name, so nothing can check it.",
+  "impact": "An older open package whose real id or path the session merely wrote into a file counts as named. scanRoot then keeps it as a candidate despite predating the session. If it is the newest open candidate and no fresh pointer exists, the nudge names that package: the flow 460 C misdirection by a different route. Trigger: write a report that cites a previous round's package path. Outcome: the gate nudges about that round.",
+  "suggested_fix": "Carry `name` in HistoryMessage.toolCalls and accept only the shell tool, plus the keryx self-command tool if any. Or match `keryx review` only at a command position in the parsed `command` argument, not anywhere in the JSON.",
+  "evidence": "completion-gate.ts:101-106 (HistoryMessage has no tool name), :160-165 (every call whose arguments match is remembered and its paths named), :265 scanRoot keeps a pre-session package when namedBySession is true.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-004",
+  "severity": "minor",
+  "file": "src/review/managed.ts",
+  "line": 551,
+  "quote": "renderReport(report, input.mode) + renderSpendMarkdown(input.research, report)",
+  "problem": "renderSpendMarkdown returns nothing when the source report already contains `\\n## Token spend\\n`. On a re-ingest whose `--report` is the package's own report.md (which the previous ingest wrote with a spend section), the old figure is kept and the totals of the current research.json are dropped. This happens, for example, when the ledger is rebuilt after more waves or a retry dispatch.",
+  "impact": "report.md states a stale spend (fewer dispatches, fewer tokens) after a re-ingest, while research.json carries the new totals. Flow 460 H is about stating the review's spend, and that number is now wrong without any warning.",
+  "suggested_fix": "Replace an existing `## Token spend` section, from the heading to the next `## ` or end of file, with the freshly rendered one instead of skipping. Or skip only when the existing section's line equals the new one.",
+  "evidence": "dispatch-usage.ts:133 `if (report !== undefined && report.includes(`\\n${SPEND_HEADING}\\n`)) return \"\";`. managed.ts:551 passes the input report text, which readReport reads from --report verbatim.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w6:LG-001",
+  "severity": "major",
+  "reviewer": "review-logic",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\",",
+  "problem": "coverageGated exempts only closed packages WITHOUT the flow 460 mark, on the stated reason that a closed package's recorded state is final and publish, the publish guard and the panel must not suddenly call it NOT READY. A closed package WITH the mark (every package ingested since flow 460, since renderCoverage always writes it) still re-runs packageCoverageErrors in reviewersCheck on every computeReadiness, and that gate's inputs are not frozen at close: requiredReviewers reads the project's current roster (collectReviewers(root), detectProjectStack), and for a dispatch with depth light effectiveDepth -> packageDiffStats resolves the base from git now. A PR package records no target.base (e.g. this round's manifest.target is {kind, ref, head}), so once the PR is merged by merge commit or fast-forward every resolveBase candidate (origin/main, main, ...) gives merge-base == head, resolveDiffBase returns the emptyRangeWarning error, effectiveDepth returns depth full with refused, and reviewerSetErrors demands the full set that the light round legitimately did not run.",
+  "impact": "A light-round PR review closed READY turns NOT READY on item 3 after the PR merges (or after any reviewer skill is added to the project): `keryx review publish` refuses it, the publish guard (reviewPublishRefusal -> computeReadiness(newest.dir)) refuses `gh pr review` on that PR, and the review panel shows a closed round as failing. The repair the item prints (dispatch the missing reviewers / re-ingest) is not available on a closed package. This is exactly the outcome the coverageGated comment says it prevents, so the deliberate choice's reason does not hold for marked packages.",
+  "suggested_fix": "Gate the re-run of the coverage gate on the package being open (manifest.status !== \"closed\"): `review complete` already ran packageResearchErrors before closing, so a closed package's item 3 should report the recorded close (as it does for unmarked packages). If a closed-package recheck is wanted, freeze its inputs at close (record the required set / effective depth in research.json at complete) instead of recomputing from the current roster and git.",
+  "evidence": "src/review/readiness.ts computeReadiness sets coverageGated = mark || status !== closed; reviewersCheck calls packageCoverageErrors(ctx.dir, dispatch) whenever coverageGated. src/review/research.ts packageCoverageErrors -> src/review/coverage.ts coverageErrors -> effectiveDepth (record.depth === 'light') -> packageDiffStats -> diffOfTarget -> resolveDiffBase -> prior-round.ts resolveBase, whose comment states 'A merged pull request's merge-base with origin/main is its own head (an empty range)' and returns the empty candidate, then emptyRangeWarning yields an error -> effectiveDepth returns {depth:'full', refused}. reviewerSetErrors then calls requiredReviewers(options.root, ...) which reads collectReviewers(root) at call time. src/review/managed.ts renderCoverage always writes COVERAGE_MD_MARK. Callers on closed packages: src/review/publish.ts publishReview, src/review/publish-guard.ts reviewPublishRefusal, src/tui/review-panel.ts. Round 1 manifest target has no base: {'kind':'pr','ref':'https://github.com/MrCipherSmith/keryx/pull/1045','head':'dff7a38...'}.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/review/readiness.ts:coverageGated in computeReadiness (feeds both reviewersCheck coverage gate and coverageMdCheck omitted check)"
+   ],
+   "enumeration_method": "keryx ctx rg 'COVERAGE_ENTRY|COVERAGE_MD_MARK|coverageGated|coverageMd' src/review: coverageGated is computed once and read by two checks; only the item 3 read re-runs time-dependent inputs (the item 6 omitted check reads coverage.md and research.json, both frozen at close). computeReadiness callers enumerated with keryx ctx rg 'computeReadiness\\(' src: managed.ts complete (open package, unaffected), publish.ts, publish-guard.ts, review-panel.ts (all reach closed packages)."
+  },
+  "_src": "review-logic-w6"
+ },
+ {
+  "id": "r2-review-logic-w6:LG-002",
+  "severity": "minor",
+  "reviewer": "review-logic",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "if (omitted.length > 0) {",
+  "problem": "coverageMdCheck returns early on an omitted reviewer, before the pre-existing 'lying' check runs. When coverage.md both omits a run and lists an unfinished reviewer as 'run', the item names only the omission; the contradiction is reported only after the next repair cycle.",
+  "impact": "The item's evidence is incomplete for a package with both defects; an operator who repairs coverage.md by an explicit --coverage list (which the repair text warns against but does not prevent) can fix the omission and still fail on the second defect, discovering it one cycle later.",
+  "suggested_fix": "Compute both `omitted` and `lying`, and return one bad() whose evidence names each non-empty set.",
+  "evidence": "src/review/readiness.ts coverageMdCheck: `lying` is computed, then `if (omitted.length > 0) { return bad(...omits...) }` precedes `if (lying.length === 0) return ok(...)`, so `lying` is discarded on that path.",
+  "confidence": "high",
+  "_src": "review-logic-w6"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-004",
+  "severity": "minor",
+  "title": "Empty-range refusal still checks only the new-slice cut's omissions, so a delta whose only changes are omitted fix lines is refused as an empty range",
+  "file": "src/commands/review-slice.ts",
+  "quote": "if (slices.length === 0 && diffFile === undefined && built.manifest.omissions.length === 0",
+  "problem": "Since L6, a delta round is cut twice: `built` over the other regions and `fixBuilt` over the fix regions. The merged `omissions` (line 259) includes fixBuilt's omissions, but the empty-range guard still reads `built.manifest.omissions` only. When every change lies in fix hunks and those fix regions are classified as ledgers, both cuts produce zero slices and the refusal fires. Ledgers here are lockfiles, data files, snapshots, generated files or large json, which reach fix hunks through 'a commit naming the finding'. The refusal says 'empty review range \u2026 changes nothing', which is not what happened. secondBuilt's omissions were already ignored the same way.",
+  "impact": "In that narrow case, review slice refuses with a misleading message instead of writing a manifest that records the omissions. No common input reaches it.",
+  "suggested_fix": "Use the merged list: `if (slices.length === 0 && diffFile === undefined && omissions.length === 0 && \u2026)`.",
+  "evidence": "review-slice.ts:259 builds merged `omissions`; :270 tests `built.manifest.omissions.length`; slice.ts:445-450 sends ledger-classified files to omissions, not slices.",
+  "confidence": "medium",
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-005",
+  "severity": "minor",
+  "title": "Partitioning before buildSlices applies the large-json byte threshold per half, so one file can be part omitted, part sliced, and omittedBytes keeps only the first half",
+  "file": "src/commands/review-slice.ts",
+  "quote": "const omissions = [...built.manifest.omissions, ...(fixBuilt?.manifest.omissions ?? []), ...(secondBuilt?.manifest.omissions ?? [])].filter(",
+  "problem": "classifyLedger decides `large-json` from a file's diff bytes summed over the regions passed to buildSlices (slice.ts:446-447). L6 now passes a file's fix regions and its other regions to two separate buildSlices calls, so the threshold (100 KB, or 20 KB for fixtures) is judged per part. A json file over the threshold in total can have both parts under it (both sliced, where round 1 would omit it), or one part omitted and one sliced (the same path appears in both omissions and a slice). The path-dedup filter then keeps the first omission's bytes only, so totals.omittedBytes undercounts.",
+  "impact": "Narrow trigger: a large json file that holds both a fix hunk and new changes in a delta round. The result is a manifest that disagrees with round 1's omission rule for the same file, plus a wrong omittedBytes figure. Nothing is lost silently, since the sliced part is still reviewed.",
+  "suggested_fix": "Classify ledgers once over the whole source before partitioning. Run classifyLedger per path over `source.regions`, drop those paths from both partitions, and record each one once with its full byte count. Alternatively, sum bytes across duplicates when merging omissions.",
+  "evidence": "review-slice.ts:251-253 (partition, then two buildSlices calls); slice.ts:232-238 byte thresholds; slice.ts:445-450 per-call classification; review-slice.ts:259 first-wins dedup by path.",
+  "confidence": "medium",
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-performance-w1:PERF-R2-002",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 161,
+  "quote": "remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+  "problem": "The tracker caps the number of retained commands (64) but not their size: each `keryx review` tool call's whole arguments string is kept verbatim. namedBySession (:217) then runs namesToken over every retained string for each open package older than the session, for two ids, on every stop.",
+  "impact": "A review run commonly passes large arguments (an inline findings JSON or report in a heredoc beside a `keryx review ingest` call). 64 such strings of hundreds of KB are retained for the session and rescanned per open pre-session package per stop: packages x 2 x 64 x length. Bounded by 20 continues, so a latency cost, not an outage.",
+  "suggested_fix": "Keep only the tokens that matter: extract review-id-shaped tokens (SAFE_REVIEW_ID matches) from the arguments once at scan time into a capped Set, and match ids against that set instead of rescanning stored text; or truncate stored commands to a few KB.",
+  "evidence": "completion-gate.ts:161 stores call.arguments untruncated; :217 `(named.commands ?? []).some((command) => namesToken(command, id))`; MAX_SESSION_REVIEW_COMMANDS at :53 limits count only.",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "r2-review-performance-w4:PF-001",
+  "severity": "minor",
+  "title": "Session gate keeps whole keryx-review tool-call arguments and substring-scans all of them for every stale package on every stop",
+  "file": "src/review/completion-gate.ts",
+  "line": 161,
+  "problem": "SessionReviewTracker.scan stores call.arguments verbatim (up to 64 entries, no length cap). namedBySession then runs namesToken (indexOf loop) over every stored command, for each id (manifest.reviewId and dir name), for every open package whose manifest predates the session, on every holdReviewGate call. A command that embeds a report, dispositions or findings JSON inline is tens to hundreds of KB.",
+  "impact": "Hot path: agent.ts holdReviewGate runs at every agent stop once a keryx review command was seen. Cost per stop is about (stale packages) x 2 x (sum of stored argument sizes). With a few hundred accumulated packages under .metaproject/reviews and a few MB of stored arguments this is up to seconds of synchronous string scanning per stop, plus the arguments held in memory for the whole session. The manifest reads in scanRoot are already linear in packages, so this term can dominate only when arguments are large.",
+  "suggested_fix": "Do not retain the raw arguments. When scan sees a keryx review call, extract the review-id-shaped tokens (SAFE_REVIEW_ID matches) once into a bounded Set, and test membership in namedBySession. That makes the per-package check O(ids).",
+  "evidence": "      remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w4"
+ },
+ {
+  "id": "r2-review-performance-w4:PF-002",
+  "severity": "minor",
+  "title": "resolveBase always spawns up to five git merge-base processes even when the first candidate settles it",
+  "file": "src/review/prior-round.ts",
+  "line": 323,
+  "problem": "The sequential loop returned at the first qualifying candidate, so with a recorded base it cost one git spawn. Promise.all now runs merge-base for the recorded base, origin/main, main, origin/master and master every call, then discards all but the first qualifying result. defaultGitRunner has no timeout, so one slow probe also gates the whole result.",
+  "impact": "resolveBase runs for every review plan, every light-depth coverage check through resolveDiffBase, and prior-round resolution. The common case (recorded base, or origin/main resolves) now pays four extra process spawns and their repository reads. Faster only when the early candidates fail. Nothing in the diff or the comment gives a before/after for this change (performance law 3).",
+  "suggested_fix": "Keep the sequential early exit, or probe the first candidate alone and start the remaining ones only if it is missing or its range is empty. If the parallel form is kept, record the measurement that justified it.",
+  "evidence": "  const shas = await Promise.all(candidates.map((ref) => mergeBaseOf(git, ref, head)));",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w4"
+ },
+ {
+  "id": "r2-review-performance-w5:PERF-001",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "title": "partitionRegionsByFix labels context lines with a filter/find scan per line (quadratic in region size)",
+  "problem": "In the mixed-region branch, every context line runs changedAt.filter(...).at(-1) and changedAt.find(...) over the whole changed-index array, so labelling costs O(lines x changes) per region and allocates a fresh array per line.",
+  "evidence": "const before = changedAt.filter((at) => at < index).at(-1);",
+  "hot_path": "Once per scoped region of a delta round at review slice time; N is region lines (bounded by slice size, tens to low thousands). Not per request.",
+  "suggested_fix": "Single forward pass tracking the previous changed index, and a backward pass (or a pointer into changedAt) for the next one, making labelling O(lines).",
+  "_src": "review-performance-w5"
+ },
+ {
+  "id": "r2-review-regression-w3:RG-002",
+  "severity": "major",
+  "reviewer": "review-regression",
+  "file": "src/commands/review.ts",
+  "quote": "  parsePremiseClaims(parsed);",
+  "symbol": "readPremiseFile",
+  "problem": "Flow 460 made `review ingest --premises` repeatable: with several files readPremises returns a PremiseSource[] and managed.ts writes it unchanged to research-evidence/premises.json (`JSON.stringify(input.premises)`), so that file is now a JSON array of `{judge, premises}` objects. readPremiseFile in review.ts still validates every --premises file with parsePremiseClaims, which throws `A premise result must be an object ..., not an array` for an array. verdict.ts reads the same file with parsePremiseClaimSets and accepts it, so the package's own record is readable by one consumer and refused by the other.",
+  "impact": "Trigger: an ingest with two or more --premises files, then a re-ingest of the same package (`ingest --review-id`, e.g. after a ledger rebuild) that passes the package's own record, which is exactly what refuseInheritance in premise.ts tells the operator to do (`Pass --premises <file> ... (research-evidence/premises.json, or research-evidence/premises.superseded.json from an earlier ingest)`). Outcome: the re-ingest is refused with a misleading 'not an array' error and the held findings cannot be carried through the documented path; the operator has to reconstruct the original per-judge files by hand.",
+  "suggested_fix": "In readPremiseFile validate with parsePremiseClaimSets instead of parsePremiseClaims and, when the parsed value is an array of claim sets, return it as PremiseSource[] (readPremises flattening nested lists when several files are given). Add a round-trip test: ingest with two --premises files, then re-ingest with --premises <pkg>/research-evidence/premises.json.",
+  "evidence": "review.ts:3654 `parsePremiseClaims(parsed);` inside readPremiseFile; premise.ts:147-152 parsePremiseClaims throws for any non-record; premise.ts:180 parsePremiseClaimSets accepts the array form; managed.ts:526 writes `input.premises` (array when several files) to PREMISES_FILE; verdict.ts:212 reads it with parsePremiseClaimSets; premise.ts:911 refusal names PREMISES_FILE / PREMISES_SUPERSEDED_FILE as the file to pass back to --premises.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/commands/review.ts:3654",
+    "src/review/managed.ts:526",
+    "src/review/premise.ts:911",
+    "src/review/verdict.ts:212"
+   ],
+   "enumeration_method": "keryx ctx rg \"PREMISES_FILE|premises\\.json\" over src (non-test): one writer (managed.ts:526), two readers \u2014 verdict.ts readPremiseClaimsFile (parsePremiseClaimSets, accepts arrays) and review.ts readPremiseFile via --premises (parsePremiseClaims, refuses arrays); the refusal text in premise.ts:911 is the instruction that routes the file back into the refusing reader."
+  },
+  "_src": "review-regression-w3"
+ },
+ {
+  "id": "r2-review-regression-w4:REG-001",
+  "severity": "major",
+  "file": "src/review/loop.ts",
+  "line": 486,
+  "quote": "const reviewsDir = flowReviewsRoot(cwd, dir);",
+  "problem": "allocatePackage (src/review/managed.ts, flow 460 L5) now returns the reviews-root package (`path.join(reviewsRoot(input.cwd), input.reviewId)`) for `review ingest --review-id <id>` when a flow matches (explicit --flow, or findRelatedFlow matching the PR url) and the reviews-root package is a `review start` (mode review-flow) package or already bound to that flow. Before this change packagePath put that ingest into `.metaproject/flows/<dir>/reviews/<id>`. Every flow-scoped reader still reads only the flow directory: readFlowReviewRounds (src/review/loop.ts:486, `keryx review loop --flow`), readReviewRounds (src/flow/review-gate.ts:460, the require_clean_round gate of `flow complete`) and readFlowReviewManifests (src/governance/spend.ts:21). The test 'ingest --flow --review-id of a review-flow package binds that package to the flow' asserts the flow's reviews dir stays empty.",
+  "impact": "Trigger: `keryx review start --pr <n>` then `keryx review ingest --review-id <same id>` for a PR tracked by a flow (or with --flow). Outcome: the round is recorded with manifest.flow.id set but is invisible to the flow: `flow complete` sees no ingested round ('no ingested round to read findings from'), `review loop --flow` under-counts rounds so its repeat/attempt bound is not reached, and flow review spend omits the round. Previously the round landed in the flow directory and all three counted it.",
+  "suggested_fix": "Either keep ingest writing the flow-bound copy where the flow readers look (move/rename the started package into flowReviewsRoot on binding), or make readReviewRounds, readFlowReviewRounds and readFlowReviewManifests also enumerate reviews-root packages whose manifest.flow.id is the flow's id. Add a test that runs start -> ingest --flow -> readReviewRounds/readFlowReviewRounds.",
+  "evidence": "src/review/managed.ts:2853 `const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);` returned when `recorded?.mode === \"review-flow\" || recorded?.flowId === flowMatch.id`; packagePath (managed.ts:1150) previously routed every ingest with a flowMatch to flowReviewsRoot. keryx ctx rg 'reviewsRoot\\(' over src/flow, src/review/loop.ts, src/governance returns no match; review-gate.ts:1940 calls readReviewRounds(input.cwd, input.flowDir) which reads flowReviewsRoot only; managed.test.ts:222 expects the flow reviews dir not to exist.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    "src/review/loop.ts:486",
+    "src/flow/review-gate.ts:460",
+    "src/governance/spend.ts:21"
+   ],
+   "enumeration_method": "keryx ctx rg 'flowReviewsRoot\\(' over src (non-test): 7 call sites; managed.ts:1151 (packagePath, the writer) and managed.ts:2949 (reviewPackagesNamed, also scans reviewsRoot) and prior-round.ts:421 (packageDirs, also adds reviewsRoot) are unaffected; the three listed read only the flow directory and are the ones that lose the round."
+  },
+  "_src": "review-regression-w4"
+ },
+ {
+  "id": "r2-review-regression-w5:RG-001",
+  "severity": "major",
+  "file": "src/review/routing-check.ts",
+  "line": null,
+  "quote": "const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles;",
+  "problem": "Flow 460 L6 dropped the union of the fix roster with the slice's own round-1 routing in classifyDeltaSlices (round-split.ts `roles: fixRosterRoles(findingIds, prior)`) and in narrowedSlices (routing-check.ts, now `expectedFixRoles(entry, fix!, text)` instead of `[...needed.roles, ...expectedFixRoles(...)]`). The union was added in f6d9e21c4 (flow 458 M2/M3) for two reasons, and the old classifyDeltaSlices doc named both: new lines inside a fix slice, AND 'a fix touching process spawning still gets the security reviewer'. partitionRegionsByFix answers only the first. The fix lines themselves still go unrouted: a fix hunk (a prior finding's located lines \u00b1 FIX_TOLERANCE) whose fix adds `spawn(`/`execFile`/`Bun.spawn`, an input-derived path or a network call is now read only by review-logic, review-regression and the finding's author. slice-routing.ts would route that content to review-security-code (`process, filesystem write or trust-sensitive code`). The new isSecurityFinding check only adds security when the PRIOR finding is a security one, not when the FIX introduces security-relevant code. The routing check in routing-check.ts is the guard that used to catch a narrowed fix slice, and it now accepts the narrowed roster because expectedFixRoles no longer includes `needed.roles`.",
+  "impact": "Silent coverage loss in every delta round. Trigger: round 2 of a PR where a review-logic or review-architecture finding is fixed by code that spawns a process or builds a path or argv inside the fix hunk. Outcome: no security reviewer is dispatched for that code, routing-check reports nothing narrowed, and the ledger and complete gate treat the round as fully covered. Before this change the same slice got review-security-code from its round-1 routing.",
+  "suggested_fix": "Keep content routing for fix lines. In classifyDeltaSlices, set roles to the union of fixRosterRoles(findingIds, prior) and the content-triggered roles of the slice (at least the codeOnly security rule, or all of `slice.roles` from routeSlices, which fix slices already pass through at review-slice.ts:255). In narrowedSlices, require `[...needed.roles, ...expectedFixRoles(entry, fix!, text)]` again. partitionRegionsByFix already keeps unrelated new lines out of fix slices, so the union no longer brings in roles owed only to new code. Add a test: a fix hunk that adds `Bun.spawn(` for a logic finding must route review-security-code.",
+  "evidence": "git show f6d9e21c4 message: 'M2/M3: ... a fix slice's roster is the fix roster plus its own round-1 routing, read deep, and the routing check holds it to the union.' Removed doc (slice-06 diff, round-split.ts): 'a fix slice may hold new lines too, and a fix touching process spawning still gets the security reviewer'. New header comment (round-split.ts:9) names only the new-lines reason. slice-routing.ts:116-117 route spawn/exec/child_process content to review-security-code. round-split.ts:199 `roles: fixRosterRoles(findingIds, prior),`; routing-check.ts:37 no longer unions needed.roles; review-slice.ts:255 routes fix slices through routeSlices and then discards those roles in classifyDeltaSlices.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    "src/review/routing-check.ts:37",
+    "src/review/round-split.ts:199",
+    "src/commands/review-slice.ts:255"
+   ],
+   "enumeration_method": "keryx ctx rg over src for fixRosterRoles, expectedFixRoles, fixClaimBacked and classifyDeltaSlices: two roster producers (classifyDeltaSlices for review slice, expectedFixRoles for the routing check) and one call site that feeds routed fix slices into classifyDeltaSlices. All three drop content routing for fix lines. Tests in round-split.test.ts are excluded."
+  },
+  "_src": "review-regression-w5"
+ },
+ {
+  "id": "r2-review-security-code-w1:SEC-R2-001",
+  "severity": "minor",
+  "reviewer": "review-security-code",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "if ((named.commands ?? []).some((command) => namesToken(command, id))) return true;",
+  "title": "An older open package counts as named by this session when attacker-controlled text matches a token of any keryx review command",
+  "problem": "namedBySession treats a package as continued by this session when its manifest.reviewId or directory name appears as a token anywhere in the arguments of any `keryx review` tool call (completion-gate.ts:217). scanRoot passes the manifest's own reviewId at :252, and that value is attacker-controlled when the package is committed in the checked-out PR. A package whose reviewId is `keryx` or `review` is therefore named by every `keryx review` command. Separately, the tracker trusts `# managed review:` and `path:` lines in the result of any tool call whose arguments merely contain `keryx review` (:160, :165-172). With a compound command such as `keryx review status x; cat notes.md`, file content can name review ids and package dirs inside cwd.",
+  "attack_vector": "The author of the PR under review commits `.metaproject/reviews/anything/manifest.json` with mode review-flow, status draft and reviewId \"keryx\". Take a session that resumes an earlier review without an active pointer, or one that has not opened its own package yet. Every `keryx review ...` call names that package, and it passes the stale-manifest filter at :252. pickPackage picks it as the newest candidate when its checkout mtime is later than the real package's manifest. The harness nudge then names the attacker's package and repeats its completion blockers to the model as harness-provenance text.",
+  "impact": "The completion gate nudges the model about the wrong package, the misdirection flow 460 C set out to remove. The damage is bounded: the nudge flattens and caps blocker text (nudgeLine, 300 chars x 20), displayId sanitises the id, and `review complete` is unaffected.",
+  "suggested_fix": "Match a review id only against reviewIds keryx printed and against an explicit argument position (`review status|readiness|complete <id>`, `--review-id <id>`), not against any token of the command line; or ignore ids that equal a word of the command itself. Trust `path:`/`# managed review:` lines only when the tool call is a single `keryx review start|attach|ingest` command, not a compound shell line.",
+  "evidence": "src/review/completion-gate.ts:202-208 namesToken matches any boundary-delimited token; :217 applies it to every recorded command; :252 passes manifest.reviewId from the package on disk; :160 accepts any call whose arguments contain `keryx review`. Test completion-gate.test.ts:245-246 covers only a call that is not a keryx review command.",
+  "confidence": "medium",
+  "related_skill": null,
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "r2-review-security-code-w1:SEC-R2-002",
+  "severity": "minor",
+  "reviewer": "review-security-code",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "const closedAt = best === null ? Math.max(0, ...closedAtByRoot.values()) : (closedAtByRoot.get(best.root) ?? 0);",
+  "title": "A closed review-flow manifest committed by the reviewed PR under cwd still releases the completion gate",
+  "problem": "This is the remaining part of round-1 SEC-002. scanRoot (:245-246) counts any review-flow package with status closed whose manifest mtime is at or after the session start. findReviewGateState (:324-325) returns null, which releases the gate, when no package is chosen yet or when the chosen package's manifest is older. cwd is always a scanned root, and nothing ties the closed package to the review this session is running (no id, pointer or own command output).",
+  "attack_vector": "The PR under review adds `.metaproject/reviews/x/manifest.json` with mode review-flow and status closed. The reviewing agent checks the PR out during the session, so the mtime is >= since. If the agent has not opened its own package yet (best === null), or resumes an older package whose manifest predates the checkout, the next stop attempt finds closedAt > 0 and the gate accepts the stop.",
+  "impact": "The model may end the run before any package is opened or completed. `review complete` is not run, so nothing is falsely recorded complete, but PR content defeats the gate's guarantee that the run keeps going until `review complete` accepts.",
+  "suggested_fix": "Release the gate only for a package this session opened or named (reviewIds/packageDirs from SessionReviewNames, or the active pointer), not for any closed manifest under the root. With best === null, do not release on closedAt at all.",
+  "evidence": "src/review/completion-gate.ts:245-246 take closedAt from any closed review-flow manifest newer than since; :324 takes the max over all roots when best === null; :325 returns null. Test completion-gate.test.ts:335 covers only a closed package under a different root.",
+  "confidence": "medium",
+  "related_skill": null,
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "r2-review-security-code-w10:SEC-001",
+  "severity": "major",
+  "file": "src/review/round-split.ts",
+  "line": null,
+  "quote": "roles: fixRosterRoles(findingIds, prior),",
+  "problem": "Flow 460 L6 drops the union of a fix slice's roster with its round-1 content routing (458 M2/M3: 'a fix touching process spawning still gets the security reviewer'). The justification is that a fix slice now holds only fix lines, but splitDelta (src/review/prior-round.ts, the commit-message loop) marks EVERY hunk of a commit whose message names a prior finding id as FIX, in any file, so brand-new code in that commit is 'fix lines' too. Such a slice passes onlyFixLines, becomes kind fix, and gets only logic + regression + the authors of the named findings (+ security-code only when isSecurityFinding matches one of them). The content rule in slice-routing.ts that assigns review-security-code to exec/execSync/spawn/child_process/eval/fs-write/input-derived-path code is never applied. routing-check.ts narrowedSlices uses expectedFixRoles alone for a backed fix claim, so the narrowed-routing check accepts the slice.",
+  "impact": "Attack vector: a PR author (or a fixing agent) lands a commit 'fix LG-001' that, alongside the fix, adds e.g. execSync(`git ${userArg}`) or a path built from input in another file. In the next delta round those hunks are FIX hunks; the slice is routed to review-logic/review-regression/the LG author only; review-security-code never reads the new process-spawning code and keryx review routing/readiness reports nothing missing. A command-injection or path-traversal sink can merge with the security reviewer silently skipped. Precondition: a delta round and a commit message naming a prior finding id, which the author fully controls.",
+  "suggested_fix": "Restore the union for content-sensitive roles: in classifyDeltaSlices set roles to fixRosterRoles(findingIds, prior) unioned with the slice's round-1 roles (or at least with any review-security-code the content router assigns), and in narrowedSlices require [...expectedFixRoles(entry, fix!, text), ...needed.roles.filter(r => r === 'review-security-code')] (or the full needed.roles). Alternatively, make commit-named marking in splitDelta only mark hunks that also overlap the named finding's file, so unrelated new code stays NEW.",
+  "evidence": "Read at head: src/review/round-split.ts:199 `roles: fixRosterRoles(findingIds, prior),` (was `[...new Set([...fixRosterRoles(...), ...(slice.roles ?? [])])]`); src/review/routing-check.ts:37 `backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles` (was union with needed.roles); src/review/prior-round.ts:738-749 commit-named loop marks every hunk of parseDiffHunks(own.stdout) across all files; src/review/slice-routing.ts:116-117 content rules route exec/spawn/child_process to review-security-code.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "class_scope": {
+   "sites": [
+    "src/review/round-split.ts:199",
+    "src/review/routing-check.ts:37",
+    "src/review/prior-round.ts:743"
+   ],
+   "enumeration_method": "keryx ctx rg for fixRosterRoles/expectedFixRoles callers in src/review (round-split classifyDeltaSlices, routing-check narrowedSlices are the only roster writers/checkers for fix slices) plus the splitDelta commit-named marking that feeds them"
+  },
+  "_src": "review-security-code-w10"
+ },
+ {
+  "id": "r2-review-security-code-w10:SEC-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": null,
+  "quote": "const SECURITY_PROBLEM = /\\b(security|secur",
+  "problem": "isSecurityFinding decides whether review-security-code joins a fix slice from the prior finding's reviewer, a SEC id, or a keyword regex over its problem text. The regex misses common security classes a non-security reviewer would describe in other words: shell / command (without 'injection'), exec, spawn, path escape outside the package (only 'sandbox escape'), symlink, TOCTOU, denial of service / ReDoS, prototype pollution, SQL, deserialization, leak (except 'token leak'), unsafe argv.",
+  "impact": "A review-logic finding like 'argv passed with shell: true' or 'path escapes the package dir' is fixed in a fix slice that review-security-code does not read, so the fix of a security-relevant bug is checked only by non-security roles. Combined with SEC-001 this is the only remaining path to the security reviewer for fix slices.",
+  "suggested_fix": "Widen the keyword set (shell, command, exec, spawn, argv, escape, symlink, toctou, denial of service, dos, redos, prototype pollution, sql, deserializ, leak, unsafe) or, more robustly, route on the fix slice's content as SEC-001 suggests so the heuristic is not the only gate.",
+  "evidence": "src/review/round-split.ts:23 regex alternatives enumerated at head; fixRosterRoles adds FIX_SECURITY_ROLE only when attached.some(isSecurityFinding).",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w10"
+ },
+ {
+  "id": "r2-review-security-code-w10:SEC-003",
+  "severity": "minor",
+  "file": "src/review/round-record.ts",
+  "line": null,
+  "quote": "export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\"",
+  "problem": "The coverage gate's diff stats (coverage.ts diffOfTarget, which feeds effectiveDepth's light-round qualification) now exclude any path under **/.metaproject/reviews/** at any depth, while slicing still uses the root-relative NOT_REVIEW_PACKAGES. A changed source file placed under a nested .metaproject/reviews/ directory (e.g. packages/x/.metaproject/reviews/run.ts) is therefore sliced and shipped but not counted toward the files/changed-lines that decide whether a 'light' dispatch is trusted.",
+  "impact": "A PR can move risky code under a nested review-package-looking directory to shrink the measured diff so a light round passes the depth gate, reducing reviewer coverage of that code. Needs an author who chooses that path and an orchestrator that records a light dispatch.",
+  "suggested_fix": "Exclude only directories that actually hold a review package (manifest.json present), or keep the exclusion root-relative to the project root the round was sliced at, so the gate and the slicer agree on the same file set.",
+  "evidence": "src/review/round-record.ts:17 (new constant); src/review/coverage.ts:571 `gitDiffAt(cwd, resolved.base, head, NOT_REVIEW_PACKAGES_ANY_DEPTH)`; coverage.ts:591-594 effectiveDepth consumes packageDiffStats for the light-round check.",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w10"
+ },
+ {
+  "id": "r2-review-security-code-w4:SC-001",
+  "reviewer": "review-security-code",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 106,
+  "quote": "const KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/;",
+  "problem": "The completion gate trusts the `path:` and `# managed review:` lines of a tool result whenever the tool call's arguments contain `keryx review` anywhere. A compound command (`keryx review status x; cat notes.md`, or `cat notes.md # keryx review`) makes the output of the other command trusted as keryx's own output. The test 'session roots come only from this session's keryx review commands and keryx's own output lines' (src/review/completion-gate.test.ts) only covers a `cat` call with no `keryx review` in it, so the compound case is unpinned.",
+  "impact": "Attack vector: text the agent reads (a PR file, a report, a fetched page) carries `# managed review: <id>` and `path: sub/.metaproject/reviews/z` lines. If the agent runs it through a command that also mentions `keryx review`, the gate adds `sub` as a session root and the id as session-named. With no open package chosen (best === null), findReviewGateState takes closedAt as the max over all roots (completion-gate.ts:324), so a closed review-flow manifest under that root written during the session releases the gate; otherwise the nudge can be pointed at a planted package. Bounded: roots must be inside cwd, ids pass SAFE_REVIEW_ID, and the gate is a completion nudge, not an access-control boundary, so this is defence in depth.",
+  "suggested_fix": "Trust output lines only when the command is a single `keryx review <start|attach|ingest>` invocation (anchor the pattern at the command start and refuse `;`, `&&`, `|`, newlines), and add a test with a compound command whose second half prints forged lines.",
+  "evidence": "Read src/review/completion-gate.ts:106-183 (scan(): KERYX_REVIEW_COMMAND.test(call.arguments) gates pendingCalls, then OWN_OUTPUT_LINE lines of the matching tool result feed namePaths/reviewIds) and :308-325 (closedAt over all roots when best is null). Slice test at completion-gate.test.ts 'session roots come only from...' uses only a plain `cat` call for the forged case.",
+  "confidence": "high",
+  "_src": "review-security-code-w4"
+ },
+ {
+  "id": "r2-review-security-code-w5:SEC-R2-002",
+  "severity": "minor",
+  "file": "src/review/locate.ts",
+  "quote": "const part = (needle[0] as string).trim();",
+  "problem": "The new `substring` pass places a one-line quote on any file line that contains it, with no minimum length. A quote of one token (`x`, `)`, `return`), or of whitespace around one token, becomes a `derived` anchor whenever it occurs on exactly one line, and findings.json records it as method `substring`. The locator's stated purpose (module header: a report is attacker-influenced data, and a wrong anchor is worse than an honest `unlocatable`) is weakened. A fabricated or careless finding now gets a derived line from a fragment that proves the reviewer read nothing.",
+  "impact": "The code behaves as documented. The cost falls on whoever trusts `locator.state: derived` as proof that the reviewer quoted real code, and on the readiness item `quotes-located`, which such a fragment passes.",
+  "suggested_fix": "Give the substring pass a floor, for example a minimum trimmed length (around 12 characters) or at least one identifier-like token plus one other character. Below the floor, return `unlocatable` with kind `absent` and a reason that says the quote is too short to anchor.",
+  "evidence": "src/review/locate.ts:233-244 (substring pass), findSubstring at :156-170; no minimum length on `quote` in reviewer-finding.schema.json or review-finding.schema.json (keryx ctx rg for MIN_QUOTE / minLength found none on quote).",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w5"
+ },
+ {
+  "id": "r2-review-security-code-w6:SEC-001",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "return typeof state === \"string\" && state !== \"\" && state !== \"unknown\";",
+  "problem": "quotesLocatedCheck treats a finding as answered when disposition.state is any non-empty string other than \"unknown\". It does not check the value against FINDING_DISPOSITION_STATES (src/review/types.ts:212), so a malformed or made-up state (e.g. \"todo\", \"pending\", \"open\") closes item 12.",
+  "impact": "Gate integrity: a findings.json edited by hand or by an agent in the same package can turn quotes-located from FAIL to pass with a state no keryx command would write, and readiness reports READY on an unplaced claim with no real answer. Not an external attacker path: it needs write access to the package, which the orchestrating agent has.",
+  "suggested_fix": "Accept only a member of FINDING_DISPOSITION_STATES other than \"unknown\" (import the const from ./types), and name the finding with an invalid state in the FAIL evidence.",
+  "evidence": "readiness.ts quotesLocatedCheck `answered` compares only against \"\" and \"unknown\"; types.ts:212-220 lists the six real states. The decide/disposition commands write validated states, but readiness reads findings.json as raw records (record() over JSON), so nothing between the file and this check validates the value.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "location_class": "in-diff",
+  "_src": "review-security-code-w6"
+ },
+ {
+  "id": "r2-review-security-code-w9:SEC-001",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": null,
+  "quote": "const resolved = await resolveBase(defaultGitRunner(cwd), { kind: target.kind, ref: target.ref ?? \"\", base: target.recordedBase }, head);",
+  "problem": "The light-round recheck (resolveDiffBase) for a PR target now diffs against manifest.target.base when one is recorded. resolveBase puts it first and keeps it even when the range it gives is small. That base comes from `review start --base <sha|ref>`, which the agent driving the review supplies, and nothing checks it against the pull request's real base. src/review/layers.ts already reads the real base with `gh pr view <ref> --json baseRefOid`. Attack vector: an agent that wants a shorter review (prompt-injected, or looping on the gate) starts the round with `--base <head~1>` on a large PR. The recomputed diff is then within LIGHT_MAX_FILES/LIGHT_MAX_CHANGED_LINES, so a dispatch saying `depth: light` is accepted with the 3-reviewer light set, and readiness and complete both pass.",
+  "impact": "A large PR can close on the light reviewer set. This is the gate-consistency guarantee flow 460 restores, and the recheck exists precisely so that agent-written records (scope-files.json) do not decide depth. Kept at minor because the non-PR path already trusted the agent-supplied target.ref/base the same way (sibling precedent, shared law 4). A recorded full round-depth.json still binds, and an empty range is refused.",
+  "suggested_fix": "For kind \"pr\", check the recorded base against the PR's baseRefOid (the gh lookup layers.ts already performs), or require that merge-base(recordedBase, head) equal merge-base(<PR base branch>, head) before a light depth is accepted. When the lookup cannot be made, fall back to resolveBase's origin/main... chain instead of the recorded base.",
+  "evidence": "src/review/coverage.ts:543 `const recordedBase = str(target.base);` (from manifest.json). src/review/coverage.ts:559 passes it as `base` to resolveBase. src/review/prior-round.ts resolveBase: `if (ref === target.base) return { ref, sha };` keeps an explicit base unconditionally. src/commands/review.ts:1044 reads it from the `--base` flag. src/review/layers.ts:179 shows a baseRefOid lookup already exists.",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "location_class": "in-diff",
+  "_src": "review-security-code-w9"
+ },
+ {
+  "id": "r2-review-style-w1:STY-001",
+  "severity": "minor",
+  "confidence": "high",
+  "file": "src/review/locate.ts",
+  "quote": "/** How a finding's `line` was arrived at. */",
+  "problem": "Two doc comments are stacked above the LocateMethod alias: the leftover one-line comment for LocatorRecord, then the new block about how a quote was placed. LocatorRecord, two declarations below, has no comment, and the first line reads as describing the wrong declaration. This is the prior CC-2 / style-w3 F-001 shape, still present at the head.",
+  "impact": "A reader sees a comment about how the line was arrived at above a type that lists locate methods; LocatorRecord loses its description.",
+  "suggested_fix": "Delete the one-line comment above LocateMethod and put it directly above `export type LocatorRecord`.",
+  "evidence": "src/review/locate.ts:62-69",
+  "reviewer": "review-style",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "r2-review-style-w3:ST-001",
+  "severity": "minor",
+  "file": "src/commands/review.ts",
+  "quote": "  type PremiseSource,",
+  "problem": "The new type import is inserted between ManagedReviewInput and ManagedReviewMode, breaking the alphabetical order the rest of that import list keeps (ManagedReviewInput, ManagedReviewMode, PremiseSource, ReviewFindingsSource ...).",
+  "impact": "Readability only: the next editor scanning the sorted list will not find the name where expected.",
+  "suggested_fix": "Move `type PremiseSource,` to after `type ManagedReviewMode,`.",
+  "evidence": "slice-03.diff lines 565-568: PremiseSource sits before ManagedReviewMode.",
+  "confidence": "high",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w3:ST-002",
+  "severity": "minor",
+  "file": "src/commands/review.ts",
+  "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+  "problem": "readPremises casts twice (`sources[0] as string`, `readPremiseFile(source)) as PremiseSource`) to bridge the return type ManagedReviewInput[\"premises\"] (which includes undefined) to PremiseSource. The casts hide that readPremiseFile never returns undefined.",
+  "impact": "A reader cannot tell whether the cast is a guarantee or a silenced type error; a later change that lets readPremiseFile return undefined would not be caught.",
+  "suggested_fix": "Give readPremiseFile the narrower return type PremiseSource and drop both casts.",
+  "evidence": "slice-03.diff lines 681-687 and 702.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w3:ST-004",
+  "severity": "minor",
+  "file": "src/commands/operator-confirm-review.ts",
+  "quote": "Item 11 (premise-decisions) is never waived",
+  "problem": "The description string now derives the upper bound from READINESS_ITEMS.length but still hard-codes `Item 11` for premise-decisions; SKILL.detail.md likewise hard-codes `twelve items`. Half the sentence tracks the list, half does not.",
+  "impact": "Adding a further readiness item updates one number automatically and leaves the others stale.",
+  "suggested_fix": "Refer to premise-decisions by id only, or derive its number from the list.",
+  "evidence": "slice-03.diff line 96.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w4:ST-003",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "quote": "? `this round reported no such finding: ${hashInDisplayIdDetail(claim.finding_id)}`",
+  "problem": "The new display-id rule lives in display-id.ts (`displayIdHasHash`, `DISPLAY_ID_FORM`), but premise.ts re-tests with an inline `.includes(\"#\")` and defines `hashInDisplayIdDetail` with its own wording of the same rule, a second statement of DISPLAY_ID_FORM.",
+  "impact": "Two sources of the rule's wording and predicate; they can diverge.",
+  "suggested_fix": "Use `displayIdHasHash` for the test and build the message from `DISPLAY_ID_FORM` (or export the detail builder from display-id.ts).",
+  "evidence": "premise.ts diff lines 2359-2364 and 2467-2472 against display-id.ts lines 813-820.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w4"
+ },
+ {
+  "id": "r2-review-style-w4:ST-004",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "quote": "const sets: readonly ParsedPremiseClaims[] = parsedInput === undefined ? [] : Array.isArray(parsedInput) ? (parsedInput as readonly ParsedPremiseClaims[]) : [parsedInput as ParsedPremiseClaims];",
+  "problem": "A ternary chain with two casts normalises the input; parsePremiseClaimSets likewise casts `parsePremiseClaims(entry) as ParsedPremiseClaims` where the function returns a union with undefined.",
+  "impact": "Nested ternary with casts is hard to read and hides a type narrowing the compiler could check.",
+  "suggested_fix": "Extract `toSets(input)` using an early return and a type guard, or have parsePremiseClaims return a non-undefined overload.",
+  "evidence": "Diff lines 2352-2355 and 2433.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w4"
+ },
+ {
+  "id": "r2-review-style-w5:ST-001",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": 173,
+  "title": "dispatchRuns duplicates the dispatch.runs parsing reviewersCheck still does by hand",
+  "problem": "The PR adds dispatchRuns() in research.ts (with its own local `record` copy) and coverageMdCheck uses it, but reviewersCheck in the same file still hand-parses dispatch.runs with the module-level `record` helper. research.ts now also defines a second `record` identical to readiness.ts's. Two readers of the same shape, and two copies of the helper.",
+  "why_it_matters": "DRY: a change to the run shape must be made in two parsers.",
+  "suggested_fix": "Have reviewersCheck read runs through dispatchRuns(ctx.research) and share one `record` helper.",
+  "evidence": "const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record)",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 54,
+  "title": "secondLookClaimBacked keeps its own changed-line walker next to the new walkRegion",
+  "problem": "walkRegion/lineInHunk now compute new-side line numbers for changed lines, while secondLookClaimBacked in the same file still walks region.text with its own `let line = region.startLine` loop for the same purpose (with slightly different removed-line handling).",
+  "why_it_matters": "Duplicated line-numbering logic that can drift; two definitions of 'a changed line lies in a hunk' in one file.",
+  "suggested_fix": "Express secondLookClaimBacked through walkRegion/lineInHunk, or note why its semantics differ.",
+  "evidence": "let line = region.startLine;",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-003",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 23,
+  "title": "SECURITY_PROBLEM alternation has redundant branches",
+  "problem": "`security|secur\\w+` and `injection|inject\\w*` each list a literal that the wildcard branch next to it already matches. Reads as if the literals mattered.",
+  "why_it_matters": "Readability of a dense one-line regex.",
+  "suggested_fix": "Drop the literal branches (`secur\\w*`, `inject\\w*`) or split the regex into a named list of terms.",
+  "evidence": "const SECURITY_PROBLEM = /\\b(security|secur\\w+|injection|inject\\w*",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-004",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 132,
+  "title": "\"review-security-code\" literal repeated beside the new FIX_SECURITY_ROLE constant",
+  "problem": "The PR introduces FIX_SECURITY_ROLE = \"review-security-code\" but SECOND_LOOK_ROLES still spells the same role name as a literal in the same file.",
+  "why_it_matters": "Duplicated string constant; a rename must be made twice.",
+  "suggested_fix": "Use FIX_SECURITY_ROLE in SECOND_LOOK_ROLES.",
+  "evidence": "export const SECOND_LOOK_ROLES: readonly string[] = [ALWAYS_ROLE, \"review-security-code\"];",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-005",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 80,
+  "title": "partitionRegionsByFix is long and branch-heavy, with non-null assertions",
+  "problem": "partitionRegionsByFix (about 50 lines) carries three early-exit branches, a context-labelling loop with a four-way if/else chain, a piece-cutting loop and several `!` assertions. Labelling and piece-cutting could be named functions.",
+  "why_it_matters": "Hard to review the half-and-half context rule; complexity near the 10-branch threshold.",
+  "suggested_fix": "Extract labelContext(lines, kinds) and cutPieces(...) helpers.",
+  "evidence": "else labels[index] = index - before <= Math.ceil((after - before - 1) / 2) ? kinds[before]! : kinds[after]!;",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-clean-code-w2:CC-004",
+  "severity": "minor",
+  "file": "src/commands/review-plan.e2e.test.ts",
+  "quote": "expect(second.dispatches).toBeLessThanOrEqual(40);",
+  "problem": "40 is the default `reviewPlan.maxDispatches` threshold, repeated as a bare literal in the assertion; the test does not say that, and it breaks silently if the default moves. The same file repeats 60_000 timeouts and, in both tests, the same report/research.json/ingest preamble (two sites, below the DRY threshold, noted only).",
+  "impact": "A change of the default threshold fails or weakens this assertion with no link back to the setting.",
+  "suggested_fix": "Name the constant (import the default or declare one with a comment citing routing.config.json), or assert overThreshold is false instead.",
+  "evidence": "reviewPlan.maxDispatches default 40 per the cli-reference estimate row in this diff.",
+  "confidence": "medium",
+  "reviewer": "review-clean-code",
+  "_src": "review-clean-code-w2"
+ },
+ {
+  "id": "r2-review-core-boundaries-w1:CB-004",
+  "severity": "minor",
+  "reviewer": "review-core-boundaries",
+  "file": "src/review/completion-gate.test.ts",
+  "line": null,
+  "quote": "expect(found?.packageDir).toBe(current);",
+  "problem": "The pointer-wins test still passes with the pointer branch of pickPackage deleted: pr-7975 is the only package written this session and is found by the fallback scan, and pr-7912 is already excluded by its age. No test in the file has two eligible packages with the pointer naming the older-mtime one. This restates two round-1 findings (review-logic-w3:F-002, review-testing-practices-w2:T-001); the round-2 edit only changed the call signature.",
+  "impact": "A regression that ignores the pointer, the very behaviour flow 460 C names, stays green.",
+  "suggested_fix": "Write two fresh packages with the newer mtime not named by the pointer, and assert the pointer's package is chosen.",
+  "evidence": "completion-gate.test.ts:207-216; the neighbouring tests (named by id, named by path, older pointer ignored) are also satisfiable by the scanRoot candidates alone.",
+  "confidence": "high",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "r2-review-highload-w1:HL-005",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 212,
+  "quote": "await writeActiveReview(sub, { id: \"pr-7975\", dir: current });",
+  "title": "Pointer test still does not drive the pointer branch",
+  "problem": "Prior findings review-logic-w3:F-002 and review-testing-practices-w2:T-001, still present. The only other package (pr-7912) is old and unnamed, and pr-7975 is also found by the fallback scan, so removing the pointer read in pickPackage (completion-gate.ts:272-283) leaves this test and the named-id test at :301 green.",
+  "impact": "A regression in the pointer-wins rule would ship unnoticed.",
+  "suggested_fix": "Add a fixture with two packages fresh this session where the pointer names the older, or a pointer naming a package whose manifest predates `since` while its startedAt is inside the session, and assert the pointer's package.",
+  "evidence": "completion-gate.test.ts:207-216 and :218-224 (the same fixture without a pointer returns pr-7975).",
+  "confidence": "high",
+  "reviewer": "review-highload",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "r2-review-logic-w4:LG-002",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 291,
+  "quote": "expect(performance.now() - started).toBeLessThan(1_000);",
+  "problem": "Two new tests assert linear-time behaviour with a wall-clock bound measured by performance.now(): completion-gate.test.ts:291 (reviewPackagePaths on 1 MB and ~1 MB crowded input, < 1000 ms) and ledger.test.ts:1106 (splitUsage on a 200k-brace line, < 500 ms). On a loaded CI runner (the client matrix runs suites in parallel) a GC pause or CPU throttling can push a linear scan past the bound.",
+  "impact": "Intermittent red CI unrelated to a change; the bound also does not distinguish linear from mildly super-linear code at these sizes, so it tests the machine as much as the algorithm.",
+  "suggested_fix": "Keep the input sizes but compare against a scaled baseline (time n and 4n, assert ratio < ~8), or raise the bound well above observed time (e.g. 5 s) so only catastrophic backtracking fails it.",
+  "evidence": "Slice lines for completion-gate.test.ts 'package path matching is linear' and ledger.test.ts 'a usage line is checked by hand, not by a backtracking pattern'; head lines located with grep at completion-gate.test.ts:291 and ledger.test.ts:1106.",
+  "confidence": "medium",
+  "location_class": "in-diff",
+  "_src": "review-logic-w4"
+ },
+ {
+  "id": "r2-review-logic-w9:LG-003",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 291,
+  "quote": "expect(performance.now() - started).toBeLessThan(1_000);",
+  "problem": "Two linear-time regression guards assert wall-clock bounds: completion-gate.test.ts:291 (<1000 ms, including building a 1 MB and a ~960 KB string and scanning both) and ledger.test.ts:1106 (<500 ms for a 200k-brace usage line). On a loaded shared CI runner or under coverage instrumentation these can fail with no code change.",
+  "impact": "Intermittent red CI unrelated to the change; a flaky guard tends to get its bound raised or deleted, losing the backtracking protection it encodes.",
+  "suggested_fix": "Keep the inputs but compare against a scaled baseline (time on n vs 4n, assert a roughly linear ratio) or raise the bound by an order of magnitude; quadratic behaviour on these sizes takes far longer, so a 10 s bound still catches it.",
+  "evidence": "Read both tests in slice-04 (completion-gate.test.ts hunk @@ 218,357 @@, ledger.test.ts hunk @@ 1081,1185 @@); line numbers confirmed at head 375279e7.",
+  "confidence": "medium",
+  "_src": "review-logic-w9"
+ },
+ {
+  "id": "r2-review-style-w2:ST-002",
+  "severity": "minor",
+  "file": "src/commands/review-plan.e2e.test.ts",
+  "quote": "const git = (...args: string[]): string => {",
+  "problem": "The e2e test defines its own git helper and repeats the author e-mail literal, although src/review/git-fixture.test-helpers.ts already exports git(cwd, ...args), initRepo and commitFiles, and four other test files share that fixture. The block was moved from review-plan.test.ts, so the duplication is new at this location.",
+  "impact": "Another copy of the identity env and spawn wrapper to keep in step with the shared helper.",
+  "suggested_fix": "Import git/initRepo/commitFiles from ../review/git-fixture.test-helpers and drop the local helper and EMAIL constant.",
+  "evidence": "The same e-mail literal appears in src/review/l6-hardening.test.ts, round-split.test.ts, second-look.test.ts and git-fixture.test-helpers.ts (keryx ctx rg).",
+  "confidence": "medium",
+  "_src": "review-style-w2"
+ },
+ {
+  "id": "r2-review-testing-practices-w1:T-R2-001",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 207,
+  "quote": "test(\"the nudge names the package the active-review pointer names, not an older open one in cwd\", async () => {",
+  "problem": "Round-1 T-001 is not addressed: the diff only adapts this test to the new findReviewGateState signature ({ roots: [sub] }). The package the pointer names (pr-7975) is still the only package fresh this session, and the very next test ('a package started this session under a subdirectory is found without a pointer') shows it is found with no pointer at all. The competing package pr-7912 is excluded by age (writeOldPackage backdates it 1h before `since`). The test title claims it pins the pointer branch; the fixture pins only the session-age filter.",
+  "impact": "The pointer lookup is unprotected: the next edit to it can break the stated contract with the suite green.",
+  "suggested_fix": "Add a fixture where pointer and session filter disagree: a pointer naming a package whose manifest predates `since`, or two packages fresh this session with the pointer naming the older. Assert the pointer's package is returned.",
+  "evidence": "completion-gate.test.ts:207-216 versus 218-224 resolve to pr-7975 for the same reason (fresh mtime under sub). Static reading; no mutation run (read-only).",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w1"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-001",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 283,
+  "quote": "history.splice(0, history.length, reviewCall(\"c3\", \"keryx review status c/.metaproject/reviews/r\"));",
+  "problem": "The tracker test is titled 'scans only messages added since the last call, and starts over when the history is rewritten' but cannot tell an incremental scan from a full rescan, and reaches only one of the two reset conditions. The rewrite replaces a 2-message history by a 1-message one, so only the `history.length < this.cursor` arm of the reset in SessionReviewTracker.update fires; the `history[this.cursor - 1] !== this.last` arm (a rewritten history that is as long or longer) is never driven. A call-id pairing across two update() calls (tool call in one update, its `# managed review:` result in the next, via pendingCalls) is also not driven: every history entry in the test is a call with no result.",
+  "impact": "Deleting the identity arm of the reset, or clearing pendingCalls on each update, leaves this suite green; a compacted history that regrows past the old cursor would then keep stale names and drop result lines that arrive late.",
+  "suggested_fix": "Add a case that replaces the history with a different array of the same or larger length and expects the old roots gone; add one where update(history) sees the call and a later update(history+result) sees the tool result carrying the `path:` line, expecting the reviewId/path to be named.",
+  "evidence": "src/review/completion-gate.ts:137 `if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();` and :165 pendingCalls.delete pairing; test at completion-gate.test.ts:279-284 uses reviewCall only. Reasoned from code, mutation not run.",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w4"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-002",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 291,
+  "quote": "expect(performance.now() - started).toBeLessThan(1_000);",
+  "problem": "Linear-time guarantees are pinned with wall-clock thresholds: completion-gate.test.ts:291 (<1000 ms over ~1 MB of input) and ledger.test.ts:1106 (<500 ms over a 200 000-brace line). The inputs are big enough that a backtracking regex fails by orders of magnitude, so the signal is real, but the thresholds are absolute and run on shared CI in the full parallel suite.",
+  "impact": "A loaded runner or GC pause can push a correct linear scan over the bound and fail the lane intermittently; the repository's own rule is to wait on predicates, not on clocks.",
+  "suggested_fix": "Keep the hostile inputs but widen the bound by an order of magnitude (a quadratic scan of these inputs takes minutes, so 5-10 s still separates them), or compare the time against a doubled input and assert the ratio is near 2.",
+  "evidence": "Both sites quoted; class: wall-clock assertions in the diff (rg 'toBeLessThan\\((1_000|500)\\)' src/review: 2 sites).",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w4"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-003",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "file": "src/review/completion-gate.test.ts",
+  "line": 339,
+  "quote": "await new Promise((r) => setTimeout(r, 15));",
+  "problem": "A fixed 15 ms sleep orders two manifest mtimes (the closed package must be strictly newer than the live one) in the new 'a package closed under another named root' test. It waits for nothing observable; it relies on the filesystem mtime resolution and the clock tick being finer than 15 ms. The file already imports `utimes`, which sets the order deterministically.",
+  "impact": "On a coarse-mtime filesystem or a tick of 16 ms or more the two mtimes can tie and the test either passes without exercising the ordering it names or fails intermittently.",
+  "suggested_fix": "Drop the sleep and `await utimes(manifestPath, t0, t0)` / `utimes(otherManifest, t1, t1)` with explicit times, as the neighbouring tests do.",
+  "evidence": "pickPackage/collectPackages compare info.mtimeMs (completion-gate.ts:246,252,281); the existing setTimeout at completion-gate.test.ts:146 is the same shape and predates this PR, so the class has 2 sites (146, 339).",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w4"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-004",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "file": "src/review/round-split.test.ts",
+  "line": 536,
+  "quote": "expect(await bodyLines(path.join(pkg, \"slices\"), delta)).toBeLessThanOrEqual(await bodyLines(fullDir, full));",
+  "problem": "The test 'a delta slice never exceeds the round-1 slice of the same head' used to assert `delta.totals.bytes <= full.totals.bytes`; it now compares counts of diff lines after stripping every line matching /^--- / and /^@@ \\d+,\\d+ @@$/. The comment gives a sound reason (the fix/new cut repeats section headers), but the stripped pattern /^--- / also drops genuine removed diff lines whose content starts with `-- ` (SQL or Lua comments, YAML), and a line count no longer pins the byte size the test name and the slice budget are about: a regression that makes slices wider (long lines) but not longer passes.",
+  "impact": "The size bound is weaker than the title says, and the helper miscounts for diffs that remove `-- ` lines.",
+  "suggested_fix": "Keep the byte comparison and allow the known header overhead explicitly (delta.slices.length * header bytes), or count bytes of body lines only; anchor the header strip on the slice file's section structure rather than the raw `--- ` prefix.",
+  "evidence": "Diff hunk at round-split.test.ts:528-536 removes `expect(delta.totals.bytes).toBeLessThanOrEqual(full.totals.bytes)`.",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w4"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-005",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "file": "src/review/round-trip.test.ts",
+  "line": 472,
+  "quote": "await expect(createManagedReviewPackage(input)).rejects.toThrow(\"it is a stub\");",
+  "problem": "'every recorded review package still ingests' now `continue`s past any recorded report whose text holds the placeholder and no `keryx:findings`, asserting a refusal instead. The guard keeps only `reports.length > 5`; nothing requires that any report still takes the ingest path. If recorded packages drift to stubs (or the heuristic is widened), the loop turns into a refusal check and the test name stays true while pinning nothing about ingest. The stub detector in the test is also a hand copy of the production heuristic ('No reviewer findings recorded yet.' plus absence of 'keryx:findings').",
+  "impact": "The legacy-ingest guard can be emptied without going red.",
+  "suggested_fix": "Count the packages that actually ingested and `expect(ingested).toBeGreaterThan(5)` after the loop; import the production stub predicate instead of copying its text.",
+  "evidence": "round-trip.test.ts:465-476 (loop with `continue`); existing non-vacuity guard is `expect(reports.length).toBeGreaterThan(5)`.",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w4"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-006",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "file": "src/review/round-split.test.ts",
+  "line": 96,
+  "quote": "a pure deletion right after a fix hunk's line counts as in it (git records it at the line before)",
+  "problem": "The partitionRegionsByFix boundary rule is pinned from one side only: a deletion recorded at the hunk's own line is fix. There is no case for a deletion recorded one line past the hunk (must be other), nor for a deletion at the line before the hunk start. The rule is an off-by-one by construction and the side that would over-claim fix (and so hand a new-code deletion to the small fix roster) is untested.",
+  "impact": "Widening the deletion tolerance by one line, or making it two-sided, leaves the suite green and quietly routes unrelated deletions to the fix roster.",
+  "suggested_fix": "Add scoped(\"src/a/a.ts\", 11, \" l11\\n-gone\") and scoped(\"src/a/a.ts\", 9, \" l9\\n-gone\") expecting `fix` to be empty and `other` to hold the region.",
+  "evidence": "round-split.test.ts:96-99 shows only the positive case; hunks = [{startLine:10,endLine:10}].",
+  "confidence": "medium",
+  "_src": "review-testing-practices-w4"
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "evidence": "src/review/locate.ts:62-63 still stacks \"How a finding's line was arrived at.\" above the LocateMethod doc, now describing the wrong type; LocatorRecord (69) has no doc",
+   "_src": "review-architecture-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "evidence": "src/review/managed.ts:1227 the hand-rolled narrowing moved into dispatchRuns (research.ts:46-64); normalizeCoverage still takes a third optional `research?: unknown` at :1245 and any other status still reads `failed: not run` at :1234",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "evidence": "src/review/locate.ts:62-68 `/** How a finding's `line` was arrived at. */` still stacked above the LocateMethod doc, so LocatorRecord at :70 has no doc of its own",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 the pointer test still passes with the pointer read removed: pr-7975 is the only in-session package (test 218-224 finds it with no pointer) and pr-7912 is excluded by age; the call only changed to { roots: [sub] }",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w4:F-004",
+   "disposition": "partial",
+   "evidence": "src/review/coverage.ts:516-519 doc now states the fallback to origin/main..master, but review start/ingest still never record target.base (src/commands/review.ts:1096 passes --base to findPreviousRound only), so a PR on another base is still diffed against main",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-004",
+   "disposition": "partial",
+   "evidence": "src/review/coverage.ts:500 gitTopLevel and :547 diff result are cached per process and resolveBase probes run in Promise.all (prior-round.ts:323); the top-level lookup is still sequential with a fallback at :566 and the cache key ignores a moved base ref",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.ts:316-321 roots still scanned one after another and all candidates collected before pickPackage; unchanged (info)",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "src/review/research.ts:53 dispatchRuns accepts any non-empty reviewer string, newlines included; unchanged (info, names come from the CLI)",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 the pointer test still passes with the pointer read removed: pr-7975 is the only in-session package (test 218-224 finds it with no pointer) and pr-7912 is excluded by age; the call only changed to { roots: [sub] }",
+   "_src": "review-clean-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "evidence": "src/review/locate.ts:62-66 '/** How a finding's `line` was arrived at. */' is still a stacked doc comment, now above LocateMethod's doc, not above LocatorRecord (:69)",
+   "_src": "review-logic-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "evidence": "src/review/research.ts:46-64 dispatchRuns gives typed runs (fixed); src/review/managed.ts:1234 still maps every status other than complete/incomplete, a typo included, to failed 'not run'",
+   "_src": "review-regression-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "evidence": "src/review/locate.ts:62-67 '/** How a finding's `line` was arrived at. */' is still stacked on top of the LocateMethod doc block, not above LocatorRecord (line 69)",
+   "_src": "review-regression-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 unchanged: pr-7975 is still the only fresh candidate, so the test passes with the pointer branch (src/review/completion-gate.ts:272-283) removed; the new tests at 301-314 also pass through the named-candidate path",
+   "_src": "review-regression-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.ts:316-320 roots still scanned one after another, and candidates collected even when the pointer decides; info",
+   "_src": "review-regression-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "src/review/managed.ts:1227 reviewer names from dispatchRuns (research.ts:53 checks only for a non-empty string) are still not validated against a name pattern; info, unreachable today",
+   "_src": "review-regression-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 unchanged; no fixture in which the pointer and the session filter disagree",
+   "_src": "review-regression-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "evidence": "src/review/managed.ts:1227 now reads typed dispatchRuns (src/review/research.ts:46); an unrecognised status still falls through to `failed: not run` at managed.ts:1234.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "partial",
+   "evidence": "src/review/locate.ts:62 `/** How a finding's `line` was arrived at. */` is still an orphan doc comment, now stacked over LocateMethod's doc at :63-66 instead of over UnlocatableKind.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 unchanged: pr-7975 is the only in-session open package, so the test passes with the pointer branch removed; the new tests at :301 and :335 are also decided by the candidate scan (named by id / newest mtime) rather than by the pointer.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.ts:316-320 roots are still scanned sequentially and every root's candidates are collected before pickPackage; info.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-002",
+   "disposition": "partial",
+   "evidence": "src/review/completion-gate.ts:324 closedAt now comes only from the chosen package's root, and roots are harvested only from the session's own commands inside cwd; but a closed review-flow manifest committed by the PR under cwd itself (always a scanned root) still releases the gate when no package is chosen or the chosen one is older. The remaining part is reported as SEC-R2-002.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "src/review/managed.ts:1227-1234 reviewer names (and now notRunReason/executionReason) from research.json are still copied into coverage.md (renderCoverage at :2738) without rejecting newlines; there is still no attacker path (names come from the CLI's selected set), info.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 unchanged; no test makes the pointer decide against the candidate scan.",
+   "_src": "review-security-code-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "evidence": "src/review/managed.ts:1227 uses the shared typed dispatchRuns (src/review/research.ts:46) and DispatchRun documents pass-through statuses; normalizeCoverage still takes a third optional `research?: unknown` (line 1245)",
+   "_src": "review-style-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "evidence": "src/review/locate.ts:62-63 two stacked doc comments remain above LocateMethod; LocatorRecord (line 69) still has none",
+   "_src": "review-style-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.test.ts:207-216 same fixture still finds pr-7975 with no pointer (test at 218-224 shows it), so the pointer branch is not exercised",
+   "_src": "review-style-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "src/review/completion-gate.ts:316-320 roots still scanned one after another and every root's candidates collected (info)",
+   "_src": "review-style-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "src/review/research.ts:53-55 and src/review/managed.ts:1227 reviewer names are still accepted unsanitised (info; names are written by the CLI)",
+   "_src": "review-style-w1",
+   "_lane": "Y"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "evidence": "same as review-logic-w3:F-002; src/review/completion-gate.test.ts:207-216 still does not drive the pointer branch",
+   "_src": "review-style-w1",
+   "_lane": "Y"
+  }
+ }
+]

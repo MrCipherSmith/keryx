@@ -1,0 +1,59 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice 04 adds a local operator CLI command and shell card (decide-premise), a --premises ingest flag, docs and tests. No server, pool, queue or hot path. Two low-severity observations on the new writer path.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "repo": null,
+      "file": "src/review/operator-decisions.ts",
+      "line": null,
+      "quote": "const entries = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry));",
+      "problem": "recordPremiseDecision (called by the new decide-premise command and review_decide_premise card) is an unlocked read-modify-write of operator-decisions.json. writeFileAtomic prevents torn files but not lost updates.",
+      "impact": "Failure mode: two concurrent writers to the same package (the card in a keryx shell and a terminal decide-premise, or two shell sessions) both read N entries and each write N+1, so one operator answer is silently dropped and the finding reads as unanswered. Needs two human confirmations in the same instant, so the rate is about one operator, not load.",
+      "suggested_fix": "Serialize writes per package dir with a lock file around the read-modify-write; the same fix covers recordOperatorDecision, which has the identical shape.",
+      "evidence": "operator-decisions.ts recordPremiseDecision and recordOperatorDecision both readEntries then writeFileAtomic with no lock. The card apply() re-check in operator-confirm-review.ts guards finding drift, not concurrent file writes. Pre-existing pattern extended by the diff.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "repo": null,
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "const raw = source === \"-\" ? await Bun.stdin.text() : await Bun.file(source).text();",
+      "problem": "readPremises reads the whole --premises input into memory with no size cap before parsing.",
+      "impact": "A very large file or piped stream would be fully buffered by a one-shot CLI. No reproducible path: input is the judge's own bounded output, same shape as the sibling --verifications/--refuted readers. Would be settled by confirming those readers also have no cap.",
+      "suggested_fix": "None required; optionally cap input size consistently across --verifications/--refuted/--premises.",
+      "evidence": "Single-shot CLI process, operator-supplied path.",
+      "confidence": "low",
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## High-Load Review
+
+### Summary
+Slice 04 is operator CLI/card wiring, docs, routing corpus and tests for the premise judge. It runs as a one-shot local CLI with human confirmation; no pools, queues, caches, retries or DB access. Load profile not provided; nothing blocking at scale.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+#### Concurrency & Race Conditions
+- [F-001] minor: lost update on concurrent operator-decisions.json writes.
+#### Resource Management
+- [F-002] info: unbounded read of --premises input.
+#### Caching, Database, Async/Queues, Retry/Timeout, Idempotency
+None detected. decide-premise is naturally idempotent (latest decision wins via premiseDecisionFor); card apply re-verifies the held finding before recording.
+
+### Clean Areas
+Caching, DB access, queues, retries/timeouts, idempotency, distributed invariants.

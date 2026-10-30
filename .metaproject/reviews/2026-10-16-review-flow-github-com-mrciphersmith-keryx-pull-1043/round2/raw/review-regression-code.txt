@@ -1,0 +1,125 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Round 2 fix delta (c144874f..f47ebb0ec) reviewed for regressions. 8 round-1 review-regression findings dispositioned: 7 closed, 1 partial. The fix for RG8-001/F-001 (answerPremiseQuestion rewriting findings.json after ingest) introduces one major regression: the local round registry hashes findings.json, and the new writers never re-record it, so a premise answer given after the last ingest/complete/publish makes a branch-committed package untrusted for the next delta round. Four minors and two infos follow.",
+  "prior_dispositions": [
+    { "id": "review-regression-w4#F-001", "disposition": "closed", "evidence": "src/review/premise-question.ts:120 answerPremiseQuestion applies the decision to findings.json under the decisions lock (dismissed-incorrect for dismiss); both writers call it (src/commands/review-operator.ts:156, src/commands/operator-confirm-review.ts:625); findingStatus (src/review/round-record.ts:81) now reads the disposition." },
+    { "id": "review-regression-w8#RG8-001", "disposition": "closed", "evidence": "Same write path as F-001: prior-round.ts:241 findingStatus(raw) and publish.ts buildRoundBlock now see dismissed-incorrect on the record; uphold after dismiss removes the answer's own dismissal (src/review/premise.ts applyPremiseDecision, ownDismissal). Side effect on the round registry filed as RG2-001." },
+    { "id": "review-regression-w8#RG8-002", "disposition": "closed", "evidence": "src/review/readiness.ts:458-462 waiveReadiness refuses premise-decisions (id or number 11) before anything is written; covers both `review complete --waive` and the card's apply. The card still offers the waiver first: filed as RG2-003." },
+    { "id": "review-regression-skills#RG-001", "disposition": "closed", "evidence": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md:366 rule 7 now states the skill has no package, no ingest/decide-premise runs, and the claim and the operator's answer are recorded on the comment's Step 7 entry (new **Premise** field)." },
+    { "id": "review-regression-skills#RG-002", "disposition": "closed", "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:134 (held excluded only once claims are saved to research-evidence/premises.json; pre-Wave-D verdict is provisional) and :1129 (ask only after `ingest --premises` wrote findings.json)." },
+    { "id": "review-regression-skills#RG-004", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:110 and reviewer-input.schema.json:188 allow git log/blame/show under read-only; review-regression/SKILL.md:25 and review-premise Iron Laws row match." },
+    { "id": "review-regression-skills#RG-005", "disposition": "closed", "evidence": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:93 verdict table forbids downgrading a minor or an external finding; :63 adds the per-finding `source` (`external` marks a PR comment); Iron Laws row names external-downgrade and security-downgrade." },
+    { "id": "review-regression-w8#RG8-003", "disposition": "partial", "evidence": "Named sites fixed: docs/docs/cli-reference.md:4857 'eleven-item', SKILL.detail.md:654 and :666 (both copies) list item 11. Same class left: src/commands/operator-confirm-review.ts:306, the review_waive_readiness tool schema, still says 'its number (1-10)'." }
+  ],
+  "findings": [
+    {
+      "id": "RG2-001",
+      "severity": "major",
+      "file": "src/review/premise-question.ts",
+      "line": 120,
+      "quote": "export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer): Promise<PremiseQuestionDecision> {",
+      "problem": "answerPremiseQuestion (new in this delta, called by `keryx review decide-premise` at src/commands/review-operator.ts:156 and the review_decide_premise card at src/commands/operator-confirm-review.ts:625) now rewrites findings.json after ingest. findings.json is one of the three files the local round registry hashes: recordFinishedRound stores findingsSha256 at ingest (src/commands/review.ts:1115), complete (src/review/managed.ts:999) and publish (src/review/publish.ts:178), and registryVouches (src/review/round-registry.ts:160-168) needs the current hash to equal a recorded one. Neither answer writer calls recordFinishedRound. Before this delta an answer wrote only operator-decisions.json, which is not hashed, so answering never affected the vouch.",
+      "impact": "packageTrust (src/review/prior-round.ts:380-401) trusts a package that the branch committed (flow packages are committed on the PR branch by design) or one read from unmerged git history ONLY through the registry. Trigger: the round's last recording event is ingest, complete or publish; the operator then answers or re-answers a held finding (re-answering is supported: 'already answered X, this answer replaces it'); the package is committed; the next `keryx review start` runs. Outcome: the hash no longer matches any entry, so the previous round is refused ('the local round registry has no entry matching its files') and the round is cut as a full round, not a delta round. Its prior findings are not carried, and carryPremiseDecisions (src/commands/review.ts:1101, delta only) never runs, so the operator is asked again about findings already answered. The common order ingest -> answer -> complete is unaffected, because complete re-records.",
+      "suggested_fix": "After answerPremiseQuestion writes findings.json, re-record the round when the registry already holds an entry for this package (for example call recordFinishedRound(packageDir, <event>) from both writers, or from inside answerPremiseQuestion once the lock is released). Or keep the answer's audit fields out of the registry hash. Add a test: ingest -> registry entry -> decide-premise -> registryVouches still matches.",
+      "evidence": "round-registry.ts:6 ('the sha256 of the package's manifest identity, findings.json and round.json'); round-record.ts:191 findingsSha256 = jsonSha256(files.findings); grep for recordFinishedRound: only review.ts:1115, managed.ts:999 and publish.ts:178 call it, none on the decide-premise path.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/commands/review-operator.ts:156", "src/commands/operator-confirm-review.ts:625", "src/review/prior-round.ts:380"],
+        "enumeration_method": "every caller of answerPremiseQuestion (2, from grep), and every reader of PackageHashes.findingsSha256 (registryVouches, the only consumer, used once by packageTrust)"
+      }
+    },
+    {
+      "id": "RG2-002",
+      "severity": "minor",
+      "file": "src/review/dedupe.ts",
+      "line": 356,
+      "quote": "const carriedPremise = canonical.premise ?? others.find((member) => member.premise !== undefined)?.premise;",
+      "problem": "mergeCluster now copies a premise from an absorbed member onto the canonical record (review LG8-003). At ingest, dedupe runs before mergePremises, so the only members that already carry a premise are findings carried into a delta round. A carried held finding (`challenged`, judged at e.g. major on reviewer A's text) that duplicates a new re-statement at a HIGHER severity (blocker, reviewer B) has its judgement moved onto the blocker. The `downgraded` case is handled by severityRuleOf, but held verdicts are not. The delta-round judge is told to judge only findings without a carried premise, and mergePremises rejects a claim on an already-judged finding, so nobody ever judges the blocker.",
+      "impact": "Trigger: delta round, a carried challenged finding is re-reported at a higher severity by another reviewer. Outcome: the blocker is held ('awaiting the operator') on the old finding's question. The verdict leaves it out of the open blockers. The operator is asked a question about a different statement and can dismiss the blocker on it. Any carried answer no longer applies (its subject records the old severity), so the operator is asked again either way. Before this delta the premise was dropped and the canonical was judged afresh.",
+      "suggested_fix": "Carry an absorbed member's premise only when its severity equals the canonical's (or when the canonical comes from the same reviewer); otherwise leave the canonical unjudged so Wave D judges it. Add the higher-severity re-statement case next to the new dedupe test, with a `challenged` premise.",
+      "evidence": "dedupe.ts:356-359; managed.ts:357-365 (dedupe before mergePremises); premise.ts mergePremises `already-judged` path; dedupe.test.ts covers only an `upheld` premise moving onto a blocker.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "RG2-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 310,
+      "quote": "async buildCard(input, ctx): Promise<OperatorCardResult<ReadinessPrepared>> {",
+      "problem": "The delta makes premise-decisions non-waivable inside waiveReadiness (readiness.ts:458), but review_waive_readiness's buildCard does not refuse it. A failing item 11 still draws the card 'Accept failing readiness item 11 (premise-decisions) ... as it is?' with 'yes: the item is recorded as waived by the operator'. The refusal only comes in apply, after the operator's yes, as 'review_waive_readiness failed after the operator's yes: ...' (operator-confirm-tools.ts:198). The tool schema also still says items are numbered '1-10' (line 306).",
+      "impact": "Trigger: an agent calls review_waive_readiness with item 11 or premise-decisions. Outcome: the operator is shown and answers a card promising an effect that can never happen, then gets an error. Nothing is written, so this is not a bypass. It wastes an operator interaction and contradicts the card's own text.",
+      "suggested_fix": "In buildCard, return a refusal for id === 'premise-decisions' that names review_decide_premise (reuse the readiness.ts message), and change '(1-10)' to '(1-11)'. Add a card test beside the readiness one.",
+      "evidence": "operator-confirm-review.ts:316-335 (no exclusion); readiness.test.ts covers only waiveReadiness directly.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "RG2-004",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 508,
+      "quote": "await rm(path.join(packageDir, PREMISES_FILE), { force: true });",
+      "problem": "Ingest without --premises now deletes research-evidence/premises.json. The orchestrator skill tells the agent to save the judge's claims to that exact path before ingest, so the early verdict can read it (review-orchestrator/SKILL.md:134 and :1128). The stated reason is to stop a file left by an earlier ingest from being re-applied. But this same delta stops the verdict re-applying premises.json once findings.json exists (verdict.ts applyPremiseClaims `ingested` branch), and findHeldFinding no longer reads it. So the deletion now guards nothing and only removes the judge's record.",
+      "impact": "Trigger: Wave D ran, the claims were saved to research-evidence/premises.json, and an ingest runs without --premises (forgotten, or a re-ingest). Outcome: the judge's output is gone, including the rejected claims, so it cannot be re-ingested and Wave D has to be dispatched again. findings.json from that ingest has no premise, so the held findings become ordinary open findings and the decisions in operator-decisions.json match nothing (premiseSubjectOf needs a premise).",
+      "suggested_fix": "Drop the rm, or move the file aside (e.g. premises.superseded.json) and print a warning that the ingest carried no premise results. Or refuse an ingest without --premises when premises.json exists and the package was already ingested with one.",
+      "evidence": "managed.ts:500-509; verdict.ts applyPremiseClaims returns before mergePremises when `ingested`; premise-question.ts findHeldFinding reads the record only.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "RG2-005",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 476,
+      "quote": "function hasTerminalOutcome(record: Loose): boolean {",
+      "problem": "premiseHoldState now returns `none` for a held finding with no answer that carries any dismissed-* or acted-on disposition, or a refuted verification (LG8-004). Dispositions are written by the agent (`keryx review complete --finding <id> --disposition dismissed-out-of-scope --evidence \"operator: ...\"`), and the flow gate accepts that dismissal on an attribution string alone (review-gate.ts:621). So an agent can now end a hold without the operator: readiness item 11, the verdict and the flow gate all stop asking. Before the delta only a premise-question decision lifted the hold. This is deliberate and tested, and it is consistent with the verdict's classify order. It is filed as an observation because it conflicts with the same doc comment ('a finding record an agent wrote cannot answer for the operator') and with the RG8-002 rationale.",
+      "impact": "Would be settled by an owner decision: may a non-premise dismissal end a premise hold? If not, keep `awaiting` for dismissed-* states and let acted-on and refuted end it.",
+      "suggested_fix": "Decide explicitly. If an agent's dismissal should not end a hold, restrict hasTerminalOutcome to refuted and acted-on.",
+      "evidence": "premise.ts:476-480 and premiseHoldState; review-gate.test.ts and readiness.test.ts new cases with dismissed-out-of-scope.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "RG2-006",
+      "severity": "info",
+      "file": "src/review/operator-decisions.ts",
+      "line": 106,
+      "quote": "onRecorded?: (decision: PremiseQuestionDecision) => Promise<void>,",
+      "problem": "Two related observations on the new store. (a) The comment says the lock means 'no other writer interleaves between the two files', but findings.json's other writers (ingest, `review complete --finding` dispositions) do not take .operator-decisions.lock, so they can still race the read-modify-write in answerPremiseQuestion. (b) validPremise now requires quote, confirmedVia and subject, and appendDecision keeps only valid entries. So the first write after this change silently drops any premise-question entry recorded in the earlier format, and carryPremiseDecisions skips them. That only affects packages answered on this branch before round 2.",
+      "impact": "(a) needs concurrent operator and agent writes to the same package; (b) is pre-release only. Neither has a reproducible path on main.",
+      "suggested_fix": "(a) Narrow the comment to the writers that take the lock, or take the lock in the disposition writer too. (b) No action needed before merge; mention it if any dev packages are kept.",
+      "evidence": "operator-decisions.ts appendDecision filter(validDecision); managed.ts complete path writes findings.json without withOperatorDecisionsLock.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 2 }
+}
+```
+
+Summary
+
+- Prior findings (8 owed): 7 closed (F-001, RG8-001, RG8-002, RG-001, RG-002, RG-004, RG-005), 1 partial (RG8-003: the docs are fixed, but the review_waive_readiness tool schema still says '1-10'). None open or regressed.
+- New in the delta: 1 major, 3 minor, 2 info.
+  - RG2-001 (major): decide-premise now rewrites findings.json, which the round registry hashes, without re-recording. An answer given after the last ingest, complete or publish makes a branch-committed package untrusted for the next delta round, so the next round is a full round and the answers are not carried.
+  - RG2-002 (minor): the dedupe premise carry moves a held judgement onto a higher-severity re-statement that the judge never saw.
+  - RG2-003 (minor): the waiver card offers a non-waivable item 11 and fails after the operator says yes.
+  - RG2-004 (minor): ingest without --premises deletes the claims file that the skill told the agent to save there.
+  - RG2-005 (info): an agent-written dismissal now ends a premise hold. This is deliberate under LG8-004 and needs an owner call.
+  - RG2-006 (info): the lock comment overstates what it protects, and earlier-format premise entries are dropped on the next write.
+- Radius: this is a delta review of the fix commits, not a blast-radius set, so no cap applied. Runtime edges were checked by hand: the round registry, the card/apply split, and the skill-to-file handoff (premises.json). The code graph does not show these.
+- Routing audit: graph_used: no (not-relevant: a bounded delta with named files; the memory notes gdgraph is unreliable on this repo); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: yes (several grep/awk reads of known lines, marked keryx:raw).

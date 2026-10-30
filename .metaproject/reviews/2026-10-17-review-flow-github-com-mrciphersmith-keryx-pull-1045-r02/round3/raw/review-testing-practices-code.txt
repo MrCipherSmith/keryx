@@ -1,0 +1,120 @@
+```json keryx:findings
+{
+ "reviewer": "review-testing-practices",
+ "status": "DONE_WITH_CONCERNS",
+ "summary": "Round-2 test findings are mostly closed at HEAD; one new minor (wall-clock bound).",
+ "findings": [
+  {
+   "id": "NTP-001",
+   "severity": "minor",
+   "reviewer": "review-testing-practices",
+   "file": "src/review/ledger.test.ts",
+   "line": 1168,
+   "quote": "expect(performance.now() - started).toBeLessThan(500);",
+   "problem": "The delta adds a second absolute wall-clock bound (a 200 000-char whitespace run trimmed in under 500 ms), the same class as the one at :1118, after round 2 widened the completion-gate one for exactly this reason.",
+   "impact": "A loaded shared runner or GC pause can fail a correct linear trim intermittently; the repository rule is to wait on predicates, not clocks.",
+   "suggested_fix": "Widen to several seconds (a quadratic trim of this input takes far longer) or compare against a doubled input.",
+   "evidence": "ledger.test.ts:1118 and :1168 both toBeLessThan(500); completion-gate.test.ts:388 was widened to 10_000 for this reason.",
+   "confidence": "medium"
+  }
+ ],
+ "stats": {
+  "files_read": 22,
+  "findings": 1
+ },
+ "prior_dispositions": [
+  {
+   "id": "r2-review-testing-practices-w1:T-R2-001",
+   "disposition": "closed",
+   "evidence": "completion-gate.test.ts describe at ~:455 'which package the gate is on': twoFresh() gives two in-session packages with the older one named by the pointer; 'named nothing' asserts the pointer's older package beats the newest-mtime fallback, 'a fresh pointer to a package never named loses'. Pointer read removal now fails."
+  },
+  {
+   "id": "r2-review-testing-practices-w1:T-R2-002",
+   "disposition": "open",
+   "evidence": "info; src/review/retry-plan.test.ts still has every reply naming slices (:83, :118); no fixture omits `slices` (retry-eval.ts:82 claims none then). Not touched by the delta."
+  },
+  {
+   "id": "r2-review-testing-practices-w2:TP-002",
+   "disposition": "closed",
+   "evidence": "src/commands/review-ledger.test.ts:~175 filter now matches review-logic-w1, review-arch-w1 and '2026-10-17-round#', so a broken canonical-id link is no longer filtered out."
+  },
+  {
+   "id": "r2-review-testing-practices-w2:TP-003",
+   "disposition": "closed",
+   "evidence": "review-plan.e2e.test.ts: the bound is now DEFAULT_MAX_DISPATCHES (named) and `drivers.files` is asserted to have length second.dispatches, pinning the exact count against the written drivers."
+  },
+  {
+   "id": "r2-review-testing-practices-w2:TP-004",
+   "disposition": "open",
+   "evidence": "info; package.json:48 test:core still runs src/commands/ whole and no script names *.e2e.test.ts; the file now uses shared git-fixture helpers but is still in the fast lane."
+  },
+  {
+   "id": "r2-review-testing-practices-w2:TP-005",
+   "disposition": "closed",
+   "evidence": "src/review/premise.test.ts:323-327 'several premise files: agreement applies once, conflict applies neither' pins the agreeing case at the merge seam (the finding's alternative fix); the CLI file adds a re-ingest round trip (review-premises-cli.test.ts:90-96)."
+  },
+  {
+   "id": "r2-review-testing-practices-w3:TP-001",
+   "disposition": "open",
+   "evidence": "info; spawn-subagent-tool.test.ts:1423-1428 `silent` still asserts only status and saved file, never silent.output; only retry.output (:1480) is asserted, so deleting the note-suppression clause leaves the suite green."
+  },
+  {
+   "id": "r2-review-testing-practices-w3:TP-002",
+   "disposition": "partial",
+   "evidence": "The sibling claim is gone: the test now asserts the kept note, the DONE body, others:[undefined] and no .partial file (spawn-subagent-tool.test.ts:1450-1456), and the retry test pins both dispatches' usage (:1468-1488). Still unpinned: emptySaveNote error branch (spawn-subagent-tool.ts:2369) and a NaN/Infinity usage report (sum test :1403 uses finite values only)."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-001",
+   "disposition": "closed",
+   "evidence": "completion-gate.test.ts: 'a rewritten history (shorter, or as long with another message)' drives both reset arms; 'a call seen in one update and its result in the next' drives pendingCalls pairing."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-002",
+   "disposition": "partial",
+   "evidence": "completion-gate.test.ts:388 widened to 10_000 with a comment. ledger.test.ts:1118 is still an absolute 500 ms bound, and the delta added a second one at :1168 (see NTP-001)."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-003",
+   "disposition": "closed",
+   "evidence": "The 15 ms sleep is gone from the 'closed under another named root' test (explicit utimes t0/t1), and from the 'draft newer than closed' test; no setTimeout remains in completion-gate.test.ts."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-004",
+   "disposition": "closed",
+   "evidence": "round-split.test.ts ~:590-604 bodyBytes compares bytes again and strips a `--- ` line only when the next line is an `@@ a,b @@` header, so removed `-- ` lines count."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-005",
+   "disposition": "closed",
+   "evidence": "round-trip.test.ts: `ingested` counter with expect(ingested).toBeGreaterThan(5) after the loop; the stub check calls the production isStubReportText (imported from ./managed)."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-006",
+   "disposition": "closed",
+   "evidence": "round-split.test.ts:~136-142 'a deletion one line past the hunk, or before its start, is new' asserts both sides."
+  },
+  {
+   "id": "r2-review-testing-practices-w4:TP-007",
+   "disposition": "open",
+   "evidence": "info; managed.test.ts:275 still `as unknown as BlastRadiusScreenInput`."
+  },
+  {
+   "id": "review-testing-practices-w1:F-003",
+   "disposition": "closed",
+   "evidence": "spawn-subagent-tool.test.ts now covers accumulation (:1403 sum), one-sided usage ({outputTokens:5}) and partial save (:1415-1428, :1468-1488)."
+  },
+  {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "closed",
+   "evidence": "Same as T-R2-001: completion-gate.test.ts ~:455-480 pointer-vs-session-filter fixtures."
+  },
+  {
+   "id": "review-testing-practices-w2:T-002",
+   "disposition": "closed",
+   "evidence": "locate.test.ts:84-98 and :207-208 assert kind 'bound' for the quote-line, file-line and large-file cases, beside the whitespace ambiguity."
+  }
+ ]
+}
+```
+
+Summary: of 18 prior records, 12 closed, 4 open (all info: T-R2-002, TP-004, w3 TP-001, TP-007), 2 partial (w3 TP-002, w4 TP-002), 0 regressed. New: 1 minor (NTP-001, a second absolute 500 ms bound at ledger.test.ts:1168). Read-only static review; no tests or mutations were run.

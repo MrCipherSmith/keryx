@@ -1,0 +1,38 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 5 fix delta (HEAD b50655d51). round4/premise-input-r4.json holds no review-security-code finding (the round-4 security result was a single info, SEC4-001, which is not a premise input); its disposition is given anyway for continuity. The delta's security-relevant changes are fail-closed: the look-alike decisions store now becomes a named per-package problem (round not ingested, gate fails) instead of an escaping exception; the flow prior-round source reports a failed read as not-consulted; the path-root refactors are byte-identical joins; the symlink-onto-long-s test matches the existing real-path plain-segment rule. One new info on the carry-forward re-applying stored claims that never applied before. No blocker, major or minor.",
+  "prior_dispositions": [
+    {
+      "id": "r4-review-security-code-code#SEC4-001",
+      "disposition": "partial",
+      "evidence": "First-ingest path closed: src/review/premise.ts:747 returns undefined when the previous findings.json held nothing, so a planted/edited research-evidence/premises.json is no longer applied on a first ingest without --premises. Still open (info) once a previous hold exists: premise.ts:750/:753 re-apply the whole stored file, and research-evidence/premises.json remains an auto-approvable plain-ASCII .json patch target (src/commands/automatic-review.ts:327-347). Grants no authority beyond --premises/findings.json, as recorded in round 4."
+    }
+  ],
+  "findings": [
+    {
+      "id": "SEC5-001",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 753,
+      "quote": "return { ok: true, parsed: parsed.claims };",
+      "problem": "The rewritten inheritedPremiseClaims checks only the claims that applied at the previous ingest (appliedClaimNames, :774) and the previously held records, then returns the full stored claim set. A stored claim the previous ingest rejected (for example a `downgraded` or `challenged` claim on an id that did not exist then) is now silently applied by a later ingest without --premises if this round reports a finding under that id. Before this delta such a claim was counted as lost and the ingest refused. So a re-ingest can lower a finding's severity (to major/minor) or hold it for the operator on a claim no judge ever applied to this round's finding, and the 'carried forward' line does not say a new claim applied.",
+      "impact": "No attack vector beyond existing authority: the claim was written by the judge (or by an agent that can already pass any under-cwd file as --premises or patch findings.json); a claim can never dismiss a finding, and the operator-only decisions store is untouched. Recorded because it is a gate-weakening drift introduced by the delta: a severity can move on a re-ingest without the claim having been checked against the finding it now lands on.",
+      "suggested_fix": "Carry forward only the applied claims (filter parsed.claims to appliedClaimNames plus non-held claims that applied), or refuse when the trial merge applies a held claim whose name is not among the previously held keys, naming it.",
+      "evidence": "premise.ts:747-753 (inheritedPremiseClaims at HEAD), :774-777 appliedClaimNames filters to heldKeys of previousHeld only; managed.ts:374 merges inherited.parsed over premiseSet; delta test review-premises-cli.test.ts (RG4-001) shows a rejected LY-999 claim kept in the stored file.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Summary
+
+- Prior: 0 review-security-code findings in round4/premise-input-r4.json. For continuity, round-4 SEC4-001 (info): partial (first-ingest re-application closed at premise.ts:747; carry with a previous hold still reads the agent-writable stored file).
+- New: 0 blocker, 0 major, 0 minor, 1 info (SEC5-001: the carry-forward now re-applies stored claims that were rejected at the previous ingest and never held anything, so a re-ingest can apply a new downgrade/hold silently; no new authority).
+- Checked and clean: review-gate.ts:529-535 findingsWithHolds pushes a problem so `ingested: problems.length === 0` (:510) fails closed and the gate names the look-alike; prior-round.ts flow source reports read failures as not-consulted and names non-ingested packages (paths and problem text only, no secrets); reviewsRoot/flowReviewsRoot replacements in review.ts, review-gate.ts, spend.ts, arbiter-log.ts, autonomous-run.ts, loop.ts and prior-round.ts are identical path.join expressions (package-location.ts:13-20); the T4-002 symlink test matches approvesPatchTargets' real-path plain-segment and operator-name checks (automatic-review.ts:336-345); the normaliseCarriedPremise predicate split preserves behaviour. The `..`-accepting review-id regex in review.ts readVerifications is pre-existing and unchanged by the delta (only its root expression moved), so it is not raised.

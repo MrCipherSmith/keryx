@@ -1,0 +1,728 @@
+[
+ {
+  "id": "r2-review-clean-code-w2:CC-001",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops",
+  "problem": "The diff adds a third matching step (a one-line quote as an exact substring of exactly one line, method `substring`) to review-finding.schema.json, locate.ts and the schema's `quote` description. The prose in the same cli-reference section still says matching stops after the whitespace-collapsed step and is 'nothing fuzzy'. The doc describes the rule the change replaced (Part C1a, first shape).",
+  "impact": "A reader of the CLI reference believes a partial-line quote is unlocatable, when ingest now anchors it to the single line containing it; the `substring` locator method is never mentioned.",
+  "suggested_fix": "Rewrite the sentence: exact first, then whitespace collapsed, then (a one-line quote only) as an exact substring of exactly one line, then it stops; list `substring` as a `method` value.",
+  "evidence": "diff of .metaproject/core/gdskills/contracts/review-finding.schema.json (quote description and locator.method enum gain substring); src/review/locate.ts:17 and :67 carry the substring method; docs/docs/cli-reference.md:6674 unchanged.",
+  "confidence": "high",
+  "reviewer": "review-clean-code",
+  "_src": "review-clean-code-w2"
+ },
+ {
+  "id": "r2-review-clean-code-w2:CC-002",
+  "severity": "minor",
+  "file": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+  "quote": "it is matched against the file at the round's head, exactly first and then",
+  "problem": "The reviewer-side `quote` description is documented as 'kept identical' to the canonical schema, whose `quote` description this diff changes to add the substring step. This copy (and the bundled copy at src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json:85) still describes only exact and whitespace-collapsed matching. Two files now document one field differently.",
+  "impact": "Reviewers are told to quote enough to be unambiguous but not that a one-line fragment now places by substring; the two schemas drift on the same field.",
+  "suggested_fix": "Update both reviewer-finding.schema.json copies' `quote` description to name the one-line substring step, as the canonical schema now does.",
+  "evidence": "grep for 'exactly first' finds both reviewer-finding.schema.json copies at line 85, neither updated by this slice.",
+  "confidence": "medium",
+  "reviewer": "review-clean-code",
+  "_src": "review-clean-code-w2"
+ },
+ {
+  "id": "r2-review-core-boundaries-w2:CB-001",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "line": 6674,
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops \u2014 nothing",
+  "problem": "The PR adds a third locator step (a one-line quote as an exact substring of exactly one line, method \"substring\") to the schema description, to src/review/locate.ts (LocateMethod) and to the SKILL text, but the reference section 'A finding points at the code it quotes' still says matching stops after the whitespace-collapsed step and is 'nothing fuzzy'.",
+  "impact": "The documented contract of the shared finding locator disagrees with the schema (review-finding.schema.json enum now has \"substring\") that producers validate against; a reviewer author following the doc will not know a one-line partial quote is now placed.",
+  "suggested_fix": "Edit the paragraph to: exact, then whitespace collapsed, then (one-line quotes only) an exact substring of exactly one line, then nothing; mention the substring method beside derived.",
+  "confidence": "high",
+  "evidence": "src/gdskills/contracts/review-finding.schema.json:206 enum includes \"substring\"; src/review/locate.ts:67 LocateMethod includes \"substring\"; the unchanged sentence is at docs/docs/cli-reference.md:6674 at head.",
+  "_src": "review-core-boundaries-w2"
+ },
+ {
+  "id": "r2-review-highload-w2:HL-001",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops",
+  "problem": "The 'A finding points at the code it quotes' section was not updated when the locator gained a third step (a one-line quote as an exact substring of exactly one line, method 'substring'). The schema description and locator.method enum in this same slice add it, but this section still says matching stops after whitespace-collapsed and lists no substring method.",
+  "impact": "Documentation drift only (no load failure mode): the CLI reference disagrees with review-finding.schema.json in the same diff, so an operator expects a fragment-of-a-line quote to be unlocatable when it now derives a line.",
+  "suggested_fix": "Edit the paragraph to read: exact, then whitespace collapsed, then (one-line quote) as an exact substring of exactly one line, then it stops; mention locator.method 'substring'.",
+  "evidence": "slice-02 schema hunk adds 'substring' to locator.method and to the quote description; docs/docs/cli-reference.md line 6674 at head still says 'then it stops'. keryx ctx rg for 'substring' in cli-reference.md, review-with-a-record.md and review-orchestrator SKILL.md finds no mention.",
+  "confidence": "high",
+  "_src": "review-highload-w2"
+ },
+ {
+  "id": "r2-review-logic-w2:LG-001",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+  "line": 685,
+  "quote": "gets `review-logic`, `review-regression`, the authors of the findings attached to it and the verifier",
+  "problem": "The orchestrator's delta-round rule names the FIX-slice roster as logic, regression and the authors only. L6 (851e83b24) changed the roster in code: fixRosterRoles (src/review/round-split.ts:35-40) also adds review-security-code when an attached finding is a security one, and cli-reference's `plan` row was updated to say so. SKILL.md (both the .metaproject copy and the bundled src/gdskills copy) and flow-orchestrator SKILL.md:529 were not. git show --stat 851e83b24 lists only docs/docs/cli-reference.md among the docs.",
+  "impact": "An orchestrator that follows the skill text rather than `review next` leaves review-security-code off a fix slice with a security finding attached. The ledger then reports the fix slice as not covered by its roster, or the security fix gets no security re-read.",
+  "suggested_fix": "Add 'and review-security-code when one of them is a security finding' to the delta-round bullet in both review-orchestrator SKILL.md copies, and to the 'small roster' sentence in flow-orchestrator SKILL.md:529.",
+  "evidence": "src/review/round-split.ts:39 `const security = attached.some(isSecurityFinding) ? [FIX_SECURITY_ROLE] : [];`. docs/docs/cli-reference.md:4888 states the new roster. .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:685 and src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:685 are identical and omit it. Same for flow-orchestrator SKILL.md:529 'logic, regression, the findings' authors, the verifier'.",
+  "confidence": "high",
+  "_src": "review-logic-w2"
+ },
+ {
+  "id": "r2-review-logic-w2:LG-002",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "line": 6674,
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops \u2014 nothing",
+  "problem": "The 'A finding points at the code it quotes' section still says matching stops after the whitespace-collapsed pass. This PR adds a third pass: a one-line quote that is an exact substring of exactly one line is placed with `method: substring` (src/review/locate.ts:233-244), and the schema hunk in this slice adds 'substring' to `locator.method`. The reviewer-facing reviewer-finding.schema.json:85 (both copies) says the same old 'exactly first and then with whitespace collapsed'.",
+  "impact": "A reader of the locator contract cannot tell that `method: substring` exists, or that a short quote lifted from mid-line now anchors and is no longer `quote_unlocated`. Locator records show a method the reference says cannot happen.",
+  "suggested_fix": "Change the sentence to 'exact first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops'. Make the same change to the quote description in both reviewer-finding.schema.json copies.",
+  "evidence": "src/review/locate.ts:239 `return { state: \"derived\", method: \"substring\", line: within[0] as number };`; .metaproject/core/gdskills/contracts/review-finding.schema.json adds \"substring\" to the method enum (slice-07 line 36). keryx ctx rg 'then with whitespace collapsed|exactly first, then' shows cli-reference.md:6674 and reviewer-finding.schema.json:85 not updated.",
+  "confidence": "high",
+  "_src": "review-logic-w2"
+ },
+ {
+  "id": "r2-review-logic-w2:LG-003",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "CHANGELOG.md",
+  "line": 7,
+  "quote": "- Readiness item 12 `quotes-located` names findings whose quote could not be placed at the reviewed head.",
+  "problem": "[Unreleased] covers L1-L4 only. The L5 and L6 behaviour changes in this PR are missing: quotes are now located as a one-line substring (`method: substring`); `--premises` is repeatable, with agreeing and disagreeing duplicate claims merged (`duplicate-claim`); finding ids may not hold '#'; and a fix slice holds only fix lines and gets exactly the fix roster (plus review-security-code), no longer the slice's own routing. cli-reference documents each of these.",
+  "impact": "The 0.3.122 release notes will not mention changes that alter ingest results: anchors that were unlocatable before now derive, and premise claims that disagree are now dropped. They also will not mention who reads a fix slice. A user upgrading cannot learn of these from the changelog.",
+  "suggested_fix": "Add Changed/Fixed bullets for the substring locator pass, repeatable --premises with the duplicate-claim rule, and the fix-slice roster and fix-line partition.",
+  "evidence": "CHANGELOG.md lines 3-15 (Unreleased) at 375279e78 contain no 'substring', 'premises' or 'fix slice'. cli-reference.md:4888 (plan row, L6) and the --premises row (slice-07 line 1885) document the changes. Flow 460 T12/T13 titles name them.",
+  "confidence": "high",
+  "_src": "review-logic-w2"
+ },
+ {
+  "id": "r2-review-logic-w2:LG-004",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+  "line": null,
+  "quote": "\"title\": \"L6 fix slices get the fix roster; fix hunks are the ones touching a finding\",",
+  "problem": "T13 (L6) is still `todo` at the reviewed head, but its lane is implemented and merged: 851e83b24 'fix(review): a fix slice gets the fix roster \u2026 (flow 460 L6)' and merge 7b4efeb1f. L5 got its 'chore(flow): 460 L5 done' (5bd6ae567); L6 got none. The journal's round-2 note also says 'After L6 the plan is \u2026', which treats L6 as done.",
+  "impact": "Task Manager reports L6 as not started while its code is under review. The flow cannot reach implemented/complete until someone marks a task done that has already shipped, and `flow status` misstates progress.",
+  "suggested_fix": "Run `keryx flow task done 460 T13` (with disposition completed) and commit the flow folder.",
+  "evidence": "jq '.tasks[]|.id+\" \"+.status' on flow.json at 375279e78 returns 'T13 todo'. git log shows 7b4efeb1f 'merge lane 460-l6' and 851e83b24.",
+  "confidence": "high",
+  "_src": "review-logic-w2"
+ },
+ {
+  "id": "r2-review-logic-w7:LG-001",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "title": "cli-reference still says the locator stops after the whitespace pass; a substring pass now follows",
+  "file": "docs/docs/cli-reference.md",
+  "line": 6674,
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops \u2014 nothing",
+  "problem": "This PR adds a third match pass (a one-line quote as an exact substring of exactly one line, locator.method \"substring\") and updates the schema description of `quote` and the locator.method enum to say so, but the user-facing section \"A finding points at the code it quotes\" in cli-reference.md still states matching stops after the whitespace-collapsed pass.",
+  "impact": "A reader of the reference sees `method: substring` in findings.json that the documentation says cannot happen, and a reviewer quoting a fragment of a line is told it will not be placed.",
+  "suggested_fix": "Reword to: \"Matching is exact first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops \u2014 nothing fuzzy.\", matching the schema text.",
+  "evidence": "src/review/locate.ts returns { state: \"derived\", method: \"substring\" } when a single-line needle is a substring of exactly one line (the Flow 460 block after the whitespace-normalised pass); .metaproject/core/gdskills/contracts/review-finding.schema.json quote.description and locator.method were updated in this diff; keryx ctx rg 'nothing fuzzy|then it stops' over docs, skills, core and src finds only docs/docs/cli-reference.md:6674.",
+  "confidence": "high",
+  "_src": "review-logic-w7"
+ },
+ {
+  "id": "r2-review-logic-w7:LG-002",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "title": "Flow 460 records T13 (L6) as todo although the L6 lane is merged at the reviewed head",
+  "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+  "line": 225,
+  "quote": "\"title\": \"L6 fix slices get the fix roster; fix hunks are the ones touching a finding\",",
+  "problem": "T13 is added with status \"todo\" and no task-done event, yet commit 851e83b24 (fix(review): a fix slice gets the fix roster ... flow 460 L6) and merge 7b4efeb1f are in the reviewed head 375279e78, and the journal entry in the same diff reports the plan \"After L6\". T12 (L5) was marked done after its lane merged (5bd6ae567); T13 was not.",
+  "impact": "Flow status and the flow's tasks gate report L6 as outstanding work that is already on the branch; anyone resuming from flow status would treat L6 as not done.",
+  "suggested_fix": "Record T13 done through the keryx flow CLI, as was done for T12.",
+  "evidence": "git log -- .metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json: last commit 0c5d56f8c 'chore(flow): 460 L6 task'; HEAD 375279e78 contains 7b4efeb1f 'merge lane 460-l6'; flow.json T13 \"status\": \"todo\".",
+  "confidence": "high",
+  "_src": "review-logic-w7"
+ },
+ {
+  "id": "r2-review-regression-w2:RG-001",
+  "severity": "major",
+  "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+  "line": 366,
+  "quote": "\"check\": \"bun test src/review/managed.test.ts src/commands/review-plan.test.ts\"",
+  "problem": "Slice-02 moves the AC6 sequence test (`plan -> ingest with an unplaceable quote -> fix commit -> plan`) and the new L6 fix-roster test out of src/commands/review-plan.test.ts into the new file src/commands/review-plan.e2e.test.ts. Frozen AC6 (acceptance-criteria.md:21, \"Tests including the plan \u2192 ingest \u2192 fix \u2192 plan sequence\") still verifies with `bun test src/review/managed.test.ts src/commands/review-plan.test.ts`. That path does not match review-plan.e2e.test.ts, either as an exact file or as a bun path-substring filter, so the AC's exec check no longer runs the test it was frozen for.",
+  "impact": "Trigger: `keryx flow ac confirm 460 AC6` (or the flow gate) runs the recorded check. Outcome: it passes with only the faked-step tests in review-plan.test.ts, so the confirmation evidence never runs the end-to-end sequence AC6 requires. A regression in the G path (round recorded despite an unplaced quote, delta round 2 planned with a fix slice) would still let AC6 confirm green. CI's test:core (`bun test ... src/commands/`) still runs the e2e file, so this is a gap in the flow's evidence, not in CI.",
+  "suggested_fix": "Add src/commands/review-plan.e2e.test.ts to AC6's verify command through `keryx flow ac update 460 AC6` (the AC file is checksum-frozen; do not hand-edit it). Example: `bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts`. Or keep the sequence test in review-plan.test.ts.",
+  "evidence": "flow.json:364-367 acKinds.AC6.check; acceptance-criteria.md:21 `[verify: exec \\`bun test src/review/managed.test.ts src/commands/review-plan.test.ts\\`]`; slice-02 removes the describe block from review-plan.test.ts (diff lines 1033-1124) and adds it with the L6 test to review-plan.e2e.test.ts (diff lines 830-970). package.json test:core includes src/commands/, so CI still runs it.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json:366",
+    ".metaproject/flows/460-2026-10-17-review-gate-consistency/acceptance-criteria.md:21"
+   ],
+   "enumeration_method": "keryx ctx rg for 'review-plan.test.ts' and 'AC6' over the flow 460 directory: these are the only places that name the moved file as verification. AC1-AC5 and AC7 name files this slice does not move (coverage/readiness/complete-coverage-gate/completion-gate/spawn-subagent-tool/ledger/managed tests)."
+  },
+  "_src": "review-regression-w2"
+ },
+ {
+  "id": "r2-review-regression-w2:RG-002",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "line": 6674,
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops \u2014 nothing",
+  "problem": "Slice-02 updates review-finding.schema.json (both copies) so the quote description and the `locator.method` enum include a third pass, `substring`: a one-line quote that is an exact substring of exactly one line. src/review/locate.ts:235-243 implements it. The CLI reference's \"A finding points at the code it quotes\" section still says matching stops after the whitespace pass, and its outcome table does not mention the substring method.",
+  "impact": "A reader of the CLI reference (an operator or a reviewer choosing what to quote) is told that a partial-line quote cannot be placed. Placement now accepts it, and a finding's `locator.method: substring` is undocumented there. Documentation only; no runtime path changes.",
+  "suggested_fix": "Change the sentence to \"exact first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops: nothing fuzzy\". In the `derived` row, mention that `locator.method` records which pass placed it.",
+  "evidence": "slice-02 diff lines 23-24 and 35-36 (schema description and enum); docs/docs/cli-reference.md:6674-6675 at 375279e78; src/review/locate.ts:17-18, 233-243.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    "docs/docs/cli-reference.md:6674"
+   ],
+   "enumeration_method": "keryx ctx rg 'then it stops|whitespace-normalised' over docs, src and .metaproject skills/core: the only prose statement of the matcher order that lacks the substring pass. The schema copies and the locate.ts header already mention it."
+  },
+  "_src": "review-regression-w2"
+ },
+ {
+  "id": "r2-review-regression-w4:REG-002",
+  "severity": "minor",
+  "file": "docs/docs/guides/review-with-a-record.md",
+  "line": 656,
+  "quote": "minus the measured finding-stage drops must equal `retained`) or when a count is",
+  "problem": "checkFilterStats and renderFilterStatsLine (src/review/filter-stats.ts) changed: the arithmetic is now total - drops - merged_duplicates = retained, and the status line prints `merged_duplicates=` between findings_cap and dismissed_by_round. The guide still states the old rule and shows the old line, in both copies of the section (lines 647/655-656 and 956/964-965).",
+  "impact": "An operator reconciling a round that merged duplicates by the documented rule gets a record that does not add up and reads a correct record as broken; the sample line no longer matches what `review status` prints.",
+  "suggested_fix": "Update both copies of the filter_stats section: add merged_duplicates to the example line and to the arithmetic sentence.",
+  "evidence": "src/review/filter-stats.ts:426-436 subtract merged_duplicates; filter-stats.ts:509 prints merged_duplicates=; grep for merged_duplicates in the guide returns nothing.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    "docs/docs/guides/review-with-a-record.md:647",
+    "docs/docs/guides/review-with-a-record.md:656",
+    "docs/docs/guides/review-with-a-record.md:956",
+    "docs/docs/guides/review-with-a-record.md:965"
+   ],
+   "enumeration_method": "keryx ctx rg 'findings_cap=|dismissed_by_round=' across the repo (hidden included, reviews excluded): only filter-stats.ts, its test and these two doc blocks; grep 'add up|minus' in the guide for the arithmetic sentence."
+  },
+  "_src": "review-regression-w4"
+ },
+ {
+  "id": "r2-review-security-code-w2:SEC-001",
+  "severity": "minor",
+  "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/context.md",
+  "line": null,
+  "quote": "Source report: /Users/Goodea/.claude/uploads/",
+  "problem": "The committed flow context records an absolute path into the developer's local Claude upload directory, including the OS username and the Claude session UUID (6e21c062-...). The file it points to is not in the repository, so the line is useless to any other reader.",
+  "impact": "Anyone reading the public repository learns the maintainer's local username, home layout and a Claude Code session id; low-grade information disclosure that also leaks the name of a third-party repository's PR process report. No credential is exposed.",
+  "suggested_fix": "Replace the absolute path with a neutral reference (e.g. 'Source report: owner-supplied PR #7975 process report (not committed)') or commit a redacted copy under the flow folder and link it relatively.",
+  "evidence": "git grep -l 'Users/Goodea' -- .metaproject/flows returns only this file: no other tracked flow commits a local absolute path, so this is not an established project convention (shared law 4 checked).",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "location_class": "in-diff",
+  "_src": "review-security-code-w2"
+ },
+ {
+  "id": "r2-review-security-code-w2:SEC-002",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "line": null,
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops \u2014 nothing",
+  "problem": "The section 'A finding points at the code it quotes' still says matching stops after the whitespace-collapsed pass ('nothing fuzzy'), but this PR adds a third tier: a one-line quote is placed when it is an exact substring of exactly one line (locate.ts method 'substring', schema enum 'substring', and the schema's quote description updated in the same slice). The doc's outcome table also does not mention `quote_unlocated`'s `ambiguous` candidate set derived from the substring scan.",
+  "impact": "An operator or reviewer relying on the reference believes a short quote cannot anchor a finding; in fact any unique substring of one line (no minimum length) now derives a line. A reader auditing why a finding was anchored where it was gets the wrong rule.",
+  "suggested_fix": "Change the sentence to: 'Matching is exact first, then with whitespace collapsed, then \u2014 for a one-line quote only \u2014 as an exact substring of exactly one line; nothing fuzzy.' and add `substring` to the `derived` row.",
+  "evidence": "src/review/locate.ts:233-244 at HEAD 375279e78 adds the substring tier; .metaproject/core/gdskills/contracts/review-finding.schema.json quote description was updated in this slice to name it; docs/docs/cli-reference.md:6674 was not.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "location_class": "in-diff",
+  "_src": "review-security-code-w2"
+ },
+ {
+  "id": "r2-review-style-w2:ST-001",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "quote": "Matching is exact first, then with whitespace collapsed, then it stops",
+  "problem": "The slice adds a third locator step (a one-line quote matched as an exact substring of exactly one line, locator method `substring`) to the schema description, but this guide paragraph still says matching stops after the whitespace-collapsed step and then lists three outcomes. The sentence is now wrong about the behaviour this PR ships.",
+  "impact": "A reader of the CLI reference believes a quote that is only a fragment of a line is unlocatable; the schema and ingest say otherwise.",
+  "suggested_fix": "Say: exact first, then whitespace-collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops; mention `substring` among the methods.",
+  "evidence": "Schema description in this slice reads 'then (a one-line quote) as an exact substring of exactly one line, then not at all'; cli-reference.md line 6674 at head still reads 'then it stops - nothing fuzzy'.",
+  "confidence": "high",
+  "_src": "review-style-w2"
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w2:F-006",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:1928-1930 still sums every usage_update; unchanged, info-level, depends on adapters not read",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "evidence": "managed.ts:1227 uses shared dispatchRuns (research.ts:46) so the unknown narrowing is gone; normalizeCoverage still takes a third optional research parameter (managed.ts:1245)",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-highload-w2:F-003",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:1928 still sums usage_update events; unchanged info",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "partial",
+   "evidence": "completion-gate.test.ts:207 still passes without the pointer branch (pr-7975 is the only fresh package); pointer ignoring is now tested at :316",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "completion-gate.ts:316-320 roots still scanned one after another and all candidates collected before pickPackage; bounded by the cap of 8",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w1:SEC-004",
+   "disposition": "open",
+   "evidence": "review-finding.schema.json:219-231 unchanged by design; readiness item quotes-located still blocks complete (info)",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "research.ts:46-62 dispatchRuns accepts any non-empty reviewer string, newlines included; managed.ts:1227 writes it to coverage.md",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w1:F-003",
+   "disposition": "open",
+   "evidence": "no spawn-subagent-tool test is in this slice; accumulation, one-sided and partial-save cases are not shown covered",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "partial",
+   "evidence": "same as logic-w3 F-002: completion-gate.test.ts:207 still does not need the pointer branch",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-002",
+   "disposition": "partial",
+   "evidence": "locate.test.ts:446 now asserts kind/candidates for the whitespace ambiguity; the two bound cases are still not asserted",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-architecture-w1:F-004",
+   "disposition": "open",
+   "evidence": "bundled SKILL.md:45 still tells a non-shell orchestrator to append the usage line to the file the reviewer writes; the raw hash covers it",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-architecture-w2:F-005",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:26 still imports review/dispatch-usage; direction accepted, info",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-architecture-w3:F-006",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:26 same import as w2 F-005, accepted, info",
+   "_src": "review-architecture-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "evidence": "locate.ts:62-67 still two stacked doc comments (CB-005)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-core-boundaries-w1:F-003",
+   "disposition": "open",
+   "evidence": "retry-eval.ts:42 still JSON.parse(raw) on the unstripped file (CB-008)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-core-boundaries-w1:F-005",
+   "disposition": "partial",
+   "evidence": "schema description now ties locator and quote_unlocated to one check; candidate_lines still has no maxItems (CB-011)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w2:F-005",
+   "disposition": "partial",
+   "evidence": "spawn-subagent-tool.ts:2328 writes the placeholder when the target is empty or absent, else .partial without telling the parent (CB-001)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "evidence": "completion-gate.test.ts:207-216 not discriminating (CB-004)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w4:F-001",
+   "disposition": "partial",
+   "evidence": "ledger.ts:19-36 free-text window removed and anchored; sentence-start defect prose and path-qualified inputs still mis-classify (CB-006)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "partial",
+   "evidence": "completion-gate.ts:316-319 still scans every root before pickPackage; roots now capped at 9",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-002",
+   "disposition": "partial",
+   "evidence": "completion-gate.ts:324 closedAt now per chosen root, still any closed package newer than the chosen one (CB-012)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "managed.ts:2738 still writes entry.reviewer unescaped; names come from the CLI-built selected set, unchanged",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "evidence": "completion-gate.test.ts:207-216 (CB-004)",
+   "_src": "review-core-boundaries-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-10",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-2",
+   "disposition": "open",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-highload-w1:F-003",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-highload-w2:F-005",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-006",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w2:SEC-W2-001",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-003",
+   "disposition": "partial",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "_src": "review-highload-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w2:F-006",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts onUsage still adds every usage_update (childUsage.tokens_in += tokensIn); adapters not checked; info",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "partial",
+   "evidence": "managed.ts:1227 uses the typed research.ts dispatchRuns; an unrecognised status still falls to 'failed: not run' at managed.ts:1234",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-highload-w1:F-003",
+   "disposition": "partial",
+   "evidence": "dispatch-usage.ts:9-14 comment corrected; USAGE_LINE (:36) still accepts a line anywhere, last wins, rather than only the last non-empty line",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-highload-w2:F-003",
+   "disposition": "open",
+   "evidence": "onUsage still sums per usage_update; no per-request last-seen tracking; info",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w2:F-005",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:2328 deliberately keeps an existing result and writes the empty record to .partial (comment :2326-2327); a stale earlier result still reads as current. See new LG-001 for the placeholder case",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w3:F-002",
+   "disposition": "open",
+   "evidence": "completion-gate.test.ts:207-216 unchanged except the call shape; pr-7975 is still the only fresh package, so the test passes without the pointer branch (completion-gate.ts:272-283)",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-006",
+   "disposition": "partial",
+   "evidence": "ledger.ts:45 still runs both patterns through map before find (no short-circuit), though the {0,80} windows are gone",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "completion-gate.ts:316-321 roots still scanned one after another, and every candidate is collected before pickPackage reads the pointer",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w2:SEC-W2-001",
+   "disposition": "partial",
+   "evidence": "dispatch-usage.ts:9-14 comment corrected; spawn still saves child-authored KERYX_USAGE lines when the host has no usage",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-003",
+   "disposition": "partial",
+   "evidence": "dispatch-usage.ts:12-14 documents the limitation and that no gate reads usage; no sidecar, and the reviewer's lines are not stripped",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-security-code-w3:SEC-005",
+   "disposition": "open",
+   "evidence": "research.ts:53 dispatchRuns accepts any non-empty reviewer string, and managed.ts:1227 copies it into coverage unchecked",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "disposition": "open",
+   "evidence": "completion-gate.test.ts:207-216 the pointer still names the only fresh package; no fixture where the pointer and the session filter disagree",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w1:LG-006",
+   "disposition": "partial",
+   "evidence": "spawn now writes a raw file for empty (:2328) and no-text timeout (:2260) dispatches, so they count; a driver with no raw file at all is still absent from dispatches/unknown (ledger.ts runUsage over `mine` raws)",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w1:LG-007",
+   "disposition": "open",
+   "evidence": ".metaproject/core/gdskills/contracts/review-finding.schema.json:232 candidate_lines still has no if/then excluding reason absent (both copies identical)",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-logic-w2:F-004",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:2324 still checks `turnResult?.submittedResult === undefined` with status Completed; dead but harmless, info",
+   "_src": "review-logic-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-highload-w2:F-003",
+   "disposition": "open",
+   "evidence": "spawn-subagent-tool.ts:1927 still sums every usage_update; unchanged. No provider emits more than one per request, so it stays an info observation.",
+   "_src": "review-performance-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-002",
+   "disposition": "partial",
+   "evidence": "History scan is now incremental (completion-gate.ts:141-150 cursor), so the transcript is no longer rescanned. Root scans (scanRoot readdir + manifest read + stat per package, :317) and dirSignature (:341) still run from scratch on every stop, now bounded by 8 roots and 20 continues.",
+   "_src": "review-performance-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-007",
+   "disposition": "open",
+   "evidence": "completion-gate.ts:317 still scans roots sequentially and collects every open candidate even when the pointer decides; unchanged and bounded by 8 roots, info only.",
+   "_src": "review-performance-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-performance-w3:PERF-005",
+   "disposition": "open",
+   "evidence": "dispatch-usage.ts:85 still has `.replace(/\\s+$/, \"\")`, quadratic on a long whitespace run; restated as PERF-R2-001.",
+   "_src": "review-performance-w1",
+   "_lane": "Z"
+  }
+ },
+ {
+  "prior": {
+   "id": "review-testing-practices-w2:T-001",
+   "state": "open",
+   "evidence": "completion-gate.test.ts:207-216 only had its call adapted to { roots: [sub] }; the fixture is unchanged and still passes without the pointer read (see :218-224). Re-filed as T-R2-001.",
+   "_src": "review-testing-practices-w1",
+   "_lane": "Z"
+  }
+ }
+]

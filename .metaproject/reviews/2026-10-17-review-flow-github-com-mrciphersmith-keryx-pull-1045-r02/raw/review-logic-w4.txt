@@ -1,0 +1,87 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-09 (test-only diff: active-review, complete-coverage-gate, complete-head-gate, completion-gate, coverage, evidence-level, ingest-locator-sha, ledger, locate, managed, readiness, research tests), checked against the source each test pins at head 375279e78. The tests are internally consistent and discriminating (the cache test does fail if the key dropped the head; the UNCHECKABLE exemption tests assert the refusal they bypass). One logic defect sits in the code the ledger D test pins: the unreadable-input claim treats any sentence that starts with a mandatory-input noun as the reviewer's own statement, so ordinary defect prose marks a DONE reviewer incomplete. Two wall-clock assertions are CI-load sensitive. Two info notes on recorded state.",
+  "slices": ["slice-09"],
+  "findings": [
+    {
+      "id": "LG-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "line": 36,
+      "quote": "${OWN_STATEMENT}${INPUT_NAMED}(?:",
+      "problem": "UNREADABLE_INPUT accepts a sentence start ([.;:!?]\\s+ or ^ with the m flag) as an 'own statement' anchor (OWN_STATEMENT, line 22). Any summary sentence that begins with a mandatory-input noun followed by 'could not be read/opened/loaded/parsed/found' or 'was not found.' is read as the reviewer saying it could not read its input, even when the sentence describes a defect in the code under review. Example DONE summary: 'Two findings. The payload could not be parsed when slices is empty (LG-001).' -> '. ' + 'The payload' + ' could not be parsed' matches pattern 2; unreadableInputClaim returns 'The payload could not be parsed', and buildLedger (line 529) sets finished=false.",
+      "impact": "A reviewer that finished its scope is recorded status incomplete, scopeComplete false, with a gap 'the reply states a mandatory input could not be read'; scopeReviewed goes false and review complete refuses. Re-dispatch reproduces it whenever the finding persists, because the reviewer is describing the same defect. Keryx reviews its own review pipeline, whose findings routinely talk about payloads, schemas, slice manifests and pr_context, so the trigger is realistic here. The slice's negative list (ledger.test.ts 'Defect prose about a schema...') only covers sentences whose subject is a non-input word ('loadSchema cannot open', 'the payload parser is missing', 'reviewer-finding.schema.json is missing'), so the false positive is untested.",
+      "suggested_fix": "Drop the bare sentence-start alternative for pattern 2 (the passive 'X could not be read' form) and require a first-person subject or an explicit reading context ('so I reviewed', 'replied from memory', 'reviewed the diff only') within the same sentence; or match only the reviewer's own input names as given in the payload (e.g. 'pr_context.json', 'the slice manifest') with a self-referential qualifier ('my', 'the dispatched'). Add 'Two findings. The payload could not be parsed when slices is empty.' and 'The schema could not be loaded when the cache is cold.' to the negative list in ledger.test.ts.",
+      "evidence": "Read src/review/ledger.ts:20-47 (MANDATORY_INPUT, OWN_STATEMENT, CANNOT, INPUT_NAMED, UNREADABLE_INPUT, unreadableInputClaim) and 525-564 (finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined). Traced pattern 2 by hand on the example: OWN_STATEMENT alternative '[.;:!?]\\s+' consumes '. ', INPUT_NAMED's optional 'the\\s+' (i flag) consumes 'The ', MANDATORY_INPUT matches 'payload', then '\\s+could\\s+not\\s+be\\s+parsed'. Slice ledger.test.ts 'D: a DONE reply that states a mandatory input could not be read is incomplete' pins the positive cases and the nine negative sentences, none of which starts a sentence with an input noun.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:34", "src/review/ledger.ts:36"],
+        "enumeration_method": "Both UNREADABLE_INPUT patterns are the only users of OWN_STATEMENT (ledger.ts:22; keryx ctx rg OWN_STATEMENT src/review). Pattern 2 (line 36) has the passive form that ordinary defect prose takes; pattern 1 (line 34) shares the sentence-start anchor ('Two findings. Cannot find the slice manifest entry for retries...' matches) but is less likely in practice. unreadableInputClaim (line 42) is the single caller, read at buildLedger line 528."
+      }
+    },
+    {
+      "id": "LG-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/completion-gate.test.ts",
+      "line": 291,
+      "quote": "expect(performance.now() - started).toBeLessThan(1_000);",
+      "problem": "Two new tests assert linear-time behaviour with a wall-clock bound measured by performance.now(): completion-gate.test.ts:291 (reviewPackagePaths on 1 MB and ~1 MB crowded input, < 1000 ms) and ledger.test.ts:1106 (splitUsage on a 200k-brace line, < 500 ms). On a loaded CI runner (the client matrix runs suites in parallel) a GC pause or CPU throttling can push a linear scan past the bound.",
+      "impact": "Intermittent red CI unrelated to a change; the bound also does not distinguish linear from mildly super-linear code at these sizes, so it tests the machine as much as the algorithm.",
+      "suggested_fix": "Keep the input sizes but compare against a scaled baseline (time n and 4n, assert ratio < ~8), or raise the bound well above observed time (e.g. 5 s) so only catastrophic backtracking fails it.",
+      "evidence": "Slice lines for completion-gate.test.ts 'package path matching is linear' and ledger.test.ts 'a usage line is checked by hand, not by a backtracking pattern'; head lines located with grep at completion-gate.test.ts:291 and ledger.test.ts:1106.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-003",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 1231,
+      "quote": "if (status === \"complete\" && routedOut === true) entries.push({ reviewer, status: \"run\"",
+      "problem": "coverageFromResearch records a routed-out role (never dispatched) with coverage status 'run', changing only the reason text, although REVIEW_COVERAGE_STATUSES has 'skipped'. The pinning test in managed.test.ts:1993 is titled 'a routed-out role is listed as not dispatched' but asserts status 'run'. Consumers that read status === 'run' as 'this reviewer ran' (concurrencyPlan managed.ts:812, verdict expectedReviewers verdict.ts:171) count it as run.",
+      "impact": "No observable defect found today: routed-out roles are already in dispatch.selected, so verdict expects them either way, and concurrencyPlan only applies when concurrency is requested. Recorded so the next reader of manifest.coverage does not take 'run' at face value; it would be settled by either using 'skipped' (and checking coverageMdCheck/omission tolerate it, which they do since omission keys on listing, not status) or by documenting why 'run' is intended.",
+      "suggested_fix": "Consider status 'skipped' for routed-out roles, or rename the test to say the role is listed as run with a routed-out reason.",
+      "evidence": "Read managed.ts:1220-1236 and 2733-2740, readiness.ts:282-301, verdict.ts:163-176, types.ts:35; slice managed.test.ts 'a routed-out role is listed as not dispatched' asserts toMatchObject({ status: \"run\" }).",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": 417,
+      "quote": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\",",
+      "problem": "Whether a closed package is held to the flow 460 checks (item 3 coverage gate, item 6 omission check) is decided by the presence of a marker comment inside coverage.md, an editable package file. Deleting that one line from a closed package's coverage.md makes readiness skip both checks and report the close as standing.",
+      "impact": "Only reachable by hand-editing a closed package; complete itself runs on an open package, where coverageGated is always true, so the gate at close time is not weakened. Noted because publish and the publish guard read readiness on closed packages. Deferred to review-security-code if tampering is in scope; settled by keying the exemption on something the close records (e.g. a manifest field or closedAt before the flow 460 release) instead of file content.",
+      "suggested_fix": "Record the gate version in the manifest at complete time and key coverageGated on it, falling back to the marker only for packages without that field.",
+      "evidence": "Read readiness.ts:120-137, 186-190, 282-301, 400-418; slice readiness.test.ts 'a package closed before flow 460 keeps its recorded close' and 'a closed package whose coverage.md carries the flow 460 mark is still held'.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 2 }
+}
+```
+
+## Logic Review (second look, slice-09)
+
+- Head: 375279e781f043c42373b29e06092a2c4177a82a, branch fix/review-gate-consistency; slice is test-only, each test read against the source it pins.
+- Spec compliance gate: flow 460 description given by the caller; no acceptance criterion found unpinned in this slice.
+- Stats: blocker 0 | major 1 | minor 1 | info 2
+
+LG-001 (major): `unreadableInputClaim` anchors on any sentence start, so a DONE summary like "Two findings. The payload could not be parsed when slices is empty." marks the reviewer incomplete and blocks the round; the slice's negative cases do not cover a sentence that starts with an input noun.
+LG-002 (minor): two wall-clock linear-time assertions (completion-gate.test.ts:291, ledger.test.ts:1106) are CI-load sensitive.
+LG-003 (info): routed-out roles are written to coverage with status "run"; test title says "not dispatched".
+LG-004 (info): the closed-package exemption keys on a marker line inside editable coverage.md.
+
+Checked and found sound: the per-process diff cache key (package, root, full target incl. base, head) and its test discriminate a head change; the UNCHECKABLE exemption tests assert the refusal they bypass; the quote_unlocated flag and unlocatable locator are written together; the flow 460 item numbering (12 = quotes-located) and waive-by-number agree.
+
+Routing audit: graph_used: no (not-relevant, slice is tests with named sources); wiki_used: no (not-relevant, flow description sufficed); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no (grep only for line numbers of two known strings).

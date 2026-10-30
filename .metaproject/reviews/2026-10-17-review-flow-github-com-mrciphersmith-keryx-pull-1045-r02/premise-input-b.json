@@ -1,0 +1,929 @@
+[
+ {
+  "id": "r2-review-logic-w11:LG-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": null,
+  "quote": "contextTruncated: region.contextTruncated,",
+  "problem": "partitionRegionsByFix splits a region that holds both fix and new lines, and the context between the two kinds is shared half and half. On the split side, each piece therefore has fewer context lines than the configured window. Each piece still copies the parent's contextTruncated. If the parent window was complete, every piece says false.",
+  "impact": "ScopedRegion documents contextTruncated as the signal that a window is narrower than asked, so a reviewer does not assume it saw the enclosing code. A fix or new piece cut from a mixed region claims a full window while it can hold as little as one context line on the cut side. The reviewer of the piece loses that warning. No wrong routing results: the cost is to the reader of the slice.",
+  "suggested_fix": "Set contextTruncated to true on every piece that has a neighbouring piece on the split side, for example region.contextTruncated || pieces > 1 per cut. Alternatively, keep the full context on both pieces instead of halving it.",
+  "evidence": "src/review/round-split.ts:121 inside partitionRegionsByFix. src/review/scope.ts:145-152 ScopedRegion, with the doc above it that contextTruncated reports a window narrower than asked.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "_src": "review-logic-w11"
+ },
+ {
+  "id": "r2-review-logic-w3:LG-001",
+  "reviewer": "review-logic",
+  "severity": "major",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "line": 331,
+  "quote": "const target = existing.trim() === \"\" ? abs :",
+  "problem": "This PR makes the empty-reply exit (line ~2328) and the no-text timeout exit (line ~2260) write NO_TEXT_PLACEHOLDER plus a KERYX_USAGE line into save_result_to. saveTimedOutPartial still decides 'a complete result is already there' by existing.trim() === \"\", so that placeholder file now counts as a complete result. The tool's own advice for an empty read-only child is 're-dispatch it once'. If that re-dispatch times out with real text (possibly a whole REVIEW_RESULT), the text goes to <target>.partial, which no raw reader picks up. raw/<reviewer>.txt keeps the empty placeholder. The tool output also says 'the complete result already at X was kept', which is false. A second empty dispatch is diverted the same way, so its dispatch and usage disappear from the ledger.",
+  "impact": "Before this PR an empty dispatch wrote no file, so a re-dispatch's timed-out partial landed at the raw path the ledger reads. Now that output is hidden: the ledger sees an empty reply, records the reviewer as incomplete or not-run, and drops any findings the partial held. The operator is told a complete result was kept.",
+  "suggested_fix": "In saveTimedOutPartial, treat an existing file as worth protecting only when isEmptyOutput(existing) is false (it already strips the usage line and matches the placeholder). An empty placeholder is then overwritten by any later dispatch. Optionally, have the stopped/BudgetExhausted path (line ~2369, saveChildResult) use the same guard so a non-Completed child never overwrites a complete result.",
+  "evidence": "spawn-subagent-tool.ts:329-334 saveTimedOutPartial uses existing.trim() === \"\". Line ~2328 (empty-reply) and ~2260 (timeout) now write `${NO_TEXT_PLACEHOLDER}${usageSuffix()}` through it. Line ~2268 prints 'the complete result already at ... was kept'. ledger.ts:425-428 isEmptyOutput treats the placeholder as empty. review-ledger.ts loadRaws reads only raw/*.txt, so the .partial file is never read. The advice text 're-dispatch it once' is at line ~2322.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:331",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2260",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2328",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2369"
+   ],
+   "enumeration_method": "keryx ctx rg for saveTimedOutPartial|saveChildResult in spawn-subagent-tool.ts: 3 writers of save_result_to (timeout, empty-reply, normal/stopped), all reaching the one 'is a complete result there' test at :331; :2369 overwrites unconditionally (the non-Completed sibling)"
+  },
+  "_src": "review-logic-w3"
+ },
+ {
+  "id": "r2-review-logic-w3:LG-002",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "line": 2369,
+  "quote": "await saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)",
+  "problem": "Token spend is recorded as one KERYX_USAGE line per raw file, and ledger.ts:673 counts one dispatch per raw file. A re-dispatch to the same save_result_to, which the empty-reply advice asks for, either overwrites the file (saveChildResult on a completed retry) or is diverted to .partial (LG-001), so one of the two paid dispatches disappears. The rate-limited exit (failChild('rate-limited'), ~2304) and the thrown-error exit (~2404) still write no file, so their spend and the dispatch itself are missing too. Round 1 named the rate-limit exit, and only the empty-reply exit was fixed. usageTotals then reports complete: true, and the report reads 'token spend: X over N dispatch(es)' with no 'at least'.",
+  "impact": "The review's stated spend (flow criterion H) is silently low and labelled complete on exactly the retry and failure paths that burn tokens. No gate reads it, so the harm is a wrong cost figure only.",
+  "suggested_fix": "Keep spend per dispatch rather than per file: append to the target instead of replacing it, or write a sidecar per dispatch (raw/<reviewer>.usage.jsonl) that the ledger sums. Record a usage-only entry on the rate-limit and error exits when usage is known.",
+  "evidence": "spawn-subagent-tool.ts ~2369 overwrites unconditionally. The rate-limit branch ~2304-2316 and the catch branch ~2404 return without any save. ledger.ts:672-673 says 'Every raw result is one dispatch' and runs usageTotals(raws.map(rawUsage)). dispatch-usage.ts:112 sets complete when every counted usage is known. The round-1 finding at findings.json:716 named the rate-limit return.",
+  "confidence": "high",
+  "_src": "review-logic-w3"
+ },
+ {
+  "id": "r2-review-logic-w3:LG-003",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "src/commands/review-ledger.ts",
+  "line": 354,
+  "quote": "const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files });",
+  "problem": "ledger build now runs packageCoverageErrors, so its coverage options match complete and readiness. But review complete (managed.ts:871/1013 to packageResearchErrors) also runs coverageGateErrors(packageDir, ledger), the layer/chunk completeness gate, and ledgerBlockers never runs it. The ledger still prints 'READY: ... satisfies the completion gate' (line 204), and ledgerBlockers' new doc comment says 'READY here is what complete accepts'. A package with an unfinished chunk plan or an incomplete layer census is READY in ledger build and refused by complete.",
+  "impact": "This is the same 'one command says ready, the next refuses' shape that flow 460 problem A sets out to remove, now between ledger build and complete. An operator or orchestrator that trusts the READY line runs complete and is refused.",
+  "suggested_fix": "When packageDir is given, have ledgerBlockers also return coverageGateErrors(packageDir, ledger). Otherwise, reword the READY line and the doc comment so they claim only the research, dispatch and coverage checks.",
+  "evidence": "research.ts:131 runs coverageGateErrors in packageResearchErrors, but ledger.ts:803-806 has no call to it. The completeness gate was added in 7e1d30521. This PR rewrote the ledgerBlockers comment to 'READY here is what complete accepts' without adding the gate.",
+  "confidence": "medium",
+  "_src": "review-logic-w3"
+ },
+ {
+  "id": "r2-review-logic-w4:LG-001",
+  "reviewer": "review-logic",
+  "severity": "major",
+  "file": "src/review/ledger.ts",
+  "line": 36,
+  "quote": "${OWN_STATEMENT}${INPUT_NAMED}(?:",
+  "problem": "UNREADABLE_INPUT accepts a sentence start ([.;:!?]\\s+ or ^ with the m flag) as an 'own statement' anchor (OWN_STATEMENT, line 22). Any summary sentence that begins with a mandatory-input noun followed by 'could not be read/opened/loaded/parsed/found' or 'was not found.' is read as the reviewer saying it could not read its input, even when the sentence describes a defect in the code under review. Example DONE summary: 'Two findings. The payload could not be parsed when slices is empty (LG-001).' -> '. ' + 'The payload' + ' could not be parsed' matches pattern 2; unreadableInputClaim returns 'The payload could not be parsed', and buildLedger (line 529) sets finished=false.",
+  "impact": "A reviewer that finished its scope is recorded status incomplete, scopeComplete false, with a gap 'the reply states a mandatory input could not be read'; scopeReviewed goes false and review complete refuses. Re-dispatch reproduces it whenever the finding persists, because the reviewer is describing the same defect. Keryx reviews its own review pipeline, whose findings routinely talk about payloads, schemas, slice manifests and pr_context, so the trigger is realistic here. The slice's negative list (ledger.test.ts 'Defect prose about a schema...') only covers sentences whose subject is a non-input word ('loadSchema cannot open', 'the payload parser is missing', 'reviewer-finding.schema.json is missing'), so the false positive is untested.",
+  "suggested_fix": "Drop the bare sentence-start alternative for pattern 2 (the passive 'X could not be read' form) and require a first-person subject or an explicit reading context ('so I reviewed', 'replied from memory', 'reviewed the diff only') within the same sentence; or match only the reviewer's own input names as given in the payload (e.g. 'pr_context.json', 'the slice manifest') with a self-referential qualifier ('my', 'the dispatched'). Add 'Two findings. The payload could not be parsed when slices is empty.' and 'The schema could not be loaded when the cache is cold.' to the negative list in ledger.test.ts.",
+  "evidence": "Read src/review/ledger.ts:20-47 (MANDATORY_INPUT, OWN_STATEMENT, CANNOT, INPUT_NAMED, UNREADABLE_INPUT, unreadableInputClaim) and 525-564 (finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined). Traced pattern 2 by hand on the example: OWN_STATEMENT alternative '[.;:!?]\\s+' consumes '. ', INPUT_NAMED's optional 'the\\s+' (i flag) consumes 'The ', MANDATORY_INPUT matches 'payload', then '\\s+could\\s+not\\s+be\\s+parsed'. Slice ledger.test.ts 'D: a DONE reply that states a mandatory input could not be read is incomplete' pins the positive cases and the nine negative sentences, none of which starts a sentence with an input noun.",
+  "confidence": "high",
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "src/review/ledger.ts:34",
+    "src/review/ledger.ts:36"
+   ],
+   "enumeration_method": "Both UNREADABLE_INPUT patterns are the only users of OWN_STATEMENT (ledger.ts:22; keryx ctx rg OWN_STATEMENT src/review). Pattern 2 (line 36) has the passive form that ordinary defect prose takes; pattern 1 (line 34) shares the sentence-start anchor ('Two findings. Cannot find the slice manifest entry for retries...' matches) but is less likely in practice. unreadableInputClaim (line 42) is the single caller, read at buildLedger line 528."
+  },
+  "_src": "review-logic-w4"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-001",
+  "severity": "major",
+  "file": "src/review/ledger.ts",
+  "line": 34,
+  "quote": "new RegExp(`${OWN_STATEMENT}${CANNOT}\\\\s+(?:read|open|load|access|find|parse)\\\\s+${INPUT_NAMED}\\\\b`, \"im\"),",
+  "problem": "The first UNREADABLE_INPUT pattern accepts the verb `find` with the determiner `any`/`the` before a MANDATORY_INPUT word, anchored only to a sentence start. A DONE summary that reports a clean result therefore matches: \"No blockers. Did not find any schema regressions.\" matches `[.]\\s+` + `did not` + `find` + `any ` + `schema` + `\\b`. Phrasings like \"Could not find any payload validation gaps\" and \"I did not find the schema drift the PR describes\" match too. The second pattern similarly matches a bug description that is not about the reviewer's reading, for example \"Run with --x. The payload was not found, so ingest throws.\"",
+  "impact": "A reviewer that finished its slice and found nothing in a schema- or payload-related area is recorded `incomplete` with the gap 'the reply states a mandatory input could not be read'. scopeReviewed goes false, so `review complete` refuses. retry-eval.ts:74 drops the same reply as a late result. The only repair is another dispatch, which can produce the same sentence again. This is the flow 460 D false-negative that rounds 1 and 2 reported. The narrowing removed the 80-character gap but kept `find` plus a free determiner.",
+  "suggested_fix": "Drop `find` from the reading verbs. If it must stay, require a definite file-like object right after it (`the|my|its` + input name + optional `file`, followed by a sentence end or `at|in <path>`) and reject `any`. Rule out a following noun: require `\\b(?!\\s+[a-z]+(?:s|ions?)\\b)`, or require the input name to be followed by `[.;:,]|$|\\s+(?:file|at|in)\\b`. For the second pattern, require a first-person subject or an explicit `I|we` within the same sentence. Add negative tests for \"Did not find any schema regressions.\" and \"The payload was not found, so ingest throws.\"",
+  "evidence": "Hand trace against the pattern at ledger.ts:34. OWN_STATEMENT `(?:^|[.;:!?]\\s+|...)` matches \". \". CANNOT has `did\\s+not` (flag i). Then `\\s+find\\s+`. INPUT_NAMED `(?:the\\s+|my\\s+|its\\s+|this\\s+|any\\s+)?...(?:review(?:er)?[_ -])?schema` matches \"any schema\". `\\b` holds before the following space. Consumers: ledger.ts:528 (`const unreadable = unreadableInputClaim(result);` sets finished=false) and retry-eval.ts:74.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "src/review/ledger.ts:34",
+    "src/review/ledger.ts:36",
+    "src/review/ledger.ts:528",
+    "src/review/retry-eval.ts:74"
+   ],
+   "enumeration_method": "keryx ctx rg -n --all \"unreadableInputClaim\" src --glob '!*.test.ts': defined once (ledger.ts:42) over the two UNREADABLE_INPUT patterns (ledger.ts:34, :36), read by buildLedger (ledger.ts:528) and collectLateResults (retry-eval.ts:74); no other reader"
+  },
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-002",
+  "severity": "major",
+  "file": "src/review/completion-gate.ts",
+  "line": 178,
+  "quote": "const root = path.resolve(cwd, prefix === \"\" ? \".\" : prefix);",
+  "problem": "SessionReviewTracker resolves every path it learns against the session cwd (the shell's root): the paths in `keryx review` call arguments, and the `path:` line keryx prints. shell_exec always runs `sh -c` at that root (shell-exec-tool.ts:248), so a package under a subdirectory's `.metaproject` (the flow 460 C/A layout `output/review-pr-7975/.metaproject/reviews/...`) can only be opened by a command such as `cd output/review-pr-7975 && keryx review start ...`. keryx then prints `path: .metaproject/reviews/<id>` relative to ITS cwd (managed.ts:588 `path.relative(input.cwd, packageDir)`), and the tracker records `<session cwd>/.metaproject/reviews/<id>` with no new root. The subdirectory is never added to `roots`, so neither its packages nor its active-review pointer are scanned. The review id is recorded, but namedBySession only applies to candidates found under the scanned roots.",
+  "impact": "In the layout the flow was written for, findReviewGateState returns the NO_PACKAGE_BLOCKER placeholder while the session's own package is open, and nudges the model with 'no review package this session opened or named'. After a successful `review complete` in the subdirectory it never sees the closed package (closedAt is read only under the scanned roots). It keeps nudging until the stall cap, then stops with a report claiming the review is not complete. The PR's outcome criterion (nudges about this session's own PR) is not met for a review started by `cd <sub> && keryx review ...`.",
+  "suggested_fix": "Have `keryx review start|attach|ingest|status` print the absolute package path (or an extra `package: <absolute dir>` line) and parse that in OWN_OUTPUT_LINE. Alternatively, resolve the paths of one call, and of its output, against a leading `cd <dir> &&|;` in that call's command before falling back to the session cwd. Add a test where the start command is `cd sub && keryx review start` and the output is `path: .metaproject/reviews/<id>`.",
+  "evidence": "completion-gate.ts:160-173: the tracker reads only call.arguments and the `path:`/`# managed review:` lines. namePaths (completion-gate.ts:176-183) resolves `prefix` against `this.cwd`. review.ts:1082 prints `path: ${result.path}` and managed.ts:588 makes it relative to keryx's own cwd. shell-exec-tool.ts:248 runs every command at `cwd: root`. findReviewGateState (completion-gate.ts:316) scans only cwd plus named.roots.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "src/review/completion-gate.ts:178",
+    "src/review/completion-gate.ts:170"
+   ],
+   "enumeration_method": "Every input to SessionReviewTracker.namePaths: call.arguments (completion-gate.ts:163) and the OWN_OUTPUT_LINE `path:` capture (completion-gate.ts:170). Both reach the single path.resolve(cwd, prefix) at :178. No other code adds to `roots` or `packageDirs`."
+  },
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-003",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 160,
+  "quote": "if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;",
+  "problem": "The tracker treats any tool call whose JSON arguments contain the words `keryx review` as one of this session's `keryx review` commands, whatever the tool is: write_file or apply_patch writing a report, a doc or a note that mentions `keryx review status <id>` or `.metaproject/reviews/<id>`, for example. The doc comment says the gate looks only at the session's own `keryx review` commands. HistoryMessage drops the tool name, so nothing can check it.",
+  "impact": "An older open package whose real id or path the session merely wrote into a file counts as named. scanRoot then keeps it as a candidate despite predating the session. If it is the newest open candidate and no fresh pointer exists, the nudge names that package: the flow 460 C misdirection by a different route. Trigger: write a report that cites a previous round's package path. Outcome: the gate nudges about that round.",
+  "suggested_fix": "Carry `name` in HistoryMessage.toolCalls and accept only the shell tool, plus the keryx self-command tool if any. Or match `keryx review` only at a command position in the parsed `command` argument, not anywhere in the JSON.",
+  "evidence": "completion-gate.ts:101-106 (HistoryMessage has no tool name), :160-165 (every call whose arguments match is remembered and its paths named), :265 scanRoot keeps a pre-session package when namedBySession is true.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-004",
+  "severity": "minor",
+  "file": "src/review/managed.ts",
+  "line": 551,
+  "quote": "renderReport(report, input.mode) + renderSpendMarkdown(input.research, report)",
+  "problem": "renderSpendMarkdown returns nothing when the source report already contains `\\n## Token spend\\n`. On a re-ingest whose `--report` is the package's own report.md (which the previous ingest wrote with a spend section), the old figure is kept and the totals of the current research.json are dropped. This happens, for example, when the ledger is rebuilt after more waves or a retry dispatch.",
+  "impact": "report.md states a stale spend (fewer dispatches, fewer tokens) after a re-ingest, while research.json carries the new totals. Flow 460 H is about stating the review's spend, and that number is now wrong without any warning.",
+  "suggested_fix": "Replace an existing `## Token spend` section, from the heading to the next `## ` or end of file, with the freshly rendered one instead of skipping. Or skip only when the existing section's line equals the new one.",
+  "evidence": "dispatch-usage.ts:133 `if (report !== undefined && report.includes(`\\n${SPEND_HEADING}\\n`)) return \"\";`. managed.ts:551 passes the input report text, which readReport reads from --report verbatim.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "_src": "review-logic-w5"
+ },
+ {
+  "id": "r2-review-logic-w6:LG-001",
+  "severity": "major",
+  "reviewer": "review-logic",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\",",
+  "problem": "coverageGated exempts only closed packages WITHOUT the flow 460 mark, on the stated reason that a closed package's recorded state is final and publish, the publish guard and the panel must not suddenly call it NOT READY. A closed package WITH the mark (every package ingested since flow 460, since renderCoverage always writes it) still re-runs packageCoverageErrors in reviewersCheck on every computeReadiness, and that gate's inputs are not frozen at close: requiredReviewers reads the project's current roster (collectReviewers(root), detectProjectStack), and for a dispatch with depth light effectiveDepth -> packageDiffStats resolves the base from git now. A PR package records no target.base (e.g. this round's manifest.target is {kind, ref, head}), so once the PR is merged by merge commit or fast-forward every resolveBase candidate (origin/main, main, ...) gives merge-base == head, resolveDiffBase returns the emptyRangeWarning error, effectiveDepth returns depth full with refused, and reviewerSetErrors demands the full set that the light round legitimately did not run.",
+  "impact": "A light-round PR review closed READY turns NOT READY on item 3 after the PR merges (or after any reviewer skill is added to the project): `keryx review publish` refuses it, the publish guard (reviewPublishRefusal -> computeReadiness(newest.dir)) refuses `gh pr review` on that PR, and the review panel shows a closed round as failing. The repair the item prints (dispatch the missing reviewers / re-ingest) is not available on a closed package. This is exactly the outcome the coverageGated comment says it prevents, so the deliberate choice's reason does not hold for marked packages.",
+  "suggested_fix": "Gate the re-run of the coverage gate on the package being open (manifest.status !== \"closed\"): `review complete` already ran packageResearchErrors before closing, so a closed package's item 3 should report the recorded close (as it does for unmarked packages). If a closed-package recheck is wanted, freeze its inputs at close (record the required set / effective depth in research.json at complete) instead of recomputing from the current roster and git.",
+  "evidence": "src/review/readiness.ts computeReadiness sets coverageGated = mark || status !== closed; reviewersCheck calls packageCoverageErrors(ctx.dir, dispatch) whenever coverageGated. src/review/research.ts packageCoverageErrors -> src/review/coverage.ts coverageErrors -> effectiveDepth (record.depth === 'light') -> packageDiffStats -> diffOfTarget -> resolveDiffBase -> prior-round.ts resolveBase, whose comment states 'A merged pull request's merge-base with origin/main is its own head (an empty range)' and returns the empty candidate, then emptyRangeWarning yields an error -> effectiveDepth returns {depth:'full', refused}. reviewerSetErrors then calls requiredReviewers(options.root, ...) which reads collectReviewers(root) at call time. src/review/managed.ts renderCoverage always writes COVERAGE_MD_MARK. Callers on closed packages: src/review/publish.ts publishReview, src/review/publish-guard.ts reviewPublishRefusal, src/tui/review-panel.ts. Round 1 manifest target has no base: {'kind':'pr','ref':'https://github.com/MrCipherSmith/keryx/pull/1045','head':'dff7a38...'}.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/review/readiness.ts:coverageGated in computeReadiness (feeds both reviewersCheck coverage gate and coverageMdCheck omitted check)"
+   ],
+   "enumeration_method": "keryx ctx rg 'COVERAGE_ENTRY|COVERAGE_MD_MARK|coverageGated|coverageMd' src/review: coverageGated is computed once and read by two checks; only the item 3 read re-runs time-dependent inputs (the item 6 omitted check reads coverage.md and research.json, both frozen at close). computeReadiness callers enumerated with keryx ctx rg 'computeReadiness\\(' src: managed.ts complete (open package, unaffected), publish.ts, publish-guard.ts, review-panel.ts (all reach closed packages)."
+  },
+  "_src": "review-logic-w6"
+ },
+ {
+  "id": "r2-review-logic-w6:LG-002",
+  "severity": "minor",
+  "reviewer": "review-logic",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "if (omitted.length > 0) {",
+  "problem": "coverageMdCheck returns early on an omitted reviewer, before the pre-existing 'lying' check runs. When coverage.md both omits a run and lists an unfinished reviewer as 'run', the item names only the omission; the contradiction is reported only after the next repair cycle.",
+  "impact": "The item's evidence is incomplete for a package with both defects; an operator who repairs coverage.md by an explicit --coverage list (which the repair text warns against but does not prevent) can fix the omission and still fail on the second defect, discovering it one cycle later.",
+  "suggested_fix": "Compute both `omitted` and `lying`, and return one bad() whose evidence names each non-empty set.",
+  "evidence": "src/review/readiness.ts coverageMdCheck: `lying` is computed, then `if (omitted.length > 0) { return bad(...omits...) }` precedes `if (lying.length === 0) return ok(...)`, so `lying` is discarded on that path.",
+  "confidence": "high",
+  "_src": "review-logic-w6"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-001",
+  "severity": "major",
+  "title": "A re-dispatch to the same save_result_to overwrites the earlier dispatch's KERYX_USAGE line, so the empty dispatch's spend is lost and the total can read as complete",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "await saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)",
+  "problem": "Flow 460 (H) records an empty or timed-out child's usage by writing the placeholder plus a KERYX_USAGE line into save_result_to, because the dispatch was paid for. The empty-reply advice then tells the parent to re-dispatch once. Drivers fix one result path per reviewer x wave (raw/<reviewer>-w<n>.txt), so the re-dispatch saves to the same file. On a completed re-dispatch, saveChildResult overwrites the file, which removes the first dispatch's usage line. On a re-dispatch that times out or ends empty, saveTimedOutPartial sees a non-empty file and writes to `<target>.partial`, which readRaws (review-ledger.ts, `*.txt` only) never reads, so the second dispatch's usage is lost. In both cases the ledger counts one dispatch per raw file. usageTotals then reports `complete: true` / `token spend: X over N dispatch(es)` with no 'at least' qualifier, even though one paid dispatch is missing.",
+  "impact": "The round's stated spend is silently understated on the exact path the PR added the empty-dispatch recording for (empty child, then the re-dispatch the advice prescribes). Acceptance criterion H ('every dispatch's token use lands in the package') does not hold there, and the report presents the figure as complete.",
+  "suggested_fix": "Carry earlier usage forward rather than replacing it. When save_result_to already holds a KERYX_USAGE line, keep it: either append the new dispatch's line (splitUsage would need to sum lines, or the ledger would need to count each line as a dispatch), or write the superseded attempt's usage to a sidecar the ledger reads (for example raw/<name>.usage.jsonl), and fold it into usageTotals as its own dispatch. Add a test that runs an empty dispatch and then a completed one to the same path and asserts two dispatches and the summed tokens.",
+  "evidence": "spawn-subagent-tool.ts:2369 saveChildResult overwrites the target unconditionally; :2328 and :2260 route through saveTimedOutPartial (:329-334), which diverts to `.partial` whenever the file is non-empty; dispatch-usage.ts splitUsage keeps only the last line per file; review-ledger.ts loadRaws reads one usage per raw/*.txt; review-slice.ts writeWaveDrivers gives each reviewer x wave one fixed `result` path (driver review-logic-w8.json: raw/review-logic-w8.txt).",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2369",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2328",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2260"
+   ],
+   "enumeration_method": "grep for saveChildResult( and saveTimedOutPartial( in spawn-subagent-tool.ts: 3 call sites that write save_result_to (completed, empty-reply, timeout). Every one replaces or diverts away from an existing usage line."
+  },
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-002",
+  "severity": "major",
+  "title": "saveTimedOutPartial treats the new empty-dispatch placeholder as a complete result, so a re-dispatch's timed-out output goes to an unread .partial file",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+  "problem": "The guard exists so a complete result from an earlier dispatch is never overwritten by a partial one. Before this PR an empty or text-less timed-out child wrote nothing, so the file was empty or absent. The PR now makes both of those exits write `(subagent produced no text)` plus a usage line into save_result_to. When that file is later read as `existing`, its trimmed content is non-empty, so the next dispatch's timed-out output is diverted to `<target>.partial`. That output may hold a full REVIEW_RESULT block the child emitted before it hung. The guard should ask whether the file holds a result, which is isEmptyOutput, rather than whether it holds any bytes.",
+  "impact": "Trigger: dispatch 1 ends empty or times out with no text (placeholder written), then the re-dispatch writes its REVIEW_RESULT and hits the deadline. Its result lands in a file no reader opens. The raw file still reads as empty, so the ledger reports the reviewer uncovered and the operator pays for a third dispatch or records a Not run, although a result exists.",
+  "suggested_fix": "In saveTimedOutPartial, overwrite when the existing file is empty by the readers' own rule: `const target = isEmptyOutput(existing) ? abs : `${abs}.partial`;` (import isEmptyOutput from review/ledger, or move the placeholder test next to NO_TEXT_PLACEHOLDER). Keep the earlier usage line per LG-001.",
+  "evidence": "spawn-subagent-tool.ts:2260 (timeout, now writes NO_TEXT_PLACEHOLDER when partial is empty) and :2328 (empty reply) both write the placeholder through saveTimedOutPartial; ledger.ts:425-428 isEmptyOutput treats that placeholder as empty, so the file is 'empty' to every reader but 'content' to this guard. The docstring at :325-327 states the intent is to protect 'a complete result'.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:331"
+   ],
+   "enumeration_method": "Searched for every 'existing content' guard before writing save_result_to (saveTimedOutPartial is the only one; saveChildResult has none). One member."
+  },
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-003",
+  "severity": "minor",
+  "title": "NO_TEXT_PLACEHOLDER is documented as never compared to decide an outcome, but the ledger decides coverage by comparing a second copy of the same literal",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "const NO_TEXT_PLACEHOLDER = \"(subagent produced no text)\";",
+  "problem": "The new constant's doc says 'display text only, never compared to decide an outcome'. ledger.ts isEmptyOutput matches the same text with its own regex `/^\\(subagent produced no text\\)$/` to decide whether a saved raw counts as a reply, so the placeholder does decide coverage. The two copies are not linked.",
+  "impact": "If the placeholder wording changes in one place only, an empty child's saved file stops reading as empty. It is then parsed as an unparsed reply, with a diagnosis rather than an empty-dispatch gap. No input reaches this today; the cost is to the next person who edits either copy.",
+  "suggested_fix": "Export the placeholder from one module (for example review/dispatch-usage or ledger) and use it in both spawn-subagent-tool.ts and isEmptyOutput. Correct the comment to say the ledger reads the placeholder as an empty reply.",
+  "evidence": "spawn-subagent-tool.ts:311-312 (new constant and comment); ledger.ts:428 isEmptyOutput regex literal.",
+  "confidence": "high",
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-004",
+  "severity": "minor",
+  "title": "Empty-range refusal still checks only the new-slice cut's omissions, so a delta whose only changes are omitted fix lines is refused as an empty range",
+  "file": "src/commands/review-slice.ts",
+  "quote": "if (slices.length === 0 && diffFile === undefined && built.manifest.omissions.length === 0",
+  "problem": "Since L6, a delta round is cut twice: `built` over the other regions and `fixBuilt` over the fix regions. The merged `omissions` (line 259) includes fixBuilt's omissions, but the empty-range guard still reads `built.manifest.omissions` only. When every change lies in fix hunks and those fix regions are classified as ledgers, both cuts produce zero slices and the refusal fires. Ledgers here are lockfiles, data files, snapshots, generated files or large json, which reach fix hunks through 'a commit naming the finding'. The refusal says 'empty review range \u2026 changes nothing', which is not what happened. secondBuilt's omissions were already ignored the same way.",
+  "impact": "In that narrow case, review slice refuses with a misleading message instead of writing a manifest that records the omissions. No common input reaches it.",
+  "suggested_fix": "Use the merged list: `if (slices.length === 0 && diffFile === undefined && omissions.length === 0 && \u2026)`.",
+  "evidence": "review-slice.ts:259 builds merged `omissions`; :270 tests `built.manifest.omissions.length`; slice.ts:445-450 sends ledger-classified files to omissions, not slices.",
+  "confidence": "medium",
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-logic-w8:LG-005",
+  "severity": "minor",
+  "title": "Partitioning before buildSlices applies the large-json byte threshold per half, so one file can be part omitted, part sliced, and omittedBytes keeps only the first half",
+  "file": "src/commands/review-slice.ts",
+  "quote": "const omissions = [...built.manifest.omissions, ...(fixBuilt?.manifest.omissions ?? []), ...(secondBuilt?.manifest.omissions ?? [])].filter(",
+  "problem": "classifyLedger decides `large-json` from a file's diff bytes summed over the regions passed to buildSlices (slice.ts:446-447). L6 now passes a file's fix regions and its other regions to two separate buildSlices calls, so the threshold (100 KB, or 20 KB for fixtures) is judged per part. A json file over the threshold in total can have both parts under it (both sliced, where round 1 would omit it), or one part omitted and one sliced (the same path appears in both omissions and a slice). The path-dedup filter then keeps the first omission's bytes only, so totals.omittedBytes undercounts.",
+  "impact": "Narrow trigger: a large json file that holds both a fix hunk and new changes in a delta round. The result is a manifest that disagrees with round 1's omission rule for the same file, plus a wrong omittedBytes figure. Nothing is lost silently, since the sliced part is still reviewed.",
+  "suggested_fix": "Classify ledgers once over the whole source before partitioning. Run classifyLedger per path over `source.regions`, drop those paths from both partitions, and record each one once with its full byte count. Alternatively, sum bytes across duplicates when merging omissions.",
+  "evidence": "review-slice.ts:251-253 (partition, then two buildSlices calls); slice.ts:232-238 byte thresholds; slice.ts:445-450 per-call classification; review-slice.ts:259 first-wins dedup by path.",
+  "confidence": "medium",
+  "_src": "review-logic-w8"
+ },
+ {
+  "id": "r2-review-logic-w9:LG-001",
+  "reviewer": "review-logic",
+  "severity": "major",
+  "file": "src/review/ledger.ts",
+  "line": 23,
+  "quote": "const CANNOT = \"(?:could",
+  "problem": "The flow 460 D pattern that decides a DONE reply 'could not read a mandatory input' treats 'did not' + 'find' + an optional 'any' + payload/schema/context file as such a claim. A clean summary such as 'I did not find any schema violations' or 'We did not find any payload handling issues' matches pattern 1 of UNREADABLE_INPUT (OWN_STATEMENT 'I '/'We ', CANNOT 'did not', verb 'find', INPUT_NAMED 'any schema'/'any payload'), so the run is recorded status incomplete, scopeComplete false, with a 'mandatory input could not be read' gap. The test in this slice that lists defect prose which must NOT match (src/review/ledger.test.ts, 'D: a DONE reply that states a mandatory input could not be read is incomplete') covers nine phrasings but no 'did not find any <input>' one, so this false positive is untested.",
+  "impact": "A reviewer that finished cleanly on a PR touching schemas or payloads (this PR is one) is counted as not covering its slices: ledger scopeReviewed goes false, review complete refuses, and retry-eval (src/review/retry-eval.ts:74) refuses to accept the reply, forcing a redispatch. That is the readiness/complete loop flow 460 exists to remove.",
+  "suggested_fix": "Drop 'find' from the reading verbs of pattern 1, or require a determiner naming the reviewer's own input after it (the|my|its|this, not 'any'); and add 'I did not find any schema violations' and 'we did not find any payload issues' to the must-not-match list in ledger.test.ts.",
+  "evidence": "Read UNREADABLE_INPUT at src/review/ledger.ts:20-37 at head 375279e7: INPUT_NAMED admits an 'any\\s+' prefix and MANDATORY_INPUT includes bare 'schema' and 'payload'; CANNOT includes 'did\\s+not'; pattern 1 verbs include 'find'; flags 'im'. Traced 'I did not find any schema violations' through pattern 1 by hand: every part matches and the word boundary holds after 'schema'. ledger.ts:528-529 makes the run unfinished when unreadableInputClaim returns a string.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/review/ledger.ts:34",
+    "src/review/ledger.ts:528",
+    "src/review/retry-eval.ts:74"
+   ],
+   "enumeration_method": "Read both UNREADABLE_INPUT patterns (only pattern 1 pairs CANNOT with the verb list); grep -rn unreadableInputClaim src (non-test): 2 callers, ledger.ts:528 and retry-eval.ts:74, both treat a hit as an unfinished reply."
+  },
+  "_src": "review-logic-w9"
+ },
+ {
+  "id": "r2-review-logic-w9:LG-002",
+  "reviewer": "review-logic",
+  "severity": "major",
+  "file": "src/review/dispatch-usage.ts",
+  "line": 133,
+  "quote": "if (report !== undefined && report.includes(",
+  "problem": "renderSpendMarkdown returns nothing whenever the report text already contains the '## Token spend' heading, and the ledger.test.ts case 'renderSpendMarkdown adds the section once' pins exactly that with a report holding 'old' spend. managed.ts:551 appends the section to report.md on ingest. A re-ingest whose --report is the package's own report.md (the path ingest's new stub check anticipates operators use) carries the earlier spend section in, so the new research.usage totals are never written and the old line stays.",
+  "impact": "After a retry wave or extra dispatches, ledger build updates research.usage, re-ingest runs, and report.md still states the first ingest's token spend: the report understates the review's cost (criterion H) with no warning.",
+  "suggested_fix": "Replace an existing '## Token spend' section (up to the next '## ' heading or end of text) with the freshly rendered one instead of skipping, and change the test to assert that 'old' is replaced by the current totals line.",
+  "evidence": "dispatch-usage.ts:132-139 returns '' when the report includes the heading line; managed.ts:551 writes renderReport(report) + renderSpendMarkdown(input.research, report); src/review/ledger.test.ts:1127 asserts the 'old' section yields ''. grep of non-test callers of renderSpendMarkdown: only managed.ts:551.",
+  "confidence": "medium",
+  "class_scope": {
+   "sites": [
+    "src/review/dispatch-usage.ts:133",
+    "src/review/managed.ts:551"
+   ],
+   "enumeration_method": "grep -rn 'renderSpendMarkdown(' src excluding tests: one definition, one caller."
+  },
+  "_src": "review-logic-w9"
+ },
+ {
+  "id": "r2-review-performance-w1:PERF-R2-001",
+  "severity": "minor",
+  "file": "src/review/dispatch-usage.ts",
+  "line": 85,
+  "quote": "const body = raw.replace(USAGE_LINE, \"\").replace(/\\s+$/, \"\");",
+  "problem": "The `/\\s+$/` trim is unchanged from round 1 (PERF-005). V8 tries every start offset inside a whitespace run and scans to the run end before failing at `$`, so a run of k whitespace characters in the middle of a reply costs O(k^2). It runs on every reply that holds a KERYX_USAGE line, and splitUsage is called by each reader of the raw result (parse, emptiness check).",
+  "impact": "Hot path: a saved reviewer reply per dispatch, each time a reader splits it. A degenerate model reply with a run of 100k spaces or newlines plus a usage line costs about 5e9 steps, seconds of blocked event loop in ingest or ledger build. No effect on normal replies.",
+  "suggested_fix": "Use `.trimEnd()` (linear) instead of `.replace(/\\s+$/, \"\")`.",
+  "evidence": "dispatch-usage.ts:85 at the reviewed head; splitUsage at :77-87 is the only caller shape; the fast path `raw.includes(USAGE_MARKER)` at :78 limits it to replies with a marker.",
+  "confidence": "high",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "r2-review-performance-w1:PERF-R2-002",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 161,
+  "quote": "remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+  "problem": "The tracker caps the number of retained commands (64) but not their size: each `keryx review` tool call's whole arguments string is kept verbatim. namedBySession (:217) then runs namesToken over every retained string for each open package older than the session, for two ids, on every stop.",
+  "impact": "A review run commonly passes large arguments (an inline findings JSON or report in a heredoc beside a `keryx review ingest` call). 64 such strings of hundreds of KB are retained for the session and rescanned per open pre-session package per stop: packages x 2 x 64 x length. Bounded by 20 continues, so a latency cost, not an outage.",
+  "suggested_fix": "Keep only the tokens that matter: extract review-id-shaped tokens (SAFE_REVIEW_ID matches) from the arguments once at scan time into a capped Set, and match ids against that set instead of rescanning stored text; or truncate stored commands to a few KB.",
+  "evidence": "completion-gate.ts:161 stores call.arguments untruncated; :217 `(named.commands ?? []).some((command) => namesToken(command, id))`; MAX_SESSION_REVIEW_COMMANDS at :53 limits count only.",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "r2-review-performance-w4:PF-001",
+  "severity": "minor",
+  "title": "Session gate keeps whole keryx-review tool-call arguments and substring-scans all of them for every stale package on every stop",
+  "file": "src/review/completion-gate.ts",
+  "line": 161,
+  "problem": "SessionReviewTracker.scan stores call.arguments verbatim (up to 64 entries, no length cap). namedBySession then runs namesToken (indexOf loop) over every stored command, for each id (manifest.reviewId and dir name), for every open package whose manifest predates the session, on every holdReviewGate call. A command that embeds a report, dispositions or findings JSON inline is tens to hundreds of KB.",
+  "impact": "Hot path: agent.ts holdReviewGate runs at every agent stop once a keryx review command was seen. Cost per stop is about (stale packages) x 2 x (sum of stored argument sizes). With a few hundred accumulated packages under .metaproject/reviews and a few MB of stored arguments this is up to seconds of synchronous string scanning per stop, plus the arguments held in memory for the whole session. The manifest reads in scanRoot are already linear in packages, so this term can dominate only when arguments are large.",
+  "suggested_fix": "Do not retain the raw arguments. When scan sees a keryx review call, extract the review-id-shaped tokens (SAFE_REVIEW_ID matches) once into a bounded Set, and test membership in namedBySession. That makes the per-package check O(ids).",
+  "evidence": "      remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w4"
+ },
+ {
+  "id": "r2-review-performance-w4:PF-002",
+  "severity": "minor",
+  "title": "resolveBase always spawns up to five git merge-base processes even when the first candidate settles it",
+  "file": "src/review/prior-round.ts",
+  "line": 323,
+  "problem": "The sequential loop returned at the first qualifying candidate, so with a recorded base it cost one git spawn. Promise.all now runs merge-base for the recorded base, origin/main, main, origin/master and master every call, then discards all but the first qualifying result. defaultGitRunner has no timeout, so one slow probe also gates the whole result.",
+  "impact": "resolveBase runs for every review plan, every light-depth coverage check through resolveDiffBase, and prior-round resolution. The common case (recorded base, or origin/main resolves) now pays four extra process spawns and their repository reads. Faster only when the early candidates fail. Nothing in the diff or the comment gives a before/after for this change (performance law 3).",
+  "suggested_fix": "Keep the sequential early exit, or probe the first candidate alone and start the remaining ones only if it is missing or its range is empty. If the parallel form is kept, record the measurement that justified it.",
+  "evidence": "  const shas = await Promise.all(candidates.map((ref) => mergeBaseOf(git, ref, head)));",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "_src": "review-performance-w4"
+ },
+ {
+  "id": "r2-review-performance-w5:PERF-001",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "title": "partitionRegionsByFix labels context lines with a filter/find scan per line (quadratic in region size)",
+  "problem": "In the mixed-region branch, every context line runs changedAt.filter(...).at(-1) and changedAt.find(...) over the whole changed-index array, so labelling costs O(lines x changes) per region and allocates a fresh array per line.",
+  "evidence": "const before = changedAt.filter((at) => at < index).at(-1);",
+  "hot_path": "Once per scoped region of a delta round at review slice time; N is region lines (bounded by slice size, tens to low thousands). Not per request.",
+  "suggested_fix": "Single forward pass tracking the previous changed index, and a backward pass (or a pointer into changedAt) for the next one, making labelling O(lines).",
+  "_src": "review-performance-w5"
+ },
+ {
+  "id": "r2-review-regression-w1:REG-R2-001",
+  "reviewer": "review-regression",
+  "severity": "major",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "line": 331,
+  "quote": "const target = existing.trim() === \"\" ? abs :",
+  "problem": "This round's fix in spawn-subagent-tool.ts changed two paths: the empty-reply branch (2324-2340) and the no-text timeout (2260). Both now write NO_TEXT_PLACEHOLDER plus usageSuffix() to save_result_to through saveTimedOutPartial, so a placeholder file sits at the raw path where round 1 left none. saveTimedOutPartial (line 331) treats any non-blank existing file as 'a complete result from an earlier dispatch' and diverts the new write to <path>.partial. The empty-reply advice tells the parent to re-dispatch once, and review-next.ts:205-218 gives a re-dispatch of the same slices the same driver result path. Trigger: dispatch 1 ends empty, so raw/<r>-w1.txt holds the placeholder and a KERYX_USAGE line. Dispatch 2 times out with partial text (or ends empty again), so its text and usage go to raw/<r>-w1.txt.partial, which no raw-result reader picks up. The timeout output then says 'the complete result already at ... was kept' about an empty placeholder (line 2268).",
+  "impact": "Flow 457 T7 guarantees the parent can parse a timed-out child's partial REVIEW_RESULT from save_result_to. After an empty first attempt that partial is lost to ledger build, which reads the empty placeholder and records lost output, and the parent is told a complete result exists. A second empty dispatch's tokens are written only to .partial, so research.json usage under-counts the round's spend. At the round-1 head (dff7a38a1) both paths wrote nothing when there was no text, so a retry's partial landed at the main path.",
+  "suggested_fix": "In saveTimedOutPartial, treat an existing file whose body is empty output as empty and overwrite it (isEmptyOutput(existing) from src/review/ledger.ts, or splitUsage(existing).body equal to NO_TEXT_PLACEHOLDER), optionally carrying its usage forward. Divert to .partial only for a file holding real text. Add a test: an empty reply, then a timed-out retry to the same save_result_to, leaves the partial text at the main path.",
+  "evidence": "spawn-subagent-tool.ts:331 `existing.trim() === \"\" ? abs : `${abs}.partial``; :2328 the empty reply calls saveTimedOutPartial with `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`; :2260 a timeout with no text writes NO_TEXT_PLACEHOLDER too; :2266-2268 note 'the complete result already at ... was kept'; review-next.ts:205,218 a re-dispatch reuses matching.result; at the round-1 head dff7a38a1, spawn-subagent-tool.ts:2244 saved only when partial.length > 0 and the empty branch saved nothing.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:331",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2260",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2268",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2328"
+   ],
+   "enumeration_method": "keryx ctx rg 'saveTimedOutPartial|NO_TEXT_PLACEHOLDER' over spawn-subagent-tool.ts: saveTimedOutPartial has two callers (2260 timeout, 2328 empty reply), and both can now write the placeholder; 331 is the check both depend on and 2268 the note it drives. saveChildResult (2369, the Completed path) overwrites unconditionally and is not affected."
+  },
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "r2-review-regression-w3:RG-001",
+  "severity": "major",
+  "reviewer": "review-regression",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+  "symbol": "saveTimedOutPartial",
+  "problem": "Flow 460 (H) changed spawn-subagent-tool.ts so that a child ending with no text (the timeout path with an empty `partial`, and the new empty-reply path) now writes NO_TEXT_PLACEHOLDER plus a KERYX_USAGE line into `save_result_to` via saveTimedOutPartial. Before this change such a dispatch left no file. saveTimedOutPartial still decides 'a complete result is already there' by `existing.trim() === \"\"`, and the placeholder is non-blank, so it is treated as a complete result. The next dispatch to the same driver result path (the re-dispatch the empty-reply advice itself prescribes, or `review next` handing the same wave again) that times out after writing text has that text diverted to `<target>.partial`, which no raw reader (loadRaws in review-ledger.ts, latestResults in review-next.ts, collectLateResults in retry-eval.ts) reads. The tool output then says `the complete result already at ... was kept`, which is false: what was kept is the empty placeholder. The same test also sends a second empty dispatch's usage line to `.partial`, so that dispatch's tokens are not counted by the ledger.",
+  "impact": "Trigger: a reviewer dispatched with save_result_to ends empty (empty reply, or timeout before any text), is re-dispatched to the same raw/<reviewer>-w<n>.txt, and the re-dispatch times out after emitting text (possibly its whole REVIEW_RESULT block). Outcome: the ledger reads the placeholder as an empty reply (isEmptyOutput), the reviewer's partial or complete findings are silently set aside in .partial, the slices stay uncovered, and the parent is told a complete result was preserved. Before flow 460 that second dispatch's text landed at the target and was parsed.",
+  "suggested_fix": "In saveTimedOutPartial treat an existing file that is empty by the readers' own rule as empty: `const target = existing.trim() === \"\" || isEmptyOutput(existing) ? abs : `${abs}.partial`;` (isEmptyOutput from src/review/ledger.ts already strips the usage line and matches the placeholder), and word the `.partial` note from that same decision. Add a test: empty dispatch, then a timed-out dispatch with a REVIEW_RESULT to the same path, and assert the target parses.",
+  "evidence": "spawn-subagent-tool.ts:331 `const target = existing.trim() === \"\" ? abs : ...`; callers at :2260 (timeout: `partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER`) and :2328 (empty reply: `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`) both added/changed by this PR. ledger.ts:425 isEmptyOutput returns true for the placeholder plus usage line (the new spawn test asserts `isEmptyOutput(empty)` is true), so the ledger counts it empty. Only the completed path (:2369, saveChildResult) overwrites the placeholder; the timeout path does not. The docstring of saveTimedOutPartial says `.partial` is read by no raw-result reader.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:331",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2260",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts:2328",
+    "src/commands/review-ledger.ts:loadRaws"
+   ],
+   "enumeration_method": "keryx ctx rg \"saveTimedOutPartial|usageSuffix|saveChildResult\" over spawn-subagent-tool.ts: 2 callers of saveTimedOutPartial (timeout, empty-reply) both route through the blank-only test; the completed path (saveChildResult) overwrites and is unaffected. Raw readers enumerated with keryx ctx rg \"isEmptyOutput|readFile\" over review-ledger.ts, review-next.ts, retry-eval.ts: none reads .partial."
+  },
+  "_src": "review-regression-w3"
+ },
+ {
+  "id": "r2-review-regression-w3:RG-002",
+  "severity": "major",
+  "reviewer": "review-regression",
+  "file": "src/commands/review.ts",
+  "quote": "  parsePremiseClaims(parsed);",
+  "symbol": "readPremiseFile",
+  "problem": "Flow 460 made `review ingest --premises` repeatable: with several files readPremises returns a PremiseSource[] and managed.ts writes it unchanged to research-evidence/premises.json (`JSON.stringify(input.premises)`), so that file is now a JSON array of `{judge, premises}` objects. readPremiseFile in review.ts still validates every --premises file with parsePremiseClaims, which throws `A premise result must be an object ..., not an array` for an array. verdict.ts reads the same file with parsePremiseClaimSets and accepts it, so the package's own record is readable by one consumer and refused by the other.",
+  "impact": "Trigger: an ingest with two or more --premises files, then a re-ingest of the same package (`ingest --review-id`, e.g. after a ledger rebuild) that passes the package's own record, which is exactly what refuseInheritance in premise.ts tells the operator to do (`Pass --premises <file> ... (research-evidence/premises.json, or research-evidence/premises.superseded.json from an earlier ingest)`). Outcome: the re-ingest is refused with a misleading 'not an array' error and the held findings cannot be carried through the documented path; the operator has to reconstruct the original per-judge files by hand.",
+  "suggested_fix": "In readPremiseFile validate with parsePremiseClaimSets instead of parsePremiseClaims and, when the parsed value is an array of claim sets, return it as PremiseSource[] (readPremises flattening nested lists when several files are given). Add a round-trip test: ingest with two --premises files, then re-ingest with --premises <pkg>/research-evidence/premises.json.",
+  "evidence": "review.ts:3654 `parsePremiseClaims(parsed);` inside readPremiseFile; premise.ts:147-152 parsePremiseClaims throws for any non-record; premise.ts:180 parsePremiseClaimSets accepts the array form; managed.ts:526 writes `input.premises` (array when several files) to PREMISES_FILE; verdict.ts:212 reads it with parsePremiseClaimSets; premise.ts:911 refusal names PREMISES_FILE / PREMISES_SUPERSEDED_FILE as the file to pass back to --premises.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/commands/review.ts:3654",
+    "src/review/managed.ts:526",
+    "src/review/premise.ts:911",
+    "src/review/verdict.ts:212"
+   ],
+   "enumeration_method": "keryx ctx rg \"PREMISES_FILE|premises\\.json\" over src (non-test): one writer (managed.ts:526), two readers \u2014 verdict.ts readPremiseClaimsFile (parsePremiseClaimSets, accepts arrays) and review.ts readPremiseFile via --premises (parsePremiseClaims, refuses arrays); the refusal text in premise.ts:911 is the instruction that routes the file back into the refusing reader."
+  },
+  "_src": "review-regression-w3"
+ },
+ {
+  "id": "r2-review-regression-w4:REG-001",
+  "severity": "major",
+  "file": "src/review/loop.ts",
+  "line": 486,
+  "quote": "const reviewsDir = flowReviewsRoot(cwd, dir);",
+  "problem": "allocatePackage (src/review/managed.ts, flow 460 L5) now returns the reviews-root package (`path.join(reviewsRoot(input.cwd), input.reviewId)`) for `review ingest --review-id <id>` when a flow matches (explicit --flow, or findRelatedFlow matching the PR url) and the reviews-root package is a `review start` (mode review-flow) package or already bound to that flow. Before this change packagePath put that ingest into `.metaproject/flows/<dir>/reviews/<id>`. Every flow-scoped reader still reads only the flow directory: readFlowReviewRounds (src/review/loop.ts:486, `keryx review loop --flow`), readReviewRounds (src/flow/review-gate.ts:460, the require_clean_round gate of `flow complete`) and readFlowReviewManifests (src/governance/spend.ts:21). The test 'ingest --flow --review-id of a review-flow package binds that package to the flow' asserts the flow's reviews dir stays empty.",
+  "impact": "Trigger: `keryx review start --pr <n>` then `keryx review ingest --review-id <same id>` for a PR tracked by a flow (or with --flow). Outcome: the round is recorded with manifest.flow.id set but is invisible to the flow: `flow complete` sees no ingested round ('no ingested round to read findings from'), `review loop --flow` under-counts rounds so its repeat/attempt bound is not reached, and flow review spend omits the round. Previously the round landed in the flow directory and all three counted it.",
+  "suggested_fix": "Either keep ingest writing the flow-bound copy where the flow readers look (move/rename the started package into flowReviewsRoot on binding), or make readReviewRounds, readFlowReviewRounds and readFlowReviewManifests also enumerate reviews-root packages whose manifest.flow.id is the flow's id. Add a test that runs start -> ingest --flow -> readReviewRounds/readFlowReviewRounds.",
+  "evidence": "src/review/managed.ts:2853 `const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);` returned when `recorded?.mode === \"review-flow\" || recorded?.flowId === flowMatch.id`; packagePath (managed.ts:1150) previously routed every ingest with a flowMatch to flowReviewsRoot. keryx ctx rg 'reviewsRoot\\(' over src/flow, src/review/loop.ts, src/governance returns no match; review-gate.ts:1940 calls readReviewRounds(input.cwd, input.flowDir) which reads flowReviewsRoot only; managed.test.ts:222 expects the flow reviews dir not to exist.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    "src/review/loop.ts:486",
+    "src/flow/review-gate.ts:460",
+    "src/governance/spend.ts:21"
+   ],
+   "enumeration_method": "keryx ctx rg 'flowReviewsRoot\\(' over src (non-test): 7 call sites; managed.ts:1151 (packagePath, the writer) and managed.ts:2949 (reviewPackagesNamed, also scans reviewsRoot) and prior-round.ts:421 (packageDirs, also adds reviewsRoot) are unaffected; the three listed read only the flow directory and are the ones that lose the round."
+  },
+  "_src": "review-regression-w4"
+ },
+ {
+  "id": "r2-review-regression-w5:RG-001",
+  "severity": "major",
+  "file": "src/review/routing-check.ts",
+  "line": null,
+  "quote": "const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles;",
+  "problem": "Flow 460 L6 dropped the union of the fix roster with the slice's own round-1 routing in classifyDeltaSlices (round-split.ts `roles: fixRosterRoles(findingIds, prior)`) and in narrowedSlices (routing-check.ts, now `expectedFixRoles(entry, fix!, text)` instead of `[...needed.roles, ...expectedFixRoles(...)]`). The union was added in f6d9e21c4 (flow 458 M2/M3) for two reasons, and the old classifyDeltaSlices doc named both: new lines inside a fix slice, AND 'a fix touching process spawning still gets the security reviewer'. partitionRegionsByFix answers only the first. The fix lines themselves still go unrouted: a fix hunk (a prior finding's located lines \u00b1 FIX_TOLERANCE) whose fix adds `spawn(`/`execFile`/`Bun.spawn`, an input-derived path or a network call is now read only by review-logic, review-regression and the finding's author. slice-routing.ts would route that content to review-security-code (`process, filesystem write or trust-sensitive code`). The new isSecurityFinding check only adds security when the PRIOR finding is a security one, not when the FIX introduces security-relevant code. The routing check in routing-check.ts is the guard that used to catch a narrowed fix slice, and it now accepts the narrowed roster because expectedFixRoles no longer includes `needed.roles`.",
+  "impact": "Silent coverage loss in every delta round. Trigger: round 2 of a PR where a review-logic or review-architecture finding is fixed by code that spawns a process or builds a path or argv inside the fix hunk. Outcome: no security reviewer is dispatched for that code, routing-check reports nothing narrowed, and the ledger and complete gate treat the round as fully covered. Before this change the same slice got review-security-code from its round-1 routing.",
+  "suggested_fix": "Keep content routing for fix lines. In classifyDeltaSlices, set roles to the union of fixRosterRoles(findingIds, prior) and the content-triggered roles of the slice (at least the codeOnly security rule, or all of `slice.roles` from routeSlices, which fix slices already pass through at review-slice.ts:255). In narrowedSlices, require `[...needed.roles, ...expectedFixRoles(entry, fix!, text)]` again. partitionRegionsByFix already keeps unrelated new lines out of fix slices, so the union no longer brings in roles owed only to new code. Add a test: a fix hunk that adds `Bun.spawn(` for a logic finding must route review-security-code.",
+  "evidence": "git show f6d9e21c4 message: 'M2/M3: ... a fix slice's roster is the fix roster plus its own round-1 routing, read deep, and the routing check holds it to the union.' Removed doc (slice-06 diff, round-split.ts): 'a fix slice may hold new lines too, and a fix touching process spawning still gets the security reviewer'. New header comment (round-split.ts:9) names only the new-lines reason. slice-routing.ts:116-117 route spawn/exec/child_process content to review-security-code. round-split.ts:199 `roles: fixRosterRoles(findingIds, prior),`; routing-check.ts:37 no longer unions needed.roles; review-slice.ts:255 routes fix slices through routeSlices and then discards those roles in classifyDeltaSlices.",
+  "confidence": "high",
+  "reviewer": "review-regression",
+  "class_scope": {
+   "sites": [
+    "src/review/routing-check.ts:37",
+    "src/review/round-split.ts:199",
+    "src/commands/review-slice.ts:255"
+   ],
+   "enumeration_method": "keryx ctx rg over src for fixRosterRoles, expectedFixRoles, fixClaimBacked and classifyDeltaSlices: two roster producers (classifyDeltaSlices for review slice, expectedFixRoles for the routing check) and one call site that feeds routed fix slices into classifyDeltaSlices. All three drop content routing for fix lines. Tests in round-split.test.ts are excluded."
+  },
+  "_src": "review-regression-w5"
+ },
+ {
+  "id": "r2-review-security-code-w1:SEC-R2-001",
+  "severity": "minor",
+  "reviewer": "review-security-code",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "if ((named.commands ?? []).some((command) => namesToken(command, id))) return true;",
+  "title": "An older open package counts as named by this session when attacker-controlled text matches a token of any keryx review command",
+  "problem": "namedBySession treats a package as continued by this session when its manifest.reviewId or directory name appears as a token anywhere in the arguments of any `keryx review` tool call (completion-gate.ts:217). scanRoot passes the manifest's own reviewId at :252, and that value is attacker-controlled when the package is committed in the checked-out PR. A package whose reviewId is `keryx` or `review` is therefore named by every `keryx review` command. Separately, the tracker trusts `# managed review:` and `path:` lines in the result of any tool call whose arguments merely contain `keryx review` (:160, :165-172). With a compound command such as `keryx review status x; cat notes.md`, file content can name review ids and package dirs inside cwd.",
+  "attack_vector": "The author of the PR under review commits `.metaproject/reviews/anything/manifest.json` with mode review-flow, status draft and reviewId \"keryx\". Take a session that resumes an earlier review without an active pointer, or one that has not opened its own package yet. Every `keryx review ...` call names that package, and it passes the stale-manifest filter at :252. pickPackage picks it as the newest candidate when its checkout mtime is later than the real package's manifest. The harness nudge then names the attacker's package and repeats its completion blockers to the model as harness-provenance text.",
+  "impact": "The completion gate nudges the model about the wrong package, the misdirection flow 460 C set out to remove. The damage is bounded: the nudge flattens and caps blocker text (nudgeLine, 300 chars x 20), displayId sanitises the id, and `review complete` is unaffected.",
+  "suggested_fix": "Match a review id only against reviewIds keryx printed and against an explicit argument position (`review status|readiness|complete <id>`, `--review-id <id>`), not against any token of the command line; or ignore ids that equal a word of the command itself. Trust `path:`/`# managed review:` lines only when the tool call is a single `keryx review start|attach|ingest` command, not a compound shell line.",
+  "evidence": "src/review/completion-gate.ts:202-208 namesToken matches any boundary-delimited token; :217 applies it to every recorded command; :252 passes manifest.reviewId from the package on disk; :160 accepts any call whose arguments contain `keryx review`. Test completion-gate.test.ts:245-246 covers only a call that is not a keryx review command.",
+  "confidence": "medium",
+  "related_skill": null,
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "r2-review-security-code-w1:SEC-R2-002",
+  "severity": "minor",
+  "reviewer": "review-security-code",
+  "file": "src/review/completion-gate.ts",
+  "line": null,
+  "quote": "const closedAt = best === null ? Math.max(0, ...closedAtByRoot.values()) : (closedAtByRoot.get(best.root) ?? 0);",
+  "title": "A closed review-flow manifest committed by the reviewed PR under cwd still releases the completion gate",
+  "problem": "This is the remaining part of round-1 SEC-002. scanRoot (:245-246) counts any review-flow package with status closed whose manifest mtime is at or after the session start. findReviewGateState (:324-325) returns null, which releases the gate, when no package is chosen yet or when the chosen package's manifest is older. cwd is always a scanned root, and nothing ties the closed package to the review this session is running (no id, pointer or own command output).",
+  "attack_vector": "The PR under review adds `.metaproject/reviews/x/manifest.json` with mode review-flow and status closed. The reviewing agent checks the PR out during the session, so the mtime is >= since. If the agent has not opened its own package yet (best === null), or resumes an older package whose manifest predates the checkout, the next stop attempt finds closedAt > 0 and the gate accepts the stop.",
+  "impact": "The model may end the run before any package is opened or completed. `review complete` is not run, so nothing is falsely recorded complete, but PR content defeats the gate's guarantee that the run keeps going until `review complete` accepts.",
+  "suggested_fix": "Release the gate only for a package this session opened or named (reviewIds/packageDirs from SessionReviewNames, or the active pointer), not for any closed manifest under the root. With best === null, do not release on closedAt at all.",
+  "evidence": "src/review/completion-gate.ts:245-246 take closedAt from any closed review-flow manifest newer than since; :324 takes the max over all roots when best === null; :325 returns null. Test completion-gate.test.ts:335 covers only a closed package under a different root.",
+  "confidence": "medium",
+  "related_skill": null,
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "r2-review-security-code-w10:SEC-001",
+  "severity": "major",
+  "file": "src/review/round-split.ts",
+  "line": null,
+  "quote": "roles: fixRosterRoles(findingIds, prior),",
+  "problem": "Flow 460 L6 drops the union of a fix slice's roster with its round-1 content routing (458 M2/M3: 'a fix touching process spawning still gets the security reviewer'). The justification is that a fix slice now holds only fix lines, but splitDelta (src/review/prior-round.ts, the commit-message loop) marks EVERY hunk of a commit whose message names a prior finding id as FIX, in any file, so brand-new code in that commit is 'fix lines' too. Such a slice passes onlyFixLines, becomes kind fix, and gets only logic + regression + the authors of the named findings (+ security-code only when isSecurityFinding matches one of them). The content rule in slice-routing.ts that assigns review-security-code to exec/execSync/spawn/child_process/eval/fs-write/input-derived-path code is never applied. routing-check.ts narrowedSlices uses expectedFixRoles alone for a backed fix claim, so the narrowed-routing check accepts the slice.",
+  "impact": "Attack vector: a PR author (or a fixing agent) lands a commit 'fix LG-001' that, alongside the fix, adds e.g. execSync(`git ${userArg}`) or a path built from input in another file. In the next delta round those hunks are FIX hunks; the slice is routed to review-logic/review-regression/the LG author only; review-security-code never reads the new process-spawning code and keryx review routing/readiness reports nothing missing. A command-injection or path-traversal sink can merge with the security reviewer silently skipped. Precondition: a delta round and a commit message naming a prior finding id, which the author fully controls.",
+  "suggested_fix": "Restore the union for content-sensitive roles: in classifyDeltaSlices set roles to fixRosterRoles(findingIds, prior) unioned with the slice's round-1 roles (or at least with any review-security-code the content router assigns), and in narrowedSlices require [...expectedFixRoles(entry, fix!, text), ...needed.roles.filter(r => r === 'review-security-code')] (or the full needed.roles). Alternatively, make commit-named marking in splitDelta only mark hunks that also overlap the named finding's file, so unrelated new code stays NEW.",
+  "evidence": "Read at head: src/review/round-split.ts:199 `roles: fixRosterRoles(findingIds, prior),` (was `[...new Set([...fixRosterRoles(...), ...(slice.roles ?? [])])]`); src/review/routing-check.ts:37 `backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles` (was union with needed.roles); src/review/prior-round.ts:738-749 commit-named loop marks every hunk of parseDiffHunks(own.stdout) across all files; src/review/slice-routing.ts:116-117 content rules route exec/spawn/child_process to review-security-code.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "class_scope": {
+   "sites": [
+    "src/review/round-split.ts:199",
+    "src/review/routing-check.ts:37",
+    "src/review/prior-round.ts:743"
+   ],
+   "enumeration_method": "keryx ctx rg for fixRosterRoles/expectedFixRoles callers in src/review (round-split classifyDeltaSlices, routing-check narrowedSlices are the only roster writers/checkers for fix slices) plus the splitDelta commit-named marking that feeds them"
+  },
+  "_src": "review-security-code-w10"
+ },
+ {
+  "id": "r2-review-security-code-w10:SEC-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": null,
+  "quote": "const SECURITY_PROBLEM = /\\b(security|secur",
+  "problem": "isSecurityFinding decides whether review-security-code joins a fix slice from the prior finding's reviewer, a SEC id, or a keyword regex over its problem text. The regex misses common security classes a non-security reviewer would describe in other words: shell / command (without 'injection'), exec, spawn, path escape outside the package (only 'sandbox escape'), symlink, TOCTOU, denial of service / ReDoS, prototype pollution, SQL, deserialization, leak (except 'token leak'), unsafe argv.",
+  "impact": "A review-logic finding like 'argv passed with shell: true' or 'path escapes the package dir' is fixed in a fix slice that review-security-code does not read, so the fix of a security-relevant bug is checked only by non-security roles. Combined with SEC-001 this is the only remaining path to the security reviewer for fix slices.",
+  "suggested_fix": "Widen the keyword set (shell, command, exec, spawn, argv, escape, symlink, toctou, denial of service, dos, redos, prototype pollution, sql, deserializ, leak, unsafe) or, more robustly, route on the fix slice's content as SEC-001 suggests so the heuristic is not the only gate.",
+  "evidence": "src/review/round-split.ts:23 regex alternatives enumerated at head; fixRosterRoles adds FIX_SECURITY_ROLE only when attached.some(isSecurityFinding).",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w10"
+ },
+ {
+  "id": "r2-review-security-code-w10:SEC-003",
+  "severity": "minor",
+  "file": "src/review/round-record.ts",
+  "line": null,
+  "quote": "export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\"",
+  "problem": "The coverage gate's diff stats (coverage.ts diffOfTarget, which feeds effectiveDepth's light-round qualification) now exclude any path under **/.metaproject/reviews/** at any depth, while slicing still uses the root-relative NOT_REVIEW_PACKAGES. A changed source file placed under a nested .metaproject/reviews/ directory (e.g. packages/x/.metaproject/reviews/run.ts) is therefore sliced and shipped but not counted toward the files/changed-lines that decide whether a 'light' dispatch is trusted.",
+  "impact": "A PR can move risky code under a nested review-package-looking directory to shrink the measured diff so a light round passes the depth gate, reducing reviewer coverage of that code. Needs an author who chooses that path and an orchestrator that records a light dispatch.",
+  "suggested_fix": "Exclude only directories that actually hold a review package (manifest.json present), or keep the exclusion root-relative to the project root the round was sliced at, so the gate and the slicer agree on the same file set.",
+  "evidence": "src/review/round-record.ts:17 (new constant); src/review/coverage.ts:571 `gitDiffAt(cwd, resolved.base, head, NOT_REVIEW_PACKAGES_ANY_DEPTH)`; coverage.ts:591-594 effectiveDepth consumes packageDiffStats for the light-round check.",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w10"
+ },
+ {
+  "id": "r2-review-security-code-w3:SEC-001",
+  "reviewer": "review-security-code",
+  "severity": "major",
+  "location_class": "in-diff",
+  "file": "src/review/ledger.ts",
+  "line": 613,
+  "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+  "problem": "screenedAs (new in flow 460, fed by review-ledger.ts `const screened = ingestScreenedOf(...)`) closes a raw finding out-of-scope when ANY screened entry has the same reviewer and the same display id (`entry.reviewer === reviewer && entry.id === fid`). Display ids restart per dispatch (a reviewer run in waves w1/w2/w3, or a retry, emits F-001 again for a different finding), and managed.ts screenedRecord writes the finding's display id. So once ingest screens review-logic-w1:F-001, every other review-logic raw finding with id F-001 that is absent from findings.json is also closed out-of-scope with w1's screen rule and detail. global_id, which would disambiguate, is recorded in the screened entry but never compared.",
+  "impact": "The obligation check exists to catch a raw finding the orchestrator left out of findings.json. With this loose match, a dropped finding from another wave of the same reviewer is recorded as screened by scope-B with a reason that belongs to a different finding; the ledger reports READY and review complete accepts it, so a real (possibly blocker) finding leaves the round with a false audit trail. Trigger: multi-wave dispatch of one reviewer (routine; this round dispatches waves w1..w10) plus one scope-B screen and one omitted finding.",
+  "suggested_fix": "Match only on the obligation id (`entry.id === oid`) or on global_id: have screenedRecord write the raw stem form (`<raw stem>:<id>`) or the global_id so the match is exact, and drop the reviewer + display-id fallback (or allow it only when that reviewer has exactly one raw file).",
+  "evidence": "src/review/ledger.ts:612-613 screenedAs; src/review/managed.ts:686-691 screenedRecord writes `id: finding.id` (the display id) with reviewer; ledger.ts:620 builds the obligation id as `<raw stem>:<fid>`, so the reviewer+fid fallback is what matches a display-id record, for every wave of that reviewer; multi-wave raw stems such as review-security-code-w3 in this package's drivers/.",
+  "confidence": "medium",
+  "class_scope": {
+   "sites": [
+    "src/review/ledger.ts:613 (new: screened closure by reviewer + display id)",
+    "src/review/ledger.ts:600 (pre-existing sibling: canonicalByReviewer matches reviewer + display id; guarded by length === 1 but still links a later wave's same-id finding to an earlier wave's canonical finding)"
+   ],
+   "enumeration_method": "grep -n \"reviewer === reviewer && \\|f.reviewer === reviewer\" src/review/ledger.ts: the places a raw finding is resolved by reviewer + display id; 2 hits"
+  },
+  "_src": "review-security-code-w3"
+ },
+ {
+  "id": "r2-review-security-code-w3:SEC-002",
+  "reviewer": "review-security-code",
+  "severity": "minor",
+  "location_class": "in-diff",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "line": 1908,
+  "quote": "const usageSuffix = (options: { partial?: boolean } = {}): string =>",
+  "problem": "In keryx shell the harness appends its KERYX_USAGE line only when the provider reported usage (`childUsage.known`). The child's own text is saved verbatim (`${raw}${usageSuffix()}`), so a child whose output ends with `KERYX_USAGE {\"tokens_in\":0,\"tokens_out\":0}` (its own choice, or induced by instruction-shaped text in the reviewed diff) has that line accepted by splitUsage as the measured spend when the provider reports none; in the timeout path it can likewise state a non-partial count. dispatch-usage.ts names the forgery risk only for hosts where the reviewer writes its own file, and the spawn tool comment says \"Unknown (no line) when nothing reported\", which is not what gets saved.",
+  "impact": "Attack vector: prompt-injected diff content or a misbehaving child emits a usage line; entry point: the text saved via save_result_to; impact: the round's stated token spend (research.json usage, report Token spend) is wrong and can read as complete. No gate reads usage, so this is the integrity of a reported figure only.",
+  "suggested_fix": "Save `splitUsage(raw).body` (and the stripped partial text in the timeout path) before appending the harness's own line, so in keryx shell only the harness can state usage and an unreported dispatch stays unknown.",
+  "evidence": "spawn-subagent-tool.ts:1908-1909 usageSuffix returns \"\" when !childUsage.known; :2369 saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`) with raw = child text; src/review/dispatch-usage.ts splitUsage takes the last well-formed KERYX_USAGE line anywhere in the file.",
+  "confidence": "high",
+  "_src": "review-security-code-w3"
+ },
+ {
+  "id": "r2-review-security-code-w3:SEC-003",
+  "reviewer": "review-security-code",
+  "severity": "minor",
+  "location_class": "in-diff",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "line": 2328,
+  "quote": "const emptySaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(",
+  "problem": "The empty-reply path records the paid dispatch (placeholder + usage line) in save_result_to and advises a read-only parent to re-dispatch once. The re-dispatch to the same save_result_to then either overwrites it (a completing child goes through saveChildResult, which writes unconditionally) or, if it ends empty again, is diverted to `<target>.partial`, because saveTimedOutPartial treats the earlier placeholder file as a complete result (its content is non-empty). Either way one of the two dispatches and its tokens vanish from what the ledger reads.",
+  "impact": "Criterion H (every dispatch's token use lands in the package; a dispatch without usage is counted unknown, never 0) under-counts exactly in the case the new advice creates. No gate effect; reported spend and dispatch count come out low.",
+  "suggested_fix": "Treat a file whose body is empty output (isEmptyOutput) as replaceable but carry its usage forward (keep its KERYX_USAGE line or sum it into the new one), or record each dispatch's usage in a per-dispatch sidecar the ledger sums.",
+  "evidence": "spawn-subagent-tool.ts:329-334 saveTimedOutPartial (non-empty existing file -> .partial); :314-322 saveChildResult overwrites; :2328 empty-reply save; the read_only advice 're-dispatch it once'.",
+  "confidence": "high",
+  "_src": "review-security-code-w3"
+ },
+ {
+  "id": "r2-review-security-code-w4:SC-001",
+  "reviewer": "review-security-code",
+  "severity": "minor",
+  "file": "src/review/completion-gate.ts",
+  "line": 106,
+  "quote": "const KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/;",
+  "problem": "The completion gate trusts the `path:` and `# managed review:` lines of a tool result whenever the tool call's arguments contain `keryx review` anywhere. A compound command (`keryx review status x; cat notes.md`, or `cat notes.md # keryx review`) makes the output of the other command trusted as keryx's own output. The test 'session roots come only from this session's keryx review commands and keryx's own output lines' (src/review/completion-gate.test.ts) only covers a `cat` call with no `keryx review` in it, so the compound case is unpinned.",
+  "impact": "Attack vector: text the agent reads (a PR file, a report, a fetched page) carries `# managed review: <id>` and `path: sub/.metaproject/reviews/z` lines. If the agent runs it through a command that also mentions `keryx review`, the gate adds `sub` as a session root and the id as session-named. With no open package chosen (best === null), findReviewGateState takes closedAt as the max over all roots (completion-gate.ts:324), so a closed review-flow manifest under that root written during the session releases the gate; otherwise the nudge can be pointed at a planted package. Bounded: roots must be inside cwd, ids pass SAFE_REVIEW_ID, and the gate is a completion nudge, not an access-control boundary, so this is defence in depth.",
+  "suggested_fix": "Trust output lines only when the command is a single `keryx review <start|attach|ingest>` invocation (anchor the pattern at the command start and refuse `;`, `&&`, `|`, newlines), and add a test with a compound command whose second half prints forged lines.",
+  "evidence": "Read src/review/completion-gate.ts:106-183 (scan(): KERYX_REVIEW_COMMAND.test(call.arguments) gates pendingCalls, then OWN_OUTPUT_LINE lines of the matching tool result feed namePaths/reviewIds) and :308-325 (closedAt over all roots when best is null). Slice test at completion-gate.test.ts 'session roots come only from...' uses only a plain `cat` call for the forged case.",
+  "confidence": "high",
+  "_src": "review-security-code-w4"
+ },
+ {
+  "id": "r2-review-security-code-w5:SEC-R2-001",
+  "severity": "major",
+  "file": "src/review/ledger.ts",
+  "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+  "problem": "screenedAs closes a raw finding `out-of-scope` when ANY screened entry has the same reviewer and the same bare display id (`entry.reviewer === reviewer && entry.id === fid`). Display ids are per-reply, not per-reviewer: every wave restarts at F-001 (round 1 of this PR alone has review-logic-w3:F-001 and review-logic-w4:F-001, both major). The obligation id `oid` (`<raw stem>:<fid>`) is wave-specific, but the fallback match ignores the raw file. So when the consolidated report uses bare ids (the schema and DISPLAY_ID_FORM allow it), and wave 1's F-001 was screened by the scope-B floor while wave 3's different F-001 was never put into findings.json, wave 3's obligation is closed `out-of-scope` with wave 1's screen reason and evidence `research-evidence/ingest-screened.json`. That file never screened that finding.",
+  "impact": "Trigger: the same reviewer reuses a display id across two dispatches (waves). One finding is screened out by scope-B, and the orchestrator leaves the other out of the consolidated report. Outcome: `ledger build` reports rawReconciled with no gap, and the dropped finding (possibly a major or blocker) passes `review complete` unreported. The ledger obligations exist to catch exactly this. A record also points at a screen decision that was never made about this finding. The attacker here is the orchestrating agent, which the gate treats as untrusted: it can lose a finding with no disposition row, so nothing is left for the operator to see.",
+  "suggested_fix": "Match a screened entry to the raw dispatch it came from, never to the reviewer alone. Have ingest record the obligation id or the raw source on each IngestScreened entry (the canonical id in stem form is already `oid`), and match only `entry.id === oid || entry.global_id === <global id of this raw finding>`. If the bare-id fallback has to stay, use it only when exactly one raw file of that reviewer carries `fid`. When several raw files do, leave the obligation unresolved and let a disposition close it.",
+  "evidence": "src/review/ledger.ts:612-613 (screenedAs) and :635-638 (closure out-of-scope); src/review/managed.ts:686-691 screenedRecord writes `id: finding.id` (the consolidated display id) and `reviewer`, with no raw source; prior_findings.json shows per-wave id reuse (review-logic-w3:F-001, review-logic-w4:F-001, review-security-code-w1:SEC-001, review-security-code-w3:SEC-001).",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "class_scope": {
+   "sites": [
+    "src/review/ledger.ts:613"
+   ],
+   "enumeration_method": "keryx ctx rg -n \"screenedAs|ingestScreenedOf\\(\" src: one matcher (ledger.ts:612) and one call site (ledger.ts:635). The reader commands/review-ledger.ts:324 only loads the file. canonicalByReviewer (ledger.ts reviewer+id match) can fall back the same way, but it closes as `finding` linked to a canonical finding that exists, so the omission is still recorded there."
+  },
+  "_src": "review-security-code-w5"
+ },
+ {
+  "id": "r2-review-security-code-w5:SEC-R2-002",
+  "severity": "minor",
+  "file": "src/review/locate.ts",
+  "quote": "const part = (needle[0] as string).trim();",
+  "problem": "The new `substring` pass places a one-line quote on any file line that contains it, with no minimum length. A quote of one token (`x`, `)`, `return`), or of whitespace around one token, becomes a `derived` anchor whenever it occurs on exactly one line, and findings.json records it as method `substring`. The locator's stated purpose (module header: a report is attacker-influenced data, and a wrong anchor is worse than an honest `unlocatable`) is weakened. A fabricated or careless finding now gets a derived line from a fragment that proves the reviewer read nothing.",
+  "impact": "The code behaves as documented. The cost falls on whoever trusts `locator.state: derived` as proof that the reviewer quoted real code, and on the readiness item `quotes-located`, which such a fragment passes.",
+  "suggested_fix": "Give the substring pass a floor, for example a minimum trimmed length (around 12 characters) or at least one identifier-like token plus one other character. Below the floor, return `unlocatable` with kind `absent` and a reason that says the quote is too short to anchor.",
+  "evidence": "src/review/locate.ts:233-244 (substring pass), findSubstring at :156-170; no minimum length on `quote` in reviewer-finding.schema.json or review-finding.schema.json (keryx ctx rg for MIN_QUOTE / minLength found none on quote).",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w5"
+ },
+ {
+  "id": "r2-review-security-code-w6:SEC-001",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": null,
+  "quote": "return typeof state === \"string\" && state !== \"\" && state !== \"unknown\";",
+  "problem": "quotesLocatedCheck treats a finding as answered when disposition.state is any non-empty string other than \"unknown\". It does not check the value against FINDING_DISPOSITION_STATES (src/review/types.ts:212), so a malformed or made-up state (e.g. \"todo\", \"pending\", \"open\") closes item 12.",
+  "impact": "Gate integrity: a findings.json edited by hand or by an agent in the same package can turn quotes-located from FAIL to pass with a state no keryx command would write, and readiness reports READY on an unplaced claim with no real answer. Not an external attacker path: it needs write access to the package, which the orchestrating agent has.",
+  "suggested_fix": "Accept only a member of FINDING_DISPOSITION_STATES other than \"unknown\" (import the const from ./types), and name the finding with an invalid state in the FAIL evidence.",
+  "evidence": "readiness.ts quotesLocatedCheck `answered` compares only against \"\" and \"unknown\"; types.ts:212-220 lists the six real states. The decide/disposition commands write validated states, but readiness reads findings.json as raw records (record() over JSON), so nothing between the file and this check validates the value.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "location_class": "in-diff",
+  "_src": "review-security-code-w6"
+ },
+ {
+  "id": "r2-review-security-code-w8:SEC-001",
+  "severity": "minor",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+  "problem": "resolveSaveResultPath validates only `save_result_to` itself (realpath of the nearest existing ancestor must stay inside the project root, an existing target must be a regular file). saveTimedOutPartial then writes to `${abs}.partial` whenever the target already has content, and that sibling path is never resolved or checked; writeFile follows a symlink there. This diff adds two new callers of that path: the empty-reply exit (`await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`)`) and the timeout exit with no text (previously skipped when `partial.length === 0`).",
+  "impact": "Attack vector: a write-capable actor inside the project (a general-mode sibling child following injected instructions, or another local process) plants `raw/<reviewer>-wN.txt.partial` as a symlink to a file outside the project root; when the read-only reviewer dispatch for that target ends empty or times out while the target already holds text, the harness writes through the link and clobbers the outside file with the placeholder plus a KERYX_USAGE line (or, on the pre-existing timeout-with-text path, child-authored text). Precondition (planting the link) is not established by this diff, and the new paths write only fixed placeholder content, so this is hardening, not a reachable exploit.",
+  "suggested_fix": "Run the `.partial` target through the same containment check as the primary path before writing (resolveSaveResultPath(root, `${target}.partial`) or an lstat refusing a symlink), or open with O_NOFOLLOW/`flag: 'wx'` semantics; the same lstat check on `abs` right before write would also close the validate-then-write window.",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:266-308 (resolveSaveResultPath checks only `abs`), saveTimedOutPartial at ~line 233 computes `${abs}.partial` and calls saveChildResult -> writeFile with no check; new call sites in the diff at the timeout exit (`partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER`) and the empty-reply exit (`const emptySaved = ...saveTimedOutPartial(...)`).",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w8"
+ },
+ {
+  "id": "r2-review-security-code-w8:SEC-002",
+  "severity": "minor",
+  "file": "src/review/ledger.ts",
+  "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+  "problem": "The new ingest-screened closure (wired in by review-ledger.ts `screened`/`screenedEvidence`) closes a raw finding `out-of-scope` when a screened entry matches either the obligation id `<raw stem>:<fid>` or, as a fallback, the same reviewer plus the bare reviewer-local id `fid`. Reviewer-local ids restart per wave (every wave has its own F-001), so one screened canonical finding `F-001` by review-logic matches the raw F-001 of every review-logic wave, not only the one ingest actually screened.",
+  "impact": "A raw finding from a different wave that was lost in consolidation (not in findings.json, no disposition) is silently closed out-of-scope with the other finding's screen reason instead of surfacing as an `unresolved` gap, so the ledger's integrity check can pass with a real finding (of any severity, including a security blocker) dropped. No external attacker; the trigger is an ordinary multi-wave round with a bare-id consolidation.",
+  "suggested_fix": "Match on the obligation id or global_id only; when falling back to reviewer + bare id, require the screened entry to be unambiguous for that reviewer (exactly one raw file of that reviewer carries `fid`), otherwise leave the obligation unresolved.",
+  "evidence": "src/review/ledger.ts:612-638 (screenedAs and the out-of-scope push); src/review/managed.ts:686-691 screenedRecord stores `finding.id` as reported in the canonical findings (bare ids when the operator consolidated without a wave prefix); src/commands/review-ledger.ts diff lines adding `screened` / `screenedEvidence` to buildLedger.",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "_src": "review-security-code-w8"
+ },
+ {
+  "id": "r2-review-security-code-w9:SEC-001",
+  "severity": "minor",
+  "file": "src/review/coverage.ts",
+  "line": null,
+  "quote": "const resolved = await resolveBase(defaultGitRunner(cwd), { kind: target.kind, ref: target.ref ?? \"\", base: target.recordedBase }, head);",
+  "problem": "The light-round recheck (resolveDiffBase) for a PR target now diffs against manifest.target.base when one is recorded. resolveBase puts it first and keeps it even when the range it gives is small. That base comes from `review start --base <sha|ref>`, which the agent driving the review supplies, and nothing checks it against the pull request's real base. src/review/layers.ts already reads the real base with `gh pr view <ref> --json baseRefOid`. Attack vector: an agent that wants a shorter review (prompt-injected, or looping on the gate) starts the round with `--base <head~1>` on a large PR. The recomputed diff is then within LIGHT_MAX_FILES/LIGHT_MAX_CHANGED_LINES, so a dispatch saying `depth: light` is accepted with the 3-reviewer light set, and readiness and complete both pass.",
+  "impact": "A large PR can close on the light reviewer set. This is the gate-consistency guarantee flow 460 restores, and the recheck exists precisely so that agent-written records (scope-files.json) do not decide depth. Kept at minor because the non-PR path already trusted the agent-supplied target.ref/base the same way (sibling precedent, shared law 4). A recorded full round-depth.json still binds, and an empty range is refused.",
+  "suggested_fix": "For kind \"pr\", check the recorded base against the PR's baseRefOid (the gh lookup layers.ts already performs), or require that merge-base(recordedBase, head) equal merge-base(<PR base branch>, head) before a light depth is accepted. When the lookup cannot be made, fall back to resolveBase's origin/main... chain instead of the recorded base.",
+  "evidence": "src/review/coverage.ts:543 `const recordedBase = str(target.base);` (from manifest.json). src/review/coverage.ts:559 passes it as `base` to resolveBase. src/review/prior-round.ts resolveBase: `if (ref === target.base) return { ref, sha };` keeps an explicit base unconditionally. src/commands/review.ts:1044 reads it from the `--base` flag. src/review/layers.ts:179 shows a baseRefOid lookup already exists.",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "location_class": "in-diff",
+  "_src": "review-security-code-w9"
+ },
+ {
+  "id": "r2-review-style-w1:STY-001",
+  "severity": "minor",
+  "confidence": "high",
+  "file": "src/review/locate.ts",
+  "quote": "/** How a finding's `line` was arrived at. */",
+  "problem": "Two doc comments are stacked above the LocateMethod alias: the leftover one-line comment for LocatorRecord, then the new block about how a quote was placed. LocatorRecord, two declarations below, has no comment, and the first line reads as describing the wrong declaration. This is the prior CC-2 / style-w3 F-001 shape, still present at the head.",
+  "impact": "A reader sees a comment about how the line was arrived at above a type that lists locate methods; LocatorRecord loses its description.",
+  "suggested_fix": "Delete the one-line comment above LocateMethod and put it directly above `export type LocatorRecord`.",
+  "evidence": "src/review/locate.ts:62-69",
+  "reviewer": "review-style",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "r2-review-style-w1:STY-002",
+  "severity": "minor",
+  "confidence": "high",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "const emptySaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`);",
+  "problem": "The empty-reply branch records its placeholder through saveTimedOutPartial, a helper named for the timeout case. A reader of the empty-reply exit sees a timeout name and has to open the helper (line 329) to learn it just writes without overwriting a complete result. The timeout branch (line 2260) and this one also repeat the same save-then-compose-a-note steps.",
+  "impact": "Misleading name at a second call site; the two exits drift if the keep-complete-result rule changes.",
+  "suggested_fix": "Rename the helper to describe what it does (for example saveUnlessComplete) and keep it as the one place that writes a non-final result.",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:329, 2260, 2328",
+  "reviewer": "review-style",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "r2-review-style-w3:ST-001",
+  "severity": "minor",
+  "file": "src/commands/review.ts",
+  "quote": "  type PremiseSource,",
+  "problem": "The new type import is inserted between ManagedReviewInput and ManagedReviewMode, breaking the alphabetical order the rest of that import list keeps (ManagedReviewInput, ManagedReviewMode, PremiseSource, ReviewFindingsSource ...).",
+  "impact": "Readability only: the next editor scanning the sorted list will not find the name where expected.",
+  "suggested_fix": "Move `type PremiseSource,` to after `type ManagedReviewMode,`.",
+  "evidence": "slice-03.diff lines 565-568: PremiseSource sits before ManagedReviewMode.",
+  "confidence": "high",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w3:ST-002",
+  "severity": "minor",
+  "file": "src/commands/review.ts",
+  "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+  "problem": "readPremises casts twice (`sources[0] as string`, `readPremiseFile(source)) as PremiseSource`) to bridge the return type ManagedReviewInput[\"premises\"] (which includes undefined) to PremiseSource. The casts hide that readPremiseFile never returns undefined.",
+  "impact": "A reader cannot tell whether the cast is a guarantee or a silenced type error; a later change that lets readPremiseFile return undefined would not be caught.",
+  "suggested_fix": "Give readPremiseFile the narrower return type PremiseSource and drop both casts.",
+  "evidence": "slice-03.diff lines 681-687 and 702.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w3:ST-003",
+  "severity": "minor",
+  "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+  "quote": "partialSaved === undefined || (partial.length === 0 && !(\"error\" in partialSaved))",
+  "problem": "The partialSaveNote chain now nests a compound condition inside a four-way ternary chain. The empty-and-saved case is expressed as a negated `in` check, and the save call above it mixes the placeholder choice, the usage suffix and the save in one long line.",
+  "impact": "Hard to see which of four notes a given case yields; the empty case silently produces no note.",
+  "suggested_fix": "Extract a small helper with early returns for the note, and name `const text = partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER` before the save call.",
+  "evidence": "slice-03.diff lines 1330-1339.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w3:ST-004",
+  "severity": "minor",
+  "file": "src/commands/operator-confirm-review.ts",
+  "quote": "Item 11 (premise-decisions) is never waived",
+  "problem": "The description string now derives the upper bound from READINESS_ITEMS.length but still hard-codes `Item 11` for premise-decisions; SKILL.detail.md likewise hard-codes `twelve items`. Half the sentence tracks the list, half does not.",
+  "impact": "Adding a further readiness item updates one number automatically and leaves the others stale.",
+  "suggested_fix": "Refer to premise-decisions by id only, or derive its number from the list.",
+  "evidence": "slice-03.diff line 96.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w3"
+ },
+ {
+  "id": "r2-review-style-w4:ST-001",
+  "severity": "minor",
+  "file": "src/review/ledger.ts",
+  "quote": "const dispatch = { version: 1, mode: input.mode, ...(superseded.length === 0 ? {} : { superseded })",
+  "problem": "The `dispatch` record is built as one line of roughly 900 characters with a dozen conditional spreads, and this diff adds to the pattern (depth/notRun already, now more fields around it).",
+  "impact": "Hard to read, review and diff; a one-field change rewrites the whole line.",
+  "suggested_fix": "Build it with a small helper or incremental `const optional = {...}` pieces, one per line.",
+  "evidence": "ledger.ts, the `const dispatch = {` statement in the hunk at diff lines 1240-1250.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w4"
+ },
+ {
+  "id": "r2-review-style-w4:ST-002",
+  "severity": "minor",
+  "file": "src/review/ledger.ts",
+  "quote": "const resolvesOnce = (key: string | undefined): key is string => text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1;",
+  "problem": "The predicates `f.id === key || f.global_id === key` (in resolvesOnce, canonicalByObligation, and closeWith's `matching`) and `m === oid || (typeof m === \"string\" && m.endsWith(`#${oid}`))` (in absorbedInto and canonicalByObligation) are written out repeatedly. Sites: ledger.ts resolvesOnce, canonicalByObligation, closeWith.matching, absorbedInto.",
+  "impact": "Duplicated matching rules drift: a change to what counts as the same finding must be made in four places.",
+  "suggested_fix": "Extract `matchesKey(f, key)` and `mergedFromHas(f, id)` helpers at module level and use them in all sites.",
+  "evidence": "Diff lines 1254-1270 and 1436.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w4"
+ },
+ {
+  "id": "r2-review-style-w4:ST-003",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "quote": "? `this round reported no such finding: ${hashInDisplayIdDetail(claim.finding_id)}`",
+  "problem": "The new display-id rule lives in display-id.ts (`displayIdHasHash`, `DISPLAY_ID_FORM`), but premise.ts re-tests with an inline `.includes(\"#\")` and defines `hashInDisplayIdDetail` with its own wording of the same rule, a second statement of DISPLAY_ID_FORM.",
+  "impact": "Two sources of the rule's wording and predicate; they can diverge.",
+  "suggested_fix": "Use `displayIdHasHash` for the test and build the message from `DISPLAY_ID_FORM` (or export the detail builder from display-id.ts).",
+  "evidence": "premise.ts diff lines 2359-2364 and 2467-2472 against display-id.ts lines 813-820.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w4"
+ },
+ {
+  "id": "r2-review-style-w4:ST-004",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "quote": "const sets: readonly ParsedPremiseClaims[] = parsedInput === undefined ? [] : Array.isArray(parsedInput) ? (parsedInput as readonly ParsedPremiseClaims[]) : [parsedInput as ParsedPremiseClaims];",
+  "problem": "A ternary chain with two casts normalises the input; parsePremiseClaimSets likewise casts `parsePremiseClaims(entry) as ParsedPremiseClaims` where the function returns a union with undefined.",
+  "impact": "Nested ternary with casts is hard to read and hides a type narrowing the compiler could check.",
+  "suggested_fix": "Extract `toSets(input)` using an early return and a type guard, or have parsePremiseClaims return a non-undefined overload.",
+  "evidence": "Diff lines 2352-2355 and 2433.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "_src": "review-style-w4"
+ },
+ {
+  "id": "r2-review-style-w5:ST-001",
+  "severity": "minor",
+  "file": "src/review/readiness.ts",
+  "line": 173,
+  "title": "dispatchRuns duplicates the dispatch.runs parsing reviewersCheck still does by hand",
+  "problem": "The PR adds dispatchRuns() in research.ts (with its own local `record` copy) and coverageMdCheck uses it, but reviewersCheck in the same file still hand-parses dispatch.runs with the module-level `record` helper. research.ts now also defines a second `record` identical to readiness.ts's. Two readers of the same shape, and two copies of the helper.",
+  "why_it_matters": "DRY: a change to the run shape must be made in two parsers.",
+  "suggested_fix": "Have reviewersCheck read runs through dispatchRuns(ctx.research) and share one `record` helper.",
+  "evidence": "const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record)",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-002",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 54,
+  "title": "secondLookClaimBacked keeps its own changed-line walker next to the new walkRegion",
+  "problem": "walkRegion/lineInHunk now compute new-side line numbers for changed lines, while secondLookClaimBacked in the same file still walks region.text with its own `let line = region.startLine` loop for the same purpose (with slightly different removed-line handling).",
+  "why_it_matters": "Duplicated line-numbering logic that can drift; two definitions of 'a changed line lies in a hunk' in one file.",
+  "suggested_fix": "Express secondLookClaimBacked through walkRegion/lineInHunk, or note why its semantics differ.",
+  "evidence": "let line = region.startLine;",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-003",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 23,
+  "title": "SECURITY_PROBLEM alternation has redundant branches",
+  "problem": "`security|secur\\w+` and `injection|inject\\w*` each list a literal that the wildcard branch next to it already matches. Reads as if the literals mattered.",
+  "why_it_matters": "Readability of a dense one-line regex.",
+  "suggested_fix": "Drop the literal branches (`secur\\w*`, `inject\\w*`) or split the regex into a named list of terms.",
+  "evidence": "const SECURITY_PROBLEM = /\\b(security|secur\\w+|injection|inject\\w*",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-004",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 132,
+  "title": "\"review-security-code\" literal repeated beside the new FIX_SECURITY_ROLE constant",
+  "problem": "The PR introduces FIX_SECURITY_ROLE = \"review-security-code\" but SECOND_LOOK_ROLES still spells the same role name as a literal in the same file.",
+  "why_it_matters": "Duplicated string constant; a rename must be made twice.",
+  "suggested_fix": "Use FIX_SECURITY_ROLE in SECOND_LOOK_ROLES.",
+  "evidence": "export const SECOND_LOOK_ROLES: readonly string[] = [ALWAYS_ROLE, \"review-security-code\"];",
+  "_src": "review-style-w5"
+ },
+ {
+  "id": "r2-review-style-w5:ST-005",
+  "severity": "minor",
+  "file": "src/review/round-split.ts",
+  "line": 80,
+  "title": "partitionRegionsByFix is long and branch-heavy, with non-null assertions",
+  "problem": "partitionRegionsByFix (about 50 lines) carries three early-exit branches, a context-labelling loop with a four-way if/else chain, a piece-cutting loop and several `!` assertions. Labelling and piece-cutting could be named functions.",
+  "why_it_matters": "Hard to review the half-and-half context rule; complexity near the 10-branch threshold.",
+  "suggested_fix": "Extract labelContext(lines, kinds) and cutPieces(...) helpers.",
+  "evidence": "else labels[index] = index - before <= Math.ceil((after - before - 1) / 2) ? kinds[before]! : kinds[after]!;",
+  "_src": "review-style-w5"
+ }
+]

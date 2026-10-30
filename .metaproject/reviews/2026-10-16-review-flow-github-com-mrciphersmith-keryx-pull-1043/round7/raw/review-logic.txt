@@ -1,0 +1,116 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "summary": "Round 7 last-fix delta (round7/delta.diff, HEAD 16955fba1 / fix 898cb41ca). Verify-run promotion moved into createManagedReviewPackage and binds to the allocated packageDir only; packageDirById is gone and reviewPackagesNamed is the one id lookup. The hold carry now refuses an unreadable or non-array findings.json and re-runs each carried hold through mergePremises as a claim. scope.md names carried holds and says upheld and downgraded judgements are not re-applied. Nine of ten priors are closed. LG6-004 (info) is partial: verdict.ts and the rejection table are unchanged. Two new minors: the new ambiguity refusal trips on the package's own re-ingest and guards nothing, and the unreadable-findings refusal prescribes a judge's claims file even for packages that never had a premise judge.",
+  "prior_dispositions": [
+    {
+      "id": "LG6-001",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:2856-2871: readPreviousFindings returns undefined only on ENOENT. Any other read error, or a JSON.parse failure, throws previousFindingsUnreadable. premise.ts:782-783 refuses a parsed value that is not an array. The call at managed.ts:373 comes before the first write (mkdir at :508), so nothing is written and premises.json is not renamed. Tests: review-premises-cli.test.ts 'over an unreadable or non-array findings.json is refused' and premise.test.ts 'not an array refuses'."
+    },
+    {
+      "id": "LG6-002",
+      "disposition": "closed",
+      "evidence": "managed.ts:272 calls ownPackageVerifications(input, reviewId, packageDir) after allocatePackage, and :2848 runs promoteParentExecutions(claims, packageDir) on the directory this ingest writes (packagePath :1119-1132). review.ts:3598-3615 no longer promotes. package-location.ts no longer has packageDirById or flowDirs. A standalone package with the same id never promotes a flow-bound claim (harness-robustness.test.ts 'a standalone package of the same id never promotes'). The new refusal this added is filed as LG7-001."
+    },
+    {
+      "id": "SEC6-001",
+      "disposition": "closed",
+      "evidence": "Same change as LG6-002. Records are read only under the allocated packageDir (managed.ts:2848; verify-run.ts:146-158 also checks basename(packageDir)), so another package's verify-run record cannot raise this ingest's claim to execution."
+    },
+    {
+      "id": "r6-review-clean-code-code#CC6-002",
+      "disposition": "closed",
+      "evidence": "The third resolver is removed (package-location.ts no longer has packageDirById/flowDirs). resolveReviewPackagePath (managed.ts:2790-2804) and the ingest's ambiguity check (:2842) share reviewPackagesNamed (:2811-2829), which applies one rule: manifest.json for the standalone package, a directory match under each flow. The header comment (package-location.ts:1-9) now describes this correctly. resolveReviewPackagePath still returns the same first element as before."
+    },
+    {
+      "id": "r6-review-clean-code-code#CC6-001",
+      "disposition": "closed",
+      "evidence": "premise.ts:798-815: each carried held premise becomes a claim (carriedClaim :826-829, which strips judge/model/operator). The claims are grouped by judge+model and merged with mergePremises, and any rejection refuses the ingest (:815). A string `options` on owner-decision now refuses (mergePremises :438-443) instead of reaching premise.options.join (:719). Test: 'a carried owner-decision whose options are malformed refuses'."
+    },
+    {
+      "id": "LG6-003",
+      "disposition": "closed",
+      "evidence": "The `as ReviewFindingPremise` cast is gone. A carried hold must pass self-judgement (:361), challenged-without-evidence (:429), held-without-question (:433), owner-decision-without-options (:440), malformed-field (:403-416), unknown-property (:327-334) and no-judge (:323). The docstring (premise.ts:767-773) no longer calls the previous merge's validation trusted. Every field the merge writes on a held premise (verdict, judge, model, intent_signals, practice_sources, reasoning, question, options; :450-460) is either a claim property or a stripped context field, so a legitimate hold is not refused as unknown-property."
+    },
+    {
+      "id": "RG6-002",
+      "disposition": "closed",
+      "evidence": "Same change as LG6-003: the per-verdict invariants are re-checked through mergePremises (premise.ts:810-815). Tests cover self-judgement, held-without-question, malformed-field, unknown-property and no-judge."
+    },
+    {
+      "id": "SEC6-002",
+      "disposition": "closed",
+      "evidence": "Re-validation as above (premise.ts:810-815). The managed.ts comment no longer calls the kept premises.json 'the record of the claims they came from'. It now says the holds came from the previous findings.json (managed.ts:517-521). A planted premise.operator is dropped (CARRIED_PREMISE_CONTEXT :760; test 'a planted operator answer is not a claim field')."
+    },
+    {
+      "id": "RG6-001",
+      "disposition": "closed",
+      "evidence": "managed.ts:526-531 passes carried {holds, judges} when carriedHolds.carried > 0. premise.ts:692-693 renders 'premise_judge: carried from the previous ingest's findings.json (<judges>)' and 'premise_claims_carried: N' instead of 'not named'. Tested at CLI level (review-premises-cli.test.ts 'a carried re-ingest says so in scope.md'). The result object's premise counts (managed.ts:577) still have no judge, but premisesCarriedForward (:579) flags the carry, and nothing reads counts.judge besides the renderer."
+    },
+    {
+      "id": "LG6-004",
+      "disposition": "partial",
+      "evidence": "Fixed: scope.md no longer says 'not named' on a carry, and it states that upheld and downgraded judgements are not re-applied and that a downgraded finding stands at its reported severity (premise.ts:702-707). Unchanged (info-level, reporting only): verdict.ts:228-230 and :372 still print no 'premise results' line when no premises.json is left (the LG5-003 path). The '### Premise claims discarded' table still shows '_none_' over a carried round instead of pointing to the earlier ingest's rejections."
+    }
+  ],
+  "findings": [
+    {
+      "id": "LG7-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 2843,
+      "quote": "if (named.length > 1) {",
+      "problem": "ownPackageVerifications refuses whenever reviewPackagesNamed finds more than one package for the id. The list includes the package this ingest is about to write whenever that directory already exists, which is true on every re-ingest and whenever verify-run created it first. So the refusal depends on whether this package exists yet, not on whether the id is ambiguous. A flow-bound first ingest whose id matches a standalone package passes (the harness-robustness test 'a standalone package of the same id never promotes': named = [standalone] only). Every later re-ingest of that same flow package with --verifications is refused (named = [standalone, flow]). The same re-ingest without --verifications passes, because the check is skipped for an empty claim list (:2839). The stated reason, 'which one its verification claims cite cannot be told', no longer applies after this delta: promotion reads only packageDir (:2848), so a second package of that id cannot affect the result.",
+      "impact": "Trigger: `keryx review ingest --review-id X --flow F --verifications v.json` where `.metaproject/reviews/X/manifest.json` exists. The first round succeeds, and the next round of the same package is refused with 'names 2 packages ... Nothing was written', even though no claim could have been bound to the other package. The same applies to a standalone re-ingest when any flow has a directory named X. The verifier's claims for that round cannot be recorded until an unrelated package is renamed or removed.",
+      "suggested_fix": "Drop the refusal, since binding to packageDir already settles which package the records come from. Or, if an ambiguity signal is wanted, exclude packageDir itself (`named.filter((dir) => path.resolve(dir) !== path.resolve(packageDir))`) and warn rather than refuse. Then add a re-ingest case to the 'ingest binds verify-run records' tests.",
+      "evidence": "src/review/managed.ts:270-272, :2811-2829 (the flow branch counts any directory, including the one being re-ingested), :2837-2849; src/review/harness-robustness.test.ts tests 'a standalone package of the same id never promotes' (passes only because the flow dir does not exist yet) and 'an id that names a standalone and a flow package refuses' (flow dir pre-created).",
+      "confidence": "high"
+    },
+    {
+      "id": "LG7-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 842,
+      "quote": "pass --premises <file> with the judge's claims for this round, so no hold it recorded is dropped silently.",
+      "problem": "readPreviousFindings (managed.ts:2856-2871) runs on every ingest without --premises, including packages that never had a premise stage. When findings.json exists but does not parse (for example merge-conflict markers in a tracked package, or a hand edit), the ingest is now refused, and the only remedy named is a judge's claims file. Such a package has no claims file, and the message does not say that repairing or removing findings.json, or passing an empty claims object, also clears the refusal. Before this delta, that re-ingest overwrote the damaged file, which was correct for a package with nothing held.",
+      "impact": "Trigger: re-ingest, without --premises, of a package with no premise history whose findings.json is invalid JSON or not an array. Outcome: the round is refused with a remedy the operator cannot follow as written. Refusing is the safe choice; the remedy text is what is wrong.",
+      "suggested_fix": "Name every way out in previousFindingsUnreadable: repair or remove findings.json if this package never had a premise judge; otherwise pass --premises with the judge's claims. Optionally, note when no premises.json or premises.superseded.json exists in the package.",
+      "evidence": "src/review/managed.ts:373, :2856-2871; src/review/premise.ts:783, :841-843.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+## Logic Review: round 7 (last-fix delta)
+
+- Scope: round7/delta.diff (fix 898cb41ca, merge 16955fba1). Spec gate skipped: no issue or task was given. Read-only: I ran no tests.
+- Priors: 9 closed, 1 partial.
+  - Closed:
+    - LG6-001: an unreadable or non-array findings.json refuses before any write.
+    - LG6-002, SEC6-001 and CC6-002: promotion binds to the allocated packageDir, and reviewPackagesNamed is the single lookup.
+    - CC6-001, LG6-003, RG6-002 and SEC6-002: carried holds are re-run through mergePremises as claims, and a planted operator answer is stripped.
+    - RG6-001: scope.md names the carry.
+  - Partial: LG6-004 (info). The scope.md note is added, but the verdict.ts 'premise results' line and the rejection table are unchanged.
+- New:
+  - LG7-001 (minor): the 'names N packages' refusal counts the package being re-ingested, so a flow package whose id matches a standalone package ingests once and is then refused on every later round with --verifications. The refusal no longer guards anything, because promotion reads only packageDir.
+  - LG7-002 (minor): the unreadable-findings refusal tells a package with no premise judge to pass a judge's claims file.
+- Checked and clean:
+  - A legitimate held premise contains only claim fields or stripped context, so the re-merge does not refuse it.
+  - Judge/model grouping and a sequential merge across groups cannot double-claim a finding.
+  - Promotion still happens before mergeVerifications, so the verification merge sees the promoted method.
+  - The import removals leave no dangling uses.
+  - resolveReviewPackagePath returns the same package as before.
+- Stats: blocker 0 | major 0 | minor 2 | info 0.
+- Routing audit:
+  - graph_used: no. The delta plus targeted reads were enough, and memory records gdgraph as unreliable on this repo.
+  - wiki_used: not-relevant.
+  - ctx_used: yes (keryx ctx rg/run).
+  - raw_rg_used: no.

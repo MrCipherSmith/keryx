@@ -1,0 +1,165 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "slices": [
+    "slice-01"
+  ],
+  "summary": "Fix slice reviewed. Of 15 prior findings, 11 are closed, 1 partial, 3 open (all info or minor, unchanged), 0 regressed. The quadratic regexes (REVIEW_PACKAGE_PATH, USAGE_LINE) are replaced by linear scanners; session root scanning is capped and incremental. Remaining: the unfixed `/\\s+$/` trim in splitUsage (minor), unbounded size of retained command strings (minor), and three info observations.",
+  "findings": [
+    {
+      "id": "PERF-R2-001",
+      "severity": "minor",
+      "file": "src/review/dispatch-usage.ts",
+      "line": 85,
+      "quote": "const body = raw.replace(USAGE_LINE, \"\").replace(/\\s+$/, \"\");",
+      "problem": "The `/\\s+$/` trim is unchanged from round 1 (PERF-005). V8 tries every start offset inside a whitespace run and scans to the run end before failing at `$`, so a run of k whitespace characters in the middle of a reply costs O(k^2). It runs on every reply that holds a KERYX_USAGE line, and splitUsage is called by each reader of the raw result (parse, emptiness check).",
+      "impact": "Hot path: a saved reviewer reply per dispatch, each time a reader splits it. A degenerate model reply with a run of 100k spaces or newlines plus a usage line costs about 5e9 steps, seconds of blocked event loop in ingest or ledger build. No effect on normal replies.",
+      "suggested_fix": "Use `.trimEnd()` (linear) instead of `.replace(/\\s+$/, \"\")`.",
+      "evidence": "dispatch-usage.ts:85 at the reviewed head; splitUsage at :77-87 is the only caller shape; the fast path `raw.includes(USAGE_MARKER)` at :78 limits it to replies with a marker.",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-R2-002",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 161,
+      "quote": "remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+      "problem": "The tracker caps the number of retained commands (64) but not their size: each `keryx review` tool call's whole arguments string is kept verbatim. namedBySession (:217) then runs namesToken over every retained string for each open package older than the session, for two ids, on every stop.",
+      "impact": "A review run commonly passes large arguments (an inline findings JSON or report in a heredoc beside a `keryx review ingest` call). 64 such strings of hundreds of KB are retained for the session and rescanned per open pre-session package per stop: packages x 2 x 64 x length. Bounded by 20 continues, so a latency cost, not an outage.",
+      "suggested_fix": "Keep only the tokens that matter: extract review-id-shaped tokens (SAFE_REVIEW_ID matches) from the arguments once at scan time into a capped Set, and match ids against that set instead of rescanning stored text; or truncate stored commands to a few KB.",
+      "evidence": "completion-gate.ts:161 stores call.arguments untruncated; :217 `(named.commands ?? []).some((command) => namesToken(command, id))`; MAX_SESSION_REVIEW_COMMANDS at :53 limits count only.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-R2-003",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 341,
+      "quote": "signature: [blockers.join(\"|\"), await dirSignature(best.dir), working].join(\"#\"),",
+      "problem": "Every gate evaluation still hashes the whole content of the chosen package directory (dirSignature reads and sha256s every file, recursively) and of data/review. This code is outside the diff (context only), so it is info; it is the same remaining cost as PERF-002 (partial) and PERF-007 (open).",
+      "impact": "A package holds slice diffs, raw results and layers; a few MB hashed up to 20 times per run (MAX_REVIEW_GATE_CONTINUES). Settling it would take a measurement of a real package size.",
+      "suggested_fix": "Sign on name, size and mtimeMs from stat instead of file content, or only when the previous signature's mtime sum changed.",
+      "evidence": "completion-gate.ts:23-38 dirSignature reads each file with readFile and hashes it; :341 calls it per stop.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-R2-004",
+      "severity": "info",
+      "file": "src/review/coverage.ts",
+      "line": 547,
+      "quote": "const packageDiffStatsCached = processCache(async (key: string)",
+      "problem": "The cache is keyed by package, root and target (including head) but not by the base ref's current commit, and lives for the whole process. In a long-lived `keryx shell` session, when the target has no recorded base, the diff base is `origin/main` resolved once; a later fetch that moves the merge-base is not seen.",
+      "impact": "Only matters if a package's merge-base changes mid-process, which needs the PR to be merged into origin/main while the session runs. No reproducible harm found, so info.",
+      "suggested_fix": "Either state the process-lifetime assumption in the doc comment (it names per-command reuse) or key on the resolved base sha.",
+      "evidence": "coverage.ts:542 key is JSON.stringify([packageDir, root, target]); the base is resolved inside diffOfTarget (:565-571) and is not part of the key.",
+      "confidence": "low",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-R2-005",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 352,
+      "quote": "if (/keryx review (start|scope|slice|ingest|complete)/.test(call.arguments)) return true;",
+      "problem": "reviewRunSeenInHistory walks the whole history and tests each tool call's arguments on every stop attempt, before the incremental tracker is consulted. The regex is linear and it returns on the first hit, so the cost is O(history) only until a review command is seen, then it exits early.",
+      "impact": "Cheap once a review has started (early return); only a long non-review session pays the full walk per stop. Observation only.",
+      "suggested_fix": "Optional: remember a positive result on the tracker, and resume the negative scan from the tracker's cursor.",
+      "evidence": "completion-gate.ts:348-356 loop returns true on first match; the caller is agent.ts:3485 per holdReviewGate.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-highload-w1:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:68-92 reviewPackagePaths uses indexOf plus a bounded backward walk (MAX_PREFIX_CHARS 1024, floor at previous match); the lazy regex is gone, linear in text length."
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:50 MAX_SESSION_REVIEW_ROOTS = 8 and :180-181 remember() cap the roots; roots come only from this session's own `keryx review` calls (:159-163) and are required to be inside cwd (:179)."
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:8-20 now states the figure is reported not proven and no gate reads it; MAX_DISPATCH_TOKENS bound at :33. Accepted design, not a defect."
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:2334-2335 advice bounds re-dispatch to once; :2327-2328 empty path writes the placeholder plus usageSuffix() so tokens are recorded."
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "disposition": "open",
+      "evidence": "spawn-subagent-tool.ts:1927 still sums every usage_update; unchanged. No provider emits more than one per request, so it stays an info observation."
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:68-92: no regex over history text any more; also scanned incrementally (SessionReviewTracker.update, :141-150), so each stop scans only new messages."
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:50,180-181 cap roots at 8 and packages at 32; the root must be inside cwd (inside(), :112-115)."
+    },
+    {
+      "id": "review-highload-w3:F-004",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:37 USAGE_LINE is /^[ \\t]*KERYX_USAGE[ \\t]+([^\\n]*)$/gm and usageOfLine (:40-48) is checked by hand with a 4096 cap: linear."
+    },
+    {
+      "id": "review-highload-w3:F-005",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:279 now `Date.parse(pointer.startedAt) >= since` stored in `fresh`; NaN gives false, so a malformed pointer is skipped unless the session names it (:280)."
+    },
+    {
+      "id": "review-performance-w3:PERF-001",
+      "disposition": "closed",
+      "evidence": "Same fix as highload-w3:F-001: reviewPackagePaths (completion-gate.ts:68) replaces the quadratic regex."
+    },
+    {
+      "id": "review-performance-w3:PERF-002",
+      "disposition": "partial",
+      "evidence": "History scan is now incremental (completion-gate.ts:141-150 cursor), so the transcript is no longer rescanned. Root scans (scanRoot readdir + manifest read + stat per package, :317) and dirSignature (:341) still run from scratch on every stop, now bounded by 8 roots and 20 continues."
+    },
+    {
+      "id": "review-performance-w3:PERF-004",
+      "disposition": "closed",
+      "evidence": "coverage.ts:508 gitTopLevel is processCache'd, :547 packageDiffStatsCached caches the whole diff per package/target/head, and prior-round.ts:323 probes the base candidates with Promise.all."
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "disposition": "closed",
+      "evidence": "ledger.ts:32-37 replaced the {0,80} windows with anchored phrasings with no free-text gap; verified linear (OWN_STATEMENT alternatives cannot overlap whitespace runs)."
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "disposition": "open",
+      "evidence": "completion-gate.ts:317 still scans roots sequentially and collects every open candidate even when the pointer decides; unchanged and bounded by 8 roots, info only."
+    },
+    {
+      "id": "review-performance-w3:PERF-005",
+      "disposition": "open",
+      "evidence": "dispatch-usage.ts:85 still has `.replace(/\\s+$/, \"\")`, quadratic on a long whitespace run; restated as PERF-R2-001."
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 3
+  }
+}
+```
+
+## Summary
+Slice-01 (fix) performance review: 0 blocker, 0 major, 2 minor, 3 info. Prior: 11 closed, 1 partial (PERF-002), 3 open (highload-w2:F-003, PERF-007, PERF-005), 0 regressed. The two high-risk quadratic regexes are gone; the usage-line trim was missed.

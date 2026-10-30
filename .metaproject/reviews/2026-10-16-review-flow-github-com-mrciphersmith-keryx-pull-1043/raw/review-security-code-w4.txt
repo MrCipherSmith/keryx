@@ -1,0 +1,109 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slice 04 (decide-premise card and CLI, --premises ingest, gate, tier, docs). No injection, path-traversal or secret issue in the new code. Two majors: the gate trusts an operator answer with no provenance (forgeable through the automatic-review apply_patch allowance), and the terminal decide-premise prompt prints model-authored finding text without the sanitiser the card path uses.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/flow/review-gate.ts",
+      "line": 366,
+      "quote": "operatorAnswer: readString(readRecord(premise[\"operator\"])?.[\"answer\"])",
+      "problem": "The gate turns a held finding terminal as `dismissed` (premiseGateState, line 415) on an operator answer read from two package files that carry no provenance check: `findings.json` `premise.operator.answer`, and any structurally valid `premise-question` entry in `operator-decisions.json` (validPremise accepts any non-empty `actor`, an optional `confirmedVia`, and no quote or subject). Neither file is writable only by the two intended writers. In an automatic review the shell auto-approves `apply_patch` for every `.json` inside the package (PACKAGE_DATA_EXTENSIONS, automatic-review.ts:259).",
+      "impact": "An agent (or a reviewer steered by hostile PR text) can write {kind:'premise-question', finding:<id>, answer:'dismiss', reason:..., actor:'x'} into operator-decisions.json, or add `premise.operator.answer: 'dismiss'` to a finding. The held finding then becomes terminal and the gate stops blocking on it, with no operator ever shown the card. The change adds a new way to remove a finding without a verifier verdict, and the stated invariant 'only the operator answers' is not enforced.",
+      "suggested_fix": "Require `confirmedVia` in {tui-card, remote-card, terminal} for a decision to count at the gate (validPremise currently allows it to be absent) and have the gate ignore `premise.operator` from findings.json, reading the answer only from operator-decisions.json. Better, bind each decision to what the card showed (finding key, severity, verdict, head) as decisionCovers does for waivers, and add operator-decisions.json to the files the automatic-review apply_patch allowance refuses.",
+      "evidence": "operator-decisions.ts:63-75 validPremise; review-gate.ts:366, 415-423, withPremiseAnswers; automatic-review.ts:259 PACKAGE_DATA_EXTENSIONS includes .json for any path under the package dir. Not read: the caller-side hard floors, which may refuse a patch to this file; if they do, this drops to minor.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/review/operator-decisions.ts:63 (validPremise, no provenance)",
+          "src/flow/review-gate.ts:366 (premise.operator read from findings.json)",
+          "src/review/premise.ts:435 (premiseHoldState reads premise.operator the same way)",
+          "src/review/premise-question.ts:50-61 (findHeldFinding reports 'answered' from either store)",
+          "src/commands/automatic-review.ts:259 (apply_patch allowance covers operator-decisions.json)",
+          "src/review/operator-decisions.ts:85 (mutation-waiver / reviewer-override: same file, same exposure, but those require confirmedVia and quote)"
+        ],
+        "enumeration_method": "keryx ctx rg for premiseDecisionFor|readPremiseDecisions|premise.operator|operator-decisions.json over src excluding tests, then read each reader; the writer allowance read from PACKAGE_DATA_EXTENSIONS"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": 144,
+      "quote": "const question = `Premise question on ${finding.key} (${finding.severity}: ${finding.problem}; judge ${finding.verdict}: ${finding.question}): ${effect} (${reason.trim()})?`;",
+      "problem": "The terminal path prints `finding.problem` and the judge's `question` raw into the operator's confirmation prompt. Both are model-authored (reviewer finding text, premise-judge text) and may carry ANSI escape sequences, carriage returns or newlines. The card path wraps every such field in cardSafe (operator-confirm-review.ts, decidePremiseSpec); the terminal path does not.",
+      "impact": "Attack vector: an attacker puts instructions in the PR under review; the reviewer or judge echoes them into `problem`/`question` with CR or cursor-movement escapes that overwrite the visible prompt (so it reads 'keep it at major' while `effect` says 'dismiss it as incorrect'). The operator types any non-empty answer and the decision records `dismiss`, so a real finding is suppressed on a prompt that did not show what was recorded. Needs a reviewer or judge steered by hostile content, so the path is not complete from the diff alone: major, not blocker.",
+      "suggested_fix": "Wrap finding.key, severity, problem, verdict, question and reason in the same sanitiser the card uses (cardSafe, or a shared helper) before building the question; print `effect` last so it cannot be overwritten. Accept only an explicit y/yes rather than any non-empty text for a dismiss.",
+      "evidence": "review-operator.ts:141-147; contrast operator-confirm-review.ts decidePremiseSpec using cardSafe(found.problem), cardSafe(found.question). trigger/schedules.ts:410 cardSafe strips CSI/OSC, CR/LF and bidi controls.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/commands/review-operator.ts:144", "src/commands/review-operator.ts:141 (effect string uses finding.severity)", "src/commands/review-operator.ts:147 (log line echoes finding.key)"],
+        "enumeration_method": "read the whole decide-premise branch and compared each interpolated field with the card builder's cardSafe calls; the sibling waive-mutation/override-reviewers prompts print only package dir, operator reason and subject ids, so they are not the same shape"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 150,
+      "quote": "await recordPremiseDecision(packageDir, { kind: \"premise-question\", finding: finding.key, answer: answerArg, reason: reason.trim(), at, actor: process.env[\"USER\"] ?? \"operator\", confirmedVia: \"terminal\" });",
+      "problem": "The terminal answer the operator typed ('your own words') is discarded, and `actor` is the `USER` environment variable, which any process can set. The card path records neither the quote nor the card text. Unlike waive-mutation and override-reviewers, the premise decision stores no quote and no subject (head, severity, verdict).",
+      "impact": "Weak audit trail: a later reader cannot tell what the operator saw or typed, and a decision made at one head or severity still applies after the finding or head changes.",
+      "suggested_fix": "Store the typed words as `quote` and the shown severity, verdict and head as `subject`; have the gate ignore a decision whose subject no longer matches. Treat `actor` as a label, not identity.",
+      "evidence": "review-operator.ts:147-150 versus recordOperatorDecision (passes quote: answer, subject). PremiseQuestionDecision in operator-decisions.ts has neither field.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 622,
+      "quote": "again.finding.severity !== prepared.severity || again.finding.verdict !== prepared.verdict",
+      "problem": "The card's apply re-check compares only severity and verdict. A change to the finding's problem text, the judge's question, or an earlier answer between card and yes goes unnoticed.",
+      "impact": "Hardening only: the operator confirms a card whose finding text was swapped after it was shown. confirmPlanSpec compares a full plan key.",
+      "suggested_fix": "Put a digest of the displayed fields (key, severity, problem, verdict, question, answered) in `prepared` and compare it in apply.",
+      "evidence": "operator-confirm-review.ts decidePremiseSpec apply; confirmPlanSpec compares planKeyOf(estimate).",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "line": 3658,
+      "quote": "const raw = source === \"-\" ? await Bun.stdin.text() : await Bun.file(source).text();",
+      "problem": "readPremises reads whatever path `--premises` names, unbounded in size, as its siblings (--verifications, --scope, --refuted) do. In an automatic review `--premises` was added to CREATE_PATH_FLAGS, so the path is placed inside the package like the others.",
+      "impact": "No attack path found: the path is operator or package controlled, the content is shape-checked by parsePremiseClaims before anything is written, and the merge is delete-only. Recorded so the next reader knows it was checked.",
+      "suggested_fix": "None needed.",
+      "evidence": "automatic-review.ts CREATE_PATH_FLAGS; review.ts readPremises.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 2, "info": 1 }
+}
+```
+
+## Security Review (slice-04)
+
+Scope: slices/slice-04.diff at head c144874f. Context read: src/review/operator-decisions.ts, src/review/premise-question.ts, src/review/premise.ts (premiseHoldState), src/commands/automatic-review.ts (apply_patch allowance), src/trigger/schedules.ts (cardSafe).
+
+### Summary
+- Blockers: 0
+- Major: 2 (F-001 forgeable operator answer, F-002 unsanitised terminal prompt)
+- Minor: 2 (F-003 audit trail and subject binding, F-004 card apply re-check)
+- Info: 1 (F-005)
+
+### Clean areas
+- Injection and command execution: no new shell or exec calls; `--premises` is parsed JSON and shape-checked before the merge.
+- Path traversal: `--premises` was added to CREATE_PATH_FLAGS so an automatic review places it inside the package.
+- Secrets, crypto, CSRF, redirects, React and NestJS patterns: not touched by this slice.
+- The card path (review_decide_premise) sanitises every displayed field with cardSafe and re-reads the finding before it writes.
+- The terminal path refuses without a TTY (requireTerminal) like its siblings.
