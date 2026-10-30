@@ -81,7 +81,7 @@ test('both variables set: every HTTP call to the Hub carries both Access headers
                 }
             }
             seen.length = 0;
-            await calls.request!(origin);
+            await throwing.request!(origin);
             expect(seen[0]!.get('authorization')).toBe(`Bearer ${BEARER}`);
         });
     }
