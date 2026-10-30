@@ -22,10 +22,13 @@ umask 077
 PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/snap/bin"
 export PATH
 
-# The shell must not be able to override the env file this install was made from.
+# The shell must not be able to override the env file this install was made from. KERYX_HUB_PROJECT
+# is in the list on purpose: a variable left over from another install must never choose which
+# volume a destructive command acts on. The project is read from secrets/hub.env and nowhere else.
 unset KERYX_HUB_OPERATOR_TOKEN KERYX_HUB_AGENT_TOKEN KERYX_HUB_REVIEWER_TOKEN \
   KERYX_HUB_PUBLIC_ORIGIN KERYX_HUB_MODE HUB_PORT HUB_DOMAIN ACME_EMAIL \
-  CF_TUNNEL_ID CF_ACCESS_TEAM CF_ACCESS_AUD 2>/dev/null || true
+  CF_TUNNEL_ID CF_ACCESS_TEAM CF_ACCESS_AUD KERYX_HUB_PROJECT \
+  COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES COMPOSE_PATH_SEPARATOR 2>/dev/null || true
 
 # --- where am I -------------------------------------------------------------
 self=$0
@@ -60,7 +63,10 @@ die() { printf 'hubctl: error: %s\n' "$*" >&2; exit 1; }
 
 cleanup() {
   rc=$?
-  trap - EXIT INT TERM HUP
+  trap - EXIT
+  # Recovery runs with the interrupting signals ignored (and so do its children): a second
+  # Ctrl-C must not land between "delete the volume's contents" and "put them back".
+  trap '' INT TERM HUP
   if [ -n "$FAIL_HOOK" ] && [ "$rc" -ne 0 ]; then
     _hook=$FAIL_HOOK; FAIL_HOOK=""
     ( "$_hook" ) || true
@@ -68,7 +74,7 @@ cleanup() {
   for c in $CLEAN_CONTAINERS; do docker rm -f "$c" >/dev/null 2>&1 || true; done
   for v in $CLEAN_VOLUMES; do docker volume rm -f "$v" >/dev/null 2>&1 || true; done
   for p in $CLEAN_PATHS; do rm -rf "$p"; done
-  if [ "$LOCK_HELD" = 1 ]; then rm -rf "$ROOT/state/lock"; fi
+  if [ "$LOCK_HELD" = 1 ] && [ "$(readlink "$ROOT/state/lock" 2>/dev/null || true)" = "$$" ]; then rm -f "$ROOT/state/lock"; fi
   exit "$rc"
 }
 trap cleanup EXIT
@@ -76,10 +82,26 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
+# The root appears in the crontab, in bind mounts and in sed/awk programs: keep it plain.
+case $ROOT in
+  *[!A-Za-z0-9._/+@-]*) die "the install directory $ROOT contains a character other than letters, digits and . _ / + @ - (whitespace included); move it" ;;
+esac
+
 # --- small helpers -------------------------------------------------------------
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is required but was not found in PATH"; }
 
-have_tty() { { : </dev/tty; } 2>/dev/null; }
+# A failed redirection on a special builtin such as `:` makes dash (/bin/sh on Debian and Ubuntu)
+# exit the whole script, silently. Test the terminal in a subshell instead.
+have_tty() { ( : </dev/tty ) 2>/dev/null; }
+
+nl='
+'
+# match <regex> <string>: the WHOLE string matches. grep -E alone matches per line, so a value
+# with a newline in it could pass on one of its lines.
+match() {
+  case $2 in *"$nl"*) return 1 ;; esac
+  printf '%s' "$2" | grep -Eq "$1"
+}
 
 confirm() {
   [ "$ASSUME_YES" = 1 ] && return 0
@@ -105,9 +127,7 @@ env_get() { # env_get KEY [default]
   printf '%s' "${_v:-${2:-}}"
 }
 
-project() {
-  if [ -n "${KERYX_HUB_PROJECT:-}" ]; then printf '%s' "$KERYX_HUB_PROJECT"; else env_get KERYX_HUB_PROJECT keryx-team-hub; fi
-}
+project() { env_get KERYX_HUB_PROJECT keryx-team-hub; }
 
 state_get() { [ -f "$ROOT/state/$1" ] && cat "$ROOT/state/$1" || true; }
 state_set() { mkdir -p "$ROOT/state"; printf '%s\n' "$2" > "$ROOT/state/$1.new"; mv -f "$ROOT/state/$1.new" "$ROOT/state/$1"; }
@@ -118,18 +138,32 @@ need_install() {
 }
 
 # lock_try: take the one-operation-at-a-time lock; fails if a live hubctl holds it.
+# The lock is a symlink whose target is the owner's pid: creating it is one atomic step, so there
+# is never a lock without an owner (a directory plus a pid file has a window in which the pid
+# file is still empty and a second hubctl would call the lock stale).
 lock_try() {
   mkdir -p "$ROOT/state"
-  if ! mkdir "$ROOT/state/lock" 2>/dev/null; then
-    _pid=$(cat "$ROOT/state/lock/pid" 2>/dev/null || true)
+  _tries=0
+  while [ "$_tries" -lt 3 ]; do
+    if ln -s "$$" "$ROOT/state/lock" 2>/dev/null; then LOCK_HELD=1; return 0; fi
+    _pid=$(readlink "$ROOT/state/lock" 2>/dev/null || true)
     if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then return 1; fi
-    rm -rf "$ROOT/state/lock"
-    mkdir "$ROOT/state/lock" || return 1
-  fi
-  printf '%s\n' "$$" > "$ROOT/state/lock/pid"
-  LOCK_HELD=1
+    # Stale (or unreadable): move it aside. The rename is atomic, so one contender wins it.
+    if mv "$ROOT/state/lock" "$ROOT/state/lock.stale.$$" 2>/dev/null; then
+      _moved=$(readlink "$ROOT/state/lock.stale.$$" 2>/dev/null || true)
+      if [ -n "$_moved" ] && [ "$_moved" != "$_pid" ] && kill -0 "$_moved" 2>/dev/null; then
+        # Someone took the lock between our look and our move: give it back.
+        ln -s "$_moved" "$ROOT/state/lock" 2>/dev/null || true
+        rm -rf "$ROOT/state/lock.stale.$$"
+        return 1
+      fi
+      rm -rf "$ROOT/state/lock.stale.$$"
+    fi
+    _tries=$((_tries + 1))
+  done
+  return 1
 }
-lock() { lock_try || die "another hubctl operation is running (pid $(cat "$ROOT/state/lock/pid" 2>/dev/null || echo '?'))"; }
+lock() { lock_try || die "another hubctl operation is running (pid $(readlink "$ROOT/state/lock" 2>/dev/null || echo '?'))"; }
 
 # new_tmp: a private directory under $ROOT/tmp, removed on exit, in $NEW_TMP.
 # (Not a command substitution: the cleanup list must be updated in this shell.)
@@ -140,16 +174,23 @@ new_tmp() {
 }
 
 # --- validation ------------------------------------------------------------------
-valid_version() { printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; }
+valid_version() { match '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' "$1"; }
 norm_version() {
   _v=${1#v}
   valid_version "$_v" || die "'$1' is not a version (expected 1.2.3 or v1.2.3)"
   printf '%s' "$_v"
 }
-valid_image_ref() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9./_-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'; }
-valid_domain() { printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'; }
-valid_agent_id() { printf '%s' "$1" | grep -Eq '^[a-z][a-z0-9._-]{0,99}$' && [ "$1" != connector ]; }
-valid_project_id() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9._-]{1,200}$'; }
+# require_pinned <image ref>: a release must name its image by digest; a tag can be moved.
+# KERYX_HUB_ALLOW_UNPINNED_IMAGE=1 exists for the end-to-end test, which serves a local image.
+require_pinned() {
+  case $1 in *@sha256:*) return 0 ;; esac
+  [ "${KERYX_HUB_ALLOW_UNPINNED_IMAGE:-}" = 1 ] || die "the release names its image without a digest ($1); refusing to run an image that a tag can move"
+  warn "TEST ONLY: using an image that is not pinned by digest ($1)"
+}
+valid_image_ref() { match '^[a-z0-9][a-z0-9./_-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$' "$1"; }
+valid_domain() { match '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' "$1"; }
+valid_agent_id() { match '^[a-z][a-z0-9._-]{0,99}$' "$1" && [ "$1" != connector ]; }
+valid_project_id() { match '^[A-Za-z0-9._-]{1,200}$' "$1"; }
 
 # --- docker -----------------------------------------------------------------------
 need_docker() {
@@ -163,7 +204,10 @@ current_release() {
   (cd -P "$ROOT/current" && pwd -P) || die "$ROOT/current does not point at a directory"
 }
 
-compose_for() { # compose_for <release dir> <compose args...>
+# A subshell body on purpose: this function sets variables (the release, the mode) that its callers
+# also use, and in sh every variable is global. Without it, a caller that validates a scratch copy
+# (restage) would read its own release directory back as that copy afterwards.
+compose_for() ( # compose_for <release dir> <compose args...>
   _rel=$1; shift
   _mode=$(env_get KERYX_HUB_MODE)
   [ -f "$_rel/compose.base.yaml" ] && [ -f "$_rel/compose.$_mode.yaml" ] \
@@ -182,8 +226,20 @@ compose_for() { # compose_for <release dir> <compose args...>
     docker compose --project-directory "$_rel" -p "$(project)" --env-file "$ENV_FILE" \
       -f "$_rel/compose.base.yaml" -f "$_rel/compose.$_mode.yaml" "$@"
   fi
-}
+)
+
 compose() { compose_for "$(current_release)" "$@"; }
+
+# up_all [service...]: start what the current release defines and remove what it does not (a
+# service of a mode this install has left, such as Caddy after https -> local, must not stay up).
+up_all() { compose up -d --no-build --remove-orphans "$@"; }
+
+# pull_release_images <release dir>: every image the release runs, not only the Hub's, so a
+# registry problem stops an upgrade before the Hub is stopped.
+pull_release_images() {
+  _images=$(compose_for "$1" config --images) || die "could not list the images of $(basename -- "$1")"
+  for _i in $_images; do ensure_image "$_i"; done
+}
 
 mode_services() {
   case $(env_get KERYX_HUB_MODE) in
@@ -222,7 +278,9 @@ hub_healthz() {
   docker exec "$_cid" bun -e 'const r = await fetch("http://127.0.0.1:8787/healthz"); const b = await r.json(); process.exit(r.status === 200 && b.ok === true ? 0 : 1)' >/dev/null 2>&1
 }
 
-verify_running() { wait_ready "${1:-120}" && hub_healthz; }
+# How long to wait for the stack to report healthy after a start. Slow or emulated hosts can raise it
+# with KERYX_HUB_VERIFY_SECONDS; the end-to-end test lowers it so a failure injection does not wait two minutes.
+verify_running() { wait_ready "${1:-${KERYX_HUB_VERIFY_SECONDS:-120}}" && hub_healthz; }
 
 ensure_image() {
   docker image inspect "$1" >/dev/null 2>&1 && return 0
@@ -234,7 +292,12 @@ data_volume() {
   _cid=$(container_of hub)
   _vol=
   if [ -n "$_cid" ]; then
-    _vol=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' "$_cid" 2>/dev/null || true)
+    _m=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}} {{.Name}}{{end}}{{end}}' "$_cid" 2>/dev/null || true)
+    case $_m in
+      "volume "*) _vol=${_m#volume } ;;
+      '') ;;
+      *) die "/data of the Hub container is a ${_m%% *} mount, not a named Docker volume; hubctl will not back up, restore or replace it" ;;
+    esac
   fi
   [ -n "$_vol" ] || _vol="$(project)_hub-data"
   docker volume inspect "$_vol" >/dev/null 2>&1 || die "the data volume $_vol was not found"
@@ -249,7 +312,7 @@ docker_locked() {
 
 # --- the SQLite oracles, run inside the Hub image so they use the Hub's own SQLite ----
 CHECK_JS='import { Database } from "bun:sqlite";
-const db = new Database("/work/x/hub.sqlite", { readwrite: true });
+const db = new Database("/work/hub.sqlite", { readwrite: true });
 const verdict = db.query("PRAGMA integrity_check").all().map((row) => String(Object.values(row)[0]));
 if (verdict.length !== 1 || verdict[0] !== "ok") {
   console.error("integrity_check failed: " + verdict.slice(0, 5).join("; "));
@@ -259,41 +322,71 @@ const rows = db.query("SELECT count(*) AS n FROM hub_state WHERE id = 1").get().
 console.log("integrity=ok hub_state_rows=" + rows);
 db.close();'
 
-report_check() { # report_check <what> <output of the check>
+# report_check <what> <check output>: say what a passing check found; returns 1 when it did not pass.
+report_check() {
   case $2 in
     *integrity=ok*hub_state_rows=0*) warn "$1 passes the integrity check but has no hub_state row (a Hub that was never used?)" ;;
     *integrity=ok*) say "$1: $2" ;;
-    *) die "$1 failed its check: $2" ;;
+    *) return 1 ;;
   esac
 }
 
-# check_tar <tar> <image>: extract a full-volume backup in a scratch tmpfs and check the database copy.
-# (Into a subdirectory the check user owns: the archive's top entry carries the volume root's
-# mode and times, which tar cannot apply to a mount point it does not own.)
-check_tar() {
-  # shellcheck disable=SC2016 # $CHECK_JS is expanded by the shell inside the container
-  _out=$(docker_locked -i --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /work:rw,nosuid,size=4g \
-    -e "CHECK_JS=$CHECK_JS" --entrypoint sh "$2" -c 'mkdir /work/x && tar -xf - --no-overwrite-dir -C /work/x && exec bun -e "$CHECK_JS"' < "$1" 2>&1) \
-    || die "$(basename -- "$1") failed its check: $_out"
-  report_check "$(basename -- "$1")" "$_out"
+# new_scratch: a private directory on DISK under $ROOT/tmp, removed on exit, in $NEW_TMP, that the
+# uid the check container runs as can write to.
+new_scratch() {
+  new_tmp
+  chmod 700 "$NEW_TMP"
+  if [ "$(id -u)" = 0 ]; then chown 1000:1000 "$NEW_TMP"; fi
 }
 
-# check_db_stdin <label> <image>: the database image arrives on stdin.
+# run_check tar|db <image>: check the database that arrives on stdin, either the tar of a whole
+# volume or a database image. Sets CHECK_OUT and returns non-zero when the check did not pass.
+# The data goes to a scratch directory on disk, not to a RAM tmpfs: a volume also holds Git caches
+# that grow, and only hub.sqlite* is looked at. From a tar only hub.sqlite* is extracted, so the
+# archive's top entry (the volume root's mode and times) is never applied to anything.
+run_check() {
+  new_scratch; _scratch=$NEW_TMP
+  case $1 in
+    tar) _prep='tar -xf - --no-overwrite-dir --wildcards --no-anchored -C /work "hub.sqlite*"' ;;
+    *) _prep='cat > /work/hub.sqlite' ;;
+  esac
+  _chk_rc=0
+  CHECK_OUT=$(docker_locked -i --tmpfs /tmp:rw,noexec,nosuid,size=64m -v "$_scratch:/work" \
+    -e "CHECK_JS=$CHECK_JS" --entrypoint sh "$2" -c "$_prep && exec bun -e \"\$CHECK_JS\"" 2>&1) || _chk_rc=$?
+  rm -rf "$_scratch"
+  return "$_chk_rc"
+}
+
+# check_tar <tar> <image>: the database in a full-volume backup must pass its check (fatal).
+check_tar() {
+  run_check tar "$2" < "$1" || die "$(basename -- "$1") failed its check: $CHECK_OUT"
+  report_check "$(basename -- "$1")" "$CHECK_OUT" || die "$(basename -- "$1") failed its check: $CHECK_OUT"
+}
+
+# check_db_stdin <label> <image>: the same for a database image on stdin (fatal).
 check_db_stdin() {
-  # shellcheck disable=SC2016 # $CHECK_JS is expanded by the shell inside the container
-  _out=$(docker_locked -i --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /work:rw,nosuid,size=4g \
-    -e "CHECK_JS=$CHECK_JS" --entrypoint sh "$2" -c 'mkdir /work/x && cat > /work/x/hub.sqlite && exec bun -e "$CHECK_JS"' 2>&1) \
-    || die "$1 failed its check: $_out"
-  report_check "$1" "$_out"
+  run_check db "$2" || die "$1 failed its check: $CHECK_OUT"
+  report_check "$1" "$CHECK_OUT" || die "$1 failed its check: $CHECK_OUT"
+}
+
+# verify_sidecar <file>: compare the file with the SHA-256 recorded beside it.
+verify_sidecar() {
+  if [ -f "$1.sha256" ]; then
+    _w=$(awk '{print $1; exit}' "$1.sha256")
+    [ "$_w" = "$(sha256_of "$1")" ] || die "checksum mismatch for $(basename -- "$1")"
+    say "checksum of $(basename -- "$1") matches"
+  else
+    warn "no $(basename -- "$1").sha256 beside it: the checksum was not verified"
+  fi
 }
 
 # Exit hook for a sequence that stops the Hub: whatever went wrong, start it again.
 start_hub() {
-  compose up -d --no-build >/dev/null 2>&1 || true
-  verify_running 120 || warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"
+  up_all >/dev/null 2>&1 || true
+  verify_running || warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"
 }
 
-# --- graceful stop and full-volume backup -------------------------------------------------
+# --- graceful stop, full-volume backup, restore -------------------------------------------------
 stop_hub_graceful() {
   _cid=$(container_of hub)
   [ -n "$_cid" ] || return 0
@@ -305,20 +398,56 @@ stop_hub_graceful() {
   fi
 }
 
-backup_volume() { # backup_volume <volume> <image> <dest tar>
+# ensure_hub_stopped: after this the Hub container is not running. Everything that deletes or replaces
+# the volume's contents calls it first, recovery hooks included: a Hub that is still running keeps
+# serving deleted files, loses what it writes afterwards and can have its write-ahead log unlinked
+# under it.
+ensure_hub_stopped() {
+  compose stop -t 60 hub >/dev/null 2>&1 </dev/null || true
+  _cid=$(container_of hub)
+  if [ -n "$_cid" ] && [ "$(docker inspect -f '{{.State.Running}}' "$_cid" 2>/dev/null || echo true)" != false ]; then
+    die "the Hub container is still running; refusing to touch its data while it is"
+  fi
+}
+
+# start_hub_recreated: bring the stack up after the volume was replaced, with the Hub container
+# recreated, not merely started.
+start_hub_recreated() {
+  compose up -d --no-build --force-recreate hub >/dev/null
+  up_all >/dev/null
+}
+
+# backup_volume <volume> <image> <dest tar> [soft]: tar the volume (the Hub is stopped), write its
+# SHA-256, flush it to disk, and check the database inside. A failed check is fatal, except in
+# `soft` mode, which is for the safety copy taken before a restore or rollback replaces the current
+# data: that data may be exactly what is broken, and restoring over a damaged database is the point.
+# The copy is kept either way; a damaged one needs an explicit yes.
+backup_volume() {
   docker_locked -v "$1:/data:ro" --entrypoint tar "$2" -C /data -cf - . > "$3.part" \
     || { rm -f "$3.part"; die "could not read the data volume $1"; }
   mv "$3.part" "$3"
   printf '%s  %s\n' "$(sha256_of "$3")" "$(basename -- "$3")" > "$3.sha256"
-  check_tar "$3" "$2"
+  # The copy must be on disk before anything is wiped on the strength of it.
+  sync
+  if run_check tar "$2" < "$3"; then
+    report_check "$(basename -- "$3")" "$CHECK_OUT" || die "$(basename -- "$3") failed its check: $CHECK_OUT"
+  elif [ "${4:-}" = soft ]; then
+    warn "THE HUB'S CURRENT DATA FAILS ITS INTEGRITY CHECK: $CHECK_OUT"
+    warn "it is saved unchanged as $3, so going on loses nothing that can still be read"
+    confirm "The current data of project $(project) (volume $1) is damaged. Replace it anyway?"
+  else
+    die "$(basename -- "$3") failed its check: $CHECK_OUT"
+  fi
 }
 
 restore_volume_tar() { # restore_volume_tar <volume> <image> <tar>
+  ensure_hub_stopped
   docker_locked -i -v "$1:/data" --entrypoint sh "$2" -c 'umask 077; find /data -mindepth 1 -delete && tar -xf - --no-overwrite-dir -C /data' < "$3" \
     || die "could not restore $(basename -- "$3") into $1"
 }
 
 restore_volume_db() { # reads the database image on stdin
+  ensure_hub_stopped </dev/null
   docker_locked -i -v "$1:/data" --entrypoint sh "$2" -c 'umask 077; find /data -mindepth 1 -delete && cat > /data/hub.sqlite' \
     || die "could not restore the database into $1"
 }
@@ -362,6 +491,7 @@ download_release() {
   [ "$(cat "$2/bundle/VERSION" 2>/dev/null || true)" = "$1" ] || die "the install bundle is not the bundle of v$1"
   _ref=$(cat "$2/team-hub-image.txt")
   valid_image_ref "$_ref" || die "team-hub-image.txt does not hold an image reference"
+  require_pinned "$_ref"
 }
 
 # render_into <dir>: write the mode's configs next to their templates in <dir> from hub.env.
@@ -379,7 +509,7 @@ render_into() {
   if [ "$_mode" = https ]; then
     _email=$(env_get ACME_EMAIL)
     if [ -n "$_email" ]; then
-      printf '%s' "$_email" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' || die "ACME_EMAIL in hub.env is not an email address"
+      match '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' "$_email" || die "ACME_EMAIL in hub.env is not an email address"
       sed -e "s|@HUB_DOMAIN@|$_domain|g" -e "s|@ACME_EMAIL@|$_email|g" "$_dir/Caddyfile.in" > "$_dir/Caddyfile"
     else
       sed -e "s|@HUB_DOMAIN@|$_domain|g" -e '/@ACME_EMAIL@/d' "$_dir/Caddyfile.in" > "$_dir/Caddyfile"
@@ -387,9 +517,9 @@ render_into() {
     sed -e "s|@HUB_DOMAIN@|$_domain|g" "$_dir/edge.https.conf.in" > "$_dir/edge.conf"
   else
     _tid=$(env_get CF_TUNNEL_ID); _team=$(env_get CF_ACCESS_TEAM); _aud=$(env_get CF_ACCESS_AUD)
-    printf '%s' "$_tid" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || die "CF_TUNNEL_ID in hub.env is not a tunnel UUID"
-    printf '%s' "$_team" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$' || die "CF_ACCESS_TEAM in hub.env is not a team name"
-    printf '%s' "$_aud" | grep -Eq '^[0-9a-f]{64}$' || die "CF_ACCESS_AUD in hub.env is not an Access application audience"
+    match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' "$_tid" || die "CF_TUNNEL_ID in hub.env is not a tunnel UUID"
+    match '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$' "$_team" || die "CF_ACCESS_TEAM in hub.env is not a team name"
+    match '^[0-9a-f]{64}$' "$_aud" || die "CF_ACCESS_AUD in hub.env is not an Access application audience"
     sed -e "s|@HUB_DOMAIN@|$_domain|g" "$_dir/edge.cloudflare.conf.in" > "$_dir/edge.conf"
     sed -e "s|@HUB_DOMAIN@|$_domain|g" -e "s|@CF_TUNNEL_ID@|$_tid|g" -e "s|@CF_ACCESS_TEAM@|$_team|g" -e "s|@CF_ACCESS_AUD@|$_aud|g" \
       "$_dir/tunnel.yml.in" > "$_dir/tunnel.yml"
@@ -455,17 +585,30 @@ cmd__stage() {
   say "staged release $_tag"
 }
 
-# restage: re-render the current release's configs after editing hub.env (a new domain, say).
+# restage: re-render the current release's configs after editing hub.env (a new domain, another mode),
+# validate the result, and apply it. A bind-mounted file is followed by inode, and the files below are
+# replaced by rename, so a plain `up` would leave the containers on the old content: the services that
+# mount them are recreated.
 cmd_restage() {
-  need_install; lock
+  need_install; need_docker; lock
   _rel=$(current_release)
   new_tmp; _work=$NEW_TMP
-  for _f in Caddyfile.in edge.https.conf.in edge.cloudflare.conf.in tunnel.yml.in; do cp "$_rel/$_f" "$_work/$_f"; done
+  # Render and validate in a copy: nothing live changes unless the result validates.
+  cp -R "$_rel/." "$_work/"
   render_into "$_work"
+  compose_for "$_work" config --quiet || die "the re-rendered configs do not validate; nothing was changed"
   for _f in Caddyfile edge.conf tunnel.yml; do
-    [ -f "$_work/$_f" ] && { cp "$_work/$_f" "$_rel/$_f.new"; chmod 644 "$_rel/$_f.new"; mv -f "$_rel/$_f.new" "$_rel/$_f"; }
+    [ -f "$_work/$_f" ] || continue
+    cp "$_work/$_f" "$_rel/$_f.new"; chmod 644 "$_rel/$_f.new"; mv -f "$_rel/$_f.new" "$_rel/$_f"
   done
-  say "re-rendered the configs of $(basename -- "$_rel"); run 'hubctl up' to apply them"
+  say "re-rendered the configs of $(basename -- "$_rel"); applying them"
+  _svcs=""
+  for _s in $(mode_services); do
+    [ "$_s" = hub ] || _svcs="$_svcs $_s"
+  done
+  up_all
+  # shellcheck disable=SC2086
+  if [ -n "$_svcs" ]; then compose up -d --no-build --force-recreate $_svcs; fi
 }
 
 # --- commands ----------------------------------------------------------------------------
@@ -479,11 +622,13 @@ cmd_up() {
       *) _svcs="$_svcs $_a" ;;
     esac
   done
+  # An upgrade, restore or backup in progress owns the stack; do not start or stop it underneath.
+  lock
   # shellcheck disable=SC2086
-  compose up -d --no-build $_svcs
+  up_all $_svcs
 }
-cmd_stop() { need_install; need_docker; compose stop -t 60 "$@"; }
-cmd_restart() { need_install; need_docker; compose restart -t 60 "$@"; }
+cmd_stop() { need_install; need_docker; lock; compose stop -t 60 "$@"; }
+cmd_restart() { need_install; need_docker; lock; compose restart -t 60 "$@"; }
 cmd_ps() { need_install; need_docker; compose ps "$@"; }
 cmd_logs() { need_install; need_docker; compose logs "$@"; }
 cmd_config() { need_install; need_docker; compose config --quiet; say "compose files validate"; }
@@ -492,13 +637,18 @@ cmd_status() {
   need_install; need_docker
   _rel=$(current_release)
   say "install dir : $ROOT"
+  say "project     : $(project)"
   say "mode        : $(env_get KERYX_HUB_MODE)"
   say "release     : $(basename -- "$_rel")   (previous: $(state_get previous-release))"
   say "image       : $(cat "$_rel/image.ref")"
   for _svc in $(mode_services); do say "$_svc : $(service_state "$_svc")"; done
   _last=$(list_backups "$ROOT/backups/daily" | head -n 1)
   say "last backup : ${_last:-none}"
-  if crontab -l 2>/dev/null | grep -Fq "keryx-team-hub-backup:$ROOT"; then say "nightly backup: scheduled"; else say "nightly backup: not scheduled (hubctl schedule on)"; fi
+  if command -v crontab >/dev/null 2>&1; then
+    if ( cron_read && cron_has ) 2>/dev/null; then say "nightly backup: scheduled"; else say "nightly backup: not scheduled, or the crontab could not be read (hubctl schedule status)"; fi
+  else
+    say "nightly backup: no crontab on this host"
+  fi
 }
 
 # --- backup ------------------------------------------------------------------------------
@@ -522,14 +672,17 @@ rotate() { # rotate <dir> <keep>
   done
 }
 
-# Keep the three newest safety backups (taken by upgrade, restore, rollback). They hold the
-# whole database. The one `rollback --restore-data` needs is never pruned; manual-* backups
-# are the operator's and are never pruned.
+# Safety backups (taken by upgrade, restore and rollback) hold the whole database, and the newest
+# one can be the only copy of the newest data. Keep the three newest, and never remove one younger
+# than 14 days however many newer ones there are; the one `rollback --restore-data` needs is never
+# removed. manual-* backups are the operator's and are never pruned.
 prune_safety_backups() {
   _keep=$(state_get last-upgrade-backup)
   # shellcheck disable=SC2012 # modification time orders these; the names are ours
   ls -1td "$ROOT"/backups/upgrade-* "$ROOT"/backups/pre-restore-* "$ROOT"/backups/pre-rollback-* 2>/dev/null | awk 'NR > 3' | while read -r _d; do
-    [ "$_d" = "$_keep" ] || rm -rf "$_d"
+    [ "$_d" = "$_keep" ] && continue
+    [ -n "$(find "$_d" -maxdepth 0 -mtime +14 2>/dev/null)" ] || continue
+    rm -rf "$_d"
   done
 }
 
@@ -544,7 +697,7 @@ cmd_backup() {
   done
   need_install; need_docker
   # From cron an overlapping upgrade is not an error: skip tonight's run quietly.
-  lock_try || { say "skipped: another hubctl operation is running"; return 0; }
+  lock_try || { warn "skipped: another hubctl operation is running, so this backup did not run"; return 0; }
   _rel=$(current_release); _image=$(cat "$_rel/image.ref")
   mkdir -p "$ROOT/backups/daily" "$ROOT/backups/weekly"; chmod 700 "$ROOT/backups"
   if [ "$_offline" = 1 ]; then
@@ -555,9 +708,9 @@ cmd_backup() {
     stop_hub_graceful
     backup_volume "$_vol" "$_image" "$_dir/hub-data.tar"
     step "starting the Hub"
-    compose up -d --no-build hub >/dev/null
+    up_all hub >/dev/null
     FAIL_HOOK=""
-    verify_running 120 || die "the Hub did not come back; the backup is safe at $_dir"
+    verify_running || die "the Hub did not come back; the backup is safe at $_dir"
     say "backup written: $_dir/hub-data.tar"
     return 0
   fi
@@ -602,52 +755,48 @@ cmd_restore() {
   need_install; need_docker; lock
   _rel=$(current_release); _image=$(cat "$_rel/image.ref"); ensure_image "$_image"
   _vol=$(data_volume)
-  if [ -f "$_file.sha256" ]; then
-    _want=$(awk '{print $1; exit}' "$_file.sha256")
-    [ "$_want" = "$(sha256_of "$_file")" ] || die "checksum mismatch for $(basename -- "$_file")"
-    say "checksum matches"
-  else
-    warn "no $(basename -- "$_file").sha256 beside it: the checksum was not verified"
-  fi
+  verify_sidecar "$_file"
   case $_file in
     *.sqlite.gz) _kind=gz ;;
     *.sqlite) _kind=db ;;
     *.tar) _kind=tar ;;
     *) die "restore takes a .sqlite.gz or .sqlite backup, or the .tar of a full-volume backup" ;;
   esac
+  new_tmp; _work=$NEW_TMP
   step "checking the backup before touching anything"
-  # shellcheck disable=SC2094 # the label only names the file; it is not opened for writing
-  case $_kind in
-    gz) gunzip -c "$_file" | check_db_stdin "$(basename -- "$_file")" "$_image" ;;
-    db) check_db_stdin "$(basename -- "$_file")" "$_image" < "$_file" ;;
-    tar) check_tar "$_file" "$_image" ;;
-  esac
-  confirm "Replace the Hub's data with $(basename -- "$_file")? Everything written since that backup is lost."
+  # Decompress ONCE, to a file, then check that file and restore from that same file: what was
+  # checked is what is restored, with no unchecked pipe in between.
+  _src=$_file
+  if [ "$_kind" = gz ]; then
+    gunzip -c "$_file" > "$_work/restore.sqlite" || die "$(basename -- "$_file") is not a valid gzip file"
+    _src=$_work/restore.sqlite; _kind=db
+  fi
+  if [ "$_kind" = tar ]; then check_tar "$_src" "$_image"; else check_db_stdin "$(basename -- "$_file")" "$_image" < "$_src"; fi
+  confirm "Replace the data of project $(project) (volume $_vol) with $(basename -- "$_file")? Everything written since that backup is lost."
   _safety=$ROOT/backups/pre-restore-$(timestamp); mkdir -p "$_safety"
-  step "stopping the Hub and saving the current data first"
   _wiped=0
-  # Runs from the exit trap if anything below fails: the data it replaced goes back.
+  # Runs from the exit trap if anything below fails: the data it replaced goes back, onto a
+  # Hub that is verified stopped first.
   restore_recover() {
     if [ "$_wiped" = 1 ]; then
       warn "the restore did not complete; putting back the data it replaced"
       restore_volume_tar "$_vol" "$_image" "$_safety/hub-data.tar"
+      start_hub_recreated
+    else
+      up_all >/dev/null 2>&1 || true
     fi
-    compose up -d --no-build >/dev/null 2>&1 || true
-    if verify_running 120; then warn "the Hub is running again on the data it had before"; else warn "the Hub did not report healthy; the data it had is in $_safety/hub-data.tar (hubctl restore $_safety/hub-data.tar)"; fi
+    if verify_running; then warn "the Hub is running again on the data it had before"; else warn "the Hub did not report healthy; the data it had is in $_safety/hub-data.tar (hubctl restore $_safety/hub-data.tar)"; fi
   }
   FAIL_HOOK=restore_recover
+  step "stopping the Hub and saving the current data first"
   stop_hub_graceful
-  backup_volume "$_vol" "$_image" "$_safety/hub-data.tar"
+  backup_volume "$_vol" "$_image" "$_safety/hub-data.tar" soft
   say "the data being replaced is saved as $_safety/hub-data.tar"
   step "restoring"
   _wiped=1
-  case $_kind in
-    gz) gunzip -c "$_file" | restore_volume_db "$_vol" "$_image" ;;
-    db) restore_volume_db "$_vol" "$_image" < "$_file" ;;
-    tar) restore_volume_tar "$_vol" "$_image" "$_file" ;;
-  esac
-  compose up -d --no-build >/dev/null
-  verify_running 120 || die "the Hub did not come up on the restored data"
+  if [ "$_kind" = tar ]; then restore_volume_tar "$_vol" "$_image" "$_src"; else restore_volume_db "$_vol" "$_image" < "$_src"; fi
+  start_hub_recreated
+  verify_running || die "the Hub did not come up on the restored data"
   FAIL_HOOK=""
   prune_safety_backups
   say "restored; the Hub is running"
@@ -709,7 +858,8 @@ cmd_upgrade() {
   _old_rel=$(current_release); _old_tag=$(basename -- "$_old_rel"); _old_image=$(cat "$_old_rel/image.ref")
   [ "$_tag" != "$_old_tag" ] || die "already on $_tag"
   _prev_before=$(state_get previous-release)
-  confirm "Upgrade $_old_tag to $_tag? The Hub is stopped for about a minute while its data is backed up."
+  _vol=$(data_volume)
+  confirm "Upgrade project $(project) (volume $_vol) from $_old_tag to $_tag? The Hub is stopped for about a minute while its data is backed up."
 
   new_tmp; _work=$NEW_TMP
   step "downloading $_tag"
@@ -718,9 +868,9 @@ cmd_upgrade() {
   step "staging $_tag"
   cmd__stage "$_work/dl/bundle" "$_version" "$_image"
   _new_rel=$(cd -P "$ROOT/releases/$_tag" && pwd -P)
-  step "pulling the image"
-  ensure_image "$_image"
-  _vol=$(data_volume)
+  # Every image, before the Hub is stopped: a registry that fails now costs nothing.
+  step "pulling every image of the release"
+  pull_release_images "$_new_rel"
 
   _backup=$ROOT/backups/upgrade-$(timestamp)-$_old_tag-to-$_tag
   mkdir -p "$_backup"
@@ -733,10 +883,9 @@ cmd_upgrade() {
       warn "rolling back to $_old_tag with the data it had before the upgrade"
       switch_current "$_old_tag"
       state_set previous-release "$_prev_before"
-      compose_for "$_old_rel" stop -t 30 hub >/dev/null 2>&1 || true
       restore_volume_tar "$_vol" "$_old_image" "$_backup/hub-data.tar"
-      compose_for "$_old_rel" up -d --no-build >/dev/null 2>&1 || true
-      if verify_running 120; then
+      start_hub_recreated
+      if verify_running; then
         sync_hubctl
         warn "rolled back: $_old_tag is running on the pre-upgrade data (backup: $_backup/hub-data.tar). Nothing of $_tag is running."
       else
@@ -744,8 +893,8 @@ cmd_upgrade() {
       fi
     elif [ "$_stopped" = 1 ]; then
       warn "upgrade abandoned; starting $_old_tag again"
-      compose_for "$_old_rel" up -d --no-build >/dev/null 2>&1 || true
-      verify_running 120 || warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"
+      up_all >/dev/null 2>&1 || true
+      verify_running || warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"
     fi
   }
 
@@ -756,15 +905,19 @@ cmd_upgrade() {
   step "backing up the whole data volume"
   backup_volume "$_vol" "$_old_image" "$_backup/hub-data.tar"
   printf 'from=%s\nto=%s\nvolume=%s\n' "$_old_tag" "$_tag" "$_vol" > "$_backup/meta"
-  state_set last-upgrade-backup "$_backup"
   step "trial start of $_tag on a copy of the data"
   trial_start "$_image" "$_backup/hub-data.tar" || die "the new image did not start on a copy of the data"
   step "switching to $_tag"
+  # The flag first: an interruption between the two lines must still be recovered as "switched".
+  _switched=1
+  switch_current "$_tag"
   state_set previous-release "$_old_tag"
-  switch_current "$_tag"; _switched=1
   step "starting $_tag"
-  compose up -d --no-build >/dev/null || die "docker compose could not start $_tag"
-  verify_running 120 || die "$_tag did not become healthy"
+  up_all >/dev/null || die "docker compose could not start $_tag"
+  verify_running || die "$_tag did not become healthy"
+  # Only a finished upgrade owns the pointer `rollback --restore-data` follows; a failed one
+  # leaves the previous upgrade's backup where it was.
+  state_set last-upgrade-backup "$_backup"
   FAIL_HOOK=""
   sync_hubctl
   prune_safety_backups
@@ -787,6 +940,22 @@ cmd_rollback() {
   _prev_rel=$(cd -P "$ROOT/releases/$_prev" && pwd -P)
   _vol=$(data_volume)
   _cur_image=$(cat "$_cur_rel/image.ref")
+  _image=$(cat "$_prev_rel/image.ref")
+  # Everything the previous release needs is here before anything is stopped.
+  pull_release_images "$_prev_rel"
+  if [ "$_restore" = 1 ]; then
+    _backup=$(state_get last-upgrade-backup)
+    [ -n "$_backup" ] && [ -f "$_backup/hub-data.tar" ] || die "no pre-upgrade backup is recorded"
+    # The backup must be the one taken when leaving the release we are rolling back to.
+    _from=$(sed -n 's/^from=//p' "$_backup/meta" 2>/dev/null || true)
+    [ "$_from" = "$_prev" ] || die "the recorded backup was taken when leaving ${_from:-an unknown release}, not $_prev; use 'hubctl restore' with the backup you mean"
+    verify_sidecar "$_backup/hub-data.tar"
+    step "checking the pre-upgrade backup before touching anything"
+    check_tar "$_backup/hub-data.tar" "$_image"
+    confirm "Roll back project $(project) (volume $_vol) to $_prev AND restore the data from before the upgrade ($(basename -- "$_backup"))? Everything written since is lost."
+  else
+    confirm "Roll back project $(project) from $_cur_tag to $_prev? The data (volume $_vol) is kept as it is: a release ignores the additive tables a newer one created."
+  fi
   _wiped=0; _switched=0
   # Runs from the exit trap if anything below fails: back to the release and the data it started with.
   rollback_recover() {
@@ -794,32 +963,28 @@ cmd_rollback() {
     if [ "$_wiped" = 1 ]; then
       warn "the rollback did not complete; putting back the data it replaced"
       restore_volume_tar "$_vol" "$_cur_image" "$_safety/hub-data.tar"
+      start_hub_recreated
+    else
+      up_all >/dev/null 2>&1 || true
     fi
-    compose up -d --no-build >/dev/null 2>&1 || true
-    if verify_running 120; then warn "the Hub is running again on $_cur_tag and the data it had before"; else warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"; fi
+    if verify_running; then warn "the Hub is running again on $_cur_tag and the data it had before"; else warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"; fi
   }
   FAIL_HOOK=rollback_recover
   if [ "$_restore" = 1 ]; then
-    _backup=$(state_get last-upgrade-backup)
-    [ -n "$_backup" ] && [ -f "$_backup/hub-data.tar" ] || die "no pre-upgrade backup is recorded"
-    confirm "Roll back to $_prev AND restore the data from before the upgrade ($(basename -- "$_backup"))? Everything written since is lost."
-    _image=$(cat "$_prev_rel/image.ref"); ensure_image "$_image"
     _safety=$ROOT/backups/pre-rollback-$(timestamp); mkdir -p "$_safety"
     step "stopping the Hub and saving the current data first"
     stop_hub_graceful
-    backup_volume "$_vol" "$_cur_image" "$_safety/hub-data.tar"
+    backup_volume "$_vol" "$_cur_image" "$_safety/hub-data.tar" soft
     say "the data being replaced is saved as $_safety/hub-data.tar"
     _wiped=1
     restore_volume_tar "$_vol" "$_image" "$_backup/hub-data.tar"
-  else
-    confirm "Roll back from $_cur_tag to $_prev? The data is kept as it is: a release ignores the additive tables a newer one created."
   fi
-  ensure_image "$(cat "$_prev_rel/image.ref")"
+  _switched=1
+  switch_current "$_prev"
   state_set previous-release "$_cur_tag"
-  switch_current "$_prev"; _switched=1
   step "starting $_prev"
-  compose up -d --no-build >/dev/null
-  verify_running 120 || die "$_prev did not become healthy"
+  if [ "$_wiped" = 1 ]; then start_hub_recreated; else up_all >/dev/null; fi
+  verify_running || die "$_prev did not become healthy"
   FAIL_HOOK=""
   sync_hubctl
   # The pre-upgrade backup belongs to the upgrade that was just undone; restoring it after a
@@ -926,6 +1091,7 @@ cmd_agent_key() {
       _key=$(openssl rand -hex 32)
       AK_ID=$_id; AK_DIGEST=$(printf '%s' "$_key" | sha256_stdin); AK_PROJECTS=$_projects
       export AK_ID AK_DIGEST AK_PROJECTS AK_READONLY AK_ROTATE
+      lock
       agent_key_run issue
       {
         printf '\nAgent key for %s (shown once; only its digest is stored):\n\n  %s\n\n' "$_id" "$_key"
@@ -937,6 +1103,7 @@ cmd_agent_key() {
       [ $# -eq 1 ] || die "usage: hubctl agent-key revoke <agent-id>"
       valid_agent_id "$1" || die "not an agent id: $1"
       AK_ID=$1; export AK_ID
+      lock
       agent_key_run revoke
       say "revoked '$1'; its key stops working on the next request"
       ;;
@@ -945,22 +1112,51 @@ cmd_agent_key() {
 }
 
 # --- nightly backup schedule ----------------------------------------------------------------------
+# One crontab line per install, ending in a marker that carries the install's whole path. Lines are
+# matched on that exact ending, never as a substring: /srv/hub must not match /srv/hub2.
+cron_marker() { printf ' # keryx-team-hub-backup:%s' "$ROOT"; }
+
+# cron_read: this user's crontab into CRON_CONTENT. A user with no crontab has an empty one; any other
+# failure stops here, because writing back what could not be read would erase it.
+cron_read() {
+  _cron_rc=0
+  CRON_CONTENT=$(crontab -l 2>&1) || _cron_rc=$?
+  if [ "$_cron_rc" -ne 0 ]; then
+    case $CRON_CONTENT in
+      *"no crontab"*) CRON_CONTENT= ;;
+      *) die "could not read the crontab (crontab -l: $CRON_CONTENT); not touching it" ;;
+    esac
+  fi
+}
+# cron_has: CRON_CONTENT holds this install's line.
+cron_has() {
+  [ -n "$CRON_CONTENT" ] || return 1
+  printf '%s\n' "$CRON_CONTENT" | MARK=$(cron_marker) awk '{ m = ENVIRON["MARK"]; if (length($0) >= length(m) && substr($0, length($0) - length(m) + 1) == m) found = 1 } END { exit !found }'
+}
+# cron_without: CRON_CONTENT minus this install's line.
+cron_without() {
+  [ -n "$CRON_CONTENT" ] || return 0
+  printf '%s\n' "$CRON_CONTENT" | MARK=$(cron_marker) awk '{ m = ENVIRON["MARK"]; if (length($0) >= length(m) && substr($0, length($0) - length(m) + 1) == m) next; print }'
+}
+
 cmd_schedule() {
   need_install; need_command_crontab
-  _marker="keryx-team-hub-backup:$ROOT"
   case $ROOT in *%*) die "cron treats % specially; move the install to a path without one" ;; esac
   case ${1:-status} in
     on)
       mkdir -p "$ROOT/log"
-      { crontab -l 2>/dev/null | grep -vF "$_marker" || true; printf '17 3 * * * "%s/hubctl" backup --quiet >> "%s/log/backup.log" 2>&1 # %s\n' "$ROOT" "$ROOT" "$_marker"; } | crontab -
+      cron_read
+      { cron_without; printf '17 3 * * * "%s/hubctl" backup --quiet >> "%s/log/backup.log" 2>&1%s\n' "$ROOT" "$ROOT" "$(cron_marker)"; } | crontab -
       say "nightly backup scheduled at 03:17 (server time); logs in $ROOT/log/backup.log"
       ;;
     off)
-      { crontab -l 2>/dev/null | grep -vF "$_marker" || true; } | crontab -
+      cron_read
+      cron_without | crontab -
       say "nightly backup removed from the crontab"
       ;;
     status)
-      if crontab -l 2>/dev/null | grep -qF "$_marker"; then say "nightly backup: scheduled"; else say "nightly backup: not scheduled"; fi
+      cron_read
+      if cron_has; then say "nightly backup: scheduled"; else say "nightly backup: not scheduled"; fi
       ;;
     *) die "usage: hubctl schedule on|off|status" ;;
   esac
@@ -990,7 +1186,7 @@ hubctl — operate a self-hosted Keryx Team Hub (install dir: $ROOT)
   agent-key issue <agent-id> --project <id>[,<id>] [--read-only]
   agent-key issue <agent-id> --rotate        a new key; the id, projects and access are kept
   agent-key revoke <agent-id>
-  restage                         re-render configs after editing secrets/hub.env
+  restage                         re-render configs after editing secrets/hub.env, validate, apply
 
 There is deliberately no 'down': removing the stack's volumes would delete the data.
 EOF
@@ -1014,6 +1210,7 @@ main() {
     agent-key) cmd_agent_key "$@" ;;
     restage) cmd_restage "$@" ;;
     _stage) cmd__stage "$@" ;;
+    _pull) need_install; need_docker; pull_release_images "$(current_release)" ;;
     _wait) need_install; need_docker; verify_running "${1:-120}" ;;
     help|-h|--help) usage ;;
     down) die "there is no 'down': it would take the data volume with it. Use 'hubctl stop'." ;;
