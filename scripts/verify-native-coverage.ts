@@ -394,7 +394,7 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
         authorizeController: async () => true, authorizeQueued: async () => true, authorizeAction: async () => true, authorizeSelection: async () => true, authorizeInspection: async () => true, authorizeOwnedControl: async () => true });
       const tasks: string[] = [];
       const observed: string[] = []; value.subscribeTurnOutcome((observation) => { observed.push(`${observation.kind}:${"reason" in observation ? observation.reason : ""}:${"text" in observation ? observation.text.slice(0, 200) : ""}`); });
-      const replace = (text: string) => tasks.reduce((current, task) => current.replaceAll(task, "<owned>"), text).replaceAll(value.nativeSessionId(), "<native-session>").replaceAll(dataDir, "<state>").replaceAll(cwd, "<checkout>")
+      const replace = (text: string) => tasks.reduce((current, task) => current.replaceAll(task, "<owned>"), text).replaceAll(value.nativeSessionId(), "<native-session>").replaceAll(dataDir, "<state>").replaceAll(cwd, "<checkout>").replaceAll(configDir, "<config>")
         .replaceAll(/"(pid|ageMs)":\d+/g, "\"$1\":0").replaceAll(/"(previewDigest|snapshotDigest|workspaceBaseline)":"[0-9a-f]{64}"/g, "\"$1\":\"<digest>\"").replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>").replaceAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<time>");
       return { host: value, runtime: assembled.value, tasks, observed, cwd, peerInstances, replace };
     };
@@ -675,11 +675,19 @@ export function renderDescriptorModule(descriptor: NativeCoverageDescriptor): st
     + `// the runtime refuses a descriptor that does not hash to its own body or that names another registry or command contract.\n`
     + `export const NATIVE_COVERAGE_DESCRIPTOR: unknown = ${JSON.stringify(descriptor, null, 2)};\n`;
 }
+/** Which committed pins or verdicts a fresh execution does not reproduce, so a stale inventory names its cause instead of only a code. */
+function inventoryDrift(committed: NativeCoverageInventory, fresh: NativeCoverageInventory): string {
+  const differs = (a: unknown, b: unknown) => canonicalDigest(a) !== canonicalDigest(b);
+  const drift: string[] = committed.schema !== fresh.schema || committed.registryDigest !== fresh.registryDigest ? ["registry"] : [];
+  for (const command of committed.commands) { const next = fresh.commands.find((entry) => entry.commandName === command.commandName); if (next === undefined || differs(command, next)) drift.push(`command ${command.commandName}`); }
+  for (const row of committed.variants) { const next = fresh.variants.find((entry) => entry.id === row.id); if (next === undefined || differs(row, next)) drift.push(`variant ${row.id}${next !== undefined && next.reason !== row.reason ? ` (now: ${next.reason})` : ""}`); }
+  return drift.slice(0, 8).join("; ");
+}
 /** Release/package guard: the embedded descriptor must validate and equal the one re-derived from a fresh execution of the committed inventory. */
-export function checkEmbeddedDescriptor(verification: Pick<NativeCoverageVerification, "inventory" | "refreshed" | "descriptor">, embedded: unknown, release: boolean): { ok: true; descriptor: NativeCoverageDescriptor } | { ok: false; code: string } {
+export function checkEmbeddedDescriptor(verification: Pick<NativeCoverageVerification, "inventory" | "refreshed" | "descriptor">, embedded: unknown, release: boolean): { ok: true; descriptor: NativeCoverageDescriptor } | { ok: false; code: string; detail?: string } {
   const valid = validateNativeCoverageDescriptor(embedded, currentNativeCoverageSubject());
   if (!valid.ok) return { ok: false, code: valid.code };
-  if (canonicalDigest(coreInventory(verification.inventory)) !== canonicalDigest(coreInventory(verification.refreshed))) return { ok: false, code: "inventory-stale" };
+  if (canonicalDigest(coreInventory(verification.inventory)) !== canonicalDigest(coreInventory(verification.refreshed))) return { ok: false, code: "inventory-stale", detail: inventoryDrift(verification.inventory, verification.refreshed) };
   if (valid.descriptor.descriptorDigest !== verification.descriptor.descriptorDigest) return { ok: false, code: "descriptor-stale" };
   if (release && !valid.releaseReady) return { ok: false, code: "not-release-ready" };
   return { ok: true, descriptor: valid.descriptor };
