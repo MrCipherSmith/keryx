@@ -37,6 +37,14 @@ test("demote shares actual registry domain guard and refuses strangers, malforme
  expect(await executeTasksIntegration(f.context,"tasks.output",{taskId:started.jobId,cursor:-1})).toMatchObject({ok:false,error:{code:"invalid-arguments"}});
  }finally{await f.cleanup();}
 });
+test("a private native checkpoint task is never listed, read, demoted or killed through the task commands",async()=>{
+ const f=await fixture(); try{
+ const hidden=await f.jobs.start("fixture",{phase:"foreground",visibility:"private"}); if(!hidden.ok)throw new Error("fixture");
+ expect(await executeTasksIntegration(f.context,"tasks",{})).toMatchObject({ok:true,data:[]});
+ for(const name of ["tasks.output","tasks.kill","demote"])expect(await executeTasksIntegration(f.context,name,{taskId:hidden.jobId})).toMatchObject({ok:false,error:{code:"not-found"}});
+ expect(f.jobs.get(hidden.jobId,{includePrivate:true})).toMatchObject({status:"running",phase:"foreground"});
+ }finally{await f.cleanup();}
+});
 test("task actions require fresh host authority; no arbitrary input actor or process authority",async()=>{
  const f=await fixture();try{
  const started=await f.jobs.start("fixture");if(!started.ok)throw new Error("fixture");f.context.authorize=async()=>{throw new Error("stale");};

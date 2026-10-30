@@ -15,6 +15,8 @@ export interface NativeOwnedGitOptions {
 }
 /** Private Git output is captured before the registry subscriber. Public tasks expose only a static label. */
 export function createNativeOwnedGit(options: NativeOwnedGitOptions) {
+  /** This module starts the private checkpoint tasks, so it alone addresses them by id. */
+  const own={includePrivate:true};
   const cwd=realpathSync(options.cwd),sessionDir=realpathSync(options.sessionDir),gitDir=join(sessionDir,'rewind','shadow.git');
   const validate=(request:ShadowGitRequest)=>{
     options.assertOwnership();request.signal.throwIfAborted();
@@ -34,7 +36,7 @@ export function createNativeOwnedGit(options: NativeOwnedGitOptions) {
     validate(request);await options.authorize(request);validate(request);
     const signal=AbortSignal.any([request.signal,AbortSignal.timeout(30000)]);let jobId:string|undefined;let handle:BackgroundProcessHandle|undefined;
     let stdout='',stderr='',bytes=0,overflow=false;
-    const abort=()=>{if(jobId!==undefined)void options.jobs.kill(jobId).catch(()=>undefined);else handle?.kill('SIGTERM');};
+    const abort=()=>{if(jobId!==undefined)void options.jobs.kill(jobId,undefined,own).catch(()=>undefined);else handle?.kill('SIGTERM');};
     signal.addEventListener('abort',abort,{once:true});
     try{
       const begun=await options.jobs.start(request.readOnly?'Native checkpoint inspection':'Native checkpoint preparation',{
@@ -46,9 +48,9 @@ export function createNativeOwnedGit(options: NativeOwnedGitOptions) {
       });
       if(!begun.ok)throw new Error('native-shadow-start-failed');jobId=begun.jobId;if(signal.aborted)abort();
       const stopped=await options.jobs.waitForExit(jobId,31000);
-      if(stopped!=='exited'){await options.jobs.kill(jobId);if(await options.jobs.waitForExit(jobId,3000)!=='exited')throw new Error('native-shadow-stop-unconfirmed');throw new Error('native-shadow-timeout');}
+      if(stopped!=='exited'){await options.jobs.kill(jobId,undefined,own);if(await options.jobs.waitForExit(jobId,3000)!=='exited')throw new Error('native-shadow-stop-unconfirmed');throw new Error('native-shadow-timeout');}
       if(overflow)throw new Error('native-shadow-output-quota');signal.throwIfAborted();options.assertOwnership();
-      const task=options.jobs.get(jobId);if(task?.exitCode===undefined||task.status==='running'||task.status==='killed')throw new Error('native-shadow-stop-unconfirmed');
+      const task=options.jobs.get(jobId,own);if(task?.exitCode===undefined||task.status==='running'||task.status==='killed')throw new Error('native-shadow-stop-unconfirmed');
       return {code:task.exitCode,stdout,stderr};
     }finally{signal.removeEventListener('abort',abort);}
   }};

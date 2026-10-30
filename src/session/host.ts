@@ -364,7 +364,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     record.activeRunId = operation.runId; record.activeTurnId = operation.turnId; record.state = "busy"; record.version++;
     const abort = new AbortController();
     const executor = { hostId, nativeSessionId: handle.summary.id, generation: turnOrdinal };
-    const existingTasks = new Set(options.runtime.jobs.list().map((task) => task.jobId));
+    const existingTasks = new Set(options.runtime.jobs.list({ includePrivate: true }).map((task) => task.jobId));
     const turnLog = createTurnObservationLog(handle.dir, operation.runId);
     const observe = (body: NativeTurnObservationPayload) => {
       const observation: NativeTurnObservation = { sessionId: record.sessionId, runId: operation.runId, turnId: operation.turnId, executor,
@@ -409,7 +409,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
           beforeMutation: async () => {
             const before = await options.workspace.verify(record.workspaceBaseline); if (!before.ok) throw new SessionHostError("workspace-conflict");
             if (recorder !== undefined) { try { await scopedRewind({ kind: "run", signal: abort.signal, beforeAction: (toolName) => io.beforeAction!({ kind: "tool", toolName, signal: abort.signal }) }, () => recorder!.beforeMutation()); }
-              catch (cause) { if (abort.signal.aborted) throw cause; if (options.runtime.jobs.list().some(task => task.visibility === "private" && task.status === "running")) { record.state = "recovery-required"; state(); throw new SessionHostError("checkpoint-stop-unconfirmed"); }
+              catch (cause) { if (abort.signal.aborted) throw cause; if (options.runtime.jobs.list({ includePrivate: true }).some(task => task.visibility === "private" && task.status === "running")) { record.state = "recovery-required"; state(); throw new SessionHostError("checkpoint-stop-unconfirmed"); }
                 // Only a code-shaped cause is shown: a raw Git message can carry local paths.
                 const unavailable = cause instanceof Error && /^[a-z0-9-]{1,64}$/.test(cause.message) ? cause.message : "checkpoint-capture-failed";
                 publishMessage("system-receipt", `A complete checkpoint is unavailable for this turn (${unavailable}); ordinary coding continues within its existing policy.`, operation.runId, operation.turnId); }
@@ -513,8 +513,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         publishMessage("system-receipt", terminal.reason, operation.runId, operation.turnId); record.state = "recovery-required"; }
       finally {
         clearTimeout(deadline);
-        const unknownTasks = options.runtime.jobs.list().filter(task => !existingTasks.has(task.jobId) && task.owner === undefined && task.status === "running");
-        const tasks = options.runtime.jobs.list().filter(task => task.owner?.kind === "run" && task.owner.identity === operation.runId);
+        const unknownTasks = options.runtime.jobs.list({ includePrivate: true }).filter(task => !existingTasks.has(task.jobId) && task.owner === undefined && task.status === "running");
+        const tasks = options.runtime.jobs.list({ includePrivate: true }).filter(task => task.owner?.kind === "run" && task.owner.identity === operation.runId);
         if (unknownTasks.length > 0 || tasks.some((task) => task.status === "running") || record.state === "recovery-required") terminal.outcome = "unknown";
         // A run whose owned work outlives it has no proven cessation: the session is fenced with it, never idle beside a live owned process.
         if (terminal.outcome === "unknown") record.state = "recovery-required";
