@@ -46,7 +46,18 @@ say() { printf 'install: %s\n' "$*" >&2; }
 warn() { printf 'install: warning: %s\n' "$*" >&2; }
 die() { printf 'install: error: %s\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is required but was not found in PATH"; }
-have_tty() { { : >/dev/tty; } 2>/dev/null; }
+# A failed redirection on a special builtin such as `:` makes dash (/bin/sh on Debian and
+# Ubuntu) exit the whole script, silently. Test the terminal in a subshell instead.
+have_tty() { ( : </dev/tty ) 2>/dev/null; }
+
+nl='
+'
+# match <regex> <string>: the WHOLE string matches. grep -E alone matches per line, so a value
+# with a newline in it could pass on one of its lines.
+match() {
+  case $2 in *"$nl"*) return 1 ;; esac
+  printf '%s' "$2" | grep -Eq "$1"
+}
 
 version=latest
 dir=${HOME:-}/keryx-team-hub
@@ -86,14 +97,14 @@ case $dir in
   *) dir=$(pwd)/$dir ;;
 esac
 dir=${dir%/}
-printf '%s' "$dir" | grep -Eq '^/[A-Za-z0-9._/-]+$' \
+match '^/[A-Za-z0-9._/-]+$' "$dir" \
   || die "the install directory may contain only letters, digits and . _ - / (got: $dir)"
-printf '%s' "$port" | grep -Eq '^[0-9]{1,5}$' && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "--port must be 1-65535"
+match '^[0-9]{1,5}$' "$port" && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "--port must be 1-65535"
 
 valid_domain() {
-  printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' \
-    && ! printf '%s' "$1" | grep -Eq '^[0-9.]+$' \
-    && { [ "$1" = localhost ] || printf '%s' "$1" | grep -q '\.'; }
+  match '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' "$1" \
+    && ! match '^[0-9.]+$' "$1" \
+    && { [ "$1" = localhost ] || match '\.' "$1"; }
 }
 case $mode in
   local)
@@ -105,7 +116,7 @@ case $mode in
     valid_domain "$domain" || die "--domain must be a lower-case DNS name such as hub.example.com"
     [ -z "$tunnel_id$tunnel_creds$access_team$access_aud" ] || die "the Cloudflare options do not apply to --mode https"
     if [ -n "$acme_email" ]; then
-      printf '%s' "$acme_email" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' || die "--acme-email is not an email address"
+      match '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' "$acme_email" || die "--acme-email is not an email address"
     fi
     ;;
   cloudflare)
@@ -113,9 +124,9 @@ case $mode in
       || die "--mode cloudflare needs --domain, --tunnel-id, --tunnel-credentials, --access-team and --access-aud"
     valid_domain "$domain" && [ "$domain" != localhost ] || die "--domain must be a lower-case DNS name such as hub.example.com"
     [ -z "$acme_email" ] || die "--acme-email does not apply to --mode cloudflare (Cloudflare terminates TLS)"
-    printf '%s' "$tunnel_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || die "--tunnel-id is not a tunnel UUID"
-    printf '%s' "$access_team" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$' || die "--access-team is the team name only (the part before .cloudflareaccess.com)"
-    printf '%s' "$access_aud" | grep -Eq '^[0-9a-f]{64}$' || die "--access-aud must be the 64-character audience tag of the Access application"
+    match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' "$tunnel_id" || die "--tunnel-id is not a tunnel UUID"
+    match '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$' "$access_team" || die "--access-team is the team name only (the part before .cloudflareaccess.com)"
+    match '^[0-9a-f]{64}$' "$access_aud" || die "--access-aud must be the 64-character audience tag of the Access application"
     [ -f "$tunnel_creds" ] || die "--tunnel-credentials: no such file: $tunnel_creds"
     grep -Fq "$tunnel_id" "$tunnel_creds" || die "--tunnel-credentials does not mention tunnel $tunnel_id"
     ;;
@@ -143,7 +154,7 @@ fi
 own_for_hub() { if [ "$uid" = 0 ]; then chown -R 1000:1000 "$@"; fi; }
 
 project=${KERYX_HUB_PROJECT:-keryx-team-hub}
-printf '%s' "$project" | grep -Eq '^[a-z0-9][a-z0-9_-]*$' || die "KERYX_HUB_PROJECT is not a valid compose project name"
+match '^[a-z0-9][a-z0-9_-]*$' "$project" || die "KERYX_HUB_PROJECT is not a valid compose project name"
 
 # --- refuse to run over an existing install --------------------------------------------------------------
 for existing in current releases secrets hubctl backups; do
@@ -197,7 +208,7 @@ if [ "$version" = latest ]; then
   version=${url##*/}
 fi
 version=${version#v}
-printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' || die "'$version' is not a version (expected 1.2.3)"
+match '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' "$version" || die "'$version' is not a version (expected 1.2.3)"
 
 say "installing Team Hub v$version, mode $mode, into $dir"
 release_url=$base/v$version
@@ -216,10 +227,15 @@ mkdir "$tmp/dl/bundle"
 tar -xzf "$tmp/dl/team-hub-install.tar.gz" -C "$tmp/dl/bundle" --strip-components=1
 [ "$(cat "$tmp/dl/bundle/VERSION" 2>/dev/null || true)" = "$version" ] || die "the install bundle is not the bundle of v$version"
 image=$(cat "$tmp/dl/team-hub-image.txt")
-printf '%s' "$image" | grep -Eq '^[a-z0-9][a-z0-9./_-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$' || die "team-hub-image.txt does not hold an image reference"
+match '^[a-z0-9][a-z0-9./_-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$' "$image" || die "team-hub-image.txt does not hold an image reference"
+# The digest is the point: a tag can be moved after the fact. KERYX_HUB_ALLOW_UNPINNED_IMAGE=1 exists
+# for the end-to-end test, which serves a local image that has no digest, and for nothing else.
 case $image in
   *@sha256:*) ;;
-  *) warn "the image reference has no digest ($image); a release should pin one" ;;
+  *)
+    [ "${KERYX_HUB_ALLOW_UNPINNED_IMAGE:-}" = 1 ] || die "the release names its image without a digest ($image); refusing to install an image that a tag can move"
+    warn "TEST ONLY: installing an image that is not pinned by digest ($image)"
+    ;;
 esac
 
 # --- lay out the install ------------------------------------------------------------------------------------------
@@ -276,10 +292,9 @@ created="$created $dir/hubctl"
 ln -s "releases/v$version" "$dir/current"
 created="$created $dir/current"
 
-if ! docker image inspect "$image" >/dev/null 2>&1; then
-  say "pulling $image"
-  docker pull --quiet "$image" >/dev/null || die "could not pull $image"
-fi
+# Every image the release runs, not just the Hub's: a registry problem should stop the install here,
+# before anything is started.
+"$dir/hubctl" _pull
 
 # --- start and wait ---------------------------------------------------------------------------------------------------
 say "starting the Hub"
