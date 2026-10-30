@@ -731,5 +731,9 @@ jobs:
           sh deploy/team-hub/release/bundle.sh "$RUNNER_TEMP/hub-bundle" 0.0.0-ci
           sh deploy/team-hub/release/check-modes.sh "$RUNNER_TEMP/hub-bundle/team-hub-install.tar.gz"
 
-      - name: Install, back up, restore, upgrade and roll back with the real scripts
-        run: sh deploy/team-hub/release/e2e.sh keryx-team-hub:ci
+      # As root: the runner user is uid 1001, and on Linux the installer accepts only
+      # uid 1000 (the Hub container's own uid) or root, which hands the credential
+      # files to uid 1000. Root is the documented path for every other operator, so
+      # this also exercises it. `env PATH=` keeps the toolchain sudo would reset.
+      - name: Install, back up, restore, upgrade and roll back with the real scripts (as root)
+        run: sudo env "PATH=$PATH" sh deploy/team-hub/release/e2e.sh keryx-team-hub:ci

@@ -445,8 +445,12 @@ jobs:
       - name: Start the image with throwaway tokens and require /healthz 200
         run: sh deploy/team-hub/release/smoke-image.sh keryx-team-hub:release-check
 
-      - name: Install, back up, restore, upgrade and roll back with the real scripts
-        run: sh deploy/team-hub/release/e2e.sh keryx-team-hub:release-check
+      # As root: the runner user is uid 1001, and on Linux the installer accepts only
+      # uid 1000 (the Hub container's own uid) or root, which hands the credential
+      # files to uid 1000. Root is the documented path for every other operator, so
+      # this also exercises it. `env PATH=` keeps the toolchain sudo would reset.
+      - name: Install, back up, restore, upgrade and roll back with the real scripts (as root)
+        run: sudo env "PATH=$PATH" sh deploy/team-hub/release/e2e.sh keryx-team-hub:release-check
 
       - name: Log in to ghcr.io
         # docker/login-action v4.6.0
