@@ -25,6 +25,7 @@ import { OWNED_CONTROL_COMMANDS, type OwnedControlCommand } from "../remote-cont
 import { lifecycleCommands, lifecycleMutationCommands, type SessionLifecycleInput } from "./host-lifecycle";
 import { createSessionUserQuestions } from "./user-questions";
 import { createNativeQuestionJournal } from "./question-journal";
+import { hiddenInCard } from "../lib/card-safe";
 import { createSessionApprovalService, type SessionApprovalQuestion, type SessionApprovalOutcome } from "./question-service";
 import type { NativeCheckObservation, NativeTurnObservation, NativeTurnObservationPayload, QueuedAdmissionAuthority, SessionHostOptions, SessionHostOperation, SessionHostPort, SessionHostReceipt, SessionOwnedResource, SessionPageQuery } from "./host-types";
 export type * from "./host-types";
@@ -1100,6 +1101,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
           const args = request.arguments;
           if (request.commandName !== "sessions.fork" || !object(args) || args.throughHistoryCursor !== input.throughHistoryCursor || args.expectedHistoryVersion !== input.expectedHistoryVersion
             || args.title !== input.title || input.expectedHistoryVersion !== record.historyVersion || active !== undefined || !authorized(operation) || opened.lease.checkLost()) throw new SessionHostError("native-fork-binding-mismatch");
+          // The title is stored and printed by `keryx sessions list`: the same hidden-character rule as an approval card.
+          if (hiddenInCard(input.title)) throw new SessionHostError("native-fork-title-unsafe");
           const through = nativeBoundaries.get(input.throughHistoryCursor); if (through === undefined) throw new SessionHostError("native-fork-boundary-unavailable");
           syncHistory();
           const fork = forkSession({ cwd: options.cwd, sourceIdOrPrefix: handle.summary.id, targetCwd: input.targetCwd, throughArchiveCount: through, contextArchiveIndices: activeArchiveIndices(through, input.throughHistoryCursor, contextResets), title: input.title,

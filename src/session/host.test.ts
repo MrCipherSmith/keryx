@@ -883,6 +883,27 @@ test("native lifecycle handoff forks through an executed public cursor into the 
   } finally { await host.dispose(); }
 });
 
+test("a native fork whose title a terminal or card would draw differently is refused before any history is copied", async () => {
+  let refusal = ""; let copied = 0;
+  const { host } = await fixture([okReply, okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { lifecycle: {
+    async apply(input) {
+      try { await input.forkNative({ throughHistoryCursor: 2, expectedHistoryVersion: input.source.historyVersion, targetCwd: input.sourceCwd, title: "Fork \u202echild" }); copied++; }
+      catch (cause) { refusal = cause instanceof Error ? cause.message : String(cause); }
+      return { ok: false, error: { code: "invalid-arguments", message: "invalid-arguments" } };
+    }, async list() { return { ok: true, value: [] }; }, async open() { return { ok: false, error: { code: "not-found", message: "not-found" } }; },
+  } });
+  try {
+    await message(host, "fork-first", "First retained native turn"); await idle(host);
+    await message(host, "fork-second", "Second native turn"); await idle(host);
+    const row = await host.inspect(); const catalogue = await host.catalogue();
+    const request: Control["CommandInvoke"] = { commandName: "sessions.fork", arguments: { throughHistoryCursor: 2, expectedHistoryVersion: row.historyVersion,
+      targetCheckoutId: row.checkoutId, expectedInventoryVersion: 1, expectedHeadSha: "a".repeat(40), title: "Fork \u202echild" }, catalogueDigest: catalogue.catalogueDigest,
+      expectedSessionVersion: row.version, expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, busyPolicy: "reject" };
+    await host.apply({ kind: "command", operationId: "fork-unsafe-op", payloadDigest: canonicalDigest(request), actorId: "human", request });
+    expect(refusal).toBe("native-fork-title-unsafe"); expect(copied).toBe(0);
+  } finally { await host.dispose(); }
+});
+
 test("queued workspace commands retain original literal arguments without allocating a run and require fresh FIFO admission", async () => {
   let calls = 0; let release!: () => void; const wait = new Promise<void>((resolve) => { release = resolve; });
   const contribution: NativeCommandContribution = { entry: { commandName: "fixture.queued", summary: "Queued native fixture", handlerId: "native.fixture.queued",

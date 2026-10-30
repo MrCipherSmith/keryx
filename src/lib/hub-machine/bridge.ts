@@ -9,6 +9,7 @@ import type { SessionLifecycleInput, NativeForkHistorySeed } from '../../session
 import type { NativeTurnObservation, SessionHostPort, SessionHostOptions, SessionHostReceipt } from '../../session/host-types';
 import type { SessionLeaseOwner } from '../../session/lease';
 import { redactSensitiveText } from '../../security/redact';
+import { hiddenInCard } from '../card-safe';
 import { acquireMachineDaemon, loadEnrollment, machineStateDir, readMachineSecret, type MachineEnrollment, type CheckoutMapping } from './config';
 import { captureBaseline, verifyBaseline, acquireCheckoutLease, currentCheckoutHead, observeCheckout, releaseRecoveredCheckoutLease } from './checkout-lease';
 import { MachineConnection, readSessionSelectionAuthority, readSessionInspectionAuthority, readSessionActionAuthority, readScopedHubFlows, verifyScopedFlowAssociation, type GrantApplication } from './client';
@@ -1054,7 +1055,7 @@ export class MachineBridge {
             if (expectedKind === 'fork-session') {
                 captureBaseline(mapping.cwd, { requireClean: true });
                 const args = input.command.arguments;
-                if (!args || typeof args !== 'object' || Array.isArray(args) || typeof args.throughHistoryCursor !== 'number' || typeof args.expectedHistoryVersion !== 'number' || typeof args.title !== 'string')
+                if (!args || typeof args !== 'object' || Array.isArray(args) || typeof args.throughHistoryCursor !== 'number' || typeof args.expectedHistoryVersion !== 'number' || typeof args.title !== 'string' || hiddenInCard(args.title))
                     throw new MachineError('invalid-arguments');
                 const fork = await input.forkNative({ throughHistoryCursor: args.throughHistoryCursor, expectedHistoryVersion: args.expectedHistoryVersion, targetCwd: mapping.cwd, title: args.title });
                 nativeSessionId = fork.nativeSessionId;
