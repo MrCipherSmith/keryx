@@ -100,6 +100,7 @@ describe("keryx serve starts the research sync job", () => {
     const source = readFileSync(path.join(import.meta.dir, "serve.ts"), "utf8");
     expect(source).toMatch(/const researchSync = createServeResearchSync\(/);
     expect(source).toMatch(/researchSync\.start\(\)/);
-    expect(source).toMatch(/Promise\.all\(\[[^\]]*researchSync\.stop\(\)[^\]]*\]\)/);
+    expect(source).toMatch(/stoppers\.push\(\{[^}]*stop: \(\) => researchSync\.stop\(\)/);
+    expect(source.indexOf("[...stoppers,")).toBeLessThan(source.indexOf("listener.drain()"));
   });
 });

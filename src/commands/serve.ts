@@ -266,68 +266,36 @@ async function runServe(args: string[]): Promise<void> {
   }
 
   const { listener } = outcome;
-  const { startConfiguredMachineBridges } = await import("../lib/hub-machine/startup");
-  const machineBridges = await startConfiguredMachineBridges({
-    onNotice: (code) => console.log(`  ${style.yellow(symbols.bullet)} Hub machine: ${sanitizeForDisplay(code)}`),
-  });
-  // Machine-parseable, and the only way a caller that passed `--port 0` learns
-  // which port the OS chose.
-  //
-  // The address is sanitized as defence only: this line is reached only after
-  // the kernel accepted the address, and an address containing a control
-  // character does not resolve, so no test can drive hostile bytes here.
-  console.log(`  ${style.green(symbols.ok)} listening on http://${authorityOf(listener.address)}:${listener.port}`);
-  console.log(`    ${style.dim(`profile ${sanitizeForDisplay(config!.profile)} · routes GET /v1/status, GET /v1/projects · Ctrl-C to drain`)}`);
-  if (!isLoopbackAddress(listener.address)) {
-    console.log(`  ${style.yellow(symbols.bullet)} this bind is reachable beyond loopback and there is no TLS in this release`);
-  }
-  // After the bind, so the hub never polls for a listener that did not come up.
-  // A refusal (second serve, conflict, non-loopback) is printed by the service and
-  // is not fatal: the listener keeps serving every other route.
-  const started = await remoteService.start({ address: listener.address, port: listener.port });
-  if (started.ok) {
-    console.log(`    ${style.dim("remote control on: shells register at /v1/remote/*")}`);
-  } else if (started.notConnected === true) {
-    console.log(`    ${style.dim("channels ready: connect Telegram from the shell with /channels")}`);
-  }
 
-  // Flow 389: scheduled digests fire from here, not from an OS timer. The first tick is
-  // immediate, so a slot missed while serve was down is caught up once.
-  const digestTicker = createServeDigestTicker({
-    hub: () => remoteService.hub(),
-    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
-  });
-  digestTicker.start();
-
-  // Flow 403: GitHub work reaches Telegram as cards from here. Off for a project until it has an enabled intake config.
-  const intake = createServeIntake({
-    hub: () => remoteService.hub(),
-    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
-  });
-  intake.start();
-
-  // Flow 404: the Part 1 materials sync runs once a day from here, for a project that opted in with
-  // `keryx research sync --schedule daily`. A failed run is a notice line, never a stop of serve.
-  const researchSync = createServeResearchSync({
-    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
-  });
-  researchSync.start();
-
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
     let draining = false;
+    // Filled as each service starts. A signal during start waits for `starting`, so nothing starts after the drain began.
+    const stoppers: { failure: string; stop(): Promise<unknown> }[] = [];
+    let starting: Promise<void> = Promise.resolve();
+    // Set at the very end of `starting`: the Hub bridges connect (up to 10 s per handshake) while serve is already up and stoppable.
+    let machineBridges: Promise<{ stop(): Promise<void> }> = Promise.resolve({ stop: async () => {} });
     const finish = (): void => {
       if (draining) {
         return;
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void Promise.all([digestTicker.stop(), intake.stop(), researchSync.stop(), machineBridges.stop()])
-        .then(() => listener.drain())
-        .then(() => remoteService.stop())
+      void starting
+        .catch(() => undefined)
+        .then(() =>
+          drainServe(
+            [
+              [...stoppers, { failure: "Hub machine: machine-stop-failed", stop: async () => (await machineBridges).stop() }],
+              [{ failure: "listener: drain failed", stop: () => listener.drain() }],
+              [{ failure: "remote control: stop failed", stop: () => remoteService.stop() }],
+            ],
+            (failure) => console.log(`  ${style.yellow(symbols.bullet)} ${failure}`),
+          ),
+        )
         .then(() => {
-        console.log(`  ${style.green(symbols.ok)} stopped`);
-        resolve();
-      });
+          console.log(`  ${style.green(symbols.ok)} stopped`);
+          resolve();
+        });
     };
     // `on`, not `once` (matches `commands/mcp-servers.ts`'s own teardown
     // handlers, and the ban `mcp-servers/invariants.test.ts` enforces
@@ -339,9 +307,95 @@ async function runServe(args: string[]): Promise<void> {
     // from a hardcoded two-file list to every file under `src/commands/`
     // (flow 277 P2b) — this file registered the exact pattern the test bans,
     // undetected until the scan actually reached it.
+    //
+    // Installed before the listening line is printed: a caller that signals the moment it reads that line must still drain.
     process.on("SIGINT", finish);
     process.on("SIGTERM", finish);
+
+    starting = (async () => {
+      // Machine-parseable, and the only way a caller that passed `--port 0` learns
+      // which port the OS chose.
+      //
+      // The address is sanitized as defence only: this line is reached only after
+      // the kernel accepted the address, and an address containing a control
+      // character does not resolve, so no test can drive hostile bytes here.
+      console.log(`  ${style.green(symbols.ok)} listening on http://${authorityOf(listener.address)}:${listener.port}`);
+      console.log(`    ${style.dim(`profile ${sanitizeForDisplay(config!.profile)} · routes GET /v1/status, GET /v1/projects · Ctrl-C to drain`)}`);
+      if (!isLoopbackAddress(listener.address)) {
+        console.log(`  ${style.yellow(symbols.bullet)} this bind is reachable beyond loopback and there is no TLS in this release`);
+      }
+      // After the bind, so the hub never polls for a listener that did not come up.
+      // A refusal (second serve, conflict, non-loopback) is printed by the service and
+      // is not fatal: the listener keeps serving every other route.
+      const started = await remoteService.start({ address: listener.address, port: listener.port });
+      if (started.ok) {
+        console.log(`    ${style.dim("remote control on: shells register at /v1/remote/*")}`);
+      } else if (started.notConnected === true) {
+        console.log(`    ${style.dim("channels ready: connect Telegram from the shell with /channels")}`);
+      }
+
+      // Flow 389: scheduled digests fire from here, not from an OS timer. The first tick is
+      // immediate, so a slot missed while serve was down is caught up once.
+      const digestTicker = createServeDigestTicker({
+        hub: () => remoteService.hub(),
+        onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+      });
+      digestTicker.start();
+      stoppers.push({ failure: "digest ticker: stop failed", stop: () => digestTicker.stop() });
+
+      // Flow 403: GitHub work reaches Telegram as cards from here. Off for a project until it has an enabled intake config.
+      const intake = createServeIntake({
+        hub: () => remoteService.hub(),
+        onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+      });
+      intake.start();
+      stoppers.push({ failure: "intake: stop failed", stop: () => intake.stop() });
+
+      // Flow 404: the Part 1 materials sync runs once a day from here, for a project that opted in with
+      // `keryx research sync --schedule daily`. A failed run is a notice line, never a stop of serve.
+      const researchSync = createServeResearchSync({
+        onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+      });
+      researchSync.start();
+      stoppers.push({ failure: "research sync: stop failed", stop: () => researchSync.stop() });
+
+      machineBridges = import("../lib/hub-machine/startup")
+        .then(async ({ startConfiguredMachineBridges }) => {
+          const bridges = await startConfiguredMachineBridges({
+            onNotice: (code) => console.log(`  ${style.yellow(symbols.bullet)} Hub machine: ${sanitizeForDisplay(code)}`),
+          });
+          // The bridges connect after the listening line, so say when they are up (nothing is printed without an enrolled Hub).
+          if (bridges.count > 0) console.log(`    ${style.dim(`machine bridges started: ${bridges.count}`)}`);
+          return bridges;
+        })
+        .catch(() => {
+          console.log(`  ${style.yellow(symbols.bullet)} Hub machine: machine-state-unavailable`);
+          return { stop: async () => {} };
+        });
+    })();
+    starting.catch(reject);
   });
+}
+
+/**
+ * Stops every service, one group after the next, the members of a group together. A stop that rejects is reported and
+ * never skips what follows, or a failing Hub bridge would leave the listener undrained and the process unable to exit.
+ */
+export async function drainServe(
+  groups: ReadonlyArray<ReadonlyArray<{ failure: string; stop(): Promise<unknown> }>>,
+  report: (failure: string) => void,
+): Promise<void> {
+  for (const group of groups) {
+    await Promise.all(
+      group.map(async ({ failure, stop }) => {
+        try {
+          await stop();
+        } catch {
+          report(failure);
+        }
+      }),
+    );
+  }
 }
 
 /** A per-run view of the stored configuration. Nothing here is persisted. */
