@@ -76,8 +76,6 @@ export async function git(repo: ShadowRepo, args: readonly string[], options: { 
     stdout: "pipe",
     stderr: "pipe",
     ...(signal === undefined ? {} : { signal }),
-    timeout: 30_000,
-    maxBuffer: 6 * 1024 * 1024,
   });
   if (options.stdin !== undefined && proc.stdin !== undefined && typeof proc.stdin !== "number") {
     proc.stdin.write(options.stdin);
