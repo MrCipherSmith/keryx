@@ -302,6 +302,9 @@ export interface JevDocsComputedResult {
 }
 
 export interface JevDocsRunOptions {
+  /** Optional local execution boundary; omitted values retain the CLI defaults. */
+  readonly signal?: AbortSignal;
+  readonly dir?: string;
   readonly cwd: string;
   readonly regions: readonly ScopedRegion[];
   readonly targetLabel: string;
@@ -327,6 +330,7 @@ export interface JevDocsRunOptions {
  * there is anything to score.
  */
 export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<JevDocsComputedResult> {
+  options.signal?.throwIfAborted();
   const { cwd, regions, targetLabel } = options;
   const maxCalls = options.maxCalls ?? DEFAULT_MAX_JEV_DOCS_CALLS;
   const maxPerFile = options.maxPerFile ?? DEFAULT_MAX_SECTIONS_PER_DOC_FILE;
@@ -358,7 +362,7 @@ export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<
   // throws — the caller decides what a failure means (degrade, or retry).
   const attemptBatch = async (batch: DocsBatch): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> => {
     try {
-      const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env });
+      const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}), ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(options.signal !== undefined ? { signal: options.signal } : {}) });
       jevCalls += 1;
       if (result.usage.input_tokens !== undefined) {
         inputTokens += result.usage.input_tokens;

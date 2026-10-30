@@ -10,6 +10,7 @@ each gap actually costs you, and what to use instead.
 | Limitation | Impact | Alternative |
 |------------|--------|-------------|
 | Remote approvals need a tool registry | The stock `keryx serve` registers no tools, so it raises no approvals; with a registry an `ask` becomes a pending approval answered over `/v1/approvals` or `keryx approvals` | Run tool-using turns locally |
+| Team Hub remote sessions are a beta | Live multi-machine, public Cloudflare Access and real-provider checks are pending owner verification; macOS and Linux, the native Keryx agent only, review-only results | Run the session locally with `keryx shell`; see [the limitations list](guides/team-hub-remote-sessions.md#known-limitations) |
 | `harness exec --allowed-domains` is macOS-only | The interactive/general sandbox's domain-level egress policy, credential masking and TLS termination refuse to run on Linux | Filesystem containment and network on/off work on both; a *scheduled agent-task*'s own `network: "allowlist"` (flow 301) is a separate mechanism, Linux-only |
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | No bundled ML security classifiers | Detection is rules plus entropy, not a model | Deterministic detectors run on the full corpus and are evaluated in CI |
@@ -206,6 +207,33 @@ Boundaries that hold:
   a weaker remote profile is refused rather than accepted.
 - Authentication happens *before* routing, so an unauthenticated caller cannot
   distinguish a known path from an unknown one.
+
+## Team Hub remote sessions are a beta
+
+A Team Hub can start a headless Keryx session on a machine you enrolled (see
+[Run Keryx sessions on your machines from Team Hub](guides/team-hub-remote-sessions.md)).
+Tools run in those sessions, and their approvals are answered in the Hub web UI.
+That is a different path from the `keryx serve` HTTP routes described above, which
+still register no tools.
+
+- **Not verified live yet.** Runs across several machines, through a Hub behind
+  public Cloudflare Access, and with real providers are pending owner
+  verification. The automated tests use real local HTTP and WebSocket
+  connections, not a public deployment.
+- **Narrow scope.** macOS and Linux, one Hub process, and the native Keryx agent
+  only. There is no Codex, Claude or OpenCode adapter, no remote terminal, and no
+  way to attach to a session that is already open.
+- **Local policy wins.** The Hub cannot widen a profile, change provider secrets or
+  answer a confirmation that needs the machine's own terminal. `keryx hub machine`
+  has no command to remove a single checkout allowance; unpair and pair again.
+- **Results are review-only.** Nothing is committed, pushed, merged or accepted for
+  you, and the agent cannot accept its own work.
+- **Stopping is bounded, not instant.** A revoked approval grant can still apply
+  for up to 5 seconds, revocation does not interrupt a running tool, and
+  cancelling does not undo file changes.
+- **Crash recovery is manual.** `keryx hub machine recover` takes explicit steps and
+  never restarts a run. One outcome of `settle-crashed-command` can leave the Hub
+  holding a session as busy with no web action to release it yet.
 
 ## A host question is a weaker proof than a card
 

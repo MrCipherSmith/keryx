@@ -132,6 +132,67 @@ const SUBCOMMAND_EXCLUSIONS: ReadonlyArray<{ command: string; reason: string }> 
     command: "agents external review",
     reason: "shows the stored diff of an external agent's write run for the operator; not offered to agents, like `agents external run`",
   },
+  {
+    command: "hub serve",
+    reason:
+      "starts the Team Hub server from the KERYX_HUB_* credentials and holds its socket until signalled, the shape the `serve` verb is excluded for; no machine-consumable result",
+  },
+  {
+    command: "hub mcp",
+    reason:
+      "a stdio bridge to the remote Hub MCP endpoint that owns stdout as the JSON-RPC channel until signalled, the shape `serve-mcp` is excluded for; `hub sync --watch` is the same kind of foreground loop, so its descriptor lists no --watch flag",
+  },
+  {
+    command: "hub connect",
+    reason:
+      "binds this checkout to a Team Hub project and writes the user-global binding; which Hub a checkout reports to is the operator's decision, not the agent's",
+  },
+  {
+    command: "hub import",
+    reason: "uploads this checkout's OpenSpec and wiki Markdown to the bound Hub; sending project documents to a remote service is the operator's call",
+  },
+  {
+    command: "hub sync",
+    reason:
+      "rewrites the shared Hub context cache and the keryx:hub block of the tracked .metaproject/index.md; a remote session reads canonical context through hub_context instead",
+  },
+  {
+    command: "hub submit",
+    reason:
+      "uploads the checkout's tracked files to the Hub as a new immutable code revision; submitting work for review is the operator's decision, never the agent's own",
+  },
+  {
+    command: "hub fetch",
+    reason: "git-fetches a Hub delivery into a dedicated ref of this checkout; accepting delivered code into the repository is the operator's step",
+  },
+  {
+    command: "hub pull",
+    reason: "previews and, with --apply, writes a Hub revision into the working tree; replacing the developer's files from a remote revision is the operator's decision",
+  },
+  {
+    command: "hub machine pair",
+    reason:
+      "enrolls this machine with a Hub using a one-time pairing code, after which that Hub may ask it to run work: a trust decision for the operator at a terminal, never an agent's call",
+  },
+  {
+    command: "hub machine allow",
+    reason:
+      "grants a paired Hub a local checkout path and profile for remote sessions; a consent decision, like `permissions`, that must not be callable by the agent the allowance gates",
+  },
+  {
+    command: "hub machine configure",
+    reason:
+      "writes the local machine policy (ad-hoc sessions, concurrent runs, the allowed model candidate) that gates what a remote Hub may launch here; the operator's consent decision",
+  },
+  {
+    command: "hub machine recover",
+    reason:
+      "the operator's local recovery after a crash: beside read-only inspection it confirms a run's absence and releases resolved runs and a stale daemon lock, which only a human who has checked the processes may do",
+  },
+  {
+    command: "hub machine unpair",
+    reason: "removes this machine's local enrollment; the operator's decision, with the Hub-side revocation a separate human step",
+  },
 ];
 
 /** Verbs that carry at least one descriptor, derived from the registry. */

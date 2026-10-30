@@ -1,0 +1,25 @@
+import {afterEach,expect,test} from 'bun:test';
+import {randomBytes} from 'node:crypto';
+import {fixture,admittedSession,success,type Fixture} from './fixture.test-support';
+import {LIMITS,type MachineSummary} from '../../remote-control/protocol';
+let f:Fixture;let slow:Bun.Socket<undefined>|undefined;let healthy:WebSocket|undefined;afterEach(async()=>{slow?.resume();slow?.end();healthy?.close();slow=undefined;healthy=undefined;if(f)await f.close();});
+const NativeWebSocket=WebSocket as unknown as {new(url:string,options:Bun.WebSocketOptions):WebSocket};
+test('a real paused TCP WebSocket consumer is closed while a healthy scoped subscriber and native producer continue',async()=>{
+ let highWater=0,backpressured=0,consumerCloses=0;const serverCloses:string[]=[];f=await fixture({observeRemoteTransport:o=>{if(o.peer==='browser'){highWater=Math.max(highWater,o.bufferedBytes);if(o.result===-1)backpressured++;if(o.closeReason==='Consumer unavailable')consumerCloses++;if(o.closeReason?.startsWith('closed:'))serverCloses.push(o.closeReason);}}});const s=await admittedSession(f);let latest=0;
+ healthy=new NativeWebSocket(`${f.origin.replace('http','ws')}/hub/v2/events/socket?projectId=${f.project.id}`,{headers:{Cookie:f.cookie,Origin:f.origin}});healthy.addEventListener('message',event=>{const frame=JSON.parse(String(event.data));if(frame.resource==='machine')latest=Number(frame.version);});await new Promise<void>((resolve,reject)=>{healthy!.addEventListener('open',()=>resolve(),{once:true});healthy!.addEventListener('error',()=>reject(new Error('healthy upgrade failed')),{once:true});});
+ let receivedBytes=0,receivedFrames=0,dataCalls=0,tcpClosed=false;let wire=Buffer.alloc(0),upgraded=false,closedCode:number|undefined,closedReason:string|undefined;let releaseUpgrade:()=>void=()=>{};const upgrade=new Promise<void>(resolve=>{releaseUpgrade=resolve;});
+ const onData=(socket:Bun.Socket<undefined>,chunk:Buffer)=>{
+  receivedBytes+=chunk.length;dataCalls++;wire=Buffer.concat([wire,chunk]);if(!upgraded){const end=wire.indexOf('\r\n\r\n');if(end<0)return;expect(wire.subarray(0,end).toString()).toContain('101');wire=wire.subarray(end+4);upgraded=true;socket.pause();releaseUpgrade();return;}
+  while(wire.length>=2){const opcode=wire[0]!&15;let length=wire[1]!&127,offset=2;if(length===126){if(wire.length<4)return;length=wire.readUInt16BE(2);offset=4;}else if(length===127){if(wire.length<10)return;length=Number(wire.readBigUInt64BE(2));offset=10;}if(wire.length<offset+length)return;receivedFrames++;if(opcode===8){closedCode=length>=2?wire.readUInt16BE(offset):1005;closedReason=wire.subarray(offset+2,offset+length).toString();socket.write(Buffer.from([0x88,0x82,0,0,0,0,0x03,0xf0]));}wire=wire.subarray(offset+length);}
+ };
+ slow=await Bun.connect<undefined>({hostname:'127.0.0.1',port:Number(new URL(f.origin).port),socket:{data:onData,close(){tcpClosed=true;},open(socket){socket.write(`GET /hub/v2/events/socket?projectId=${f.project.id} HTTP/1.1\r\nHost: ${new URL(f.origin).host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\nOrigin: ${f.origin}\r\nCookie: ${f.cookie}\r\n\r\n`);},error(_socket,error){throw error;}}});await upgrade;
+ const metadata=await success<MachineSummary>(await f.call(`/hub/v2/machines/${s.machine.machineId}`,{cookie:f.cookie}));
+ // Bounded pressure exceeds OS buffers without an unbounded in-memory producer.
+ const pressureStarted=Date.now();for(let batch=0;batch<80;batch++){for(let i=0;i<100;i++)s.peer.send('inventory',{...metadata.inventory,inventoryVersion:batch*100+i+2});s.peer.send('heartbeat',{daemonId:'daemon-1'});await s.peer.next('heartbeat-ack');}
+ console.info('backpressure producer complete',Date.now()-pressureStarted,{highWater,backpressured,consumerCloses});slow.resume();const deadline=Date.now()+1500;while(closedCode===undefined&&!(Bun.version==='1.3.14'&&tcpClosed)&&Date.now()<deadline)await Bun.sleep(5);console.info('backpressure wire diagnostic',{receivedBytes,receivedFrames,dataCalls,tcpClosed,serverCloses});expect(highWater).toBeGreaterThan(LIMITS.bufferBytes-LIMITS.frameBytes);expect(highWater).toBeLessThanOrEqual(LIMITS.bufferBytes);expect(backpressured).toBeGreaterThan(0);expect(serverCloses).toContain('closed:1008:Consumer unavailable');expect(consumerCloses).toBeGreaterThan(0);
+ // Minimum Bun may omit a wire CLOSE after backpressured data; require exact
+ // server policy close AND actual bounded TCP cessation, never generic auth1008.
+ if(Bun.version==='1.3.14'&&closedCode===undefined)expect(tcpClosed).toBe(true);else{expect(closedCode).toBe(1008);expect(closedReason).toBe('Consumer unavailable');}expect(healthy.readyState).toBe(WebSocket.OPEN);expect(latest).toBeGreaterThan(1000);s.peer.send('heartbeat',{daemonId:'daemon-1'});expect((await s.peer.next('heartbeat-ack')).type).toBe('heartbeat-ack');
+// QEMU minimum-runtime proof measured ~27s for the unchanged8000-event producer.
+// Wire closure still has its independent1.5s deadline after the producer.
+},45000);

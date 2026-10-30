@@ -1,0 +1,17 @@
+import {afterEach,expect,test} from 'bun:test';
+import {Database} from 'bun:sqlite';
+import {join} from 'node:path';
+import {fixture,admittedSession,appliedController,success,type Fixture} from './fixture.test-support';
+import {sessionCommandDigest,type FrameOf} from '../../remote-control/protocol';
+let f:Fixture;let browser:WebSocket|undefined;afterEach(async()=>{browser?.close();browser=undefined;if(f)await f.close();});
+const NativeWebSocket=WebSocket as unknown as {new(url:string,options:Bun.WebSocketOptions):WebSocket};
+async function subscribe(){browser=new NativeWebSocket(`${f.origin.replace('http','ws')}/hub/v2/events/socket?projectId=${f.project.id}`,{headers:{Cookie:f.cookie,Origin:f.origin}});const frames:Record<string,unknown>[]=[];browser.addEventListener('message',event=>frames.push(JSON.parse(String(event.data))));await new Promise<void>((resolve,reject)=>{browser!.addEventListener('open',()=>resolve(),{once:true});browser!.addEventListener('error',()=>reject(new Error('browser upgrade')),{once:true});});return {frames,async next(predicate:(frame:Record<string,unknown>)=>boolean){const deadline=Date.now()+700;while(Date.now()<deadline){const index=frames.findIndex(predicate);if(index>=0)return frames.splice(index,1)[0]!;await Bun.sleep(5);}throw new Error('No scoped resource notification');}};}
+test('expiry is notified with a fresh resource cursor distinct from pending HTTP and native CAS versions',async()=>{
+ f=await fixture();const s=await admittedSession(f);const c=await appliedController(f,s);const events=await subscribe();
+ await success(await f.call(`${s.path}/config`,{method:'PUT',cookie:f.cookie,body:{expectedSessionVersion:2,controller:{controllerLeaseId:c.lease.controllerLeaseId,expectedControllerVersion:c.lease.version},expectedConfigVersion:1,baselineCandidateId:'local',reasoningEffort:'none',routing:s.session.config.routing,busyPolicy:'reject'}}));const delivery=(await s.peer.next('session-command')).payload as FrameOf<'session-command'>['payload'];
+ const pending=await events.next(frame=>frame.resource==='config');const db=new Database(join(f.dataDir,'hub.sqlite'));const command=JSON.parse(db.query<{body:string},[string]>('SELECT body FROM remote_command WHERE id=?').get(delivery.commandId)!.body);command.envelope.expiresAt=new Date(Date.now()-1).toISOString();command.envelope.commandDigest=sessionCommandDigest(command.envelope);db.query('UPDATE remote_command SET body=? WHERE id=?').run(JSON.stringify(command),delivery.commandId);db.close();s.peer.send('heartbeat',{daemonId:'daemon-1'});await s.peer.next('heartbeat-ack');
+ const expired=await events.next(frame=>frame.resource==='config'&&Number(frame.version)>Number(pending.version));expect(expired.resourceId).toBe(s.session.sessionId);
+});
+test('revoking an already offline machine invalidates its scoped machine projection',async()=>{
+ f=await fixture();const s=await admittedSession(f);await new Promise<void>(resolve=>{s.peer.socket.addEventListener('close',()=>resolve(),{once:true});s.peer.socket.close();});const events=await subscribe();const metadata=await success<{version:number}>(await f.call(`/hub/v2/machines/${s.machine.machineId}`,{cookie:f.cookie}));await success(await f.call(`/hub/v2/machines/${s.machine.machineId}/revoke`,{method:'POST',cookie:f.cookie,body:{expectedVersion:metadata.version}}));expect(await events.next(frame=>frame.resource==='machine')).toMatchObject({resourceId:s.machine.machineId});
+});

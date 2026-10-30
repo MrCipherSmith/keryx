@@ -959,6 +959,11 @@ export function forkSession(opts: {
   sourceIdOrPrefix: string;
   title?: string;
   dataDir?: string;
+  /** Local native owner may branch an exact executed archive prefix into a validated target checkout. */
+  throughArchiveCount?: number;
+  /** Trusted native owner context window for an exact executed prefix after a context reset. */
+  contextArchiveIndices?: readonly number[];
+  targetCwd?: string;
 }): { handle: SessionHandle; source: SessionSummary; messageCount: number; archiveCount: number } {
   const source = findSession(opts.cwd, opts.sourceIdOrPrefix, opts.dataDir);
   if (source === undefined) {
@@ -968,15 +973,20 @@ export function forkSession(opts: {
   // Throws `TranscriptUnreadableError` rather than forking an empty session off
   // a transcript it could not open — a fork that silently starts blank is the
   // worst outcome here, because it looks like it worked.
-  const context = loadContext(opts.cwd, source.id, opts.dataDir);
-  const archive = loadArchive(opts.cwd, source.id, opts.dataDir);
+  const sourceContext = loadContext(opts.cwd, source.id, opts.dataDir);
+  const sourceArchive = loadArchive(opts.cwd, source.id, opts.dataDir);
+  if (opts.throughArchiveCount !== undefined && (!Number.isSafeInteger(opts.throughArchiveCount) || opts.throughArchiveCount < 0 || opts.throughArchiveCount > sourceArchive.length)) throw new Error("invalid-native-fork-boundary");
+  const archive = opts.throughArchiveCount === undefined ? sourceArchive : sourceArchive.slice(0, opts.throughArchiveCount);
+  const indices = opts.contextArchiveIndices;
+  if (indices !== undefined && (opts.throughArchiveCount === undefined || indices.some((value, index) => !Number.isSafeInteger(value) || value < 0 || value >= archive.length || index > 0 && value <= indices[index - 1]!))) throw new Error("invalid-native-fork-context");
+  const context = indices === undefined ? opts.throughArchiveCount === undefined ? sourceContext : archive : indices.map(index => archive[index]!);
 
   const title = opts.title !== undefined && opts.title.trim().length > 0
     ? opts.title.trim()
     : `${source.title} (fork)`;
 
   const created = createSession({
-    cwd: opts.cwd,
+    cwd: opts.targetCwd ?? opts.cwd,
     parentSessionId: source.id,
     title,
     ...(opts.dataDir !== undefined ? { dataDir: opts.dataDir } : {}),

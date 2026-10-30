@@ -480,6 +480,19 @@ jobs:
             src/harness/process/sandbox/dual-axis-report.test.ts \
             src/harness/process/sandbox/mask-resolve.test.ts
 
+      # Team Hub remote sessions need the launcher too. The native parity harness
+      # drives live turns whose built-in gate hooks stay sandboxed under a
+      # required-fail-closed profile, and the serve-path trial resolves the
+      # production `remote-restricted` profile, which refuses `containment-missing`
+      # without a launcher. Both files skip exactly those tests where no launcher
+      # exists (the ubuntu `check` and AC8 jobs), so this zero-skip run is what
+      # proves them on every PR. The Linux bwrap leg of these files is not run yet.
+      - name: Hub remote-session legs — native parity, serve-path trial (fail on skip)
+        run: |
+          bun ./scripts/opentui-tests-no-skips.ts \
+            scripts/verify-native-coverage.test.ts \
+            src/lib/hub-machine/trial.process.test.ts
+
       # The gate is `darwin` + `/usr/bin/script`. If the runner image ever drops
       # `script`, the suite would SKIP and this job would go green having proven
       # nothing — so fail here instead, where the reason is legible.

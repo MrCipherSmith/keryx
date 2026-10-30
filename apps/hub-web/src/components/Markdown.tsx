@@ -1,0 +1,2 @@
+import ReactMarkdown,{defaultUrlTransform} from 'react-markdown';
+export function Markdown({content}:{content:string}){return <div className="markdown min-w-0 break-words"><ReactMarkdown skipHtml urlTransform={defaultUrlTransform} components={{img:({alt})=><span className="text-sm text-slate-500">{alt}</span>,a:({children,...props})=><a {...props} rel="noopener noreferrer">{children}</a>}}>{content}</ReactMarkdown></div>;}

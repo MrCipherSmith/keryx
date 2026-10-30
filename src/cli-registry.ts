@@ -30,6 +30,7 @@
 import { runModelTurn } from "./harness/provider/single-turn";
 import { setModelTurnPort } from "./sac/model-turn-port";
 import { initCommand } from "./commands/init";
+import { hubCommand, printHubHelp } from "./commands/hub";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
 import { wikiCommand } from "./commands/wiki";
@@ -82,8 +83,9 @@ import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
 import { intakeCommand, printIntakeHelp } from "./commands/intake";
 import { researchCommand, printResearchHelp } from "./commands/research-sync";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
-import { productCommand, readDigestBoard } from "./commands/product";
+import { productCommand, readDigestBoard, readOpenIntents } from "./commands/product";
 import { registerBoardReader } from "./scheduler/digest-board";
+import { registerOpenIntentReader } from "./session/commands/open-intents";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
@@ -97,6 +99,8 @@ import packageJson from "../package.json" with { type: "json" };
 
 // Flow 389: the scheduled digest reads the flow board through the product command, the only reader of the product index.
 registerBoardReader(readDigestBoard);
+// The native session `/product` inspection reads the open report the same way, through the product command's reader.
+registerOpenIntentReader(readOpenIntents);
 
 export const VERSION = packageJson.version;
 
@@ -118,6 +122,7 @@ export const VERSION = packageJson.version;
  */
 export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void> = {
   init: initCommand,
+  hub: hubCommand,
   // Flow 303 (AC10): grouped command help by task. `--help`/`-h`/bare `keryx`
   // keep printing the flat USAGE_BODY below (AC5) — this is a SEPARATE verb.
   //
@@ -252,6 +257,7 @@ export function groupsWithKnownSubcommands(): readonly string[] {
  * actually read.
  */
 export const USAGE_BODY = `Usage:
+  keryx hub <serve|connect|import|sync|submit|pull|fetch> Team Hub prototype (--help for arguments)
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness
@@ -630,6 +636,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   string,
   (rest: readonly string[]) => void
 >([
+  ["hub", () => printHubHelp()],
   ["flow", () => printFlowHelp()],
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],

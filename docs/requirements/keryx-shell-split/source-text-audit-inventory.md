@@ -501,6 +501,13 @@ check that of the two `buildInteractiveAgentTools` calls only the TUI's carries 
 mountable, so the absence of the binding is not observable; when the closure becomes
 mountable, replace it with a roster test on the readline shell.
 
+`lib/local-startup-imports.test.ts` (PR #1098) names both god-files as entry points of a
+breadth-first walk over static runtime imports (`Bun.Transpiler.scanImports`). It checks
+that no path from the local shells reaches the generated remote-control validators, which
+would add about 4.6 MB to every keryx start. It reads the import graph, not offsets or
+counts. A split that keeps the files as entry points, or points the walk at the new entry
+files, still passes, so P2 should repoint it rather than convert it.
+
 ```text
 commands/operator-confirm-rosters.test.ts | commands/shell.ts | 1
 commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
@@ -512,6 +519,7 @@ commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
 commands/shell.test.ts | commands/shell.ts, tui/tui-shell.ts | 6
 decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
+lib/local-startup-imports.test.ts | commands/shell.ts, tui/tui-shell.ts | 1
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 security/source-scan.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2

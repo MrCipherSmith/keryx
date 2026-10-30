@@ -87,6 +87,10 @@ async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
 }
 
 export interface JevRiskRunOptions {
+  /** Optional local execution boundary; omitted values retain the CLI defaults. */
+  readonly signal?: AbortSignal;
+  readonly dir?: string;
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly cwd: string;
   readonly regions: readonly ScopedRegion[];
   readonly allChangedFiles: readonly string[];
@@ -121,6 +125,7 @@ function nearbyTestTextByPath(regions: readonly ScopedRegion[]): NearbyTestTextB
  * score.
  */
 export async function computeJevRiskResult(options: JevRiskRunOptions): Promise<JevRiskComputedResult> {
+  options.signal?.throwIfAborted();
   const { regions, allChangedFiles, targetLabel } = options;
   const maxCalls = options.maxCalls ?? DEFAULT_MAX_JEV_RISK_CALLS;
   const threshold = options.threshold ?? DEFAULT_JEV_RISK_THRESHOLD;
@@ -142,7 +147,7 @@ export async function computeJevRiskResult(options: JevRiskRunOptions): Promise<
     const batches = batchRiskQuestionsForHunk(hunkFacts);
     const answers: Record<string, { noul: number }> = {};
     for (const batch of batches) {
-      const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: process.env });
+      const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}), ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(options.signal !== undefined ? { signal: options.signal } : {}) });
       jevCalls += 1;
       if (result.usage.input_tokens !== undefined) {
         inputTokens += result.usage.input_tokens;

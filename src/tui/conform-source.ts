@@ -20,7 +20,7 @@ import {
   extractReferenceClauses,
   type ReferenceClause,
 } from "../review/conform-clauses";
-import { cachedTagsFor, hashConformDocContent, readClauseTagCache, writeClauseTagCache } from "../review/conform-tag-cache";
+import { CONFORM_TAG_CACHE_PATH, cachedTagsFor, hashConformDocContent, readClauseTagCache, writeClauseTagCache } from "../review/conform-tag-cache";
 import {
   computePrConformFacts,
   computeReportConformFacts,
@@ -50,7 +50,7 @@ import {
   type ConformHunkLocation,
   type ConformVerdict,
 } from "../review/conform-jev";
-import { createGhConformPrPort } from "../review/conform-pr-port";
+import { createGhConformPrPort, type ConformPrPort } from "../review/conform-pr-port";
 import { readConformEnabled, withRecentDoc, CONFORM_RECENTS_PATH, type ConformHunkBudget } from "../review/conform-report";
 import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey } from "../harness/decision/jev-client";
 import type { ConformClauseRow, ConformRunOutcome, ConformSetupRead, ConformTargetOption } from "./conform-inspector";
@@ -64,9 +64,17 @@ async function readRecentConformDocs(cwd: string): Promise<readonly string[]> {
   }
 }
 
-async function currentBranchPrTarget(cwd: string): Promise<ConformTargetOption | undefined> {
-  const proc = Bun.spawn(["gh", "pr", "view", "--json", "number,title"], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+export interface ConformReadOptions {
+  readonly signal?: AbortSignal;
+  readonly spawn?: (argv: string[], cwd: string, signal?: AbortSignal) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+}
+async function currentBranchPrTarget(cwd: string, options: ConformReadOptions): Promise<ConformTargetOption | undefined> {
+  let stdout: string; let exitCode: number;
+  if (options.spawn !== undefined) ({ stdout, exitCode } = await options.spawn(["gh", "pr", "view", "--json", "number,title"], cwd, options.signal));
+  else {
+    const proc = Bun.spawn(["gh", "pr", "view", "--json", "number,title"], { cwd, ...(options.signal !== undefined ? { signal: options.signal } : {}), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  }
   if (exitCode !== 0) return undefined;
   try {
     const parsed = JSON.parse(stdout) as { number?: number; title?: string };
@@ -109,7 +117,8 @@ async function mostRecentReviewPackage(cwd: string): Promise<string | undefined>
 }
 
 /** AC8: recent docs + the three target options, never throwing — a note explains an empty state. */
-export async function loadConformSetup(cwd: string): Promise<ConformSetupRead> {
+export async function loadConformSetup(cwd: string, options: ConformReadOptions = {}): Promise<ConformSetupRead> {
+  if (options.signal?.aborted) return { recents: [], targets: [], note: "Conformance inspection was cancelled." };
   if (!(await readConformEnabled(cwd))) {
     return {
       recents: await readRecentConformDocs(cwd),
@@ -120,7 +129,7 @@ export async function loadConformSetup(cwd: string): Promise<ConformSetupRead> {
   }
   const recents = await readRecentConformDocs(cwd);
   const targets: ConformTargetOption[] = [];
-  const pr = await currentBranchPrTarget(cwd);
+  const pr = await currentBranchPrTarget(cwd, options);
   if (pr !== undefined) targets.push(pr);
   const reviewDir = await mostRecentReviewPackage(cwd);
   if (reviewDir !== undefined) {
@@ -163,21 +172,35 @@ function toRow(agg: ConformClauseAggregate, hunkBudget: ConformHunkBudget | unde
  * call when the modal closes mid-run (same discipline `runCiTriageForItem`
  * already established for `/ci`).
  */
+export interface ConformExecutionOptions {
+  readonly mutate?: <T>(paths: readonly string[], write: () => Promise<T>) => Promise<T>;
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly dir?: string;
+  readonly model?: string;
+  readonly fetchFn?: typeof fetch;
+  readonly readDiff?: (signal?: AbortSignal) => Promise<string>;
+  readonly prPort?: ConformPrPort;
+  readonly readReference?: (refPath: string, signal?: AbortSignal) => Promise<string>;
+  readonly readReport?: (reportDir: string, signal?: AbortSignal) => Promise<{ markdown: string; findings: readonly ReportFindingLike[] }>;
+}
+
 export async function runConformForTarget(
   cwd: string,
   refPath: string,
   target: ConformTargetOption,
   signal?: AbortSignal,
+  options: ConformExecutionOptions = {},
 ): Promise<ConformRunOutcome> {
+  if (signal?.aborted) return { ok: false, reason: "Conformance was cancelled." };
   if (!(await readConformEnabled(cwd))) {
     return { ok: false, reason: "review.jev.conform is not enabled for this project." };
   }
-  const apiKey = resolveJevApiKey(process.env);
+  const apiKey = resolveJevApiKey(options.env ?? process.env, options.dir);
   if (apiKey === undefined || apiKey.length === 0) {
     return { ok: false, reason: "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config." };
   }
   try {
-    const docText = await readFile(refPath, "utf8");
+    const docText = options.readReference === undefined ? await readFile(refPath, "utf8") : await options.readReference(refPath, signal);
     const rawClauses = extractReferenceClauses(docText);
     const contentHash = hashConformDocContent(docText);
     const cache = await readClauseTagCache(cwd);
@@ -188,9 +211,9 @@ export async function runConformForTarget(
     const tagQuestions = buildClauseTagQuestions(needsTagging);
     if (Object.keys(tagQuestions).length > 0) {
       const tagResult = await callJevSystemOne(
-        globalThis.fetch,
-        { model: DEFAULT_JEV_MODEL, state: "Reference-document clause classification.", questions: tagQuestions },
-        { ...(signal !== undefined ? { signal } : {}) },
+        options.fetchFn ?? globalThis.fetch,
+        { model: options.model ?? DEFAULT_JEV_MODEL, state: "Reference-document clause classification.", questions: tagQuestions },
+        { env: options.env ?? process.env, cwd, ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(signal !== undefined ? { signal } : {}) },
       );
       const fresh: Record<string, ReturnType<typeof clauseTagFromChoice>> = {};
       for (const [id, answer] of Object.entries(tagResult.answers)) {
@@ -199,10 +222,14 @@ export async function runConformForTarget(
         resolved.set(id, { source: "jev", tag });
         fresh[id] = tag;
       }
-      if (Object.keys(fresh).length > 0) await writeClauseTagCache(cwd, refPath, contentHash, fresh);
+      if (Object.keys(fresh).length > 0) {
+        const write = () => writeClauseTagCache(cwd, refPath, contentHash, fresh);
+        if (options.mutate === undefined) await write(); else await options.mutate([CONFORM_TAG_CACHE_PATH], write);
+      }
     }
     const clauses: ReferenceClause[] = applyClauseTags(rawClauses, resolved);
-    await writeRecentConformDoc(cwd, refPath);
+    if (options.mutate === undefined) await writeRecentConformDoc(cwd, refPath);
+    else await options.mutate([CONFORM_RECENTS_PATH], () => writeRecentConformDoc(cwd, refPath, true));
 
     const notCheckable = clauses.filter((c) => !c.checkable);
     const checkable = clauses.filter((c) => c.checkable);
@@ -222,9 +249,9 @@ export async function runConformForTarget(
       const out: ConformVerdict[] = [];
       for (const batch of batchConformItems(items, sharedRedactedText)) {
         const result = await callJevSystemOne(
-          globalThis.fetch,
-          { model: DEFAULT_JEV_MODEL, state: batch.state, questions: batch.questions },
-          { ...(signal !== undefined ? { signal } : {}) },
+          options.fetchFn ?? globalThis.fetch,
+          { model: options.model ?? DEFAULT_JEV_MODEL, state: batch.state, questions: batch.questions },
+          { env: options.env ?? process.env, cwd, ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(signal !== undefined ? { signal } : {}) },
         );
         for (const item of batch.items) {
           const answer = result.answers[item.clause.clause_id];
@@ -273,7 +300,7 @@ export async function runConformForTarget(
 
     if (target.kind === "pr") {
       const number = Number(target.id.slice("pr:".length));
-      const port = createGhConformPrPort(undefined, undefined);
+      const port = options.prPort ?? createGhConformPrPort(undefined, undefined);
       const info = await port.pr(number);
       const facts = computePrConformFacts(info);
       const redacted = prRedactedStateText(info);
@@ -285,17 +312,22 @@ export async function runConformForTarget(
       await scoreHunkRegions(hunkClauses, hunkRegionsFromDiff(info.diff));
     } else if (target.kind === "report") {
       const reportDir = target.id.slice("report:".length);
-      const reportMarkdown = await readFile(path.join(reportDir, "report.md"), "utf8").catch(() => "");
-      const findings = await readReportFindings(reportDir);
+      const report = options.readReport === undefined ? undefined : await options.readReport(reportDir, signal);
+      const reportMarkdown = report?.markdown ?? await readFile(path.join(reportDir, "report.md"), "utf8").catch(() => "");
+      const findings = report?.findings ?? await readReportFindings(reportDir);
       const facts = computeReportConformFacts(reportMarkdown, findings);
       const redacted = reportRedactedStateText(reportMarkdown);
       const reportClauses = checkable.filter((c) => c.state_kind === "report");
       for (const clause of reportClauses) supplied.add(clause.clause_id);
       evaluated = await score(reportClauses.map((clause) => ({ clause, facts: reportClauseFacts(clause, facts) })), redacted);
     } else {
-      const proc = Bun.spawn(["git", "diff", "--no-color"], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-      const diff = await new Response(proc.stdout).text();
-      await proc.exited;
+      let diff: string;
+      if (options.readDiff !== undefined) diff = await options.readDiff(signal);
+      else {
+        const proc = Bun.spawn(["git", "diff", "--no-color"], { cwd, ...(signal !== undefined ? { signal } : {}), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+        diff = await new Response(proc.stdout).text();
+        await proc.exited;
+      }
       const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
       await scoreHunkRegions(hunkClauses, hunkRegionsFromDiff(diff));
     }
@@ -318,11 +350,10 @@ export async function runConformForTarget(
   }
 }
 
-async function writeRecentConformDoc(cwd: string, refPath: string): Promise<void> {
+async function writeRecentConformDoc(cwd: string, refPath: string, strict = false): Promise<void> {
   const { writeFileAtomic } = await import("../lib/fs");
   const current = await readRecentConformDocs(cwd);
   // 0o600: local filesystem paths other users on the same machine should not see.
-  await writeFileAtomic(path.join(cwd, CONFORM_RECENTS_PATH), `${JSON.stringify(withRecentDoc(current, refPath), null, 2)}\n`, {
-    mode: 0o600,
-  }).catch(() => {});
+  const write = writeFileAtomic(path.join(cwd, CONFORM_RECENTS_PATH), `${JSON.stringify(withRecentDoc(current, refPath), null, 2)}\n`, { mode: 0o600 });
+  if (strict) await write; else await write.catch(() => {});
 }

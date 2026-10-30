@@ -1,0 +1,7 @@
+import { describe,expect,test } from 'vitest';
+import commonEn from '../src/i18n/common.en';import commonRu from '../src/i18n/common.ru';
+import workflowEn from '../src/i18n/workflow.en';import workflowRu from '../src/i18n/workflow.ru';
+import remoteEn from '../src/i18n/remote.en';import remoteRu from '../src/i18n/remote.ru';
+import contextEn from '../src/i18n/context.en';import contextRu from '../src/i18n/context.ru';
+function leaves(value:unknown,prefix=''):Record<string,string>{if(typeof value==='string')return{[prefix]:value};if(typeof value!=='object'||value===null)throw new Error('Unsupported locale value');return Object.assign({},...Object.entries(value).map(([key,item])=>leaves(item,prefix?prefix+'.'+key:key)));}
+describe('complete bilingual message catalogs',()=>{for(const[name,en,ru]of [['common',commonEn,commonRu],['workflow',workflowEn,workflowRu],['context',contextEn,contextRu],['remote',remoteEn,remoteRu]] as const)test(name+' has identical nonempty keys and interpolation contracts',()=>{const english=leaves(en),russian=leaves(ru);expect(Object.keys(english).sort()).toEqual(Object.keys(russian).sort());for(const[key,value]of Object.entries(english)){expect(value.trim()).not.toBe('');expect(russian[key]?.trim()).not.toBe('');const variables=(text:string)=>[...text.matchAll(/\{\{\s*([^}]+)\s*\}\}/g)].map(match=>match[1]!.trim()).sort();expect(variables(value)).toEqual(variables(russian[key]!));}});});

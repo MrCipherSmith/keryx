@@ -12,6 +12,7 @@ export interface RewindApplyInput {
   archive: NormalizedMessage[];
   canPersist: () => boolean;
   persist: (history: readonly NormalizedMessage[], archive: readonly NormalizedMessage[]) => void;
+  strict?: { signal: AbortSignal; planDigest?: string };
 }
 
 export interface RewindApplyOutcome {
@@ -19,6 +20,7 @@ export interface RewindApplyOutcome {
   historyRewound: boolean;
   filesRestored: boolean;
   lines: string[];
+  partial?: boolean;
 }
 
 function plural(count: number, noun: string): string {
@@ -33,6 +35,7 @@ export async function applyRewind(input: RewindApplyInput): Promise<RewindApplyO
   const lines: string[] = [];
   const wantsHistory = input.mode !== "files";
   const wantsFiles = input.mode !== "history";
+  input.strict?.signal.throwIfAborted();
   if (!input.canPersist()) return { ok: false, historyRewound: false, filesRestored: false, lines: [REWIND_LEASE_REFUSAL] };
   const target = input.recorder.entries().find((entry) => entry.seq === input.seq);
   if (target === undefined) return { ok: false, historyRewound: false, filesRestored: false, lines: [`Snapshot ${input.seq} no longer exists.`] };
@@ -42,7 +45,7 @@ export async function applyRewind(input: RewindApplyInput): Promise<RewindApplyO
 
   let filesRestored = false;
   if (wantsFiles) {
-    const files = await input.recorder.restoreFiles(input.seq);
+    const files = await input.recorder.restoreFiles(input.seq, input.strict === undefined ? {} : { signal: input.strict.signal, ...(input.strict.planDigest === undefined ? {} : { expectedPlanDigest: input.strict.planDigest }) });
     if (!files.ok) return { ok: false, historyRewound: false, filesRestored: false, lines: [files.reason] };
     filesRestored = true;
     const parts = [
@@ -53,10 +56,12 @@ export async function applyRewind(input: RewindApplyInput): Promise<RewindApplyO
     lines.push(parts.length > 0 ? `Files: ${parts.join(", ")}.` : "Files: already matched that snapshot.");
     lines.push(`Undo point: snapshot ${files.preRewindSeq} holds the tree from just before this rewind.`);
     if (files.skipped.length > 0) lines.push(`Left as they are (over 5 MB): ${files.skipped.join(", ")}`);
+    if (input.strict && files.skipped.length) return { ok: false, historyRewound: false, filesRestored, partial: true, lines };
   }
 
   let historyRewound = false;
   if (wantsHistory) {
+    input.strict?.signal.throwIfAborted();
     const conversation = applyConversationRewind({
       history: input.history,
       archive: input.archive,
@@ -69,7 +74,8 @@ export async function applyRewind(input: RewindApplyInput): Promise<RewindApplyO
       return { ok: false, historyRewound: false, filesRestored, lines };
     }
     historyRewound = true;
-    await input.recorder.detachHistoryAfter(input.seq);
+    try { await input.recorder.detachHistoryAfter(input.seq); }
+    catch { return { ok: false, historyRewound, filesRestored, partial: true, lines: [...lines, "Snapshot history mapping could not be updated."] }; }
     lines.push(`History: removed ${plural(conversation.removed, "message")} from the conversation.`);
   }
   return { ok: true, historyRewound, filesRestored, lines };

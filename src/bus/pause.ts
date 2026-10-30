@@ -61,6 +61,8 @@ export interface CreatePauseLeaseInput {
   now?: () => number;
   /** D-09 inputs for recipient/holder liveness; defaults to this host and `processIsAlive`. */
   liveness?: Omit<PresenceClassifyOptions, "now">;
+  /** Trusted local native owner scope, never a caller-controlled command field. Empty denies every target. */
+  allowedTargetInstanceIds?: readonly string[];
 }
 
 export interface ResumePauseLeaseInput {
@@ -111,6 +113,10 @@ async function resumeToLabel(root: string, targets: readonly string[]): Promise<
  * when it resolves only to the holder itself.
  */
 export async function createPauseLease(root: string, input: CreatePauseLeaseInput): Promise<PauseLease> {
+  const allowed = input.allowedTargetInstanceIds === undefined ? undefined : new Set(input.allowedTargetInstanceIds);
+  const assertTargetScope = (targets: readonly string[]): void => {
+    if (allowed !== undefined && targets.some(id => id === "*" || !allowed.has(id))) throw new BusRefusal("unknown-recipient", "The exact native control targets are outside the locally owned scope.");
+  };
   const now = input.now ?? Date.now;
   const ttlMs = input.ttlMs ?? DEFAULT_LEASE_TTL_MS;
   if (!Number.isFinite(ttlMs) || ttlMs < MIN_LEASE_TTL_MS || ttlMs > MAX_LEASE_TTL_MS) {
@@ -130,6 +136,7 @@ export async function createPauseLease(root: string, input: CreatePauseLeaseInpu
   // self-check, so the check — and the stored lease — cover every case, not
   // just the single-target one.
   const targets = resolved.filter((id) => id !== input.holder.instanceId);
+  assertTargetScope(targets);
   if (targets.length === 0) {
     throw new BusRefusal("recipient-is-self", `${input.toLabel} resolves only to this instance`);
   }
@@ -152,6 +159,7 @@ export async function createPauseLease(root: string, input: CreatePauseLeaseInpu
       {
         now,
         underLock: async () => {
+          assertTargetScope(targets);
           const presence = await listPresence(root);
           const holderLiveness = holderLivenessFrom(presence, { ...input.liveness, now: now() });
           const activity: LeaseActivityOptions = { now: now(), holderLiveness };

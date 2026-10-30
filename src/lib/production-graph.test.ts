@@ -162,6 +162,33 @@ const BENIGN_COMMANDS = new Set([
 ]);
 
 /**
+ * Release steps that run a project SCRIPT and have been shown not to build,
+ * each matched on its exact argv once leading `VAR=value` assignments are
+ * stripped.
+ *
+ * Not a second `BENIGN_COMMANDS`: that set is keyed by a command name, and
+ * `bun` cannot be benign by name — `bun <script>` runs anything. So the key
+ * here is the WHOLE invocation. A respelling (`bun run <script>`,
+ * `bun --bun <script>`), an extra flag, or the same script without its
+ * read-only flag matches nothing and is refused like any other step this
+ * parser does not know, which the parser test below plants.
+ */
+const READ_ONLY_RELEASE_CHECKS: ReadonlyArray<{ argv: readonly string[]; script: string; reason: string }> = [
+  {
+    argv: ["bun", "scripts/build-hub-web.ts", "--check"],
+    script: "scripts/build-hub-web.ts",
+    reason:
+      "freshness check of the committed Team Hub web assets: it imports src/hub/web-assets.generated.ts, compares its digests with the frontend sources and exits non-zero when they are stale, writing nothing (scripts/build-hub-web.test.ts). The module it reads ships only through the `bun build` steps this guard asks about. Without `--check` the same script REWRITES that module, so it is a build input and stays refused",
+  },
+];
+
+function isReadOnlyReleaseCheck(tokens: readonly string[]): boolean {
+  return READ_ONLY_RELEASE_CHECKS.some(
+    ({ argv }) => argv.length === tokens.length && argv.every((token, i) => token === tokens[i]),
+  );
+}
+
+/**
  * Decide what a release-script step is: a build to ask about, benign, or
  * something this parser must refuse to guess at.
  *
@@ -177,6 +204,9 @@ function classifyStep(command: string, scripts: Record<string, string>): string[
     tokens = tokens.slice(1);
   }
   if (tokens.length === 0) {
+    return "benign";
+  }
+  if (isReadOnlyReleaseCheck(tokens)) {
     return "benign";
   }
   const head = path.basename(tokens[0] as string);
@@ -444,6 +474,18 @@ describe("the shipped build contains no test scaffolding", () => {
     }
   });
 
+  test("every read-only release check names a script that exists", async () => {
+    // Same reason as the module list above: a renamed script must fail here
+    // rather than leave an exemption that matches nothing and reads as cover.
+    for (const { argv, script } of READ_ONLY_RELEASE_CHECKS) {
+      expect({ script, named: argv.includes(script), exists: await Bun.file(path.join(ROOT, script)).exists() }).toEqual({
+        script,
+        named: true,
+        exists: true,
+      });
+    }
+  });
+
   test("the raw-source trees the package also ships carry no scaffolding", async () => {
     // `package.json` `files` ships `src/gdgraph` and parts of `src/gdskills` as
     // RAW `.ts`, which the bundler never sees — so they are outside this file's
@@ -541,6 +583,21 @@ describe("the shipped build contains no test scaffolding", () => {
       /cannot be classified/,
     );
     expect(() => parse("bun run nonexistent-script")).toThrow(/unknown script/);
+
+    // A read-only release check is skipped on its EXACT argv and on nothing
+    // else. The same script without `--check` rewrites a module the next build
+    // bundles; an extra flag, a respelling or another script is unknown.
+    const CLI_BUILD = `bun build ./src/cli.ts --outdir ./dist ${BASE}`;
+    expect(parse(`bun scripts/build-hub-web.ts --check && ${CLI_BUILD}`)).toHaveLength(1);
+    for (const step of [
+      "bun scripts/build-hub-web.ts",
+      "bun scripts/build-hub-web.ts --check --write",
+      "bun --bun scripts/build-hub-web.ts --check",
+      "bun ./scripts/build-hub-web.ts --check",
+      "bun scripts/build-extra.ts --check",
+    ]) {
+      expect(() => parse(`${step} && ${CLI_BUILD}`)).toThrow(/cannot be classified/);
+    }
 
     // A non-build step is skipped, not fatal — the guard used to throw on a
     // `cp`, so adding one to the release script broke the guard rather than the

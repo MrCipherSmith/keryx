@@ -68,6 +68,8 @@ import { applyThemeId, getTheme, getThemeId } from "./theme";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
+import { executePlanCommand } from "../session/commands/plan";
+import { executeReasoningCommand } from "../session/commands/reasoning";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import { readTaskCostStore, taskCostKey } from "../harness/routing/task-cost";
 import { setModelProfileField } from "../harness/routing/model-profile";
@@ -2980,16 +2982,29 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(fnBlock).not.toContain("showComposerChoice");
   });
 
+  // Since the remote-session prototype `on` and `off` set `readOnly` through the shared `executePlanCommand`, whose
+  // commit is this closure's own assignment; the behaviour test below pins what that operation commits for each word.
+  const planCommit = (word: "on" | "off"): string =>
+    `executePlanCommand("${word}", { current: readOnly, commit: (enabled) => { readOnly = enabled; } });`;
+
   test("no-arg reports current state via chrome.showToast; on/off toggle readOnly + toast; anything else is a usage message", () => {
     const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
     const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
     const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
     expect(fnBlock).toContain("chrome.showToast(`Read-only mode: ${readOnly ? \"on\" : \"off\"}`)");
-    expect(fnBlock).toContain('"on"');
-    expect(fnBlock).toContain("readOnly = true;");
-    expect(fnBlock).toContain('"off"');
-    expect(fnBlock).toContain("readOnly = false;");
+    expect(fnBlock).toContain('if (wanted === "on") {\n        ' + planCommit("on"));
+    expect(fnBlock).toContain('if (wanted === "off") {\n        ' + planCommit("off"));
     expect(fnBlock).toContain("Usage: /plan [on|off]");
+  });
+
+  test("executePlanCommand commits true for on and false for off, and nothing for no argument or any other word", () => {
+    const committed: boolean[] = [];
+    const state = (current: boolean) => ({ current, commit: (enabled: boolean) => { committed.push(enabled); } });
+    expect(executePlanCommand("on", state(false))).toEqual({ ok: true, enabled: true });
+    expect(executePlanCommand("off", state(true))).toEqual({ ok: true, enabled: false });
+    expect(executePlanCommand("", state(true))).toEqual({ ok: true, enabled: true });
+    expect(executePlanCommand("maybe", state(false))).toEqual({ ok: false });
+    expect(committed).toEqual([true, false]);
   });
 
   test("the command switch has a /plan branch calling runPlanCommand, and the busy-branch switch has a matching case", () => {
@@ -3042,8 +3057,8 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
     const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
     const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd);
-    expect(fnBlock).toContain("readOnly = true;\n        paintModeRow();");
-    expect(fnBlock).toContain("readOnly = false;\n        paintModeRow();");
+    expect(fnBlock).toContain(`${planCommit("on")}\n        paintModeRow();`);
+    expect(fnBlock).toContain(`${planCommit("off")}\n        paintModeRow();`);
     expect(fnBodyPlan).toContain("permissionMode = next;\n      modeChangedThisSession = true;\n      paintModeRow();");
     // Painted once at startup too, so the row is never blank.
     expect(fnBodyPlan).toMatch(/const paintModeRow = [\s\S]*?\n {4}paintModeRow\(\);/);
@@ -4170,16 +4185,36 @@ describe("flow 268 T16 — tui-shell.ts /reasoning wiring (source-text audit)", 
     expect(branchBlock).toContain("isReasoningEffortLevel(wanted)");
   });
 
+  // Since the remote-session prototype a valid level goes through the shared `executeReasoningCommand`, which hands
+  // `wanted` unchanged to this closure's own commit as `effort` (pinned by the behaviour test below); the commit does
+  // the three things the next tests name, synchronously, before the confirmation line.
+  const commitHead = "executeReasoningCommand(wanted, { current: deps.reasoningEffort, commit: (effort) => {";
+  const commitIndex = branchBlock.indexOf(commitHead);
+  const commitBlock = commitIndex < 0 ? "" : branchBlock.slice(commitIndex, branchBlock.indexOf("} });", commitIndex));
+
+  test("a valid level runs the shared executeReasoningCommand with this shell's commit, before it is confirmed", () => {
+    expect(commitIndex).toBeGreaterThan(branchBlock.indexOf("isReasoningEffortLevel(wanted)"));
+    expect(commitIndex).toBeLessThan(branchBlock.indexOf("io.onSystem?.(`Reasoning effort: ${wanted}\\n`);"));
+  });
+
+  test("executeReasoningCommand commits a valid level unchanged, once, and never an invalid or empty one", () => {
+    const committed: string[] = [];
+    for (const wanted of ["high", "nonsense", ""]) {
+      executeReasoningCommand(wanted, { current: "off", commit: (effort) => { committed.push(effort); } });
+    }
+    expect(committed).toEqual(["high"]);
+  });
+
   test("a valid level mutates the live deps immediately (no rebuild needed for the next turn)", () => {
-    expect(branchBlock).toContain("deps.reasoningEffort = wanted");
+    expect(commitBlock).toContain("deps.reasoningEffort = effort;");
   });
 
   test("a valid level is threaded to commands/shell.ts via opts.setReasoningOverride, for a later /model rebuild", () => {
-    expect(branchBlock).toContain("opts.setReasoningOverride?.(wanted)");
+    expect(commitBlock).toContain("opts.setReasoningOverride?.(effort);");
   });
 
   test("a valid level is persisted to ShellConfig, so it survives a restart", () => {
-    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted })");
+    expect(commitBlock).toContain("saveShellConfig({ reasoningEffort: effort });");
   });
 
   test("an OpenAI-compatible provider with no reasoning config gets a one-line note", () => {

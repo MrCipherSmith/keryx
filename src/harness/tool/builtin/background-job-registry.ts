@@ -62,7 +62,11 @@ export type BackgroundSpawner = (
 export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit" | "hold-timeout";
 
 /** Public, session-visible snapshot of a tracked task. */
+export interface JobOwner { kind: "run" | "inspection" | "session"; identity: string }
 export interface BackgroundJobInfo {
+  owner?: JobOwner;
+  /** Trusted local infrastructure task; never admissible as user check evidence or model task control. */
+  visibility?: "private";
   jobId: string;
   pid: number;
   command: string;
@@ -206,6 +210,12 @@ export type BackgroundJobEvent =
 
 /** Options for a single {@link JobRegistry.start}. */
 export interface StartTaskOptions {
+  /** Trusted local scope, never decoded from tool/Hub input. */
+  owner?: JobOwner;
+  /** Trusted local constructor callback for fixed argv/stdin operations. Never deserialize from tool or remote input. */
+  localSpawn?: BackgroundSpawner;
+  /** Local infrastructure classification, never decoded from tool input. */
+  visibility?: "private";
   /** Defaults to `"background"`, preserving flow-173 semantics for direct callers. */
   phase?: "foreground" | "background";
   description?: string;
@@ -237,14 +247,22 @@ export interface TaskCompletion {
   output: string;
 }
 
+/**
+ * Private tasks (`visibility: "private"`, trusted local infrastructure such as a native checkpoint) are invisible
+ * to `get`, `list`, `readOutput`, `readOutputSince` and `kill` unless the caller opts in. Only the code that
+ * started one, or a host sweep that must account for it, passes `includePrivate`; model tools, `/tasks` and every
+ * remote task command never do, so a private id behaves exactly like an unknown one.
+ */
+export interface JobAccess { includePrivate?: boolean }
+
 export interface JobRegistry {
   start(
     command: string,
     opts?: StartTaskOptions,
   ): Promise<{ ok: true; jobId: string; pid: number; output: string } | { ok: false; error: string }>;
-  get(jobId: string): BackgroundJobInfo | undefined;
-  list(): BackgroundJobInfo[];
-  readOutput(jobId: string): { ok: true; output: string } | { ok: false; error: string };
+  get(jobId: string, access?: JobAccess): BackgroundJobInfo | undefined;
+  list(access?: JobAccess): BackgroundJobInfo[];
+  readOutput(jobId: string, access?: JobAccess): { ok: true; output: string } | { ok: false; error: string };
   /**
    * Read from an EXPLICIT, absolute cursor instead of the registry's own
    * (flow 266, AC1). Two calls with the same `since` return the same bytes,
@@ -262,6 +280,7 @@ export interface JobRegistry {
   readOutputSince(
     jobId: string,
     since: number,
+    access?: JobAccess,
   ):
     | { ok: true; output: string; nextCursor: number; missed: number; status: BackgroundJobInfo["status"] }
     | { ok: false; error: string };
@@ -293,7 +312,7 @@ export interface JobRegistry {
    * other running background commands) rather than enforced destructively.
    */
   promote(jobId: string): { ok: true; overCap?: string } | { ok: false; error: string };
-  kill(jobId: string, reason?: KillReason): Promise<{ ok: true } | { ok: false; error: string }>;
+  kill(jobId: string, reason?: KillReason, access?: JobAccess): Promise<{ ok: true } | { ok: false; error: string }>;
   sweepAll(): Promise<void>;
   /**
    * Every task that is terminal, was handed back as a handle (`background`
@@ -620,6 +639,7 @@ export function createJobRegistry(options?: {
   cwd?: string;
   maxConcurrent?: number;
   spawn?: BackgroundSpawner;
+  owner?: () => JobOwner | undefined;
   killGraceMs?: number;
   initialBufferMs?: number;
   onEvent?: (event: BackgroundJobEvent) => void;
@@ -686,6 +706,11 @@ export function createJobRegistry(options?: {
     // worker alive). `unref` is Node/Bun-only and absent on an injected fake.
     (timer as { unref?: () => void }).unref?.();
     job.idleTimer = timer;
+  }
+
+  /** A private task is reachable only through an explicit {@link JobAccess} opt-in; otherwise it reads as unknown. */
+  function reachable(job: InternalJob | undefined, access: JobAccess | undefined): InternalJob | undefined {
+    return job !== undefined && (job.info.visibility !== "private" || access?.includePrivate === true) ? job : undefined;
   }
 
   /**
@@ -808,9 +833,10 @@ export function createJobRegistry(options?: {
         }
       }
 
+      const owner = opts?.owner ?? options?.owner?.();
       let handle: BackgroundProcessHandle;
       try {
-        handle = await spawn(command, cwd);
+        handle = await (opts?.localSpawn ?? spawn)(command, cwd);
       } catch (cause) {
         return {
           ok: false,
@@ -828,6 +854,8 @@ export function createJobRegistry(options?: {
           jobId,
           pid: handle.pid,
           command,
+          ...(opts?.visibility === undefined ? {} : { visibility: opts.visibility }),
+          ...(owner === undefined ? {} : { owner: { ...owner } }),
           status: "running",
           phase,
           // Stored AS GIVEN — clamping belongs to the caller (see
@@ -928,16 +956,16 @@ export function createJobRegistry(options?: {
       return { ok: true, jobId, pid: handle.pid, output };
     },
 
-    get(jobId) {
-      return jobs.get(jobId)?.info;
+    get(jobId, access) {
+      return reachable(jobs.get(jobId), access)?.info;
     },
 
-    list() {
-      return [...jobs.values()].map((j) => j.info);
+    list(access) {
+      return [...jobs.values()].filter((j) => reachable(j, access) !== undefined).map((j) => j.info);
     },
 
-    readOutput(jobId) {
-      const job = jobs.get(jobId);
+    readOutput(jobId, access) {
+      const job = reachable(jobs.get(jobId), access);
       if (job === undefined) {
         return { ok: false, error: `unknown job_id: ${jobId}` };
       }
@@ -953,8 +981,8 @@ export function createJobRegistry(options?: {
       return { ok: true, output };
     },
 
-    readOutputSince(jobId, since) {
-      const job = jobs.get(jobId);
+    readOutputSince(jobId, since, access) {
+      const job = reachable(jobs.get(jobId), access);
       if (job === undefined) {
         return { ok: false, error: `unknown job_id: ${jobId}` };
       }
@@ -1028,8 +1056,8 @@ export function createJobRegistry(options?: {
       return { ok: true };
     },
 
-    async kill(jobId, reason = "model") {
-      const job = jobs.get(jobId);
+    async kill(jobId, reason = "model", access) {
+      const job = reachable(jobs.get(jobId), access);
       if (job === undefined) {
         return { ok: false, error: `unknown job_id: ${jobId}` };
       }

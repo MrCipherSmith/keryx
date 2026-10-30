@@ -253,6 +253,33 @@ describe("openLeasedSession", () => {
     expect(result.handle.summary.id).toBe(target.summary.id);
   });
 
+  test("reclaimHolder takes over a lease only on the caller's own proof, even while its heartbeat is fresh", () => {
+    const target = makeSession("crashed");
+    // A crashed holder's lease reads live for 15 s; only the caller's identity evidence, never its age, lets it go.
+    const crashed = plantHolder(target.summary.id);
+    expect(() => openLeasedSession({ cwd, dataDir, resumeId: target.summary.id })).toThrow(SessionLeasedError);
+    const seen: string[] = [];
+    const result = track(openLeasedSession({ cwd, dataDir, resumeId: target.summary.id, reclaimHolder: (holder) => { seen.push(holder.token); return holder.token === crashed.token; } }));
+    expect(seen).toEqual([crashed.token]);
+    expect(readLeaseOwnerSync<SessionLeaseOwner>(result.lease.lockPath)?.instanceId).toBe(processInstanceId());
+  });
+
+  test("with reclaimHolder an unproven holder keeps its lease although the D-09 rule would call it gone", () => {
+    const target = makeSession("unproven");
+    const old = new Date(Date.now() - 60_000).toISOString();
+    const holder = plantHolder(target.summary.id, { heartbeatAt: old, host: "another-host" });
+    expect(() => openLeasedSession({ cwd, dataDir, resumeId: target.summary.id, reclaimHolder: () => false })).toThrow(SessionLeasedError);
+    expect(readLeaseOwnerSync(sessionLeasePath(cwd, target.summary.id, dataDir))?.token).toBe(holder.token);
+    // An unreadable owner record is never proof of anything, however old its directory is.
+    const unreadable = makeSession("unreadable");
+    const lockPath = sessionLeasePath(cwd, unreadable.summary.id, dataDir);
+    mkdirSync(lockPath, { recursive: true, mode: 0o700 }); writeFileSync(path.join(lockPath, "owner.json"), "{", { mode: 0o600 });
+    expect(() => openLeasedSession({ cwd, dataDir, resumeId: unreadable.summary.id, reclaimHolder: () => true, now: () => Date.now() + 3_600_000 })).toThrow(SessionLeasedError);
+    // A free lease is simply acquired.
+    const free = makeSession("free");
+    expect(track(openLeasedSession({ cwd, dataDir, resumeId: free.summary.id, reclaimHolder: () => false })).handle.summary.id).toBe(free.summary.id);
+  });
+
   test("fork opens a new id and leases it, leaving the held source alone", () => {
     const source = makeSession("source");
     const holder = plantHolder(source.summary.id);

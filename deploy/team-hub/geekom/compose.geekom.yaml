@@ -1,0 +1,57 @@
+services:
+  hub:
+    build:
+      context: .
+      dockerfile: deploy/team-hub/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  edge:
+    image: nginx@sha256:<CLOUDFLARE_ACCESS_AUD>
+    user: "1000:1000"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    restart: unless-stopped
+    ports: ["127.0.0.1:8788:8080"]
+    volumes:
+      - ./edge.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 96m
+    pids_limit: 64
+    depends_on:
+      hub:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  tunnel:
+    image: cloudflare/cloudflared@sha256:<CLOUDFLARE_ACCESS_AUD>
+    user: "1000:1000"
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    restart: unless-stopped
+    volumes:
+      - ./tunnel.yml:/etc/cloudflared/config.yml:ro
+      - ../../secrets/tunnel.json:/run/secrets/tunnel.json:ro
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    pids_limit: 64
+    depends_on: ["edge"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

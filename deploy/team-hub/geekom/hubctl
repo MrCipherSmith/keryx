@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+# Install at ~/keryx-team-hub/hubctl, beside current/ and secrets/.
+hub_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+cd -P "$hub_root/current"
+if [ -f "$PWD/compose.access.yaml" ]; then
+  KERYX_HUB_RELEASE_TAG=$(basename "$PWD")
+  export KERYX_HUB_RELEASE_TAG
+  exec docker compose --project-directory "$PWD" -p keryx-team-hub \
+    --env-file "$hub_root/secrets/hub.env" \
+    -f "$PWD/deploy/team-hub/compose.yaml" \
+    -f "$PWD/compose.geekom.yaml" \
+    -f "$PWD/compose.access.yaml" "$@"
+fi
+exec docker compose --project-directory "$PWD" -p keryx-team-hub \
+  --env-file "$hub_root/secrets/hub.env" \
+  -f "$PWD/deploy/team-hub/compose.yaml" \
+  -f "$PWD/compose.geekom.yaml" "$@"

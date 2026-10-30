@@ -43,6 +43,7 @@ the one that describes shipped behaviour.
 - [Use local SearXNG for agent web search](guides/use-local-searxng.md)
 - [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
 - [Answer a remote approval from a bot or another product](guides/answer-remote-approvals.md)
+- [Run Keryx sessions on your machines from Team Hub (beta)](guides/team-hub-remote-sessions.md)
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)
 - [Review every pull request with a bot, and measure it](guides/review-as-a-pr-bot.md)
 - [Run a review unattended, on a schedule or a trigger](guides/autonomous-review.md)

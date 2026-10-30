@@ -26,6 +26,8 @@ export interface ApprovalBrokerOptions {
   hasConsumer: () => boolean;
   pollMs?: number;
   now?: () => Date;
+  /** Native session action cards may opt into the existing 8 KiB wire limit. */
+  summaryMaxBytes?: number;
 }
 
 export interface ApprovalAsk {
@@ -35,6 +37,9 @@ export interface ApprovalAsk {
   risk: ToolRisk;
   callFingerprint: string;
   floors: readonly string[];
+  /** Prepared, bounded action details from a trusted local adapter, already redacted.
+   * Other consumers retain the generic description and never persist raw tool input. */
+  actionSummary?: string;
   /** Announce the pending record to the stream. Throwing means the ask could not be delivered. */
   deliver: (approval: ApprovalView) => void;
   /** Announce the resolution. Best effort: the evidence ledger already has it. */
@@ -65,11 +70,11 @@ const CONSEQUENCE: Record<ToolRisk, string> = {
   destructive: "Deletes or overwrites data and cannot be undone.",
 };
 
-/** Never derived from the call's arguments: a reader of the store must not learn the command. */
+/** Generic callers disclose no arguments; session adapters may supply safe review details. */
 function describeAsk(ask: ApprovalAsk): { summary: string; scope: string; consequence: string } {
   const floors = ask.floors.length > 0 ? ` Needs a fresh answer every time (${ask.floors.join(", ")}).` : "";
   return {
-    summary: `Run tool "${ask.toolName}" (risk: ${ask.risk})`,
+    summary: ask.actionSummary ?? `Run tool "${ask.toolName}" (risk: ${ask.risk})`,
     scope: `This one call to "${ask.toolName}" only. Not a session grant, not a standing rule.`,
     consequence: `${CONSEQUENCE[ask.risk]}${floors}`,
   };
@@ -136,6 +141,7 @@ export function createApprovalBroker(options: ApprovalBrokerOptions): ApprovalBr
           },
           options.dir,
           createdAt,
+          options.summaryMaxBytes,
         );
       } catch {
         try {

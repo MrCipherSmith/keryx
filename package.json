@@ -40,12 +40,12 @@
   },
   "scripts": {
     "keryx": "bun ./src/cli.ts",
-    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/core.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
+    "build": "bun scripts/build-hub-web.ts --check && bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/core.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
     "prepare": "bun run build",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --project tsconfig.scripts.json --noEmit",
     "test": "bun test",
-    "test:core": "bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/",
+    "test:core": "bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/hub/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/remote-control/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/",
     "test:client:terminal": "bun test src/tui/ src/commands/shell",
     "test:client:streaming": "bun test src/harness/provider/",
     "test:client:cancel-resume": "bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/remote/ src/docs/ src/commands/sessions",
@@ -59,7 +59,9 @@
     "check:retired-spellings": "bun scripts/check-retired-cli-spellings.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
     "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:hub-web": "bun scripts/build-hub-web.ts",
+    "check:hub-web": "bun run --cwd apps/hub-web typecheck && bun run --cwd apps/hub-web lint && bun run --cwd apps/hub-web test && bun scripts/build-hub-web.ts --check"
   },
   "files": [
     "dist",
@@ -86,7 +88,7 @@
   },
   "dependencies": {},
   "optionalDependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@opentui/core": "^0.4.5",
     "web-tree-sitter": "^0.22.6"
   },

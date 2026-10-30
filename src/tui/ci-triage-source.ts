@@ -31,10 +31,17 @@ export interface CiSpawnResult {
   readonly exitCode: number;
 }
 
-export type CiSourceSpawn = (argv: string[], cwd: string) => Promise<CiSpawnResult>;
+export type CiSourceSpawn = (argv: string[], cwd: string, signal?: AbortSignal) => Promise<CiSpawnResult>;
 
-async function defaultSpawn(argv: string[], cwd: string): Promise<CiSpawnResult> {
-  const proc = Bun.spawn(argv, { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+export interface CiExecutionOptions {
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly dir?: string;
+  readonly signal?: AbortSignal;
+  readonly model?: string;
+}
+
+async function defaultSpawn(argv: string[], cwd: string, signal?: AbortSignal): Promise<CiSpawnResult> {
+  const proc = Bun.spawn(argv, { cwd, ...(signal !== undefined ? { signal } : {}), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -62,12 +69,13 @@ interface GhRunListEntry {
  * PR, `gh` unavailable, nothing failed) is a `note`, so the modal always has
  * something to say rather than an empty panel with no explanation.
  */
-export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defaultSpawn): Promise<CiTriageListRead> {
+export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defaultSpawn, options: CiExecutionOptions = {}): Promise<CiTriageListRead> {
+  if (options.signal?.aborted) return { items: [], note: "CI inspection was cancelled." };
   // Flow 346: computed BEFORE the gate (not after, as `resolveJevApiKey` used
   // to be called only once a credential was already needed) so the shared
   // default-on resolver (`resolveJevProfileFlag`) can see whether a
   // credential is actually available — see `readCiTriageEnabled`'s own doc.
-  const jevAvailable = resolveJevApiKey(process.env) !== undefined;
+  const jevAvailable = resolveJevApiKey(options.env ?? process.env, options.dir) !== undefined;
   if (!(await readCiTriageEnabled(cwd, { jevAvailable }))) {
     return {
       items: [],
@@ -76,7 +84,7 @@ export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defau
         'Enable it explicitly in .metaproject/tasks.config.json ({"review":{"jev":{"ci_triage":true}}}) — CI triage sends a redacted log excerpt to OpenRouter/TypeSafe.',
     };
   }
-  const pr = await spawn(["gh", "pr", "view", "--json", "number,headRefName"], cwd);
+  const pr = await spawn(["gh", "pr", "view", "--json", "number,headRefName"], cwd, options.signal);
   if (pr.exitCode !== 0) {
     return { items: [], note: "No pull request found for the current branch (`gh pr view` failed)." };
   }
@@ -93,6 +101,7 @@ export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defau
   const runs = await spawn(
     ["gh", "run", "list", "--branch", branch, "--json", "databaseId,conclusion,workflowName,headBranch,createdAt", "-L", "20"],
     cwd,
+    options.signal,
   );
   if (runs.exitCode !== 0) {
     return { items: [], note: `Could not list CI runs for ${branch} (\`gh run list\` failed).` };
@@ -107,7 +116,7 @@ export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defau
   if (failedRuns.length === 0) {
     return { items: [], note: `No failed CI runs on ${branch}.` };
   }
-  const port = createGhCiPort((argv) => spawn(argv, cwd));
+  const port = createGhCiPort((argv) => spawn(argv, cwd, options.signal));
   const items: CiTriageJobItem[] = [];
   for (const run of failedRuns) {
     const runId = String(run.databaseId ?? "");
@@ -155,8 +164,10 @@ export async function runCiTriageForItem(
   spawn: CiSourceSpawn = defaultSpawn,
   fetchFn: typeof fetch = globalThis.fetch,
   signal?: AbortSignal,
+  options: CiExecutionOptions = {},
 ): Promise<CiTriageRunResult> {
-  const apiKey = resolveJevApiKey(process.env);
+  if (signal?.aborted) return { ok: false, reason: "CI triage was cancelled.", timedOut: true };
+  const apiKey = resolveJevApiKey(options.env ?? process.env, options.dir);
   if (!(await readCiTriageEnabled(cwd, { jevAvailable: apiKey !== undefined && apiKey.length > 0 }))) {
     return { ok: false, reason: "review.jev.ci_triage is not enabled for this project (default: on when a Jev/OpenRouter credential is available and /external is on)." };
   }
@@ -164,7 +175,7 @@ export async function runCiTriageForItem(
     return { ok: false, reason: "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config." };
   }
   try {
-    const port = createGhCiPort((argv) => spawn(argv, cwd));
+    const port = createGhCiPort((argv) => spawn(argv, cwd, options.signal));
     const info = await port.runInfo(item.runId);
     const rawLog = await port.failedLog(item.runId);
     const testName = extractFailingTestName(rawLog, item.jobName);
@@ -183,7 +194,7 @@ export async function runCiTriageForItem(
       ...(signals.lines.length > 0 ? { signalLines: signals.lines } : {}),
     });
     const questions = buildCiTriageQuestions(true);
-    const result = await callJevSystemOne(fetchFn, { model: DEFAULT_JEV_MODEL, state, questions }, { ...(signal !== undefined ? { signal } : {}) });
+    const result = await callJevSystemOne(fetchFn, { model: options.model ?? DEFAULT_JEV_MODEL, state, questions }, { env: options.env ?? process.env, cwd, ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(signal !== undefined ? { signal } : {}) });
     const rawVerdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
     const verdict = applyDeterministicOverride(rawVerdict, signals);
     return { ok: true, verdict, signalLines: signals.lines, ...(testName !== undefined ? { testName } : {}) };

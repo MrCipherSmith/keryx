@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { validateAgainstSchemaObject } from "../contracts/validator";
 import {
   BUS_EVENT_SCHEMA,
   BUS_PRESENCE_SCHEMA,
@@ -206,4 +207,13 @@ describe("strict timestamps (r2 N1)", () => {
     expect(parseBusEvent(event({ ts: "2026-09-19T10:00:00+02:00" }))).toBeUndefined();
     expect(parseBusEvent(event({ ts: "2026-09-19" }))).toBeUndefined();
   });
+});
+
+test("headless is an explicit local transport label while legacy peer records remain readable",()=>{
+ const base={schemaVersion:1,instanceId:"10000000-0000-4000-8000-000000000001",name:"headless",pid:1,host:"fixture",sessionId:"10000000-0000-4000-8000-000000000002",checkout:"/fixture",branch:null,status:"idle",activity:"",startedAt:"2026-10-27T00:00:00.000Z",heartbeatAt:"2026-10-27T00:00:00.000Z",keryxVersion:"fixture"};
+ for(const surface of ["headless","tui","readline"] as const)expect(parsePresence({...base,surface})?.surface).toBe(surface);expect(parsePresence({...base,surface:"unknown-transport"})).toBeUndefined();
+ const legacy={...BUS_PRESENCE_SCHEMA,properties:{...props(BUS_PRESENCE_SCHEMA),surface:{enum:["tui","readline"]}}};
+ const records=["headless","tui","readline"].map(surface=>({...base,surface}));
+ // Historical readPresence/listPresence skip an individually invalid record; one new label cannot hide legacy peers.
+ expect(records.filter(record=>validateAgainstSchemaObject(legacy,record).errors.length===0).map(record=>record.surface)).toEqual(["tui","readline"]);
 });

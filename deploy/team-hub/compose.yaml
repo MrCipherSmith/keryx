@@ -1,0 +1,40 @@
+services:
+  hub:
+    build:
+      context: ../..
+      dockerfile: deploy/team-hub/Dockerfile
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HUB_PORT:-8787}:8787"
+    environment:
+      KERYX_HUB_OPERATOR_TOKEN: ${KERYX_HUB_OPERATOR_TOKEN:?Generate a separate human operator token in .env}
+      KERYX_HUB_AGENT_TOKEN: ${KERYX_HUB_AGENT_TOKEN:?Generate a separate agent token in .env}
+      KERYX_HUB_REVIEWER_TOKEN: ${KERYX_HUB_REVIEWER_TOKEN:-}
+      KERYX_HUB_PUBLIC_ORIGIN: ${KERYX_HUB_PUBLIC_ORIGIN:-}
+    volumes:
+      - hub-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      HUB_DOMAIN: ${HUB_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      hub:
+        condition: service_healthy
+volumes:
+  hub-data:
+  caddy-data:
+  caddy-config:
