@@ -28,6 +28,8 @@ type Options = {
      * `keryx hub sync`/watch). False keeps the synced context in the cache alone and never writes the checkout.
      */
     checkoutIndex?: boolean;
+    /** Extra headers on the context read only (an edge service token); held in memory, never written to the binding or cache. */
+    accessHeaders?: Readonly<Record<string, string>>;
 };
 const digest = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 async function atomic(path: string, value: unknown) {
@@ -276,7 +278,7 @@ export class HubConnector {
             const cacheFile = join(cacheDir, "context.json");
             const prior = await readContext(cacheFile, binding.projectId);
             revision = prior.value?.revision;
-            const response = await requestContext(`${binding.url}/hub/v1/projects/${encodeURIComponent(binding.projectId)}/context${prior.value ? `?after=${prior.value.revision}` : ""}`, token, signal);
+            const response = await requestContext(`${binding.url}/hub/v1/projects/${encodeURIComponent(binding.projectId)}/context${prior.value ? `?after=${prior.value.revision}` : ""}`, token, signal, this.options.accessHeaders);
             signal?.throwIfAborted();
             const context = mergeContext(response, prior.value, binding.projectId);
             const bytes = JSON.stringify(context, null, 2);

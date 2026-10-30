@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { canonicalDigest, criteriaDigest, LIMITS, MACHINE_SUBPROTOCOL, parseClosedJson, parseMachineFrame, validateControl, type Control, type MachineFrame, type MachineToHubFrame } from '../../remote-control/protocol';
 import { MachineError, machineFailure, type MachineResult } from './errors';
 import { trustedHubUrl } from './config';
+import { hubAccessHeaders } from './access';
 export async function enrollMachine(hubUrl: string, request: Control['EnrollmentRequest']): Promise<{
     machineId: string;
     secret: string;
@@ -10,7 +11,8 @@ export async function enrollMachine(hubUrl: string, request: Control['Enrollment
     const checked = validateControl('EnrollmentRequest', request);
     if (!checked.ok)
         throw new MachineError('invalid-enrollment');
-    const response = await fetch(`${trustedHubUrl(hubUrl)}/hub/v2/machines/enroll`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(checked.value), redirect: 'error', signal: AbortSignal.timeout(30000) });
+    const access = hubAccessHeaders(hubUrl);
+    const response = await fetch(`${trustedHubUrl(hubUrl)}/hub/v2/machines/enroll`, { method: 'POST', headers: { ...access, 'Content-Type': 'application/json' }, body: JSON.stringify(checked.value), redirect: 'error', signal: AbortSignal.timeout(30000) });
     if (!response.ok) {
         await response.body?.cancel();
         throw new MachineError('enrollment-rejected');
@@ -73,11 +75,12 @@ export class MachineConnection {
     async connect(): Promise<void> {
         if (this.socket)
             throw new MachineError('already-connected');
+        const access = hubAccessHeaders(this.options.hubUrl);
         this.transportAbort = new AbortController();
         const generation = ++this.generation;
         const u = new URL('/hub/v2/machines/socket', trustedHubUrl(this.options.hubUrl));
         u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new NativeWebSocket(u, { protocols: [MACHINE_SUBPROTOCOL], headers: { Authorization: `Bearer ${this.options.secret}` } });
+        const ws = new NativeWebSocket(u, { protocols: [MACHINE_SUBPROTOCOL], headers: { ...access, Authorization: `Bearer ${this.options.secret}` } });
         this.socket = ws;
         return new Promise((resolve, reject) => {
             this.handshakeReject = reject;
@@ -159,10 +162,10 @@ export class MachineConnection {
             throw new MachineError('invalid-idempotency-key');
         if (!route.startsWith('/hub/v2/') || route.includes('..') || (route.includes('?') && !/^\/hub\/v2\/machines\/[A-Za-z0-9._:-]+\/recovery\?after=\d+$/.test(route)))
             throw new MachineError('invalid-machine-route');
-        const url = `${trustedHubUrl(this.options.hubUrl)}${route}`, payload = body === undefined ? {} : { body: JSON.stringify(body) };
+        const url = `${trustedHubUrl(this.options.hubUrl)}${route}`, payload = body === undefined ? {} : { body: JSON.stringify(body) }, access = hubAccessHeaders(this.options.hubUrl);
         let response: Response;
         try {
-            response = await fetch(url, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${this.options.secret}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey ?? randomUUID() }, ...payload, signal: AbortSignal.any([AbortSignal.timeout(30000), this.transportAbort.signal]), redirect: 'error' });
+            response = await fetch(url, { method: body === undefined ? 'GET' : 'POST', headers: { ...access, Authorization: `Bearer ${this.options.secret}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey ?? randomUUID() }, ...payload, signal: AbortSignal.any([AbortSignal.timeout(30000), this.transportAbort.signal]), redirect: 'error' });
         }
         catch (cause) {
             // Fetch rejects with a TypeError only for a network error: the Hub refused, reset or dropped the connection, as when it
@@ -299,8 +302,9 @@ export async function readSessionActionAuthority(options: {
     const timeout = AbortSignal.timeout(5000);
     const signal = action.signal ? AbortSignal.any([action.signal, timeout]) : timeout;
     try {
+        const access = hubAccessHeaders(options.hubUrl);
         while (performance.now() - started < 5000) {
-            const response = await fetch(`${trustedHubUrl(options.hubUrl)}/hub/v2/projects/${encodeURIComponent(expected.projectId)}/sessions/${encodeURIComponent(expected.sessionId)}`, { headers: { Authorization: `Bearer ${options.secret}` }, cache: 'no-store', redirect: 'error', signal });
+            const response = await fetch(`${trustedHubUrl(options.hubUrl)}/hub/v2/projects/${encodeURIComponent(expected.projectId)}/sessions/${encodeURIComponent(expected.sessionId)}`, { headers: { ...access, Authorization: `Bearer ${options.secret}` }, cache: 'no-store', redirect: 'error', signal });
             if (!response.ok) {
                 await response.body?.cancel();
                 return response.status === 409 && response.headers.get('X-Keryx-Action-Authority') === 'association-stale' && !signal.aborted ? { status: 'stale-subject' } : false;
@@ -339,7 +343,8 @@ export async function readScopedHubFlows(options: {
     const id = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
     if (!id.test(options.projectId) || (options.flowId !== undefined && !id.test(options.flowId)))
         throw new MachineError('invalid-arguments');
-    const response = await fetch(`${trustedHubUrl(options.hubUrl)}/hub/v1/projects/${encodeURIComponent(options.projectId)}/flows${options.flowId === undefined ? '' : `/${encodeURIComponent(options.flowId)}`}`, { headers: { Authorization: `Bearer ${options.secret}` }, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000) });
+    const access = hubAccessHeaders(options.hubUrl);
+    const response = await fetch(`${trustedHubUrl(options.hubUrl)}/hub/v1/projects/${encodeURIComponent(options.projectId)}/flows${options.flowId === undefined ? '' : `/${encodeURIComponent(options.flowId)}`}`, { headers: { ...access, Authorization: `Bearer ${options.secret}` }, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5000) });
     if (!response.ok) {
         await response.body?.cancel();
         throw new MachineError(response.status === 403 ? 'scope-denied' : 'project-read-failed');
@@ -397,7 +402,8 @@ async function readCurrentControllerAuthorityResult(hubUrl: string, secret: stri
     if (!controller || controller.state !== 'held' || controller.actorId !== actorId || Date.parse(controller.expiresAt) <= Date.now()) return {status:'revoked-or-forbidden'};
     const started = performance.now(), signal = actionSignal ? AbortSignal.any([actionSignal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000);
     try {
-        const response = await fetch(`${trustedHubUrl(hubUrl)}/hub/v2/projects/${encodeURIComponent(expected.projectId)}/sessions/${encodeURIComponent(expected.sessionId)}`, { headers: { Authorization: `Bearer ${secret}` }, cache: 'no-store', redirect: 'error', signal });
+        const access = hubAccessHeaders(hubUrl);
+        const response = await fetch(`${trustedHubUrl(hubUrl)}/hub/v2/projects/${encodeURIComponent(expected.projectId)}/sessions/${encodeURIComponent(expected.sessionId)}`, { headers: { ...access, Authorization: `Bearer ${secret}` }, cache: 'no-store', redirect: 'error', signal });
         if (!response.ok) { await response.body?.cancel(); return selectionReadFailure(new MachineError(`machine-http-${response.status}`), actionSignal); }
         const parsed = parseClosedJson(await readBoundedResponse(response, 65536));
         if (!parsed.ok) return {status:'unknown'};

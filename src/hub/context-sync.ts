@@ -89,12 +89,12 @@ export async function acquireContextLock(cacheDir: string): Promise<() => Promis
         catch (error) { if (!record(error) || error.code !== "ENOENT") throw error; }
     };
 }
-export async function requestContext(url: string, token: string, signal?: AbortSignal): Promise<unknown> {
+export async function requestContext(url: string, token: string, signal?: AbortSignal, accessHeaders: Readonly<Record<string, string>> = {}): Promise<unknown> {
     const timeout = AbortSignal.timeout(30000);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     try {
         combined.throwIfAborted();
-        const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, signal: combined, redirect: "error" });
+        const response = await fetch(url, { headers: { ...accessHeaders, Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, signal: combined, redirect: "error" });
         if (!response.ok) {
             await response.body?.cancel();
             const status = response.status;
