@@ -178,8 +178,11 @@ export function createRemoteControl(ports: RemotePorts) {
       runCommand(store.remote, m, row, auth, operationId, run.runId, run.turnId, run.version, "cancel-run", { reason: b.reason }, { controllerLeaseId: controller.controllerLeaseId, expectedControllerVersion: controller.version }); return { runId: run.runId, version: run.version, status: "requested", confirmed: false };
     }
     if (p[4] === "approvals" && p[5] && p[6] === "answer") {
-      const b = control("ApprovalAnswer", input); version(run.version, b.expectedRunVersion);
+      const b = control("ApprovalAnswer", input);
       const question = store.remote.get<ApprovalRow>("remote_approval_projection", p[5]);
+      // An unanswered waiter of this run that expired is refused as expired before the version check: stale-version would invite a retry that can never apply.
+      if (question && !question.answer && question.runId === run.runId && (question.status !== "waiting" || Date.parse(question.expiresAt) <= Date.now())) fail(409, "approval-expired", "Approval binding or waiter is no longer current");
+      version(run.version, b.expectedRunVersion);
       const answerDigest = canonicalDigest([p[5], b.actionFingerprint, b.policyDigest, b.decision]);
       if (question?.answer) { if (question.answer.digest !== answerDigest || question.answer.actorId !== auth.actor.id) fail(409, "payload-conflict", "Approval answer is already immutable"); return question.answer.receipt; }
       if (!question || question.runId !== run.runId || question.localRequired || question.status !== "waiting" || question.actionFingerprint !== b.actionFingerprint || question.policyDigest !== b.policyDigest || Date.parse(question.expiresAt) <= Date.now()) fail(409, "approval-expired", "Approval binding or waiter is no longer current");
