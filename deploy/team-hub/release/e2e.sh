@@ -8,17 +8,24 @@
 # directory through KERYX_HUB_RELEASE_BASE_URL (file://), installs in `local` mode into a
 # temporary directory under a throwaway compose project, and then exercises, in order:
 #
-#   install                 healthy, owner-only secrets, no token in the install log
-#   backup / restore        online backup, checksum, weekly copy, restore of an older state
-#   agent keys              issue (needs a terminal), use, list, revoke
-#   schedule                the cron entry (through a crontab stand-in; yours is not touched)
-#   upgrade / rollback      a clean upgrade, then rollback
+#   install                 under dash with no terminal (dash is /bin/sh on Debian and Ubuntu);
+#                           healthy, owner-only secrets, no token in the install log or in argv
+#   refusals                no terminal to confirm on, an image without a digest, newlines in
+#                           inputs, a lock held by another operation, a project named by the shell
+#   backup / restore        online backup, checksum, weekly copy, restore of an older state,
+#                           restore OVER a corrupted database, and a restore the Hub cannot start
+#                           on (the data it replaced must come back, on a stopped Hub)
+#   agent keys              issue (needs a terminal), use, list, rotate, revoke
+#   schedule                the cron entry (through a crontab stand-in; yours is not touched),
+#                           and that two installs whose paths share a prefix keep their own lines
+#   upgrade / rollback      a clean upgrade, rollback with and without the data
 #   failed upgrades         a new image that dies at start (caught by the trial, nothing
 #                           changes) and one that only dies with a network (caught after the
 #                           switch: automatic rollback with the pre-upgrade data restored)
 #
-# Everything it creates is removed at the end, including the throwaway compose project and its
-# volume. It never touches another compose project, and it does not run `crontab` for real.
+# Everything it creates is removed at the end, including the throwaway compose projects and their
+# volumes. It never touches another compose project, and it does not run `crontab` for real.
+# No secret is put on a command line here: tokens travel through files and pipes.
 set -eu
 umask 077
 
@@ -47,7 +54,7 @@ tags="kth-e2e-$run-v2 kth-e2e-$run-dies kth-e2e-$run-nonet"
 cleanup() {
   rc=$?
   trap - EXIT INT TERM HUP
-  # Only this run's own project and images.
+  # Only this run's own projects and images.
   for pr in "$project" "${project}b"; do
     docker ps -aq --filter "label=com.docker.compose.project=$pr" | xargs docker rm -f >/dev/null 2>&1 || true
     docker volume rm -f "${pr}_hub-data" >/dev/null 2>&1 || true
@@ -84,8 +91,43 @@ refuse() { # refuse <description> <command...>: the command must fail
   echo "--- $d" >> "$steps"
   if "$@" >>"$steps" 2>&1; then fail "$d (it succeeded)"; else pass "$d"; fi
 }
+# refuses_saying <description> <fragment> <command...>: the command must fail AND say the fragment,
+# so a refusal for the wrong reason (or a silent exit) does not pass.
+refuses_saying() {
+  d=$1; frag=$2; shift 2
+  echo "--- $d" >> "$steps"
+  if out=$("$@" 2>&1); then fail "$d (it succeeded)"; fi
+  printf '%s\n' "$out" >> "$steps"
+  case $out in *"$frag"*) pass "$d" ;; *) fail "$d (it failed, but not saying '$frag')" ;; esac
+}
 count_files() { n=0; for f in "$@"; do [ -e "$f" ] && n=$((n + 1)); done; echo "$n"; }
 mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+
+# Secrets never go on a command line here (a command line is world-readable in ps): a secret that has to
+# be looked for or sent travels in a file this function writes with a shell builtin.
+secret_file=$E/.secret
+has_secret() { # has_secret <file> <secret>: does the file contain the secret?
+  printf '%s\n' "$2" > "$secret_file"
+  grep -qF -f "$secret_file" "$1"
+}
+count_secret() { printf '%s\n' "$2" > "$secret_file"; grep -cF -f "$secret_file" "$1" || true; }
+output_has_secret() { # output_has_secret <secret> <command...>
+  printf '%s\n' "$1" > "$secret_file"; shift
+  "$@" 2>&1 | grep -qF -f "$secret_file"
+}
+bearer_header() { printf 'Authorization: Bearer %s\n' "$1" > "$E/.header"; }
+
+# A shell for the cases that matter on Debian and Ubuntu, where /bin/sh is dash, and a way to run
+# a command with no controlling terminal whatever terminal this script was started from.
+dash_bin=$(command -v dash || command -v sh)
+notty() { python3 -c 'import subprocess, sys
+sys.exit(subprocess.run(sys.argv[1:], stdin=subprocess.DEVNULL, start_new_session=True).returncode)' "$@"; }
+# pty <out file> <command...>: run on a pseudo-terminal, keep its output in the file, return its exit status.
+pty() {
+  out=$1; shift
+  python3 -c 'import os, pty, sys
+sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))' "$@" > "$out" 2>&1 </dev/null
+}
 
 if [ -n "$platform" ]; then DOCKER_DEFAULT_PLATFORM=$platform; export DOCKER_DEFAULT_PLATFORM; fi
 
@@ -110,9 +152,14 @@ publish 0.0.2 "kth-e2e-$run-v2"
 publish 0.0.3 "kth-e2e-$run-dies"
 publish 0.0.4 "kth-e2e-$run-nonet"
 
+# The served images are local tags with no digest. install.sh and hubctl refuse that unless this
+# test-only variable says otherwise; the refusal itself is checked below.
+KERYX_HUB_ALLOW_UNPINNED_IMAGE=1
+# A failure injection should not wait the production two minutes for "healthy".
+KERYX_HUB_VERIFY_SECONDS=60
 KERYX_HUB_RELEASE_BASE_URL=file://$E/releases
 KERYX_HUB_PROJECT=$project
-export KERYX_HUB_RELEASE_BASE_URL KERYX_HUB_PROJECT
+export KERYX_HUB_ALLOW_UNPINNED_IMAGE KERYX_HUB_VERIFY_SECONDS KERYX_HUB_RELEASE_BASE_URL KERYX_HUB_PROJECT
 
 # A crontab stand-in: the real crontab is never read or written.
 mkdir "$E/bin"
@@ -132,13 +179,14 @@ hub=$E/hub
 hubctl() { "$hub/hubctl" "$@"; }
 env_value() { sed -n "s/^$1=//p" "$hub/secrets/hub.env" | tail -n 1; }
 
-# --- install ----------------------------------------------------------------------------------------
-sh "$deploy/install.sh" --version 0.0.1 --dir "$hub" --mode local --port "$port" > "$log" 2>&1 || { cat "$log" >&2; fail "install.sh failed"; }
+# --- install: dash, no terminal -----------------------------------------------------------------------
+notty "$dash_bin" "$deploy/install.sh" --version 0.0.1 --dir "$hub" --mode local --port "$port" > "$log" 2>&1 || { cat "$log" >&2; fail "install.sh failed under $dash_bin with no terminal"; }
+pass "install.sh runs under $dash_bin with no terminal"
 operator=$(env_value KERYX_HUB_OPERATOR_TOKEN)
 agent=$(env_value KERYX_HUB_AGENT_TOKEN)
 assert "the Hub answers /healthz on the loopback port" curl -fsS --max-time 5 "$base/healthz"
-refuse "the install log does not contain the operator token" sh -c "grep -q '$operator' '$log'"
-refuse "the install log does not contain the bootstrap agent token" sh -c "grep -q '$agent' '$log'"
+refuse "the install log does not contain the operator token" has_secret "$log" "$operator"
+refuse "the install log does not contain the bootstrap agent token" has_secret "$log" "$agent"
 eq "the operator token is 64 characters" "${#operator}" 64
 [ "$operator" != "$agent" ] || fail "the operator and agent tokens are equal"
 eq "hub.env is 0600" "$(mode_of "$hub/secrets/hub.env")" 600
@@ -148,19 +196,60 @@ refuse "install.sh refuses to run over the install" sh "$deploy/install.sh" --ve
 assert "hubctl status works" hubctl status
 refuse "hubctl has no down" hubctl down
 refuse "hubctl rollback has nothing to roll back to" hubctl rollback --yes
+assert "hubctl restage validates and applies" hubctl restage
+
+# --- refusals -----------------------------------------------------------------------------------------------
+# No terminal to confirm on: dash used to exit silently here. The question names the project and volume.
+refuses_saying "a confirmation without a terminal says it needs one (dash, no tty)" "needs a terminal" notty "$dash_bin" "$hub/hubctl" upgrade 0.0.2
+refuses_saying "the confirmation names the project and the volume" "project $project (volume ${project}_hub-data)" notty "$dash_bin" "$hub/hubctl" upgrade 0.0.2
+eq "an unconfirmed upgrade changed nothing" "$(readlink "$hub/current")" releases/v0.0.1
+# An image without a digest is refused by install and by upgrade; nothing is created or changed.
+refuses_saying "install.sh refuses an image without a digest" "without a digest" env -u KERYX_HUB_ALLOW_UNPINNED_IMAGE KERYX_HUB_PROJECT="${project}c" sh "$deploy/install.sh" --version 0.0.1 --dir "$E/hub-nodigest" --mode local --port "$((port + 5))"
+if [ -e "$E/hub-nodigest" ]; then fail "the refused install created $E/hub-nodigest"; else pass "and left nothing behind"; fi
+refuses_saying "hubctl upgrade refuses an image without a digest" "without a digest" env -u KERYX_HUB_ALLOW_UNPINNED_IMAGE "$hub/hubctl" upgrade 0.0.2 --yes
+eq "and current is unchanged" "$(readlink "$hub/current")" releases/v0.0.1
+# Values are matched as a whole: a newline must not let the good line through.
+refuses_saying "install.sh rejects a newline in --domain" "lower-case DNS name" sh "$deploy/install.sh" --version 0.0.1 --dir "$E/hub-nl" --mode https --domain "$(printf 'hub.example.com\nevil.example.org')"
+refuses_saying "hubctl rejects a newline in an agent id" "an agent id is" notty "$dash_bin" "$hub/hubctl" agent-key issue "$(printf 'ok-id\nBAD')" --project p1
+refuses_saying "agent-key issue without a terminal says so (dash, no tty)" "none here" notty "$dash_bin" "$hub/hubctl" agent-key issue e2e-agent --project p1
+# A lock held by a live operation stops anything that would start or stop the stack; a stale one does not.
+ln -s "$$" "$hub/state/lock"
+refuses_saying "up waits for the operation that holds the lock" "another hubctl operation is running" hubctl up
+refuses_saying "stop does too" "another hubctl operation is running" hubctl stop
+refuses_saying "and so does revoking an agent key" "another hubctl operation is running" hubctl agent-key revoke some-agent
+assert "a nightly backup that meets the lock skips with a warning and exits 0" sh -c "'$hub/hubctl' backup --quiet 2>&1 | grep -q 'skipped'"
+rm -f "$hub/state/lock"
+ln -s 999999 "$hub/state/lock"
+assert "a lock whose owner is gone is replaced" hubctl up
+if [ -e "$hub/state/lock" ] || [ -L "$hub/state/lock" ]; then fail "the lock was left behind"; else pass "and released afterwards"; fi
+# A service that is no longer part of the stack is removed, not left running. The operator's
+# compose.override.yaml is the way to add one, and removing the file is the way to drop it.
+printf 'services:\n  ghost:\n    image: %s\n    entrypoint: ["sleep", "3600"]\n' "$image" > "$hub/compose.override.yaml"
+hubctl up >>"$steps" 2>&1 || fail "hubctl up with a compose.override.yaml failed"
+ghosts() { docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=ghost; }
+if [ -z "$(ghosts)" ]; then fail "compose.override.yaml was not applied"; else pass "compose.override.yaml adds a service to the stack"; fi
+rm -f "$hub/compose.override.yaml"
+hubctl up >>"$steps" 2>&1 || fail "hubctl up failed"
+if [ -n "$(ghosts)" ]; then fail "an orphan survived hubctl up"; else pass "up --remove-orphans removed a service that is no longer in the stack"; fi
 
 # --- data, backup, restore -----------------------------------------------------------------------------
 cookie=
 login() {
-  cookie=$(curl -si --max-time 10 -X POST -H 'Content-Type: application/json' -d "{\"token\":\"$operator\"}" "$base/hub/v1/session" \
+  printf '{"token":"%s"}' "$operator" > "$E/.login"
+  cookie=$(curl -si --max-time 10 -X POST -H 'Content-Type: application/json' --data-binary @"$E/.login" "$base/hub/v1/session" \
     | sed -n 's/^[Ss]et-[Cc]ookie: \([^;]*\).*/\1/p' | head -n 1)
   [ -n "$cookie" ] || fail "operator login returned no session cookie"
 }
-create_project() { # create_project <name> -> prints the id
-  curl -fsS --max-time 10 -X POST -H 'Content-Type: application/json' -H "Cookie: $cookie" -H "Origin: $base" \
+create_project() { # create_project <name> -> prints the id (the session cookie is a credential: it goes in a file, not argv)
+  printf 'Cookie: %s\n' "$cookie" > "$E/.cookie"
+  curl -fsS --max-time 10 -X POST -H 'Content-Type: application/json' -H @"$E/.cookie" -H "Origin: $base" \
     -H "Idempotency-Key: e2e-$run-$1" -d "{\"name\":\"$1\"}" "$base/hub/v1/projects" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'
 }
-project_count() { curl -fsS --max-time 10 -H "Authorization: Bearer $agent" "$base/hub/v1/projects" | awk 'BEGIN{RS="\"id\":"} NR>1{n++} END{print n+0}'; }
+project_count() {
+  bearer_header "$agent"
+  curl -fsS --max-time 10 -H @"$E/.header" "$base/hub/v1/projects" | awk 'BEGIN{RS="\"id\":"} NR>1{n++} END{print n+0}'
+}
+status_of() { bearer_header "$1"; curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H @"$E/.header" "$base/hub/v1/projects"; }
 login
 first=$(create_project "e2e first")
 [ -n "$first" ] || fail "could not create a project"
@@ -189,6 +278,28 @@ b2=$(ls "$hub"/backups/daily/hub-*.sqlite.gz | sort | tail -n 1)
 hubctl restore "$b2" --yes >>"$steps" 2>&1 || fail "restore of the second backup failed"
 eq "restored the later state too" "$(project_count)" 2
 
+# Disaster recovery: the live database is destroyed, and a restore must still work (the safety copy of
+# the broken data is kept and flagged, not a reason to refuse).
+vol=${project}_hub-data
+hubctl stop >>"$steps" 2>&1 || fail "hubctl stop failed"
+docker run --rm --user 1000:1000 -v "$vol:/data" --entrypoint sh "$image" -c 'head -c 8192 /dev/urandom > /data/hub.sqlite; rm -f /data/hub.sqlite-wal /data/hub.sqlite-shm' >>"$steps" 2>&1 || fail "could not corrupt the database"
+hubctl restore "$b2" --yes >>"$steps" 2>&1 || fail "restore over a corrupted database failed"
+eq "a restore works over a corrupted database" "$(project_count)" 2
+assert "and the damaged data was kept and flagged" sh -c "grep -q 'FAILS ITS INTEGRITY CHECK' '$steps'"
+
+# A restore the Hub cannot start on: a database that passes its integrity check but names a schema
+# version this Hub does not support. The Hub crash-loops; the data it replaced must come back, onto a
+# Hub that is stopped first.
+mkdir "$E/bad"; chmod 777 "$E/bad"
+docker run --rm --user 1000:1000 -v "$E/bad:/out" --entrypoint bun "$image" -e 'import { Database } from "bun:sqlite";
+const db = new Database("/out/bad.sqlite");
+db.exec("CREATE TABLE hub_state(id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL); INSERT INTO hub_state VALUES(1, \"{}\"); CREATE TABLE remote_schema_version(version INTEGER NOT NULL); INSERT INTO remote_schema_version VALUES(99)");
+db.close();' >>"$steps" 2>&1 || fail "could not build the unusable database"
+refuse "a restore the Hub cannot start on is reported as a failure" hubctl restore "$E/bad/bad.sqlite" --yes
+assert "the Hub is healthy again after the failed restore" curl -fsS --max-time 10 "$base/healthz"
+eq "and the data it replaced came back" "$(project_count)" 2
+assert "the failed restore said it was putting the data back" sh -c "grep -q 'putting back the data it replaced' '$steps'"
+
 hubctl backup --offline >>"$steps" 2>&1 || fail "hubctl backup --offline failed"
 assert "an offline backup holds the whole volume" sh -c "tar -tf '$hub'/backups/manual-*/hub-data.tar | grep -q 'hub.sqlite'"
 assert "the Hub is healthy after an offline backup" curl -fsS --max-time 10 "$base/healthz"
@@ -204,28 +315,20 @@ hubctl schedule off >>"$steps" 2>&1
 refuse "cron entry removed" sh -c "grep -q keryx-team-hub-backup '$E/crontab.txt'"
 
 # --- agent keys (a key is shown on the terminal only) ------------------------------------------------------------
-refuse "agent-key issue refuses without a terminal" hubctl agent-key issue e2e-agent --project "$first" </dev/null
-# pty <out file> <command...>: run on a pseudo-terminal, keep its output in the file, return its exit status.
-pty() {
-  out=$1; shift
-  python3 -c 'import os, pty, sys
-sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))' "$@" > "$out" 2>&1 </dev/null
-}
 key_from() { tr -d '\r' < "$1" | awk '/^  [0-9a-f]{64}$/ { gsub(/ /, ""); print; exit }'; }
-status_of() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $1" "$base/hub/v1/projects"; }
-pty "$E/key.txt" "$hub/hubctl" agent-key issue e2e-agent --project "$first" || fail "agent-key issue failed on a terminal: $(cat "$E/key.txt")"
+pty "$E/key.txt" "$hub/hubctl" agent-key issue e2e-agent --project "$first" || fail "agent-key issue failed on a terminal"
 key=$(key_from "$E/key.txt")
 eq "a 64-character key was shown on the terminal" "${#key}" 64
 rm -f "$E/key.txt"
 eq "agents.json stays 0600" "$(mode_of "$hub/secrets/agents/agents.json")" 600
 assert "agents.json.bak was kept" test -f "$hub/secrets/agents/agents.json.bak"
-refuse "the raw key is not stored" sh -c "grep -q '$key' '$hub/secrets/agents/agents.json'"
+refuse "the raw key is not stored" has_secret "$hub/secrets/agents/agents.json" "$key"
 eq "the new key works without a restart" "$(status_of "$key")" 200
 assert "agent-key list shows it" sh -c "'$hub/hubctl' agent-key list 2>/dev/null | grep -q '^e2e-agent'"
-refuse "agent-key list prints no key" sh -c "'$hub/hubctl' agent-key list 2>&1 | grep -q '$key'"
+refuse "agent-key list prints no key" output_has_secret "$key" "$hub/hubctl" agent-key list
 if pty "$E/dup.txt" "$hub/hubctl" agent-key issue e2e-agent --project "$first"; then fail "a duplicate id was accepted"; fi
 assert "a duplicate id is refused for the right reason" sh -c "grep -q 'already exists' '$E/dup.txt'"
-pty "$E/rotate.txt" "$hub/hubctl" agent-key issue e2e-agent --rotate || fail "rotate failed: $(cat "$E/rotate.txt")"
+pty "$E/rotate.txt" "$hub/hubctl" agent-key issue e2e-agent --rotate || fail "rotate failed"
 rotated=$(key_from "$E/rotate.txt")
 eq "rotation shows a new 64-character key" "${#rotated}" 64
 [ "$rotated" != "$key" ] || fail "rotation returned the same key"
@@ -264,6 +367,7 @@ assert "the Hub is healthy after the plain rollback" curl -fsS --max-time 10 "$b
 eq "a plain rollback keeps the data" "$(project_count)" 3
 
 # An image that dies at start is caught by the trial: nothing changes and the Hub keeps running.
+# The pre-upgrade backup of the last successful upgrade is not the failed upgrade's to overwrite.
 refuse "an image that dies at start is refused" hubctl upgrade 0.0.3 --yes
 eq "the failed upgrade left current alone" "$(readlink "$hub/current")" releases/v0.0.1
 assert "the Hub is running after the abandoned upgrade" curl -fsS --max-time 10 "$base/healthz"
@@ -278,14 +382,31 @@ eq "automatic rollback: current is back on v0.0.1" "$(readlink "$hub/current")" 
 assert "the Hub is healthy after the automatic rollback" curl -fsS --max-time 10 "$base/healthz"
 eq "the automatic rollback restored the pre-upgrade data" "$(project_count)" 4
 
-# --- the operator token is shown on a terminal, once ------------------------------------------------------------
-# A second install into its own directory and compose project, run on a pseudo-terminal.
+# Safety backups are pruned by count only once they are old: every one of these is minutes old.
+safety=$(count_files "$hub"/backups/upgrade-* "$hub"/backups/pre-restore-* "$hub"/backups/pre-rollback-*)
+if [ "$safety" -gt 3 ]; then pass "no safety backup younger than 14 days was pruned ($safety kept)"; else fail "only $safety safety backups are left"; fi
+
+# --- the operator token is shown on a terminal, once; two installs side by side ------------------------------------
+# A second install into a directory whose name starts with the first one's, in its own compose project.
 KERYX_HUB_PROJECT=${project}b; export KERYX_HUB_PROJECT
-hub2=$E/hub2
+hub2=${hub}2
 pty "$E/tty-install.txt" sh "$deploy/install.sh" --version 0.0.1 --dir "$hub2" --mode local --port "$((port + 1))" --no-backup \
-  || fail "the install on a terminal failed: $(cat "$E/tty-install.txt")"
+  || fail "the install on a terminal failed"
 operator2=$(sed -n 's/^KERYX_HUB_OPERATOR_TOKEN=//p' "$hub2/secrets/hub.env")
-eq "the operator token appears once in what a terminal shows" "$(grep -c "$operator2" "$E/tty-install.txt")" 1
+eq "the operator token appears once in what a terminal shows" "$(count_secret "$E/tty-install.txt" "$operator2")" 1
+# The project comes from each install's own hub.env, never from the shell: this shell now names the
+# SECOND install's project, and the first install must still act on its own.
+out=$("$hub/hubctl" status 2>&1)
+case $out in *"project     : $project"*) pass "hubctl names its own project, not the one in the environment" ;; *) fail "hubctl status ignored its own hub.env: $out" ;; esac
+case $out in *"project     : ${project}b"*) fail "hubctl followed KERYX_HUB_PROJECT from the environment" ;; esac
 KERYX_HUB_PROJECT=$project; export KERYX_HUB_PROJECT
+# Two installs whose paths share a prefix keep their own cron lines.
+hubctl schedule on >>"$steps" 2>&1
+"$hub2/hubctl" schedule on >>"$steps" 2>&1
+eq "two installs, two cron lines" "$(grep -c keryx-team-hub-backup "$E/crontab.txt")" 2
+hubctl schedule off >>"$steps" 2>&1
+eq "turning one off leaves the other (one path is a prefix of the other)" "$(grep -c keryx-team-hub-backup "$E/crontab.txt")" 1
+assert "and it is the other install's" sh -c "grep -q 'keryx-team-hub-backup:.*hub2\$' '$E/crontab.txt'"
+"$hub2/hubctl" schedule off >>"$steps" 2>&1
 
 echo "e2e: every check passed"
