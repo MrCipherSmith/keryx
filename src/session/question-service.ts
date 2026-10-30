@@ -3,12 +3,14 @@ import { answerApproval, reconcileApprovals, resolveApproval, type ApprovalView,
 import type { ApprovalResponse } from "../commands/agent";
 import { createHash } from "node:crypto";
 import { redactSensitiveText } from "../security/service";
+import { hiddenInCard } from "../lib/card-safe";
+import type { ToolRisk } from "../harness/tool/types";
 
 /** The native engine's opaque canonical action key may contain private tool input.
  * Only its SHA-256 digest crosses the machine protocol. Always hash, even a hex-looking key. */
 export function wireApprovalFingerprint(localFingerprint: string): string { return createHash("sha256").update(localFingerprint).digest("hex"); }
 
-function reviewableAction(toolName: string, input: string): string | undefined {
+function reviewableAction(toolName: string, input: string, risk: ToolRisk): string | undefined {
   if (Buffer.byteLength(input, "utf8") > 8192 || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(toolName)) return undefined;
   try {
     const parsed: unknown = JSON.parse(input);
@@ -18,16 +20,17 @@ function reviewableAction(toolName: string, input: string): string | undefined {
       if (/^(?:env|environment|authorization|cookie|password|secret|token|apiKey|api_key|credential)$/i.test(key)) sensitive = true;
       return value;
     }, 2);
-    const summary = `${toolName}\n${encoded}`;
+    const summary = `${toolName} (risk: ${risk})\n${encoded}`;
     // Never silently clip an action into a blind permission card, or expose a secret
     // in either approval ledger. Large actions can be split into reviewable calls.
-    if (sensitive || Buffer.byteLength(summary, "utf8") > 8192 || redactSensitiveText(summary) !== summary) return undefined;
+    // JSON escapes C0 but leaves bidi, zero-width and C1 intact, so a card could draw a reordered command: check line by line (the newlines are structure).
+    if (sensitive || Buffer.byteLength(summary, "utf8") > 8192 || redactSensitiveText(summary) !== summary || summary.split("\n").some(hiddenInCard)) return undefined;
     return summary;
   } catch { return undefined; }
 }
 
 export interface SessionApprovalRequest {
-  runId: string; turnId: string; policyDigest: string; toolName: string; input: string; fingerprint: string; signal?: AbortSignal;
+  runId: string; turnId: string; policyDigest: string; toolName: string; risk: ToolRisk; input: string; fingerprint: string; signal?: AbortSignal;
 }
 export interface SessionApprovalQuestion extends SessionApprovalRequest { approvalId: string; expiresAt: string; summary: string }
 export interface SessionApprovalAnswer {
@@ -51,14 +54,14 @@ export function createSessionApprovalService(options: { dir: string; sessionId: 
   const service = {
     async request(request: SessionApprovalRequest): Promise<ApprovalResponse> {
       if (!deliverable() || request.signal?.aborted) return { approved: false, fingerprint: request.fingerprint };
-      const summary = reviewableAction(request.toolName, request.input);
+      const summary = reviewableAction(request.toolName, request.input, request.risk);
       if (summary === undefined) return { approved: false, fingerprint: request.fingerprint };
       let approvalId: string | undefined;
       const deny = () => { if (approvalId !== undefined) { resolveApproval(approvalId, { state: "denied", reason: "turn-aborted" }, options.dir); broker.wake(); } };
       request.signal?.addEventListener("abort", deny, { once: true });
       try {
         const outcome = await broker.request({ turnId: request.turnId, sessionId: options.sessionId, toolName: request.toolName,
-          risk: "write", callFingerprint: wireApprovalFingerprint(request.fingerprint), actionSummary: summary, floors: ["local-policy", request.policyDigest],
+          risk: request.risk, callFingerprint: wireApprovalFingerprint(request.fingerprint), actionSummary: summary, floors: ["local-policy", request.policyDigest],
           deliver(view: ApprovalView) {
             approvalId = view.approvalId;
             let finish!: (state: ResolvedState) => void; const applied = new Promise<ResolvedState>((resolve) => { finish = resolve; });

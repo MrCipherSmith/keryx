@@ -84,11 +84,12 @@ test("host approval API confirms consumption of the exact active waiter before a
   const patch = "diff --git a/approved.txt b/approved.txt\nnew file mode 100644\n--- /dev/null\n+++ b/approved.txt\n@@ -0,0 +1 @@\n+approved\n";
   const { host, cwd } = await fixture([callRound("patch", "apply_patch", JSON.stringify({ patch })), okReply], false);
   let delivered!: () => void; const delivery = new Promise<void>((resolve) => { delivered = resolve; });
-  const unsubscribe = host.subscribeApprovals(() => delivered());
+  let summary = ""; const unsubscribe = host.subscribeApprovals((question) => { summary = question.summary; delivered(); });
   try {
     const applications: string[] = []; const offOutcome = host.subscribeApprovalOutcome((event) => applications.push(`${event.decision}:${event.application}`));
     await message(host, "approval", "Create approved.txt"); await delivery;
     expect(await Bun.file(join(cwd, "approved.txt")).exists()).toBe(false);
+    expect(summary.split("\n")[0]).toBe("apply_patch (risk: write)");
     const pending = host.pendingApprovals()[0]!; const current = await host.inspect();
     const applied = await host.answerApproval({ approvalId: pending.approvalId, runId: "run-approval", turnId: "turn-approval", actorId: "human", request: {
       expectedRunVersion: 1, expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 },

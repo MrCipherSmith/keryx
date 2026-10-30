@@ -16,12 +16,13 @@ test("the host's ask restriction makes a mutating call ask even where the floor 
     // monitored-trusted-local allows a shell call without asking; the caller's mode is the most permissive one.
     const runtime = createNativeSessionRuntime({ cwd, provider: provider.provider, providerId: "scripted", modelId: "m", policy: resolveLocalProfile("monitored-trusted-local") });
     runtime.bindRestrictions(() => false, (version) => asked && version === 1);
-    const approvals: string[] = []; const results: string[] = [];
+    const approvals: string[] = []; const risks: unknown[] = []; const results: string[] = [];
     try {
       const snapshot = await runtime.routing(config).select("run the echo", config);
       await runtime.run({ write: () => {}, permissionMode: () => "auto", onToolResult: (_name, result) => results.push(result.output),
-        requestApproval: async (name, _input, meta) => { approvals.push(name); return meta === undefined ? false : { approved: true, fingerprint: meta.fingerprint }; } }, [], "Run the echo", snapshot, {});
+        requestApproval: async (name, _input, meta) => { approvals.push(name); risks.push(meta?.risk); return meta === undefined ? false : { approved: true, fingerprint: meta.fingerprint }; } }, [], "Run the echo", snapshot, {});
       expect({ asked, approvals }).toEqual({ asked, approvals: asked ? ["shell_exec"] : [] });
+      expect(risks).toEqual(asked ? ["shell"] : []);
       expect(results.some((output) => output.includes("native-approval"))).toBe(true);
     } finally { await runtime.stop(); await rm(cwd, { recursive: true, force: true }); }
   }

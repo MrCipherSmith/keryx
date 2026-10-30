@@ -419,7 +419,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
             observe({ kind: "progress", text: summary, toolName }); publishMessage("tool-summary", summary, operation.runId, operation.turnId); },
           onUsage: (usage) => observe({ kind: "usage", usage, source: "agent", candidateId: snapshot.effectiveCandidateId }),
           requestApproval: (toolName, input, meta) => meta === undefined ? Promise.resolve(false) : approvals.request({ runId: operation.runId, turnId: operation.turnId,
-            policyDigest: snapshot.config.policyDigest, toolName, input, fingerprint: meta.fingerprint,
+            policyDigest: snapshot.config.policyDigest, toolName, input, fingerprint: meta.fingerprint, risk: meta.destructive ? "destructive" : meta.risk ?? "write",
             signal: meta.signal === undefined ? abort.signal : AbortSignal.any([abort.signal, meta.signal]),
           }),
         };
