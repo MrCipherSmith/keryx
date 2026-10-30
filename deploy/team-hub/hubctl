@@ -1,4 +1,6 @@
 #!/bin/sh
+# shellcheck disable=SC2015
+# (Every `a && b || die` here chains tests only: it dies unless all of them hold.)
 # hubctl — the operator's tool for a self-hosted Keryx Team Hub.
 #
 # It lives at <install dir>/hubctl, beside the directories install.sh created:

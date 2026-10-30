@@ -1,4 +1,6 @@
 #!/bin/sh
+# shellcheck disable=SC2015
+# (Every `a && b || die` here chains tests only: it dies unless all of them hold.)
 # install.sh — first install of a self-hosted Keryx Team Hub.
 #
 #   curl -fsSLO https://github.com/MrCipherSmith/keryx/releases/download/v<version>/team-hub-install.sh
