@@ -1,0 +1,65 @@
+# Team Hub, self-hosted from the released image. Every install mode uses this
+# file; a mode overlay (compose.local.yaml, compose.https.yaml,
+# compose.cloudflare.yaml) only decides how traffic reaches the Hub.
+#
+# Run it through `hubctl`, never by hand: hubctl exports the two variables this
+# file cannot work without (KERYX_HUB_HOME and KERYX_HUB_IMAGE), points
+# --project-directory at the physical release directory, and passes the env file.
+# That is also why this file has no `build:` — an install never builds anything.
+services:
+  hub:
+    # The image of the current release, pinned by digest (releases/<tag>/image.ref).
+    # Re-pointing `current` therefore re-points the image; there is no tag to drift.
+    image: ${KERYX_HUB_IMAGE:?hubctl exports the image of the current release}
+    pull_policy: missing
+    init: true
+    restart: unless-stopped
+    # The image's own user. Stated here because the secrets directory below is
+    # owned by uid 1000 and the Hub refuses a credentials file it cannot read.
+    user: "1000:1000"
+    # Longer than the default 10 s: a graceful stop closes the machine and
+    # browser sockets and checkpoints SQLite, and only an exit code 0 does that.
+    stop_grace_period: 30s
+    environment:
+      KERYX_HUB_OPERATOR_TOKEN: ${KERYX_HUB_OPERATOR_TOKEN:?Run install.sh, or set an operator token in secrets/hub.env}
+      KERYX_HUB_AGENT_TOKEN: ${KERYX_HUB_AGENT_TOKEN:?Run install.sh, or set an agent token in secrets/hub.env}
+      KERYX_HUB_REVIEWER_TOKEN: ${KERYX_HUB_REVIEWER_TOKEN:-}
+      KERYX_HUB_PUBLIC_ORIGIN: ${KERYX_HUB_PUBLIC_ORIGIN:-}
+      # Named agent keys (`hubctl agent-key`). The Hub re-reads this file on every
+      # request, so issuing or revoking a key needs no restart.
+      KERYX_HUB_AGENT_CREDENTIALS_FILE: /run/keryx-agents/agents.json
+    volumes:
+      - hub-data:/data
+      # The parent directory, not the file: an atomic replacement of agents.json
+      # (rename over it) is only visible through a directory mount.
+      - type: bind
+        source: ${KERYX_HUB_HOME:?hubctl exports the install root}/secrets/agents
+        target: /run/keryx-agents
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    # Replaces the image's 30 s probe: hubctl waits for "healthy" after a start,
+    # and a 30 s first probe would make every start and upgrade wait that long.
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch(\"http://127.0.0.1:8787/healthz\"); process.exit(r.ok ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  hub-data:

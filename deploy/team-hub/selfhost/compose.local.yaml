@@ -1,0 +1,11 @@
+# Mode `local`: the Hub listens on 127.0.0.1 of the host and nowhere else.
+#
+# Reach it from another machine through an SSH tunnel or a VPN you already run:
+#   ssh -N -L 8787:127.0.0.1:8787 <server>     then open http://127.0.0.1:8787
+# There is no TLS and no proxy in this mode. The Hub refuses remote-control
+# traffic over plain HTTP unless the browser reaches it as localhost, which is
+# exactly what the tunnel gives it.
+services:
+  hub:
+    ports:
+      - "127.0.0.1:${HUB_PORT:-8787}:8787"
