@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, statSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { saveEnrollment, loadEnrollment, allowCheckout, machineConfigPath, removeEnrollment } from './config';
+import { saveEnrollment, loadEnrollment, allowCheckout, listEnrollments, machineConfigPath, removeEnrollment } from './config';
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
@@ -29,6 +29,20 @@ test('configuration parent symlinks are refused', () => {
     const d = dir(), outside = dir();
     require('node:fs').symlinkSync(outside, path.join(d, 'machine'));
     expect(() => saveEnrollment(d, { hubUrl: 'https://hub.example', machineId: 'machine-a', secret: 's'.repeat(43) })).toThrow('unsafe');
+});
+test('a machine with no Hub enrollment lists none even when its config path crosses a symlinked ancestor', () => {
+    const base = realpathSync(dir()), real = path.join(base, 'real');
+    mkdirSync(path.join(real, 'cfg'), { recursive: true });
+    symlinkSync(real, path.join(base, 'link'));
+    const viaLink = path.join(base, 'link', 'cfg');
+    expect(listEnrollments(viaLink)).toEqual([]);
+    expect(listEnrollments(path.join(base, 'absent'))).toEqual([]);
+    // Once there is Hub state under the path, the same ancestor is still refused, and a legacy enrollment still asks for migration.
+    mkdirSync(path.join(real, 'cfg', 'hub-machines'));
+    expect(() => listEnrollments(viaLink)).toThrow('unsafe');
+    rmSync(path.join(real, 'cfg', 'hub-machines'), { recursive: true });
+    mkdirSync(path.join(real, 'legacy', 'machine'), { recursive: true, mode: 0o700 });
+    expect(() => listEnrollments(path.join(real, 'legacy'))).toThrow('legacy-enrollment-migration-required');
 });
 test('world-readable enrollment parent refuses before credential reads', () => {
     const d = dir();
