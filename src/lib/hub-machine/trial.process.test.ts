@@ -42,7 +42,10 @@ type RunRecord={state:string;version:number;lastLocalSeq:number;result?:Control[
 async function controlledSession(trial:Trial,hub:ReturnType<typeof hubClient>,target:TrialTarget,title:string){
  const metadata=await hub.wait(()=>hub.call<Inventory>(`/hub/v2/machines/${target.machineId}`),v=>v.connected&&v.inventory?.checkouts.some(c=>c.checkoutId===target.checkoutId&&c.agentProfiles[0]?.readiness==='ready')===true);
  const checkout=metadata.inventory!.checkouts.find(c=>c.checkoutId===target.checkoutId)!,profile=checkout.agentProfiles[0]!;expect(profile.policyDigest).toBe(canonicalDigest(resolveRemoteProfile(TRIAL_PROFILE)));
- const created=await hub.call<Control['SessionOperationReceipt']>(`/hub/v2/projects/${trial.projectId}/sessions`,{machineId:target.machineId,checkoutId:target.checkoutId,agentProfileId:TRIAL_PROFILE,expectedInventoryVersion:metadata.inventory!.inventoryVersion,expectedHeadSha:checkout.headSha,capabilityDigest:profile.capabilityDigest,policyDigest:profile.policyDigest,title});
+ // A new inventory version reports the profile ready a moment before the machine publishes its capability projection for that version;
+ // until then Hub refuses creation as setup-required with no side effect, and the projection follows without any action. Any other refusal fails.
+ const create=()=>hub.raw(`/hub/v2/projects/${trial.projectId}/sessions`,{machineId:target.machineId,checkoutId:target.checkoutId,agentProfileId:TRIAL_PROFILE,expectedInventoryVersion:metadata.inventory!.inventoryVersion,expectedHeadSha:checkout.headSha,capabilityDigest:profile.capabilityDigest,policyDigest:profile.policyDigest,title});
+ const attempt=await hub.wait(create,r=>r.status!==409||(r.data as {error?:{code?:string}}).error?.code!=='setup-required');expect(attempt).toMatchObject({status:200});const created=attempt.data as Control['SessionOperationReceipt'];
  const base=`/hub/v2/projects/${trial.projectId}/sessions/${created.sessionId}`,runs=`/hub/v2/projects/${trial.projectId}/runs`;
  // Idle as Hub's own fence reads it: the session row holds no accepted operation still awaiting the machine. The session events of a
  // controller change or an applied command show its effect before the machine's receipt settles it, and until then Hub refuses the
