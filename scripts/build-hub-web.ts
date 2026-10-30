@@ -1,7 +1,7 @@
 /** Build and embed the isolated React application, or verify its source/artifact digests. */
 import { createHash } from 'node:crypto';
 import { lstat, readdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const application=join(root,'apps/hub-web');
@@ -10,8 +10,11 @@ const check=process.argv.includes('--check');
 if(process.argv.slice(2).some(arg=>arg!=='--check'))throw new Error('Usage: bun scripts/build-hub-web.ts [--check]');
 const digest=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
 async function files(directory:string):Promise<string[]>{const result:string[]=[];for(const entry of await readdir(directory,{withFileTypes:true})){const path=join(directory,entry.name);if(entry.isSymbolicLink())throw new Error('Symlinks are not allowed in frontend build inputs');if(entry.isDirectory())result.push(...await files(path));else if(entry.isFile())result.push(path);}return result;}
-const inputs=[...await files(join(application,'src')),...await files(join(application,'public')),...['package.json','bun.lock','index.html','tsconfig.json','vite.config.ts'].map(name=>join(application,name)),join(root,'scripts/build-hub-web.ts'),join(root,'src/remote-control/owned-controls.ts')].sort();
-const hash=createHash('sha256');for(const path of inputs){hash.update(relative(root,path)+'\0');const bytes=await readFile(path);hash.update(String(bytes.length)+'\0');hash.update(bytes);}
+// The digest must not depend on the platform: POSIX-style relative paths, and text inputs hashed with LF line endings (a Windows checkout may hold CRLF).
+const posix=(path:string)=>relative(root,path).split(sep).join('/');
+const textInput=/\.(?:tsx?|jsx?|css|html|json|lock|svg|md|txt)$/;
+const inputs=[...await files(join(application,'src')),...await files(join(application,'public')),...['package.json','bun.lock','index.html','tsconfig.json','vite.config.ts'].map(name=>join(application,name)),join(root,'scripts/build-hub-web.ts'),join(root,'src/remote-control/owned-controls.ts')].sort((a,b)=>posix(a)<posix(b)?-1:posix(a)>posix(b)?1:0);
+const hash=createHash('sha256');for(const path of inputs){hash.update(posix(path)+'\0');let bytes=await readFile(path);if(textInput.test(path)&&bytes.includes(13))bytes=Buffer.from(bytes.toString('latin1').replaceAll('\r\n','\n'),'latin1');hash.update(String(bytes.length)+'\0');hash.update(bytes);}
 const inputDigest=hash.digest('hex');
 if(check){
  try{const generated=await import(pathToFileURL(output).href) as {webInputDigest:string;webAssetDigests:Record<string,string>;webAssets:Record<string,{body:string;contentType:string}>};if(generated.webInputDigest!==inputDigest)throw new Error('Frontend assets are stale');for(const[path,asset]of Object.entries(generated.webAssets))if(digest(asset.body)!==generated.webAssetDigests[path])throw new Error('Frontend asset digest mismatch');if(!generated.webAssets['/'])throw new Error('Frontend index missing');console.log('Hub frontend freshness verified: '+inputDigest);}
