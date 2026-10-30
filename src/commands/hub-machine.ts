@@ -39,14 +39,16 @@ interface CommandOptions {
     /** Test seam only: replaces the build-time embedded descriptor; `null` models an absent one. */
     nativeCoverageDescriptor?: unknown;
 }
+/** Every `keryx hub machine` subcommand and the flags it accepts; the usage error and the help are checked against it. */
+const allowed: Record<string, string[]> = { pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], configure:['--hub','--candidate','--ad-hoc','--max-runs'], readiness: [], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation','--command'], unpair: ['--hub'] };
+export const MACHINE_SUBCOMMANDS: readonly string[] = Object.keys(allowed);
 export async function hubMachineCommand(args: string[], options: CommandOptions = {}): Promise<void> {
     const stateDir = keryxConfigDir(options.stateDir);
     const env = options.env ?? process.env;
     const write = options.write ?? console.log;
     const [command, ...rest] = args;
-    const allowed: Record<string, string[]> = { readiness: [], pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation','--command'], unpair: ['--hub'],configure:['--hub','--candidate','--ad-hoc','--max-runs'] };
     if (!command || !allowed[command])
-        throw new MachineError('Use hub machine pair | allow | recover | unpair');
+        throw new MachineError(`Use hub machine ${MACHINE_SUBCOMMANDS.join(' | ')}`);
     const flags = new Map<string, string>();
     for (let i = 0; i < rest.length; i++) {
         const key = rest[i]!;

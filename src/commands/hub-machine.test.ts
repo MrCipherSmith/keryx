@@ -64,6 +64,13 @@ test('hub CLI routes machine commands before ordinary Hub flags and preserves wa
     await expect(hubCommand(['machine', 'pair', '--code', 'raw-secret'])).rejects.toThrow('Invalid hub machine arguments');
     expect(HUB_HELP).toContain('sync [--watch');
 });
+test('the usage error and the hub help name every machine subcommand', async () => {
+    const { HUB_HELP } = await import('./hub');
+    const { MACHINE_SUBCOMMANDS } = await import('./hub-machine');
+    expect([...MACHINE_SUBCOMMANDS].sort()).toEqual(['allow', 'configure', 'pair', 'readiness', 'recover', 'unpair']);
+    const error = await hubMachineCommand([], { stateDir: dir(), write: () => { } }).then(() => '', (e: Error) => e.message);
+    for (const name of MACHINE_SUBCOMMANDS) { expect(error).toContain(name); expect(HUB_HELP).toContain(`machine ${name}`); }
+});
 test('local configure snapshots only explicitly selected current candidate and ad-hoc consent',async()=>{
  const stateDir=dir();const {saveEnrollment,hubIdentity}=await import('../lib/hub-machine/config');const {saveShellConfig}=await import('../lib/shell-config');const {readMachinePolicy}=await import('../lib/hub-machine/policy');saveEnrollment(stateDir,{hubUrl:'https://hub.example',machineId:'m',secret:'s'.repeat(43)});saveShellConfig({provider:'local-fixture',model:'fixture-model'},stateDir);
  await hubMachineCommand(['configure','--hub',hubIdentity('https://hub.example'),'--candidate','current','--ad-hoc','deny','--max-runs','1'],{stateDir,write:()=>{}});const policy=readMachinePolicy(stateDir,hubIdentity('https://hub.example'))!;expect(policy.allowAdHocSessions).toBe(false);expect(policy.maxConcurrentRuns).toBe(1);expect(policy.allowedCandidateIds).toHaveLength(1);expect(JSON.stringify(policy)).not.toContain('fixture-model');
