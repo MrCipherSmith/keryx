@@ -1,0 +1,135 @@
+# keryx review verify-run
+finding: previous-path
+command: cd /home/altsay/keryx-f479 && bun src/cli.ts review blast-radius --changed src/review/degradation.ts --json --out /tmp/claude-1000/-home-altsay-keryx/6d005502-25b5-4229-b6cf-5ae3bcd42469/scratchpad/prev.json >/dev/null 2>&1; echo '--- run with --previous and --degradation ---'; bun src/cli.ts review blast-radius --changed src/review/degradation.ts --previous /tmp/claude-1000/-home-altsay-keryx/6d005502-25b5-4229-b6cf-5ae3bcd42469/scratchpad/prev.json --degradation 2>&1
+cwd: /home/altsay/keryx-f479
+time: 2026-10-28T08:02:43.591Z
+exit: 0
+
+--- stdout ---
+--- run with --previous and --degradation ---
+recompute: no — changed-file set is identical to the previous round (1 files) and the bounds are unchanged; the previous radius still answers this round's question
+## Blast radius
+
+scope: blast-radius (regression check — NOT a review of this code)
+depth: 2
+max_files: 40
+graph: 3319 nodes, 11954 edges
+changed_files: 1
+changed_files_unresolved: 0
+candidates: 75
+retained: 5
+dropped_by_cap: 0
+dropped_by_pre_filter: 0
+reach: symbol
+omitted_unrelated_symbol: 9
+omitted_hub_damped: 0
+omitted_text_hub: 0
+omitted_test_consumer: 70
+text_links_added: 0
+related_tests_added: 1
+tests_retained: 0
+hops: 1=2, 2=3
+
+### Under regression check
+
+| file | hop | fan-in | path back to the change | source |
+|---|---|---|---|---|
+| src/commands/review.ts | 1 | 54 | src/commands/review.ts -> src/review/degradation.ts | graph |
+| src/review/managed.ts | 1 | 36 | src/review/managed.ts -> src/review/degradation.ts | graph |
+| src/cli-registry.ts | 2 | 7 | src/cli-registry.ts -> src/commands/review.ts -> src/review/degradation.ts | graph |
+| src/review/bot/run.ts | 2 | 6 | src/review/bot/run.ts -> src/review/managed.ts -> src/review/degradation.ts | graph |
+| src/commands/operator-confirm-review.ts | 2 | 3 | src/commands/operator-confirm-review.ts -> src/commands/review.ts -> src/review/degradation.ts | graph |
+
+### Dropped — NOT reviewed
+
+| file | hop | reason | why |
+|---|---|---|---|
+| src/review/degradation-screen.test.ts | 1 | test-consumer | exercises {DEGRADATION_NO_EVIDENCE_RULE, degradationScreenRecord, renderDegradationScreenLines, renderDegradationScreenMarkdown, screenDegradationFindings} of src/review/degradation.ts (hop 1, from src/review/degradation.ts): run it, it is not read |
+| src/commands/agent-orchestrator-log.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/import-only.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/memory-orchestrator-log.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/operator-confirm-review-tools.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-ac-check-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-ci-triage-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-comments-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-conform-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-floor-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-comments-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-contract-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-docs-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-profile-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-risk-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-rules-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-scenarios-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-select-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-jev-triage-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-layers.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-learn-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-learn-reviewer-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-next.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-parity-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-plan.e2e.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-premises-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-required-package.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-slice.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review-tty-refusal.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/commands/review.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/flow/renumber-reviews.e2e.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/flow/review-gate.e2e.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/mcp/metaproject-orchestrator-log.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/active-review.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/bot/metrics.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/bot/post.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/clean-context.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/complete-head-gate.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/cost-cli.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/cross-family.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/dedupe.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/estimate-actual-complete.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/estimate.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/evidence-level.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/filter-stats.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/harness-robustness.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/ingest-locator-sha.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/locate-ingest.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/loop-real-path.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/loop.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/managed.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/mutate.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/pr-comments.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/premise.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/prior-round.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/publish.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/readiness.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/rebuttal-citation.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/repair-ingest.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/research.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/review-next.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/review-notes.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/role-switches-complete.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/round-split.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/round-trip.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/second-look.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/verification.test.ts | 2 | test-consumer | exercises {createManagedReviewPackage} of src/review/managed.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/wave-events.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/tui/review-readiness.test.ts | 2 | test-consumer | exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/review/degradation.ts): run it, it is not read |
+| src/review/degradation-payload.test.ts | 3 | test-consumer | a test named after the changed src/review/degradation.ts: run it, it is not read |
+| src/review/bot/metrics.ts | 2 | unrelated-symbol | imports {findingDispositionState} from src/review/managed.ts; changed: {createManagedReviewPackage} |
+| src/review/complete-gated.ts | 2 | unrelated-symbol | imports {CompleteManagedReviewOptions, CompleteManagedReviewResult, completeManagedReview, resolveReviewPackagePath} from src/review/managed.ts; changed: {createManagedReviewPackage} |
+| src/review/completion-gate.ts | 2 | unrelated-symbol | imports {reviewCompletionBlockers, reviewsRoot} from src/review/managed.ts; changed: {createManagedReviewPackage} |
+| src/review/publish-guard.ts | 2 | unrelated-symbol | imports {reviewsRoot} from src/review/managed.ts; changed: {createManagedReviewPackage} |
+| src/commands/review-help.test.ts | 2 | unrelated-symbol | imports {COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, DEFAULT_GRAPH_TIMEOUT_SECONDS, VERDICT_FLAGS, printReviewHelpFor} from src/commands/review.ts; changed: {reviewCommand} |
+| src/commands/review-plan.test.ts | 2 | unrelated-symbol | imports {printReviewHelpFor} from src/commands/review.ts; changed: {reviewCommand} |
+| src/commands/review-pr-base.test.ts | 2 | unrelated-symbol | imports {prBaseRef} from src/commands/review.ts; changed: {reviewCommand} |
+| src/commands/review-slice-paths.test.ts | 2 | unrelated-symbol | imports {ESTIMATE_FLAGS, REQUIRED_FLAGS, VERDICT_FLAGS} from src/commands/review.ts; changed: {reviewCommand} |
+| src/review/premise-embedded.test.ts | 2 | unrelated-symbol | imports {parseEmbeddedPremises} from src/review/managed.ts; changed: {createManagedReviewPackage} |
+
+### Tests to run
+
+70 tests exercise the changed code — run them: `bun test src/commands/agent-orchestrator-log.test.ts src/commands/import-only.test.ts src/commands/memory-orchestrator-log.test.ts src/commands/operator-confirm-review-tools.test.ts src/commands/review-ac-check-cli.test.ts src/commands/review-ci-triage-cli.test.ts src/commands/review-comments-cli.test.ts src/commands/review-conform-cli.test.ts src/commands/review-floor-cli.test.ts src/commands/review-jev-comments-cli.test.ts src/commands/review-jev-contract-cli.test.ts src/commands/review-jev-docs-cli.test.ts src/commands/review-jev-profile-cli.test.ts src/commands/review-jev-risk-cli.test.ts src/commands/review-jev-rules-cli.test.ts src/commands/review-jev-scenarios-cli.test.ts src/commands/review-jev-select-cli.test.ts src/commands/review-jev-triage-cli.test.ts src/commands/review-layers.test.ts src/commands/review-learn-cli.test.ts src/commands/review-learn-reviewer-cli.test.ts src/commands/review-next.test.ts src/commands/review-parity-cli.test.ts src/commands/review-plan.e2e.test.ts src/commands/review-premises-cli.test.ts src/commands/review-required-package.test.ts src/commands/review-slice.test.ts src/commands/review-tty-refusal.test.ts src/commands/review.test.ts src/flow/renumber-reviews.e2e.test.ts src/flow/review-gate.e2e.test.ts src/mcp/metaproject-orchestrator-log.test.ts src/review/active-review.test.ts src/review/bot/metrics.test.ts src/review/bot/post.test.ts src/review/clean-context.test.ts src/review/complete-head-gate.test.ts src/review/cost-cli.test.ts src/review/cross-family.test.ts src/review/dedupe.test.ts src/review/degradation-payload.test.ts src/review/degradation-screen.test.ts src/review/estimate-actual-complete.test.ts src/review/estimate.test.ts src/review/evidence-level.test.ts src/review/filter-stats.test.ts src/review/harness-robustness.test.ts src/review/ingest-locator-sha.test.ts src/review/locate-ingest.test.ts src/review/loop-real-path.test.ts src/review/loop.test.ts src/review/managed.test.ts src/review/mutate.test.ts src/review/pr-comments.test.ts src/review/premise.test.ts src/review/prior-round.test.ts src/review/publish.test.ts src/review/readiness.test.ts src/review/rebuttal-citation.test.ts src/review/repair-ingest.test.ts src/review/research.test.ts src/review/review-next.test.ts src/review/review-notes.test.ts src/review/role-switches-complete.test.ts src/review/round-split.test.ts src/review/round-trip.test.ts src/review/second-look.test.ts src/review/verification.test.ts src/review/wave-events.test.ts src/tui/review-readiness.test.ts`
+
+### Changed files the graph could not answer for
+
+_every changed file resolved to a graph node._
+--- stderr ---
+
