@@ -21,6 +21,7 @@ the one that describes shipped behaviour.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [commands-by-task.md](./commands-by-task.md) — Every command grouped by task, generated from the same table `keryx help` and the TUI's `/help` modal use.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
+- [team-hub-deployment.md](./team-hub-deployment.md) — Self-hosting the Team Hub: the three install modes and what each secures, `install.sh`, `hubctl` upgrade, backup, restore and rollback, key issuance, and what is not offered.
 - [limitations.md](./limitations.md) — Known gaps, platform support, optional AI features, and what to use instead.
 
 ## Releases
