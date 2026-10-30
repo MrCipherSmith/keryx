@@ -333,3 +333,195 @@ jobs:
             --notes-file ./.release/notes.md \
             ./.release/*.tgz \
             ./.release/keryx-bun-*
+
+  # The Team Hub is versioned with the CLI: the tag that publishes `0.2.0` of the
+  # CLI also publishes `0.2.0` of the Hub, and no other trigger does. Same rule as
+  # the top of this file, so there is still no `workflow_dispatch`.
+  #
+  # `needs: release` IS the verification gate. That job runs the whole suite, the
+  # standard gates and the packed-artifact smoke before it publishes, and only a
+  # successful run reaches the end of it — so a tag that fails verification, or
+  # whose npm publish fails, publishes no Hub either: one tag, one outcome. It also
+  # means the GitHub Release this job uploads to already exists. If this job fails
+  # on its own, re-run just this job from the Actions page: the upload uses
+  # `--clobber`, and the image tags are simply pushed again.
+  hub:
+    name: Team Hub image and install bundle
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # A job-level block REPLACES the top-level one, so this job has neither
+    # `id-token` nor anything else the npm publish needed. `packages: write` pushes
+    # to ghcr.io; `contents: write` uploads to the Release. The image attestations
+    # (provenance, SBOM) are BuildKit's and are pushed with the image, so they need
+    # no further permission.
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      # Pinned to commits, unlike the first job: this job holds `packages: write`.
+      - name: Check out the tag
+        # actions/checkout v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Bun
+        # oven-sh/setup-bun v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: latest
+
+      # `latest` moves only for a release, never for a prerelease (`0.4.0-rc.1`).
+      - name: Work out the version and the image tags
+        id: v
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          IMAGE="ghcr.io/mrciphersmith/keryx-team-hub"
+          TAGS="${IMAGE}:${VERSION}"
+          case "$VERSION" in
+            *-*) echo "prerelease ${VERSION}: not tagging latest" ;;
+            *) TAGS="${TAGS}"$'\n'"${IMAGE}:latest" ;;
+          esac
+          {
+            echo "version=${VERSION}"
+            echo "image=${IMAGE}"
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Shell scripts parse and lint
+        run: |
+          set -eu
+          for f in deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh; do
+            sh -n "$f"
+          done
+          shellcheck -s sh deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh
+
+      # Source archive, SHA256SUMS and the two Linux executables. The commit time
+      # makes the archive's bytes a function of the tag, so a re-run reproduces them.
+      - name: Package the Hub (source archive and Linux binaries)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hub" "$RUNNER_TEMP/hub-src"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" bun scripts/package-team-hub.ts --out "$RUNNER_TEMP/hub" --linux-x64
+          ls -l "$RUNNER_TEMP/hub"
+
+      # The image is built from what the release SHIPS, not from the checkout: if
+      # the archive omits a file the image needs, this is where it shows.
+      - name: Extract the archive the image is built from
+        run: tar -xzf "$RUNNER_TEMP/hub/team-hub-prototype-source.tar.gz" -C "$RUNNER_TEMP/hub-src" --strip-components=1
+
+      - name: Build the install bundle and validate every install mode
+        run: |
+          set -eu
+          sh deploy/team-hub/release/bundle.sh "$RUNNER_TEMP/hub" "${{ steps.v.outputs.version }}"
+          sh deploy/team-hub/release/check-modes.sh "$RUNNER_TEMP/hub/team-hub-install.tar.gz"
+
+      - name: Set up QEMU (for the arm64 image)
+        # docker/setup-qemu-action v4.4.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        # docker/setup-buildx-action v4.4.1
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+
+      # One platform, loaded locally, so it can be run BEFORE anything is pushed.
+      - name: Build the amd64 image for the pre-publication checks
+        # docker/build-push-action v7.4.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: ${{ runner.temp }}/hub-src
+          file: ${{ runner.temp }}/hub-src/deploy/team-hub/Dockerfile
+          platforms: linux/amd64
+          load: true
+          provenance: false
+          tags: keryx-team-hub:release-check
+
+      - name: Start the image with throwaway tokens and require /healthz 200
+        run: sh deploy/team-hub/release/smoke-image.sh keryx-team-hub:release-check
+
+      - name: Install, back up, restore, upgrade and roll back with the real scripts
+        run: sh deploy/team-hub/release/e2e.sh keryx-team-hub:release-check
+
+      - name: Log in to ghcr.io
+        # docker/login-action v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # BuildKit's own attestations: a SLSA provenance statement (mode=max records
+      # the build arguments and the source) and an SPDX SBOM, both attached to the
+      # image index. They are what `docker buildx imagetools inspect` shows.
+      - name: Build and push the multi-arch image
+        id: push
+        # docker/build-push-action v7.4.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: ${{ runner.temp }}/hub-src
+          file: ${{ runner.temp }}/hub-src/deploy/team-hub/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.v.outputs.tags }}
+          provenance: mode=max
+          sbom: true
+          labels: |
+            org.opencontainers.image.title=Keryx Team Hub
+            org.opencontainers.image.description=The Keryx Team Hub server with its web app, released with the Keryx CLI
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      # A package that a workflow creates for the first time can come out private,
+      # and an install on someone else's server pulls it anonymously. So pull the
+      # digest with NO credentials (an empty Docker config) and run it once more.
+      # If this fails on the very first release, make the package public once:
+      # GitHub -> Packages -> keryx-team-hub -> Package settings -> Change visibility.
+      - name: Prove the published digest pulls anonymously and starts
+        env:
+          REF: ${{ steps.v.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          export DOCKER_CONFIG="$(mktemp -d)"
+          if ! docker pull "$REF"; then
+            echo "::error::$REF cannot be pulled without credentials. Make the keryx-team-hub package public (Package settings -> Change visibility) and re-run this job."
+            exit 1
+          fi
+          sh deploy/team-hub/release/smoke-image.sh "$REF"
+
+      # The digest, not a tag, is what an install pins: a tag can be moved after the
+      # fact, a digest names these bytes.
+      - name: Write the image digest and the checksums
+        env:
+          REF: ${{ steps.v.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/hub"
+          printf '%s\n' "$REF" > team-hub-image.txt
+          # package-team-hub.ts already listed the archive and the binaries; add the rest.
+          for f in team-hub-install.tar.gz team-hub-install.sh team-hub-image.txt; do
+            sha256sum "$f" >> SHA256SUMS
+          done
+          sort -k 2 SHA256SUMS -o SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload the Hub assets to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/hub"
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            team-hub-prototype-source.tar.gz \
+            team-hub-server-linux-x64 \
+            team-hub-client-linux-x64 \
+            team-hub-install.tar.gz \
+            team-hub-install.sh \
+            team-hub-image.txt \
+            SHA256SUMS
