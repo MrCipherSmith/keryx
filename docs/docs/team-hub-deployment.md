@@ -27,7 +27,7 @@ In every mode the Hub also listens on `127.0.0.1:<port>` of the host (8787 by de
 ## What you need
 
 - A Linux server (amd64 or arm64) with Docker Engine and Docker Compose v2 (`docker compose version`). macOS with Docker Desktop or OrbStack works for the `local` mode.
-- On Linux, install as **uid 1000 or as root**. The container runs as uid 1000 and the Hub refuses a credentials file it cannot read; root hands the files over to uid 1000 itself. Other uids are refused on Linux.
+- On Linux, install as **uid 1000 or as root**. The container runs as uid 1000 and the Hub refuses a credentials file it cannot read; root hands the files over to uid 1000 itself. Other uids are refused on Linux. In a root install that hand-over has a consequence: **any account or process on the host that runs as uid 1000 has the Hub's own access** to `secrets/agents/` (it can issue or revoke agent keys) and, in `cloudflare` mode, to `secrets/tunnel.json`. Do not give uid 1000 to a user you would not give those to.
 - `curl`, `tar`, `openssl`, and `sha256sum` or `shasum`.
 - `https` mode: a DNS name pointing at the server and ports 80 and 443 free.
 - `cloudflare` mode: a tunnel and an Access application you created in Cloudflare Zero Trust (the installer does not create them): the tunnel UUID and its credentials JSON, the team name, and the application's audience tag.
@@ -74,7 +74,7 @@ The installer checks Docker and Compose first and **refuses to run over an exist
 1. downloads the release bundle and the image reference and verifies both against the release's `SHA256SUMS`;
 2. generates two independent tokens with `openssl rand -hex 32` into `secrets/hub.env` (mode 0600), and an empty `secrets/agents/agents.json`;
 3. writes the compose files and configs for the mode into `releases/v<version>/` and points `current` at it;
-4. pulls the image **by digest**, starts the Hub, and waits until Docker reports it healthy;
+4. pulls every image of the release (the Hub's **by digest**: an install refuses a release that names its image any other way), starts the stack, and waits until Docker reports it healthy;
 5. installs `hubctl` and the nightly backup cron entry;
 6. shows the **operator token once, on the terminal (`/dev/tty`)**, and never in a log. When there is no terminal it says so instead of printing it. The token is also in `secrets/hub.env`, which is owner-only; that file is what the Hub reads.
 
@@ -94,7 +94,7 @@ If it fails before starting anything it removes what it created. If it fails aft
   state/ log/ tmp/
 ```
 
-The data itself lives in the Docker volume `<project>_hub-data` (project `keryx-team-hub` unless you set `KERYX_HUB_PROJECT`).
+The data itself lives in the Docker volume `<project>_hub-data`: the SQLite database, and the Git state the Hub keeps under `/data/git` for delivery: bare caches of the remotes it delivered to, which grow with use and are rebuilt by fetching, and a small receipt per delivery operation (if one is missing, the Hub recovers the outcome from the operation marker on the remote). All of it is part of the volume, so of the full-volume backups; none of it is in the nightly online backups, which hold only the database. The project is `keryx-team-hub` unless the installer was run with `KERYX_HUB_PROJECT` set; it is recorded in `secrets/hub.env` and read **only from there**, so a variable left in your shell can never point `hubctl` at another install's volume. Every destructive prompt names the project and the volume it will act on.
 
 ## After the install
 
@@ -118,7 +118,7 @@ What every mode shares: the Hub container runs as uid 1000 with a read-only root
 
 **`https`.** The Hub is on the internet behind two layers you can see. Caddy terminates TLS and renews the certificate. The nginx edge adds rate limits (20 requests/s per client, 5 sign-in attempts/minute per client with a burst of 10), `nosniff`, `no-referrer`, HSTS and `X-Frame-Options: DENY`, and a separate location for the machine and browser WebSockets with a one-hour timeout. The edge trusts `X-Forwarded-For` and `X-Forwarded-Proto` only from the private address ranges of the compose network, where its only client is Caddy, and Caddy overwrites whatever a client sent. The only sign-in is the operator token (with a second reviewer token if you set one), so treat it like a root password and keep it long and out of chat. There is **no SSO** in this mode and no second factor.
 
-**`cloudflare`.** No inbound port is open. Cloudflare Access decides who reaches the Hub at all; `cloudflared` validates the Access JWT's signature, issuer and audience before the request leaves the tunnel; the edge refuses a request without the assertion header, applies the same rate limits and headers, and the Hub then asks for the operator token (or, with the optional overlay below, recognises the Access identity). Two limits to know: the rate limit is keyed on the tunnel connector's address, so it is shared by every visitor; and the CLI and machines cannot present a browser Access cookie, so connect them through the loopback port (SSH tunnel) or give them a Service Auth policy that you configure and verify yourself. The Hub does not configure Cloudflare for you.
+**`cloudflare`.** No inbound port is open. Cloudflare Access decides who reaches the Hub at all; `cloudflared` validates the Access JWT's signature, issuer and audience before the request leaves the tunnel; the edge refuses a request without the assertion header, applies the same rate limits and headers, and the Hub then asks for the operator token (or, with the optional overlay below, recognises the Access identity). The rate limit is keyed on the visitor's address (`CF-Connecting-IP`, believed only from the compose network, where `cloudflared` is the edge's one client). One limit to know: the CLI and machines cannot present a browser Access cookie, so connect them through the loopback port (SSH tunnel) or give them a Service Auth policy that you configure and verify yourself. The Hub does not configure Cloudflare for you.
 
 ## Keys and credentials
 
@@ -154,7 +154,9 @@ hubctl config                       # validate the compose files (prints no secr
 hubctl schedule on|off|status       # the nightly backup entry in this user's crontab
 ```
 
-`hubctl` has no `down`: removing the stack's volumes would delete the data. Change the domain or other settings by editing `secrets/hub.env`, then `hubctl restage && hubctl up`. To add your own compose settings, put them in `compose.override.yaml` beside `hubctl`; it is added to every call when it exists.
+`hubctl` has no `down`: removing the stack's volumes would delete the data. One operation at a time: `up`, `stop`, `restart`, `restage`, `backup`, `restore`, `upgrade`, `rollback` and `agent-key issue|revoke` take a lock, so none of them can start or stop the stack underneath another. A nightly backup that meets the lock skips its run and logs a warning.
+
+Change the domain or the mode by editing `secrets/hub.env` and running `hubctl restage`. It re-renders the configs, checks that the compose files validate before changing anything, and applies the result: the Hub is updated if its settings changed, and the edge, proxy and tunnel containers are **recreated** (a config file that is replaced is not seen by a container that already has the old one mounted). `hubctl up` removes services that the current mode no longer defines, so leaving `https` for `local` takes Caddy off ports 80 and 443. To add your own compose settings, put them in `compose.override.yaml` beside `hubctl`; it is added to every call when it exists.
 
 ## Upgrade
 
@@ -164,14 +166,14 @@ hubctl schedule on|off|status       # the nightly backup entry in this user's cr
 
 `upgrade` confirms (`--yes` skips the question), then:
 
-1. downloads the release and verifies it against its `SHA256SUMS`, stages it under `releases/`, pulls its image and validates its compose files;
+1. downloads the release and verifies it against its `SHA256SUMS`, stages it under `releases/`, validates its compose files and **pulls every image it runs** (the edge, proxy and tunnel images as well as the Hub's), so a registry problem costs nothing;
 2. stops the Hub gracefully (`docker compose stop`; a clean exit checkpoints the write-ahead log) — browser sessions and machine connections drop from here until the Hub is back, about a minute;
 3. takes a **full backup of the data volume**, extracts it and runs `PRAGMA integrity_check` on the copy;
 4. starts the **new image on a copy of the data** in a container with no network, a read-only root and throwaway tokens, and waits for Docker's `healthy` and a `200` from `/healthz`;
 5. switches `current` with an atomic rename, starts the new release and verifies it the same way;
 6. on success installs that release's `hubctl`.
 
-If anything fails, it puts the old release back by itself. A failure before the switch just restarts the old Hub on its untouched data. A failure after the switch re-points `current`, **restores the full backup into the volume**, starts the old release and verifies it. The backup is kept as `backups/upgrade-<time>-<from>-to-<to>/hub-data.tar` (the three newest safety backups are kept). Run upgrades when nobody is mid-task.
+If anything fails, it puts the old release back by itself. A failure before the switch just restarts the old Hub on its untouched data. A failure after the switch re-points `current`, makes sure the Hub container is **stopped**, **restores the full backup into the volume**, recreates the Hub on the old release and verifies it. Recovery runs with Ctrl-C ignored, so it cannot be cut off between emptying the volume and refilling it. The backup is kept as `backups/upgrade-<time>-<from>-to-<to>/hub-data.tar`; the backup that `rollback --restore-data` follows is changed only by an upgrade that finished. Run upgrades when nobody is mid-task.
 
 ## Rollback
 
@@ -180,7 +182,7 @@ hubctl rollback                    # back to the previous release; the data stay
 hubctl rollback --restore-data     # also restore the backup taken at the last upgrade (only straight after it)
 ```
 
-A release's data changes are additive (new `remote_*` tables); an older release ignores tables it does not know, so a plain rollback keeps everything written since the upgrade. `--restore-data` throws that work away and asks you to confirm; it first saves the data it replaces to `backups/pre-rollback-<time>/`. A release that stored data an older one would misread is the exception: the release notes say so, and then a plain rollback is the wrong tool. Once any rollback has run, `--restore-data` has nothing to restore; the upgrade's `hub-data.tar` can still be restored by hand with `hubctl restore`. If a rollback fails part-way, `hubctl` puts the release and the data back as they were.
+A release's data changes are additive (new `remote_*` tables); an older release ignores tables it does not know, so a plain rollback keeps everything written since the upgrade. `--restore-data` throws that work away. It only follows a backup that was taken when leaving the release you are rolling back to, checks that backup before touching anything, asks you to confirm (the question names the project and volume), and first saves the data it replaces to `backups/pre-rollback-<time>/`. A release that stored data an older one would misread is the exception: the release notes say so, and then a plain rollback is the wrong tool. Once any rollback has run, `--restore-data` has nothing to restore; the upgrade's `hub-data.tar` can still be restored by hand with `hubctl restore`. If a rollback fails part-way, `hubctl` puts the release and the data back as they were.
 
 ## Backup and restore
 
@@ -188,7 +190,7 @@ The installer schedules `hubctl backup --quiet` at 03:17 server time (skip it wi
 
 - **Kept on the server:** the 14 newest daily backups in `backups/daily/` and the 8 newest weekly ones in `backups/weekly/` (one per ISO week, the last of that week). Change the counts with `KERYX_HUB_BACKUP_DAILY` and `KERYX_HUB_BACKUP_WEEKLY` in `secrets/hub.env`.
 - **They are on the same machine as the data.** A lost disk loses both. Copy `backups/` somewhere else on a schedule you own.
-- They hold every project's content and the Hub's session records, though not the tokens. Files are mode 0600.
+- They hold every project's content and the Hub's session records, though not the tokens. Files are mode 0600. The safety backups an upgrade, restore or rollback takes (`upgrade-*`, `pre-restore-*`, `pre-rollback-*`, full copies of the volume) are kept: the three newest, and **any younger than 14 days however many there are**, because the newest can be the only copy of the newest data. They are the big ones; remove older ones yourself when disk gets tight. `manual-*` backups are never pruned.
 - An online backup holds the database in the Hub container's memory (limit 512 MB). Above about 150 MB `hubctl backup` refuses; use `hubctl backup --offline`, which stops the Hub and saves the whole volume as `backups/manual-<time>/hub-data.tar`.
 
 Restore:
@@ -197,7 +199,9 @@ Restore:
 hubctl restore ~/keryx-team-hub/backups/daily/hub-20261030T031700Z.sqlite.gz
 ```
 
-`restore` accepts a `.sqlite.gz` or `.sqlite` backup or the `.tar` of a full-volume backup. It verifies the checksum next to the file, checks the database **before touching anything**, asks you to confirm, stops the Hub, saves the current data to `backups/pre-restore-<time>/hub-data.tar`, replaces the volume's contents, starts the Hub and verifies it. If any step fails, or the restored Hub does not become healthy, it puts the data it replaced back and starts the Hub again.
+`restore` accepts a `.sqlite.gz` or `.sqlite` backup or the `.tar` of a full-volume backup. It verifies the checksum next to the file, decompresses it once and checks **that file** before touching anything, asks you to confirm (the question names the project and volume), stops the Hub and confirms it is stopped, saves the current data to `backups/pre-restore-<time>/hub-data.tar`, replaces the volume's contents from the checked file, recreates the Hub and verifies it. If any step fails, or the restored Hub does not become healthy, it stops the Hub again, puts the data it replaced back and starts the Hub.
+
+You can restore over a damaged database, which is the case a restore is for: the copy of the current data is taken whatever state it is in. If that copy fails its integrity check, `hubctl` says so loudly, keeps it unchanged, and asks for one more confirmation (`--yes` gives it).
 
 ## Cloudflare SSO (optional, `cloudflare` mode only)
 
