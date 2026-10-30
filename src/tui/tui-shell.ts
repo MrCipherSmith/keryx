@@ -1,4 +1,4 @@
-import { executePlanCommand } from "../session/commands/plan";
+import { executePlanCommand } from "../session/commands/plan-command";
 import { applyRuntimeSwitchToSlate } from "../session/runtime-switch";
 import { requestSessionInterrupt } from "../session/commands/session-control";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";

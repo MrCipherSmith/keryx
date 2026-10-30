@@ -1,4 +1,4 @@
-import { executePlanCommand } from "../session/commands/plan";
+import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
