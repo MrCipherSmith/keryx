@@ -700,8 +700,10 @@ jobs:
       - name: Shell scripts parse and lint
         run: |
           set -eu
+          # dash is /bin/sh on Debian and Ubuntu, where these scripts run; bash is not a test of that.
           for f in deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh; do
             sh -n "$f"
+            dash -n "$f"
           done
           shellcheck -s sh deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh
 

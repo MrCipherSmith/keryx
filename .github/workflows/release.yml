@@ -393,8 +393,10 @@ jobs:
       - name: Shell scripts parse and lint
         run: |
           set -eu
+          # dash is /bin/sh on Debian and Ubuntu, where these scripts run; bash is not a test of that.
           for f in deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh; do
             sh -n "$f"
+            dash -n "$f"
           done
           shellcheck -s sh deploy/team-hub/install.sh deploy/team-hub/hubctl deploy/team-hub/release/*.sh
 
@@ -511,6 +513,12 @@ jobs:
           sha256sum -c SHA256SUMS
           cat SHA256SUMS
 
+      # `--clobber` replaces an asset that is already on the Release. That is what lets a failed job
+      # be re-run to completion; the price is that a re-run silently replaces files that may already
+      # have been downloaded. SHA256SUMS is replaced with them, so the set stays consistent, and
+      # the image reference inside is a digest, which does not change under anyone. Signing the
+      # assets, so that a replaced file is detectable, is future work (docs/requirements/
+      # team-hub-distribution/specification.md, out of scope).
       - name: Upload the Hub assets to the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
