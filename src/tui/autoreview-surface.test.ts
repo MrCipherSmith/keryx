@@ -1,7 +1,7 @@
 // Flow 424 (AC10): the autonomous review's TUI surface — what the sidebar shows, and /autoreview.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -10,6 +10,7 @@ import {
   createAutoReviewController,
   parseAutoReviewArgs,
   projectAutoReviewPanel,
+  readAutoReviewArbiter,
   readAutoReviewRuns,
   routeAutoReviewCommand,
   type AutoReviewRun,
@@ -333,6 +334,39 @@ describe("arbiter view", () => {
 
   test("the list line carries the arbiter counts", () => {
     expect(autoReviewListText([run({ arbiter: { asked: 3, escalated: 1 } })])).toContain("arbiter 3 (1 escalated)");
+  });
+
+  test("the headless read and the terminal command render one normalized outcome from the same run files", () => {
+    const tui = (line: string): string => { const said: string[] = []; createAutoReviewController({ cwd, notice: (text) => said.push(text) }).handleCommand(line); return said.join(""); };
+    expect(readAutoReviewArbiter(cwd)).toEqual({ outcome: "no-runs", candidates: [], text: tui("/autoreview arbiter") });
+    const dir = runDir();
+    progress(dir);
+    lock(dir, process.pid);
+    writeLog(dir, [record(), record({ kind: "scope", verdict: "deny", rule: "R-02" }), record({ verdict: "escalate", rule: "none", reason: "timeout" })]);
+    const log = readAutoReviewArbiter(cwd);
+    expect(log).toMatchObject({ outcome: "log", label: "o/r#7435", asked: 3, escalated: 1 });
+    expect(log.text).toBe(tui("/autoreview arbiter"));
+    expect(readAutoReviewArbiter(cwd, "7435").text).toBe(tui("/autoreview arbiter 7435"));
+    expect(readAutoReviewArbiter(cwd, "99")).toEqual({ outcome: "no-match", candidates: ["o/r#7435"], text: tui("/autoreview arbiter 99") });
+    expect(JSON.stringify(readAutoReviewArbiter(cwd))).not.toContain(String(process.pid));
+  });
+
+  test("a run's arbiter log is read only as a regular file inside its run directory, never through a link", () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "autoreview-outside-"));
+    try {
+      writeLog(outside, [record(), record({ verdict: "escalate", rule: "none", reason: "timeout" })]);
+      const dir = runDir();
+      progress(dir, { state: "complete" });
+      symlinkSync(path.join(outside, "arbiter.log"), path.join(dir, "arbiter.log"));
+      expect(readAutoReviewRuns(cwd)[0]!.arbiter).toBeUndefined();
+      expect(readAutoReviewArbiter(cwd)).toMatchObject({ outcome: "log", asked: 0, text: "o/r#7435: the arbiter has not been consulted in this run.\n" });
+      const other = runDir("x-y-pr2");
+      progress(other, { ref: "https://github.com/x/y/pull/2", state: "complete" });
+      mkdirSync(path.join(other, "arbiter.log"));
+      expect(readAutoReviewRuns(cwd).map((entry) => entry.arbiter)).toEqual([undefined, undefined]);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

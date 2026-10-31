@@ -160,6 +160,18 @@ describe("keryx sessions list — LIVE (flow 271, AC10)", () => {
     expect(process.exitCode).toBe(0);
   });
 
+  test("a title with escape, bidi or zero-width characters is printed escaped, never raw", async () => {
+    const id = seedSession("fork \u001b[2J\u202eevil\u200b");
+
+    await runSessions(["list"]);
+
+    const row = logged.find((line) => line.startsWith(shortSessionId(id))) as string;
+    expect(row).toBeDefined();
+    // eslint-disable-next-line no-control-regex -- the point is that no control character reaches the terminal
+    expect(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/.test(row)).toBe(false);
+    expect(row).toContain("fork ");
+  });
+
   test("help describes the LIVE column", async () => {
     await runSessions(["--help"]);
     expect(logged.join("\n")).toContain("LIVE");

@@ -64,35 +64,38 @@ export interface DecisionsFollowupDeps {
   session?: string | undefined;
   /** Where the outcome is told (the transcript). */
   notice?: ((text: string) => void) | undefined;
+  /** Where the flow of a follow-up without a decision of this session comes from: the checkout (`resolveFlowContext`) when absent. */
+  flowContext?: ((cwd: string) => Promise<{ flow?: string | undefined }>) | undefined;
 }
 
-/** Run a `reason` or `change` command and say what happened. Never throws. */
-export async function runDecisionsFollowup(command: Exclude<DecisionsCommand, { kind: "show" | "arms" }>, deps: DecisionsFollowupDeps): Promise<void> {
-  const say = (text: string): void => {
-    try {
-      deps.notice?.(text);
-    } catch {
-      // a failing transcript is not the journal's problem
-    }
-  };
+/** What a `reason` or `change` command did, in the words the transcript shows: `ok` false when nothing was changed. Never throws. */
+export async function decisionsFollowup(command: Exclude<DecisionsCommand, { kind: "show" | "arms" }>, deps: Omit<DecisionsFollowupDeps, "notice">): Promise<{ ok: boolean; text: string; decisionId?: string }> {
   const lastId = deps.lastDecisionId?.();
   try {
     // no decision from this session: look at the latest one of this flow (to name it), never the repo-wide latest;
     // it is acted on only when it was asked in this session
-    const flow = lastId === undefined ? (await resolveFlowContext(deps.cwd)).flow : undefined;
+    const flow = lastId === undefined ? (await (deps.flowContext ?? resolveFlowContext)(deps.cwd)).flow : undefined;
     if (command.kind === "reason") {
       const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId, flow, session: deps.session });
-      say(`Reason ${done.replaced ? "changed" : "recorded"} for decision ${done.id} ("${shortQuestion(done.question)}").`);
-      return;
+      return { ok: true, decisionId: done.id, text: `Reason ${done.replaced ? "changed" : "recorded"} for decision ${done.id} ("${shortQuestion(done.question)}").` };
     }
     if (command.choice.length === 0) throw new Error("name the option: /decisions change <option id or label>");
     const result = await changeAnswer({ cwd: deps.cwd, choice: command.choice, lastId, flow, session: deps.session });
-    say(
+    return { ok: true, decisionId: result.id, text:
       `Decision ${result.id} ("${shortQuestion(result.question)}"): answer changed from ${result.previous} to ${result.choice}. ` +
-        `The agent already received the first answer (${result.previous}), so the change is recorded in the journal but may not reach the agent. The report counts the first answer.`,
-    );
+        `The agent already received the first answer (${result.previous}), so the change is recorded in the journal but may not reach the agent. The report counts the first answer.` };
   } catch (cause) {
-    say(`/decisions ${command.kind}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    return { ok: false, text: `/decisions ${command.kind}: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+}
+
+/** Run a `reason` or `change` command and say what happened. Never throws. */
+export async function runDecisionsFollowup(command: Exclude<DecisionsCommand, { kind: "show" | "arms" }>, deps: DecisionsFollowupDeps): Promise<void> {
+  const { text } = await decisionsFollowup(command, deps);
+  try {
+    deps.notice?.(text);
+  } catch {
+    // a failing transcript is not the journal's problem
   }
 }
 

@@ -8,6 +8,7 @@ import { ContainedWriteError } from "./contained-write";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
+  isMetaprojectManagedPath,
   renderMetaprojectGitignoreBlock,
   syncMetaprojectIgnoreRules,
 } from "./metaproject-gitignore";
@@ -60,6 +61,17 @@ test("the managed block ignores the recommendation journal", () => {
 
 test("the managed block ignores the mutation scratch directory", () => {
   expect(renderMetaprojectGitignoreBlock()).toContain(".metaproject/data/review/mutate-scratch/\n");
+});
+
+// The impact-evidence hook writes its per-session touch state and event log on a
+// session's first edit; an owned native workspace must read it as keryx runtime data.
+test("the managed block ignores the impact-evidence gate's per-session state and log", () => {
+  expect(renderMetaprojectGitignoreBlock()).toContain(".metaproject/data/security/impact-evidence/\n");
+  expect(isMetaprojectManagedPath(".metaproject/data/security/impact-evidence/log.jsonl")).toBe(true);
+  expect(isMetaprojectManagedPath(".metaproject/data/security/impact-evidence/sessions/native-0a1b2c3d.json")).toBe(true);
+  // Only that directory: the security config and committable reports stay observed.
+  expect(isMetaprojectManagedPath(".metaproject/security.config.json")).toBe(false);
+  expect(isMetaprojectManagedPath(".metaproject/data/security/policies/custom.json")).toBe(false);
 });
 
 // R700-06/R700-10: skills stocktake writes dated reports plus a cache file

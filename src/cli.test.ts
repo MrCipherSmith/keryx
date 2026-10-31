@@ -194,6 +194,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // verb, so a USAGE_BODY line and a Commands: summary row, same shape as
     // flow 353's `doctor` above.
     "  keryx setup [init|refresh|repair]            Print the Metaproject preparation guide (does not run it)\n",
+    "  keryx hub <serve|connect|import|sync|submit|pull|fetch> Team Hub prototype (--help for arguments)\n",
     "  setup     Print the Metaproject preparation guide: init, refresh, or repair\n",
     // Flow 362 (product module P1): `keryx product index|open`, a brand-new
     // verb, so both USAGE_BODY lines and a Commands: summary row.

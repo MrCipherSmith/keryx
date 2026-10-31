@@ -9,7 +9,7 @@
 
 import { flowServiceDeps } from "../commands/flow";
 import { createFlowService, originDetailLines, readOrigin } from "../flow/service";
-import type { FlowService } from "../flow/types";
+import type { FlowService, OriginSetResult } from "../flow/types";
 
 export const FLOW_ORIGIN_COMMAND = "/flow";
 
@@ -83,7 +83,7 @@ export const FLOW_ORIGIN_RECENT_LIMIT = 10;
  * few by name. Never one block per flow: a project with hundreds of flows would
  * flood the transcript. The quote and source of one flow are `/flow origin <id>`.
  */
-async function summarizeOrigins(cwd: string, service: FlowService): Promise<string> {
+export async function summarizeOrigins(cwd: string, service: FlowService): Promise<string> {
   const flows = await service.list({ cwd });
   if (flows.length === 0) return "No flows.";
   const newestFirst = [...flows].sort((a, b) => Number(b.id) - Number(a.id) || b.id.localeCompare(a.id));
@@ -147,6 +147,11 @@ export async function runFlowOriginForShell(
     quote: args.quote,
     source: args.source,
   });
+  return formatOriginSetResult(result);
+}
+
+/** What a set reports, shared by `/flow origin <id> <kind> --reason …` and the native session's typed set. */
+export function formatOriginSetResult(result: OriginSetResult): string {
   if (result.note !== undefined) {
     return `${result.note}\nNothing written; origin stays ${result.previous}.\n${renderFlowOrigin(result.flow.id, result.flow.origin)}`;
   }

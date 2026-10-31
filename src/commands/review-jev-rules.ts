@@ -21,7 +21,7 @@ import { DEFAULT_CONTEXT_LINES } from "../review/scope";
 import type { ScopedRegion } from "../review/scope";
 import { createFixtureConformPrPort, createGhConformPrPort, type ConformPrInfo, type ConformPrPort } from "../review/conform-pr-port";
 import { readJevRulesEnabled } from "../review/jev-rules-config";
-import { cacheKeyFor, cachedProbability, JEV_RULES_TAG_CACHE_PATH, readJevRulesCache, writeJevRulesCache } from "../review/jev-rules-cache";
+import { cacheKeyFor, cachedProbability, JEV_RULES_CACHE_PATH, JEV_RULES_TAG_CACHE_PATH, readJevRulesCache, writeJevRulesCache } from "../review/jev-rules-cache";
 import {
   DEFAULT_JEV_RULES_THRESHOLD,
   DEFAULT_MAX_JEV_RULE_CALLS,
@@ -355,6 +355,8 @@ export interface JevRulesComputedResult {
 }
 
 export interface JevRulesRunOptions {
+  readonly mutate?: <T>(paths: readonly string[], write: () => Promise<T>) => Promise<T>;
+  readonly dir?: string;
   readonly cwd: string;
   readonly regions: readonly ScopedRegion[];
   readonly targetLabel: string;
@@ -446,6 +448,8 @@ async function resolveRuleSourceClauseTags(
   usage: JevUsageAccumulator,
   signal: AbortSignal | undefined,
   env: Readonly<Record<string, string | undefined>> | undefined,
+  dir?: string,
+  mutate?: JevRulesRunOptions["mutate"],
 ): Promise<ClauseTagResolution> {
   const extracted = extractReferenceClauses(source.text);
   const rawClauses = extracted.filter((clause) => !isPlaceholderClauseText(clause.text));
@@ -465,7 +469,7 @@ async function resolveRuleSourceClauseTags(
     const result = await callJevSystemOne(
       fetchFn,
       { model, state: `Rule-document clause classification (review-jev-rules): "${source.path}" — no additional state beyond each clause's own text.`, questions: tagQuestions },
-      { env: env ?? process.env, ...(signal !== undefined ? { signal } : {}) },
+      { env: env ?? process.env, cwd, ...(dir !== undefined ? { dir } : {}), ...(signal !== undefined ? { signal } : {}) },
     );
     usage.taggingCalls += 1;
     accumulateUsage(usage, result.usage);
@@ -477,7 +481,8 @@ async function resolveRuleSourceClauseTags(
       freshTags[id] = tag;
     }
     if (Object.keys(freshTags).length > 0) {
-      await writeClauseTagCache(cwd, source.path, contentHash, freshTags, JEV_RULES_TAG_CACHE_PATH);
+      const write = () => writeClauseTagCache(cwd, source.path, contentHash, freshTags, JEV_RULES_TAG_CACHE_PATH);
+      if (mutate === undefined) await write(); else await mutate([JEV_RULES_TAG_CACHE_PATH], write);
     }
   }
   return { clauses: applyClauseTags(rawClauses, resolved), droppedPlaceholders };
@@ -497,6 +502,7 @@ async function resolveRuleSourceClauseTags(
  * tag or score.
  */
 export async function computeJevRulesResult(options: JevRulesRunOptions): Promise<JevRulesComputedResult> {
+  options.signal?.throwIfAborted();
   const { cwd, regions, targetLabel } = options;
   const maxCalls = options.maxCalls ?? DEFAULT_MAX_JEV_RULE_CALLS;
   const threshold = options.threshold ?? DEFAULT_JEV_RULES_THRESHOLD;
@@ -512,7 +518,7 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
   const taggedSources: TaggedRuleSource[] = [];
   const droppedPlaceholderClauses: { ruleId: string; clauseId: string; reason: string }[] = [];
   for (const source of sources) {
-    const { clauses, droppedPlaceholders } = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage, signal, env);
+    const { clauses, droppedPlaceholders } = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage, signal, env, options.dir, options.mutate);
     taggedSources.push({ source, clauses });
     for (const dropped of droppedPlaceholders) {
       droppedPlaceholderClauses.push({ ruleId: source.path, clauseId: dropped.clauseId, reason: dropped.reason });
@@ -544,7 +550,7 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
     }
     if (Object.keys(uncachedQuestions).length === 0) continue;
 
-    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: uncachedQuestions as JevQuestions }, { env: env ?? process.env, ...(signal !== undefined ? { signal } : {}) });
+    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: uncachedQuestions as JevQuestions }, { env: env ?? process.env, cwd, ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(signal !== undefined ? { signal } : {}) });
     usage.violationCalls += 1;
     accumulateUsage(usage, result.usage);
     for (const item of batch.items) {
@@ -558,7 +564,8 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
     }
   }
 
-  await writeJevRulesCache(cwd, newCacheEntries).catch(() => {});
+  if (options.mutate !== undefined && newCacheEntries.size > 0) await options.mutate([JEV_RULES_CACHE_PATH], () => writeJevRulesCache(cwd, newCacheEntries));
+  else await writeJevRulesCache(cwd, newCacheEntries).catch(() => {});
 
   const ruleRationales = new Map<string, string>();
   for (const source of sources) {

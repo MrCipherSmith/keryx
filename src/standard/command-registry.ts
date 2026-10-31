@@ -1953,6 +1953,30 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- hub (Team Hub prototype) ---------------------------------------------
+  // Only the read-only Team Hub commands are agent operations: the checkout's
+  // binding (`src/hub/client-command.ts`) and the `hub machine` readiness check.
+  // Every command that changes the binding, Hub state or the working tree, and
+  // `hub serve`, `hub mcp` and the other `hub machine` subcommands, is the
+  // operator's: see SUBCOMMAND_EXCLUSIONS in `command-registry.coverage.test.ts`.
+  {
+    module: "hub",
+    command: "hub status",
+    summary: "This checkout's Team Hub binding (url, projectId, checkoutId) from the user-global binding file, or a not-connected message. No token, no network, no write.",
+    intent: ["hub status", "к какому хабу подключён checkout", "team hub binding", "статус team hub"],
+    args: [],
+    json: false,
+    read: true,
+  },
+  {
+    module: "hub",
+    command: "hub machine readiness",
+    summary: "Whether this build's embedded native command coverage descriptor is valid and release-ready for Hub remote sessions; prints the digest, counts and required gaps and exits non-zero when not ready. Needs no pairing, no network and no token.",
+    intent: ["hub machine readiness", "готова ли машина к удалённым сессиям", "native coverage readiness", "remote session readiness"],
+    args: [],
+    json: false,
+    read: true,
+  },
   // ---- bus ------------------------------------------------------------------
   // The agent bus (flow 272; docs/requirements/keryx-agent-bus). It lives in the
   // git common directory, outside `.metaproject/`, and never writes flow state.

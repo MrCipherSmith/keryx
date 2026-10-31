@@ -8,7 +8,7 @@ export default defineConfig(
   // `**/*.test.ts` block below, which carries no TypeScript parser, so its
   // tests were parsed by espree and every `type` import was a parse error.
   // Deleting those imports to silence it broke the extension's own typecheck.
-  { ignores: ["node_modules/**", "dist/**", "build/**", "coverage/**", ".metaproject/**", ".claude/**", ".worktrees/**", "fixtures/**", "vscode-extension/**"] },
+  { ignores: ["node_modules/**", "dist/**", "build/**", "coverage/**", ".metaproject/**", ".claude/**", ".worktrees/**", "fixtures/**", "vscode-extension/**", "apps/hub-web/**", "src/hub/web-assets.generated.ts"] },
   {
     files: ["src/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts"],
     extends: [js.configs.recommended, tseslint.configs.recommended],

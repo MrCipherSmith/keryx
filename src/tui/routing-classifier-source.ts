@@ -136,7 +136,7 @@ export async function runRoutingClassifierForTurn(
   const providers = opts.providers === undefined ? opts.detected : await loadTurnProviders(opts.providers, opts.signal, Math.max(0, deadline - performance.now()));
   if (providers === undefined) return undefined;
   if (opts.signal?.aborted) return undefined;
-  const env = envWithSavedApiKeys(opts.env ?? process.env);
+  const env = envWithSavedApiKeys(opts.env ?? process.env, opts.userConfigDir);
   // Mandatory privacy gate, refreshed each turn; caller hooks only restrict further.
   const external = await resolveExternalSetting({ cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { dir: opts.userConfigDir } : {}) });
   if (opts.signal?.aborted) return undefined;

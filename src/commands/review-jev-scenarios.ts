@@ -164,6 +164,10 @@ async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
 }
 
 export interface JevScenariosRunOptions {
+  /** Optional local execution boundary; omitted values retain the CLI defaults. */
+  readonly signal?: AbortSignal;
+  readonly dir?: string;
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly cwd: string;
   readonly allChangedFiles: readonly string[];
   readonly targetLabel: string;
@@ -189,6 +193,7 @@ export interface JevScenariosComputedResult extends JevScenariosRunResult {
  * Shared by the CLI (`runJevScenarios`, below) and the TUI's `/scenarios`.
  */
 export async function computeJevScenariosResult(options: JevScenariosRunOptions): Promise<JevScenariosComputedResult> {
+  options.signal?.throwIfAborted();
   const { cwd, allChangedFiles, targetLabel } = options;
   const maxCalls = options.maxCalls ?? DEFAULT_MAX_JEV_SCENARIO_CALLS;
   const threshold = options.threshold ?? DEFAULT_JEV_SCENARIOS_THRESHOLD;
@@ -211,7 +216,7 @@ export async function computeJevScenariosResult(options: JevScenariosRunOptions)
   let sawUsage = false;
 
   for (const batch of batches) {
-    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: process.env });
+    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}), ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(options.signal !== undefined ? { signal: options.signal } : {}) });
     jevCalls += 1;
     if (result.usage.input_tokens !== undefined) {
       inputTokens += result.usage.input_tokens;

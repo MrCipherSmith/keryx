@@ -33,6 +33,14 @@ export async function readDigestBoard(projectRoot: string) {
   };
 }
 
+/**
+ * The open report for the native session `/product` inspection: exactly what `keryx product open` reads. Same door as the digest's
+ * board: the session command does not import the product module; the CLI registry hands it this function.
+ */
+export function readOpenIntents(projectRoot: string) {
+  return loadOpenReport(projectRoot);
+}
+
 const FLAGS = ["--json"] as const;
 
 function rejectUnknownFlags(command: string, args: readonly string[]): void {

@@ -20,6 +20,11 @@
 // reconstruct the command. The fingerprint and floors stay out of the public
 // projection (`toPublicApproval`), which is the shape `pending-approval.schema.json`
 // closes.
+//
+// One exception: the native session adapter (`session/question-service.ts`) stores
+// the reviewable action itself as `summary`, up to 8 KiB of the tool input, so the
+// person answering sees what they allow. It is stored only when redaction leaves
+// it unchanged and it names no credential-like field, so a secret never lands here.
 
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
@@ -165,17 +170,19 @@ function appendEvidence(event: ApprovalEvidence, dir?: string): void {
 }
 
 /** Create the record for a question that is about to be asked. Throws when the ledger cannot be appended. */
-export function createApproval(input: NewApproval, dir?: string, now: Date = new Date()): ApprovalView {
+export function createApproval(input: NewApproval, dir?: string, now: Date = new Date(), summaryMaxBytes = SUMMARY_MAX): ApprovalView {
   if (!isApprovalId(input.approvalId)) {
     throw new Error("approvalId is not an approval id");
   }
+  if (!Number.isSafeInteger(summaryMaxBytes) || summaryMaxBytes < SUMMARY_MAX || summaryMaxBytes > 8192) throw new Error("invalid approval summary limit");
+  if (summaryMaxBytes !== SUMMARY_MAX && Buffer.byteLength(input.summary, "utf8") > summaryMaxBytes) throw new Error("approval action details exceed the reviewable byte limit");
   ensureKeryxSubdir(["approvals"], dir);
   const stored: StoredRequest = {
     schemaVersion: APPROVAL_SCHEMA_VERSION,
     approvalId: input.approvalId,
     turnId: input.turnId,
     sessionId: input.sessionId,
-    summary: bound(input.summary, SUMMARY_MAX),
+    summary: summaryMaxBytes === SUMMARY_MAX ? bound(input.summary, SUMMARY_MAX) : input.summary,
     scope: bound(input.scope, SCOPE_MAX),
     consequence: bound(input.consequence, CONSEQUENCE_MAX),
     createdAt: now.toISOString(),

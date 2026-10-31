@@ -303,6 +303,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
 
   // ---- Project knowledge ----------------------------------------------------
+  { kind: "cli", name: "hub", group: "Project knowledge", summary: "Connect, sync and exchange revisions with the Team Hub prototype." },
   { kind: "cli", name: "gdgraph", group: "Project knowledge", summary: "Build and query the code dependency graph." },
   { kind: "cli", name: "ctx", group: "Project knowledge", summary: "Run compact context commands and save raw output." },
   { kind: "cli", name: "wiki", group: "Project knowledge", summary: "Manage the local project knowledge base." },

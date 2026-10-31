@@ -1,0 +1,13 @@
+tunnel: <CLOUDFLARE_TUNNEL_ID>
+credentials-file: /run/secrets/tunnel.json
+metrics: 127.0.0.1:20241
+ingress:
+  - hostname: hub.example.com
+    service: http://edge:8080
+    originRequest:
+      access:
+        required: true
+        teamName: example-team
+        audTag:
+          - <CLOUDFLARE_ACCESS_AUD>
+  - service: http_status:404

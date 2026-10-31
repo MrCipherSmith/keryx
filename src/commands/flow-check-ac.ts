@@ -225,6 +225,16 @@ export interface CheckAcOptions {
    * command) passes none, and waits out the underlying per-call bounds.
    */
   readonly signal?: AbortSignal;
+  /**
+   * False: never ask Jev and never resolve its key, whatever the opt-in says — the deterministic path the check takes when Jev
+   * is not configured. A native session passes it: Jev there is a security-local setup boundary (specification 3.1).
+   */
+  readonly askJev?: boolean;
+  /**
+   * False: compute (or read back a matching cached result) without writing the cache file. A native session passes it, since its
+   * owned checkout admits no effect over `.metaproject/data/ac-check/` and an unnamed write would fence it.
+   */
+  readonly persist?: boolean;
 }
 
 export interface CheckAcDeps {
@@ -326,7 +336,7 @@ export async function runCheckAc(cwd: string, id: string, opts: CheckAcOptions =
   }
 
   const acCheckEnabled = await readAcCheckEnabled(cwd);
-  const { key: apiKey } = resolveJevApiKeyResolution(deps.env ?? process.env);
+  const apiKey = opts.askJev === false ? undefined : resolveJevApiKeyResolution(deps.env ?? process.env).key;
   const canAskJev = acCheckEnabled && apiKey !== undefined && apiKey.length > 0 && items.length > 0;
 
   let evaluated: AcCheckVerdict[];
@@ -391,14 +401,16 @@ export async function runCheckAc(cwd: string, id: string, opts: CheckAcOptions =
   const verdicts = [...evaluated, ...notCheckable].sort((a, b) => acNumber(a.id) - acNumber(b.id));
   const at = (deps.now?.() ?? new Date()).toISOString();
 
-  await writeAcCheckCache(cachePath, {
-    key: cacheKey,
-    at,
-    jevAsked,
-    ...(jevError !== undefined ? { jevError } : {}),
-    ...(usage !== undefined ? { usage } : {}),
-    verdicts,
-  });
+  if (opts.persist !== false) {
+    await writeAcCheckCache(cachePath, {
+      key: cacheKey,
+      at,
+      jevAsked,
+      ...(jevError !== undefined ? { jevError } : {}),
+      ...(usage !== undefined ? { usage } : {}),
+      verdicts,
+    });
+  }
 
   return {
     flowId: flow.id,

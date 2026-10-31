@@ -437,3 +437,15 @@ describe("exactly-once lease-expired stays with prune (specification §4.3, arti
     expect(stillThere).toBeUndefined();
   });
 });
+
+describe("native local target scope",()=>{
+ test("empty, foreign and mixed exact target scopes refuse before appending; undefined retains local defaults",async()=>{
+  for(const allowed of [[],[ID.other]]){const root=await busRoot();await writePresence(root,presence(ID.target,"target",NOW,100));expect(await refusal(createPauseLease(root,{holder:HOLDER,toLabel:"@target",scope:"turns",reason:"scope",allowedTargetInstanceIds:allowed,...clock,liveness}))).toBe("unknown-recipient");expect(await allEvents(root)).toHaveLength(0);}
+  const root=await busRoot();await writePresence(root,presence(ID.target,"shared",NOW,100));await writePresence(root,presence(ID.other,"shared",NOW,100));expect(await refusal(createPauseLease(root,{holder:HOLDER,toLabel:"@shared",scope:"turns",reason:"mixed",allowedTargetInstanceIds:[ID.target],...clock,liveness}))).toBe("unknown-recipient");expect(await allEvents(root)).toHaveLength(0);
+  expect((await createPauseLease(root,{holder:HOLDER,toLabel:"@shared",scope:"turns",reason:"legacy",...clock,liveness})).targets.sort()).toEqual([ID.target,ID.other].sort());
+ });
+ test("rename between caller scope selection and actual recipient resolution cannot retarget control",async()=>{
+  const root=await busRoot();await writePresence(root,presence(ID.target,"selected",NOW,100));const selected=[ID.target];await writePresence(root,presence(ID.target,"renamed",NOW,100));await writePresence(root,presence(ID.other,"selected",NOW,100));
+  expect(await refusal(createPauseLease(root,{holder:HOLDER,toLabel:"@selected",scope:"turns",reason:"race",allowedTargetInstanceIds:selected,...clock,liveness}))).toBe("unknown-recipient");expect(await allEvents(root)).toHaveLength(0);
+ });
+});

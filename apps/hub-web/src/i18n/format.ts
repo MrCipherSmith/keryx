@@ -1,0 +1,1 @@
+export function formatDate(value:string,language:string){const date=new Date(value);return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat(language==='ru'?'ru-RU':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(date);}

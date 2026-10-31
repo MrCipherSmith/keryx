@@ -7766,3 +7766,76 @@ the agent's reader. Kill stops the supervised process group without a model
 turn. These commands operate only on tasks tracked by this session.
 In the TUI, unknown slash commands display a collapsible available-command
 list with an eight-line preview (Ctrl+O, then Enter to expand).
+
+## hub
+
+Team Hub prototype for canonical project context, immutable code snapshots and human-gated publication. It is separate from local `flow` state and from `keryx serve`. Run `keryx hub --help` for the exact supported arguments. The `machine` subcommands, which let a Hub run Keryx sessions on this computer, are under [hub machine](#hub-machine).
+
+```bash
+keryx hub serve
+keryx hub status
+keryx hub mcp --url https://hub.example.com/mcp [--token-env NAME]
+keryx hub connect --url http://127.0.0.1:7331 --project <id> [--token-env NAME]
+keryx hub import [--token-env NAME]
+keryx hub sync [--token-env NAME]
+keryx hub submit --message <text> [--token-env NAME]
+keryx hub pull [--revision <id>] [--apply] [--token-env NAME]
+keryx hub fetch --delivery <id> [--token-env NAME]
+```
+
+`serve` uses the `KERYX_HUB_*` server environment. Client credentials use `KERYX_HUB_TOKEN` or the named environment variable; they are never saved in the checkout. `connect` explicitly binds each checkout with a distinct identity and records the authoritative binding in permission-restricted user configuration outside the repository. HTTPS is required for non-loopback URLs.
+
+`status` reads only this checkout's authoritative local binding and prints `url`, `projectId` and `checkoutId`. It requires no token, makes no HTTP requests and does not change project/configuration files or Git state. An unconnected checkout prints a clear message; a malformed or unreadable binding fails with a sanitized error. The repository mirror is never used as a fallback.
+
+`mcp` is a local stdio bridge to the shared Hub MCP endpoint. It needs no checkout or local binding. The agent key comes from `KERYX_HUB_TOKEN` or `--token-env NAME`; optional Cloudflare Service Auth uses both `KERYX_CF_ACCESS_CLIENT_ID` and `KERYX_CF_ACCESS_CLIENT_SECRET`. Credentials are never accepted as raw flags. Remote URLs require HTTPS; loopback HTTP is allowed for local testing. Redirects are refused, stdout contains only MCP messages, and network failures do not automatically retry writes. See [Hub MCP clients](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/hub-mcp/clients.md) for configuration and compatibility limits.
+
+`import` reads bounded OpenSpec/wiki Markdown without executing OpenSpec, and batches larger imports; imported content does not grant approval. `sync` refreshes shared project context under XDG cache and preserves existing index/wiki content, adding only a managed index block and backup.
+
+`submit` sends tracked regular file bytes/modes and subsequent updates/deletions. Symlinks, submodules and unsafe/over-quota snapshots are refused. `pull` previews selected or named revision changes; `--apply` requires safe local state, refuses staged/local/untracked collisions and active Git operations, and records original bytes in a recovery checkpoint before writes. HEAD/index remain unchanged. An unchanged previously applied Hub snapshot can receive another selected revision; subsequent local edits are refused.
+
+`fetch` fetches a published managed branch into a dedicated reference, verifies its receipt and selected delta, and previews the delivered tree. It preserves local edits and leaves reanchoring to normal Git. No PR/merge or dirty reset is performed. A failed command exits nonzero with a visible error.
+
+An older globally installed CLI may not have `hub`; use the prototype source/release standalone client with the same arguments after the entry filename, omitting `hub`:
+
+```bash
+bun --no-env-file --config=/dev/null /absolute/path/to/keryx/src/hub/client-main.ts --help
+```
+
+The standalone client has no `machine` subcommands. They are described next.
+
+### hub machine
+
+The `machine` subcommands enroll this computer with a Hub, say which checkouts it may run, and recover after a crash. They belong to the full Keryx installation: the standalone Hub client stops with "Machine commands require the full Keryx executor installation". The walkthrough is in [Run Keryx sessions on your machines from Team Hub](guides/team-hub-remote-sessions.md) (beta).
+
+```bash
+keryx hub machine readiness
+keryx hub machine pair --url https://hub.example.com --code-env NAME
+keryx hub machine allow --project <id> --checkout <id> --path <absolute-path> --profile <name> [--hub <hub-id>]
+keryx hub machine configure --candidate current --ad-hoc allow|deny --max-runs 1|2 [--hub <hub-id>]
+keryx hub machine recover [--hub <hub-id>] [--action <name>] [<action flags>]
+keryx hub machine unpair [--hub <hub-id>]
+```
+
+`pair`, `allow`, `configure` and `unpair` take the machine's lock, so while `keryx serve` is running they stop with `machine-busy`. Every flag takes one value, may appear once, and its value may not start with `--`; otherwise the command stops with `Invalid hub machine arguments`. A failure exits non-zero and prints a short code. `--hub` is the SHA-256 of the Hub origin, which is also the name of the machine's directory under `hub-machines/` in the Keryx user directory. It can be left out while the machine is enrolled with one Hub, and it is required (`hub-selection-required`) when there are several.
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `readiness` | _(none)_ | Checks the native command coverage descriptor embedded in this build. Prints one JSON line (`descriptorValid`, `releaseReady`, `descriptorDigest`, `counts`, `requiredGaps`) and exits non-zero with `native-coverage-not-ready` unless the build is release-ready. Needs no pairing, network or token. |
+| `pair` | `--url`, `--code-env` | Trades a one-use pairing code for a machine secret. The code is read from the environment variable that `--code-env` names, never from an argument. `--url` is the Hub origin: `https`, or `http` for `localhost`, `127.0.0.1` or `[::1]`, with no path, query or credentials. The enrollment is stored in owner-only files in the Keryx user directory; a Hub that is already enrolled fails with `already-paired`. When `KERYX_CF_ACCESS_CLIENT_ID` and `KERYX_CF_ACCESS_CLIENT_SECRET` are both set, they are sent as Cloudflare Access service-token headers. |
+| `allow` | `--project`, `--checkout`, `--path`, `--profile`, `--hub` | Maps a Hub project and checkout id to a local Git working copy and a remote policy profile (`remote-restricted` or `remote-read-only`). `--path` must be the top level of the working copy (`invalid-checkout` otherwise). A checkout id or path that is already allowed is `mapping-conflict`. Pairing alone allows nothing. |
+| `configure` | `--candidate`, `--ad-hoc`, `--max-runs`, `--hub` | Writes the local policy from the allowances that exist when it runs. `--candidate current` allows the provider and model last saved by `keryx shell` (none, or `fake`, is `provider-setup`). `--ad-hoc allow\|deny` permits or refuses work that is not tied to a Flow. `--max-runs` is `1` or `2`. Each run raises every profile's ad-hoc consent version by one. |
+| `recover` | `--hub`, `--action`, and the action's own flags | Inspects local state or recovers from a crash. See the next table. |
+| `unpair` | `--hub` | Removes the local enrollment and secret and keeps the ledger. It does not revoke the machine in the Hub. It refuses with `recovery-required` while a launch is unresolved. |
+
+`recover` actions:
+
+| `--action` | Flags | What it does |
+|---|---|---|
+| `inspect` (default) | `--session` (optional) | Prints sessions, unresolved commands, recovery claims and uncertain runs as JSON, and changes nothing. Without a running `keryx serve` it prints only the unresolved commands and recovery claims from the durable ledger. |
+| `release-expired-idle` | `--session`, `--native-session`, `--controller-lease`, `--controller-version`, `--session-version`, `--history-version`, `--workspace-baseline`, `--request-id` | Closes an expired, idle session so a person can take over its controller in the Hub. Every pin must match the live session. |
+| `release-stale-daemon` | _(none)_ | Runs offline. Removes the daemon lock that a crashed `keryx serve` left, only if that daemon is proven gone. |
+| `confirm-run-absence` | `--run`, `--request-id` | Checks that a crashed run's processes are gone and reports it to the Hub. Releases nothing. |
+| `release-resolved-run` | `--run`, `--reconciliation`, `--request-id` | After a person resolved the run in the Hub, releases that run's local fences. |
+| `settle-crashed-command` | `--command`, `--request-id` | Records what is known about a session command a crash left unresolved, and sends the receipt to the Hub. |
+
+Every action except `inspect` and `release-stale-daemon` needs `--request-id`, a new id you keep: repeating it returns the recorded result, and reusing it with other flags is `payload-conflict`. The pins and every refusal code are in the [recovery runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/hub-remote-sessions/recovery-runbook.md).

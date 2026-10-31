@@ -87,12 +87,42 @@ describe("pruneArchive wiring at every host that keeps an archive", () => {
     );
   });
 
+  // The three turns share one `runTurn` helper since the remote-session prototype; goal-command.test.ts ("F-001: every
+  // /goal turn") proves each of them offers the working-memory tools, which only a pruneArchive turn is given.
   test("/goal builds turnOptions with pruneArchive and passes them to all three turns", () => {
     const source = read("commands/goal-command.ts");
-    expect(source).toMatch(/const turnOptions\s*=[\s\S]{0,120}?pruneArchive:\s*true/);
-    const turnCalls = source.match(/runAgentTurn\(io,\s*deps,\s*history,\s*[^,]+,\s*turnOptions\)/g) ?? [];
-    expect(turnCalls).toHaveLength(3);
-    expect(source.match(/runAgentTurn\(/g) ?? []).toHaveLength(3);
+    const file = ts.createSourceFile("goal-command.ts", source, ts.ScriptTarget.Latest, true);
+    const declarations: ts.VariableDeclaration[] = [];
+    const calls: ts.CallExpression[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isVariableDeclaration(node)) declarations.push(node);
+      if (ts.isCallExpression(node)) calls.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(file);
+    const declared = (name: string): ts.Expression => {
+      const found = declarations.filter((declaration) => declaration.name.getText(file) === name);
+      expect(found).toHaveLength(1);
+      if (found[0]?.initializer === undefined) throw new Error(`${name} has no initializer`);
+      return found[0].initializer;
+    };
+    const callsOf = (callee: string): ts.CallExpression[] => calls.filter((call) => call.expression.getText(file) === callee);
+    const compact = (node: ts.Node): string => node.getText(file).replace(/\s/g, "");
+
+    // The slate branch carries the literal flag and is the last property, so a caller's turnOptions cannot override it.
+    const options = declared("turnOptions");
+    if (!ts.isObjectLiteralExpression(options)) throw new Error("turnOptions is not an object literal");
+    expect(compact(options.properties.at(-1)!)).toBe(
+      "...(slateSession===undefined?{}:{slateSession,skipCloseTrigger:true,pruneArchive:true})",
+    );
+    // runAgentTurn is called once, inside runTurn, with those options.
+    const turns = callsOf("runAgentTurn");
+    expect(turns.map(compact)).toEqual(["runAgentTurn(io,deps,history,text,turnOptions)"]);
+    const runTurn = declared("runTurn");
+    expect(turns[0]!.getStart(file)).toBeGreaterThan(runTurn.getStart(file));
+    expect(turns[0]!.getEnd()).toBeLessThan(runTurn.getEnd());
+    // Every turn goes through runTurn: the first, the round loop's and the verifier's extra round.
+    expect(callsOf("runTurn").map(compact)).toEqual(["runTurn(parsed.text)", "runTurn(continuationText)", "runTurn(continuationText)"]);
   });
 
   test("the ACP host does not opt into pruning", () => {

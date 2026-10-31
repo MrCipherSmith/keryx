@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.21
+Version: 0.29.27
 
 ## Status
 
@@ -12,6 +12,18 @@ carrying the measurement that found it and the reason it was not done then.
 
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
+>
+> - **0.29.27**: [Human Flow supersession](hub-flow-supersession/README.md) — **future Flow, not implemented**. Human-only retirement of obsolete non-running drafts with reason/replacement/audit and mandatory real validation closing the original16criterion draft after implementation.
+>
+> - **0.29.26**: [Full headless remote sessions](hub-remote-sessions/README.md) — **expanded specification for review, runtime not implemented**. Successor to the original remote-agent draft: persistent SessionHost, source-backed command parity, model/provider routing, versioned queues/config/controllers, owned-workspace continuation and explicit ad-hoc versus Flow-work;24criteria.
+>
+> - **0.29.25**: [Headless session/web chat extension](hub-remote-agents/session-runtime.md) — **design extension, not implemented or included in the current remote-control Flow pins**. Shared persistent SessionHost and source-backed command parity/routing control are required for a later full-function web chat; the sixteen-criterion draft must be amended before claiming this coverage.
+>
+> - **0.29.24**: [Remote agents through Hub](hub-remote-agents/README.md) — **specification for owner review; runtime not implemented**. Outbound machine WebSockets, explicit local policy/enrollment, native coding executor, live progress, exact approvals/cancel/recovery and review-only result handoff. Other vendor adapters remain future work.
+>
+> - **0.29.23**: [Hub context watch](hub-context-watch/README.md) — **implementation verified, owner acceptance pending**. Shared serialized sync, foreground watch, retry/cancellation and exact-cursor reporting verified; persistent serve integration, deployment and public release remain future work.
+>
+> - **0.29.22**: [Hub context watch](hub-context-watch/README.md) — **spec ready for human review; runtime not implemented**. Opt-in foreground incremental context polling, shared-cache serialization, retries and cancellation; persistent serve integration remains future work.
 >
 > _Version numbers below are `package.json` versions at the time of
 > merge. Only some were ever PUBLISHED: releases fire on a `v*` tag

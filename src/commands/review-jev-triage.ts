@@ -102,6 +102,10 @@ async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
 }
 
 export interface JevTriageRunOptions {
+  /** Optional local execution boundary; omitted values retain the CLI defaults. */
+  readonly signal?: AbortSignal;
+  readonly dir?: string;
+  readonly cwd?: string;
   readonly findingsRaw: unknown;
   readonly maxItems?: number;
   readonly threshold?: number;
@@ -125,6 +129,7 @@ export interface JevTriageComputedResult extends JevTriageRunResult {
  * network calls unconditionally when there is anything to score.
  */
 export async function computeJevTriageResult(options: JevTriageRunOptions): Promise<JevTriageComputedResult> {
+  options.signal?.throwIfAborted();
   const { findings, droppedCount } = parseTriageFindings(options.findingsRaw);
   const population = computeTriagePopulation(findings);
   const maxItems = options.maxItems ?? DEFAULT_MAX_JEV_TRIAGE_ITEMS;
@@ -147,7 +152,7 @@ export async function computeJevTriageResult(options: JevTriageRunOptions): Prom
 
     const attemptBatch = async (batch: TriageBatch): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> => {
       try {
-        const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env });
+        const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}), ...(options.dir !== undefined ? { dir: options.dir } : {}), ...(options.signal !== undefined ? { signal: options.signal } : {}) });
         jevCalls += 1;
         if (result.usage.input_tokens !== undefined) {
           inputTokens += result.usage.input_tokens;

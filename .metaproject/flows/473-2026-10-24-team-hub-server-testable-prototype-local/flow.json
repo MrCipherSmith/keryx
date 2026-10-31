@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "473",
+  "slug": "team-hub-server-testable-prototype-local",
+  "title": "Team Hub server-testable prototype: local connector, OpenSpec Flow wiki review and Git delivery",
+  "status": "in-progress",
+  "createdAt": "2026-10-24T21:42:15.961Z",
+  "updatedAt": "2026-10-24T22:04:57.683Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7438d5da598c338b6142008b88bcf78a72b5e70e3fe7ac79eefbae576931d7fa",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-24T21:47:55.444Z",
+            "outcome": "started",
+            "detail": "Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Server/domain implemented and independently verified: transactional SQLite, auth, versioning and protected transitions."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-24T21:47:55.734Z",
+            "outcome": "started",
+            "detail": "Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Hub and related CLI regression: 260 tests passed, 3857 assertions. Wider seven Git fixture hook failures documented separately."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent review and root-cause fixes verified, packaging reviewed; handoff selected, no PR or merge requested."
+    },
+    {
+      "id": "T5",
+      "title": "Implement functional Web UI and its state transitions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-24T21:47:56.140Z",
+            "outcome": "started",
+            "detail": "Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Functional browser journeys exercised: Flow acceptance, proposal review by second principal, persisted restart, desktop/mobile."
+    },
+    {
+      "id": "T6",
+      "title": "Implement local connector and Git delivery with safety tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-24T21:47:56.428Z",
+            "outcome": "started",
+            "detail": "Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two-clone revision exchange, advanced Git base, receipt recovery, dirty safety and symlink regressions green."
+    },
+    {
+      "id": "T7",
+      "title": "Package server deployment and test checklist",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Reproducible source archive and Linux x64 server/client compiled and run; Compose build/healthy/restart persistence passed."
+    },
+    {
+      "id": "T8",
+      "title": "Verify live browser restart and two-checkout end-to-end journeys",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Actual Chromium two-role Flow/wiki journey, restart session, desktop/mobile; live two-clone/Git integration tests passed."
+    },
+    {
+      "id": "T9",
+      "title": "Run independent quality gate and record evidence",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent verifier: lint/typecheck/build/docs green; scoped260tests green; wider gate PARTIAL documented."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-24T21:42:15.961Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-24T21:44:18.665Z",
+      "event": "task-added",
+      "detail": "T5: Implement functional Web UI and its state transitions"
+    },
+    {
+      "at": "2026-10-24T21:44:18.933Z",
+      "event": "task-added",
+      "detail": "T6: Implement local connector and Git delivery with safety tests"
+    },
+    {
+      "at": "2026-10-24T21:44:19.193Z",
+      "event": "task-added",
+      "detail": "T7: Package server deployment and test checklist"
+    },
+    {
+      "at": "2026-10-24T21:44:19.467Z",
+      "event": "task-added",
+      "detail": "T8: Verify live browser restart and two-checkout end-to-end journeys"
+    },
+    {
+      "at": "2026-10-24T21:44:19.758Z",
+      "event": "task-added",
+      "detail": "T9: Run independent quality gate and record evidence"
+    },
+    {
+      "at": "2026-10-24T21:44:20.004Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-24T21:44:20.250Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-24T21:47:55.155Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-24T21:47:55.444Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+    },
+    {
+      "at": "2026-10-24T21:47:55.734Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+    },
+    {
+      "at": "2026-10-24T21:47:56.140Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+    },
+    {
+      "at": "2026-10-24T21:47:56.428Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Autonomous prototype parallel implementation against frozen contract and RED acceptance tests"
+    },
+    {
+      "at": "2026-10-24T22:02:37.129Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-24T22:02:37.394Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-24T22:02:37.660Z",
+      "event": "task-done",
+      "detail": "T5: Implement functional Web UI and its state transitions"
+    },
+    {
+      "at": "2026-10-24T22:02:37.921Z",
+      "event": "task-done",
+      "detail": "T6: Implement local connector and Git delivery with safety tests"
+    },
+    {
+      "at": "2026-10-24T22:02:38.243Z",
+      "event": "task-done",
+      "detail": "T9: Run independent quality gate and record evidence"
+    },
+    {
+      "at": "2026-10-24T22:04:57.147Z",
+      "event": "task-done",
+      "detail": "T7: Package server deployment and test checklist"
+    },
+    {
+      "at": "2026-10-24T22:04:57.413Z",
+      "event": "task-done",
+      "detail": "T8: Verify live browser restart and two-checkout end-to-end journeys"
+    },
+    {
+      "at": "2026-10-24T22:04:57.683Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/hub/server.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/hub/server.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/hub/connector.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/hub/git-delivery.test.ts"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  }
+}
