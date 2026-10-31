@@ -20,6 +20,11 @@
 // reconstruct the command. The fingerprint and floors stay out of the public
 // projection (`toPublicApproval`), which is the shape `pending-approval.schema.json`
 // closes.
+//
+// One exception: the native session adapter (`session/question-service.ts`) stores
+// the reviewable action itself as `summary`, up to 8 KiB of the tool input, so the
+// person answering sees what they allow. It is stored only when redaction leaves
+// it unchanged and it names no credential-like field, so a secret never lands here.
 
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";

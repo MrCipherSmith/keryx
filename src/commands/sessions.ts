@@ -13,6 +13,7 @@ import {
   shortSessionId,
 } from "../session";
 import { sessionLeaseState } from "../session/lease";
+import { terminalSafe } from "../lib/terminal-safe";
 
 export async function sessionsCommand(args: string[]): Promise<void> {
   const sub = args[0] ?? "list";
@@ -57,7 +58,7 @@ export async function sessionsCommand(args: string[]): Promise<void> {
           // A fork is marked in the listing rather than only in `--json`: the
           // ancestry is the whole point of the verb, and a row that looks
           // identical to an unrelated session hides it.
-          (s.parentSessionId !== undefined ? `↳ ${s.title}` : s.title),
+          (s.parentSessionId !== undefined ? `↳ ${terminalSafe(s.title).text}` : terminalSafe(s.title).text),
       );
       // Flow 376 (AC4): a session driven from Telegram shows the topic and every interval.
       if (s.remote !== undefined) {
@@ -134,7 +135,7 @@ export async function sessionsCommand(args: string[]): Promise<void> {
         return;
       }
       console.log(`Forked ${shortSessionId(forked.source.id)} -> ${shortSessionId(forked.handle.summary.id)}`);
-      console.log(`  title:   ${forked.handle.summary.title}`);
+      console.log(`  title:   ${terminalSafe(forked.handle.summary.title).text}`);
       console.log(`  parent:  ${forked.source.id}`);
       console.log(`  history: ${forked.messageCount} context / ${forked.archiveCount} archive`);
       console.log("");

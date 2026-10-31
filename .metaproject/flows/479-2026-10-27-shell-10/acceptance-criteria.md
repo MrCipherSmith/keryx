@@ -1,0 +1,9 @@
+# Acceptance Criteria
+
+## Criteria
+- AC1: Тело в 1, 2 и ровно 10 визуальных строк видно полностью без однострочной обрезки; короткое тело не резервирует пустые 10 строк. Учитываются явные переводы и переносы по ширине. [verify: exec `bun test src/tui/composer-choice.test.ts`]
+- AC2: Для тела свыше 10 визуальных строк область не превышает 10 строк, прокрутка достигает хвоста. Полный допустимый req.question доходит из TUI host до body без среза до 72/8000 символов; тесты проверяют хвост многострочного текста и одной длинной строки, включая текст длиннее 8000 символов. [verify: exec `bun test src/tui/composer-choice.test.ts src/tui/ask-user-bridge.test.ts`]
+- AC3: При resize ширины/высоты переносы и высота пересчитываются, ввод и выбор сохраняются, хвост доступен. На низком терминале область тела уменьшается ниже 10 строк, варианты доступны через свою навигацию/прокрутку и не вытесняются полностью. [verify: exec `bun test src/tui/composer-choice.test.ts`]
+- AC4: Ctrl+O переключает текст/ответы; стрелки, PageUp/PageDown и мышь прокручивают тело без смены выбора. Enter, Esc, клики, свой ответ, причина, preselection и accept-delay сохраняют семантику; callers без body сохраняют поведение. [verify: exec `bun test src/tui/composer-choice.test.ts src/commands/operator-confirm-tools.test.ts src/tui/ask-user-transcript.test.ts`]
+- AC5: Отмена, abort, обычный ответ и победа Telegram в гонке освобождают обработчики/ScrollBox и возвращают фокус; следующий вопрос открывается с начала без offset/ресурсов предыдущего. [verify: exec `bun test src/tui/composer-choice.test.ts src/tui/ask-user-race.test.ts`]
+- AC6: В живом keryx shell оператор читает начало и конец вопроса в карточке и отвечает. Проверены короткий/10-строчный/>10-строчный тексты, одна длинная строка, resize и низкий терминал. В journal.md сохранены размеры терминала, действия и результат со скриншотом или записью прогона. [verify: judged]

@@ -37,6 +37,14 @@ test("demote shares actual registry domain guard and refuses strangers, malforme
  expect(await executeTasksIntegration(f.context,"tasks.output",{taskId:started.jobId,cursor:-1})).toMatchObject({ok:false,error:{code:"invalid-arguments"}});
  }finally{await f.cleanup();}
 });
+test("a private native checkpoint task is never listed, read, demoted or killed through the task commands",async()=>{
+ const f=await fixture(); try{
+ const hidden=await f.jobs.start("fixture",{phase:"foreground",visibility:"private"}); if(!hidden.ok)throw new Error("fixture");
+ expect(await executeTasksIntegration(f.context,"tasks",{})).toMatchObject({ok:true,data:[]});
+ for(const name of ["tasks.output","tasks.kill","demote"])expect(await executeTasksIntegration(f.context,name,{taskId:hidden.jobId})).toMatchObject({ok:false,error:{code:"not-found"}});
+ expect(f.jobs.get(hidden.jobId,{includePrivate:true})).toMatchObject({status:"running",phase:"foreground"});
+ }finally{await f.cleanup();}
+});
 test("task actions require fresh host authority; no arbitrary input actor or process authority",async()=>{
  const f=await fixture();try{
  const started=await f.jobs.start("fixture");if(!started.ok)throw new Error("fixture");f.context.authorize=async()=>{throw new Error("stale");};
@@ -48,7 +56,7 @@ test("task actions require fresh host authority; no arbitrary input actor or pro
 test("approval answers resolve only exact current live broker action and consume once",async()=>{
  const f=await fixture();let delivered!:()=>void;const ready=new Promise<void>(resolve=>{delivered=resolve;});
  const service=createSessionApprovalService({dir:path.join(f.cwd,"approvals"),sessionId:f.context.sessionId,connected:()=>true,deliver(){delivered();}});
- const waiter=service.request({runId:"run-one",turnId:"turn-one",policyDigest:f.context.policyDigest,toolName:"write_file",input:'{"path":"a.txt"}',fingerprint:"private-action-key"});await ready;
+ const waiter=service.request({runId:"run-one",turnId:"turn-one",policyDigest:f.context.policyDigest,toolName:"write_file",risk:"write",input:'{"path":"a.txt"}',fingerprint:"private-action-key"});await ready;
  f.context.approvals={pending:service.pending,answer:async input=>service.answer({...input,actorId:f.context.actorId})};
  const question=service.pending()[0]!;
  expect(await executeTasksIntegration(f.context,"approvals.allow-once",{...question,fingerprint:"b".repeat(64)})).toMatchObject({ok:false,error:{code:"not-found"}});

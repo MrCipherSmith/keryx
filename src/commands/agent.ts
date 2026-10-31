@@ -56,6 +56,7 @@ import { extractFilePathsFromToolInput } from "../harness/hooks/runtime";
 import type { HookFireResult } from "../harness/hooks/runtime";
 import type { PolicyOutcome } from "../harness/policy/types";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import type { ToolRisk } from "../harness/tool/types";
 import {
   parseSubmitResultInput,
   SUBMIT_RESULT_TOOL_DEFINITION,
@@ -178,6 +179,8 @@ export interface ApprovalMeta {
    */
   fingerprint: string;
   destructive: boolean;
+  /** The tool's declared risk class (`definition.risk`); `destructive` above is the per-command escalation of it. */
+  risk?: ToolRisk;
   /**
    * The command mentions the agent's own permission/credential files. Approving
    * it may hand the agent authority it did not have; it is never auto-approved
@@ -5962,6 +5965,7 @@ async function executeCallUnbounded(
           ? false
           : await requestApproval(call.name, call.input, {
               fingerprint,
+              risk,
               destructive,
               ...(credentials ? { credentials } : {}),
               ...(publishLease ? { publishLease } : {}),
@@ -6039,6 +6043,7 @@ async function executeCallUnbounded(
           ? false
           : await requestApproval(call.name, call.input, {
               fingerprint,
+              risk,
               destructive: false,
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
@@ -6126,6 +6131,7 @@ async function executeCallUnbounded(
           ? false
           : await requestApproval(call.name, call.input, {
               fingerprint,
+              risk,
               destructive,
               ...(credentials ? { credentials } : {}),
               ...(card !== undefined ? { alwaysAsk: true, card, ...(cardTitle !== undefined ? { cardTitle } : {}) } : {}),
@@ -6186,6 +6192,7 @@ async function executeCallUnbounded(
           ? false
           : await requestApproval(call.name, call.input, {
               fingerprint,
+              risk,
               destructive: false,
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(readUntrusted ? { untrustedOrigin: true } : {}),

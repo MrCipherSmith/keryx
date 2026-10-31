@@ -1,4 +1,4 @@
-import { executePlanCommand } from "../session/commands/plan";
+import { executePlanCommand } from "../session/commands/plan-command";
 import { applyRuntimeSwitchToSlate } from "../session/runtime-switch";
 import { requestSessionInterrupt } from "../session/commands/session-control";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
@@ -6968,7 +6968,8 @@ export async function launchTuiAgentShell(opts: {
         dock: (dockSignal) =>
           chrome.withOverlay(() =>
             showComposerChoiceDetailed(otui, r, chrome.dock, {
-              title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
+              title: "Question",
+              body: req.question,
               subtitle: "Pick an option, or type your own answer · Esc cancels",
               cancelId: ASK_USER_CANCEL,
               // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)

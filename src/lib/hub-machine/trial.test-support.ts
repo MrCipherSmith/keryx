@@ -86,6 +86,9 @@ async function startServeChild(machineRoot:string,candidate?:string):Promise<Ser
  const deadline=Date.now()+30000;let port:number|undefined;
  while(Date.now()<deadline&&port===undefined&&handle.exitCode===null){const line=stdout.find(l=>/listening on http:\/\/127\.0\.0\.1:\d+/.test(l));if(line)port=Number(/127\.0\.0\.1:(\d+)/.exec(line)![1]);else await Bun.sleep(20);}
  if(port===undefined){handle.kill('SIGKILL');await exited;throw new Error(`trial-serve-not-listening: ${JSON.stringify({stdout,stderr}).slice(0,4000)}`);}
+ // serve prints its listening line first and starts the Hub bridges in the background: a caller gets the start-up state it always saw only once serve says its bridges started or a bridge notice says why not.
+ const bridgesDeadline=Date.now()+30000;
+ while(Date.now()<bridgesDeadline&&handle.exitCode===null&&!stdout.some(l=>/machine bridges started|Hub machine:/.test(l)))await Bun.sleep(20);
  return{pid:handle.pid,argv,stdout,stderr,exited,servePort:port,serveToken:''};
 }
 /** Terminate like an operator's Ctrl-C (serve drains bridges first); a child that ignores it is killed and reported as such. */

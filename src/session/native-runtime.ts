@@ -184,7 +184,7 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
     workingDirectory: tool.workingDirectory ?? options.cwd,
     invoke: async (input: Record<string, unknown>, context?: Parameters<typeof tool.invoke>[1]) => {
       if (workspaceConflict) throw new NativeRuntimeError("workspace-conflict");
-      if (["shell_job_kill", "shell_task_kill"].includes(tool.definition.name)) { const id = input.task_id ?? input.job_id; if (typeof id === "string" && jobs.get(id)?.visibility === "private") return { output: "private-native-operation", isError: true }; }
+      if (["shell_job_kill", "shell_task_kill"].includes(tool.definition.name)) { const id = input.task_id ?? input.job_id; if (typeof id === "string" && jobs.get(id, { includePrivate: true })?.visibility === "private") return { output: "private-native-operation", isError: true }; }
       if (options.policy !== undefined) {
         const risk = tool.definition.risk;
         if (risk === undefined) return { output: "local-policy-denied", isError: true };

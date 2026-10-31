@@ -120,7 +120,7 @@ test.skipIf(!launcher.available)(`release guard re-executes the committed invent
   status.sources[0] = { ...status.sources[0]!, sha256: "0".repeat(64) };
   const drifted = await judgeNativeCoverage(root, stale, run, hashes, false);
   expect(drifted.result.blockers.map((row) => `${row.code}:${row.subject}`)).toEqual(expect.arrayContaining([expect.stringMatching(/^source-drift:status:/), "stale-receipt:status.default"]));
-  expect(checkEmbeddedDescriptor(drifted, descriptor, false)).toEqual({ ok: false, code: "inventory-stale" });
+  expect(checkEmbeddedDescriptor(drifted, descriptor, false)).toEqual({ ok: false, code: "inventory-stale", detail: "command status" });
   // An omitted nested action: the catalogue advertises a handler with no audit row.
   const omitted = structuredClone(inventory);
   omitted.variants = omitted.variants.filter((row) => row.id !== "rewind.apply");

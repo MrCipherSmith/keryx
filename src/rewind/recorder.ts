@@ -32,7 +32,7 @@ export type RewindFilesOutcome = ({ ok: true; preRewindSeq: number } & RestoreRe
 
 export interface RewindRecorder {
   beginTurn(input: { archiveIndex: number | null; prompt: string }): void;
-  /** Snapshot the work tree once per turn, right before the first mutating tool call. Never throws. */
+  /** Snapshot the work tree once per turn, right before the first mutating tool call. Local mode never throws (failures go to `onError`); native mode rethrows so the host can stop or record an unconfirmed checkpoint. */
   beforeMutation(): Promise<void>;
   snapshotCount(): number;
   entries(): RewindEntry[];

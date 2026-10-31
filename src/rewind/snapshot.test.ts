@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { exists, makeProject, write } from "./rewind.test-helpers";
-import { initShadow, REWIND_MAX_FILE_BYTES, shadowRepo } from "./shadow";
+import { git, gitOk, initShadow, REWIND_MAX_FILE_BYTES, shadowRepo } from "./shadow";
 import { captureTree, changedFiles } from "./snapshot";
 
 async function fresh() {
@@ -62,6 +62,15 @@ test("files over 5 MB are skipped and reported by name", async () => {
   const empty = await captureTree(repo);
   const names = await changedFiles(repo, (await captureTree(repo)).tree, empty.tree);
   expect(names).toEqual([]);
+});
+
+test("a local git command is not capped at 6 MiB of output", async () => {
+  const { repo } = await fresh();
+  const size = 7 * 1024 * 1024;
+  const oid = (await gitOk(repo, ["hash-object", "-w", "--stdin"], { stdin: "x".repeat(size) })).trim();
+  const result = await git(repo, ["cat-file", "blob", oid]);
+  expect(result.code).toBe(0);
+  expect(result.stdout.length).toBe(size);
 });
 
 test("a run with GIT_DIR and GIT_WORK_TREE in the parent env behaves the same", async () => {

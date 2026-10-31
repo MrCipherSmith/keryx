@@ -84,11 +84,12 @@ test("host approval API confirms consumption of the exact active waiter before a
   const patch = "diff --git a/approved.txt b/approved.txt\nnew file mode 100644\n--- /dev/null\n+++ b/approved.txt\n@@ -0,0 +1 @@\n+approved\n";
   const { host, cwd } = await fixture([callRound("patch", "apply_patch", JSON.stringify({ patch })), okReply], false);
   let delivered!: () => void; const delivery = new Promise<void>((resolve) => { delivered = resolve; });
-  const unsubscribe = host.subscribeApprovals(() => delivered());
+  let summary = ""; const unsubscribe = host.subscribeApprovals((question) => { summary = question.summary; delivered(); });
   try {
     const applications: string[] = []; const offOutcome = host.subscribeApprovalOutcome((event) => applications.push(`${event.decision}:${event.application}`));
     await message(host, "approval", "Create approved.txt"); await delivery;
     expect(await Bun.file(join(cwd, "approved.txt")).exists()).toBe(false);
+    expect(summary.split("\n")[0]).toBe("apply_patch (risk: write)");
     const pending = host.pendingApprovals()[0]!; const current = await host.inspect();
     const applied = await host.answerApproval({ approvalId: pending.approvalId, runId: "run-approval", turnId: "turn-approval", actorId: "human", request: {
       expectedRunVersion: 1, expectedSessionVersion: current.version, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 },
@@ -879,6 +880,27 @@ test("native lifecycle handoff forks through an executed public cursor into the 
       expect(JSON.stringify(script.requests[0]?.messages)).not.toContain("Second excluded native turn");
       expect((await host.history()).messages.some((item) => item.text.includes("Second excluded"))).toBe(true);
     } finally { await forkHost.dispose(); }
+  } finally { await host.dispose(); }
+});
+
+test("a native fork whose title a terminal or card would draw differently is refused before any history is copied", async () => {
+  let refusal = ""; let copied = 0;
+  const { host } = await fixture([okReply, okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { lifecycle: {
+    async apply(input) {
+      try { await input.forkNative({ throughHistoryCursor: 2, expectedHistoryVersion: input.source.historyVersion, targetCwd: input.sourceCwd, title: "Fork \u202echild" }); copied++; }
+      catch (cause) { refusal = cause instanceof Error ? cause.message : String(cause); }
+      return { ok: false, error: { code: "invalid-arguments", message: "invalid-arguments" } };
+    }, async list() { return { ok: true, value: [] }; }, async open() { return { ok: false, error: { code: "not-found", message: "not-found" } }; },
+  } });
+  try {
+    await message(host, "fork-first", "First retained native turn"); await idle(host);
+    await message(host, "fork-second", "Second native turn"); await idle(host);
+    const row = await host.inspect(); const catalogue = await host.catalogue();
+    const request: Control["CommandInvoke"] = { commandName: "sessions.fork", arguments: { throughHistoryCursor: 2, expectedHistoryVersion: row.historyVersion,
+      targetCheckoutId: row.checkoutId, expectedInventoryVersion: 1, expectedHeadSha: "a".repeat(40), title: "Fork \u202echild" }, catalogueDigest: catalogue.catalogueDigest,
+      expectedSessionVersion: row.version, expectedConfigVersion: row.config.configVersion, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, busyPolicy: "reject" };
+    await host.apply({ kind: "command", operationId: "fork-unsafe-op", payloadDigest: canonicalDigest(request), actorId: "human", request });
+    expect(refusal).toBe("native-fork-title-unsafe"); expect(copied).toBe(0);
   } finally { await host.dispose(); }
 });
 

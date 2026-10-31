@@ -43,6 +43,9 @@ function legacyCheck(dir: string): void { if (existsSync(path.join(dir, 'machine
     throw new MachineError(legacy.isSymbolicLink() ? 'unsafe-config-path' : 'legacy-enrollment-migration-required');
 } }
 export function listEnrollments(dir: string): MachineEnrollment[] {
+    // A machine with no Hub (and no legacy enrollment to migrate) holds nothing to vet: its config directory is none of this module's business.
+    if (!existsSync(path.join(dir, 'hub-machines')) && !existsSync(path.join(dir, 'machine')))
+        return [];
     if (existsSync(dir))
         ensurePrivateDirectory(dir);
     legacyCheck(dir);

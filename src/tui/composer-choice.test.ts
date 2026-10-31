@@ -834,3 +834,221 @@ otuiTest("hand-back: nested choices on two docks unwind in either order without 
     h.destroy();
   }
 });
+
+for (const count of [1, 2, 10, 15]) {
+  otuiTest(`question body viewport: ${count} lines`, async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui);
+    h.resize(100, 50);
+    const answer = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+      title: "Question", acceptDelayMs: 0, body: Array.from({ length: count }, (_, i) => `QUESTION-${i}`).join("\n"),
+      cancelId: "cancel", options: [{ id: "yes", label: "Yes", description: "" }],
+    });
+    try {
+      await h.flush();
+      const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+      expect(scroll).toBeDefined();
+      expect(scroll.height).toBe(Math.min(count, 10));
+      const initialFrame = h.captureCharFrame();
+      for (let i = 0; i < Math.min(count, 10); i++) expect(initialFrame).toContain(`QUESTION-${i}`);
+      scroll.scrollTo(1_000_000);
+      await h.flush();
+      expect(h.captureCharFrame()).toContain(`QUESTION-${count - 1}`);
+      h.mockInput.pressEnter();
+      expect(await answer).toBe("yes");
+    } finally { h.destroy(); }
+  });
+}
+
+otuiTest("question body wraps without truncation and adapts to resize", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const controller = new AbortController();
+  const answer = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question", body: "START" + "x".repeat(9000) + "TAIL", cancelId: "cancel", signal: controller.signal,
+    options: [{ id: "yes", label: "Yes", description: "" }],
+  });
+  try {
+    await h.flush();
+    const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+    expect(scroll).toBeDefined();
+    expect(scroll.height).toBeLessThanOrEqual(10);
+    h.resize(60, 18);
+    await h.flush();
+    expect(scroll.height).toBeLessThan(10);
+    scroll.scrollTo(1_000_000);
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("TAIL");
+    expect(h.captureCharFrame()).toContain("Yes");
+    controller.abort();
+    expect(await answer).toBe("cancel");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(scroll.isDestroyed).toBe(true);
+  } finally { h.destroy(); }
+});
+
+
+otuiTest("question body: keyboard and mouse scroll without changing the picked option", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  h.resize(100, 50);
+  const answer = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question", acceptDelayMs: 0,
+    body: Array.from({ length: 40 }, (_, i) => `BODY-${i}`).join("\n"),
+    cancelId: "cancel",
+    options: [{ id: "a", label: "Alpha", description: "" }, { id: "b", label: "Beta", description: "" }],
+  });
+  try {
+    await h.flush();
+    const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+    h.mockInput.pressArrow("down"); // Beta
+    h.mockInput.pressKey("o", { ctrl: true });
+    await h.flush();
+    expect(scroll.focused).toBe(true);
+    h.mockInput.pressArrow("down");
+    await h.flush();
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    const afterArrow = scroll.scrollTop;
+    h.mockInput.pressKey("\x1b[6~"); // PageDown
+    await h.flush();
+    expect(scroll.scrollTop).toBeGreaterThan(afterArrow);
+    h.mockInput.pressKey("\x1b[5~"); // PageUp
+    await h.flush();
+    expect(scroll.scrollTop).toBeLessThanOrEqual(afterArrow);
+    scroll.scrollTo(0);
+    await h.flush();
+    await h.mockMouse.scroll(scroll.x + 1, scroll.y + 1, "down");
+    await h.flush();
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    h.mockInput.pressKey("o", { ctrl: true });
+    await h.flush();
+    expect(scroll.focused).toBe(false);
+    h.mockInput.pressEnter();
+    expect(await answer).toBe("b");
+    await h.flush();
+    expect(h.chrome.textarea.focused).toBe(true);
+  } finally { h.destroy(); }
+});
+
+otuiTest("question body: closing destroys the scrollbox and the next question starts at the top", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  try {
+    for (const mode of ["answer", "escape", "abort"] as const) {
+      const controller = new AbortController();
+      const answer = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+        title: "Question", acceptDelayMs: 0, signal: controller.signal,
+        body: Array.from({ length: 30 }, (_, i) => `REOPEN-${i}`).join("\n"),
+        cancelId: "cancel", options: [{ id: "yes", label: "Yes", description: "" }],
+      });
+      await h.flush();
+      const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+      expect(scroll.scrollTop).toBe(0);
+      expect(h.captureCharFrame()).toContain("REOPEN-0");
+      scroll.scrollTo(1_000_000);
+      await h.flush();
+      h.mockInput.pressKey("o", { ctrl: true });
+      await h.flush();
+      if (mode === "answer") h.mockInput.pressEnter();
+      else if (mode === "escape") h.mockInput.pressEscape();
+      else controller.abort();
+      expect(await answer).toBe(mode === "answer" ? "yes" : "cancel");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await h.flush();
+      expect(scroll.isDestroyed).toBe(true);
+      expect(h.chrome.textarea.focused).toBe(true);
+    }
+  } finally { h.destroy(); }
+});
+
+
+for (const kind of ["own", "reason"] as const) {
+  otuiTest(`question body: ${kind} input survives realistic host resize`, async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui);
+    h.resize(100, 50);
+    const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, {
+      ...ownRequest(), title: "Question", acceptDelayMs: 0,
+      subtitle: "Pick an option, or type your own answer · Esc cancels",
+      body: Array.from({ length: 25 }, (_, i) => `HOST-${i}`).join("\n"),
+    });
+    try {
+      await h.flush();
+      const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+      h.mockInput.pressArrow("down"); // Option B
+      h.resize(60, 18);
+      await h.flush();
+      expect(h.captureCharFrame()).toContain("Option B");
+      expect(scroll.height).toBeLessThan(10);
+      if (kind === "own") {
+        h.mockInput.pressArrow("down");
+        await h.flush();
+        expect(h.captureCharFrame()).toContain("Свой ответ");
+        h.mockInput.pressEnter();
+      } else h.mockInput.pressTab();
+      await h.flush();
+      await h.mockInput.typeText("kept through resize");
+      h.resize(80, 24);
+      await h.flush();
+      expect(h.captureCharFrame()).toContain("kept through resize");
+      h.mockInput.pressEnter();
+      expect(await pending).toEqual(kind === "own" ? { kind: "own", text: "kept through resize" } : { kind: "reason", id: "b", reason: "kept through resize" });
+    } finally { h.destroy(); }
+  });
+}
+
+otuiTest("question body: topic winner destroys mounted body and releases selection listeners", async () => {
+  const { raceAskUser } = await import("./ask-user-race");
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const count = () => h.renderer.listenerCount("selection");
+  const baseline = count();
+  let topicAnswer!: (value: string) => void;
+  const topic = new Promise<string>((resolve) => { topicAnswer = resolve; });
+  try {
+    const pending = raceAskUser({
+      turnSignal: new AbortController().signal,
+      topic: () => topic,
+      dock: (signal) => showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, {
+        ...ownRequest(), signal, body: "first\n".repeat(30) + "last",
+      }),
+    });
+    await h.flush();
+    const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+    expect(scroll).toBeDefined();
+    topicAnswer("b");
+    expect(await pending).toEqual({ from: "topic", answer: "b" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await h.flush();
+    expect(scroll.isDestroyed).toBe(true);
+    expect(count()).toBe(baseline);
+    expect(h.chrome.textarea.focused).toBe(true);
+  } finally { h.destroy(); }
+});
+
+otuiTest("question body reserves the actual multiline composer height", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  h.resize(80, 24);
+  h.chrome.input.value = Array.from({ length: 8 }, (_, i) => `draft-${i}`).join("\n");
+  const controller = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question", acceptDelayMs: 0, signal: controller.signal,
+    body: Array.from({ length: 30 }, (_, i) => `MULTILINE-${i}`).join("\n"),
+    cancelId: "cancel", options: [{ id: "yes", label: "VISIBLE-ANSWER", description: "" }],
+  });
+  try {
+    await h.flush();
+    const scroll = h.chrome.dock.getChildren().find((n) => n.id.startsWith("ch-body-scroll")) as InstanceType<OtuiBundle["core"]["ScrollBoxRenderable"]>;
+    expect(h.chrome.textarea.y + h.chrome.textarea.height).toBeLessThanOrEqual(h.renderer.height);
+    expect(h.captureCharFrame()).toContain("VISIBLE-ANSWER");
+    scroll.scrollTo(1_000_000);
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("MULTILINE-29");
+    h.mockInput.pressEnter();
+    expect(await pending).toBe("yes");
+  } finally {
+    controller.abort();
+    h.destroy();
+  }
+});

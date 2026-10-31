@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added
+- **Team Hub remote sessions (beta): run full headless Keryx sessions on your own machines from the Hub web (PR #1098).** An operator picks an enrolled machine, a checkout you allowed on it and a profile, and that machine's `keryx serve` runs the native Keryx agent under its local policy. The checkout, the provider keys and every tool call stay on the machine; the Hub never runs project code. Live multi-machine checks, a Hub behind public Cloudflare Access and real providers are pending owner verification, so this is a beta. The Team Hub itself (`keryx hub`) is new in this release too: see the [CLI reference](docs/docs/cli-reference.md#hub). Guide: [Run Keryx sessions on your machines from Team Hub](docs/docs/guides/team-hub-remote-sessions.md).
+- **Machine enrollment with one-use pairing codes.** On the Machines screen an operator creates a code for the selected project; it is shown once, works once and expires after 10 minutes. On the machine, `keryx hub machine pair --url <hub-url> --code-env <name>` reads the code from an environment variable, never from an argument, and keeps the machine secret in owner-only files outside the repository. Pairing alone lets the Hub run nothing.
+- **`keryx hub machine` commands:** `pair`, `allow` (map a Hub checkout id to a local Git checkout and a `remote-restricted` or `remote-read-only` profile), `configure` (provider and model, ad-hoc work on or off, 1 or 2 concurrent runs), `readiness`, `recover` and `unpair`. `keryx serve` connects every enrolled Hub on its own, outbound only. See [hub machine](docs/docs/cli-reference.md#hub-machine).
+- **Headless sessions started from the Hub web.** An operator creates a session on an online machine's clean checkout, claims control in the tab, and sends messages as managed Flow work (an in-progress Flow, pinned to its specification and criteria) or as ad-hoc work the machine allowed. Sessions have a history, an editable message queue, model and routing settings, a command catalogue, resume, close and fork. The result is a review-only code revision; nothing is accepted, selected or pushed to Git for you.
+- **Remote approvals, cancellation and recovery.** A tool call that needs approval shows as a card with Allow once and Deny; the Hub shows recorded, delivered and applied separately, an answer applies to that one call only, and an unanswered card expires as a Deny after 120 seconds. Cancel is a request that becomes Cancelled only after the machine verifies its processes stopped, and shows Unknown otherwise. After a crash of `keryx serve`, `keryx hub machine recover` walks through explicit steps and never restarts a run by itself. See the [recovery runbook](docs/requirements/hub-remote-sessions/recovery-runbook.md).
+- **A Hub behind Cloudflare Access.** When `KERYX_CF_ACCESS_CLIENT_ID` and `KERYX_CF_ACCESS_CLIENT_SECRET` are both set, pairing, the machine connection and the Hub reads send them as a service token. Both or neither; an incomplete or invalid value is refused before any request. The token goes only to an `https` (or loopback) Hub URL, redirects are never followed, and it is never stored or shown in an error.
+- **New Hub web screens:** Machines (pairing codes, checkout HEAD and clean state, profile readiness, revoke), Sessions, Runs (progress, approvals, cancel, recovery) and a **Run on a machine** action on an in-progress Flow. English and Russian, down to a 375 px phone width.
+
+### Changed
+- **`keryx serve` prints its listening line before the Hub bridges connect.** It used to wait for every Hub handshake (up to 10 seconds each) before it printed the line, started its services or took Ctrl-C. The signal handlers and services now come first, the bridges connect in the background, and serve prints `machine bridges started: N` when they are up. A bridge that fails to stop is reported as `Hub machine: machine-stop-failed` and no longer keeps the listener from draining.
+
+### Fixed
+- **`/rewind` no longer stops the local shadow git at 6 MiB of output or 30 seconds.** Those caps killed git, so the first snapshot of a large work tree could fail and a restore could be partial.
+- **Private checkpoint tasks no longer appear in task lists.** A native session's own checkpoint tasks are hidden from task lists, output reads and kill, including the model's task tools, unless a caller asks for private tasks.
+- **A machine with no Hub no longer gets an `unsafe-config-path` notice on every `keryx serve`** when an ancestor of the Keryx config directory is a symlink or not owner-only. The directory is vetted only when Hub state is there.
+
+### Security
+- **Approval cards refuse hidden characters.** A native session's tool-approval card whose text holds bidirectional-control, zero-width or C1 control characters is not offered and the call is denied, because such a card can show a command in a different order than it runs. The card now names the tool and its risk class.
+- **`keryx sessions list` prints titles terminal-safe.** Control characters in a session title are escaped in the list and in `sessions fork` output, and a remote fork title that hides characters is refused.
+
 ## [0.3.135] - 2026-10-29
 
 ### Changed

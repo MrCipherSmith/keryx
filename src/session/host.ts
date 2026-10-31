@@ -25,6 +25,7 @@ import { OWNED_CONTROL_COMMANDS, type OwnedControlCommand } from "../remote-cont
 import { lifecycleCommands, lifecycleMutationCommands, type SessionLifecycleInput } from "./host-lifecycle";
 import { createSessionUserQuestions } from "./user-questions";
 import { createNativeQuestionJournal } from "./question-journal";
+import { hiddenInCard } from "../lib/card-safe";
 import { createSessionApprovalService, type SessionApprovalQuestion, type SessionApprovalOutcome } from "./question-service";
 import type { NativeCheckObservation, NativeTurnObservation, NativeTurnObservationPayload, QueuedAdmissionAuthority, SessionHostOptions, SessionHostOperation, SessionHostPort, SessionHostReceipt, SessionOwnedResource, SessionPageQuery } from "./host-types";
 export type * from "./host-types";
@@ -363,7 +364,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     record.activeRunId = operation.runId; record.activeTurnId = operation.turnId; record.state = "busy"; record.version++;
     const abort = new AbortController();
     const executor = { hostId, nativeSessionId: handle.summary.id, generation: turnOrdinal };
-    const existingTasks = new Set(options.runtime.jobs.list().map((task) => task.jobId));
+    const existingTasks = new Set(options.runtime.jobs.list({ includePrivate: true }).map((task) => task.jobId));
     const turnLog = createTurnObservationLog(handle.dir, operation.runId);
     const observe = (body: NativeTurnObservationPayload) => {
       const observation: NativeTurnObservation = { sessionId: record.sessionId, runId: operation.runId, turnId: operation.turnId, executor,
@@ -408,7 +409,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
           beforeMutation: async () => {
             const before = await options.workspace.verify(record.workspaceBaseline); if (!before.ok) throw new SessionHostError("workspace-conflict");
             if (recorder !== undefined) { try { await scopedRewind({ kind: "run", signal: abort.signal, beforeAction: (toolName) => io.beforeAction!({ kind: "tool", toolName, signal: abort.signal }) }, () => recorder!.beforeMutation()); }
-              catch (cause) { if (abort.signal.aborted) throw cause; if (options.runtime.jobs.list().some(task => task.visibility === "private" && task.status === "running")) { record.state = "recovery-required"; state(); throw new SessionHostError("checkpoint-stop-unconfirmed"); }
+              catch (cause) { if (abort.signal.aborted) throw cause; if (options.runtime.jobs.list({ includePrivate: true }).some(task => task.visibility === "private" && task.status === "running")) { record.state = "recovery-required"; state(); throw new SessionHostError("checkpoint-stop-unconfirmed"); }
                 // Only a code-shaped cause is shown: a raw Git message can carry local paths.
                 const unavailable = cause instanceof Error && /^[a-z0-9-]{1,64}$/.test(cause.message) ? cause.message : "checkpoint-capture-failed";
                 publishMessage("system-receipt", `A complete checkpoint is unavailable for this turn (${unavailable}); ordinary coding continues within its existing policy.`, operation.runId, operation.turnId); }
@@ -419,7 +420,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
             observe({ kind: "progress", text: summary, toolName }); publishMessage("tool-summary", summary, operation.runId, operation.turnId); },
           onUsage: (usage) => observe({ kind: "usage", usage, source: "agent", candidateId: snapshot.effectiveCandidateId }),
           requestApproval: (toolName, input, meta) => meta === undefined ? Promise.resolve(false) : approvals.request({ runId: operation.runId, turnId: operation.turnId,
-            policyDigest: snapshot.config.policyDigest, toolName, input, fingerprint: meta.fingerprint,
+            policyDigest: snapshot.config.policyDigest, toolName, input, fingerprint: meta.fingerprint, risk: meta.destructive ? "destructive" : meta.risk ?? "write",
             signal: meta.signal === undefined ? abort.signal : AbortSignal.any([abort.signal, meta.signal]),
           }),
         };
@@ -512,8 +513,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         publishMessage("system-receipt", terminal.reason, operation.runId, operation.turnId); record.state = "recovery-required"; }
       finally {
         clearTimeout(deadline);
-        const unknownTasks = options.runtime.jobs.list().filter(task => !existingTasks.has(task.jobId) && task.owner === undefined && task.status === "running");
-        const tasks = options.runtime.jobs.list().filter(task => task.owner?.kind === "run" && task.owner.identity === operation.runId);
+        const unknownTasks = options.runtime.jobs.list({ includePrivate: true }).filter(task => !existingTasks.has(task.jobId) && task.owner === undefined && task.status === "running");
+        const tasks = options.runtime.jobs.list({ includePrivate: true }).filter(task => task.owner?.kind === "run" && task.owner.identity === operation.runId);
         if (unknownTasks.length > 0 || tasks.some((task) => task.status === "running") || record.state === "recovery-required") terminal.outcome = "unknown";
         // A run whose owned work outlives it has no proven cessation: the session is fenced with it, never idle beside a live owned process.
         if (terminal.outcome === "unknown") record.state = "recovery-required";
@@ -1100,6 +1101,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
           const args = request.arguments;
           if (request.commandName !== "sessions.fork" || !object(args) || args.throughHistoryCursor !== input.throughHistoryCursor || args.expectedHistoryVersion !== input.expectedHistoryVersion
             || args.title !== input.title || input.expectedHistoryVersion !== record.historyVersion || active !== undefined || !authorized(operation) || opened.lease.checkLost()) throw new SessionHostError("native-fork-binding-mismatch");
+          // The title is stored and printed by `keryx sessions list`: the same hidden-character rule as an approval card.
+          if (hiddenInCard(input.title)) throw new SessionHostError("native-fork-title-unsafe");
           const through = nativeBoundaries.get(input.throughHistoryCursor); if (through === undefined) throw new SessionHostError("native-fork-boundary-unavailable");
           syncHistory();
           const fork = forkSession({ cwd: options.cwd, sourceIdOrPrefix: handle.summary.id, targetCwd: input.targetCwd, throughArchiveCount: through, contextArchiveIndices: activeArchiveIndices(through, input.throughHistoryCursor, contextResets), title: input.title,

@@ -1,13 +1,13 @@
 import path from 'node:path';
 import {readContext} from '../../hub/context-sync';
 import{HubConnector,type HubBinding}from'../../hub/connector';
-import{MachineError}from'./errors';import type{CheckoutMapping}from'./config';
+import{MachineError}from'./errors';import type{CheckoutMapping}from'./config';import{hubAccessHeaders}from'./access';
 /**
  * The machine's sync of one project's shared context into its own keryx-managed cache. It never writes the checkout: a hosted session
  * reads canonical context through hub_context from this cache, and a rewritten tracked index would dirty the owned baseline.
  */
 class ExplicitMachineConnector extends HubConnector{
- constructor(private readonly local:CheckoutMapping,private readonly url:string,token:string,cacheRoot:string){super({cwd:local.cwd,token,cacheRoot,checkoutIndex:false});}
+ constructor(private readonly local:CheckoutMapping,private readonly url:string,token:string,cacheRoot:string,accessHeaders:Record<string,string>){super({cwd:local.cwd,token,cacheRoot,checkoutIndex:false,accessHeaders});}
  override async binding():Promise<HubBinding>{return {url:this.url,projectId:this.local.projectId,checkoutId:this.local.checkoutId,tokenEnv:'KERYX_MACHINE_NOT_AN_ENV_TOKEN'};}
  override async status(){return {ok:true as const,connection:{url:this.url,projectId:this.local.projectId,checkoutId:this.local.checkoutId}};}
 }
@@ -15,7 +15,8 @@ class ExplicitMachineConnector extends HubConnector{
 export class MachineContextSync{
  private readonly projects=new Map<string,{connector:ExplicitMachineConnector;revision:number;target:number;cacheDir?:string;running?:Promise<void>}>();
  constructor(options:{hubUrl:string;token:string;cacheRoot:string;mappings:readonly CheckoutMapping[]}){
-  for(const mapping of options.mappings)if(!this.projects.has(mapping.projectId))this.projects.set(mapping.projectId,{connector:new ExplicitMachineConnector(mapping,options.hubUrl,options.token,options.cacheRoot),revision:-1,target:-1});
+  const access=hubAccessHeaders(options.hubUrl);
+  for(const mapping of options.mappings)if(!this.projects.has(mapping.projectId))this.projects.set(mapping.projectId,{connector:new ExplicitMachineConnector(mapping,options.hubUrl,options.token,options.cacheRoot,access),revision:-1,target:-1});
  }
  async invalidate(projectId:string,revision:number):Promise<void>{
   const project=this.projects.get(projectId);if(!project)throw new MachineError('scope-denied');if(!Number.isSafeInteger(revision)||revision<0)throw new MachineError('invalid-frame');project.target=Math.max(project.target,revision);

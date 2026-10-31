@@ -67,6 +67,10 @@ export async function startConfiguredMachineBridges(options: {
             catch (cause) {
                 options.onNotice?.(machineFailure(cause).code);
             }
-            await Promise.all(bridges.map(b => b.stop()));
+            // Every bridge finishes stopping before a failure is reported, so a rejecting one never cuts the others short.
+            const stopped = await Promise.allSettled(bridges.map(b => b.stop()));
+            const failed = stopped.find(result => result.status === 'rejected');
+            if (failed)
+                throw failed.reason;
         } };
 }

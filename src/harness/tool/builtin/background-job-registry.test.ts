@@ -184,6 +184,32 @@ test("AC2: a call with no new output since the previous call returns empty, not 
   expect(second.output.trim()).toBe("");
 });
 
+// --- private tasks: trusted local infrastructure is invisible unless the caller opts in ---
+
+test("a private task reads as unknown to get, list, readOutput, readOutputSince and kill unless includePrivate is passed", async () => {
+  const { spawn, handles } = fakeSpawner({ exitOnKill: true });
+  const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+  const open = await registry.start("echo open", { phase: "foreground" });
+  const hidden = await registry.start("echo hidden", { phase: "foreground", visibility: "private" });
+  if (!open.ok || !hidden.ok) throw new Error("test setup: start failed");
+  handles.get(hidden.pid)?.emitData("secret\n");
+
+  expect(registry.list().map((job) => job.jobId)).toEqual([open.jobId]);
+  expect(registry.list({ includePrivate: true }).map((job) => job.jobId)).toEqual([open.jobId, hidden.jobId]);
+  expect(registry.get(hidden.jobId)).toBeUndefined();
+  expect(registry.get(hidden.jobId, { includePrivate: true })?.visibility).toBe("private");
+  expect(registry.readOutput(hidden.jobId)).toEqual({ ok: false, error: `unknown job_id: ${hidden.jobId}` });
+  expect(registry.readOutputSince(hidden.jobId, 0)).toEqual({ ok: false, error: `unknown job_id: ${hidden.jobId}` });
+  expect(registry.readOutputSince(hidden.jobId, 0, { includePrivate: true })).toMatchObject({ ok: true, output: "secret\n" });
+  expect(await registry.kill(hidden.jobId)).toEqual({ ok: false, error: `unknown job_id: ${hidden.jobId}` });
+  expect(registry.get(hidden.jobId, { includePrivate: true })?.status).toBe("running");
+  expect((await shellJobOutputTool(registry).invoke({ job_id: hidden.jobId })).isError).toBe(true);
+  expect((await shellJobKillTool(registry).invoke({ job_id: hidden.jobId })).isError).toBe(true);
+  expect(handles.get(hidden.pid)?.kills).toEqual([]);
+  expect(await registry.kill(hidden.jobId, "operator", { includePrivate: true })).toEqual({ ok: true });
+  expect(registry.get(hidden.jobId, { includePrivate: true })?.status).toBe("killed");
+});
+
 // --- AC4: job_id scoping — unknown or foreign ids never touch an OS process ---
 
 test("AC4: an unknown job_id returns a tool error from both shell_job_output and shell_job_kill", async () => {
