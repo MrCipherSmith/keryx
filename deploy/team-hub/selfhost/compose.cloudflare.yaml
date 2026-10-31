@@ -1,0 +1,76 @@
+# Mode `cloudflare`: Cloudflare Tunnel (cloudflared) -> nginx edge -> Hub. No
+# inbound port is opened on the server at all.
+#
+#   Cloudflare Access (sign-in, policy) -> tunnel (validates the Access JWT
+#   signature, issuer and audience) -> edge :8080 (requires the assertion header,
+#   rate limits, security headers, WebSocket location) -> hub :8787
+#
+# The Hub additionally listens on the host's loopback. That is the recovery
+# path over SSH, and the path for the CLI and for agents on the same host: the
+# CLI cannot present a Cloudflare Access cookie.
+services:
+  hub:
+    ports:
+      - "127.0.0.1:${HUB_PORT:-8787}:8787"
+  edge:
+    image: nginx:1.30-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949
+    user: "1000:1000"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    restart: unless-stopped
+    volumes:
+      - ./edge.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 96m
+    pids_limit: 64
+    # The edge refuses a request without the Access assertion and without the
+    # forwarded-proto header, so the probe sends both. The value is not checked
+    # here — cloudflared validates the signature before a request gets this far.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--header", "X-Forwarded-Proto: https", "--header", "Cf-Access-Jwt-Assertion: healthcheck", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    depends_on:
+      hub:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.1@sha256:a15a3b50b8dabd57ac2090e9484c0247dba9dfa1f0df4d298d4317f9d69eb2d5
+    user: "1000:1000"
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    restart: unless-stopped
+    volumes:
+      - ./tunnel.yml:/etc/cloudflared/config.yml:ro
+      # The credential of ONE tunnel, never an account-wide certificate.
+      - type: bind
+        source: ${KERYX_HUB_HOME:?hubctl exports the install root}/secrets/tunnel.json
+        target: /run/secrets/tunnel.json
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 64
+    depends_on:
+      edge:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,61 @@
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 256; }
+http {
+  access_log /dev/stdout;
+  server_tokens off;
+  client_body_temp_path /tmp/client;
+  proxy_temp_path /tmp/proxy;
+  fastcgi_temp_path /tmp/fastcgi;
+  uwsgi_temp_path /tmp/uwsgi;
+  scgi_temp_path /tmp/scgi;
+  # Rate-limit on the visitor, not on the tunnel connector that every visitor shares. Cloudflare puts
+  # the visitor's address in CF-Connecting-IP and cloudflared passes it on. The edge publishes no
+  # host port and cloudflared is its only client, so the header is believed only when the peer is on
+  # a private range of the compose network; a request without it is limited by its peer address.
+  set_real_ip_from 10.0.0.0/8;
+  set_real_ip_from 172.16.0.0/12;
+  set_real_ip_from 192.168.0.0/16;
+  real_ip_header CF-Connecting-IP;
+  limit_req_zone $binary_remote_addr zone=all_requests:1m rate=20r/s;
+  limit_req_zone $binary_remote_addr zone=login:1m rate=5r/m;
+  limit_req_status 429;
+  # WebSocket upgrade for the machine and browser event sockets; plain requests keep Connection: close.
+  map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+  client_max_body_size 32m;
+  client_body_timeout 15s;
+  send_timeout 30s;
+  server {
+    listen 8080;
+    server_name @HUB_DOMAIN@;
+    if ($http_x_forwarded_proto != "https") { return 308 https://@HUB_DOMAIN@$request_uri; }
+    # cloudflared validates signature, issuer and this application audience.
+    if ($http_cf_access_jwt_assertion = "") { return 403; }
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Strict-Transport-Security "max-age=86400" always;
+    add_header X-Frame-Options DENY always;
+    location ~ ^/hub/v1/session(?:/cloudflare)?$ {
+      limit_req zone=login burst=10 nodelay;
+      proxy_pass http://hub:8787;
+      proxy_set_header Host @HUB_DOMAIN@;
+    }
+    # Long-lived sockets: the 60 s read timeout below cuts an idle browser event socket every minute.
+    location ~ ^/hub/v2/(machines|events)/socket$ {
+      limit_req zone=all_requests burst=40 nodelay;
+      proxy_pass http://hub:8787;
+      proxy_set_header Host @HUB_DOMAIN@;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+      proxy_read_timeout 1h;
+      proxy_send_timeout 1h;
+    }
+    location / {
+      limit_req zone=all_requests burst=40 nodelay;
+      proxy_pass http://hub:8787;
+      proxy_set_header Host @HUB_DOMAIN@;
+      proxy_read_timeout 60s;
+    }
+  }
+}

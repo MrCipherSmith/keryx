@@ -1,0 +1,80 @@
+# Mode `https`: Caddy (Let's Encrypt TLS) -> nginx edge -> Hub, on a server with a
+# public DNS name.
+#
+#   internet -> proxy :80/:443 (TLS, certificates) -> edge :8080 (rate limits,
+#   security headers, WebSocket location) -> hub :8787
+#
+# Only the proxy publishes ports on all interfaces. The edge and the Hub are
+# reachable on the compose network only; the Hub additionally listens on the
+# host's loopback for recovery over SSH. Sign-in is the operator token — there
+# is no SSO in this mode (SSO needs Cloudflare Access, see compose.cloudflare.yaml).
+services:
+  hub:
+    ports:
+      - "127.0.0.1:${HUB_PORT:-8787}:8787"
+  edge:
+    # Pinned by digest: the edge is the part that faces the internet, so its
+    # content must not change under a moving tag. Bump the digest deliberately.
+    image: nginx:1.30-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949
+    user: "1000:1000"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    restart: unless-stopped
+    volumes:
+      - ./edge.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 96m
+    pids_limit: 64
+    # Goes through the whole edge location and on to the Hub, so "healthy" means
+    # the chain answers, not only that nginx started.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--header", "X-Forwarded-Proto: https", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    depends_on:
+      hub:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  proxy:
+    image: caddy:2.11-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account. Losing this volume costs a re-issue,
+      # and Let's Encrypt rate-limits those, so `hubctl` never removes volumes.
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    depends_on:
+      edge:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  caddy-data:
+  caddy-config:

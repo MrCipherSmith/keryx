@@ -33,6 +33,7 @@ keryx init
 - **[cli-reference.md](./cli-reference.md)** — Complete reference for every command, subcommand, flag, and exit code.
 - **[jev-in-review.md](./jev-in-review.md)** — What we measured putting Jev in the review domain: CI triage (proven), three CLI-engine reviewers (measured weaker than a strong model), and reviewer selection (unmeasured, most promising).
 - **[workspace-and-lifecycle.md](./workspace-and-lifecycle.md)** — The `.metaproject/` directory contract, source-of-truth vs generated `data/`, the manifest, agent entrypoints, and the `init`/`update` lifecycle.
+- **[team-hub-deployment.md](./team-hub-deployment.md)** — Self-hosting the Team Hub from the released image: `local`, `https` and `cloudflare` modes and their security model, `install.sh`, `hubctl` (upgrade with automatic rollback, backup and restore, agent keys), and what is not offered.
 - **[guides/shared-agent-context.md](./guides/shared-agent-context.md)** — Shared Agent Context: `keryx workspace`, FWK reads, propose/review, MCP `sac.*`, harness `workspace_*`.
 
 ## Modules at a glance
