@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-31
+
 ### Added
 - **Team Hub remote sessions (beta): run full headless Keryx sessions on your own machines from the Hub web (PR #1098).** An operator picks an enrolled machine, a checkout you allowed on it and a profile, and that machine's `keryx serve` runs the native Keryx agent under its local policy. The checkout, the provider keys and every tool call stay on the machine; the Hub never runs project code. Live multi-machine checks, a Hub behind public Cloudflare Access and real providers are pending owner verification, so this is a beta. The Team Hub itself (`keryx hub`) is new in this release too: see the [CLI reference](docs/docs/cli-reference.md#hub). Guide: [Run Keryx sessions on your machines from Team Hub](docs/docs/guides/team-hub-remote-sessions.md).
 - **Machine enrollment with one-use pairing codes.** On the Machines screen an operator creates a code for the selected project; it is shown once, works once and expires after 10 minutes. On the machine, `keryx hub machine pair --url <hub-url> --code-env <name>` reads the code from an environment variable, never from an argument, and keeps the machine secret in owner-only files outside the repository. Pairing alone lets the Hub run nothing.
