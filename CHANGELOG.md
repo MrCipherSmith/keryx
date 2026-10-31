@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-10-31
+## [0.4.1] - 2026-10-31
+
+0.4.0 was tagged but never published: its release job failed on an order-dependent test, and the release tag rules do not let a tag move. 0.4.1 is the same release with the fixes below.
 
 ### Added
 - **Team Hub remote sessions (beta): run full headless Keryx sessions on your own machines from the Hub web (PR #1098).** An operator picks an enrolled machine, a checkout you allowed on it and a profile, and that machine's `keryx serve` runs the native Keryx agent under its local policy. The checkout, the provider keys and every tool call stay on the machine; the Hub never runs project code. Live multi-machine checks, a Hub behind public Cloudflare Access and real providers are pending owner verification, so this is a beta. The Team Hub itself (`keryx hub`) is new in this release too: see the [CLI reference](docs/docs/cli-reference.md#hub). Guide: [Run Keryx sessions on your machines from Team Hub](docs/docs/guides/team-hub-remote-sessions.md).
@@ -21,6 +23,8 @@
 - **`/rewind` no longer stops the local shadow git at 6 MiB of output or 30 seconds.** Those caps killed git, so the first snapshot of a large work tree could fail and a restore could be partial.
 - **Private checkpoint tasks no longer appear in task lists.** A native session's own checkpoint tasks are hidden from task lists, output reads and kill, including the model's task tools, unless a caller asks for private tasks.
 - **A machine with no Hub no longer gets an `unsafe-config-path` notice on every `keryx serve`** when an ancestor of the Keryx config directory is a symlink or not owner-only. The directory is vetted only when Hub state is there.
+- **The dependency audit passes again.** `minimatch` is overridden to 11.0.3 for GHSA-g3hv-75wg-m249 (denial of service through globparts amplification, `< 11.0.1`). Keryx reaches it only through `eslint` and `typescript-eslint`, which ask for `^10`, a line with no patched release (PR #1105).
+- **The digest tests no longer depend on which test file ran before them.** The board reader they use is registered on every fixture copy instead of once at import, so a suite that clears it in its teardown (the intake tests) can no longer leave the digest tests without a board (PR #1106).
 
 ### Security
 - **Approval cards refuse hidden characters.** A native session's tool-approval card whose text holds bidirectional-control, zero-width or C1 control characters is not offered and the call is denied, because such a card can show a command in a different order than it runs. The card now names the tool and its risk class.
