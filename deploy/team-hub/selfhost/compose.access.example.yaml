@@ -1,0 +1,31 @@
+# Optional, `cloudflare` mode only: let the Hub recognise the Cloudflare Access
+# identity, so an authorised person opens the Hub without typing the operator
+# token. There is no equivalent for the `https` or `local` mode.
+#
+# To enable it:
+#   1. Create the role mapping (no token in it), owner-only, in a directory the
+#      Hub can read — see docs/docs/team-hub-deployment.md, "Cloudflare SSO".
+#        <install dir>/secrets/access/roles.json
+#   2. Copy this file to <install dir>/compose.override.yaml. hubctl adds that
+#      file to every compose call when it exists.
+#   3. hubctl up
+#
+# The issuer and audience come from the values given to install.sh
+# (CF_ACCESS_TEAM, CF_ACCESS_AUD in secrets/hub.env); the Hub requires an HTTPS
+# public origin for them, which this mode always has. The containing directory is
+# mounted, not the file, so an atomic replacement of roles.json is picked up.
+# Removing a mapping takes effect on the next request without a restart.
+services:
+  hub:
+    environment:
+      KERYX_HUB_ACCESS_ENABLED: "true"
+      KERYX_HUB_ACCESS_ISSUER: https://${CF_ACCESS_TEAM:?CF_ACCESS_TEAM is set by install.sh --access-team}.cloudflareaccess.com
+      KERYX_HUB_ACCESS_AUDIENCE: ${CF_ACCESS_AUD:?CF_ACCESS_AUD is set by install.sh --access-aud}
+      KERYX_HUB_ACCESS_ROLES_FILE: /run/keryx-access/roles.json
+    volumes:
+      - type: bind
+        source: ${KERYX_HUB_HOME:?hubctl exports the install root}/secrets/access
+        target: /run/keryx-access
+        read_only: true
+        bind:
+          create_host_path: false

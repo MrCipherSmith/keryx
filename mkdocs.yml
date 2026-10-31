@@ -113,6 +113,7 @@ nav:
   - CLI reference: cli-reference.md
   - Commands by task: commands-by-task.md
   - Workspace and lifecycle: workspace-and-lifecycle.md
+  - Self-hosting the Team Hub: team-hub-deployment.md
   - Limitations: limitations.md
   - Complete setup and agent workflows: complete-setup-and-agent-workflows.md
   - Agent installation playbook: agent-installation-playbook.md

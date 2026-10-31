@@ -1,0 +1,12 @@
+{
+	# hubctl drops the next line when no --acme-email was given. Let's Encrypt
+	# works without one; it only means no expiry notices.
+	email @ACME_EMAIL@
+}
+
+@HUB_DOMAIN@ {
+	encode zstd gzip
+	# Caddy sets X-Forwarded-For / X-Forwarded-Proto from the connection it
+	# terminated and discards any value the client sent. The edge relies on that.
+	reverse_proxy edge:8080
+}
