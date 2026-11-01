@@ -32,7 +32,12 @@
       "maxLength": 200
     },
     "actorKind": {
-      "enum": ["human", "agent", "machine", "service"]
+      "enum": [
+        "human",
+        "agent",
+        "machine",
+        "service"
+      ]
     },
     "occurredAt": {
       "type": "string",
@@ -124,5 +129,6 @@
     "entityVersion",
     "contentDigest",
     "causationId"
-  ]
+  ],
+  "title": "Hub work-management events, v1"
 }

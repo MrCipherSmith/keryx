@@ -2301,5 +2301,6 @@
         "payload"
       ]
     }
-  ]
+  ],
+  "description": "The complete serialized UTF-8 command envelope is limited to 65536 bytes (64 KiB). Per-field maxima are upper bounds within this total limit."
 }

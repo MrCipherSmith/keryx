@@ -1,3 +1,4 @@
+import { MAX_COMMAND_BYTES } from './limits';
 import { open } from "node:fs/promises";
 import { constants } from "node:fs";
 import { HubConnector } from "../connector";
@@ -35,13 +36,13 @@ async function inputText(source: string): Promise<string> {
     let size = 0; const chunks: Uint8Array[] = [];
     if (source === "-") {
         if (process.stdin.isTTY) throw Error("Pipe a command envelope to stdin, or specify a JSON input file.");
-        for await (const chunk of process.stdin) { const bytes = Buffer.from(chunk); size += bytes.byteLength; if (size > 65536) throw Error("Work command input exceeds 64 KiB."); chunks.push(bytes); }
+        for await (const chunk of process.stdin) { const bytes = Buffer.from(chunk); size += bytes.byteLength; if (size > MAX_COMMAND_BYTES) throw Error("Work command input exceeds 64 KiB."); chunks.push(bytes); }
     } else {
         const file = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => { throw Error("Cannot read work command input file."); });
         try {
-            const stat = await file.stat(); if (!stat.isFile() || stat.size > 65536) throw Error("Work command input must be a regular file at most 64 KiB.");
-            const bytes = Buffer.alloc(65537); const result = await file.read(bytes, 0, bytes.length, 0);
-            if (result.bytesRead > 65536) throw Error("Work command input exceeds 64 KiB."); chunks.push(bytes.subarray(0, result.bytesRead));
+            const stat = await file.stat(); if (!stat.isFile() || stat.size > MAX_COMMAND_BYTES) throw Error("Work command input must be a regular file at most 64 KiB.");
+            const bytes = Buffer.alloc(MAX_COMMAND_BYTES + 1); const result = await file.read(bytes, 0, bytes.length, 0);
+            if (result.bytesRead > MAX_COMMAND_BYTES) throw Error("Work command input exceeds 64 KiB."); chunks.push(bytes.subarray(0, result.bytesRead));
         } finally { await file.close(); }
     }
     return Buffer.concat(chunks).toString("utf8");
@@ -56,24 +57,16 @@ function parse(args: string[]) {
     }
     return { words, flags };
 }
-export async function runWorkCommand(args: string[], options: Options = {}): Promise<void> {
-    const write = options.write ?? console.log;
-    if (!args.length || args.includes("--help") || args.includes("-h")) { write(WORK_HELP); return; }
-    const { words, flags } = parse(args); const [family, action, entityId] = words;
-    const connector = options.connector ?? new HubConnector({ cwd: options.cwd ?? process.cwd() });
-    const status = await connector.status();
-    if (!status.ok) throw Error("Invalid or unreadable Hub connection binding.");
-    if (family === "status" && words.length === 1 && !flags.size) { write(status.connection ? JSON.stringify({ url: status.connection.url, projectId: status.connection.projectId, checkoutId: status.connection.checkoutId }, null, 2) : "This checkout is not connected to Team Hub."); return; }
-    if (!status.connection) throw Error("This checkout is not connected to Team Hub; use keryx hub connect first.");
-    const { projectId } = status.connection;
+function resolveInvocation(words: string[], flags: Map<string, string>) {
+    const [family, action, entityId] = words;
     const params: Record<string, string | number> = {}; let read: WorkReadName | undefined;
     const used = new Set(["--token-env"]);
     const take = (flag: string, key: string, required = false) => { const value = flags.get(flag); used.add(flag); if (required && !value) invalid(); if (value !== undefined) params[key] = value; };
     const shows: Record<string, [WorkReadName, string]> = { flow: ["get_flow", "flowId"], intent: ["get_intent", "intentId"], attempt: ["get_attempt", "attemptId"], context: ["get_context", "contextId"], subject: ["get_subject", "subjectId"], submission: ["get_submission", "submissionId"], "flow-submission": ["get_flow_submission", "submissionId"], amendment: ["get_amendment", "amendmentId"], operation: ["operation", "operationId"] };
     if (flags.has("--input")) {
         used.add("--input");
-        if (family === "subject" && action === "observe" && words.length === 3) { /* exact observation envelope below */ }
-        else {
+        const observationInput = family === "subject" && action === "observe" && words.length === 3;
+        if (!observationInput) {
             if (words.length !== 1 && words.length !== 2 || family !== "command" && !contributorWorkCommands.includes(`${family}.${action}` as WorkCommand["command"])) invalid();
             if (family === "command" && words.length !== 1) invalid();
         }
@@ -101,11 +94,15 @@ export async function runWorkCommand(args: string[], options: Options = {}): Pro
         take(read === "events" ? "--after" : read === "snapshot" ? "--cursor" : "--after-id", read === "events" ? "after" : read === "snapshot" ? "cursor" : "afterId");
     }
     if ([...flags.keys()].some(flag => !used.has(flag))) invalid();
+    return { params, read };
+}
+
+async function readCommandInput(flags: Map<string, string>, family: string | undefined, action: string | undefined, options: Options) {
     let command: WorkCommand | undefined;
     let observation: WorkObserveInput | undefined;
     if (flags.has("--input")) {
         const raw = await (options.readInput ?? inputText)(flags.get("--input")!);
-        if (Buffer.byteLength(raw, "utf8") > 65536) throw Error("Work command input exceeds 64 KiB.");
+        if (Buffer.byteLength(raw, "utf8") > MAX_COMMAND_BYTES) throw Error("Work command input exceeds 64 KiB.");
         let value: unknown; try { value = JSON.parse(raw) as unknown; } catch { throw Error("Invalid work command JSON."); }
         if (family === "subject" && action === "observe") {
             if (!matchesWorkSchema(value, { $ref: "#/components/schemas/ObserveSubject" })) throw Error("Invalid Git observation envelope.");
@@ -116,6 +113,21 @@ export async function runWorkCommand(args: string[], options: Options = {}): Pro
             if (!contributorWorkCommands.includes(command.command) || family !== "command" && command.command !== `${family}.${action}`) throw Error("This CLI exposes contributor work commands only; command does not match the requested action.");
         }
     }
+    return { command, observation };
+}
+
+export async function runWorkCommand(args: string[], options: Options = {}): Promise<void> {
+    const write = options.write ?? console.log;
+    if (!args.length || args.includes("--help") || args.includes("-h")) { write(WORK_HELP); return; }
+    const { words, flags } = parse(args); const [family, action, entityId] = words;
+    const connector = options.connector ?? new HubConnector({ cwd: options.cwd ?? process.cwd() });
+    const status = await connector.status();
+    if (!status.ok) throw Error("Invalid or unreadable Hub connection binding.");
+    if (family === "status" && words.length === 1 && !flags.size) { write(status.connection ? JSON.stringify({ url: status.connection.url, projectId: status.connection.projectId, checkoutId: status.connection.checkoutId }, null, 2) : "This checkout is not connected to Team Hub."); return; }
+    if (!status.connection) throw Error("This checkout is not connected to Team Hub; use keryx hub connect first.");
+    const { projectId } = status.connection;
+    const { params, read } = resolveInvocation(words, flags);
+    const { command, observation } = await readCommandInput(flags, family, action, options);
     const binding = await connector.binding();
     const tokenEnv = flags.get("--token-env") ?? binding.tokenEnv;
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(tokenEnv)) throw Error("Invalid Hub token environment variable name.");

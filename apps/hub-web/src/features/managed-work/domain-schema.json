@@ -183,28 +183,7 @@
               "const": "document"
             },
             "reference": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "documentId": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200
-                },
-                "version": {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "contentDigest": {
-                  "type": "string",
-                  "pattern": "^[a-f0-9]{64}$"
-                }
-              },
-              "required": [
-                "documentId",
-                "version",
-                "contentDigest"
-              ]
+              "$ref": "#/$defs/DocumentRef"
             },
             "proposalId": {
               "anyOf": [
@@ -369,28 +348,7 @@
         "specification": {
           "anyOf": [
             {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "documentId": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200
-                },
-                "version": {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "contentDigest": {
-                  "type": "string",
-                  "pattern": "^[a-f0-9]{64}$"
-                }
-              },
-              "required": [
-                "documentId",
-                "version",
-                "contentDigest"
-              ]
+              "$ref": "#/$defs/DocumentRef"
             },
             {
               "type": "null"
@@ -401,28 +359,7 @@
           "type": "array",
           "maxItems": 200,
           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "criterionId": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200
-              },
-              "text": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4000
-              },
-              "waivable": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "criterionId",
-              "text",
-              "waivable"
-            ]
+            "$ref": "#/$defs/Criterion"
           }
         },
         "requiredIntentIds": {
@@ -639,28 +576,7 @@
           "type": "array",
           "maxItems": 200,
           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "criterionId": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200
-              },
-              "text": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4000
-              },
-              "waivable": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "criterionId",
-              "text",
-              "waivable"
-            ]
+            "$ref": "#/$defs/Criterion"
           }
         },
         "flowCriterionIds": {
@@ -913,28 +829,7 @@
               "reference": {
                 "anyOf": [
                   {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "documentId": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 200
-                      },
-                      "version": {
-                        "type": "integer",
-                        "minimum": 1
-                      },
-                      "contentDigest": {
-                        "type": "string",
-                        "pattern": "^[a-f0-9]{64}$"
-                      }
-                    },
-                    "required": [
-                      "documentId",
-                      "version",
-                      "contentDigest"
-                    ]
+                    "$ref": "#/$defs/DocumentRef"
                   },
                   {
                     "type": "null"

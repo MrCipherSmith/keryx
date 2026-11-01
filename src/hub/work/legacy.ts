@@ -45,7 +45,10 @@ export function createLegacyConversion(store: HubStore, legacy: HubState, now: (
             fail(409, 'flow-converted', 'Legacy Flow already converted');
         if (flow.version !== sourceVersion)
             fail(409, 'version-conflict', 'Legacy source version changed');
-        if (!['initializing', 'ready'].includes(flow.status) || flow.subjectRevisionId || flow.acceptedBy || flow.receipt || legacy.evidence.some(e => e.projectId === projectId && e.flowId === flow.id))
+        const idleState = ['initializing', 'ready'].includes(flow.status);
+        const noDelivery = !flow.subjectRevisionId && !flow.acceptedBy && !flow.receipt;
+        const noEvidence = !legacy.evidence.some(e => e.projectId === projectId && e.flowId === flow.id);
+        if (!idleState || !noDelivery || !noEvidence)
             fail(409, 'legacy-not-idle', 'Only unfinished idle initializing or ready work can convert');
         const document = legacy.documents.find(d => d.projectId === projectId && d.id === flow.specDocumentId && d.contentDigest === flow.specContentDigest);
         if (!document)

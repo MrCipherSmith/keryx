@@ -62,3 +62,10 @@ test('valid attempt submission coverage passes client preparation and contributo
     expect(resolveWorkMcpOperation('hub_work_attempt_submit', { projectId: 'p1', ...args })).toHaveProperty('operation');
     expect(resolveWorkMcpOperation('hub_work_attempt_submit', { projectId: 'p1', ...args, payload: { ...args.payload, coverage: [{ criterionId: 'ic', result: 'invented', evidenceIds: [] }] } })).toEqual({ error: 'invalid-arguments' });
 });
+
+test('MCP path identifiers reject dot segments before URL resolution', () => {
+    for (const value of ['.', '..']) {
+        expect(resolveWorkMcpOperation('hub_work_list_flows', { projectId: value })).toEqual({ error: 'invalid-arguments' });
+        expect(resolveWorkMcpOperation('hub_work_get_attempt', { projectId: 'p1', attemptId: value })).toEqual({ error: 'invalid-arguments' });
+    }
+});

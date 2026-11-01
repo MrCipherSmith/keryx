@@ -1,4 +1,4 @@
-// Generated from reviewed v1 schemas.
+// TypeScript representation of the reviewed v1 metadata schemas.
 export type DocumentRef = { "documentId": string; "version": number; "contentDigest": string };
 export type Criterion = { "criterionId": string; "text": string; "waivable": boolean };
 export type Artifact = ({ "kind": "git"; "repositoryId": string; "commitOid": string; "treeOid": (string | null); "pullRequest": ({ "number": number; "observedHeadOid": string } | null); "verification": "claimed" | "observed"; "observedAt": (string | null) } | { "kind": "document"; "reference": { "documentId": string; "version": number; "contentDigest": string }; "proposalId": (string | null) } | { "kind": "legacy"; "revisionId": string; "treeDigest": string } | { "kind": "report"; "text": string; "contentDigest": string });

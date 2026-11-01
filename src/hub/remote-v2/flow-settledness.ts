@@ -6,7 +6,7 @@ import type { CommandConfirmationRow } from './config';
 const settledQueueStates = { queued: false, suspended: false, admitted: false, applied: true, rejected: true, removed: true } satisfies Record<Control['QueueItem']['state'], boolean>;
 const settledApprovalStates = { waiting: false, recorded: false, delivered: false, applied: true, 'not-applied': true, expired: true } satisfies Record<ApprovalProjection['status'], boolean>;
 const terminalRunStates = { dispatching: false, received: false, starting: false, running: false, 'waiting-approval': false, paused: false, cancelling: false, unknown: false, succeeded: true, failed: true, cancelled: true, rejected: true, lost: true } satisfies Record<RunRow['state'], boolean>;
-function requestAssociation(value: QueueRow['request'] | undefined) { return value && 'association' in value ? value.association : undefined; }
+function requestAssociation(value: QueueRow['request'] | Control['SessionFork'] | Control['StartTurnRequest'] | undefined) { return value && 'association' in value ? value.association : undefined; }
 function associated(value: Control['FlowAssociation'] | undefined, flowId: string) { return value?.mode === 'flow' && value.flowId === flowId; }
 function settledRun(run: RunRow) {
     if (!terminalRunStates[run.state] || !run.terminalAt) return false;

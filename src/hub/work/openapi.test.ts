@@ -29,7 +29,7 @@ test('every published schema reference resolves within the OpenAPI document', ()
 });
 
 test('web contract copies remain identical to canonical schemas and vocabulary stays explicitly supported', async () => {
-    const vocabulary = new Set(['$id', '$ref', '$schema', '$defs', 'title', 'additionalProperties', 'anyOf', 'const', 'enum', 'items', 'maxItems', 'maxLength', 'maxProperties', 'minItems', 'minLength', 'minimum', 'maximum', 'oneOf', 'pattern', 'propertyNames', 'properties', 'required', 'type']);
+    const vocabulary = new Set(['$id', '$ref', '$schema', '$defs', 'title', 'description', 'additionalProperties', 'anyOf', 'const', 'enum', 'items', 'maxItems', 'maxLength', 'maxProperties', 'minItems', 'minLength', 'minimum', 'maximum', 'oneOf', 'pattern', 'propertyNames', 'properties', 'required', 'type']);
     function inspect(schema: unknown) {
         if (Array.isArray(schema)) { for (const item of schema) inspect(item); return; }
         if (!schema || typeof schema !== 'object') return;

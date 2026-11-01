@@ -1,3 +1,4 @@
+import { MAX_COMMAND_BYTES } from './limits';
 import type { WorkCommand, WorkEvent, WorkRecord } from "./model";
 import { matchesWorkSchema, workOpenApi, workReadRoutes, workRouteParameters, type WorkReadName, type WorkSchema } from "./openapi";
 import type { GitObservation } from "./git-observer-contract";
@@ -12,7 +13,7 @@ export type WorkObserveInput = { operationId: string; expectedVersions: Record<s
 export type WorkObservationResult = { operationId: string; observation: GitObservation; eventCursor: string; receiptId: string };
 export type WorkObservationPage = { observations: GitObservation[]; nextCursor: string | null; eventCursor: string };
 export type WorkOperation = { operationId: string; status: "pending"; receiptId: null; result: null; eventCursor: null } | { operationId: string; status: "committed"; receiptId: string; result: WorkCommandResult | WorkObservationResult; eventCursor: string };
-export type WorkCapabilities = { protocolVersion: 1; enabled: boolean; allowedCommands: WorkCommand["command"][]; limits: { maxCommandBytes: 65536; defaultPageSize: 50; maxPageSize: 200; maxEventPageSize: 1000; maxEventBytes: 1048576; maxSnapshotBytes: 20971520 }; features: { managedExecution: boolean; gitObserver: boolean; legacyConversion: boolean } };
+export type WorkCapabilities = { protocolVersion: 1; enabled: boolean; allowedCommands: WorkCommand["command"][]; limits: { maxCommandBytes: typeof MAX_COMMAND_BYTES; defaultPageSize: 50; maxPageSize: 200; maxEventPageSize: 1000; maxEventBytes: 1048576; maxSnapshotBytes: 20971520 }; features: { managedExecution: boolean; gitObserver: boolean; legacyConversion: boolean } };
 type FlowSubmission = Extract<WorkRecord, { kind: "flow-submission" }>;
 export type WorkAcceptancePreview = Pick<FlowSubmission, "flowId" | "flowRevisionId" | "acceptedIntents" | "knowledgeProposalIds" | "criterionCoverage"> & { acceptanceManifestDigest: string; eventCursor: string };
 type ReadResponses = { get_record: WorkRecordResponse; get_document_version:WorkDocumentVersion; capabilities: WorkCapabilities; snapshot: WorkPage; list_flows: WorkPage; get_flow: WorkAggregate; list_intents: WorkPage; get_flow_revision: WorkRecordResponse; get_intent: WorkAggregate; get_intent_revision: WorkRecordResponse; list_attempts: WorkPage; get_attempt: WorkAggregate; list_evidence: WorkPage; get_context: WorkRecordResponse; get_subject: WorkRecordResponse; list_observations: WorkObservationPage; get_submission: WorkRecordResponse; get_flow_submission: WorkRecordResponse; get_amendment: WorkRecordResponse; list_decisions: WorkPage; events: { events: WorkEvent[]; nextCursor: string }; attention: WorkPage; acceptance_preview: WorkAcceptancePreview; operation: WorkOperation };
@@ -22,7 +23,7 @@ export class WorkClientError extends Error {
 export type WorkTransport = { baseUrl: string; fetch?: (request: Request) => Promise<Response>; headers?: HeadersInit; timeoutMs?: number };
 const prefix = (projectId: string) => `/hub/work/v1/projects/${encodeURIComponent(projectId)}`;
 const schemaRef = (name: string): WorkSchema => ({ $ref: `#/components/schemas/${name}` });
-const id: WorkSchema = { type: "string", minLength: 1, maxLength: 200 };
+const id: WorkSchema = { type: "string", minLength: 1, maxLength: 200, pattern: "^(?!\\.{1,2}$).+$" };
 function readInputSchema(name: WorkReadName): WorkSchema {
     const route = workReadRoutes.find(route => route.name === name)!;
     const properties: Record<string, WorkSchema> = { projectId: id, ...Object.fromEntries(workRouteParameters(route.suffix).map(name => [name, id])) };
@@ -94,14 +95,14 @@ export function createWorkClient(options: WorkTransport) {
     function prepareCommand(projectId: string, command: WorkCommand) {
         if (!matchesWorkSchema(projectId, id) || !matchesWorkSchema(command, schemaRef("WorkCommand"))) throw new WorkClientError("invalid-arguments", 0, false);
         const serialized = JSON.stringify(command);
-        if (Buffer.byteLength(serialized, "utf8") > 65536) throw new WorkClientError("quota-exceeded", 0, false);
+        if (Buffer.byteLength(serialized, "utf8") > MAX_COMMAND_BYTES) throw new WorkClientError("quota-exceeded", 0, false);
         const operationId = command.operationId;
         return Object.freeze({ operationId, serialized, send: async (): Promise<WorkCommandResult | WorkOperation> => await send(`${prefix(projectId)}/commands`, "CommandResult", serialized, operationId) as WorkCommandResult | WorkOperation });
     }
     function prepareObservation(projectId: string, subjectId: string, input: WorkObserveInput) {
         if (!matchesWorkSchema(projectId, id) || !matchesWorkSchema(subjectId, id) || !matchesWorkSchema(input, schemaRef("ObserveSubject"))) throw new WorkClientError("invalid-arguments", 0, false);
         const serialized = JSON.stringify(input), operationId = input.operationId;
-        if (Buffer.byteLength(serialized, "utf8") > 65536) throw new WorkClientError("quota-exceeded", 0, false);
+        if (Buffer.byteLength(serialized, "utf8") > MAX_COMMAND_BYTES) throw new WorkClientError("quota-exceeded", 0, false);
         return Object.freeze({ operationId, serialized, send: async (): Promise<WorkObservationResult> => await send(`${prefix(projectId)}/subjects/${encodeURIComponent(subjectId)}/observe`, "ObservationResult", serialized, operationId) as WorkObservationResult });
     }
     return {
@@ -150,10 +151,10 @@ export function resolveWorkMcpOperation(name: string, input: unknown): { operati
     if (definition.read) return { operation: { path: readPath(definition.read, args) } };
     if (definition.observation) {
         const body = { operationId: args.operationId, expectedVersions: args.expectedVersions, payload: args.payload };
-        if (!matchesWorkSchema(body, schemaRef("ObserveSubject")) || Buffer.byteLength(JSON.stringify(body), "utf8") > 65536) return { error: "invalid-arguments" };
+        if (!matchesWorkSchema(body, schemaRef("ObserveSubject")) || Buffer.byteLength(JSON.stringify(body), "utf8") > MAX_COMMAND_BYTES) return { error: "invalid-arguments" };
         return { operation: { path: `${prefix(String(args.projectId))}/subjects/${encodeURIComponent(String(args.subjectId))}/observe`, body: body as WorkObserveInput }, operationId: String(args.operationId) };
     }
     const body = { operationId: args.operationId, expectedVersions: args.expectedVersions, command: definition.command, payload: args.payload };
-    if (!matchesWorkSchema(body, schemaRef("WorkCommand")) || Buffer.byteLength(JSON.stringify(body), "utf8") > 65536) return { error: "invalid-arguments" };
+    if (!matchesWorkSchema(body, schemaRef("WorkCommand")) || Buffer.byteLength(JSON.stringify(body), "utf8") > MAX_COMMAND_BYTES) return { error: "invalid-arguments" };
     return { operation: { path: `${prefix(String(args.projectId))}/commands`, body: body as WorkCommand }, operationId: String(args.operationId) };
 }

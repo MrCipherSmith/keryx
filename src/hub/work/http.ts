@@ -1,3 +1,4 @@
+import { MAX_COMMAND_BYTES, pageLimit } from './limits';
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { observeGitSubject, assertGitSubjectAcceptable, parseGitRepositoryConfig, type GitRepositoryConfig } from './git-observer';
 import type { WorkObservationJob } from './storage';
@@ -13,7 +14,7 @@ import type { HubStore } from '../store';
 import { allowedWorkCommands, workCommand, workDigest, workRead } from './domain';
 import type { Attempt, ResultSubject, WorkReceipt, WorkRecord, WorkState } from './model';
 export const workLimits = {
-    maxCommandBytes: 64 * 1024, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024, maxSnapshotCacheBytes: 64 * 1024 * 1024, maxSnapshots: 32, maxSnapshotsPerPrincipal: 4, maxSnapshotBytesPerPrincipal: 32 * 1024 * 1024, snapshotTtlMs: 5 * 60 * 1000, maxObservations: 8, maxObservationsPerPrincipal: 2
+    maxCommandBytes: MAX_COMMAND_BYTES, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024, maxSnapshotCacheBytes: 64 * 1024 * 1024, maxSnapshots: 32, maxSnapshotsPerPrincipal: 4, maxSnapshotBytesPerPrincipal: 32 * 1024 * 1024, snapshotTtlMs: 5 * 60 * 1000, maxObservations: 8, maxObservationsPerPrincipal: 2
 } as const;
 type Identity = {
     actor: Principal;
@@ -54,13 +55,7 @@ type Snapshot = {
 function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
-function pageLimit(url: URL, max: number = workLimits.maxPageSize) {
-    const raw = url.searchParams.get('limit');
-    const value = raw === null ? workLimits.defaultPageSize : Number(raw);
-    if (!Number.isSafeInteger(value) || value < 1 || value > max)
-        fail(400, 'invalid-limit', 'Page limit is out of range');
-    return value;
-}
+
 async function bodyJson(request: Request): Promise<unknown> {
     if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))
         fail(400, 'json-required', 'Expected application/json');
@@ -93,11 +88,17 @@ async function bodyJson(request: Request): Promise<unknown> {
         fail(400, 'invalid-json', 'Invalid JSON body');
     }
 }
+function resultEntities(value: unknown): WorkRecord[] {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object' && 'kind' in value) return [value as WorkRecord];
+    if (!value || typeof value !== 'object') return [];
+    return Object.values(value).flatMap(item => Array.isArray(item) ? item : [item]).filter((item): item is WorkRecord => !!item && typeof item === 'object' && 'kind' in item);
+}
 function resultEnvelope(receipt: WorkReceipt, eventCursor: string) {
     const value = receipt.result;
     if (value && typeof value === 'object' && 'observation' in value)
         return { ...value, eventCursor };
-    const entities: WorkRecord[] = Array.isArray(value) ? value : typeof value === 'object' && value !== null && 'kind' in value ? [value as WorkRecord] : Object.values((value ?? {}) as Record<string, unknown>).flatMap(v => Array.isArray(v) ? v : [v]).filter((v): v is WorkRecord => typeof v === 'object' && v !== null && 'kind' in v);
+    const entities = resultEntities(value);
     const preview = typeof value === 'object' && value !== null && 'status' in value && value.status === 'eligible' ? value : undefined;
     return {
         operationId: receipt.operationId, entities, eventCursor, receiptId: receipt.receiptId, ...(preview ? { preview } : {})

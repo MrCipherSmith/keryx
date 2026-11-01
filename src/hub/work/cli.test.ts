@@ -19,10 +19,10 @@ test("CLI preserves user-supplied idempotency envelope from stdin and never prin
 });
 test("CLI refuses human transitions, extras and missing tokens before network", async () => {
     let calls = 0;
-    const options = { connector, env: {}, write: () => {}, readInput: async () => JSON.stringify({ operationId: "op", expectedVersions: {}, command: "requirements.approve", payload: {} }), fetch: async () => { calls++; return Response.json({}); } };
-    await expect(runWorkCommand(["command", "--input", "-"], options)).rejects.toThrow();
-    await expect(runWorkCommand(["flow", "list", "--unexpected", "secret"], options)).rejects.toThrow();
-    await expect(runWorkCommand(["flow", "list"], options)).rejects.toThrow("token environment variable is empty");
+    const options = { connector, env: { WORK_TEST_TOKEN: 'private-token' }, write: () => {}, readInput: async () => JSON.stringify({ operationId: 'op', expectedVersions: {}, command: 'requirements.approve', payload: { targetType: 'flow-revision', revisionId: 'r', revisionDigest: 'a'.repeat(64), flowRevisionId: 'r', reason: 'Reviewed' } }), fetch: async () => { calls++; return Response.json({}); } };
+    await expect(runWorkCommand(["command", "--input", "-"], options)).rejects.toThrow('contributor work commands only');
+    await expect(runWorkCommand(["flow", "list", "--unexpected", "secret"], options)).rejects.toThrow('Invalid hub work arguments');
+    await expect(runWorkCommand(["flow", "list"], { ...options, env: {} })).rejects.toThrow("token environment variable is empty");
     expect(calls).toBe(0);
 });
 test("CLI status and help do not need tokens or network", async () => {

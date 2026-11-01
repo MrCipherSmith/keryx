@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createWorkState, workCommand, workRead, workDigest } from './domain';
+import { createWorkState, workCommand, workRead, workDigest, assertAcceptanceBounds, combineExecutionOutcomes } from './domain';
 import type { Principal } from '../contracts';
 import type { HubState } from '../store';
 const human: Principal = { id: 'h', kind: 'human', role: 'operator' };
@@ -413,4 +413,19 @@ test('initial approval excludes cancelled required Intents but still requires li
     const revision = cmd('revision.propose', { targetType: 'flow', flowId: flow.id, problem: flowPayload.problem, expectedOutcome: flowPayload.expectedOutcome, scope: flowPayload.scope, outOfScope: flowPayload.outOfScope, specification: null, criteria: flowPayload.criteria, requiredIntentIds: [] });
     cmd('requirements.approve', { targetType: 'flow-revision', revisionId: revision.id, revisionDigest: revision.contentDigest, flowRevisionId: revision.id, reason: 'Approve remaining scope' });
     expect(() => cmd('flow.start', { flowId: flow.id, flowRevisionDigest: revision.contentDigest })).toThrow('at least one');
+});
+
+test('aggregate bounds reject oversized combined submissions before record persistence', () => {
+    const proposals = Array.from({ length: 200 }, (_, index) => 'proposal-' + index);
+    const row = { flowCriterionId: 'fc', intentId: 'i', intentCriterionId: 'ic', submissionId: 's', decisionId: 'd' };
+    expect(() => assertAcceptanceBounds(proposals, Array.from({ length: 2000 }, () => row))).not.toThrow();
+    expect(() => assertAcceptanceBounds([...proposals, 'excess'], [])).toThrow('aggregate');
+    expect(() => assertAcceptanceBounds([], Array.from({ length: 2001 }, () => row))).toThrow('aggregate');
+    expect(() => assertAcceptanceBounds([...proposals, ...proposals], [])).not.toThrow();
+});
+test('execution outcome aggregation preserves unknown and active precedence', () => {
+    expect(combineExecutionOutcomes([])).toBe('none');
+    expect(combineExecutionOutcomes(['known-terminal', 'active'])).toBe('active');
+    expect(combineExecutionOutcomes(['active', 'unknown'])).toBe('unknown');
+    expect(combineExecutionOutcomes(['none', 'known-terminal'])).toBe('known-terminal');
 });

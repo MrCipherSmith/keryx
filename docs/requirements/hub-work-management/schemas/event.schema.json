@@ -129,5 +129,6 @@
     "entityVersion",
     "contentDigest",
     "causationId"
-  ]
+  ],
+  "title": "Hub work-management events, v1"
 }

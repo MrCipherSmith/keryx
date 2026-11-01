@@ -1,3 +1,4 @@
+import { MAX_COMMAND_BYTES } from './limits';
 import domain from "../../../docs/requirements/hub-work-management/schemas/domain.schema.json";
 import command from "../../../docs/requirements/hub-work-management/schemas/command.schema.json";
 import event from "../../../docs/requirements/hub-work-management/schemas/event.schema.json";
@@ -38,7 +39,7 @@ const schemas: Record<string, WorkSchema> = {
     Events: object({ events: array(ref("WorkEvent"), 1000), nextCursor: cursor }),
     CommandResult: object({ operationId: text, entities: array(ref("WorkRecord"), 1000), eventCursor: cursor, receiptId: text, preview: ref("LegacyPreview") }, ["operationId", "entities", "eventCursor", "receiptId"]),
     Error: object({ error: object({ code: { type: "string", minLength: 1, maxLength: 200 }, message: { type: "string", maxLength: 4096 }, retryable: { type: "boolean" }, currentVersions: { type: "object", maxProperties: 210, additionalProperties: { type: "integer", minimum: 1 } } }, ["code", "message", "retryable"]), operationId: text }, ["error"]),
-    Capabilities: object({ protocolVersion: { const: 1 }, enabled: { type: "boolean" }, allowedCommands: array({ enum: commandNames }, commandNames.length), limits: object({ maxCommandBytes: { const: 65536 }, defaultPageSize: { const: 50 }, maxPageSize: { const: 200 }, maxEventPageSize: { const: 1000 }, maxEventBytes: { const: 1048576 }, maxSnapshotBytes: { const: 20971520 } }), features: object({ managedExecution: { type: "boolean" }, gitObserver: { type: "boolean" }, legacyConversion: { type: "boolean" } }) }),
+    Capabilities: object({ protocolVersion: { const: 1 }, enabled: { type: "boolean" }, allowedCommands: array({ enum: commandNames }, commandNames.length), limits: object({ maxCommandBytes: { const: MAX_COMMAND_BYTES }, defaultPageSize: { const: 50 }, maxPageSize: { const: 200 }, maxEventPageSize: { const: 1000 }, maxEventBytes: { const: 1048576 }, maxSnapshotBytes: { const: 20971520 } }), features: object({ managedExecution: { type: "boolean" }, gitObserver: { type: "boolean" }, legacyConversion: { type: "boolean" } }) }),
 };
 for (const [name, recordType] of Object.entries({ FlowRevision: "FlowRevision", IntentRevision: "IntentRevision", Context: "ContextSnapshot", Subject: "ResultSubject", Submission: "ReviewSubmission", FlowSubmission: "FlowSubmission", Amendment: "AmendmentManifest" })) schemas[`${name}Record`] = object({ record: ref(recordType), eventCursor: cursor });
 for (const [name, recordType] of Object.entries({ Flow: "WorkFlow", Intent: "WorkIntent", Attempt: "Attempt", Evidence: "EvidenceRecord", Decision: "Decision" })) schemas[`${name}Page`] = object({ records: array(ref(recordType), 200), nextCursor: nullableCursor, eventCursor: cursor });
@@ -111,6 +112,12 @@ export const workOpenApi = {
 };
 
 /** Fail closed for unknown schema vocabulary or unresolved references. */
+const compiledPatterns = new Map<string, RegExp>();
+function patternMatches(pattern: string, value: string) {
+    let expression = compiledPatterns.get(pattern);
+    if (!expression) { expression = new RegExp(pattern); compiledPatterns.set(pattern, expression); }
+    return expression.test(value);
+}
 export function matchesWorkSchema(value: unknown, schema: WorkSchema): boolean {
     if (schema.$ref) { const target = schemas[schema.$ref.replace("#/components/schemas/", "")]; return !!target && matchesWorkSchema(value, target); }
     if ("const" in schema && value !== schema.const) return false;
@@ -118,7 +125,7 @@ export function matchesWorkSchema(value: unknown, schema: WorkSchema): boolean {
     if (schema.oneOf && schema.oneOf.filter(variant => matchesWorkSchema(value, variant)).length !== 1) return false;
     if (schema.anyOf && !schema.anyOf.some(variant => matchesWorkSchema(value, variant))) return false;
     if (schema.type === "null") return value === null;
-    if (schema.type === "string") return typeof value === "string" && value.length >= (schema.minLength ?? 0) && value.length <= (schema.maxLength ?? Infinity) && (!schema.pattern || new RegExp(schema.pattern).test(value));
+    if (schema.type === "string") return typeof value === "string" && value.length >= (schema.minLength ?? 0) && value.length <= (schema.maxLength ?? Infinity) && (!schema.pattern || patternMatches(schema.pattern, value));
     if (schema.type === "boolean") return typeof value === "boolean";
     if (schema.type === "integer") return typeof value === "number" && Number.isSafeInteger(value) && value >= (schema.minimum ?? -Infinity) && value <= (schema.maximum ?? Infinity);
     if (schema.type === "array") return Array.isArray(value) && value.length >= (schema.minItems ?? 0) && value.length <= (schema.maxItems ?? Infinity) && !!schema.items && value.every(item => matchesWorkSchema(item, schema.items!));
