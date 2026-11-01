@@ -95,3 +95,7 @@ Observed draft PR head was `65bff23a006e90c8d430bc0c671a798f6c999282`. Its faili
 ## Routing audit
 
 `graph_used: yes` (earlier bounded affected/related lookup; graph predates new files and is not asserted current); `wiki_used: yes` (earlier domain verification, not repeated for command-only quality gate); `ctx_used: yes`; `raw_rg_used: no`. Project testing context and local code-verifier skill were read. No code search was needed in this final command-only gate.
+
+## Subsequent CI fixture repair
+
+Historical head `8e8262fb` core CI: 27,692 passed, one failure from a test helper bypassing normalized artifact hydration. The helper now uses the public API, preserves the exact bytes assertion, and all 13 cases pass (596 assertions,15.98s). Focused ESLint and global TypeScript pass. Product source remains unchanged; final remote checks must target the subsequent published head.

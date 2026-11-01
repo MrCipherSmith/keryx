@@ -74,3 +74,7 @@ Carry-over F-002 is **partially fixed**, not silently declared fully resolved. E
 All other retained minor/info IDs and individual reasons are listed in the ledger and the PR description. No merge, release, production cutover, frozen criterion approval or product acceptance is performed by this task.
 
 Routing audit: graph_used=yes; wiki_used=yes; ctx_used=yes; raw_rg_used=no.
+
+## Final CI fixture correction
+
+The first complete core CI run passed 27,692 tests and exposed one native-result test helper reading normalized revision content from raw legacy JSON. Commit `9eea7e7d9ee895b0b3cc3e6e3d5f31c7e174d86e` changes that helper to the authenticated public revisions/Flow Evidence API. The exact decoded-byte assertion is unchanged; all 13 native-result scenarios, focused lint and global TypeScript pass. No product code changed. ShellCheck also passed after the earlier explicit-if E2E assertion correction in `8e8262fb05173490236102da48eec0d4626e604d`. Final CI is evaluated on the new published head through the live PR checks.

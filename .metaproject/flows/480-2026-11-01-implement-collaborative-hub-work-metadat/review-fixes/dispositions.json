@@ -6297,12 +6297,14 @@
     "status": "left",
     "commit": "6ce22b337d3ec1d4dae7137f42f46dd5a78c220a",
     "tests": [
-      "legacy-artifacts.test.ts (7): exact lazy hydration/replay refs, previous production v3 gate refuses4, migration rollback-copy + failed migration rollback, bounded transient retention preserving exact archived docs, quota rollback, exact base64 aliases before/after restart+old migration; revision-summary.test.ts full response budget; migrate-legacy.test.py semantic preservation + tamper/missing archive refusal."
+      "legacy-artifacts.test.ts (7): exact lazy hydration/replay refs, previous production v3 gate refuses4, migration rollback-copy + failed migration rollback, bounded transient retention preserving exact archived docs, quota rollback, exact base64 aliases before/after restart+old migration; revision-summary.test.ts full response budget; migrate-legacy.test.py semantic preservation + tamper/missing archive refusal.",
+      "bridge.results.network.test.ts: all 13 native-result cases read hydrated public revisions and retain exact decoded partial.txt bytes"
     ],
     "reason": "Partially fixed in the listed commits. Legacy v1 nonbinary metadata remains a quota-bounded64MiB aggregate. Full per-record v1 metadata normalization is left as an explicit follow-up; CodeRevision encoded payloads/replay duplicates are outside it, hot cookie/work reads are indexed, and accepted artifacts/receipts are not deleted. Existing over-budget migration histories remain intact; future growth requires explicit archival.",
     "commits": [
       "6ce22b337d3ec1d4dae7137f42f46dd5a78c220a",
-      "ceeecf1bb18e68f1b779425fa63b8a8dcd43c746"
+      "ceeecf1bb18e68f1b779425fa63b8a8dcd43c746",
+      "9eea7e7d9ee895b0b3cc3e6e3d5f31c7e174d86e"
     ]
   },
   {
