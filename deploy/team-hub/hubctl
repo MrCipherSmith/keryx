@@ -756,6 +756,19 @@ const image = db.serialize();
 db.close();
 process.stdout.write(image);'
 
+# online_snapshot <container> <destination>: db.serialize() allocates in the live
+# container's cgroup. Refuse an unreadable size or a DB above 150 MiB before allocation.
+online_snapshot() {
+  _snapshot_cid=$1; _snapshot_file=$2
+  _snapshot_size=$(docker exec "$_snapshot_cid" stat -c %s /data/hub.sqlite 2>/dev/null) \
+    || die "could not determine the database size for an online backup; use hubctl backup --offline"
+  case $_snapshot_size in ''|*[!0-9]*) die "invalid database size for an online backup; use hubctl backup --offline" ;; esac
+  [ "$_snapshot_size" -le 157286400 ] \
+    || die "the database is $_snapshot_size bytes; an online backup holds it in the Hub container's memory (limit 512 MB). Use: hubctl backup --offline"
+  docker exec "$_snapshot_cid" bun -e "$ONLINE_BACKUP_JS" > "$_snapshot_file" || die "the online backup failed"
+  [ -s "$_snapshot_file" ] || die "the online backup is empty"
+}
+
 # list_backups <dir>: the backup files in a directory, newest first (names carry a UTC timestamp).
 list_backups() {
   for _f in "$1"/hub-*.sqlite.gz; do
@@ -814,14 +827,9 @@ cmd_backup() {
   fi
   _cid=$(container_of hub)
   [ -n "$_cid" ] && [ "$(service_state hub)" != stopped ] || die "the Hub is not running; start it or use --offline"
-  _size=$(docker exec "$_cid" stat -c %s /data/hub.sqlite 2>/dev/null || echo 0)
-  if [ "$_size" -gt 157286400 ]; then
-    die "the database is $_size bytes; an online backup holds it in the Hub container's memory (limit 512 MB). Use: hubctl backup --offline"
-  fi
   _ts=$(timestamp)
   new_tmp; _work=$NEW_TMP
-  docker exec "$_cid" bun -e "$ONLINE_BACKUP_JS" > "$_work/hub.sqlite" || die "the online backup failed"
-  [ -s "$_work/hub.sqlite" ] || die "the online backup is empty"
+  online_snapshot "$_cid" "$_work/hub.sqlite"
   check_db_stdin "backup $_ts" "$_image" < "$_work/hub.sqlite"
   gzip -9 -c "$_work/hub.sqlite" > "$_work/hub-$_ts.sqlite.gz"
   printf '%s  %s\n' "$(sha256_of "$_work/hub-$_ts.sqlite.gz")" "hub-$_ts.sqlite.gz" > "$_work/hub-$_ts.sqlite.gz.sha256"
@@ -977,7 +985,7 @@ trial_running_data() { # trial_running_data <target image> <target release>
   new_tmp; _preflight=$NEW_TMP
   _cid=$(container_of hub)
   [ -n "$_cid" ] || die "the Hub must be running for an online compatibility preflight"
-  docker exec "$_cid" bun -e "$ONLINE_BACKUP_JS" > "$_preflight/hub.sqlite" || die "could not snapshot the live database"
+  online_snapshot "$_cid" "$_preflight/hub.sqlite"
   docker_locked -v "$_vol:/data:ro" --entrypoint tar "$_cur_image" -C /data -cf - . > "$_preflight/data.tar" || die "could not copy the live data for preflight"
   trial_start "$1" "$_preflight/data.tar" "$2" "$_preflight/hub.sqlite"
 }
