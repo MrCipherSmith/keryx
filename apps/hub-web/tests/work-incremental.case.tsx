@@ -51,3 +51,28 @@ test('expired event cursors resync once and keep polling even when the cursor is
   mounted.unmount();
  }finally{vi.useRealTimers();}
 });
+
+
+test('Git observation events do not request a nonexistent WorkRecord',async()=>{
+ const {fetchEventRecords}=await import('../src/features/managed-work/cache');
+ const base=demoWorkAdapter('p');const record=vi.fn();
+ const changes=await fetchEventRecords({...base,record},undefined,[{entityType:'git-observation',entityId:'observation-id',entityVersion:null} as WorkEvent],new AbortController().signal);
+ expect(record).not.toHaveBeenCalled();expect(changes).toEqual([]);
+});
+
+test('Git observation refresh advances the event cursor and a later WorkRecord event still applies',async()=>{
+ vi.useFakeTimers();const client=new QueryClient();const base=demoWorkAdapter('p');const snapshot=await base.snapshot();
+ const flow=snapshot.records.find(record=>record.kind==='flow')!;const next={...flow,version:flow.version+1};
+ const key=[99,'p','work','live','snapshot'];client.setQueryData(key,snapshot);
+ const observationKey=[99,'p','work','live','observations','subject-agent'];client.setQueryData(observationKey,{pages:[],pageParams:[]});
+ const events=vi.fn().mockResolvedValueOnce({events:[{entityType:'git-observation',entityId:'observation-id',entityVersion:null}],nextCursor:'after-observation'}).mockResolvedValue({events:[{entityType:'flow',entityId:flow.id,entityVersion:next.version}],nextCursor:'after-flow'});
+ const record=vi.fn(async()=>({record:next,eventCursor:'after-flow'}));const adapter={...base,mode:'live' as const,events,record};
+ const context={projectId:'p',scopeKey:99,principal:{id:'human',kind:'human',role:'operator'},location:{projectId:'p',tab:'work'},navigate:()=>undefined,refresh:async()=>undefined} satisfies HubContextValue;
+ function Probe(){useWorkEvents(adapter,'initial');return null;}
+ try {
+ const mounted=render(<QueryClientProvider client={client}><HubContext.Provider value={context}><Probe/></HubContext.Provider></QueryClientProvider>);
+ await act(async()=>{await Promise.resolve();});expect(record).not.toHaveBeenCalled();expect(client.getQueryState(observationKey)?.isInvalidated).toBe(true);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});expect(events.mock.calls[1][0]).toBe('after-observation');expect(record).toHaveBeenCalledTimes(1);
+ expect(client.getQueryData<typeof snapshot>(key)?.records.find(record=>record.id===flow.id)).toEqual(next);mounted.unmount();
+ }finally{vi.useRealTimers();}
+});

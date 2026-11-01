@@ -47,11 +47,16 @@ export function useWorkEvents(
         const records = await fetchEventRecords(adapter, client.getQueryData<WorkSnapshot>(key), page.events, controller.signal);
         if (controller.signal.aborted) return;
         mergeWorkCache(client, key, records);
+        if (page.events.some((event) => event.entityType === "git-observation")) {
+          // Observations have a separate read model, not a WorkRecord ID. Only
+          // active subject queries are refreshed; exact documents stay untouched.
+          void client.invalidateQueries({queryKey:[hub.scopeKey,projectId,"work",adapter.mode,"observations"],refetchType:"active"});
+        }
         cursor = page.nextCursor;
         failures = 0;
         idlePages = page.events.length ? 0 : idlePages + 1;
         setStatus("connected");
-        if (records.length) void client.invalidateQueries({queryKey:[hub.scopeKey, projectId,"work",adapter.mode,"attention"],exact:true});
+        if (records.length || page.events.some((event) => event.entityType === "git-observation")) void client.invalidateQueries({queryKey:[hub.scopeKey, projectId,"work",adapter.mode,"attention"],exact:true});
       } catch (error) {
         if (controller.signal.aborted) return;
         failures++;

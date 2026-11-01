@@ -25,6 +25,7 @@ export function mergeWorkCache(client: QueryClient, key: ReturnType<typeof workS
 export async function fetchEventRecords(adapter: WorkAdapter, snapshot: WorkSnapshot | undefined, events: WorkEvent[], signal: AbortSignal) {
   const existing = new Map(snapshot?.records.map((record) => [record.id, record]));
   const ids = [...new Set(events.filter((event) => {
+    if (event.entityType === "git-observation") return false;
     const record = existing.get(event.entityId);
     return !record || (event.entityVersion !== null && (!("version" in record) || record.version < event.entityVersion));
   }).map((event) => event.entityId))];
