@@ -31,6 +31,25 @@ import {
 import { ActionFeedback, Feedback, useOperator } from "./shared";
 import "./machine-cards.css";
 
+type SessionPageRequest = { projectId: string; cursor: number };
+
+function hasRequestedSessionPage(
+  requests: SessionPageRequest[], projectId: string, cursor: number,
+): boolean {
+  return requests.some((request) => request.projectId === projectId && request.cursor === cursor);
+}
+
+function machineSessionPagesComplete(
+  machineProjects: string[], authorizedProjects: string[],
+  requests: SessionPageRequest[], pages: (Control["SessionPage"] | undefined)[],
+): boolean {
+  return authorizedProjects.length > 0 && requests.every((request, index) => {
+    if (!machineProjects.includes(request.projectId)) return true;
+    const page = pages[index];
+    return !!page && (!page.hasMore || hasRequestedSessionPage(requests, request.projectId, page.cursor));
+  });
+}
+
 export function MachinesView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -204,26 +223,10 @@ export function MachinesView() {
             machine={machine}
             sessions={sessions.filter((s) => s.machineId === machine.machineId)}
             projectName={projectName}
-            sessionsComplete={
-              !!projectIds.length &&
-              specifications.every(
-                (spec, index) =>
-                  !machine.projectIds.includes(spec.projectId) ||
-                  !!sessionQueries[index].data,
-              ) &&
-              !sessionQueries.some(
-                (q, index) =>
-                  machine.projectIds.includes(
-                    specifications[index].projectId,
-                  ) &&
-                  q.data?.hasMore &&
-                  !specifications.some(
-                    (spec) =>
-                      spec.projectId === specifications[index].projectId &&
-                      spec.cursor === q.data?.cursor,
-                  ),
-              )
-            }
+            sessionsComplete={machineSessionPagesComplete(
+              machine.projectIds, projectIds, specifications,
+              sessionQueries.map((query) => query.data),
+            )}
             onRevoke={() =>
               action.mutate({
                 path:
@@ -242,9 +245,7 @@ export function MachinesView() {
           const next = query.data?.cursor;
           return query.data?.hasMore &&
             next !== undefined &&
-            !specifications.some(
-              (s) => s.projectId === spec.projectId && s.cursor === next,
-            ) ? (
+            !hasRequestedSessionPage(specifications, spec.projectId, next) ? (
             <Button
               key={spec.projectId + ":" + next}
               variant="secondary"
@@ -430,6 +431,7 @@ function MachineSessionRow({
 }) {
   const hub = useHub();
   const { t } = useTranslation("remote");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const run = useQuery({
     queryKey: [
       hub.scopeKey,
@@ -445,9 +447,10 @@ function MachineSessionRow({
           encodeURIComponent(session.activeRunId ?? ""),
         signal,
       ),
-    enabled: !!session.activeRunId,
+    enabled: detailsOpen && !!session.activeRunId,
   });
   const routing = useQuery({
+    enabled: detailsOpen,
     queryKey: [
       hub.scopeKey,
       session.projectId,
@@ -499,7 +502,14 @@ function MachineSessionRow({
         >
           {session.title}
         </button>
-        <ChevronRight size={14} />
+        <button
+          type="button"
+          aria-expanded={detailsOpen}
+          aria-label={t("sessionDetails") + ": " + session.title}
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          <ChevronRight size={14} />
+        </button>
       </div>
       <div className="machine-session-meta">
         <span
