@@ -116,14 +116,15 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
         const rawLimit = url.searchParams.get('limit'), limit = rawLimit === null ? legacyStorageLimits.maxRevisionPageSize : Number(rawLimit);
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > legacyStorageLimits.maxRevisionPageSize) fail(400,'invalid-limit','Revision page limit is out of range');
         const revisions = all.slice(index + 1,index + 1 + limit);
+        const nextCursor = index + 1 + limit < all.length ? revisions.at(-1)!.id : undefined;
         if (url.searchParams.get('summary') !== '1') {
-          let bytes = 0;
-          for (const revision of revisions) for (const file of revision.files) {
-            bytes += Buffer.byteLength(file.contentBase64);
+          let bytes = Buffer.byteLength(JSON.stringify({revisions:[],...(nextCursor ? {nextCursor} : {})}));
+          for (const [position,revision] of revisions.entries()) {
+            bytes += Buffer.byteLength(JSON.stringify(revision)) + (position ? 1 : 0);
             if (bytes > legacyStorageLimits.maxRevisionResponseBytes) fail(413,'revision-page-too-large','Use summary=1 and exact single-revision reads');
           }
         }
-        return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions, ...(index + 1 + limit < all.length ? {nextCursor:revisions.at(-1)!.id} : {}) };
+        return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions, ...(nextCursor ? {nextCursor} : {}) };
       }
       const r = scopedRevision(state, p, path[3]);
       if (path[4] !== "changes") return r;
