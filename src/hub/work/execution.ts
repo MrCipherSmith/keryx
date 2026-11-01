@@ -111,8 +111,8 @@ export function createWorkExecution(store: HubStore) {
             fail(403, 'original-operator-required', 'Only the original human operator can bind this run');
         if (input.sessionId !== run.sessionId || input.turnId !== run.turnId || input.machineId !== run.machineId || input.checkoutId !== run.checkoutId || input.associationDigest !== reservation.associationDigest)
             fail(409, 'execution-proof-mismatch', 'Execution references differ from original allocation');
-        const terminal = ['succeeded', 'failed', 'cancelled', 'rejected'].includes(run.state) && !!run.terminalAt;
-        const unavailable = machine.revoked || machine.recoveryRequired || !machine.projectIds.includes(projectId) || ['unknown', 'lost'].includes(run.state);
+        const terminal = ['succeeded', 'failed', 'cancelled', 'rejected', 'lost'].includes(run.state) && !!run.terminalAt;
+        const unavailable = machine.revoked || machine.recoveryRequired || !machine.projectIds.includes(projectId) || run.state === 'unknown';
         return { originalOperatorId: reservation.actorId, projectId, sessionId: run.sessionId, runId: run.runId, turnId: run.turnId, machineId: run.machineId, checkoutId: run.checkoutId, associationDigest: reservation.associationDigest, flowRevisionId: reservation.flowRevisionId, intentRevisionId: reservation.intentRevisionId, contextSnapshotId: reservation.contextSnapshotId, contextObservation: 'unverified', observedContextDigest: null, executionOutcome: terminal ? 'known-terminal' : unavailable ? 'unknown' : 'active' };
     };
     const assertKnownExecutions = (projectId: string, attemptId: string, state: WorkState) => {

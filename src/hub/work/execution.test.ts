@@ -39,7 +39,7 @@ async function managedAttempt(f: Fixture) {
     const ctx = field((await command('context.create', { flowRevisionId: fr.id, intentRevisionId: ir.id, entries: [], gitBases: [] })).entities, 'context');
     if (ctx.kind !== 'context')
         throw new Error('Invalid context');
-    const a = field((await command('attempt.create', { intentRevisionId: ir.id, contextSnapshotId: ctx.id, participantId: 'operator', method: 'native-agent', summary: 'Runtime test', supersedesAttemptId: null })).entities, 'attempt');
+    const a = field((await command('attempt.create', { intentRevisionId: ir.id, contextSnapshotId: ctx.id, participantId: 'human:operator', method: 'native-agent', summary: 'Runtime test', supersedesAttemptId: null })).entities, 'attempt');
     await command('attempt.start', { attemptId: a.id, flowRevisionDigest: fr.contentDigest, intentRevisionDigest: ir.contentDigest, contextDigest: ctx.contentDigest });
     const read = async () => {
         const result = await success<{
@@ -196,4 +196,24 @@ test('delayed queue admission refuses another linked run that became unknown and
     expect(retained.status).toBe('queued');
     expect(retained.runId).toBeNull();
     expect((await managed.read()).records.filter(r => r.kind === 'execution-link')).toHaveLength(1);
+});
+
+test('human confirmed lost reconciliation settles managed execution while unknown remains fenced', async () => {
+    f = await fixture({ workManagement: { enabled: true } });
+    const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
+    const body = { expectedSessionVersion: c.sessionVersion, controller: { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version }, expectedConfigVersion: 1, text: 'Work', interpretation: 'literal-message', busyPolicy: 'reject', association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
+    const turn = await success<Control['TurnReceipt']>(await fetch(f.origin + s.path + '/messages', { method: 'POST', headers: headers(f, managed.a, randomUUID()), body: JSON.stringify(body) }));
+    const frame = await s.peer.next('command');
+    const command = frame.payload as { commandDigest: string };
+    s.peer.send('run-event', { runId: turn.runId, projectId: f.project.id, checkoutId: 'checkout', sessionId: s.session.sessionId, turnId: turn.turnId, localSeq: 1, observedAt: new Date().toISOString(), kind: 'state', state: 'unknown', reasonCode: 'recovery-required' });
+    await s.peer.next('run-event-ack');
+    await managed.command('attempt.report', { attemptId: managed.a.id, event: 'blocked', report: 'Unknown runtime' });
+    expect((await managed.read()).records.find(r => r.id === managed.a.id)).toMatchObject({ executionOutcome: 'unknown' });
+    const run = await success<{ version: number }>(await f.call(`/hub/v2/projects/${f.project.id}/runs/${turn.runId}`, { cookie: f.cookie }));
+    const report: Control['ReconciliationReport'] = { runId: turn.runId!, projectId: f.project.id, checkoutId: 'checkout', ledgerId: 'ledger-1', daemonId: 'daemon-1', commandDigest: command.commandDigest, expectedRunVersion: run.version, observation: 'confirmed-stopped', observedAt: new Date().toISOString(), sessionId: s.session.sessionId, turnId: turn.turnId! };
+    const receipt = await success<Control['ReconciliationReceipt']>(await f.call(`/hub/v2/machines/${s.machine.machineId}/reconciliations`, { method: 'POST', token: s.machine.secret, origin: null, body: report }));
+    await success(await f.call(`/hub/v2/machines/${s.machine.machineId}/resolve-run`, { method: 'POST', cookie: f.cookie, body: { runId: turn.runId, expectedRunVersion: run.version, localReconciliationId: receipt.reconciliationId, decision: 'lost', reason: 'Confirmed stopped' } }));
+    await managed.command('attempt.report', { attemptId: managed.a.id, event: 'failed', report: 'Resolved runtime stopped' });
+    expect((await managed.read()).records.find(r => r.id === managed.a.id)).toMatchObject({ executionOutcome: 'known-terminal', state: 'failed' });
+    await managed.command('attempt.create', { intentRevisionId: managed.ir.id, contextSnapshotId: managed.ctx.id, participantId: 'human:operator', method: 'native-agent', summary: 'Retry known stopped work', supersedesAttemptId: managed.a.id });
 });
