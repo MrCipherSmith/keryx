@@ -1,15 +1,9 @@
 import {afterEach,expect,test} from 'bun:test';
-import {fixture,admittedSession,appliedController,success,hubRun,D,HEAD,type Fixture} from './fixture.test-support';
+import {fixture,admittedSession,appliedController,success,hubRun,subscribeBrowser,D,HEAD,type Fixture} from './fixture.test-support';
 import type {Control,FrameOf} from '../../remote-control/protocol';
 let f:Fixture|undefined;let browser:WebSocket|undefined;
 afterEach(async()=>{browser?.close();browser=undefined;if(f)await f.close();f=undefined;});
-const NativeWebSocket=WebSocket as unknown as {new(url:string,options:Bun.WebSocketOptions):WebSocket};
-async function subscribe(fx:Fixture){
- browser=new NativeWebSocket(`${fx.origin.replace('http','ws')}/hub/v2/events/socket?projectId=${fx.project.id}`,{headers:{Cookie:fx.cookie,Origin:fx.origin}});
- const frames:Control['BrowserInvalidation'][]=[];browser.addEventListener('message',e=>frames.push(JSON.parse(String(e.data))));
- await new Promise<void>((resolve,reject)=>{browser!.addEventListener('open',()=>resolve(),{once:true});browser!.addEventListener('error',()=>reject(new Error('browser upgrade failed')),{once:true});});
- return frames;
-}
+async function subscribe(fx:Fixture){const opened=await subscribeBrowser(fx);browser=opened.socket;return opened.frames;}
 async function until(check:()=>boolean,ms=3000){const end=Date.now()+ms;while(!check()&&Date.now()<end)await new Promise(r=>setTimeout(r,20));return check();}
 async function startTurn(fx:Fixture){
  const s=await admittedSession(fx);const c=await appliedController(fx,s);
