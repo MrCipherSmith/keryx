@@ -62,6 +62,91 @@ class MigrationSafety(unittest.TestCase):
         tunnel = {"Mounts": [{"Type": "bind", "Source": str(creds), "Destination": "/run/secrets/tunnel.json"}]}
         return hub, tunnel
 
+    def apply_fixture(self):
+        root = self.root / "install"
+        current = root / "releases/legacy-source"
+        current.mkdir(parents=True)
+        (current / "compose.geekom.yaml").write_text("legacy")
+        (root / "current").symlink_to("releases/legacy-source")
+        (root / "hubctl").write_text("#!/bin/sh\nlegacy wrapper\n")
+        (root / "hubctl").chmod(0o755)
+        (root / "secrets").mkdir()
+        (root / "secrets/hub.env").write_text("private fixture")
+        (root / "secrets/tunnel.json").write_text("private tunnel")
+        info = {"unresolvedWork": 0, "stateDigest": "legacy", "remoteHistoryDigest": "remote"}
+        hub = {"Id": "hub", "Image": "old-image", "State": {"Health": {"Status": "healthy"}}}
+        config = {"volume": "fixture-volume", "roles": root / "secrets/hub.env",
+                  "tunnelFile": root / "secrets/tunnel.json", "agents": None}
+        calls = []
+        trial_calls = 0
+
+        def prepare(*args, **kwargs):
+            stage = next(value for value in args if isinstance(value, Path) and value.name == "stage")
+            (stage / "releases/v0.4.4").mkdir(parents=True)
+            (stage / "hubctl").write_text("candidate")
+            (stage / "compose.override.yaml").write_text("candidate overlay")
+            for name in ("hub.env", "agents/agents.json", "tunnel.json"):
+                destination = stage / "secrets" / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text("candidate private")
+
+        def run(args, **kwargs):
+            calls.append(args)
+            output = kwargs.get("output")
+            if output:
+                output.write(b"fixture database")
+            return SimpleNamespace(returncode=0, stdout=b"")
+
+        def archive(volume, image, path):
+            path.write_bytes(b"volume archive")
+
+        def trial(*args, **kwargs):
+            nonlocal trial_calls
+            trial_calls += 1
+            if trial_calls == 2:
+                raise m.MigrationError("injected final trial failure")
+
+        return root, current, info, hub, config, calls, prepare, run, archive, trial
+
+    def test_apply_recovery_attempts_restart_even_if_a_restore_step_fails(self):
+        root, current, info, hub, config, calls, prepare, run, archive, trial = self.apply_fixture()
+        original_copytree = m.shutil.copytree
+
+        def copytree(source, destination, *args, **kwargs):
+            if kwargs.get("dirs_exist_ok"):
+                raise PermissionError("private fixture: restore denied")
+            return original_copytree(source, destination, *args, **kwargs)
+
+        argv = [str(MODULE), "--root", str(root), "--artifacts", str(self.root), "--version", "0.4.4", "--apply", "--yes"]
+        from contextlib import ExitStack, nullcontext
+        with ExitStack() as stack:
+            for target, value in [("trusted_source", lambda *a, **k: None), ("bind_installation", lambda *a: None),
+                                  ("configuration", lambda *a: config), ("verified_bundle", lambda *a: (self.root, "new-image")),
+                                  ("snapshot", lambda *a: dict(info)), ("info_for", lambda *a: dict(info)),
+                                  ("inspect_service", lambda name: {**hub, "Id": name}), ("prepare", prepare),
+                                  ("trial", trial), ("volume_archive", archive), ("docker", lambda *a, **k: run(list(a), **k)),
+                                  ("run", run), ("adoption_lock", lambda *a: nullcontext())]:
+                stack.enter_context(patch.object(m, target, value))
+            stack.enter_context(patch.object(m.os, "geteuid", return_value=1000))
+            stack.enter_context(patch.object(m.sys, "argv", argv))
+            stack.enter_context(patch.object(m.shutil, "copytree", side_effect=copytree))
+            with self.assertRaises(Exception):
+                m.main()
+        self.assertIn([str(root.resolve() / "hubctl"), "up", "-d"], calls)
+        self.assertEqual((root / "current").resolve(), current.resolve())
+
+    def test_private_write_atomically_replaces_readonly_secret_with_private_mode(self):
+        path = self.root / "private/credential"
+        path.parent.mkdir()
+        path.write_bytes(b"old")
+        path.chmod(0o400)
+        original_inode = path.stat().st_ino
+        m.private_write(path, b"replacement", 0o400)
+        self.assertEqual(path.read_bytes(), b"replacement")
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o400)
+        self.assertNotEqual(path.stat().st_ino, original_inode)
+        self.assertEqual(list(path.parent.iterdir()), [path])
+
     def test_release_checksum_and_pin_before_extraction(self):
         artifacts = self.artifacts()
         bundle, image = m.verified_bundle(artifacts, "0.4.4", self.root / "extract")

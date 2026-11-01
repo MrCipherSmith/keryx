@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time adoption of the known geekom source-build Hub; --check is the default.
+"""One-time adoption of the known legacy source-build Hub; --check is the default.
 
 Never runs the fresh installer over existing data. Does not print Docker inspect,
 credentials, environment values, cookies, role mappings or container logs.
@@ -53,11 +53,62 @@ def sha(path):
 
 def private_write(path, value, mode=0o600, hub_owner=False):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path.write_bytes(value if isinstance(value, bytes) else value.encode())
-    path.chmod(mode)
-    if hub_owner and os.geteuid() == 0:
-        os.chown(path.parent, 1000, 1000)
-        os.chown(path, 1000, 1000)
+    temporary = path.with_name("." + path.name + "." + secrets.token_hex(8))
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(value if isinstance(value, bytes) else value.encode())
+            output.flush()
+            os.fsync(output.fileno())
+            os.fchmod(output.fileno(), mode)
+            if hub_owner and os.geteuid() == 0:
+                os.fchown(output.fileno(), 1000, 1000)
+                os.chown(path.parent, 1000, 1000)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def restore_file(source, destination):
+    private_write(Path(destination), Path(source).read_bytes(), Path(source).stat().st_mode & 0o777)
+    return str(destination)
+
+
+def recover_original(root, backup, current):
+    """Restore each independent config component and always attempt the old Hub."""
+    failed = []
+
+    def attempt(name, action):
+        try:
+            result = action()
+            if getattr(result, "returncode", 0):
+                failed.append(name)
+        except BaseException:
+            # Exception messages can contain private configuration. Report only the step.
+            failed.append(name)
+
+    def restore_overlay():
+        if (backup / "compose.override.yaml").exists():
+            restore_file(backup / "compose.override.yaml", root / "compose.override.yaml")
+        else:
+            (root / "compose.override.yaml").unlink(missing_ok=True)
+
+    def restore_pointer():
+        pointer = root / "current.recovery"
+        pointer.unlink(missing_ok=True)
+        pointer.symlink_to(current)
+        os.replace(pointer, root / "current")
+
+    attempt("wrapper", lambda: restore_file(backup / "hubctl", root / "hubctl"))
+    attempt("secrets", lambda: shutil.copytree(backup / "secrets", root / "secrets",
+            dirs_exist_ok=True, symlinks=True, copy_function=restore_file))
+    attempt("overlay", restore_overlay)
+    attempt("release pointer", restore_pointer)
+    attempt("original Hub restart", lambda: run([str(root / "hubctl"), "up", "-d"], allow_failure=True))
+    if failed:
+        print("Original installation recovery needs inspection; failed steps: " + ", ".join(failed) +
+              ". Latest data preserved; private backup: " + str(backup), file=sys.stderr)
+    return failed
 
 
 def run(args, *, input=None, stdin=None, output=None, timeout=180, allow_failure=False):
@@ -402,7 +453,7 @@ def main():
     parser.add_argument("--yes", action="store_true")
     args = parser.parse_args()
     require(not args.apply or args.yes, "Apply requires explicit --yes; otherwise run --check")
-    require(os.geteuid() in (0, 1000), "Run as the existing geekom user (uid1000), or root")
+    require(os.geteuid() in (0, 1000), "Run as the existing installation owner (uid1000), or root")
     root = args.root.expanduser().resolve()
     require(re.fullmatch(r"/[A-Za-z0-9._/-]+", str(root)), "Unsupported installation path")
     require((root / "current").is_symlink() and (root / "hubctl").is_file(), "Expected legacy installation layout")
@@ -461,10 +512,10 @@ def main():
                 run([str(root / "hubctl"), "stop", "hub"])
                 # No writer remains. Copy and validate the final exact database and full volume.
                 volume_archive(config["volume"], hub["Image"], backup / "hub-data.tar")
-                docker("run", "--rm", "--network", "none", "--user", "1000:1000", "-v", f'{config["volume"]}:/data:ro', "--entrypoint", "bun", hub["Image"],
-                       "-e", 'import{Database}from"bun:sqlite";const db=new Database("/data/hub.sqlite",{readonly:true});process.stdout.write(db.serialize());db.close();',
-                       output=(final := (backup / "hub.sqlite").open("wb")))
-                final.close()
+                with (backup / "hub.sqlite").open("wb") as final:
+                    docker("run", "--rm", "--network", "none", "--user", "1000:1000", "-v", f'{config["volume"]}:/data:ro', "--entrypoint", "bun", hub["Image"],
+                           "-e", 'import{Database}from"bun:sqlite";const db=new Database("/data/hub.sqlite",{readonly:true});process.stdout.write(db.serialize());db.close();',
+                           output=final)
                 final_info = info_for(backup / "hub.sqlite")
                 require(final_info["unresolvedWork"] == 0, "Work raced with shutdown; original Hub will be resumed")
                 trial(workspace, image, backup / "hub-data.tar", backup / "hub.sqlite", stage, config, final_info)
@@ -497,15 +548,7 @@ def main():
             except BaseException:
                 if not candidate_started:
                     # Candidate never started: data is untouched, restore only the original config.
-                    shutil.copy2(backup / "hubctl", root / "hubctl")
-                    shutil.copytree(backup / "secrets", root / "secrets", dirs_exist_ok=True, symlinks=True)
-                    if (backup / "compose.override.yaml").exists():
-                        shutil.copy2(backup / "compose.override.yaml", root / "compose.override.yaml")
-                    elif (root / "compose.override.yaml").exists():
-                        (root / "compose.override.yaml").unlink()
-                    (root / "current.recovery").symlink_to(current)
-                    os.replace(root / "current.recovery", root / "current")
-                    run([str(root / "hubctl"), "up", "-d"], allow_failure=True)
+                    recover_original(root, backup, current)
                 else:
                     run([str(root / "hubctl"), "stop", "edge", "tunnel", "hub"], allow_failure=True)
                     print("Adoption stopped after candidate startup; latest data preserved. Forward repair required; backup: " + str(backup), file=sys.stderr)

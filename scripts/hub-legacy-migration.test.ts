@@ -9,7 +9,8 @@ test('legacy adoption safety boundaries use only disposable fixtures', () => {
     env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
   });
   expect(result.exitCode).toBe(0);
-  expect(result.stderr.toString()).toContain('Ran 10 tests');
+  expect(result.stderr.toString()).toMatch(/Ran [1-9][0-9]* tests/);
+  expect(result.stderr.toString()).toContain('OK');
 });
 
 async function workHttpFixture(run: (base: string, project: string, token: string, directory: string) => Promise<void>) {
