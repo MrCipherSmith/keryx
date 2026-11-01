@@ -8612,7 +8612,18 @@ export async function launchTuiAgentShell(opts: {
     const showTools = (): void => {
       void (async () => {
         const cwd = inspectorCwd();
-        const runtimes = await mcpClientStatus(cwd, mcpRuntimeIds());
+        // A status read that fails must not take the panel (or the session,
+        // via an unhandled rejection) with it: open with what was read and say
+        // what could not be.
+        let runtimes: Awaited<ReturnType<typeof mcpClientStatus>> = [];
+        try {
+          runtimes = await mcpClientStatus(cwd, mcpRuntimeIds());
+        } catch (error) {
+          io.onSystem?.(`tools: MCP client status unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+        for (const runtime of runtimes) {
+          if (runtime.error !== undefined) io.onSystem?.(`tools: ${runtime.id}: ${runtime.error}\n`);
+        }
         openMcpTools(otui, chrome, {
           tools: deps.tools.map((t) => t.definition),
           runtimes,

@@ -498,7 +498,7 @@ export class WorkspaceService {
    * record is disclosed at all.
    */
   private async readManifest(id: string): Promise<WorkspaceManifest> {
-    if (!/^[a-z][a-z0-9-]{2,63}$/.test(id)) throw new WorkspaceServiceError("not_found", "workspace not found");
+    if (!isWorkspaceId(id)) throw new WorkspaceServiceError("not_found", "workspace not found");
     let parsed: unknown;
     try { parsed = JSON.parse(await readFile(this.manifestPath(id), "utf8")); }
     catch (error) { if (isNotFound(error)) throw new WorkspaceServiceError("not_found", "workspace not found"); throw new WorkspaceServiceError("invalid_manifest", "workspace manifest cannot be read"); }
@@ -525,6 +525,13 @@ export function localWorkspaceAuthorizationServer(subject = `user:local-${proces
   // reads no caller-supplied subject/role and exports no client minting path.
   return createSacAuthorizationServer({ authenticateRequest: async () => ({ subject, authenticationMethod: "local-os", roleRevision: "local-os-v1" }) });
 }
+
+/**
+ * The workspace-id shape the manifest schema pins (`idPattern`, `./index.ts`).
+ * An id becomes a path segment under `.metaproject/workspaces/`, so anything
+ * else — empty, a separator, `..` — is rejected before it is joined.
+ */
+export function isWorkspaceId(id: string): boolean { return /^[a-z][a-z0-9-]{2,63}$/.test(id); }
 
 export function newWorkspaceId(): string { return `workspace-${randomUUID().replace(/-/g, "").slice(0, 16)}`; }
 

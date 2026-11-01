@@ -17,6 +17,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { parseJsonc } from "../lib/jsonc";
 import { ContainedWriteError, mkdirContained, writeContained } from "../lib/contained-write";
 import { MCP_CONFIG_DEFAULTS } from "./config";
 
@@ -404,6 +405,9 @@ export interface McpRuntimeStatus {
   // disconnect action; always `[]` for `generic` (no file to read) or when
   // the config has no `mcpServers`/`mcp`/`servers` section at all.
   otherServers: string[];
+  // Set when this runtime's config file exists but cannot be parsed even as
+  // JSONC. The other runtimes are still reported.
+  error?: string;
 }
 
 // Live connect/disconnect status for MCP client runtimes, read fresh from disk
@@ -424,7 +428,16 @@ export async function mcpClientStatus(
       statuses.push({ id: runtime.id, filePath: null, connected: false, otherServers: [] });
       continue;
     }
-    const settings = await readSettings(file);
+    // Status only reads, so it accepts the JSONC editors allow in these files
+    // (`.vscode/mcp.json` is JSONC). Install/uninstall stay strict, because
+    // rewriting the file would drop the user's comments.
+    let settings: Settings;
+    try {
+      settings = await readSettings(file, { jsonc: true });
+    } catch (error) {
+      statuses.push({ id: runtime.id, filePath: file, connected: false, otherServers: [], error: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
     const otherServers = runtime.listServers(settings).filter((name) => name !== MCP_SERVER_NAME).sort();
     statuses.push({ id: runtime.id, filePath: file, connected: runtime.hasManaged(settings), otherServers });
   }
@@ -435,18 +448,19 @@ export async function mcpClientStatus(
 // Settings read/write (JSON-or-empty → merge/strip → write), mirroring E5.
 // ---------------------------------------------------------------------------
 
-async function readSettings(file: string): Promise<Settings> {
+async function readSettings(file: string, options: { jsonc?: boolean } = {}): Promise<Settings> {
   if (!(await pathExists(file))) {
     return {};
   }
   try {
-    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
+    const raw = await readFile(file, "utf8");
+    const parsed = (options.jsonc === true ? parseJsonc(raw) : JSON.parse(raw)) as unknown;
     if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
       return parsed as Settings;
     }
     return {};
   } catch {
-    throw new Error(`Cannot parse ${file}: file is not valid JSON`);
+    throw new Error(`Cannot parse ${file}: file is not valid ${options.jsonc === true ? "JSON or JSONC" : "JSON"}`);
   }
 }
 

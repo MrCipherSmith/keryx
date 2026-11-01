@@ -304,6 +304,35 @@ describe("classifyElicitationRisk (T9, AC9)", () => {
     expect(classifyElicitationRisk(pending).destructive).toBe(true);
   });
 
+  test("fails closed for shell-wrapped shapes the unwrap does not recognise, and for a nested <shell> -c", () => {
+    const shapes: string[][] = [
+      ["bash", "-ec", "rm -rf ~"],
+      ["/bin/zsh", "-lc", "rm -rf /", "arg0"],
+      ["bash", "--noprofile", "-c", "rm -rf /"],
+      ["env", "bash", "-lc", "rm -rf /"],
+      ["bash", "-lc", "bash -c 'rm -rf /'"],
+    ];
+    for (const codex_command of shapes) {
+      const pending = toPendingElicitation({
+        requestId: `shape-${codex_command.join("_")}`,
+        message: "run",
+        requestedSchema: {},
+        vendor: { codex_call_id: "call-shape", codex_command },
+      });
+      expect({ codex_command, destructive: classifyElicitationRisk(pending).destructive }).toEqual({ codex_command, destructive: true });
+    }
+  });
+
+  test("a recognised wrapper around a harmless command is still not escalated", () => {
+    const pending = toPendingElicitation({
+      requestId: "harmless-wrapped",
+      message: "run",
+      requestedSchema: {},
+      vendor: { codex_call_id: "call-harmless", codex_command: ["bash", "-lc", "ls -la && git status"] },
+    });
+    expect(classifyElicitationRisk(pending).destructive).toBe(false);
+  });
+
   test("extractCommandTextForClassification prefers the unwrapped command text, and is undefined when codex_command is absent", () => {
     expect(
       extractCommandTextForClassification({ codex_command: ["/bin/zsh", "-lc", "rm -rf /"] }),
