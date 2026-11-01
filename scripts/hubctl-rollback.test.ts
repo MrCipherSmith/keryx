@@ -33,7 +33,7 @@ docker_locked() { printf archive; }
 trial_start() { return 0; }
 _vol=volume
 _cur_image=current-image
-trial_running_data target-image "$ROOT/target-release"
+trial_running_data target-image "$ROOT/target-release" volume current-image
 `;
 
 test('rollback preflight refuses an oversized database before serialization in the live container', () => {
@@ -49,3 +49,49 @@ test('rollback preflight refuses an unreadable size rather than treating it as z
   expect(result.stderr.toString()).toContain('database size');
   expect(() => readFileSync(join(directory, 'serialize-called'))).toThrow();
 });
+
+const rollbackPorts = `
+mkdir -p "$ROOT/releases/v1" "$ROOT/releases/v2" "$ROOT/backups"
+printf old-image > "$ROOT/releases/v1/image.ref"
+printf new-image > "$ROOT/releases/v2/image.ref"
+printf v2 > "$ROOT/selected"
+need_install() { :; }; need_docker() { :; }; lock() { :; }
+state_get() { [ "$1" != previous-release ] || printf v1; }
+state_set() { :; }
+current_release() { printf '%s/releases/v2' "$ROOT"; }
+data_volume() { printf data-volume; }
+container_of() { [ "$HUB_STATE" = missing ] || printf live; }
+docker() {
+  case "$*" in
+    'inspect -f {{.State.Running}} {{.State.Restarting}} live') [ "$HUB_STATE" = restarting ] && printf 'true true' || printf 'false false' ;;
+    *) printf 'unexpected Docker exec: %s\\n' "$*" >&2; return 91 ;;
+  esac
+}
+pull_release_images() { :; }
+confirm() { printf confirmed > "$ROOT/confirmed"; }
+stop_hub_graceful() { printf stopped > "$ROOT/stopped"; }
+backup_volume() { printf current-data > "$3"; }
+trial_start() {
+  [ -f "$ROOT/stopped" ] && [ "$(cat "$2")" = current-data ] || return 92
+  [ "$COMPATIBLE" = yes ]
+}
+switch_current() { printf '%s' "$1" > "$ROOT/selected"; }
+up_all() { printf started > "$ROOT/started"; }
+verify_running() { return 0; }; sync_hubctl() { :; }; prune_safety_backups() { :; }
+cmd_rollback --yes
+`;
+
+for (const state of ['stopped', 'missing', 'restarting']) {
+  test(`rollback of a ${state} Hub trials a quiescent copy without requiring live exec`, () => {
+    const { directory, result } = libraryFixture(rollbackPorts, { HUB_STATE: state, COMPATIBLE: 'yes' });
+    expect(result.exitCode).toBe(0);
+    expect(readFileSync(join(directory, 'selected'), 'utf8')).toBe('v1');
+    expect(readFileSync(join(directory, 'started'), 'utf8')).toBe('started');
+  });
+  test(`incompatible rollback of a ${state} Hub preserves current release and data`, () => {
+    const { directory, result } = libraryFixture(rollbackPorts, { HUB_STATE: state, COMPATIBLE: 'no' });
+    expect(result.exitCode).not.toBe(0);
+    expect(readFileSync(join(directory, 'selected'), 'utf8')).toBe('v2');
+    expect(result.stderr.toString()).toContain('current data and release were preserved');
+  });
+}

@@ -981,12 +981,15 @@ trial_start() { # trial_start <image> <tar of data> [release dir] [online db]
 
 # Online preflight keeps the live service running. Its serialized SQLite image is
 # consistent even when a raw file/WAL copy would not be; only the disposable copy is replaced.
-trial_running_data() { # trial_running_data <target image> <target release>
+trial_running_data() { # trial_running_data <target image> <target release> <volume> <current image>
   new_tmp; _preflight=$NEW_TMP
   _cid=$(container_of hub)
   [ -n "$_cid" ] || die "the Hub must be running for an online compatibility preflight"
   online_snapshot "$_cid" "$_preflight/hub.sqlite"
-  docker_locked -v "$_vol:/data:ro" --entrypoint tar "$_cur_image" -C /data -cf - . > "$_preflight/data.tar" || die "could not copy the live data for preflight"
+  # SQLite is supplied by the consistent serialized snapshot, never by changing WAL files.
+  _tar_rc=0
+  docker_locked -v "$3:/data:ro" --entrypoint tar "$4" -C /data --exclude=./hub.sqlite --exclude=./hub.sqlite-wal --exclude=./hub.sqlite-shm -cf - . > "$_preflight/data.tar" || _tar_rc=$?
+  [ "$_tar_rc" -le 1 ] || die "could not copy the live data for preflight"
   trial_start "$1" "$_preflight/data.tar" "$2" "$_preflight/hub.sqlite"
 }
 
@@ -1118,9 +1121,18 @@ cmd_rollback() {
     check_tar "$_backup/hub-data.tar" "$_image"
     confirm "Roll back project $(project) (volume $_vol) to $_prev AND restore the data from before the upgrade ($(basename -- "$_backup"))? Everything written since is lost."
   else
-    step "checking the previous image against a copy of current data before stopping anything"
-    trial_running_data "$_image" "$_prev_rel" || die "the previous release cannot run on the current data; current Hub and release are unchanged"
-    confirm "Roll back project $(project) from $_cur_tag to $_prev? Current data is kept; compatibility will be checked again after the final snapshot."
+    confirm "Roll back project $(project) from $_cur_tag to $_prev? Current data is kept. Allow downtime for a complete volume copy and compatibility trial; keep free disk for the backup and disposable trial volume."
+    _cid=$(container_of hub)
+    _live_state=
+    if [ -n "$_cid" ]; then
+      _live_state=$(docker inspect -f '{{.State.Running}} {{.State.Restarting}}' "$_cid" 2>/dev/null || true)
+    fi
+    if [ "$_live_state" = 'true false' ]; then
+      step "checking the previous image against an online snapshot before stopping anything"
+      trial_running_data "$_image" "$_prev_rel" "$_vol" "$_cur_image" || die "online compatibility preflight failed (data or trial infrastructure); current Hub and release are unchanged"
+    else
+      step "Hub is not stably running; compatibility will use a quiescent volume copy without live exec"
+    fi
   fi
   _wiped=0; _switched=0
   # Runs from the exit trap if anything below fails: back to the release and the data it started with.
