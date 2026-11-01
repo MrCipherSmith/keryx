@@ -1,16 +1,18 @@
 # Candidate verification
+
+Historical milestone record: the counts below describe their named pre-review test scopes, not the current PR head. Current validation and per-finding outcomes are recorded in [PR1113 correction results](../../../.metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/report.md).
 Version: 0.2.0
 
 Status: PASS for the tested candidate scopes. Owner product acceptance, real-team pilot, live GitHub compatibility and real model execution are not asserted.
 
-## Executed gates
+## Historical gates at the reload-recovery milestone
 
-- Backend1783 passed across158files; root/script types, scoped backend lint and source health passed. Subsequent backend source hashes were unchanged during final native UI gate.
-- Frontend151 passed across31files in the reload-recovery candidate; types, lint and production Vite build passed. Embedded22assets are regenerated and checked against the final source; the exact input digest is retained in output/work-quality-gate-reload.md.
+- Backend 1783 passed across 158 files; root/script types, scoped backend lint and source health passed. Subsequent backend source hashes were unchanged during final native UI gate.
+- Frontend 151 passed across 31 files in the reload-recovery candidate; types, lint and production Vite build passed. Embedded22 assets are regenerated and checked against the final source; the exact input digest is retained in output/work-quality-gate-reload.md.
 - Packaging6 passed, including extracted isolated source, frozen offline disposable runtime installation, real HTTP mutation/replay, official SDK MCP, Docker COPY/schema closure and symlink refusal.
 - CLI/reference67 passed. Counts overlap other focused diagnostic runs and must not be summed into an inflated total.
-- Documentation verifier PASS:13Markdown files,14PRD requirements,16AC,3JSONSchemas,11positive/16negative examples. Generated OpenAPI and closed response/command validation have executable tests.
-- Historical native-only gate measured447files unchanged before/after; scope digest f314ee647fa45e4ceb58e076a2f36252145335eafd62d3500e4625e812c8c3bf. Generated frontend bundle is verified separately; committed HEAD changes do not invalidate identical measured source bytes.
+- Documentation verifier PASS:13 Markdown files,14 PRD requirements,16 AC,3 JSONSchemas,11 positive/16 negative examples. Generated OpenAPI and closed response/command validation have executable tests.
+- Historical native-only gate measured447 files unchanged before/after; scope digest f314ee647fa45e4ceb58e076a2f36252145335eafd62d3500e4625e812c8c3bf. Generated frontend bundle is verified separately; committed HEAD changes do not invalidate identical measured source bytes.
 
 Latest reload-delta commands/results are retained in output/work-quality-gate-reload.md and its companion scope/check JSON; output/work-quality-gate-final.md records earlier native/backend scopes. These are actual executions, not planned test names. Standard Bun test preloads remained enabled, isolating user-global configuration. Runtime/frontend installs used existing frozen locks in isolated directories; shared root dependencies were not modified.
 
@@ -31,15 +33,15 @@ Latest reload-delta commands/results are retained in output/work-quality-gate-re
 |11|Exact proposal references/no-update rationale, existing wiki proposal review|Product acceptance does not verify wiki truth|
 |12|Legacy conversion, old-writer marker3, backup/restore, old-path write refusals|Activation rollback procedure requires operator diligence|
 |13|CLI and official SDK MCP against actual isolated Hub, including Linux|Clients must use this candidate build|
-|14|Browser lifecycle, advanced review, exact navigation,8theme/locale/width combinations, native composer tests|No blanket WCAG certification|
-|15|Body quotas, credential rejection,100refresh/pagination cycles, scoped archives and backups|No long-term production retention/pilot measurement|
+|14|Browser lifecycle, advanced review, exact navigation,8 theme/locale/width combinations, native composer tests|No blanket WCAG certification|
+|15|Body quotas, credential rejection,100 refresh/pagination cycles, scoped archives and backups|No long-term production retention/pilot measurement|
 |16|Independent backend/UI delta approvals, verified source archive and runbook|Owner alone accepts product work and production cutover|
 
 ## Live checks
 
 Manual Flow→Intent→Attempt→Evidence→human selection/Intent acceptance→final Flow acceptance completed via real browser forms against local API. Waiver, whole-set amendment approve/withdraw, legacy conversion, exact document read and Overview deep links passed. Native browser explicitly claimed released control, selected a started Attempt, confirmed pins and existing consent, sent one message, and observed one actual server ExecutionLink. Runtime consumption was labelled unverified.
 
-On geekom Linux a separate loopback source-archive preview installed and started, authenticated requests created a Flow and replayed without duplication, and an agent read it. The official MCP SDK initialized, discovered37managed-work tools and read Flow data. All values/principals were deliberately synthetic; public Hub/Cloudflare configuration and production data were untouched.
+On isolated Linux test host Linux a separate loopback source-archive preview installed and started, authenticated requests created a Flow and replayed without duplication, and an agent read it. The official MCP SDK initialized, discovered 37 managed-work tools and read Flow data. All values/principals were deliberately synthetic; public Hub/Cloudflare configuration and production data were untouched.
 
 Routing: graph attempted/refreshed after source commits; wiki/memory consulted; ctx used; raw rg not used.
 

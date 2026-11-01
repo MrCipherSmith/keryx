@@ -1,11 +1,13 @@
 # Hub work management: candidate handoff
+
+Historical milestone record: the counts below describe their named pre-review test scopes, not the current PR head. Current validation and per-finding outcomes are recorded in [PR1113 correction results](../../.metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/report.md).
 Version: 0.2.0
 
 Status: integrated candidate verified, including native UI delta. No owner product acceptance or public production upgrade is claimed.
 
 ## Source and integration
 
-Backend/integrated branch: feat-hub-work-management. Worktree: /Users/Goodea/.codex/worktrees/hub-work-management/keryx. Base main0.4.1: 3dd6ac53f159c65a522f1db7e755268174bb1217. UI lane: feat-hub-workspace-design in /Users/Goodea/.codex/worktrees/hub-workspace-components/keryx. Patches were checked/applied into the backend branch; old dirty prototype worktree was preserved. Branches are local until explicitly published.
+Backend/integrated branch: feat-hub-work-management. Worktree: /path/to/backend-worktree/keryx. Base main 0.4.1: 3dd6ac53f159c65a522f1db7e755268174bb1217. UI lane: feat-hub-workspace-design in /path/to/ui-worktree/keryx. Patches were checked/applied into the backend branch; old dirty prototype worktree was preserved. Branches are local until explicitly published.
 
 Implementation commits include 11a776df1 (contracts/adapters),239ba7229 (durable domain/native integration),c82fe19e4 (core UI),466980d0a (distribution),c2109a7aa (membership/snapshot corrections),d01d5328a (advanced review/Overview) and dec5ecce4 (native UI). Final reload recovery and handoff evidence are recorded in subsequent commits on the same branch.
 
@@ -19,23 +21,23 @@ The React UI preserves the existing machine/session cockpit, both themes and RU/
 
 Existing native messages can carry paired managed-work headers; original controller, consent, authority and allocation checks remain. Context consumption is unverified unless independently observed. CLI and read/contributor MCP use the same application boundary and never expose protected human operations as agent tools. Exact archived document content is fetchable without latest fallback. Git/CI metadata refresh is read-only and never auto-accepts work.
 
-## Completed validation
+## Historical validation at the reload-recovery milestone
 
-- Backend1783 tests passed across158files; source health, types and lint passed.
-- Frontend151 tests passed across31files; types, lint, build and embedded asset freshness passed.
+- Backend 1783 tests passed across 158 files; source health, types and lint passed.
+- Frontend 151 tests passed across 31 files; types, lint, build and embedded asset freshness passed.
 - Packaging6 tests passed, including isolated archive extraction, frozen offline dependency install, actual HTTP mutation/replay and official-SDK MCP calls. Docker source/schema inclusion checked.
 - Backend independent initial findings were reproduced and corrected; round3 and subsequent membership/snapshot delta reports APPROVE. UI initial two majors were reproduced/corrected; second increment APPROVE.
 - Browser core lifecycle ran against the actual API, including human requirement approvals, Attempt, Evidence, selection, Intent and final Flow acceptance. Additional live waiver, amendment approve/withdraw, legacy conversion, exact archive reads and Overview links passed. Desktop375/1280, RU/EN and both themes were inspected without document overflow.
-- Separate geekom Linux source-archive runtime passed install/start/authenticated Flow create+durable replay+agent read. Official SDK initialized and discovered37managed-work tools and read the test Flow. No production credentials or live GitHub/provider execution were used.
+- Separate operator@hub-host Linux source-archive runtime passed install/start/authenticated Flow create+durable replay+agent read. Official SDK initialized and discovered 37 managed-work tools and read the test Flow. No production credentials or live GitHub/provider execution were used.
 
 Raw gate/review evidence is retained under output/work-quality-gate-final.md, output/work-independent-review-round3.md, output/work-independent-review-final-delta.md and output/work-ui-independent-review-round2.md. Native UI review is recorded in output/work-ui-independent-review-native.md. The later reload-recovery review/gate are output/work-ui-independent-review-reload.md and output/work-quality-gate-reload.md; they supersede earlier frontend counts and asset digests. Backend source bytes match the1783-test pass.
 
 ## Access and operation
 
-See hub-work-management-runbook.md for configuration, trial launcher and safe activation/rollback. On geekom the private synthetic preview source is /home/altsay/.cache/keryx-work-preview.cPfTN4/team-hub-prototype, loopback port19879. A laptop tunnel currently exposes it at http://localhost:18794. To recreate that tunnel:
+See hub-work-management-runbook.md for configuration, trial launcher and safe activation/rollback. On operator@hub-host the private synthetic preview source is /path/to/isolated-preview/team-hub-prototype, loopback port19879. A laptop tunnel currently exposes it at http://localhost:18794. To recreate that tunnel:
 
 ```sh
-ssh -N -L 18794:127.0.0.1:19879 geekom
+ssh -N -L 18794:127.0.0.1:19879 operator@hub-host
 ```
 
 The fixture launcher scripts/smoke/team-hub-work.ts contains deliberately public dummy login values; use only for the disposable loopback preview. The production Hub and its Cloudflare Access configuration were not modified. The candidate source archive and SHA256SUMS are under artifacts/team-hub-work-management on the laptop; verify the generated SHA256SUMS file for the final archive bytes.

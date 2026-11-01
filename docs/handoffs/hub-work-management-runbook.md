@@ -1,7 +1,7 @@
 # Hub work management candidate: operator runbook
 Version: 0.2.0
 
-Status: integrated candidate for isolated operator testing; owner product acceptance and public production upgrade are pending. Backend branch feat-hub-work-management, worktree /Users/Goodea/.codex/worktrees/hub-work-management/keryx. UI source lane feat-hub-workspace-design is integrated as reviewed patches; do not merge the old dirty prototype branch.
+Status: integrated candidate for isolated operator testing; owner product acceptance and public production upgrade are pending. Backend branch feat-hub-work-management, worktree /path/to/backend-worktree/keryx. UI source lane feat-hub-workspace-design is integrated as reviewed patches; do not merge the old dirty prototype branch.
 
 ## Local trial
 
@@ -54,12 +54,12 @@ Final verification evidence lives in the companion candidate handoff and output/
 
 ## Private Linux preview
 
-The isolated preview on geekom binds 127.0.0.1:19879. Source: /home/altsay/.cache/keryx-work-preview.cPfTN4/team-hub-prototype. It uses its own disposable database and runtime dependencies. Production Hub, Cloudflare configuration and production data remain separate.
+The isolated preview on operator@hub-host binds 127.0.0.1:19879. Source: /path/to/isolated-preview/team-hub-prototype. It uses its own disposable database and runtime dependencies. Production Hub, Cloudflare configuration and production data remain separate.
 
-From a laptop with the existing geekom SSH configuration, run:
+From a laptop with the existing operator@hub-host SSH configuration, run:
 
 ```sh
-ssh -N -L 18794:127.0.0.1:19879 geekom
+ssh -N -L 18794:127.0.0.1:19879 operator@hub-host
 ```
 
 Open http://localhost:18794 and use the deliberately public fixture operator token below. It authorizes only this synthetic preview and must never configure a public Hub:

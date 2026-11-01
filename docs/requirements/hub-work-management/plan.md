@@ -1,7 +1,9 @@
 # Implementation and verification plan
+
+Historical milestone record: the counts below describe their named pre-review test scopes, not the current PR head. Current validation and per-finding outcomes are recorded in [PR1113 correction results](../../../.metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/report.md).
 Version: 0.2.0
 
-Status: implementation/verification waves executed for the candidate; no remote owner acceptance or public production rollout performed. Baseline main0.4.1/v0.4.0 must be rechecked; preserve active parallel branches and frozen machine contracts.
+Status: implementation/verification waves executed for the candidate; no remote owner acceptance or public production rollout performed. Baseline main 0.4.1/v0.4.0 must be rechecked; preserve active parallel branches and frozen machine contracts.
 
 ## Before coding
 
@@ -21,7 +23,7 @@ Owner reviews P1–P9 in decisions.md, approves this package revision and create
 | M7 | Optional configured Git/CI read observer and freshness | M4,M5 | actual local fake provider API, wrong-repo/head/dup/reordered/unavailable; no vendor write |
 | M8 | Legacy mode/conversion guard, startup writer-version gate, backup/rollback | M2,M4,M6 | real old-client writes/conversion races; restore with and without managed data |
 | U0 | Parallel UI design/HTML fixtures under own directory | this draft | explicit mock banner, agreed visual/interaction states; no production coupling |
-| U1 | Product UI implementation behind capability/version check | M1,M4,M5; approved design | all state-matrix cells, RU/EN375px, existing machine screens unchanged |
+| U1 | Product UI implementation behind capability/version check | M1,M4,M5; approved design | all state-matrix cells, RU/EN375 px, existing machine screens unchanged |
 | V1 | Exact candidate integrated tests and packaging/upgrade; all AC evidence matrix | M6,M7,M8,U1 | relevant installed lint/types/tests/build, untracked scope included |
 | V2 | Independent correctness/security/migration/UI review and fix loop | V1 | no unaddressed blockers; exact head/source coverage |
 | H1 | Immutable candidate/evidence owner handoff | V2 | no self-acceptance, deploy, Git/npm publication |
@@ -39,7 +41,7 @@ Turn each group below into tracked implementation tasks when Flow is created. Te
 - T-git: real read adapter against synthetic configured provider, SHA1/SHA256 repository formats, inaccessible repo, wrong head, force-push/deletion, CI workflow source spoofing and last-known metadata. No outbound network to real vendor required in automated tests.
 - T-knowledge: exact document-version archive; shared cache refs; required missing overlay refusal; report context is claimed vs actual; wiki proposal/no-update reason and human verification separated.
 - T-compat: v1 Flow/Evidence/review-bundle, v2 sessions, SSO/MCP/context-watch/serve regressions. Every legacy writer guard, dry-run stale, concurrent conversion/start, min-writer gate, backup trial and rollback refusal after managed data.
-- T-UI: Overview→same attention item in Flow/session; two Attempts, Evidence diff, human decision; Git-only manual result, requested changes→new Attempt; project switch/in-flight read/unknown submit/reconnect/observer and375px RU/EN/keyboard. Both semantic and browser checks, no screenshot-only claim.
+- T-UI: Overview→same attention item in Flow/session; two Attempts, Evidence diff, human decision; Git-only manual result, requested changes→new Attempt; project switch/in-flight read/unknown submit/reconnect/observer and375 px RU/EN/keyboard. Both semantic and browser checks, no screenshot-only claim.
 - T-resource: caps/quota atomic refusal, log redaction, attachment unavailable/retention, accepted raw artifact retention, bounded pages; no full source upload required.
 - T-release: actual source/standalone/container schema assets and feature-off compatibility, install/upgrade smoke from0.4.x DB; explicit unexecuted external GitHub/real-team checks.
 
@@ -53,4 +55,4 @@ First pilot: one project, at least two human principals, a manual Git contributo
 
 ## Candidate completion evidence
 
-The integrated backend and three UI increments are implemented on feat-hub-work-management. Backend1783 tests passed; final UI142 tests passed; packaging6 tests passed, plus67 CLI/reference checks. Types, lint, frontend build and embedded assets passed. Independent backend, membership/snapshot delta, UI core/advanced and native UI reviews approved their exact scopes after reproduced findings were corrected. Full native browser association was checked against a synthetic Hub/WebSocket peer; actual model/provider execution is not claimed. A separate geekom Linux source-archive runtime and official SDK MCP trial passed without production changes. See verification.md and the operator handoff for exact boundaries. Local Flow480 stays in-progress for owner handoff; no judged AC is signed as a human by an agent.
+The integrated backend and three UI increments are implemented on feat-hub-work-management. Backend 1783 tests passed; UI 142 tests passed at the native-integration milestone (before the 151-test reload-recovery milestone); packaging 6 tests passed, plus67 CLI/reference checks. Types, lint, frontend build and embedded assets passed. Independent backend, membership/snapshot delta, UI core/advanced and native UI reviews approved their exact scopes after reproduced findings were corrected. Full native browser association was checked against a synthetic Hub/WebSocket peer; actual model/provider execution is not claimed. A separate isolated Linux test host Linux source-archive runtime and official SDK MCP trial passed without production changes. See verification.md and the operator handoff for exact boundaries. Local Flow480 stays in-progress for owner handoff; no judged AC is signed as a human by an agent.
