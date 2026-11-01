@@ -4,6 +4,7 @@ import { fail } from '../domain';
 import type { HubState, HubStore } from '../store';
 import { workDigest } from './domain';
 import type { WorkCommand } from './model';
+import { flowExecutionUnsettled } from '../remote-v2/flow-settledness';
 export type LegacyPreview = {
     receiptId: string;
     contentDigest: string;
@@ -26,16 +27,6 @@ export type LegacyPreview = {
 type ConvertPayload = Extract<WorkCommand, {
     command: 'legacy.convert';
 }>['payload'];
-type Association = {
-    mode?: string;
-    flowId?: string;
-};
-type LegacyRun = {
-    runId: string;
-    state: string;
-    association?: Association;
-    result?: unknown;
-};
 export function createLegacyConversion(store: HubStore, legacy: HubState, now: () => string) {
     function human(actor: Principal, projectId: string) {
         if (actor.kind !== 'human' || !['operator', 'reviewer'].includes(actor.role) || actor.readOnly)
@@ -59,46 +50,8 @@ export function createLegacyConversion(store: HubStore, legacy: HubState, now: (
         const document = legacy.documents.find(d => d.projectId === projectId && d.id === flow.specDocumentId && d.contentDigest === flow.specContentDigest);
         if (!document)
             fail(409, 'requirements-drift', 'Exact legacy specification unavailable');
-        const runs = store.remote.all<LegacyRun>('remote_run', { projectId }).filter(r => r.association?.mode === 'flow' && r.association.flowId === flow.id), runIds = new Set(runs.map(r => r.runId));
-        if (runs.some(r => !['succeeded', 'failed', 'cancelled', 'rejected'].includes(r.state) || ['succeeded', 'failed', 'cancelled'].includes(r.state) && !r.result))
-            fail(409, 'execution-unsettled', 'Legacy run or result is unsettled');
-        const queued = store.remote.all<{
-            item: {
-                state: string;
-            };
-            association?: Association;
-            request?: {
-                association?: Association;
-            };
-        }>('remote_queue', { projectId });
-        if (queued.some(q => ['queued', 'dispatching', 'unknown'].includes(q.item.state) && [q.association, q.request?.association].some(a => a?.mode === 'flow' && a.flowId === flow.id)))
-            fail(409, 'execution-unsettled', 'Legacy execution queue is unsettled');
-        if (store.remote.all<{
-            runId: string;
-            status: string;
-        }>('remote_approval_projection', { projectId }).some(a => runIds.has(a.runId) && !['answered', 'expired', 'denied', 'cancelled', 'resolved'].includes(a.status)))
-            fail(409, 'execution-unsettled', 'Legacy approval is unsettled');
-        if (store.remote.all<{
-            consumed: boolean;
-            original?: {
-                association?: Association;
-            };
-        }>('remote_confirmation', { projectId }).some(c => !c.consumed && c.original?.association?.mode === 'flow' && c.original.association.flowId === flow.id))
-            fail(409, 'execution-unsettled', 'Legacy command confirmation is unsettled');
-        const commands = store.remote.all<{
-            status: string;
-            envelope: {
-                runId?: string;
-                payload?: {
-                    association?: Association;
-                    request?: {
-                        association?: Association;
-                    };
-                };
-            };
-        }>('remote_command', { projectId });
-        if (commands.some(c => !['applied', 'not-applied', 'rejected', 'expired-unconfirmed'].includes(c.status) && (!!c.envelope.runId && runIds.has(c.envelope.runId) || [c.envelope.payload?.association, c.envelope.payload?.request?.association].some(a => a?.mode === 'flow' && a.flowId === flow.id))))
-            fail(409, 'execution-unsettled', 'Legacy command is unsettled');
+        const unsettled = flowExecutionUnsettled(store.remote, projectId, flow.id);
+        if (unsettled) fail(409, 'execution-unsettled', unsettled);
         return { flow, document };
     }
     function sourceDigest(flow: HubFlow, document: HubDocument) {

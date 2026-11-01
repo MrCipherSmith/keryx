@@ -91,13 +91,27 @@ test('idle eligibility refuses queued work, unuploaded terminal result and pendi
     store.remote.put('remote_run', 'r', { runId: 'r', state: 'succeeded', association: { mode: 'flow', flowId: 'old' } }, { projectId: 'p' });
     expect(check).toThrow();
     store.remote.put('remote_run', 'r', {
-        runId: 'r', state: 'succeeded', result: { receiptId: 'done' }, association: { mode: 'flow', flowId: 'old' }
+        runId: 'r', state: 'succeeded', terminalAt: '2026-11-01T00:00:00Z', result: { receiptId: 'done' }, association: { mode: 'flow', flowId: 'old' }
     }, { projectId: 'p' });
-    store.remote.put('remote_approval_projection', 'approval', { runId: 'r', status: 'pending' }, { projectId: 'p' });
+    store.remote.put('remote_approval_projection', 'approval', { runId: 'r', status: 'waiting' }, { projectId: 'p' });
     expect(check).toThrow();
 });
 test('unallocated command confirmation blocks conversion before it can later admit work', () => {
     const { store, legacy } = fixture();
     store.remote.put('remote_confirmation', 'confirmation', { consumed: false, original: { association: { mode: 'flow', flowId: 'old' } } }, { projectId: 'p' });
     expect(() => createLegacyConversion(store, legacy, () => 'now').preview(human, 'p', { legacyFlowId: 'old', sourceVersion: 2 })).toThrow();
+});
+
+for (const state of ['suspended', 'admitted']) test(`legacy conversion refuses native queue state ${state} without a settled run`, () => {
+    const { store, legacy } = fixture();
+    store.remote.put('remote_queue', 'q', { item: { state }, request: { association: { mode: 'flow', flowId: 'old' } } }, { projectId: 'p' });
+    expect(() => createLegacyConversion(store, legacy, () => 'now').preview(human, 'p', { legacyFlowId: 'old', sourceVersion: 2 })).toThrow('queue');
+});
+for (const status of ['waiting', 'recorded', 'delivered', 'applied', 'not-applied', 'expired']) test(`legacy conversion handles actual approval state ${status}`, () => {
+    const { store, legacy } = fixture();
+    store.remote.put('remote_run', 'r', { runId: 'r', state: 'succeeded', terminalAt: '2026-11-01T00:00:00Z', result: { receiptId: 'done' }, association: { mode: 'flow', flowId: 'old' } }, { projectId: 'p' });
+    store.remote.put('remote_approval_projection', 'approval', { runId: 'r', status }, { projectId: 'p' });
+    const check = () => createLegacyConversion(store, legacy, () => 'now').preview(human, 'p', { legacyFlowId: 'old', sourceVersion: 2 });
+    if (['applied', 'not-applied', 'expired'].includes(status)) expect(check().status).toBe('eligible');
+    else expect(check).toThrow('approval');
 });
