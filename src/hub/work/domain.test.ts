@@ -379,3 +379,14 @@ test('new proposed required flags do not join an already approved Flow start mem
     cmd('flow.start', { flowId: f.id, flowRevisionDigest: fr.contentDigest });
     expect(state.records.find(r => r.id === f.id)).toMatchObject({ state: 'in-progress', approvedRevisionId: fr.id });
 });
+
+test('attempt author is authenticated and an agent cannot impersonate a human contributor', () => {
+    const { state, cmd, ir, ctx } = fixture();
+    const agent: Principal = { id: 'agent-one', kind: 'agent', role: 'agent' };
+    const payload = { intentRevisionId: ir.id, contextSnapshotId: ctx.id, participantId: agent.id, method: 'native-agent', summary: 'Implement', supersedesAttemptId: null };
+    const before = JSON.stringify(state);
+    expect(() => cmd('attempt.create', { ...payload, participantId: 'another-human' }, agent)).toThrow('authenticated');
+    expect(() => cmd('attempt.create', { ...payload, method: 'human' }, agent)).toThrow('human');
+    expect(JSON.stringify(state)).toBe(before);
+    expect(cmd('attempt.create', payload, agent)).toMatchObject({ createdBy: agent.id, participantId: agent.id, method: 'native-agent' });
+});

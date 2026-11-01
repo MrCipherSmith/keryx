@@ -395,7 +395,12 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
             return add(seal({ ...base(), kind: 'context' as const, flowRevisionId: fr.id, intentRevisionId: ir.id, entries, gitBases: p.gitBases.map(g => ({ ...g, verification: 'claimed' as const })) }));
         }
         case 'attempt.create': {
-            const p = command.payload, ir = find(p.intentRevisionId, 'intent-revision'), i = find(ir.intentId, 'intent'), f = find(i.flowId, 'flow'), ctx = find(p.contextSnapshotId, 'context');
+            const p = command.payload;
+            if (p.participantId !== actor.id)
+                fail(403, 'participant-mismatch', 'Attempt participant must match the authenticated contributor');
+            if (actor.kind === 'agent' && p.method === 'human')
+                fail(403, 'method-mismatch', 'An agent cannot claim human work');
+            const ir = find(p.intentRevisionId, 'intent-revision'), i = find(ir.intentId, 'intent'), f = find(i.flowId, 'flow'), ctx = find(p.contextSnapshotId, 'context');
             cas(i);
             open(i);
             open(f);
