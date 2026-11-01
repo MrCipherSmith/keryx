@@ -23,6 +23,8 @@ spec.loader.exec_module(m)
 
 class MigrationSafety(unittest.TestCase):
     def setUp(self):
+        m.SOURCE_OWNER = None
+        m.configure_deployment({"composeProject":"keryx-team-hub","publicOrigin":"https://hub.mrciphersmith.com","imageRepository":"ghcr.io/mrciphersmith/keryx-team-hub","legacyOverlay":"compose.geekom.yaml"})
         self.temp = tempfile.TemporaryDirectory(prefix="hub-legacy-test-")
         self.root = Path(self.temp.name)
 
@@ -118,7 +120,9 @@ class MigrationSafety(unittest.TestCase):
                 raise PermissionError("private fixture: restore denied")
             return original_copytree(source, destination, *args, **kwargs)
 
-        argv = [str(MODULE), "--root", str(root), "--artifacts", str(self.root), "--version", "0.4.4", "--apply", "--yes"]
+        profile = self.root / "deployment-profile.json"
+        profile.write_text(json.dumps({"composeProject":"keryx-team-hub","publicOrigin":"https://hub.mrciphersmith.com","imageRepository":"ghcr.io/mrciphersmith/keryx-team-hub","legacyOverlay":"compose.geekom.yaml"}))
+        argv = [str(MODULE), "--deployment-profile", str(profile), "--root", str(root), "--artifacts", str(self.root), "--version", "0.4.4", "--apply", "--yes"]
         from contextlib import ExitStack, nullcontext
         with ExitStack() as stack:
             for target, value in [("trusted_source", lambda *a, **k: None), ("bind_installation", lambda *a: None),
@@ -128,7 +132,7 @@ class MigrationSafety(unittest.TestCase):
                                   ("trial", trial), ("volume_archive", archive), ("docker", lambda *a, **k: run(list(a), **k)),
                                   ("run", run), ("adoption_lock", lambda *a: nullcontext())]:
                 stack.enter_context(patch.object(m, target, value))
-            stack.enter_context(patch.object(m.os, "geteuid", return_value=1000))
+            stack.enter_context(patch.object(m.os, "geteuid", return_value=root.stat().st_uid))
             stack.enter_context(patch.object(m.sys, "argv", argv))
             stack.enter_context(patch.object(m.shutil, "copytree", side_effect=copytree))
             with self.assertRaises(Exception):
@@ -189,7 +193,7 @@ class MigrationSafety(unittest.TestCase):
         db.close()
 
     def test_apply_requires_explicit_yes_before_any_docker_call(self):
-        result = subprocess.run([sys.executable, str(MODULE), "--artifacts", str(self.root), "--version", "0.4.4", "--apply"], capture_output=True)
+        result = subprocess.run([sys.executable, str(MODULE), "--deployment-profile", str(self.root / "profile.json"), "--artifacts", str(self.root), "--version", "0.4.4", "--apply"], capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"requires explicit --yes", result.stderr)
         self.assertEqual(result.stdout, b"")
@@ -319,7 +323,6 @@ class MigrationSafety(unittest.TestCase):
         with self.assertRaisesRegex(m.MigrationError, "(?:blob|encoding) digest mismatch"):
             m.info_for(candidate_path)
         candidate.close()
-
 
 
 if __name__ == "__main__":

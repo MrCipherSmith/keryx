@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time adoption of the known legacy source-build Hub; --check is the default.
+"""Adopt a compatible legacy source-build Hub from an explicit deployment profile; --check is the default.
 
 Never runs the fresh installer over existing data. Does not print Docker inspect,
 credentials, environment values, cookies, role mappings or container logs.
@@ -25,9 +25,11 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
-PROJECT = "keryx-team-hub"
-ORIGIN = "https://hub.mrciphersmith.com"
-IMAGE = re.compile(r"ghcr\.io/mrciphersmith/keryx-team-hub@sha256:[a-f0-9]{64}")
+PROJECT = ""
+ORIGIN = ""
+IMAGE = re.compile(r"(?!)")
+LEGACY_OVERLAY = ""
+SOURCE_OWNER = None
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 REQUIRED = ("hubctl", "VERSION", "compose.base.yaml", "compose.cloudflare.yaml",
             "compose.local.yaml", "compose.https.yaml", "compose.access.example.yaml",
@@ -46,6 +48,52 @@ class MigrationError(Exception):
 def require(condition, message):
     if not condition:
         raise MigrationError(message)
+
+
+def configure_deployment(profile):
+    """Closed public deployment identity; never infer a private install."""
+    global PROJECT, ORIGIN, IMAGE, LEGACY_OVERLAY
+    fields = {"composeProject", "publicOrigin", "imageRepository", "legacyOverlay"}
+    require(isinstance(profile, dict) and set(profile) == fields and
+            all(isinstance(value, str) and 0 < len(value) <= 255 for value in profile.values()),
+            "Deployment profile requires exactly composeProject, publicOrigin, imageRepository and legacyOverlay")
+    require(re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", profile["composeProject"]), "Invalid Compose project in deployment profile")
+    origin = profile["publicOrigin"]
+    try:
+        parsed = urlsplit(origin)
+        valid_port = parsed.port is None or 1 <= parsed.port <= 65535
+    except ValueError:
+        raise MigrationError("Invalid public origin in deployment profile") from None
+    require(parsed.scheme == "https" and parsed.hostname and parsed.username is None and parsed.password is None and
+            parsed.path in ("", "/") and not parsed.query and not parsed.fragment and origin == "https://" + parsed.netloc + parsed.path and valid_port and
+            not any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in origin),
+            "Deployment profile requires an HTTPS origin without credentials, path, query or fragment")
+    repository = profile["imageRepository"]
+    require(re.fullmatch(r"[a-z0-9]+(?:[._-]+[a-z0-9]+)*(?::[0-9]{1,5})?(?:/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)+", repository),
+            "Invalid digest-only image repository in deployment profile")
+    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.ya?ml", profile["legacyOverlay"]),
+            "Legacy overlay must be a YAML basename inside the selected release")
+    PROJECT = profile["composeProject"]
+    ORIGIN = origin.rstrip("/")
+    IMAGE = re.compile(re.escape(repository) + r"@sha256:[a-f0-9]{64}")
+    LEGACY_OVERLAY = profile["legacyOverlay"]
+
+
+def read_deployment_profile(path):
+    trusted_source(path)
+    require(path.stat().st_size <= 16384, "Deployment profile exceeds its size limit")
+    def closed_object(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, "Duplicate deployment profile field")
+            result[key] = value
+        return result
+    try:
+        profile = json.loads(path.read_text(), object_pairs_hook=closed_object)
+    except (ValueError, UnicodeError):
+        raise MigrationError("Invalid deployment profile JSON") from None
+    configure_deployment(profile)
+    return profile
 
 
 def sha(path):
@@ -164,7 +212,7 @@ def source_for(info, target):
 
 def trusted_source(path, directory=False, link=False):
     info = path.lstat()
-    require(info.st_uid in {0, os.geteuid()}, "Run adoption as the installation owner; foreign-owned source is not trusted")
+    require(info.st_uid in {0, os.geteuid(), SOURCE_OWNER}, "Run adoption as the installation owner; foreign-owned source is not trusted")
     if link:
         require(stat.S_ISLNK(info.st_mode), "Expected a current-release symlink")
     else:
@@ -176,7 +224,7 @@ def bind_installation(root, current, hub, tunnel, edge):
     root, current = root.resolve(), current.resolve()
     require(current.is_relative_to(root / "releases"), "Selected release is outside its installation")
     expected_base = (current / "deploy/team-hub/compose.yaml").resolve()
-    expected_overlay = (current / "compose.geekom.yaml").resolve()
+    expected_overlay = (current / LEGACY_OVERLAY).resolve()
     for service, info in (("hub", hub), ("tunnel", tunnel), ("edge", edge)):
         labels = info.get("Config", {}).get("Labels", {})
         require(labels.get("com.docker.compose.project") == PROJECT and
@@ -259,6 +307,7 @@ def verified_bundle(artifacts, version, destination):
     return bundle, image
 
 
+
 def canonical_legacy_state(db, body, tables):
     """Compare semantic immutable data across inline-v3 and content-addressed-v4 layouts."""
     revisions = {revision["id"]: revision for revision in body.get("revisions", [])}
@@ -310,7 +359,6 @@ def canonical_legacy_state(db, body, tables):
     body["_verifiedLegacyConversions"] = conversions
     body.pop("legacyConversions", None)  # derived duplicate; actual authoritative rows are verified above
     return body
-
 
 
 def info_for(database):
@@ -543,9 +591,11 @@ def healthy_candidate():
 
 
 def main():
+    global SOURCE_OWNER
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.home() / "keryx-team-hub")
     parser.add_argument("--artifacts", type=Path, required=True)
+    parser.add_argument("--deployment-profile", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--enable-work", action="store_true")
     mode = parser.add_mutually_exclusive_group()
@@ -554,16 +604,18 @@ def main():
     parser.add_argument("--yes", action="store_true")
     args = parser.parse_args()
     require(not args.apply or args.yes, "Apply requires explicit --yes; otherwise run --check")
-    require(os.geteuid() in (0, 1000), "Run as the existing installation owner (uid1000), or root")
     root = args.root.expanduser().resolve()
     require(re.fullmatch(r"/[A-Za-z0-9._/-]+", str(root)), "Unsupported installation path")
+    SOURCE_OWNER = root.stat().st_uid
+    require(os.geteuid() == 0 or SOURCE_OWNER == os.geteuid(), "Run as the existing installation owner, or root")
+    read_deployment_profile(args.deployment_profile.expanduser())
     require((root / "current").is_symlink() and (root / "hubctl").is_file(), "Expected legacy installation layout")
     trusted_source(root, directory=True)
     trusted_source(root / "releases", directory=True)
     trusted_source(root / "current", link=True)
     trusted_source(root / "hubctl")
     current = (root / "current").resolve()
-    require(current.is_relative_to(root / "releases") and (current / "compose.geekom.yaml").is_file(), "Unexpected legacy release identity")
+    require(current.is_relative_to(root / "releases") and (current / LEGACY_OVERLAY).is_file(), "Unexpected legacy release identity")
     trusted_source(current, directory=True)
     require("keryx-hub-update-protocol" not in (root / "hubctl").read_text(), "Already release-managed: use keryx hub update")
     require(not (root / "releases" / f"v{args.version}").exists(), "Target release directory already exists; inspect it before adopting")

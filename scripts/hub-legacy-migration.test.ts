@@ -13,6 +13,14 @@ test('legacy adoption safety boundaries use only disposable fixtures', () => {
   expect(result.stderr.toString()).toContain('OK');
 });
 
+test('legacy adoption requires a validated explicit deployment profile for every installation', () => {
+  const result = Bun.spawnSync(['python3', 'deploy/team-hub/release/legacy-profile.test.py'], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr.toString()).toContain('OK');
+});
+
 async function workHttpFixture(run: (base: string, project: string, token: string, directory: string) => Promise<void>) {
   const directory = mkdtempSync(join(tmpdir(), 'hub-adoption-http-'));
   const token = 'migration-fixture-operator-' + 'o'.repeat(40);

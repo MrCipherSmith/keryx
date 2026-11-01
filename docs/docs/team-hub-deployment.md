@@ -185,7 +185,34 @@ A failure before the switch restarts the old Hub on untouched data. After the sw
 
 Managed-work settings (`KERYX_HUB_WORK_ENABLED`, default `false`, and `KERYX_HUB_WORK_REPOSITORIES`, default `[]`) come from `secrets/hub.env`. Keep install-owned Access configuration in stable `compose.override.yaml`. Legacy per-release `compose.access.yaml` is copied forward on staging; rollback refuses a target missing that overlay, so migrate it to the stable file or explicitly stage a target with equivalent settings first. The isolated trial carries the configured Work/Cloudflare Access settings and read-only role mapping, with independent throwaway operator/agent tokens.
 
-Legacy geekom installations using the old source-build wrapper need the separately verified [one-time adoption procedure](https://github.com/MrCipherSmith/keryx/blob/main/docs/handoffs/hub-legacy-adoption.md) before the release update command can operate. The helper ships inside the install bundle and defaults to rehearsal only.
+Compatible legacy source-build installations need adoption before the release update command can operate. The generic `migrate-legacy.py` helper ships inside the verified install bundle, defaults to rehearsal only, and requires an explicit non-secret deployment profile. It has no private hostname, project, overlay or image-repository default.
+
+Create a profile owned by the installation owner (or root), with no group/world write permission. It accepts exactly these four fields:
+
+```json
+{
+  "composeProject": "example-team-hub",
+  "publicOrigin": "https://hub.example.test",
+  "imageRepository": "ghcr.io/mrciphersmith/keryx-team-hub",
+  "legacyOverlay": "compose.legacy.yaml"
+}
+```
+
+Replace the example project, origin and overlay with the existing installation's identities; the image repository must match the verified release's digest-pinned image. Review the file before selecting it. The helper checks it against running container labels, the existing origin, source paths and the original `<composeProject>_hub-data` volume. Unknown/duplicate fields, userinfo or paths in the HTTPS origin, unpinned images, overlay paths and unsafe profile file permissions are rejected before deployment work.
+
+```sh
+python3 verified-install/migrate-legacy.py \
+  --root "$HOME/example-team-hub" \
+  --deployment-profile "$PWD/deployment-profile.json" \
+  --artifacts "$PWD" --version "$release" --check
+# Only after successful rehearsal and a maintenance window:
+python3 verified-install/migrate-legacy.py \
+  --root "$HOME/example-team-hub" \
+  --deployment-profile "$PWD/deployment-profile.json" \
+  --artifacts "$PWD" --version "$release" --apply --yes
+```
+
+The [adoption handoff](https://github.com/MrCipherSmith/keryx/blob/main/docs/handoffs/hub-legacy-adoption.md) supplies a profile template and complete download/backup procedure. Each installation fills its own profile with the same safety checks. `keryx hub update` continues to refuse legacy wrappers until adoption succeeds.
 
 ## Rollback
 

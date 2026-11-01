@@ -30,11 +30,13 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
                   "docker": lambda *a, **k: run(list(a), **k), "run": run,
                   "adoption_lock": lambda *a: nullcontext()}
         values.update(overrides)
+        profile = self.root / "deployment-profile.json"
+        profile.write_text(json.dumps({"composeProject":"keryx-team-hub","publicOrigin":"https://hub.mrciphersmith.com","imageRepository":"ghcr.io/mrciphersmith/keryx-team-hub","legacyOverlay":"compose.geekom.yaml"}))
         with ExitStack() as stack:
             for name, value in values.items():
                 stack.enter_context(patch.object(m, name, value))
-            stack.enter_context(patch.object(m.os, "geteuid", return_value=1000))
-            stack.enter_context(patch.object(m.sys, "argv", [str(fixtures.MODULE), "--root", str(root),
+            stack.enter_context(patch.object(m.os, "geteuid", return_value=root.stat().st_uid))
+            stack.enter_context(patch.object(m.sys, "argv", [str(fixtures.MODULE), "--deployment-profile", str(profile), "--root", str(root),
                 "--artifacts", str(self.root), "--version", "0.4.4", "--apply", "--yes"]))
             yield
 
