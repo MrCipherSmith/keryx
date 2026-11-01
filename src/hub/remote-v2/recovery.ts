@@ -37,8 +37,8 @@ export function resolveRun(state: HubState, repo: RemoteRepository, authority: H
   if (run.state !== "unknown") fail(409, "stale-reference", "Only uncertain runs may be resolved");
   if (body.decision === "lost" && receipt.observation !== "confirmed-stopped") fail(409, "recovery-required", "Locally confirmed absence required for lost resolution");
   if (receipt.observation === "owned-running") { if (!report.nativeIdentity) fail(409, "recovery-required", "Owned supervisor required"); run.nativeIdentity = report.nativeIdentity; run.state = "running"; }
-  else run.state = "lost";
-  run.version++; run.reconciliationId = receipt.reconciliationId; run.observedAt = report.observedAt; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: machine.machineId, sessionId: run.sessionId, runId: run.runId });
+  else { run.state = "lost"; run.terminalAt ??= new Date().toISOString(); }
+  run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; run.reconciliationId = receipt.reconciliationId; run.observedAt = report.observedAt; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: machine.machineId, sessionId: run.sessionId, runId: run.runId });
   const row = repo.get<SessionRow>("remote_session", run.sessionId);
   if(run.state==='lost')repo.releaseRunCapacity(run.runId);
   if (row && run.state === "lost") {

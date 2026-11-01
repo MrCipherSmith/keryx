@@ -46,6 +46,13 @@ export function hubCommandReceipt(dataDir: string, sessionId: string, operationI
     .map((row) => JSON.parse(row.body) as { frameType?: string; operationId?: string; receipt?: { status: string; errorCode: string | null } })
     .find((command) => command.frameType === "session-command" && command.operationId === operationId)?.receipt);
 }
+/** Hub's stored run row, including the fields the HTTP projection leaves out (terminalAt, notificationVersion); undefined when absent. */
+export function hubRun(dataDir: string, runId: string): { state: string; terminalAt?: string; notificationVersion?: number } | undefined {
+  return hubRows(dataDir, (db) => {
+    const row = db.query<{ body: string }, [string]>("SELECT body FROM remote_run WHERE id=?").get(runId);
+    return row ? JSON.parse(row.body) as { state: string; terminalAt?: string; notificationVersion?: number } : undefined;
+  });
+}
 export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'|'workManagement'>={}) {
   const dataDir = mkdtempSync(join(tmpdir(), "hub-remote-v2-"));
   const server = startHub({ dataDir, operatorToken, reviewerToken, agentToken, port: 0, host: "127.0.0.1",...overrides });

@@ -148,6 +148,7 @@ export function createRemoteControl(ports: RemotePorts) {
       });
       for (const [machineId, socket] of machines) if (store.remote.get<MachineRecord>("remote_machine", machineId)?.revoked) socket.close(1008, "Authorization changed");
       if(p[0]==='machines'&&p[1]&&p[2]==='revoke'){const changed=store.remote.get<MachineRecord>('remote_machine',p[1]);if(changed)invalidateMachine(changed);}
+      if(p[0]==='machines'&&p[1]&&p[2]==='resolve-run'){const runId=(input as {runId?:unknown}|undefined)?.runId;const changed=typeof runId==='string'?store.remote.get<RunRow>('remote_run',runId):undefined;if(changed&&changed.machineId===p[1])invalidate(changed.projectId,'run',changed.runId,changed.notificationVersion??0);}
       if (p[0] === "projects" && p[1]) { if (p[2] === "sessions" && p[3]) { const currentSession = store.remote.get<SessionRow>("remote_session", p[3]); if (currentSession) invalidate(p[1], p[4] === "controller" ? "controller" : p[4] === "queue" ? "queue" : p[4] === "config" || p[4] === "routing" ? "config" : "session", p[3], currentSession.notificationVersion??0); } else { const changedRun = p[2] === "runs" && p[3] ? store.remote.get<RunRow>("remote_run", p[3]) : undefined; invalidate(p[1], p[2] === "runs" ? p[4] === "approvals" ? "approval" : "run" : "session", p[3] ?? p[1], changedRun?.notificationVersion ?? 0); } }
       dispatch(); return response;
     });
@@ -261,7 +262,11 @@ export function createRemoteControl(ports: RemotePorts) {
     }
     if (p[0] === "projects" && p[1] && p[2] === "runs" && p[3] && p[4] === "result" && request.method === "POST") {
       const b = control("ResultUpload", input); const key = mutationKey(request);
-      return ports.serialized(async () => store.writeTransaction((state, repo) => json(resultUpload(state, repo, machine(repo, m.machineId), p[1]!, p[3]!, b, key))));
+      return ports.serialized(async () => {
+        const response = store.writeTransaction((state, repo) => json(resultUpload(state, repo, machine(repo, m.machineId), p[1]!, p[3]!, b, key)));
+        const changed = store.remote.get<RunRow>("remote_run", p[3]!); if (changed) invalidate(changed.projectId, "run", changed.runId, changed.notificationVersion ?? 0);
+        return response;
+      });
     }
     if (p[0] !== "machines" || p[1] !== m.machineId) fail(403, "forbidden", "Machine cannot perform human control actions");
     if (p[2] === "recovery" && request.method === "GET") {

@@ -523,13 +523,16 @@ jobs:
       # the image reference inside is a digest, which does not change under anyone. Signing the
       # assets, so that a replaced file is detectable, is future work (docs/requirements/
       # team-hub-distribution/specification.md, out of scope).
+      #
+      # `--repo` is required: the step runs in `$RUNNER_TEMP/hub`, outside the checkout, where `gh`
+      # has no git remote to infer the repository from (v0.4.1 failed here with "not a git repository").
       - name: Upload the Hub assets to the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/hub"
-          gh release upload "$GITHUB_REF_NAME" --clobber \
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
             team-hub-prototype-source.tar.gz \
             team-hub-server-linux-x64 \
             team-hub-client-linux-x64 \
