@@ -420,11 +420,6 @@ eq "automatic rollback: current is back on v0.0.1" "$(readlink "$hub/current")" 
 assert "the Hub is healthy after the automatic rollback" curl -fsS --max-time 10 "$base/healthz"
 eq "automatic recovery preserved all current data" "$(project_count)" 4
 
-# Capture every safety copy that this run has already produced. Earlier refusal now happens
-# before backup creation, so a fixed minimum count is not a retention assertion.
-find "$hub/backups" -mindepth 1 -maxdepth 1 -type d \( -name 'upgrade-*' -o -name 'pre-restore-*' -o -name 'pre-rollback-*' \) > "$E/young-safety-backups"
-[ -s "$E/young-safety-backups" ] || fail "the rehearsal produced no safety backups to verify"
-
 # A writer3 database must reject the simulated old-writer image BEFORE stopping the live Hub.
 hubctl upgrade 0.0.2 --yes >>"$steps" 2>&1 || fail "upgrade for writer compatibility test failed"
 bearer_header "$operator"
@@ -434,6 +429,13 @@ mkdir "$E/old-reader-bundle"
 tar -xzf "$E/releases/v0.0.5/team-hub-install.tar.gz" -C "$E/old-reader-bundle" --strip-components=1
 hubctl _stage "$E/old-reader-bundle" 0.0.5 "kth-e2e-$run-old-reader" >>"$steps" 2>&1 || fail "could not stage old-reader fixture"
 printf 'v0.0.5\n' > "$hub/state/previous-release"
+# Count retention is the documented contract: three newest plus a referenced upgrade copy.
+# Capture the actual retained set AFTER the successful upgrade has legitimately pruned it.
+find "$hub/backups" -mindepth 1 -maxdepth 1 -type d \( -name 'upgrade-*' -o -name 'pre-restore-*' -o -name 'pre-rollback-*' \) > "$E/retained-safety-backups"
+safety=$(wc -l < "$E/retained-safety-backups" | tr -d ' ')
+[ "$safety" -ge 1 ] && [ "$safety" -le 4 ] || fail "safety retention must keep a bounded recoverable set: $safety"
+IFS= read -r protected_backup < "$hub/state/last-upgrade-backup"
+[ -d "$protected_backup" ] || fail "the explicitly referenced pre-upgrade backup was pruned"
 check_cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)
 refuses_saying "writer3 downgrade refuses before stopping current" "current Hub and release are unchanged" hubctl rollback --yes
 # A broken fixture must not masquerade as the writer-version incompatibility being tested.
@@ -445,9 +447,9 @@ assert "managed metadata remains readable" curl -fsS --max-time 10 -H "@$E/.head
 
 # Verify actual backup identities rather than assuming failed preflights create backups.
 while IFS= read -r retained; do
-  [ -d "$retained" ] || fail "a safety backup made during this rehearsal was removed: $retained"
-done < "$E/young-safety-backups"
-pass "all prior safety backups remain present after the writer compatibility rehearsal"
+  [ -d "$retained" ] || fail "a failed preflight removed an existing safety backup: $retained"
+done < "$E/retained-safety-backups"
+pass "bounded safety copies and the protected upgrade backup survive refused rollback"
 
 # --- the operator token is shown on a terminal, once; two installs side by side ------------------------------------
 # A second install into a directory whose name starts with the first one's, in its own compose project.
