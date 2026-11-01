@@ -47,11 +47,19 @@ export function hubCommandReceipt(dataDir: string, sessionId: string, operationI
     .find((command) => command.frameType === "session-command" && command.operationId === operationId)?.receipt);
 }
 /** Hub's stored run row, including the fields the HTTP projection leaves out (terminalAt, notificationVersion); undefined when absent. */
-export function hubRun(dataDir: string, runId: string): { state: string; terminalAt?: string; notificationVersion?: number } | undefined {
+type HubRunRow = { state: string; terminalAt?: string; notificationVersion?: number };
+export function hubRun(dataDir: string, runId: string): HubRunRow | undefined {
   return hubRows(dataDir, (db) => {
     const row = db.query<{ body: string }, [string]>("SELECT body FROM remote_run WHERE id=?").get(runId);
-    return row ? JSON.parse(row.body) as { state: string; terminalAt?: string; notificationVersion?: number } : undefined;
+    return row ? JSON.parse(row.body) as HubRunRow : undefined;
   });
+}
+/** An open browser event socket for the fixture project, with every invalidation frame it has received so far. */
+export async function subscribeBrowser(fx: { origin: string; cookie: string; project: { id: string } }): Promise<{ socket: WebSocket; frames: Control["BrowserInvalidation"][] }> {
+  const socket = new NativeWebSocket(`${fx.origin.replace("http", "ws")}/hub/v2/events/socket?projectId=${fx.project.id}`, { headers: { Cookie: fx.cookie, Origin: fx.origin } });
+  const frames: Control["BrowserInvalidation"][] = []; socket.addEventListener("message", (e) => frames.push(JSON.parse(String(e.data))));
+  await new Promise<void>((resolve, reject) => { socket.addEventListener("open", () => resolve(), { once: true }); socket.addEventListener("error", () => reject(new Error("browser upgrade failed")), { once: true }); });
+  return { socket, frames };
 }
 export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'>={}) {
   const dataDir = mkdtempSync(join(tmpdir(), "hub-remote-v2-"));

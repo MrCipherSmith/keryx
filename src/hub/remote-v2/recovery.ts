@@ -3,7 +3,7 @@ import { fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
 import type { HumanAuthority, MachineRecord, OperationRecord, QueueRow, RunRow, SessionRow } from "./model";
-import { control, id, iso, saveSession, scoped, version } from "./guards";
+import { control, endRun, id, iso, saveSession, scoped, version } from "./guards";
 export type ReconciliationRow = { report: Control["ReconciliationReport"]; receipt: Control["ReconciliationReceipt"] };
 /**
  * A crashed session whose only uncertain run a human resolved lost. Hub then delivers a resume although it holds no verified baseline:
@@ -36,12 +36,15 @@ export function resolveRun(state: HubState, repo: RemoteRepository, authority: H
   if (!receipt || !report || receipt.machineId !== machine.machineId || receipt.ledgerId !== machine.ledgerId || receipt.runId !== run.runId || receipt.sessionId !== run.sessionId || receipt.turnId !== run.turnId || receipt.checkoutId !== run.checkoutId || receipt.projectId !== run.projectId || receipt.expectedRunVersion !== run.version || receipt.reportDigest !== canonicalDigest(report) || Date.now() - Date.parse(receipt.receivedAt) > 30000 || report.commandDigest !== run.commandDigest || receipt.observation === "unknown") fail(409, "recovery-required", "Matching fresh local reconciliation required");
   if (run.state !== "unknown") fail(409, "stale-reference", "Only uncertain runs may be resolved");
   if (body.decision === "lost" && receipt.observation !== "confirmed-stopped") fail(409, "recovery-required", "Locally confirmed absence required for lost resolution");
-  if (receipt.observation === "owned-running") { if (!report.nativeIdentity) fail(409, "recovery-required", "Owned supervisor required"); run.nativeIdentity = report.nativeIdentity; run.state = "running"; }
-  else { run.state = "lost"; run.terminalAt ??= new Date().toISOString(); }
-  run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; run.reconciliationId = receipt.reconciliationId; run.observedAt = report.observedAt; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: machine.machineId, sessionId: run.sessionId, runId: run.runId });
+  run.reconciliationId = receipt.reconciliationId; run.observedAt = report.observedAt;
+  const lost = receipt.observation !== "owned-running";
+  if (lost) endRun(repo, run, "lost");
+  else {
+    if (!report.nativeIdentity) fail(409, "recovery-required", "Owned supervisor required");
+    run.nativeIdentity = report.nativeIdentity; run.state = "running"; run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; repo.put("remote_run", run.runId, run);
+  }
   const row = repo.get<SessionRow>("remote_session", run.sessionId);
-  if(run.state==='lost')repo.releaseRunCapacity(run.runId);
-  if (row && run.state === "lost") {
+  if (row && lost) {
     if (row.pending?.commandId === run.commandId) delete row.pending; row.baselineVerified = false;
     // The crashed daemon's last projection still shows the lost run active, and nothing runs it now. The session is neither busy nor
     // idle nor closed but recovery-required, until a resume the machine re-verifies against its owned baseline. The version is kept:
