@@ -1,5 +1,6 @@
 import { releasedControllerAlias, verifiedControllerRecovery } from "./controller-recovery";
-import { canonicalDigest, criteriaDigest, type Control, type FrameOf } from "../../remote-control/protocol";
+import { canonicalDigest, type Control, type FrameOf } from "../../remote-control/protocol";
+import { inspectLegacyFlowPins } from "../legacy-flow-pins";
 import { assertLegacyFlowWritable, fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
@@ -19,10 +20,9 @@ export function completeProjection(repo: RemoteRepository, row: SessionRow): Pro
 }
 export function checkAssociation(state: HubState, association: Control["FlowAssociation"], projectId?: string): void {
   if (association.mode === "flow") {
-    const flow = state.flows.find((f) => f.id === association.flowId);
-    if(flow&&(projectId===undefined||flow.projectId===projectId))assertLegacyFlowWritable(state,flow.projectId,flow.id);
-    const spec = flow && state.documents.find((d) => d.id === flow.specDocumentId);
-    if (!flow || (projectId !== undefined && flow.projectId !== projectId) || !spec || flow.status !== "in-progress" || flow.version !== association.expectedFlowVersion || flow.specContentDigest !== association.specDigest || spec.contentDigest !== association.specDigest || criteriaDigest(flow.criteria) !== association.criteriaDigest) fail(409, "stale-reference", "Managed Flow association is not current executable work");
+    const {flow,spec,drift}=inspectLegacyFlowPins(state,association,projectId);
+    if(flow)assertLegacyFlowWritable(state,flow.projectId,flow.id);
+    if(!flow||!spec||flow.status!=='in-progress'||drift.length)fail(409,'stale-reference','Managed Flow association is not current executable work');
   }
 }
 export function createSession(state: HubState, repo: RemoteRepository, deps: SessionDependencies, auth: HumanAuthority, projectId: string, body: Control["SessionCreate"], operationId: string, deliver = true) {
