@@ -1,0 +1,8 @@
+/* Exact immutable identities remain selectable and readable on narrow screens. */
+.managed-work :is(code, dd, .work-criterion strong) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.managed-work code {
+  white-space: pre-wrap;
+}

@@ -359,4 +359,3 @@ function AmendmentDecision({
     </details>
   );
 }
-
