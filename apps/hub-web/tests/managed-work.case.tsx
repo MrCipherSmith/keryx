@@ -525,3 +525,13 @@ test("Intent approval exposes approach, exclusions, exact parent digest and crit
     screen.getByRole("button", { name: "Approve requirements" }),
   ).toBeEnabled();
 });
+
+test("unsubmitted Attempt detail shows the latest exact subject selected by submission preparation",async()=>{
+ const attempt=recordOf(records,"attempt","a-agent")!;attempt.submissionId=null;
+ const subject=recordOf(records,"subject","subject-agent")!;subject.report="Older result marker";
+ records.push({...subject,id:"latest-subject",report:"Latest result marker",contentDigest:"b".repeat(64)});
+ const value:HubContextValue={principal:{id:"human:test",kind:"human",role:"operator"},projectId:"p",scopeKey:65,location:{projectId:"p",tab:"work",flowId:"flow-demo",intentId:"i1",attemptId:"a-agent"},navigate:vi.fn(),refresh:async()=>undefined};
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><HubContext.Provider value={value}><ManagedWorkView/></HubContext.Provider></QueryClientProvider>);
+ expect(await screen.findByText("Latest result marker")).toBeVisible();
+ expect(screen.queryByText("Older result marker")).not.toBeInTheDocument();
+});

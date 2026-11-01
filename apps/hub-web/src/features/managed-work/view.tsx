@@ -768,7 +768,7 @@ function AttemptDetail({
   const submission = recordOf(records, "submission", attempt.submissionId);
   const subject =
     recordOf(records, "subject", submission?.subjectId) ??
-    recordsOf(records, "subject").find((s) => s.attemptId === attempt.id);
+    recordsOf(records, "subject").filter((subject) => subject.attemptId === attempt.id).at(-1);
   const context = recordOf(records, "context", attempt.contextSnapshotId);
   const links = recordsOf(records, "execution-link").filter(
     (l) => l.attemptId === attempt.id,
