@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { workOpenApi, matchesWorkSchema } from "./openapi";
 
 test("published OpenAPI is the exact generated closed HTTP contract", async () => {
@@ -29,7 +30,7 @@ test('every published schema reference resolves within the OpenAPI document', ()
 });
 
 test('web contract copies remain identical to canonical schemas and vocabulary stays explicitly supported', async () => {
-    const vocabulary = new Set(['$id', '$ref', '$schema', '$defs', 'title', 'description', 'additionalProperties', 'anyOf', 'const', 'enum', 'items', 'maxItems', 'maxLength', 'maxProperties', 'minItems', 'minLength', 'minimum', 'maximum', 'oneOf', 'pattern', 'propertyNames', 'properties', 'required', 'type']);
+    const vocabulary = new Set(['$id', '$ref', '$schema', '$comment', '$defs', 'title', 'description', 'additionalProperties', 'anyOf', 'const', 'enum', 'items', 'maxItems', 'maxLength', 'maxProperties', 'minItems', 'minLength', 'minimum', 'maximum', 'oneOf', 'pattern', 'propertyNames', 'properties', 'required', 'type']);
     function inspect(schema: unknown) {
         if (Array.isArray(schema)) { for (const item of schema) inspect(item); return; }
         if (!schema || typeof schema !== 'object') return;
@@ -44,4 +45,16 @@ test('web contract copies remain identical to canonical schemas and vocabulary s
         const web = await Bun.file(new URL(`../../../apps/hub-web/src/features/managed-work/${name}-schema.json`, import.meta.url)).json();
         expect(web).toEqual(canonical); inspect(canonical);
     }
+});
+
+
+test('browser schema copies are reproducibly generated and their check is read-only', async () => {
+    const root = new URL('../../../', import.meta.url);
+    const paths = ['command', 'domain', 'event'].map(name => new URL(`apps/hub-web/src/features/managed-work/${name}-schema.json`, root));
+    const before = await Promise.all(paths.map(path => Bun.file(path).text()));
+    const child = Bun.spawn([process.execPath, 'scripts/sync-hub-work-schemas.ts', '--check'], { cwd: fileURLToPath(root), stdout: 'pipe', stderr: 'pipe' });
+    const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    expect({ code, stderr }).toEqual({ code: 0, stderr: '' });
+    expect(stdout).toContain('match the canonical protocol');
+    expect(await Promise.all(paths.map(path => Bun.file(path).text()))).toEqual(before);
 });
