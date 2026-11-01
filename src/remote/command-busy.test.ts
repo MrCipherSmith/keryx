@@ -93,7 +93,8 @@ describe("a command that runs long (AC9)", () => {
     });
     await h.bridge.enable();
     await h.say("/doctor");
-    await h.bridge.idle();
+    // The command never ends, so the line stays held (highload-20 F-001): wait for the notice, not idle().
+    await waitFor(() => h.client().replies.some((reply) => reply.includes("Stopped waiting")), "the limit notice");
     expect(h.calls).not.toContain("cancel");
     const reply = h.client().replies.at(-1) ?? "";
     expect(reply).toContain("/doctor is still running in the shell");
@@ -109,7 +110,7 @@ describe("a command that runs long (AC9)", () => {
     });
     await h.bridge.enable();
     await h.say("/status");
-    await h.bridge.idle();
+    await waitFor(() => h.client().replies.some((reply) => reply.includes("Stopped waiting")), "the limit notice");
     expect(h.ran).toEqual(["/status"]);
     expect(h.calls.filter((call) => call === "cancel")).toEqual([]);
     expect(h.client().replies.at(-1) ?? "").toContain("Stopped waiting");
@@ -124,14 +125,19 @@ describe("a command that runs long (AC9)", () => {
     expect(h.calls.filter((call) => call === "cancel")).toEqual([]);
   });
 
-  it("goes on to the next command after one was stopped", async () => {
+  // Perimeter review (highload-20 F-001): this used to expect /status to run while /doctor still ran,
+  // which is the overlap the review found. The next command goes on once the first one has ended.
+  it("goes on to the next command once the one it stopped waiting for has ended", async () => {
     let first = true;
+    let finishFirst!: () => void;
     const h = commandHarness({
       commandLimitMs: 15,
       runCommand: (line) => {
         if (first) {
           first = false;
-          return new Promise(() => undefined);
+          return new Promise((resolve) => {
+            finishFirst = () => resolve({ output: "doctor done", ok: true });
+          });
         }
         return Promise.resolve({ output: `ran ${line}`, ok: true });
       },
@@ -139,6 +145,9 @@ describe("a command that runs long (AC9)", () => {
     await h.bridge.enable();
     await h.say("/doctor");
     await h.say("/status");
+    await waitFor(() => h.client().replies.some((reply) => reply.includes("Stopped waiting")), "the limit notice");
+    expect(h.ran).toEqual(["/doctor"]);
+    finishFirst();
     await h.bridge.idle();
     expect(h.client().replies.at(-1)).toContain("ran /status");
   });

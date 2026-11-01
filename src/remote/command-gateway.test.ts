@@ -146,3 +146,49 @@ describe("commands refused remotely (AC8)", () => {
     await waitFor(() => h.bridge.status().events.some((event) => event.kind === "command" && event.text.startsWith("refused /exit")), "the refusal event");
   });
 });
+
+// Perimeter review (security-code-20 F-001): `/queue force` interrupts the running turn and
+// `/queue remove|edit` change lines the operator queued, so only the read-only forms pass.
+describe("/queue from the topic", () => {
+  it("lets the listing through", () => {
+    expect(classifyRemoteCommand("/queue")).toEqual({ kind: "run", command: "queue", line: "/queue" });
+    expect(classifyRemoteCommand("/queue list")).toEqual({ kind: "run", command: "queue", line: "/queue list" });
+    expect(classifyRemoteCommand("/queue LIST").kind).toBe("run");
+  });
+
+  it("refuses force, remove and edit, and anything else, with a reason", () => {
+    for (const line of ["/queue force 1", "/queue force", "/queue FORCE 2", "/queue remove 1", "/queue edit 1", "/queue list extra", "/queue drop"]) {
+      const decision = classifyRemoteCommand(line);
+      expect(decision.kind).toBe("refuse");
+      if (decision.kind === "refuse") {
+        expect(decision.known).toBe(true);
+        expect(decision.reason.length).toBeGreaterThan(0);
+      }
+    }
+    const force = classifyRemoteCommand("/queue force 1");
+    expect(force.kind === "refuse" && force.reason).toContain("interrupts the running turn");
+  });
+
+  it("never runs /queue force in the shell; the topic is told why", async () => {
+    const h = commandHarness({ busy: true });
+    await h.bridge.enable();
+    await h.say("/queue force 1");
+    await h.bridge.idle();
+    expect(h.ran).toEqual([]);
+    expect(h.client().replies.at(-1)).toContain("Not available remotely: /queue");
+  });
+});
+
+// Perimeter review (backend-20 F-001): an inherited property name is not a refusal reason.
+describe("a command named like an Object property", () => {
+  it("is refused as unknown, with a string reason", () => {
+    for (const line of ["/constructor", "/__proto__", "/toString", "/hasOwnProperty"]) {
+      const decision = classifyRemoteCommand(line);
+      expect(decision.kind).toBe("refuse");
+      if (decision.kind === "refuse") {
+        expect(typeof decision.reason).toBe("string");
+        expect(decision.known).toBe(false);
+      }
+    }
+  });
+});

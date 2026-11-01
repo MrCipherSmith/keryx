@@ -11269,8 +11269,8 @@ export async function launchTuiAgentShell(opts: {
         // makes the shell busy without making that answer incomplete.
         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
         sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),
-        runLine: (text) => remoteQueue.runTelegramLine(text),
-        enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
+        runLine: (text, updateId) => remoteQueue.runTelegramLine(text, updateId),
+        enqueue: (text, updateId) => remoteQueue.enqueueTelegramLine(text, updateId),
         notice: (text) => io.onSystem?.(`${text}\n`),
         cancelTurn: () => foregroundOperation.cancel("remote run time limit"),
         recordOn: (name) => {

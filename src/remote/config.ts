@@ -224,6 +224,25 @@ export interface RemotePolicyPatch {
  * the file is not touched.
  */
 export function updateRemotePolicy(patch: RemotePolicyPatch, dir?: string): Loaded<RemoteConfig> {
+  return editRemoteConfigFile((next) => {
+    if (patch.permissionMode !== undefined) next.permissionMode = patch.permissionMode;
+    if (patch.runTimeoutMs !== undefined) next.runTimeoutMs = patch.runTimeoutMs;
+    if (patch.approvalTimeoutMs !== undefined) next.approvalTimeoutMs = patch.approvalTimeoutMs;
+  }, dir);
+}
+
+/**
+ * Save the rendering mode the same way: only `rendering` changes, so the defaults a load fills in never
+ * land in the file (perimeter review, regression-21 F-001).
+ */
+export function updateRemoteRendering(mode: NonNullable<RemoteConfig["rendering"]>, dir?: string): Loaded<RemoteConfig> {
+  return editRemoteConfigFile((next) => {
+    next.rendering = mode;
+  }, dir);
+}
+
+/** Edit the file as it is, validate the result with the closed schema, and write it only when it passes. */
+function editRemoteConfigFile(edit: (doc: Record<string, unknown>) => void, dir?: string): Loaded<RemoteConfig> {
   const file = remoteConfigPath(dir);
   const read = readConfigFile(file);
   if (!read.ok) {
@@ -245,9 +264,7 @@ export function updateRemotePolicy(patch: RemotePolicyPatch, dir?: string): Load
     return { ok: false, reason: "remote config must be a JSON object" };
   }
   const next: Record<string, unknown> = { ...(doc as Record<string, unknown>) };
-  if (patch.permissionMode !== undefined) next.permissionMode = patch.permissionMode;
-  if (patch.runTimeoutMs !== undefined) next.runTimeoutMs = patch.runTimeoutMs;
-  if (patch.approvalTimeoutMs !== undefined) next.approvalTimeoutMs = patch.approvalTimeoutMs;
+  edit(next);
   const checked = parseRemoteConfig(next);
   if (!checked.ok) {
     return checked;
