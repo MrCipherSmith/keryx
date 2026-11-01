@@ -1,3 +1,5 @@
+import { RevisionEditor } from "./revision-editor";
+import { amendmentDraft } from "./amendment-model";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useHub } from "../../app/hub-context";
@@ -5,7 +7,6 @@ import { useDraft } from "../../state/drafts";
 import {
   Button,
   Field,
-  Input,
   Notice,
   Select,
   Textarea,
@@ -21,7 +22,6 @@ import { useWorkOperation } from "./operation";
 import type { WorkAdapter } from "./adapter";
 import type {
   AmendmentManifest,
-  Criterion,
   WorkFlow,
   WorkIntent,
   WorkRecord,
@@ -37,7 +37,7 @@ export function AmendmentsPanel({
   adapter: WorkAdapter;
   flow: WorkFlow;
   records: WorkRecord[];
-  can: (c: string) => boolean;
+  can: (command: string) => boolean;
   onDone: () => void;
 }) {
   const { t } = useTranslation("work");
@@ -56,59 +56,10 @@ export function AmendmentsPanel({
     ].join(":"),
     "",
   );
-  const intents = recordsOf(records, "intent").filter(
-    (i) => i.flowId === flow.id,
-  );
+  const { intents, replacements, affected, complete, expectedVersions } = amendmentDraft(records, flow);
   const pending = pendingAmendments(records, flow.id);
-  const history = recordsOf(records, "amendment").filter(
-    (m) => m.flowId === flow.id,
-  );
+  const history = recordsOf(records, "amendment").filter((manifest) => manifest.flowId === flow.id);
   const terminal = ["accepted", "cancelled"].includes(flow.state);
-  const fr = recordOf(records, "flow-revision", flow.currentRevisionId);
-  const replacements: AmendmentManifest["replacements"] = [];
-  if (flow.approvedRevisionId && fr && fr.id !== flow.approvedRevisionId)
-    replacements.push({
-      targetType: "flow",
-      targetId: flow.id,
-      revisionId: fr.id,
-      contentDigest: fr.contentDigest,
-    });
-  for (const intent of intents) {
-    const ir = recordOf(records, "intent-revision", intent.currentRevisionId);
-    if (ir && ir.id !== intent.approvedRevisionId)
-      replacements.push({
-        targetType: "intent",
-        targetId: intent.id,
-        revisionId: ir.id,
-        contentDigest: ir.contentDigest,
-      });
-  }
-  const affected = replacements
-    .filter((r) => r.targetType === "intent")
-    .map((r) => r.targetId);
-  const flowChange = replacements.some((r) => r.targetType === "flow");
-  const complete =
-    affected.length > 0 &&
-    intents
-      .filter((i) => i.required && affected.includes(i.id))
-      .every((i) =>
-        (flowChange
-          ? fr
-          : recordOf(records, "flow-revision", flow.approvedRevisionId)
-        )?.requiredIntentIds.includes(i.id),
-      ) &&
-    (!flowChange ||
-      intents
-        .filter((i) => i.approvedRevisionId)
-        .every((i) => affected.includes(i.id))) &&
-    affected.every(
-      (id) =>
-        recordOf(
-          records,
-          "intent-revision",
-          intents.find((i) => i.id === id)?.currentRevisionId,
-        )?.flowRevisionId === (flowChange ? fr?.id : flow.approvedRevisionId),
-    );
   if (!flow.approvedRevisionId && !history.length) return null;
   return (
     <section className="work-amendments">
@@ -133,9 +84,9 @@ export function AmendmentsPanel({
                   onChange={(e) => setTarget(e.target.value)}
                 >
                   <option value="flow">{flow.title}</option>
-                  {intents.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.title}
+                  {intents.map((intent) => (
+                    <option key={intent.id} value={intent.id}>
+                      {intent.title}
                     </option>
                   ))}
                 </Select>
@@ -146,11 +97,11 @@ export function AmendmentsPanel({
                   ":" +
                   flow.currentRevisionId +
                   ":" +
-                  intents.find((i) => i.id === target)?.currentRevisionId
+                  intents.find((intent) => intent.id === target)?.currentRevisionId
                 }
                 adapter={adapter}
                 flow={flow}
-                intent={intents.find((i) => i.id === target)}
+                intent={intents.find((intent) => intent.id === target)}
                 records={records}
                 onDone={() => {
                   setEditing(false);
@@ -166,14 +117,7 @@ export function AmendmentsPanel({
                 e.preventDefault();
                 void run({
                   command: "requirements.amend",
-                  expectedVersions: {
-                    ...aggregateVersions(flow),
-                    ...Object.fromEntries(
-                      intents
-                        .filter((i) => affected.includes(i.id))
-                        .map((i) => [i.id, i.version]),
-                    ),
-                  },
+                  expectedVersions,
                   payload: {
                     flowId: flow.id,
                     sourceFlowRevisionId: flow.approvedRevisionId,
@@ -253,7 +197,7 @@ function PinTable({
         const target =
           replacement.targetType === "flow"
             ? flow
-            : intents.find((i) => i.id === replacement.targetId);
+            : intents.find((intent) => intent.id === replacement.targetId);
         const approved = target?.approvedRevisionId;
         return (
           <article key={replacement.targetId}>
@@ -325,8 +269,8 @@ function AmendmentDecision({
         ...aggregateVersions(flow),
         ...Object.fromEntries(
           intents
-            .filter((i) => manifest.affectedIntentIds.includes(i.id))
-            .map((i) => [i.id, i.version]),
+            .filter((intent) => manifest.affectedIntentIds.includes(intent.id))
+            .map((intent) => [intent.id, intent.version]),
         ),
       },
       payload: {
@@ -356,23 +300,23 @@ function AmendmentDecision({
           records={records}
         />
       ) : (
-        manifest.replacements.map((r) => (
-          <p key={r.targetId}>
-            {r.targetType} ·{" "}
+        manifest.replacements.map((replacement) => (
+          <p key={replacement.targetId}>
+            {replacement.targetType} ·{" "}
             <code>
-              {r.targetId} → {r.revisionId}
+              {replacement.targetId} → {replacement.revisionId}
             </code>
           </p>
         ))
       )}
       {manifest.replacements.map((replacement) => {
-        const r = records.find((r) => r.id === replacement.revisionId);
-        return r &&
-          (r.kind === "flow-revision" || r.kind === "intent-revision") ? (
+        const revision = records.find((record) => record.id === replacement.revisionId);
+        return revision &&
+          (revision.kind === "flow-revision" || revision.kind === "intent-revision") ? (
           <RevisionReview
-            key={r.id}
+            key={revision.id}
             adapter={adapter}
-            revision={r}
+            revision={revision}
             records={records}
             expanded={pending}
           />
@@ -416,249 +360,3 @@ function AmendmentDecision({
   );
 }
 
-function RevisionEditor({
-  adapter,
-  flow,
-  intent,
-  records,
-  onDone,
-}: {
-  adapter: WorkAdapter;
-  flow: WorkFlow;
-  intent?: WorkIntent;
-  records: WorkRecord[];
-  onDone: () => void;
-}) {
-  const { t } = useTranslation("work");
-  const hub = useHub();
-  const fr = recordOf(records, "flow-revision", flow.currentRevisionId);
-  const ir = recordOf(records, "intent-revision", intent?.currentRevisionId);
-  const target = intent ?? flow;
-  const revision = intent ? ir : fr;
-  const [draft, setDraft] = useDraft(
-    [
-      hub.scopeKey,
-      hub.projectId,
-      adapter.mode,
-      target.id,
-      revision?.id,
-      "revision-editor",
-    ].join(":"),
-    {
-      problem: fr?.problem ?? "",
-      expectedOutcome: fr?.expectedOutcome ?? "",
-      scope: fr?.scope ?? "",
-      deliverable: ir?.deliverable ?? "",
-      approach: ir?.approach ?? "",
-      outOfScope: revision?.outOfScope ?? "",
-      requiredIntentIds: [...(fr?.requiredIntentIds ?? [])],
-      criteria: structuredClone(revision?.criteria ?? []),
-      mappings: structuredClone(ir?.criterionMappings ?? []),
-    },
-  );
-  const { run, blocked } = useWorkOperation(adapter, onDone);
-  if (!revision || !fr) return null;
-  const changeCriterion = (id: string, patch: Partial<Criterion>) =>
-    setDraft({
-      ...draft,
-      criteria: draft.criteria.map((c) =>
-        c.criterionId === id ? { ...c, ...patch } : c,
-      ),
-    });
-  const mappedIds = [...new Set(draft.mappings.map((m) => m.flowCriterionId))];
-  const validMappings =
-    !intent ||
-    (draft.criteria.length > 0 &&
-      draft.criteria.every((c) =>
-        draft.mappings.some((m) => m.intentCriterionId === c.criterionId),
-      ) &&
-      draft.mappings.every((m) =>
-        fr.criteria.some((c) => c.criterionId === m.flowCriterionId),
-      ));
-  return (
-    <form
-      className="work-contribution-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void run({
-          command: "revision.propose",
-          expectedVersions: aggregateVersions(flow, intent),
-          payload: intent
-            ? {
-                targetType: "intent",
-                intentId: intent.id,
-                flowRevisionId: fr.id,
-                deliverable: draft.deliverable,
-                approach: draft.approach,
-                outOfScope: draft.outOfScope,
-                criteria: draft.criteria,
-                flowCriterionIds: mappedIds,
-                criterionMappings: draft.mappings,
-              }
-            : {
-                targetType: "flow",
-                flowId: flow.id,
-                problem: draft.problem,
-                expectedOutcome: draft.expectedOutcome,
-                scope: draft.scope,
-                outOfScope: draft.outOfScope,
-                specification: fr.specification,
-                criteria: draft.criteria,
-                requiredIntentIds: draft.requiredIntentIds,
-              },
-        });
-      }}
-    >
-      <div className="work-pin">
-        <span>{t("oldPins")}</span>
-        <code>{target.approvedRevisionId}</code>
-        <span>{t("proposalBase")}</span>
-        <code>{revision.id}</code>
-      </div>
-      {(intent
-        ? (["deliverable", "approach", "outOfScope"] as const)
-        : (["problem", "expectedOutcome", "scope", "outOfScope"] as const)
-      ).map((key) => (
-        <Field key={key} label={t(key === "expectedOutcome" ? "outcome" : key)}>
-          <Textarea
-            required
-            maxLength={10000}
-            value={draft[key]}
-            onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-          />
-        </Field>
-      ))}
-      {!intent && (
-        <fieldset>
-          <legend>{t("requiredIntents")}</legend>
-          {recordsOf(records, "intent")
-            .filter((i) => i.flowId === flow.id && i.required)
-            .map((i) => (
-              <label className="work-checkbox" key={i.id}>
-                <input
-                  type="checkbox"
-                  checked={draft.requiredIntentIds.includes(i.id)}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      requiredIntentIds: e.target.checked
-                        ? [...draft.requiredIntentIds, i.id]
-                        : draft.requiredIntentIds.filter((id) => id !== i.id),
-                    })
-                  }
-                />
-                {i.title}
-              </label>
-            ))}
-        </fieldset>
-      )}
-      <fieldset>
-        <legend>{t("criteria")}</legend>
-        {draft.criteria.map((criterion) => (
-          <div className="work-edit-criterion" key={criterion.criterionId}>
-            <code>{criterion.criterionId}</code>
-            <Field label={t("criterionText")}>
-              <Input
-                required
-                maxLength={4000}
-                value={criterion.text}
-                onChange={(e) =>
-                  changeCriterion(criterion.criterionId, {
-                    text: e.target.value,
-                  })
-                }
-              />
-            </Field>
-            <label className="work-checkbox">
-              <input
-                type="checkbox"
-                checked={criterion.waivable}
-                onChange={(e) =>
-                  changeCriterion(criterion.criterionId, {
-                    waivable: e.target.checked,
-                  })
-                }
-              />
-              {t("allowWaivers")}
-            </label>
-            {intent && (
-              <fieldset>
-                <legend>{t("criterionMapping")}</legend>
-                {fr.criteria.map((fc) => (
-                  <label key={fc.criterionId} className="work-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={draft.mappings.some(
-                        (m) =>
-                          m.intentCriterionId === criterion.criterionId &&
-                          m.flowCriterionId === fc.criterionId,
-                      )}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          mappings: e.target.checked
-                            ? [
-                                ...draft.mappings,
-                                {
-                                  intentCriterionId: criterion.criterionId,
-                                  flowCriterionId: fc.criterionId,
-                                },
-                              ]
-                            : draft.mappings.filter(
-                                (m) =>
-                                  !(
-                                    m.intentCriterionId ===
-                                      criterion.criterionId &&
-                                    m.flowCriterionId === fc.criterionId
-                                  ),
-                              ),
-                        })
-                      }
-                    />
-                    {fc.text}
-                  </label>
-                ))}
-              </fieldset>
-            )}
-            <Button
-              variant="ghost"
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  criteria: draft.criteria.filter(
-                    (c) => c.criterionId !== criterion.criterionId,
-                  ),
-                  mappings: draft.mappings.filter(
-                    (m) => m.intentCriterionId !== criterion.criterionId,
-                  ),
-                })
-              }
-            >
-              {t("removeCriterion")}
-            </Button>
-          </div>
-        ))}
-        <Button
-          variant="secondary"
-          onClick={() =>
-            setDraft({
-              ...draft,
-              criteria: [
-                ...draft.criteria,
-                { criterionId: crypto.randomUUID(), text: "", waivable: false },
-              ],
-            })
-          }
-        >
-          {t("newCriterion")}
-        </Button>
-      </fieldset>
-      <Button
-        type="submit"
-        disabled={blocked || !draft.criteria.length || !validMappings}
-      >
-        {t("propose")}
-      </Button>
-    </form>
-  );
-}

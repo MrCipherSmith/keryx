@@ -577,3 +577,28 @@ test("work events retry with bounded backoff and stop on unmount without replayi
     vi.useRealTimers();
   }
 });
+
+
+test("amendments exclude cancelled and never-approved Intents from the exact replacement set", async () => {
+  amendment(); records = records.filter(record => record.kind !== "amendment");
+  const cancelled = recordOf(records, "intent", "i2")!;
+  cancelled.state = "cancelled";
+  records.push({...cancelled,id:"draft-intent",state:"draft",approvedRevisionId:null});
+  recordOf(records,"flow-revision","fr2")!.requiredIntentIds=["i1"];
+  show(<AmendmentsPanel adapter={adapter} flow={recordOf(records,"flow","flow-demo")!} records={records} can={()=>true} onDone={()=>undefined}/>);
+  fireEvent.change(screen.getByRole("textbox",{name:"Reason for the requirements change"}),{target:{value:"Review only active approved work"}});
+  expect(screen.getByRole("button",{name:"Authorize exact amendment set"})).toBeEnabled();
+  fireEvent.click(screen.getByRole("button",{name:"Authorize exact amendment set"}));
+  await waitFor(()=>expect(fetch).toHaveBeenCalled());
+  const body=JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(body.payload.affectedIntentIds).toEqual(["i1"]);
+  expect(body.payload.replacements.map((replacement:{targetId:string})=>replacement.targetId)).toEqual(["flow-demo","i1"]);
+});
+
+test("an approved Flow with no approved dependent Intent can authorize a Flow-only amendment",()=>{
+ amendment();records=records.filter(record=>record.kind!=="amendment"&&record.kind!=="intent");
+ recordOf(records,"flow-revision","fr2")!.requiredIntentIds=[];
+ show(<AmendmentsPanel adapter={adapter} flow={recordOf(records,"flow","flow-demo")!} records={records} can={()=>true} onDone={()=>undefined}/>);
+ fireEvent.change(screen.getByRole("textbox",{name:"Reason for the requirements change"}),{target:{value:"Change only the Flow scope"}});
+ expect(screen.getByRole("button",{name:"Authorize exact amendment set"})).toBeEnabled();
+});
