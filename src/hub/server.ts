@@ -106,7 +106,14 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const secure = new URL(config.publicOrigin ?? request.url).protocol === "https:" ? "; Secure" : "";
     return `${cookieName}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
   }
-  const remote = createRemoteControl({ store, managedExecution:createWorkExecution(store), serialized, checkOrigin,workManagementEnabled:config.workManagement?.enabled===true,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
+  const workEnabled = config.workManagement?.enabled === true;
+  const workRepositories = config.workManagement?.repositories ?? [];
+  const protectedValues = (request: Request) => [
+    config.operatorToken, config.agentToken, config.reviewerToken ?? '',
+    ...workRepositories.map(repository => repository.github?.token ?? ''),
+    request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '', sessionKey(request) ?? '',
+  ];
+  const remote = createRemoteControl({ store, managedExecution:createWorkExecution(store), serialized, checkOrigin,workManagementEnabled:workEnabled,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
     transportAllowed(request) { const origin = new URL(config.publicOrigin ?? request.url); return origin.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]", "::1"].includes(origin.hostname); },
     async human(request) { const identity = await authenticate(request); if (!identity.cookie || identity.actor.kind !== "human") fail(403, "human-session-required", "Current human browser session required"); const key = sessionKey(request); if (!key) fail(401, "unauthorized", "Session required"); return { actor: identity.actor, sessionDigest: sha256(key) }; },
     authorityValid(auth, projectId, readOnly = false) {
@@ -121,7 +128,9 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         && stored.credentialDigest === sha256(credentialFor(stored.principal, config));
     },
   });
-  const work = createWorkHttp({store, enabled: config.workManagement?.enabled === true, repositories:config.workManagement?.repositories??[], ...(config.workManagement?.observerFetch?{observerFetch:config.workManagement.observerFetch}:{}), protectedValues:(request)=>[config.operatorToken,config.agentToken,config.reviewerToken??"",...(config.workManagement?.repositories??[]).map(r=>r.github?.token??""),request.headers.get("authorization")?.replace(/^Bearer /,"")??"",sessionKey(request)??""], authenticate, checkOrigin, serialized, now});
+  const work = createWorkHttp({ store, enabled: workEnabled, repositories: workRepositories,
+    ...(config.workManagement?.observerFetch ? {observerFetch:config.workManagement.observerFetch} : {}),
+    protectedValues, authenticate, checkOrigin, serialized, now });
   async function externalDelivery(request: Request, path: string[], url: URL, body: unknown, key: string, bodyDigest: string): Promise<Response> {
     const prepared = await serialized(async () => {
       const identity = await authenticate(request);

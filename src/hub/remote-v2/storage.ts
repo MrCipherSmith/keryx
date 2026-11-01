@@ -3,11 +3,19 @@ import {remoteBudgets,type RemoteBudgets} from './budgets';
 export const REMOTE_TABLES = ["remote_project_ref", "remote_machine", "remote_pairing", "remote_inventory", "remote_capability_page", "remote_projection", "remote_session", "remote_operation", "remote_queue", "remote_controller_release", "remote_confirmation", "remote_run", "remote_command", "remote_event", "remote_session_event", "remote_history", "remote_approval_projection", "remote_authorization_grant", "remote_reconciliation", "remote_result_receipt", "remote_run_check"] as const;
 export type RemoteTable = typeof REMOTE_TABLES[number];
 export class RemoteStorageFailure extends Error {}
-export const REMOTE_SCHEMA_VERSION = 2;
+/** All historical values share the old startup gate column, so marker values are reserved globally. */
+export const DATABASE_MARKERS = { legacySchema: 1, remoteSchema: 2, managedWorkWriter: 3, legacyArtifactsWriter: 4 } as const;
+export function assertDatabaseMarkerNamespace(markers: Readonly<Record<string,number>> = DATABASE_MARKERS): void {
+  const values = Object.values(markers);
+  if (values.some(value => !Number.isSafeInteger(value) || value < 1) || new Set(values).size !== values.length) throw new RemoteStorageFailure('Database schema/writer marker collides with a reserved value');
+}
+assertDatabaseMarkerNamespace();
+const SUPPORTED_DATABASE_MARKERS: ReadonlySet<number> = new Set(Object.values(DATABASE_MARKERS));
+export const REMOTE_SCHEMA_VERSION = DATABASE_MARKERS.remoteSchema;
 /** Existing 0.4.1 startup rejects this marker; remote wire/table layout stays v2. */
-export const MANAGED_WORK_WRITER_VERSION = 3;
+export const MANAGED_WORK_WRITER_VERSION = DATABASE_MARKERS.managedWorkWriter;
 /** Legacy revision bytes/replays require content-addressed hydration; older v3 writers must refuse startup. */
-export const LEGACY_ARTIFACT_WRITER_VERSION = 4;
+export const LEGACY_ARTIFACT_WRITER_VERSION = DATABASE_MARKERS.legacyArtifactsWriter;
 function createRemoteTable(db: Database, table: RemoteTable, physical: string = table): void {
   const refs: string[] = [];
   if (table !== "remote_project_ref") refs.push("FOREIGN KEY(projectId) REFERENCES remote_project_ref(id) DEFERRABLE INITIALLY DEFERRED");
@@ -27,8 +35,8 @@ export function migrateRemote(db: Database): void {
     db.transaction(() => {
       db.exec("CREATE TABLE IF NOT EXISTS remote_schema_version(version INTEGER NOT NULL)");
       const row = db.query<{ version: number }, []>("SELECT version FROM remote_schema_version").get();
-      if (row && row.version !== 1 && row.version !== REMOTE_SCHEMA_VERSION && row.version !== MANAGED_WORK_WRITER_VERSION && row.version !== LEGACY_ARTIFACT_WRITER_VERSION) throw new RemoteStorageFailure("Unsupported remote schema version");
-      if (row?.version === REMOTE_SCHEMA_VERSION || row?.version === MANAGED_WORK_WRITER_VERSION || row?.version === LEGACY_ARTIFACT_WRITER_VERSION) return;
+      if (row && !SUPPORTED_DATABASE_MARKERS.has(row.version)) throw new RemoteStorageFailure("Unsupported remote schema version");
+      if (row && row.version !== DATABASE_MARKERS.legacySchema) return;
       for (const table of REMOTE_TABLES) {
         const old = db.query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
         const temporary = `${table}_v2`;
