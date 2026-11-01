@@ -1,0 +1,90 @@
+[
+  {
+    "name": "pr-health",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun --no-env-file src/cli.ts health run --changed --source eslint,typescript",
+    "started": "2026-11-01T16:12:14.500Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-58-638Z-8a59cb_run.log"
+  },
+  {
+    "name": "pr-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-48-511Z-3eaab8_run.log"
+  },
+  {
+    "name": "pr-script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-23-641Z-240aa7_run.log"
+  },
+  {
+    "name": "pr-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun node_modules/eslint/bin/eslint.js src/cli-registry.ts src/commands/hub.ts src/commands/hub-update.ts src/commands/hub-update.test.ts scripts/hubctl-release.test.ts scripts/hub-legacy-migration.test.ts",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-17-011Z-79687a_run.log"
+  },
+  {
+    "name": "pr-cli-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test src/commands/hub-update.test.ts src/commands/hub-machine.test.ts src/hub/status.test.ts src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-23-499Z-6b8853_run.log"
+  },
+  {
+    "name": "pr-helper-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/hubctl-release.test.ts scripts/hub-legacy-migration.test.ts",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.276Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-21-044Z-ff0480_run.log"
+  },
+  {
+    "name": "pr-package-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/package-team-hub.test.ts",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-22-821Z-486d2e_run.log"
+  },
+  {
+    "name": "pr-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-15-776Z-0e23c6_run.log"
+  },
+  {
+    "name": "pr-doc-links",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run check:doc-links",
+    "started": "2026-11-01T16:12:14.501Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-16-251Z-5e6ee8_run.log"
+  },
+  {
+    "name": "pr-shell-syntax",
+    "command": "bun --no-env-file src/cli.ts ctx run -- sh -n deploy/team-hub/hubctl deploy/team-hub/release/bundle.sh deploy/team-hub/release/e2e.sh",
+    "started": "2026-11-01T16:12:14.502Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-15-794Z-0ce287_run.log"
+  },
+  {
+    "name": "pr-python-syntax",
+    "command": "bun --no-env-file src/cli.ts ctx run -- python3 -c 'import ast,pathlib; [ast.parse(pathlib.Path(p).read_text(), filename=p) for p in [\"deploy/team-hub/migrate-legacy.py\", \"deploy/team-hub/release/migrate-legacy.test.py\"]]; print(\"Python AST syntax: 2 files passed\")'",
+    "started": "2026-11-01T16:12:14.502Z",
+    "completedObservation": "2026-11-01T16:13:14.277Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T16-12-15-870Z-006975_run.log"
+  }
+]

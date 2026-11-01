@@ -36,3 +36,5 @@ This is not a production upgrade, a real Cloudflare browser-login proof, or prod
 - Independent repaired-helper review APPROVE in `output/release-legacy-independent-review.md`; final local QA PASS in `output/release-update-quality.md`.
 
 These results make the code ready for the owner's requested review, not for an automatic merge, tag, published release or production cutover.
+
+Final shell lint also passed on geekom: official ShellCheck v0.10.0 container, installation tool/controller and all release shell scripts; exit0, no production mounts or changes. Log: `/home/altsay/.cache/keryx-release-rehearsal.erMnbB/shellcheck.log`.
