@@ -221,13 +221,28 @@ function knownNonApplication(p: FrameOf<"command-receipt">["payload"] | FrameOf<
  * A session command the machine rejected before starting it fails its operation with the machine's own code, as an expired delivery
  * does. A FIFO admission of a queued item is the exception: its refusal does not reject the still-queued logical operation.
  */
-function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p: FrameOf<"session-command-receipt">["payload"]): void {
+function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p: FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"]): void {
   if (p.status !== "rejected" || p.errorCode === null) return;
   if (repo.all<QueueRow>("remote_queue", { sessionId: p.sessionId }).some((queued) => queued.admissionCommandId === p.commandId)) return;
   const operation = repo.get<OperationRecord>("remote_operation", command.operationId);
   if (!operation) return;
   operation.status = 409; operation.deliveryFailure = { error: { code: p.errorCode, message: "The machine refused this operation before starting it; nothing was applied" } };
   repo.put("remote_operation", operation.id, operation);
+}
+/**
+ * A run whose command the machine refused before starting it never ran, and the machine sends no run-event for it: Hub ends it
+ * here, frees its run capacity and fails its operation. A queued admission is ended by releaseQueuedAttempt first, so it is
+ * past `dispatching` by now.
+ */
+function endRefusedRun(repo: RemoteRepository, command: StoredCommand, p: FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"]): void {
+  if (p.status !== "rejected") return;
+  const envelope = command.envelope;
+  const runId = "target" in envelope ? (envelope.target.scope === "run" ? envelope.target.runId : undefined) : envelope.runId;
+  const run = runId ? repo.get<RunRow>("remote_run", runId) : undefined;
+  if (!run || run.commandId !== envelope.commandId || run.state !== "dispatching") return;
+  run.state = "rejected"; run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; run.terminalAt ??= new Date().toISOString();
+  repo.put("remote_run", run.runId, run); repo.releaseRunCapacity(run.runId); command.capacityReleased = true;
+  failRejectedDelivery(repo, command, p);
 }
 export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, frame: FrameOf<"command-receipt"> | FrameOf<"session-command-receipt">,authorityValid?:(authority:StoredCommand["authority"],projectId:string)=>boolean): void {
   const p = frame.payload; const command = repo.get<StoredCommand>("remote_command", p.commandId);
@@ -258,6 +273,7 @@ export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, f
     const row=repo.get<SessionRow>('remote_session',targetSession);
     if(row?.pending?.commandId===p.commandId&&frame.payload.observedSessionVersion===row.record.version&&applicationObserved(repo,row,{...command,receipt:p},row.record)){delete row.pending;delete row.pendingController;saveSession(repo,row);}
   }
+  endRefusedRun(repo, command, p);
   command.receipt = p; command.status = p.status; repo.put("remote_command", p.commandId, command, { machineId: machine.machineId, projectId: command.projectId, sessionId: targetSession, ...("runId" in command.envelope ? { runId: command.envelope.runId } : {}), seq: p.hubSequence });
 }
 
