@@ -433,7 +433,9 @@ printf 'v0.0.5\n' > "$hub/state/previous-release"
 # Capture the actual retained set AFTER the successful upgrade has legitimately pruned it.
 find "$hub/backups" -mindepth 1 -maxdepth 1 -type d \( -name 'upgrade-*' -o -name 'pre-restore-*' -o -name 'pre-rollback-*' \) > "$E/retained-safety-backups"
 safety=$(wc -l < "$E/retained-safety-backups" | tr -d ' ')
-[ "$safety" -ge 1 ] && [ "$safety" -le 4 ] || fail "safety retention must keep a bounded recoverable set: $safety"
+if [ "$safety" -lt 1 ] || [ "$safety" -gt 4 ]; then
+  fail "safety retention must keep a bounded recoverable set: $safety"
+fi
 IFS= read -r protected_backup < "$hub/state/last-upgrade-backup"
 [ -d "$protected_backup" ] || fail "the explicitly referenced pre-upgrade backup was pruned"
 check_cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)
