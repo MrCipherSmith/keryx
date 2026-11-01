@@ -198,6 +198,35 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
   const receipts = new Map<string, { body: string; receipt: WorkReceipt }>();
   return {
     mode: "demo",
+    async document() {
+      throw new ApiError(404, "not-found", "No archived demo document");
+    },
+    async events(cursor) {
+      return { events: [], nextCursor: cursor };
+    },
+    async attention() {
+      return {
+        records: structuredClone(
+          records.filter(
+            (r) =>
+              ((r.kind === "flow" || r.kind === "intent") &&
+                r.state === "in-review") ||
+              (r.kind === "attempt" && r.state === "blocked"),
+          ),
+        ),
+        nextCursor: null,
+      };
+    },
+    async observations() {
+      return { observations: [], nextCursor: null };
+    },
+    async observe() {
+      throw new ApiError(
+        501,
+        "observation-unavailable",
+        "Demo has no provider",
+      );
+    },
     async capabilities() {
       return {
         protocolVersion: 1,

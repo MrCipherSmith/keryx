@@ -458,3 +458,213 @@
 .managed-work .hub-page-heading p {
   margin: 4px 0 0;
 }
+
+.work-waivers {
+  border: 1px solid var(--hub-warning);
+  padding: 12px;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+}
+.work-waivers legend {
+  font-weight: 600;
+}
+.work-waivers label,
+.work-checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+}
+.work-checkbox {
+  grid-column: 1/-1;
+}
+.work-attention {
+  padding: 12px;
+  border: 1px solid var(--hub-border);
+  background: var(--hub-surface);
+  border-radius: 8px;
+}
+.work-attention h2 span {
+  color: var(--hub-warning);
+  margin-left: 6px;
+}
+.work-attention-items {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.work-attention-items button {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--hub-subtle);
+  border: 1px solid var(--hub-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.work-attention-items small {
+  color: var(--hub-muted);
+}
+
+.work-amendments,
+.work-observations {
+  background: var(--hub-surface);
+  border: 1px solid var(--hub-border);
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+}
+.work-amendment {
+  border-top: 1px solid var(--hub-border);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+.work-pin-table {
+  display: grid;
+  gap: 8px;
+}
+.work-pin-table article,
+.work-edit-criterion {
+  padding: 10px;
+  border: 1px solid var(--hub-border);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+}
+.work-pin-table article > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 6px;
+  font-size: 11px;
+}
+.work-pin-table code {
+  min-width: 0;
+}
+.work-edit-criterion {
+  margin-bottom: 10px;
+}
+.work-edit-criterion fieldset {
+  display: grid;
+  gap: 6px;
+}
+.work-ci-run {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--hub-border);
+  border-radius: 5px;
+  margin: 6px 0;
+  font-size: 11px;
+}
+.work-observations article {
+  padding: 8px 0;
+  border-top: 1px solid var(--hub-border);
+}
+@media (max-width: 760px) {
+  .work-pin-table article > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+.work-revision-review {
+  padding: 10px;
+  border: 1px solid var(--hub-border);
+  border-radius: 6px;
+  margin: 10px 0;
+}
+.work-revision-review dl {
+  display: grid;
+  gap: 10px;
+}
+.work-revision-review dt {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--hub-muted);
+}
+.work-revision-review dd {
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+}
+.work-revision-review code {
+  display: block;
+}
+.work-revision-review li {
+  margin: 8px 0;
+  list-style: disc;
+}
+.work-revision-review ul {
+  padding-left: 18px;
+}
+.work-exact-document {
+  display: grid;
+  gap: 6px;
+}
+.work-exact-document pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  background: var(--hub-subtle);
+  border: 1px solid var(--hub-border);
+  padding: 12px;
+  max-height: 500px;
+  overflow: auto;
+}
+
+.work-legacy {
+  border: 1px solid var(--hub-border);
+  border-radius: 8px;
+  background: var(--hub-surface);
+  padding: 10px 14px;
+}
+.work-legacy-source {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--hub-border);
+}
+.work-legacy-source button {
+  margin-left: auto;
+}
+
+.managed-attention-overview {
+  background: var(--hub-surface);
+  border: 1px solid var(--hub-border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+}
+.managed-attention-overview header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.managed-attention-overview h2 {
+  font-size: 14px;
+  font-weight: 650;
+}
+.managed-attention-overview small {
+  color: var(--hub-muted);
+  font-size: 11px;
+}
+.managed-project-attention {
+  margin-top: 10px;
+  border-top: 1px solid var(--hub-border);
+  padding-top: 10px;
+}
+.managed-attention-overview code {
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+.managed-attention-overview button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

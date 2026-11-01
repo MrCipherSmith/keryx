@@ -16,6 +16,8 @@ export type HubLocation = {
   tab: Tab;
   documentId?: string;
   flowId?: string;
+  intentId?: string;
+  attemptId?: string;
   revisionId?: string;
   sessionId?: string;
   runId?: string;
@@ -46,6 +48,8 @@ function read(): HubLocation {
     sessionId: p.get("session") ?? undefined,
     runId: p.get("run") ?? undefined,
     machineId: p.get("machine") ?? undefined,
+    ...(p.get("intent") ? { intentId: p.get("intent")! } : {}),
+    ...(p.get("attempt") ? { attemptId: p.get("attempt")! } : {}),
   };
 }
 let location = read();
@@ -64,6 +68,16 @@ export function navigate(patch: Partial<HubLocation>, replace = false) {
     next.sessionId = patch.sessionId;
     next.runId = patch.runId;
     next.machineId = patch.machineId;
+    next.intentId = patch.intentId;
+    next.attemptId = patch.attemptId;
+  }
+  if (patch.flowId !== undefined && patch.flowId !== location.flowId) {
+    next.intentId = patch.intentId;
+    next.attemptId = patch.attemptId;
+  }
+  if (patch.tab && patch.tab !== "work") {
+    next.intentId = undefined;
+    next.attemptId = undefined;
   }
   const p = new URLSearchParams();
   if (next.projectId) p.set("project", next.projectId);
@@ -74,6 +88,8 @@ export function navigate(patch: Partial<HubLocation>, replace = false) {
   if (next.sessionId) p.set("session", next.sessionId);
   if (next.runId) p.set("run", next.runId);
   if (next.machineId) p.set("machine", next.machineId);
+  if (next.intentId) p.set("intent", next.intentId);
+  if (next.attemptId) p.set("attempt", next.attemptId);
   const url = "/" + (p.size ? "?" + p.toString() : "");
   window.history[replace ? "replaceState" : "pushState"]({}, "", url);
   emit();
@@ -89,6 +105,8 @@ export function resetNavigation() {
       sessionId: undefined,
       runId: undefined,
       machineId: undefined,
+      intentId: undefined,
+      attemptId: undefined,
     },
     true,
   );

@@ -1,3 +1,4 @@
+import {ManagedAttentionOverview} from "./managed-work/overview-attention";
 import { ProjectOverview } from './project-overview';
 export { GlobalFlowsView } from './global-flows';
 import { FlowRows } from './global-flows';
@@ -54,6 +55,7 @@ export function ProjectsView() {
   return <div className="space-y-8">
     <PageHeading title={t('projectsTitle')} description={t('projectsDescription')} />
     <QueryFeedback query={projects} />
+    {projects.data && <ManagedAttentionOverview projects={projects.data.projects}/>}
     {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card group min-w-0 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
       <span className="mb-5 flex size-11 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
       <span className="block break-words text-lg font-semibold text-slate-950">{project.name}</span><span className="mt-2 block text-sm text-slate-500">{t('openProject')} <span aria-hidden="true">→</span></span>

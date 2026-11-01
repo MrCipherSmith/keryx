@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/client";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useHub } from "../../app/hub-context";
@@ -33,19 +34,22 @@ export function FlowReview({
   const [preview, setPreview] = useState<Awaited<
     ReturnType<WorkAdapter["acceptancePreview"]>
   > | null>(null);
-  const [previewError, setError] = useState(false);
+  const [previewError, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState("accept");
   const [reading, setReading] = useState(false);
   const intents = recordsOf(records, "intent").filter(
     (i) => i.flowId === flow.id,
   );
-  const required = intents.filter((i) => i.required);
+  const approvedFlowRevision = recordOf(
+    records,
+    "flow-revision",
+    flow.approvedRevisionId,
+  );
+  const required = intents.filter((i) =>
+    approvedFlowRevision?.requiredIntentIds.includes(i.id),
+  );
   const complete =
-    required.length > 0 &&
-    required.every(
-      (i) =>
-        i.state === "accepted" && i.currentRevisionId === i.approvedRevisionId,
-    );
+    required.length > 0 && required.every((i) => i.state === "accepted");
   const submission = recordsOf(records, "flow-submission")
     .filter(
       (s) =>
@@ -73,20 +77,25 @@ export function FlowReview({
             disabled={blocked || reading || !complete || !can("flow.submit")}
             onClick={() => {
               setReading(true);
-              setError(false);
+              setError(null);
               void adapter
                 .acceptancePreview(flow.id)
                 .then(setPreview)
-                .catch(() => {
+                .catch((error:unknown) => {
                   setPreview(null);
-                  setError(true);
+                  setError(error instanceof ApiError?error.code:"unknown");
                 })
                 .finally(() => setReading(false));
             }}
           >
             {t("submitFlow")}
           </Button>
-          {(!complete || previewError) && <p>{t("previewUnavailable")}</p>}
+          {!complete && <p>{t("previewUnavailable")}</p>}
+          {previewError && (
+            <Notice tone="error">
+              {t("previewBlocked")} ({previewError})
+            </Notice>
+          )}
           {preview && (
             <div className="work-review">
               <code>{preview.acceptanceManifestDigest}</code>

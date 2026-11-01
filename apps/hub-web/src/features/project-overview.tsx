@@ -1,3 +1,4 @@
+import { ManagedAttentionOverview } from "./managed-work/overview-attention";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -160,6 +161,7 @@ export function ProjectOverview() {
         }
       />
       <QueryFeedback query={project} label={t("overviewTitle")} />
+      {project.data && <ManagedAttentionOverview projects={[project.data]} />}
       <div className="project-signal-strip">
         {metrics.map(({ label, value, icon: Icon, action }) => (
           <button type="button" key={label} onClick={action}>

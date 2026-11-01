@@ -1,4 +1,8 @@
 import schema from "./domain-schema.json";
+import eventSchema from "./event-schema.json";
+import observationSchema from "./observation-schema.json";
+import legacyPreviewSchema from "./legacy-preview-schema.json";
+import type { WorkEvent, GitObservation, LegacyPreview } from "./types";
 import commandSchema from "./command-schema.json";
 import type { WorkRecord, WorkCommand } from "./types";
 
@@ -48,16 +52,25 @@ function matches(value: unknown, rule: unknown, depth = 0): boolean {
     );
   if (rule.type === "object") {
     if (!object(value)) return false;
+    if (
+      typeof rule.maxProperties === "number" &&
+      Object.keys(value).length > rule.maxProperties
+    )
+      return false;
     const props = object(rule.properties) ? rule.properties : {};
     if (
       Array.isArray(rule.required) &&
       !rule.required.every((key) => typeof key === "string" && key in value)
     )
       return false;
-    return Object.entries(value).every(([key, entry]) =>
-      key in props
-        ? matches(entry, props[key], depth + 1)
-        : rule.additionalProperties !== false,
+    return Object.entries(value).every(
+      ([key, entry]) =>
+        (!rule.propertyNames || matches(key, rule.propertyNames, depth + 1)) &&
+        (key in props
+          ? matches(entry, props[key], depth + 1)
+          : object(rule.additionalProperties)
+            ? matches(entry, rule.additionalProperties, depth + 1)
+            : rule.additionalProperties !== false),
     );
   }
   return true;
@@ -69,3 +82,13 @@ export function isWorkCommand(value: unknown): value is WorkCommand {
   return matches(value, commandSchema);
 }
 export { object as isObject };
+
+export function isWorkEvent(value: unknown): value is WorkEvent {
+  return matches(value, eventSchema);
+}
+export function isGitObservation(value: unknown): value is GitObservation {
+  return matches(value, observationSchema);
+}
+export function isLegacyPreview(value: unknown): value is LegacyPreview {
+  return matches(value, legacyPreviewSchema);
+}

@@ -27,12 +27,16 @@ import { demoWorkAdapter } from "./demo";
 import {
   aggregateVersions,
   exactPassingCoverage,
+  criterionHasExactPassingEvidence,
+  pendingAmendments,
+  flowStartReady,
   recordOf,
   recordsOf,
   requirementDrift,
 } from "./model";
 import type {
   Attempt,
+  Criterion,
   WorkCapabilities,
   WorkCommand,
   WorkFlow,
@@ -41,12 +45,19 @@ import type {
 } from "./types";
 import { useWorkOperation, WorkOperationStatus } from "./operation";
 import { ContributionPanel, SubmissionForm } from "./contribute";
+import { LegacyConversion } from "./legacy";
+import { RevisionReview, ExactDocument } from "./revision-review";
+import { AmendmentsPanel } from "./amendments";
+import { GitObservations } from "./observations";
+import { WorkAttention, useWorkEvents } from "./updates";
 import { FlowReview } from "./flow-review";
 import "./work.css";
 
 type PreparedAction = Omit<WorkCommand, "operationId"> & {
   title: string;
   help: string;
+  waiverCriteria?: Criterion[];
+  scopeFlowId?: string;
 };
 export function ManagedWorkView() {
   const { projectId, scopeKey } = useHub();
@@ -131,25 +142,31 @@ function WorkBoard({
 }) {
   const hub = useHub();
   const { t } = useTranslation("work");
-  const [flowId, setFlowId] = useState<string | null>(
-    hub.location.flowId ?? null,
+  const flowId = hub.location.flowId ?? null;
+  const setFlow = (id: string | null) =>
+    hub.navigate({ tab: "work", flowId: id ?? undefined });
+  const [intentId, setIntent] = useState<string | null>(
+    hub.location.intentId ?? null,
   );
-  const setFlow = (id: string | null) => {
-    setFlowId(id);
-    hub.navigate({tab: 'work', flowId: id ?? undefined});
-  };
-  useEffect(() => { setFlowId(hub.location.flowId ?? null); }, [hub.location.flowId]);
-  const [intentId, setIntent] = useState<string | null>(null);
-  const [attemptId, setAttempt] = useState<string | null>(null);
+  const [attemptId, setAttempt] = useState<string | null>(
+    hub.location.attemptId ?? null,
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
   const [action, setAction] = useState<PreparedAction | null>(null);
   const [creating, setCreating] = useState(false);
+  useEffect(() => {
+    setIntent(hub.location.intentId ?? null);
+    setAttempt(hub.location.attemptId ?? null);
+    setAction(null);
+    setCreating(false);
+  }, [flowId, hub.location.intentId, hub.location.attemptId]);
   const snapshot = useQuery({
     queryKey: [hub.scopeKey, hub.projectId, "work", adapter.mode, "snapshot"],
     queryFn: ({ signal }) => adapter.snapshot(signal),
     retry: false,
   });
+  const eventStatus = useWorkEvents(adapter, snapshot.data?.eventCursor);
   const records = snapshot.data?.records ?? [];
   const flows = recordsOf(records, "flow");
   const flow = recordOf(records, "flow", flowId);
@@ -157,6 +174,11 @@ function WorkBoard({
     ? recordsOf(records, "intent").filter((i) => i.flowId === flow.id)
     : [];
   const intent = intents.find((i) => i.id === intentId) ?? intents[0];
+  const currentIntentRevision = recordOf(
+    records,
+    "intent-revision",
+    intent?.currentRevisionId,
+  );
   const attempts = intent
     ? recordsOf(records, "attempt").filter((a) => a.intentId === intent.id)
     : [];
@@ -167,6 +189,25 @@ function WorkBoard({
   const refresh = () => snapshot.refetch();
   return (
     <>
+      {adapter.mode === "live" && (
+        <small role="status">
+          {t(
+            eventStatus === "connected"
+              ? "workConnected"
+              : eventStatus === "retrying"
+                ? "workRetrying"
+                : "workWaiting",
+          )}
+        </small>
+      )}
+      <WorkAttention
+        adapter={adapter}
+        records={records}
+        onSelect={(f, i, a) => {
+          hub.navigate({ tab: "work", flowId: f, intentId: i, attemptId: a });
+          setAction(null);
+        }}
+      />
       <WorkOperationStatus
         adapter={adapter}
         onCommitted={() => {
@@ -207,6 +248,17 @@ function WorkBoard({
           )}
         </div>
       </div>
+      {human &&
+        adapter.mode === "live" &&
+        capabilities.features.legacyConversion &&
+        can("legacy.preview") &&
+        can("legacy.convert") && (
+          <LegacyConversion
+            adapter={adapter}
+            records={records}
+            onDone={() => void refresh()}
+          />
+        )}
       {creating && (
         <CreateFlow
           adapter={adapter}
@@ -325,11 +377,12 @@ function WorkBoard({
             onDone={() => void refresh()}
           />
           <FlowSummary
+            adapter={adapter}
             flow={flow}
             records={records}
             can={can}
             human={human}
-            prepare={setAction}
+            prepare={(next) => setAction({ ...next, scopeFlowId: flow.id })}
           />
           <div className="work-detail-grid">
             <section className="work-intents">
@@ -367,12 +420,28 @@ function WorkBoard({
                       {t("attempts")} · {attempts.length}
                     </span>
                   </header>
+                  {currentIntentRevision &&
+                    intent.state !== "draft" &&
+                    (!attempt ||
+                      attempt.intentRevisionId !==
+                        currentIntentRevision.id) && (
+                      <RevisionReview
+                        adapter={adapter}
+                        revision={currentIntentRevision}
+                        records={records}
+                      />
+                    )}
                   <div className="work-attempt-selector">
                     {attempts.map((a) => (
                       <button
                         key={a.id}
                         aria-pressed={a.id === attempt?.id}
                         onClick={() => {
+                          hub.navigate({
+                            tab: "work",
+                            intentId: intent.id,
+                            attemptId: a.id,
+                          });
                           setAttempt(a.id);
                           setAction(null);
                         }}
@@ -394,16 +463,20 @@ function WorkBoard({
                   </div>
                   {intent.state === "draft" && !intent.approvedRevisionId && (
                     <IntentApproval
+                      adapter={adapter}
                       flow={flow}
                       intent={intent}
                       records={records}
                       can={can}
                       human={human}
-                      prepare={setAction}
+                      prepare={(next) =>
+                        setAction({ ...next, scopeFlowId: flow.id })
+                      }
                     />
                   )}{" "}
                   {attempt ? (
                     <AttemptDetail
+                      capabilities={capabilities}
                       adapter={adapter}
                       refresh={() => void refresh()}
                       flow={flow}
@@ -412,7 +485,9 @@ function WorkBoard({
                       records={records}
                       can={can}
                       human={human}
-                      prepare={setAction}
+                      prepare={(next) =>
+                        setAction({ ...next, scopeFlowId: flow.id })
+                      }
                     />
                   ) : (
                     <EmptyState>{t("noAttempts")}</EmptyState>
@@ -421,9 +496,14 @@ function WorkBoard({
               )}
             </section>
           </div>
-          {action && (
+          {action && action.scopeFlowId === flowId && (
             <DecisionForm
-              key={JSON.stringify(action)}
+              key={[
+                hub.scopeKey,
+                hub.projectId,
+                flowId,
+                JSON.stringify(action),
+              ].join(":")}
               adapter={adapter}
               action={action}
               onCancel={() => setAction(null)}
@@ -433,6 +513,13 @@ function WorkBoard({
               }}
             />
           )}
+          <AmendmentsPanel
+            adapter={adapter}
+            records={records}
+            flow={flow}
+            can={can}
+            onDone={() => void refresh()}
+          />
           <FlowReview
             key={flow.id + ":" + flow.version}
             adapter={adapter}
@@ -455,6 +542,7 @@ function WorkBoard({
   );
 }
 function IntentApproval({
+  adapter,
   flow,
   intent,
   records,
@@ -462,6 +550,7 @@ function IntentApproval({
   human,
   prepare,
 }: {
+  adapter: WorkAdapter;
   flow: WorkFlow;
   intent: WorkIntent;
   records: WorkRecord[];
@@ -478,7 +567,12 @@ function IntentApproval({
   if (!revision) return null;
   return (
     <div className="work-review">
-      <p>{revision.deliverable}</p>
+      <RevisionReview
+        adapter={adapter}
+        revision={revision}
+        records={records}
+        expanded
+      />
       <ul>
         {revision.criteria.map((c) => (
           <li key={c.criterionId}>{c.text}</li>
@@ -511,12 +605,14 @@ function IntentApproval({
   );
 }
 function FlowSummary({
+  adapter,
   flow,
   records,
   can,
   human,
   prepare,
 }: {
+  adapter: WorkAdapter;
   flow: WorkFlow;
   records: WorkRecord[];
   can: (c: string) => boolean;
@@ -540,7 +636,36 @@ function FlowSummary({
       </div>
       {revision && (
         <>
+          {flow.approvedRevisionId &&
+            flow.approvedRevisionId !== revision.id && (
+              <Notice>{t("proposedNotApproved")}</Notice>
+            )}
           <p>{revision.expectedOutcome}</p>
+          <RevisionReview
+            adapter={adapter}
+            revision={revision}
+            records={records}
+            expanded={flow.state === "draft"}
+          />
+          {flow.approvedRevisionId &&
+            flow.approvedRevisionId !== revision.id &&
+            (() => {
+              const approved = recordOf(
+                records,
+                "flow-revision",
+                flow.approvedRevisionId,
+              );
+              return approved ? (
+                <div>
+                  <h4>{t("approvedRequirements")}</h4>
+                  <RevisionReview
+                    adapter={adapter}
+                    revision={approved}
+                    records={records}
+                  />
+                </div>
+              ) : null;
+            })()}
           <div className="work-pin">
             <span>
               {t("revision")} {revision.revision}
@@ -587,15 +712,18 @@ function FlowSummary({
           )}
           {flow.state === "ready" && (
             <Button
-              disabled={
-                !can("flow.start") || flow.approvedRevisionId !== revision.id
-              }
+              disabled={!can("flow.start") || !flowStartReady(records, flow)}
               onClick={() =>
                 prepare({
                   title: t("start"),
                   help: revision.expectedOutcome,
                   command: "flow.start",
-                  expectedVersions: aggregateVersions(flow),
+                  expectedVersions: {
+                    ...aggregateVersions(flow),
+                    ...Object.fromEntries(
+                      required.map((i) => [i.id, i.version]),
+                    ),
+                  },
                   payload: {
                     flowId: flow.id,
                     flowRevisionDigest: revision.contentDigest,
@@ -612,6 +740,7 @@ function FlowSummary({
   );
 }
 function AttemptDetail({
+  capabilities,
   adapter,
   refresh,
   flow,
@@ -622,6 +751,7 @@ function AttemptDetail({
   human,
   prepare,
 }: {
+  capabilities: WorkCapabilities;
   adapter: WorkAdapter;
   refresh: () => void;
   flow: WorkFlow;
@@ -651,12 +781,14 @@ function AttemptDetail({
     "intent-revision",
     attempt.intentRevisionId,
   );
+  const pendingAmendment = pendingAmendments(records, flow.id).length > 0;
   const drift = requirementDrift(flow, intent, attempt);
   const sealed =
     !!submission && submission.subjectDigest === subject?.contentDigest;
   const eligible =
     human &&
     !drift &&
+    !pendingAmendment &&
     sealed &&
     attempt.state === "submitted" &&
     intent.state === "in-review" &&
@@ -667,6 +799,18 @@ function AttemptDetail({
     prepare({
       command,
       title,
+      waiverCriteria:
+        decision === "accept"
+          ? revision?.criteria.filter(
+              (c) =>
+                c.waivable &&
+                !criterionHasExactPassingEvidence(
+                  records,
+                  submission,
+                  c.criterionId,
+                ),
+            )
+          : undefined,
       help: t(command === "attempt.select" ? "selectionHelp" : "acceptHelp"),
       expectedVersions: aggregateVersions(flow, intent, attempt),
       payload:
@@ -690,7 +834,15 @@ function AttemptDetail({
   return (
     <div className="work-attempt-detail">
       {drift && <Notice>{t("stale")}</Notice>}
+      {pendingAmendment && <Notice>{t("pendingAmendment")}</Notice>}
 
+      {revision && (
+        <RevisionReview
+          adapter={adapter}
+          revision={revision}
+          records={records}
+        />
+      )}
       <p>{attempt.summary}</p>
       <div className="work-meta">
         <span>
@@ -740,6 +892,16 @@ function AttemptDetail({
           <p>{t("resultMissing")}</p>
         )}
       </section>
+      {subject?.artifacts.some((a) => a.kind === "git") && (
+        <GitObservations
+          adapter={adapter}
+          subject={subject}
+          versions={aggregateVersions(flow, intent, attempt)}
+          enabled={capabilities.features.gitObserver}
+          canObserve={can("subject.create")}
+          onDone={refresh}
+        />
+      )}
       <section>
         <h3>{t("evidence")}</h3>
         {revision?.criteria.map((criterion) => {
@@ -793,7 +955,15 @@ function AttemptDetail({
         )}
       {submission && (
         <section className="work-review">
-          <h3>{t(intent.state === 'accepted' ? 'states.accepted' : attempt.state === 'submitted' ? 'needsReview' : 'states.' + attempt.state)}</h3>
+          <h3>
+            {t(
+              intent.state === "accepted"
+                ? "states.accepted"
+                : attempt.state === "submitted"
+                  ? "needsReview"
+                  : "states." + attempt.state,
+            )}
+          </h3>
           <div className="work-pin">
             <span>{t("submissionDigest")}</span>
             <code>{submission.contentDigest}</code>
@@ -812,7 +982,13 @@ function AttemptDetail({
                 !eligible ||
                 !selected ||
                 !can("review.decide") ||
-                !exactPassingCoverage(records, submission)
+                !exactPassingCoverage(
+                  records,
+                  submission,
+                  revision?.criteria
+                    .filter((c) => c.waivable)
+                    .map((c) => c.criterionId) ?? [],
+                )
               }
               onClick={() => make("review.decide", t("accept"), "accept")}
             >
@@ -862,6 +1038,12 @@ function AttemptDetail({
                 {entry.role} · {entry.reference?.documentId ?? "—"} ·{" "}
                 {entry.reference?.version ?? "—"} · {entry.resolution} ·{" "}
                 {entry.provenance}
+                {entry.reference && (
+                  <ExactDocument
+                    adapter={adapter}
+                    reference={entry.reference}
+                  />
+                )}
               </div>
             ))}
           </>
@@ -917,6 +1099,7 @@ function DecisionHistory({
       .map((i) => i.id),
   ]);
   for (const r of records) {
+    if (r.kind === "amendment" && r.flowId === flow.id) ids.add(r.id);
     if (r.kind === "flow-revision" && r.flowId === flow.id) ids.add(r.id);
     if (r.kind === "intent-revision" && ids.has(r.intentId)) {
       ids.add(r.id);
@@ -969,6 +1152,23 @@ function DecisionForm({
     ].join(":"),
     "",
   );
+  const [waivers, setWaivers] = useDraft<Record<string, string>>(
+    [
+      hub.scopeKey,
+      hub.projectId,
+      adapter.mode,
+      action.command,
+      JSON.stringify(action.payload),
+      "work-waivers",
+    ].join(":"),
+    {},
+  );
+  const waiverCriteria = action.waiverCriteria ?? [];
+  const completeWaivers = waiverCriteria.every(
+    (c) =>
+      typeof waivers[c.criterionId] === "string" &&
+      waivers[c.criterionId].trim().length > 0,
+  );
   const { blocked, run } = useWorkOperation(adapter, onDone);
   return (
     <form
@@ -976,11 +1176,21 @@ function DecisionForm({
       aria-label={action.title}
       onSubmit={(e) => {
         e.preventDefault();
+        if (action.scopeFlowId !== hub.location.flowId) return;
         void run({
           command: action.command,
           expectedVersions: action.expectedVersions,
           payload: {
             ...action.payload,
+            ...(action.command === "review.decide" &&
+            action.payload.decision === "accept"
+              ? {
+                  waivers: waiverCriteria.map((c) => ({
+                    criterionId: c.criterionId,
+                    reason: waivers[c.criterionId]?.trim() ?? "",
+                  })),
+                }
+              : {}),
             ...(action.command === "flow.start"
               ? {}
               : { reason: reason.trim() }),
@@ -1008,11 +1218,53 @@ function DecisionForm({
           />
         </Field>
       )}
+      {waiverCriteria.length > 0 && (
+        <fieldset className="work-waivers">
+          <legend>{t("waiver")}</legend>
+          <p>{t("waiverHelp")}</p>
+          {waiverCriteria.map((criterion) => (
+            <div key={criterion.criterionId}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={criterion.criterionId in waivers}
+                  disabled={blocked}
+                  onChange={(e) => {
+                    const next = { ...waivers };
+                    if (e.target.checked) next[criterion.criterionId] = "";
+                    else delete next[criterion.criterionId];
+                    setWaivers(next);
+                  }}
+                />{" "}
+                {criterion.text}
+              </label>
+              {criterion.criterionId in waivers && (
+                <Field label={t("waiverReason") + " · " + criterion.text}>
+                  <Textarea
+                    required
+                    maxLength={4000}
+                    disabled={blocked}
+                    value={waivers[criterion.criterionId]}
+                    onChange={(e) =>
+                      setWaivers({
+                        ...waivers,
+                        [criterion.criterionId]: e.target.value,
+                      })
+                    }
+                  />
+                </Field>
+              )}
+            </div>
+          ))}
+        </fieldset>
+      )}
       <div className="work-actions">
         <Button
           type="submit"
           disabled={
-            blocked || (action.command !== "flow.start" && !reason.trim())
+            blocked ||
+            !completeWaivers ||
+            (action.command !== "flow.start" && !reason.trim())
           }
         >
           {t("confirm")}
@@ -1043,6 +1295,7 @@ function CreateFlow({
       scope: "",
       outOfScope: "",
       criteria: "",
+      allowWaivers: false,
     },
   );
   const { blocked, run } = useWorkOperation(adapter, onDone);
@@ -1068,7 +1321,7 @@ function CreateFlow({
               .map((line) => ({
                 criterionId: crypto.randomUUID(),
                 text: line.trim(),
-                waivable: false,
+                waivable: draft.allowWaivers,
               })),
           },
         });
@@ -1116,6 +1369,16 @@ function CreateFlow({
           )}
         </Field>
       ))}
+      <label className="work-checkbox">
+        <input
+          type="checkbox"
+          checked={draft.allowWaivers}
+          onChange={(e) =>
+            setDraft({ ...draft, allowWaivers: e.target.checked })
+          }
+        />{" "}
+        {t("allowWaivers")}
+      </label>
       <Button type="submit" disabled={blocked}>
         {t("create")}
       </Button>

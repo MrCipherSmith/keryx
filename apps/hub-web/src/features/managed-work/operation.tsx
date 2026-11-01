@@ -4,18 +4,19 @@ import { useHub } from "../../app/hub-context";
 import { useDraft } from "../../state/drafts";
 import { Button, Notice } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
-import type { WorkCommand } from "./types";
+import type { WorkCommand, WorkReceipt } from "./types";
 import { isWorkCommand } from "./validation";
 
 type Operation = {
   status: "idle" | "sending" | "unknown" | "rejected";
   command: WorkCommand | null;
   code: string | null;
+  lastReceipt?: WorkReceipt;
 };
 const initial: Operation = { status: "idle", command: null, code: null };
 export function useWorkOperation(
   adapter: WorkAdapter,
-  onCommitted: () => void,
+  onCommitted: (receipt: WorkReceipt) => void,
 ) {
   const hub = useHub();
   const [operation, setOperation] = useDraft<Operation>(
@@ -28,7 +29,18 @@ export function useWorkOperation(
     const value = command
       ? { ...command, operationId: crypto.randomUUID() }
       : operation.command;
-    if (!value || !isWorkCommand(value)) {
+    const observation = value?.command === "subject.observe";
+    const validObservation =
+      observation &&
+      typeof value.payload.subjectId === "string" &&
+      typeof value.payload.subjectDigest === "string" &&
+      /^[a-f0-9]{64}$/.test(value.payload.subjectDigest) &&
+      Object.keys(value.payload).length === 2 &&
+      Object.keys(value.expectedVersions).length > 0 &&
+      Object.values(value.expectedVersions).every(
+        (v) => Number.isSafeInteger(v) && v >= 1,
+      );
+    if (!value || (!isWorkCommand(value) && !validObservation)) {
       setOperation({ ...initial, status: "rejected", code: "invalid-command" });
       return;
     }
@@ -36,14 +48,16 @@ export function useWorkOperation(
     setOperation({ status: "sending", command: value, code: null });
     try {
       const receipt = command
-        ? await adapter.command(value)
+        ? observation
+          ? await adapter.observe(value)
+          : await adapter.command(value)
         : await adapter.operation(value.operationId);
       if (generation !== getClientScope()) return;
       if (receipt.status === "pending")
         setOperation({ status: "unknown", command: value, code: "pending" });
       else {
-        setOperation(initial);
-        onCommitted();
+        setOperation({ ...initial, lastReceipt: receipt });
+        onCommitted(receipt);
       }
     } catch (e) {
       if (generation !== getClientScope()) return;
@@ -64,7 +78,7 @@ export function WorkOperationStatus({
   onCommitted,
 }: {
   adapter: WorkAdapter;
-  onCommitted: () => void;
+  onCommitted: (receipt: WorkReceipt) => void;
 }) {
   const { t } = useTranslation("work");
   const { operation, run } = useWorkOperation(adapter, onCommitted);

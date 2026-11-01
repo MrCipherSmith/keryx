@@ -5,7 +5,12 @@ import { useDraft } from "../../state/drafts";
 import { Button, Field, Input, Select, Textarea } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
 import type { Attempt, WorkFlow, WorkIntent, WorkRecord } from "./types";
-import { aggregateVersions, recordOf, recordsOf } from "./model";
+import {
+  aggregateVersions,
+  recordOf,
+  recordsOf,
+  pendingAmendments,
+} from "./model";
 import { useWorkOperation } from "./operation";
 
 type FormKind =
@@ -46,9 +51,11 @@ export function ContributionPanel({
     required.length === fr.requiredIntentIds.length &&
     required.every((id) => fr.requiredIntentIds.includes(id));
   const context = recordOf(records, "context", attempt?.contextSnapshotId);
+  const terminalFlow = ["accepted", "cancelled"].includes(flow.state);
   const editable =
     attempt && ["draft", "running", "blocked"].includes(attempt.state);
   const current =
+    !pendingAmendments(records, flow.id).length &&
     !["accepted", "cancelled"].includes(flow.state) &&
     !["accepted", "cancelled"].includes(intent?.state ?? "") &&
     intent?.approvedRevisionId === ir?.id &&
@@ -79,15 +86,17 @@ export function ContributionPanel({
       <h2>{t("contribute")}</h2>
       {flow.state === "draft" && <p>{t("planHelp")}</p>}
       <div className="work-actions">
-        {flow.state === "draft" && can("intent.create") && (
-          <Button
-            variant="secondary"
-            disabled={blocked}
-            onClick={() => setForm("intent")}
-          >
-            {t("addIntent")}
-          </Button>
-        )}
+        {!terminalFlow &&
+          !pendingAmendments(records, flow.id).length &&
+          can("intent.create") && (
+            <Button
+              variant="secondary"
+              disabled={blocked}
+              onClick={() => setForm("intent")}
+            >
+              {t(flow.approvedRevisionId ? "addDraftIntent" : "addIntent")}
+            </Button>
+          )}
         {flow.state === "draft" &&
           !requiredSetMatches &&
           fr &&
@@ -333,7 +342,7 @@ function ContributionForm({
         .map((text) => ({
           criterionId: crypto.randomUUID(),
           text: text.trim(),
-          waivable: false,
+          waivable: draft.allowWaivers === "true",
         }));
       await run({
         command: "intent.create",
@@ -506,6 +515,10 @@ function ContributionForm({
             fr?.criteria.map((c) => ({ id: c.criterionId, label: c.text })) ??
               [],
           )}
+          {choice("allowWaivers", "allowWaivers", [
+            { id: "false", label: t("unwaivable") },
+            { id: "true", label: t("allowWaivers") },
+          ])}
           {choice("required", "required", [
             { id: "true", label: t("required") },
             { id: "false", label: t("optional") },

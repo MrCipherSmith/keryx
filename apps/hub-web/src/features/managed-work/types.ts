@@ -355,9 +355,143 @@ export type WorkCommand = {
   payload: Record<string, unknown>;
 };
 export type WorkReceipt = {
+  preview?: LegacyPreview;
+  observation?: GitObservation;
   operationId: string;
   receiptId?: string;
   eventCursor?: string;
   entities?: WorkRecord[];
   status?: "pending" | "committed";
+};
+
+export type WorkEvent = {
+  protocolVersion: 1;
+  projectId: string;
+  sequence: number;
+  eventId: string;
+  operationId: string;
+  actorId: string;
+  actorKind: "human" | "agent" | "machine" | "service";
+  occurredAt: string;
+  type:
+    | "flow-changed"
+    | "intent-changed"
+    | "attempt-changed"
+    | "context-created"
+    | "execution-linked"
+    | "subject-created"
+    | "evidence-recorded"
+    | "submission-created"
+    | "decision-recorded"
+    | "git-observed"
+    | "legacy-converted";
+  entityType:
+    | "flow"
+    | "intent"
+    | "attempt"
+    | "context"
+    | "execution-link"
+    | "subject"
+    | "evidence"
+    | "submission"
+    | "decision"
+    | "git-observation"
+    | "conversion";
+  entityId: string;
+  entityVersion: number | null;
+  contentDigest: string | null;
+  causationId: string | null;
+};
+export type GitObservation = {
+  id: string;
+  projectId: string;
+  subjectId: string;
+  subjectDigest: string;
+  createdBy: string;
+  observedAt: string;
+  generation: number;
+  artifacts: {
+    repositoryId: string;
+    commitOid: string;
+    treeOid: string | null;
+    policyDigest: string | null;
+    availability:
+      | "available"
+      | "unavailable"
+      | "identity-mismatch"
+      | "not-configured";
+    reasonCode:
+      | "observed"
+      | "not-configured"
+      | "provider-unavailable"
+      | "identity-mismatch";
+    pullRequest: {
+      number: number;
+      headOid: string;
+      baseRepositoryId: number;
+      headRepositoryId: number;
+      state: "open" | "closed";
+      updatedAt: string;
+    } | null;
+    ci: {
+      availability: "available" | "unavailable" | "not-configured";
+      runs: {
+        runId: number;
+        runNumber: number;
+        runAttempt: number;
+        workflowId: number;
+        workflowPath: string;
+        workflowRef: string | null;
+        headOid: string;
+        repositoryProviderId: number;
+        headRepositoryProviderId: number;
+        event:
+          | "push"
+          | "pull_request"
+          | "workflow_dispatch"
+          | "workflow_call"
+          | "workflow_run"
+          | "schedule"
+          | "merge_group"
+          | "pull_request_target"
+          | "repository_dispatch";
+        status:
+          | "completed"
+          | "in_progress"
+          | "queued"
+          | "requested"
+          | "waiting"
+          | "pending";
+        conclusion:
+          | "success"
+          | "failure"
+          | "neutral"
+          | "cancelled"
+          | "skipped"
+          | "timed_out"
+          | "action_required"
+          | "stale"
+          | "startup_failure"
+          | null;
+        updatedAt: string;
+        trusted: boolean;
+      }[];
+    };
+  }[];
+  contentDigest: string;
+};
+export type LegacyPreview = {
+  receiptId: string;
+  contentDigest: string;
+  legacyFlowId: string;
+  sourceVersion: number;
+  sourceDigest: string;
+  status: "eligible";
+  source: {
+    flowId: string;
+    title: string;
+    specification: DocumentRef;
+    criteria: string[];
+    status: "initializing" | "ready";
+  };
 };
