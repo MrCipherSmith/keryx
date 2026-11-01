@@ -1,7 +1,7 @@
 # Hub work management: shared context, execution history and acceptance
 Version: 0.2.0
 
-Status: implementation candidate in progress; final verification/review and owner product acceptance pending. Date: 2026-11-01. The owner requested this PRD/specification/plan and a parallel UI-agent brief. Owner subsequently authorized implementation; remote human-only acceptance remains separate.
+Status: verified implementation candidate for owner testing; product acceptance and public production rollout pending. Date: 2026-11-01. The owner requested this PRD/specification/plan and a parallel UI-agent brief. Owner subsequently authorized implementation; remote human-only acceptance remains separate.
 
 ## Purpose
 
@@ -38,7 +38,7 @@ Non-goals: code synchronization, Git mirror expansion, conflict resolution engin
 
 Baseline source: `origin/main` at `3dd6ac53f159c65a522f1db7e755268174bb1217`; published-version contract examined at tag `v0.4.0` (tag object `ae0d96b28af64599a27ca15b56895a07031c252a`, peeled commit `a8799ebe2`). Main is0.4.1; relevant Hub/session/machine directories had no diff against0.4.0 in the earlier check. Reverify before implementation. GitHub release-object API returned404 for v0.4.0 during evidence gathering; tag/changelog/source existence is confirmed, release asset publication was not independently established here.
 
-Existing Hub has a simple `HubFlow`, CodeRevision-bound Evidence/acceptance and machine-v2 execution. New Intent/Attempt/ResultSubject/Decision records below are proposed, not claimed present. Worktree `codex/team-hub-prototype` is old and dirty; implementers must choose a current compatible checkout without destroying its changes.
+Existing Hub has a simple `HubFlow`, CodeRevision-bound Evidence/acceptance and machine-v2 execution. The feature branch implements new Intent/Attempt/ResultSubject/Decision records; those records were absent from the inspected main baseline. Worktree `codex/team-hub-prototype` is old and dirty; implementers must choose a current compatible checkout without destroying its changes.
 
 Related: [remote sessions](../hub-remote-sessions/README.md), [session contract](../hub-remote-sessions/session-runtime.md), [prototype API](../team-hub-prototype/api.md), [context watch](../hub-context-watch/README.md), [MCP](../hub-mcp/README.md).
 

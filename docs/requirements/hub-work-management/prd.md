@@ -1,7 +1,7 @@
 # PRD: collaborative work and acceptance metadata
-Version: 0.1.1
+Version: 0.2.0
 
-Status: draft for owner review, implementation not started by this package.
+Status: implemented candidate with automated and independent review evidence; owner outcome/pilot judgment remains pending.
 
 ## Problem and goal
 

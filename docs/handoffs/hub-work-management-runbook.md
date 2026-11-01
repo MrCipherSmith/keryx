@@ -1,7 +1,7 @@
 # Hub work management candidate: operator runbook
 Version: 0.2.0
 
-Status: local candidate; final integrated UI/package verification in progress. Backend branch feat-hub-work-management, worktree /Users/Goodea/.codex/worktrees/hub-work-management/keryx. UI source lane feat-hub-workspace-design is integrated as reviewed patches; do not merge the old dirty prototype branch.
+Status: integrated candidate for isolated operator testing; owner product acceptance and public production upgrade are pending. Backend branch feat-hub-work-management, worktree /Users/Goodea/.codex/worktrees/hub-work-management/keryx. UI source lane feat-hub-workspace-design is integrated as reviewed patches; do not merge the old dirty prototype branch.
 
 ## Local trial
 
@@ -44,6 +44,24 @@ Legacy Flows remain readable and functional unless explicitly converted. Preview
 
 ## Distribution and review
 
-The final candidate archive/binary paths and SHA256 values will be recorded after packaging tests. A branch existing only on this laptop cannot be cloned on another machine until explicitly published; use the verified archive rather than assuming a remote branch exists. No production rollout is implied by local fixture or automated tests.
+The candidate source archive and its SHA256SUMS are generated under artifacts/team-hub-work-management. Verify that checksum file after copying the archive; it identifies the packaged bytes rather than an earlier UI snapshot. A branch existing only on this laptop cannot be cloned on another machine until explicitly published; use the verified archive rather than assuming a remote branch exists. No production rollout is implied by local fixture or automated tests.
 
-Final verification evidence lives in the companion candidate handoff and output/work-quality-gate.md; independent backend/UI reports identify their exact reviewed source scopes. Known operational boundaries: single-process SQLite Hub, explicit Git refresh rather than a background scheduler, unverified actual runtime context consumption, contributor reports not elevated to CI trust, and no automatic machine-result Evidence ingestion.
+Final verification evidence lives in the companion candidate handoff and output/work-quality-gate-reload.md; independent backend/UI reports identify their exact reviewed source scopes. Known operational boundaries: single-process SQLite Hub, explicit Git refresh rather than a background scheduler, unverified actual runtime context consumption, contributor reports not elevated to CI trust, and no automatic machine-result Evidence ingestion.
+
+## Private Linux preview
+
+The isolated preview on geekom binds 127.0.0.1:19879. Source: /home/altsay/.cache/keryx-work-preview.cPfTN4/team-hub-prototype. It uses its own disposable database and runtime dependencies. Production Hub, Cloudflare configuration and production data remain separate.
+
+From a laptop with the existing geekom SSH configuration, run:
+
+```sh
+ssh -N -L 18794:127.0.0.1:19879 geekom
+```
+
+Open http://localhost:18794 and use the deliberately public fixture operator token below. It authorizes only this synthetic preview and must never configure a public Hub:
+
+```text
+work-demo-human-operator-0000000000000000000000
+```
+
+Choose project work-demo-project → Work. Exercise the lifecycle above. For unknown request recovery, reload the same tab: pending requests retain their original ID and body and require an explicit check/retry; they never dispatch automatically. A failed original retry does not settle an earlier uncertain result. A different authenticated principal cannot replay that tab's request. Signing out clears pending envelopes; ordinary form drafts are not durable. A browser that blocks/quota-fails session storage blocks new managed mutations with a visible error rather than sending an unrecoverable operation.

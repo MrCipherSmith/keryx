@@ -1,5 +1,5 @@
 # Evidence and decisions
-Version: 0.1.1
+Version: 0.2.0
 
 Status: draft. Distinguish owner decisions from recommended specification choices.
 
@@ -38,3 +38,10 @@ Graph is stale and was used only for orientation; conclusions above derive from 
 No change to frozen existing remote-session documents is made. These recommendations are frozen only through a later explicit owner-approved work Flow/spec revision.
 
 - P9: v1 defers carry-forward compatibility; amended requirements require fresh Attempts and review. Waivers are acceptance overlays, not mutations of sealed submissions. Flow criterion coverage is complete and integration criteria have an explicit required Intent.
+
+## Implementation refinements
+
+- I1: the owner subsequently authorized autonomous implementation and parallel backend/UI work. This authorizes candidate development, not product self-acceptance or implicit production rollout.
+- I2: physical SQLite storage follows the repository's typed JSON row pattern with project+ID keys and dedicated event/receipt/archive/reservation/observation tables. Domain guards and closed schemas enforce relationships transactionally; the original table-per-entity list was a design sketch, not a migration already applied.
+- I3: original native admission uses optional paired HTTP sidecar headers, preserving frozen v2 JSON and every existing controller/ad-hoc-consent check. Runtime content consumption remains explicitly unverified.
+- I4: completed snapshot exports are released, with bounded unfinished exports and explicit resync on consumed/expired cursors. A real browser trial reproduced the previous retained-export quota defect before this correction.

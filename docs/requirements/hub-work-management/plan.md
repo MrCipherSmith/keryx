@@ -1,7 +1,7 @@
 # Implementation and verification plan
-Version: 0.1.1
+Version: 0.2.0
 
-Status: proposed, no implementation dispatch or owner freeze performed by this package. Baseline main0.4.1/v0.4.0 must be rechecked; preserve active parallel branches and frozen machine contracts.
+Status: implementation/verification waves executed for the candidate; no remote owner acceptance or public production rollout performed. Baseline main0.4.1/v0.4.0 must be rechecked; preserve active parallel branches and frozen machine contracts.
 
 ## Before coding
 
@@ -50,3 +50,7 @@ Use project-local code-verifier and review orchestration. Health changed scope m
 ## Risks and rollout
 
 First pilot: one project, at least two human principals, a manual Git contributor and one native agent. Export/backup new metadata and verify full replayability before wider use. Runtime control and product work remain separate views/authorities. Product acceptance can precede or follow PR merge by explicit policy; UI never equates them. All owner review decisions remain external to implementation agent self-report.
+
+## Candidate completion evidence
+
+The integrated backend and three UI increments are implemented on feat-hub-work-management. Backend1783 tests passed; final UI142 tests passed; packaging6 tests passed, plus67 CLI/reference checks. Types, lint, frontend build and embedded assets passed. Independent backend, membership/snapshot delta, UI core/advanced and native UI reviews approved their exact scopes after reproduced findings were corrected. Full native browser association was checked against a synthetic Hub/WebSocket peer; actual model/provider execution is not claimed. A separate geekom Linux source-archive runtime and official SDK MCP trial passed without production changes. See verification.md and the operator handoff for exact boundaries. Local Flow480 stays in-progress for owner handoff; no judged AC is signed as a human by an agent.

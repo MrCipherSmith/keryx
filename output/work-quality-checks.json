@@ -1,0 +1,101 @@
+[
+  {
+    "name": "health",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun --no-env-file src/cli.ts health run --changed --source eslint,typescript",
+    "started": "2026-11-01T10:45:56.974Z",
+    "completedObservation": "2026-11-01T10:47:15.848Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-59-913Z-edcd5f_run.log"
+  },
+  {
+    "name": "testing",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun --no-env-file src/cli.ts test run --changed --strict",
+    "started": "2026-11-01T10:45:56.983Z",
+    "completedObservation": "2026-11-01T10:48:43.576Z",
+    "exitCode": 143,
+    "timeout": true,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-48-43-547Z-731b14_run.log"
+  },
+  {
+    "name": "backend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test src/hub/ src/remote-control/ src/remote/ src/commands/hub-machine.test.ts src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts",
+    "started": "2026-11-01T10:45:56.983Z",
+    "completedObservation": "2026-11-01T10:47:15.848Z",
+    "exitCode": 1,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-54-559Z-726acb_run.log"
+  },
+  {
+    "name": "frontend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web test",
+    "started": "2026-11-01T10:45:56.983Z",
+    "completedObservation": "2026-11-01T10:46:21.667Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-14-584Z-c4a943_run.log"
+  },
+  {
+    "name": "root-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:47:15.848Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-57-246Z-38c48a_run.log"
+  },
+  {
+    "name": "script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:46:47.783Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-32-166Z-7d352a_run.log"
+  },
+  {
+    "name": "backend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun node_modules/eslint/bin/eslint.js src/hub src/remote-control src/remote src/commands/hub.ts src/commands/hub-machine.ts src/commands/hub-machine.test.ts",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:46:47.785Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-32-184Z-155207_run.log"
+  },
+  {
+    "name": "frontend-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web typecheck",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:46:47.785Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-37-013Z-2d1805_run.log"
+  },
+  {
+    "name": "frontend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web lint",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:46:22.428Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-22-366Z-686e54_run.log"
+  },
+  {
+    "name": "frontend-build",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web build",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:46:21.729Z",
+    "exitCode": 0,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-21-673Z-5da32d_run.log"
+  },
+  {
+    "name": "embedded-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T10:46:14.864Z",
+    "completedObservation": "2026-11-01T10:46:21.666Z",
+    "exitCode": 1,
+    "timeout": false,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T10-46-16-395Z-3e979b_run.log"
+  }
+]

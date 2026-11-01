@@ -1,21 +1,12 @@
-# Independent documentation review
-Version: 0.1.1
+# Independent candidate review
+Version: 0.2.0
 
-Status: PASS_WITH_WARNINGS on 2026-11-01; zero blockers, one implementation-gate warning. This is a documentation review, not implementation certification or owner approval.
+Status: APPROVE for the reviewed implementation scopes; owner product acceptance remains pending.
 
-Independent reviewer: work_docpack_review, using the project-local docpack-review procedure. Reviewed all ten Markdown documents, domain/command/event schemas, examples, verifier and roadmap entry; checked baseline claims against pinned main/release Git source.
+The documentation package first received independent docpack review. Initial coverage, immutable submission/waiver recovery and amendment contract blockers were corrected before coding.
 
-Round one: FAIL with three blockers. Flow-level criterion coverage was incomplete; sealed submissions had ambiguous waiver/recovery behavior; requirement amendment compatibility lacked an implementable contract.
+Backend independent review reproduced admission/coverage/draft-cancellation/terminal-state defects, then a delayed-queue unknown-run case and missing late-contradiction attention. Each received RED→GREEN regression coverage. Round3 APPROVE and a later narrow membership/snapshot delta APPROVE verified current authority, exact coverage, history preservation and context/snapshot behavior.
 
-Round two: all blockers resolved. Explicit Intent-to-Flow criterion mappings and integration Intent coverage gate final acceptance. Waivers are immutable acceptance-side Decisions; late contradictory Evidence requires a successor Attempt rather than editing a sealed submission. Version1 defers carry-forward compatibility and uses exact immutable amendment manifests with atomic whole-set approval. Write projections reject client provenance spoofing. Start requires approved mapping completeness; finished passing Evidence is required at submit/acceptance, not before starting.
+UI independent review reproduced hidden material requirement fields and cross-Flow prepared approval leakage. Both were fixed with permanent negative tests and independently adapted faithful navigation probes. Second increment APPROVE covers advanced waivers/amendments/events/observations/legacy/context and bounded Overview attention. Native UI delta APPROVE verifies original request/header identity, unknown retry, stale pins, controller rights and scope changes.
 
-Remaining warning: detailed generated OpenAPI/projection contracts and executable transactional authorization/concurrency tests are explicit M1+ implementation gates. Structural validation does not establish runtime safety. No unresolved draft contradiction was found by the reviewer.
-
-Final verifier independently confirmed PASS: 10 Markdown documents, 14 requirements, 16 AC, three schemas, 11 valid and 16 invalid examples.
-
-Review evidence retained in repository output directory:
-
-- output/hub-work-management-docpack-review.txt — initial findings.
-- output/hub-work-management-docpack-review-round2.txt — final independent report.
-
-Owner review of proposed P1–P9 remains required before freezing an implementation Flow. No reviewer or implementation agent may self-accept the resulting product work.
+Reports retained in output/work-independent-review-round3.md, output/work-independent-review-final-delta.md, output/work-ui-independent-review-round2.md and output/work-ui-independent-review-native.md. Review approvals are scoped source judgments, not proof of real provider operation or human outcome acceptance. Final quality evidence is in verification.md.

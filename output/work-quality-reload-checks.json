@@ -1,0 +1,74 @@
+[
+  {
+    "name": "reload-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T12:55:50.502Z",
+    "completedObservation": "2026-11-01T12:56:33.297Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-56-27-457Z-5c0406_run.log"
+  },
+  {
+    "name": "reload-script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.297Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-56-07-998Z-c63947_run.log"
+  },
+  {
+    "name": "reload-frontend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web test",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.293Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-56-05-376Z-c1b68d_run.log"
+  },
+  {
+    "name": "reload-frontend-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web typecheck",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.296Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-56-10-452Z-6b260b_run.log"
+  },
+  {
+    "name": "reload-frontend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web lint",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.297Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-56-00-594Z-a87fa4_run.log"
+  },
+  {
+    "name": "reload-frontend-build",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web build",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.296Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-55-53-004Z-158c91_run.log"
+  },
+  {
+    "name": "reload-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.297Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-55-51-685Z-128c54_run.log"
+  },
+  {
+    "name": "reload-packaging",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/package-team-hub.test.ts",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.297Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-56-06-655Z-93dac9_run.log"
+  },
+  {
+    "name": "reload-docs",
+    "command": "bun --no-env-file src/cli.ts ctx run -- node docs/requirements/hub-work-management/verify.cjs",
+    "started": "2026-11-01T12:55:50.504Z",
+    "completedObservation": "2026-11-01T12:56:33.297Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T12-55-52-657Z-2fdfd4_run.log"
+  }
+]

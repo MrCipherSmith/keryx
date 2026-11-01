@@ -1,12 +1,12 @@
 # Migration and coexistence with Keryx0.4.0
-Version: 0.1.1
+Version: 0.2.0
 
 Status: planned migration contract; no live migration executed.
 
 ## Additive rollout
 
 1. Back up current Hub SQLite database and retained attachments with existing documented consistency procedure; test restoration to isolated path.
-2. Stop writes for the short schema migration boundary. Add versioned work_* tables/indexes/immutable document archive and conversion registry transactionally; existing HubState records are unchanged.
+2. Stop writes for the short schema migration boundary. Add the versioned hub_work_records payload table and dedicated hub_work_* events/receipts/archive/reservation/observation/conversion tables and indexes transactionally (physical mapping in specification.md section7); existing HubState records are unchanged.
 3. Start with `workManagement.enabled=false` (proposed administrator config). Legacy behavior remains; new work endpoint reports explicit unavailable until supported configuration/readiness.
 4. Enable new metadata for explicitly selected projects after compatibility/backup/limits checks. UI capability response reports supported schema/commands and legacy vs managed flow mode; absence means legacy, never infer from title.
 5. Enable contributor adapters and optional Git observer independently. No code publication or machine enrollment is implied by flag changes.
