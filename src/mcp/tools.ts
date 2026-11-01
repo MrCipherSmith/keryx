@@ -12,7 +12,6 @@ import { getAffected, getCycles, getOrphans, loadGraph } from "../gdgraph/query"
 import type { GraphData } from "../gdgraph/types";
 import { createSecurityService, runScan, sourceForFileRead } from "../security/service";
 import { scanMcpManifest } from "../security/detect/mcp";
-import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { resolveContainedPath, resolveProjectRoot } from "../lib/contained-path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { createCodeHealthService } from "../health/service";
@@ -23,6 +22,7 @@ import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
+import { guardNoteForPersistence } from "./redact-seam";
 import {
   containsHarnessHeaderLine,
   isMemoryHarnessId,
@@ -378,12 +378,7 @@ export function buildToolRegistry(): ToolEntry[] {
         const notePath = proposalNotePath(cwd, workspaceId, proposalId);
         // The note is persisted and handed to the owner writers, so it passes
         // the same output guard as the CLI and workspace_propose before either.
-        const materializedNote = note === undefined
-          ? undefined
-          : prepareOutputForPersistence(
-              await guardOutput({ cwd, content: note, target: "task", source: "generated", path: notePath }),
-              note,
-            );
+        const materializedNote = note === undefined ? undefined : await guardNoteForPersistence(cwd, note, notePath);
         if (materializedNote !== undefined && !materializedNote.allowed) throw new Error(materializedNote.reason);
         const persistedNote = materializedNote?.allowed ? materializedNote.content : undefined;
         const { service, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(persistedNote ? { note: persistedNote } : {}) });
