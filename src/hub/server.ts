@@ -84,7 +84,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   async function authenticate(request: Request): Promise<{ actor: Principal; cookie: boolean }> {
     if (request.headers.has("authorization")) return { actor: bearerIdentity(request), cookie: false };
-    const key = sessionKey(request); const session = key ? store.load().sessions[sha256(key)] : undefined;
+    const key = sessionKey(request); const session = key ? store.session(sha256(key)) : undefined;
     if (!session || session.expiresAt <= now()) fail(401, "unauthorized", "Authentication required");
     if (session.accessIdentity) {
       if (!access) fail(401, "unauthorized", "Authentication required");
@@ -107,7 +107,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     transportAllowed(request) { const origin = new URL(config.publicOrigin ?? request.url); return origin.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]", "::1"].includes(origin.hostname); },
     async human(request) { const identity = await authenticate(request); if (!identity.cookie || identity.actor.kind !== "human") fail(403, "human-session-required", "Current human browser session required"); const key = sessionKey(request); if (!key) fail(401, "unauthorized", "Session required"); return { actor: identity.actor, sessionDigest: sha256(key) }; },
     authorityValid(auth, projectId, readOnly = false) {
-      const stored = store.load().sessions[auth.sessionDigest];
+      const stored = store.session(auth.sessionDigest);
       if (!stored || stored.expiresAt <= now() || stored.principal.id !== auth.actor.id) return false;
       const inScope = (principal: Principal) => projectId === undefined || !principal.projectIds || principal.projectIds.includes(projectId);
       if (stored.accessIdentity) {

@@ -1,18 +1,19 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { observeGitSubject, assertGitSubjectAcceptable, parseGitRepositoryConfig, type GitRepositoryConfig } from './git-observer';
 import type { WorkObservationJob } from './storage';
-import type { ResultSubject, Attempt } from './model';
+import type { GitObservation } from './git-observer';
+import { validateWorkCommand } from './validation';
+import { commitGitObservation } from './observation';
 import { createWorkExecution } from './execution';
 import { createLegacyConversion } from './legacy';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Principal } from '../contracts';
 import { authorizeAgentRequest } from '../agent-credentials';
 import { fail, HubFailure, object, sha256 } from '../domain';
 import type { HubStore } from '../store';
 import { allowedWorkCommands, workCommand, workDigest, workRead } from './domain';
-import type { WorkReceipt, WorkRecord, WorkState } from './model';
+import type { Attempt, ResultSubject, WorkReceipt, WorkRecord, WorkState } from './model';
 export const workLimits = {
-    maxCommandBytes: 64 * 1024, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024
+    maxCommandBytes: 64 * 1024, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024, maxSnapshotCacheBytes: 64 * 1024 * 1024, maxSnapshots: 32, maxSnapshotsPerPrincipal: 4, maxSnapshotBytesPerPrincipal: 32 * 1024 * 1024, snapshotTtlMs: 5 * 60 * 1000, maxObservations: 8, maxObservationsPerPrincipal: 2
 } as const;
 type Identity = {
     actor: Principal;
@@ -44,6 +45,7 @@ type Dependencies = {
 };
 type Snapshot = {
     scope: string;
+    actorId: string;
     records: WorkRecord[];
     eventCursor: number;
     expiresAt: number;
@@ -52,9 +54,9 @@ type Snapshot = {
 function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
-function pageLimit(url: URL, max = 200) {
+function pageLimit(url: URL, max: number = workLimits.maxPageSize) {
     const raw = url.searchParams.get('limit');
-    const value = raw === null ? 50 : Number(raw);
+    const value = raw === null ? workLimits.defaultPageSize : Number(raw);
     if (!Number.isSafeInteger(value) || value < 1 || value > max)
         fail(400, 'invalid-limit', 'Page limit is out of range');
     return value;
@@ -132,7 +134,7 @@ export function createWorkHttp(deps: Dependencies) {
         authorizeAgentRequest(actor, ['projects', projectId], method);
         if (actor.projectIds && !actor.projectIds.includes(projectId))
             fail(403, 'project-scope-denied', 'Project access denied');
-        if (!deps.store.load().projects.some(p => p.id === projectId))
+        if (!deps.store.project(projectId))
             fail(404, 'not-found', 'Project not found');
         if (method !== 'GET' && actor.readOnly)
             fail(403, 'read-only', 'Read-only principal');
@@ -160,16 +162,19 @@ export function createWorkHttp(deps: Dependencies) {
             exported = existing;
         }
         else {
-            const records = structuredClone(state.records);
+            const records = state.records;
             const bytes = Buffer.byteLength(JSON.stringify(records));
             if(bytes>workLimits.maxSnapshotBytes)fail(413,'quota-exceeded','Snapshot export exceeds quota; use scoped views');
             // A complete response has no continuation state to retain.
-            if(records.length<=limit)return {records,nextCursor:null,eventCursor:eventCursor(actor,projectId,state.events.at(-1)?.sequence??0)};
-            if (snapshotBytes + bytes > 64 * 1024 * 1024 || snapshots.size >= 32)
+            if(records.length<=limit)return {records,nextCursor:null,eventCursor:eventCursor(actor,projectId,state.sequence ?? state.events.at(-1)?.sequence??0)};
+            const principalSnapshots = [...snapshots.values()].filter(value => value.actorId === actor.id);
+            if (principalSnapshots.length >= workLimits.maxSnapshotsPerPrincipal || principalSnapshots.reduce((total, value) => total + value.bytes, bytes) > workLimits.maxSnapshotBytesPerPrincipal)
+                fail(413, 'quota-exceeded', 'Principal snapshot quota exceeded; finish or expire an existing export');
+            if (snapshotBytes + bytes > workLimits.maxSnapshotCacheBytes || snapshots.size >= workLimits.maxSnapshots)
                 fail(413, 'quota-exceeded', 'Snapshot export exceeds quota; use scoped views');
             id = randomBytes(24).toString('base64url');
             exported = {
-                scope: currentScope, records, eventCursor: state.events.at(-1)?.sequence ?? 0, expiresAt: deps.now() + 5 * 60 * 1000, bytes
+                scope: currentScope, actorId: actor.id, records, eventCursor: state.sequence ?? state.events.at(-1)?.sequence ?? 0, expiresAt: deps.now() + workLimits.snapshotTtlMs, bytes
             };
             snapshots.set(id, exported);
             snapshotBytes += bytes;
@@ -179,8 +184,8 @@ export function createWorkHttp(deps: Dependencies) {
         if(nextCursor===null){snapshots.delete(id);snapshotBytes-=exported.bytes;}
         return { records, nextCursor, eventCursor: eventCursor(actor, projectId, exported.eventCursor) };
     }
-    function events(state: WorkState, actor: Principal, projectId: string, url: URL) {
-        const limit = pageLimit(url, 1000), token = url.searchParams.get('after'), currentScope = workDigest({ actorId: actor.id, projectId });
+    function events(actor: Principal, projectId: string, url: URL) {
+        const limit = pageLimit(url, workLimits.maxEventPageSize), token = url.searchParams.get('after'), currentScope = workDigest({ actorId: actor.id, projectId });
         let after = 0;
         if (token) {
             const parsed = object(decode(token));
@@ -188,9 +193,7 @@ export function createWorkHttp(deps: Dependencies) {
                 fail(410, 'resync-required', 'Event cursor scope changed; start a new snapshot');
             after = Number(parsed.sequence);
         }
-        if (after > (state.events.at(-1)?.sequence ?? 0) || state.events.length && after < state.events[0]!.sequence - 1)
-            fail(410, 'resync-required', 'Event history gap; start a new snapshot');
-        const available = state.events.filter(event => event.sequence > after), page: typeof state.events = [];
+        const available = deps.store.work.eventsAfter(projectId, after, limit), page: import('./model').WorkEvent[] = [];
         let bytes = 0;
         for (const event of available) {
             const size = Buffer.byteLength(JSON.stringify(event));
@@ -203,7 +206,7 @@ export function createWorkHttp(deps: Dependencies) {
         return { events: page, nextCursor: cursor({ type: 'events', scope: currentScope, sequence }) };
     }
     function observationSubject(projectId: string, subjectId: string, subjectDigest?: unknown, versions?: unknown) {
-        const state = deps.store.work.load(projectId), subject = state.records.find((r): r is ResultSubject => r.kind === 'subject' && r.id === subjectId), attempt = subject && state.records.find((r): r is Attempt => r.kind === 'attempt' && r.id === subject.attemptId);
+        const state = deps.store.work.recordState(projectId, subjectId), subject = state.records.find((r): r is ResultSubject => r.kind === 'subject' && r.id === subjectId), attempt = subject && state.records.find((r): r is Attempt => r.kind === 'attempt' && r.id === subject.attemptId);
         if (!subject || !attempt)
             fail(404, 'not-found', 'Subject not found');
         if (subjectDigest !== undefined && subject.contentDigest !== subjectDigest)
@@ -212,18 +215,14 @@ export function createWorkHttp(deps: Dependencies) {
             fail(409, 'version-conflict', 'Attempt version changed');
         return { state, subject, attempt };
     }
-    async function observe(request: Request, projectId: string, subjectId: string, body: Record<string, unknown>): Promise<Response> {
-        const payload = object(body.payload), versions = object(body.expectedVersions), operationId = body.operationId;
-        if (typeof operationId !== 'string' || !operationId || operationId.length > 200 || Object.keys(body).some(k => !['operationId', 'expectedVersions', 'payload'].includes(k)) || Object.keys(payload).some(k => k !== 'subjectDigest') || typeof payload.subjectDigest !== 'string' || !/^[a-f0-9]{64}$/.test(payload.subjectDigest) || Object.values(versions).some(v => !Number.isSafeInteger(v) || Number(v) < 1))
-            fail(400, 'invalid-body', 'Invalid observation request');
-        const requestDigest = workDigest({ path: ['subjects', subjectId, 'observe'], body });
-        const prepared = await deps.serialized(async () => {
+    async function reserveObservation(request: Request, projectId: string, subjectId: string, payload: Record<string, unknown>, versions: Record<string, unknown>, operationId: string, requestDigest: string) {
+        return deps.serialized(async () => {
             const current = await deps.authenticate(request);
             authorize(current.actor, projectId, 'POST');
             if (current.cookie || request.headers.has('origin'))
                 deps.checkOrigin(request);
-            return deps.store.writeTransaction(() => {
-                const state = deps.store.work.load(projectId), receipt = Object.values(state.operations).find(r => r.actorId === current.actor.id && r.operationId === operationId);
+            return deps.store.workTransaction(() => {
+                const receipt = deps.store.work.operation(projectId, current.actor.id, operationId);
                 if (receipt) {
                     if (receipt.requestDigest !== requestDigest)
                         fail(409, 'idempotency-conflict', 'Operation ID already used');
@@ -235,6 +234,8 @@ export function createWorkHttp(deps: Dependencies) {
                 const previous = deps.store.work.observationJob(projectId, current.actor.id, operationId);
                 if (previous && previous.requestDigest !== requestDigest)
                     fail(409, 'idempotency-conflict', 'Operation ID already used');
+                if (!previous && [...inFlightObservations.keys()].filter(value => (JSON.parse(value) as string[])[1] === current.actor.id).length >= workLimits.maxObservationsPerPrincipal) fail(429, 'quota-exceeded', 'Principal concurrent observation quota exceeded');
+                if (!previous && inFlightObservations.size >= workLimits.maxObservations) fail(413, 'quota-exceeded', 'Concurrent observation quota exceeded');
                 const job: WorkObservationJob = previous ?? {
                     projectId, actorId: current.actor.id, operationId, requestDigest, receiptId: randomUUID(), observationId: randomUUID(), generation: deps.store.work.nextObservationGeneration(projectId, subjectId), subjectId, subjectDigest: subject.contentDigest, attemptId: attempt.id, expectedVersion: attempt.version
                 };
@@ -243,6 +244,35 @@ export function createWorkHttp(deps: Dependencies) {
                 return { actor: current.actor, subject, job };
             });
         });
+    }
+    async function commitObservation(request: Request, projectId: string, subjectId: string, job: WorkObservationJob, observation: GitObservation) {
+            return deps.serialized(async () => {
+                const current = await deps.authenticate(request);
+                authorize(current.actor, projectId, 'POST');
+                if (current.actor.id !== job.actorId)
+                    fail(403, 'identity-changed', 'Current identity changed');
+                return deps.store.workTransaction(() => {
+                    const { state } = observationSubject(projectId, subjectId, job.subjectDigest, { [job.attemptId]: job.expectedVersion });
+                    const replay = deps.store.work.operation(projectId, job.actorId, job.operationId);
+                    if (replay) {
+                        if (replay.requestDigest !== job.requestDigest)
+                            fail(409, 'idempotency-conflict', 'Operation ID already used');
+                        return json(resultEnvelope(replay, eventCursor(current.actor, projectId, replay.eventCursor)));
+                    }
+                    deps.store.work.saveGitObservation(observation);
+                    const receipt = commitGitObservation(state, current.actor, observation, job, randomUUID());
+                    deps.store.work.save(projectId, state);
+                    deps.store.work.deleteObservationJob(projectId, job.actorId, job.operationId);
+                    return json(resultEnvelope(receipt, eventCursor(current.actor, projectId, receipt.eventCursor)));
+                });
+            });
+    }
+    async function observe(request: Request, projectId: string, subjectId: string, body: Record<string, unknown>): Promise<Response> {
+        const payload = object(body.payload), versions = object(body.expectedVersions), operationId = body.operationId;
+        if (typeof operationId !== 'string' || !operationId || operationId.length > 200 || Object.keys(body).some(k => !['operationId', 'expectedVersions', 'payload'].includes(k)) || Object.keys(payload).some(k => k !== 'subjectDigest') || typeof payload.subjectDigest !== 'string' || !/^[a-f0-9]{64}$/.test(payload.subjectDigest) || Object.values(versions).some(v => !Number.isSafeInteger(v) || Number(v) < 1))
+            fail(400, 'invalid-body', 'Invalid observation request');
+        const requestDigest = workDigest({ path: ['subjects', subjectId, 'observe'], body });
+        const prepared = await reserveObservation(request, projectId, subjectId, payload, versions, operationId, requestDigest);
         if ('receipt' in prepared && prepared.receipt)
             return json(resultEnvelope(prepared.receipt, eventCursor(prepared.actor, projectId, prepared.receipt.eventCursor)));
         if (!('job' in prepared) || !prepared.job || !prepared.subject)
@@ -251,42 +281,15 @@ export function createWorkHttp(deps: Dependencies) {
         const existing = inFlightObservations.get(key);
         if (existing)
             return (await existing).clone();
-        if (inFlightObservations.size >= 8)
+        if ([...inFlightObservations.keys()].filter(value => (JSON.parse(value) as string[])[1] === prepared.actor.id).length >= workLimits.maxObservationsPerPrincipal)
+            fail(429, 'quota-exceeded', 'Principal concurrent observation quota exceeded');
+        if (inFlightObservations.size >= workLimits.maxObservations)
             fail(413, 'quota-exceeded', 'Concurrent observation quota exceeded');
         const pending = (async () => {
             const observation = await observeGitSubject(subject, deps.repositories ?? [], {
                 id: job.observationId, actorId: job.actorId, generation: job.generation, now: deps.now, ...(deps.observerFetch ? { fetch: deps.observerFetch } : {})
             });
-            return deps.serialized(async () => {
-                const current = await deps.authenticate(request);
-                authorize(current.actor, projectId, 'POST');
-                if (current.actor.id !== job.actorId)
-                    fail(403, 'identity-changed', 'Current identity changed');
-                return deps.store.writeTransaction(() => {
-                    const { state } = observationSubject(projectId, subjectId, job.subjectDigest, { [job.attemptId]: job.expectedVersion });
-                    const replay = Object.values(state.operations).find(r => r.actorId === job.actorId && r.operationId === job.operationId);
-                    if (replay) {
-                        if (replay.requestDigest !== job.requestDigest)
-                            fail(409, 'idempotency-conflict', 'Operation ID already used');
-                        return json(resultEnvelope(replay, eventCursor(current.actor, projectId, replay.eventCursor)));
-                    }
-                    deps.store.work.saveGitObservation(observation);
-                    const sequence = (state.events.at(-1)?.sequence ?? 0) + 1;
-                    state.events.push({
-                        protocolVersion: 1, projectId, sequence, eventId: randomUUID(), operationId: job.operationId, actorId: current.actor.id, actorKind: current.actor.kind, occurredAt: observation.observedAt, type: 'git-observed', entityType: 'git-observation', entityId: observation.id, entityVersion: null, contentDigest: observation.contentDigest, causationId: null
-                    });
-                    const result = {
-                        operationId: job.operationId, observation, receiptId: job.receiptId, eventCursor: sequence
-                    };
-                    const receipt: WorkReceipt = {
-                        operationId: job.operationId, status: 'committed', receiptId: job.receiptId, actorId: job.actorId, projectId, requestDigest: job.requestDigest, result, eventCursor: sequence
-                    };
-                    state.operations[projectId + ':' + job.actorId + ':' + job.operationId] = receipt;
-                    deps.store.work.save(projectId, state);
-                    deps.store.work.deleteObservationJob(projectId, job.actorId, job.operationId);
-                    return json(resultEnvelope(receipt, eventCursor(current.actor, projectId, sequence)));
-                });
-            });
+            return commitObservation(request, projectId, subjectId, job, observation);
         })();
         inFlightObservations.set(key, pending);
         try {
@@ -294,12 +297,27 @@ export function createWorkHttp(deps: Dependencies) {
         }
         catch (error) {
             if (error instanceof HubFailure)
-                deps.store.writeTransaction(() => deps.store.work.deleteObservationJob(projectId, job.actorId, job.operationId));
+                deps.store.workTransaction(() => deps.store.work.deleteObservationJob(projectId, job.actorId, job.operationId));
             throw error;
         }
         finally {
             inFlightObservations.delete(key);
         }
+    }
+    function exactDocument(projectId: string, actor: Principal, suffix: string[], url: URL, sequence: number) {
+                    const versionText=suffix[3]!,digest=url.searchParams.get('digest');
+                    if(!/^[1-9][0-9]{0,15}$/.test(versionText)||!Number.isSafeInteger(Number(versionText))||!digest||url.searchParams.getAll('digest').length!==1||!/^[a-f0-9]{64}$/.test(digest)||[...url.searchParams.keys()].some(key=>key!=='digest'))fail(400,'invalid-document-reference','Exact version and digest are required');
+                    const reference={documentId:suffix[1]!,version:Number(versionText),contentDigest:digest};
+                    const archived=deps.store.work.documentVersion(projectId,reference);
+                    const document=archived;
+                    if(!document||document.projectId!==projectId||document.id!==reference.documentId||document.version!==reference.version||document.contentDigest!==digest||Buffer.byteLength(document.content)>1024*1024||sha256(document.content)!==digest)fail(404,'document-version-unavailable','Exact document content is unavailable');
+                    const {id,path,kind,version,contentDigest,content}=document;
+                    return json({document:{id,projectId,path,kind,version,contentDigest,content},eventCursor:eventCursor(actor,projectId,sequence)});
+    }
+    function capabilities(actor: Principal, projectId: string) {
+        return json({
+                    protocolVersion: 1, enabled: deps.enabled, allowedCommands: deps.enabled ? [...allowedWorkCommands(actor), ...(actor.kind === 'human' && !actor.readOnly ? ['legacy.preview', 'legacy.convert'] : []), ...(actor.kind === 'human' && actor.role === 'operator' && !actor.readOnly ? ['execution.bind'] : [])] : [], limits: workLimits, features: { managedExecution: deps.enabled, gitObserver: deps.enabled && !!deps.repositories?.some(r => r.projectId===projectId&&!!r.github), legacyConversion: deps.enabled }
+                });
     }
     async function handle(request: Request): Promise<Response | undefined> {
         const url = new URL(request.url);
@@ -319,29 +337,20 @@ export function createWorkHttp(deps: Dependencies) {
             const projectId = path[1], suffix = path.slice(2), identity = await deps.authenticate(request);
             authorize(identity.actor, projectId, request.method);
             if (suffix.length === 1 && suffix[0] === 'capabilities' && request.method === 'GET')
-                return json({
-                    protocolVersion: 1, enabled: deps.enabled, allowedCommands: deps.enabled ? [...allowedWorkCommands(identity.actor), ...(identity.actor.kind === 'human' && !identity.actor.readOnly ? ['legacy.preview', 'legacy.convert'] : []), ...(identity.actor.kind === 'human' && identity.actor.role === 'operator' && !identity.actor.readOnly ? ['execution.bind'] : [])] : [], limits: workLimits, features: { managedExecution: deps.enabled, gitObserver: deps.enabled && !!deps.repositories?.some(r => r.projectId===projectId&&!!r.github), legacyConversion: deps.enabled }
-                });
+                return capabilities(identity.actor, projectId);
             if (!deps.enabled)
                 fail(404, 'work-disabled', 'Managed work is disabled');
             if (request.method === 'GET') {
-                const state = deps.store.work.load(projectId);
+                const sequence = deps.store.work.currentSequence(projectId);
                 if(suffix.length===4&&suffix[0]==='documents'&&suffix[2]==='versions'){
-                    const versionText=suffix[3]!,digest=url.searchParams.get('digest');
-                    if(!/^[1-9][0-9]{0,15}$/.test(versionText)||!Number.isSafeInteger(Number(versionText))||!digest||url.searchParams.getAll('digest').length!==1||!/^[a-f0-9]{64}$/.test(digest)||[...url.searchParams.keys()].some(key=>key!=='digest'))fail(400,'invalid-document-reference','Exact version and digest are required');
-                    const reference={documentId:suffix[1]!,version:Number(versionText),contentDigest:digest};
-                    const archived=deps.store.work.documentVersion(projectId,reference);
-                    const document=archived??deps.store.load().documents.find(d=>d.projectId===projectId&&d.id===reference.documentId&&d.version===reference.version&&d.contentDigest===reference.contentDigest);
-                    if(!document||document.projectId!==projectId||document.id!==reference.documentId||document.version!==reference.version||document.contentDigest!==digest||Buffer.byteLength(document.content)>1024*1024||sha256(document.content)!==digest)fail(404,'document-version-unavailable','Exact document content is unavailable');
-                    const {id,path,kind,version,contentDigest,content}=document;
-                    return json({document:{id,projectId,path,kind,version,contentDigest,content},eventCursor:eventCursor(identity.actor,projectId,state.events.at(-1)?.sequence??0)});
+                    return exactDocument(projectId, identity.actor, suffix, url, sequence);
                 }
                 if (suffix.length === 1 && suffix[0] === 'snapshot')
-                    return json(snapshot(state, identity.actor, projectId, url));
+                    return json(snapshot(url.searchParams.has('cursor') ? { records: [], events: [], operations: {} } : deps.store.work.snapshotState(projectId, workLimits.maxSnapshotBytes), identity.actor, projectId, url));
                 if (suffix.length === 1 && suffix[0] === 'events')
-                    return json(events(state, identity.actor, projectId, url));
+                    return json(events(identity.actor, projectId, url));
                 if (suffix.length === 2 && suffix[0] === 'operations') {
-                    const receipt = Object.values(state.operations).find(r => r.actorId === identity.actor.id && r.operationId === suffix[1]);
+                    const receipt = deps.store.work.operation(projectId, identity.actor.id, suffix[1]!);
                     if (!receipt) {
                         const pending = deps.store.work.observationJob(projectId, identity.actor.id, suffix[1]!);
                         if (pending)
@@ -366,8 +375,18 @@ export function createWorkHttp(deps: Dependencies) {
                     }
                     return json({ observations: all.slice(offset, offset + limit), nextCursor: offset + limit < all.length ? cursor({
                             type: 'observations', scope: scope(identity.actor, projectId), subjectId: suffix[1], offset: offset + limit
-                        }) : null, eventCursor: eventCursor(identity.actor, projectId, state.events.at(-1)?.sequence ?? 0) });
+                        }) : null, eventCursor: eventCursor(identity.actor, projectId, sequence) });
                 }
+                if (suffix.length === 2 && suffix[0] === 'records') {
+                    const record = deps.store.work.record(projectId, suffix[1]!);
+                    if (!record) fail(404, 'not-found', 'Work record not found');
+                    return json({ record, eventCursor: eventCursor(identity.actor, projectId, sequence) });
+                }
+                if (suffix.length === 1 && suffix[0] === 'attention') {
+                    const page = deps.store.work.attentionPage(projectId, url);
+                    return json({ ...page, eventCursor: eventCursor(identity.actor, projectId, page.eventCursor) });
+                }
+                const state = deps.store.work.readState(projectId, suffix, url);
                 const projection = object(workRead(state, identity.actor, projectId, suffix, url, { verifySubjectForAcceptance }));
                 return json({ ...projection, eventCursor: eventCursor(identity.actor, projectId, Number(projection.eventCursor)) });
             }
@@ -393,10 +412,12 @@ export function createWorkHttp(deps: Dependencies) {
                     deps.checkOrigin(request);
                 if (deps.store.work.observationJob(projectId, current.actor.id, operationId!))
                     fail(409, 'idempotency-conflict', 'Operation ID belongs to a pending observation');
-                const receipt = deps.store.writeTransaction(legacy => {
-                    const state = deps.store.work.load(projectId);
+                const receipt = deps.store.workTransaction(() => {
+                    const command = validateWorkCommand(body);
+                    const state = deps.store.work.commandState(projectId, command, current.actor.id);
+                    const legacy = body.command === 'legacy.preview' || body.command === 'legacy.convert' ? deps.store.load() : deps.store.workLegacyContext(projectId, state.records, body.payload);
                     const receipt = workCommand(state, current.actor, projectId, body, {
-                        legacy, now: () => new Date(deps.now()).toISOString(), resolveRepository: (projectId, repositoryId) => deps.repositories?.find(r => r.projectId === projectId && r.id === repositoryId), ...(execution.verifyExecution ? { verifyExecution: execution.verifyExecution } : {}), ...(execution.inspectExecution ? { inspectExecution: execution.inspectExecution } : {}), ...(execution.hasPendingExecution ? { hasPendingExecution: execution.hasPendingExecution } : {}), verifySubjectForAcceptance, legacyConversion: createLegacyConversion(deps.store, legacy, () => new Date(deps.now()).toISOString()), resolveDocument: (projectId, reference) => {
+                        legacy, nextRevisionNumber: (kind, targetId) => deps.store.work.nextRevisionNumber(projectId, kind, targetId), now: () => new Date(deps.now()).toISOString(), resolveRepository: (projectId, repositoryId) => deps.repositories?.find(r => r.projectId === projectId && r.id === repositoryId), ...(execution.verifyExecution ? { verifyExecution: execution.verifyExecution } : {}), ...(execution.inspectExecution ? { inspectExecution: execution.inspectExecution } : {}), ...(execution.hasPendingExecution ? { hasPendingExecution: execution.hasPendingExecution } : {}), verifySubjectForAcceptance, legacyConversion: createLegacyConversion(deps.store, legacy, () => new Date(deps.now()).toISOString()), resolveDocument: (projectId, reference) => {
                             const archived = deps.store.work.documentVersion(projectId, reference);
                             if (archived)
                                 return archived;

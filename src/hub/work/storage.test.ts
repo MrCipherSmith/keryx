@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHubStore, type HubStore } from '../store';
@@ -129,4 +129,57 @@ test('Git observations append immutably with monotonic generations scoped to sub
     expect(store.work.gitObservations('p', 's')).toEqual([observation]);
     expect(() => store.work.saveGitObservation({ ...observation, contentDigest: 'changed' })).toThrow();
     expect(store.work.gitObservations('q', 's')).toEqual([]);
+});
+test('managed transactions and unchanged remote transactions never rewrite the legacy aggregate', () => {
+    const { store, dir } = fixture();
+    store.save(store.load());
+    const db = new Database(join(dir, 'hub.sqlite'));
+    db.exec('CREATE TABLE legacy_updates(n INTEGER); CREATE TRIGGER legacy_write AFTER UPDATE ON hub_state BEGIN INSERT INTO legacy_updates VALUES(1); END;');
+    store.workTransaction(() => store.work.save('p', state()));
+    store.writeTransaction(() => store.work.save('p', state()));
+    expect(db.query('SELECT * FROM legacy_updates').all()).toEqual([]);
+    db.close();
+});
+test('stale legacy snapshots cannot overwrite a later committed mutation', () => {
+    const { store } = fixture();
+    const stale = store.load();
+    store.writeTransaction(legacy => { legacy.projects.push({ id: 'p', name: 'New', version: 1, lineRevisionId: null, lineVersion: 0, contextRevision: 0 }); });
+    expect(() => store.save(stale)).toThrow('Legacy state changed');
+    expect(store.project('p')?.name).toBe('New');
+});
+test('conversion projection is visible to old guards without persisting a duplicate in hub_state', () => {
+    const { store, dir } = fixture();
+    store.work.markConverted('p','legacy','managed');
+    const legacy = store.load();
+    expect(legacy.legacyConversions?.legacy?.managedFlowId).toBe('managed');
+    store.save(legacy);
+    const db = new Database(join(dir,'hub.sqlite'));
+    const row = db.query<{body:string},[]>('SELECT body FROM hub_state WHERE id=1').get();
+    expect(JSON.parse(row!.body).legacyConversions).toBeUndefined();
+    db.close();
+});
+test('tightens existing shared directory and live database file permissions', () => {
+    const { store, dir } = fixture();
+    store.close();
+    chmodSync(dir,0o755);
+    chmodSync(join(dir,'hub.sqlite'),0o644);
+    const reopened = openHubStore(dir);
+    stores.push(reopened);
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expect(statSync(join(dir,'hub.sqlite')).mode & 0o777).toBe(0o600);
+    expect(statSync(join(dir,'hub.sqlite-wal')).mode & 0o777).toBe(0o600);
+    expect(statSync(join(dir,'hub.sqlite-shm')).mode & 0o777).toBe(0o600);
+});
+test('backup copies committed WAL records without allocating a whole database serialization buffer', () => {
+    const { store, dir } = fixture();
+    store.workTransaction(() => store.work.save('p',state()));
+    const serialize = Database.prototype.serialize;
+    Database.prototype.serialize = () => { throw Error('Whole database buffer forbidden'); };
+    const destination = join(dir,'backup.sqlite');
+    try { store.backup(destination); } finally { Database.prototype.serialize = serialize; }
+    const backup = new Database(destination, { readonly: true });
+    expect(backup.query('SELECT id FROM hub_work_records').all()).toEqual([{id:'flow-one'}]);
+    expect(statSync(destination).mode & 0o777).toBe(0o600);
+    expect(() => store.backup(destination)).toThrow();
+    backup.close();
 });

@@ -46,14 +46,14 @@ export function workExecutionHint(request: Request): WorkExecutionHint | undefin
 }
 export function createWorkExecution(store: HubStore) {
     const attempt = (projectId: string, attemptId: string) => {
-        const state = store.work.load(projectId);
+        const state = store.work.recordState(projectId, attemptId);
         const a = state.records.find((r): r is Attempt => r.kind === 'attempt' && r.id === attemptId);
         if (!a)
             fail(404, 'not-found', 'Attempt not found');
         return { state, a };
     };
-    const guard = (legacy: HubState, projectId: string, a: Attempt) => {
-        const state = store.work.load(projectId), f = state.records.find((r): r is WorkFlow => r.kind === 'flow' && r.id === a.flowId), i = state.records.find((r): r is WorkIntent => r.kind === 'intent' && r.id === a.intentId), ctx = state.records.find((r): r is ContextSnapshot => r.kind === 'context' && r.id === a.contextSnapshotId);
+    const guard = (legacy: HubState, projectId: string, a: Attempt, state: WorkState) => {
+        const f = state.records.find((r): r is WorkFlow => r.kind === 'flow' && r.id === a.flowId), i = state.records.find((r): r is WorkIntent => r.kind === 'intent' && r.id === a.intentId), ctx = state.records.find((r): r is ContextSnapshot => r.kind === 'context' && r.id === a.contextSnapshotId);
         if (!legacy.projects.some(p => p.id === projectId) || !f || !i || !ctx)
             fail(404, 'not-found', 'Work association not found');
         if (!['running', 'blocked'].includes(a.state) || f.state !== 'in-progress' || !['in-progress', 'in-review'].includes(i.state) || f.approvedRevisionId !== a.flowRevisionId || i.approvedRevisionId !== a.intentRevisionId || ctx.flowRevisionId !== a.flowRevisionId || ctx.intentRevisionId !== a.intentRevisionId)
@@ -69,10 +69,10 @@ export function createWorkExecution(store: HubStore) {
             fail(403, 'human-operator-required', 'Current original human operator is required');
         if (association.mode !== 'ad-hoc')
             fail(409, 'conflicting-association', 'Managed Attempt uses server association alongside explicit ad-hoc wire consent');
-        const { a } = attempt(projectId, hint.attemptId);
+        const { a, state: attemptState } = attempt(projectId, hint.attemptId);
         if (a.version !== hint.expectedVersion)
             fail(409, 'version-conflict', 'Attempt version changed');
-        const { state, ctx } = guard(legacy, projectId, a);
+        const { state, ctx } = guard(legacy, projectId, a, attemptState);
         assertKnownExecutions(projectId, a.id, state);
         if (store.work.reservationsForAttempt(projectId, a.id).some(r => r.state === 'reserved'))
             fail(409, 'execution-allocation-uncertain', 'An existing execution reservation must reconcile before another dispatch');
@@ -92,8 +92,8 @@ export function createWorkExecution(store: HubStore) {
             fail(409, 'execution-already-allocated', 'Original reservation already has an immutable run');
         if (reservation.actorId !== auth.actor.id || reservation.sessionDigest !== auth.sessionDigest || reservation.sessionId !== row.record.sessionId || reservation.projectId !== row.record.projectId || reservation.machineId !== row.record.machineId || reservation.checkoutId !== row.record.checkoutId)
             fail(403, 'work-binding-authority', 'Reservation belongs to a different original authority');
-        const { a } = attempt(reservation.projectId, reservation.attemptId);
-        const { state } = guard(store.load(), reservation.projectId, a);
+        const { a, state: attemptState } = attempt(reservation.projectId, reservation.attemptId);
+        const { state } = guard(store.workLegacyContext(reservation.projectId), reservation.projectId, a, attemptState);
         assertKnownExecutions(reservation.projectId, a.id, state);
         if (store.work.reservationsForAttempt(reservation.projectId, a.id).some(r => r.state === 'reserved' && r.operationId !== operationId))
             fail(409, 'execution-allocation-uncertain', 'Another execution reservation must reconcile before delayed admission');
@@ -134,10 +134,13 @@ export function createWorkExecution(store: HubStore) {
         reservation.runId = run.runId;
         reservation.turnId = run.turnId;
         store.work.saveExecutionReservation(reservation);
-        const { state, a } = attempt(run.projectId, reservation.attemptId), command = store.remote.get<StoredCommand>('remote_command', run.commandId);
+        const state = store.work.commandState(run.projectId, { command: 'execution.bind', operationId: 'execution-bind:' + operationId, payload: { attemptId: reservation.attemptId } }, reservation.actorId);
+        const a = state.records.find((record): record is Attempt => record.kind === 'attempt' && record.id === reservation.attemptId);
+        if (!a) fail(404, 'not-found', 'Attempt not found');
+        const command = store.remote.get<StoredCommand>('remote_command', run.commandId);
         if (!command)
             fail(409, 'execution-proof-missing', 'Original execution command missing');
-        workCommand(state, command.authority.actor, run.projectId, { operationId: 'execution-bind:' + operationId, expectedVersions: { [a.id]: a.version }, command: 'execution.bind', payload: { attemptId: a.id, sessionId: run.sessionId, runId: run.runId, turnId: run.turnId, machineId: run.machineId, checkoutId: run.checkoutId, associationDigest: reservation.associationDigest } }, { legacy: store.load(), now: () => new Date().toISOString(), verifyExecution, inspectExecution });
+        workCommand(state, command.authority.actor, run.projectId, { operationId: 'execution-bind:' + operationId, expectedVersions: { [a.id]: a.version }, command: 'execution.bind', payload: { attemptId: a.id, sessionId: run.sessionId, runId: run.runId, turnId: run.turnId, machineId: run.machineId, checkoutId: run.checkoutId, associationDigest: reservation.associationDigest } }, { legacy: store.workLegacyContext(run.projectId, state.records), now: () => new Date().toISOString(), verifyExecution, inspectExecution });
         store.work.save(run.projectId, state);
     };
     const hasPendingExecution = (projectId: string, attemptId: string) => store.work.reservationsForAttempt(projectId, attemptId).some(r => r.state === 'reserved');

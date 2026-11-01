@@ -26,6 +26,7 @@ export type VerifiedExecution = {
 export type WorkContext = {
     legacy: HubState;
     now: () => string;
+    nextRevisionNumber?: (kind: 'flow-revision' | 'intent-revision', targetId: string) => number;
     resolveDocument?: (projectId: string, reference: {
         documentId: string;
         version: number;
@@ -89,8 +90,9 @@ export function workCommand(state: WorkState, actor: Principal, projectId: strin
     }
     const staged = structuredClone(state);
     const result = execute(staged, actor, projectId, command, context);
-    const receipt: WorkReceipt = { operationId: command.operationId, status: 'committed', receiptId: randomUUID(), actorId: actor.id, projectId, requestDigest, result: structuredClone(result), eventCursor: staged.events.filter(e => e.projectId === projectId).at(-1)?.sequence ?? 0 };
+    const receipt: WorkReceipt = { operationId: command.operationId, status: 'committed', receiptId: randomUUID(), actorId: actor.id, projectId, requestDigest, result: structuredClone(result), eventCursor: staged.sequence ?? staged.events.filter(e => e.projectId === projectId).at(-1)?.sequence ?? 0 };
     staged.operations[key] = receipt;
+    if (staged.sequence !== undefined) state.sequence = staged.sequence;
     state.records = staged.records;
     state.events = staged.events;
     state.operations = staged.operations;
@@ -140,7 +142,7 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
         const mutable = 'version' in r;
         const entityType = r.kind === 'flow-revision' ? 'flow' : r.kind === 'intent-revision' ? 'intent' : r.kind === 'flow-submission' ? 'submission' : r.kind === 'amendment' ? 'flow' : r.kind;
         const type = entityType === 'flow' ? 'flow-changed' : entityType === 'intent' ? 'intent-changed' : entityType === 'attempt' ? 'attempt-changed' : entityType === 'context' ? 'context-created' : entityType === 'execution-link' ? 'execution-linked' : entityType === 'subject' ? 'subject-created' : entityType === 'evidence' ? 'evidence-recorded' : entityType === 'decision' ? 'decision-recorded' : 'submission-created';
-        state.events.push({ protocolVersion: 1, projectId, sequence: (state.events.filter(e => e.projectId === projectId).at(-1)?.sequence ?? 0) + 1, eventId: randomUUID(), operationId: command.operationId, actorId: actor.id, actorKind: actor.kind, occurredAt: now, type, entityType, entityId: r.id, entityVersion: mutable ? r.version : null, contentDigest: 'contentDigest' in r ? r.contentDigest : null, causationId: null });
+        state.events.push({ protocolVersion: 1, projectId, sequence: (state.sequence = (state.sequence ?? state.events.filter(e => e.projectId === projectId).at(-1)?.sequence ?? 0) + 1), eventId: randomUUID(), operationId: command.operationId, actorId: actor.id, actorKind: actor.kind, occurredAt: now, type, entityType, entityId: r.id, entityVersion: mutable ? r.version : null, contentDigest: 'contentDigest' in r ? r.contentDigest : null, causationId: null });
     };
     const add = <T extends WorkRecord>(r: T): T => { validateWorkRecord(r); state.records.push(r); emit(r); return r; };
     const seal = <T extends object>(r: T) => { const payload = Object.fromEntries(Object.entries(r).filter(([key]) => !['id', 'projectId', 'createdBy', 'createdAt'].includes(key))); return { ...r, contentDigest: workDigest(payload) }; };
@@ -271,7 +273,7 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
                     if (find(id, 'intent').flowId !== f.id)
                         fail(404, 'not-found', 'Intent does not belong to Flow');
                 const { targetType: _, ...fields } = p;
-                const r = add(seal({ ...base(), ...fields, kind: 'flow-revision' as const, revision: state.records.filter(r => r.kind === 'flow-revision' && r.flowId === f.id).length + 1 }));
+                const r = add(seal({ ...base(), ...fields, kind: 'flow-revision' as const, revision: context.nextRevisionNumber?.('flow-revision', f.id) ?? state.records.filter(r => r.kind === 'flow-revision' && r.flowId === f.id).length + 1 }));
                 f.currentRevisionId = r.id;
                 change(f);
                 return r;
@@ -287,7 +289,7 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
                 fail(404, 'not-found', 'Foreign Flow revision');
             mappings(p, fr);
             const { targetType: _, ...fields } = p;
-            const r = add(seal({ ...base(), ...fields, kind: 'intent-revision' as const, revision: state.records.filter(r => r.kind === 'intent-revision' && r.intentId === i.id).length + 1 }));
+            const r = add(seal({ ...base(), ...fields, kind: 'intent-revision' as const, revision: context.nextRevisionNumber?.('intent-revision', i.id) ?? state.records.filter(r => r.kind === 'intent-revision' && r.intentId === i.id).length + 1 }));
             i.currentRevisionId = r.id;
             change(i);
             return r;
@@ -835,7 +837,7 @@ function contradictoryAcceptedEvidence(records: WorkRecord[]): EvidenceRecord[] 
 export function workRead(state: WorkState, actor: Principal, projectId: string, path: string[], url: URL, context?: Pick<WorkContext, 'verifySubjectForAcceptance'>): unknown {
     if (actor.projectIds && !actor.projectIds.includes(projectId))
         fail(404, 'not-found', 'Project not found');
-    const records = state.records.filter(r => r.projectId === projectId), eventCursor = state.events.filter(e => e.projectId === projectId).at(-1)?.sequence ?? 0;
+    const records = state.records.filter(r => r.projectId === projectId), eventCursor = state.sequence ?? state.events.filter(e => e.projectId === projectId).at(-1)?.sequence ?? 0;
     const table: Record<string, WorkRecord['kind']> = { flows: 'flow', intents: 'intent', attempts: 'attempt', contexts: 'context', subjects: 'subject', submissions: 'submission', 'flow-submissions': 'flow-submission', decisions: 'decision', amendments: 'amendment' };
     const find = (id: string, kind?: WorkRecord['kind']) => {
         const r = records.find(r => r.id === id && (!kind || r.kind === kind));
