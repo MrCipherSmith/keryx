@@ -314,3 +314,68 @@ test('late failure remediation proposes on accepted Intent without reopening, ap
     expect(state.records.some(r => r.id === late.id)).toBe(true);
     expect(() => workRead(state, human, 'p', ['flows', flowId, 'acceptance-preview'], new URL('http://hub'), context)).not.toThrow();
 });
+function emptyApprovedFlowFixture() {
+    const state = createWorkState();
+    let op = 0;
+    const cmd = (command: string, payload: unknown) => workCommand(state, human, 'p', { operationId: 'membership-' + (++op), expectedVersions: Object.fromEntries(state.records.filter(r => 'version' in r).map(r => [r.id, 'version' in r ? r.version : 1])), command, payload }, context).result as Record<string, unknown>;
+    const f = cmd('flow.create', flowPayload), fr = state.records.find(r => r.kind === 'flow-revision')!;
+    if (fr.kind !== 'flow-revision')
+        throw new Error('Missing revision');
+    cmd('requirements.approve', { targetType: 'flow-revision', revisionId: fr.id, revisionDigest: fr.contentDigest, flowRevisionId: fr.id, reason: 'Approve initial requirements' });
+    return { state, cmd, f, fr };
+}
+const newIntentFields = { title: 'Proposed deliverable', deliverable: 'New deliverable', approach: 'Manual', outOfScope: 'None', ownerId: 'h', required: true, criteria: [{ criterionId: 'new-ic', text: 'Works', waivable: false }], flowCriterionIds: ['fc'], criterionMappings: [{ intentCriterionId: 'new-ic', flowCriterionId: 'fc' }] };
+test('approved empty Flow gains draft Intent only through whole-set human membership amendment', () => {
+    const { state, cmd, f, fr } = emptyApprovedFlowFixture(), oldRevision = JSON.stringify(fr);
+    const i = cmd('intent.create', { ...newIntentFields, flowId: f.id });
+    const initial = state.records.find(r => r.kind === 'intent-revision' && r.intentId === i.id)!;
+    if (initial.kind !== 'intent-revision')
+        throw new Error('Missing revision');
+    expect(state.records.find(r => r.id === f.id)).toMatchObject({ state: 'ready', approvedRevisionId: fr.id });
+    expect(state.records.find(r => r.id === i.id)).toMatchObject({ state: 'draft', approvedRevisionId: null });
+    const before = JSON.stringify(state);
+    expect(() => cmd('requirements.approve', { targetType: 'intent-revision', revisionId: initial.id, revisionDigest: initial.contentDigest, flowRevisionId: fr.id, reason: 'Bypass membership' })).toThrow('amendment');
+    expect(JSON.stringify(state)).toBe(before);
+    expect(() => cmd('requirements.amend', { flowId: f.id, sourceFlowRevisionId: fr.id, affectedIntentIds: [i.id], reason: 'Missing membership change', replacements: [{ targetType: 'intent', targetId: i.id, revisionId: initial.id, contentDigest: initial.contentDigest }] })).toThrow('membership');
+    expect(JSON.stringify(state)).toBe(before);
+    const nextFlow = cmd('revision.propose', { targetType: 'flow', flowId: f.id, problem: flowPayload.problem, expectedOutcome: flowPayload.expectedOutcome, scope: flowPayload.scope, outOfScope: flowPayload.outOfScope, specification: null, criteria: flowPayload.criteria, requiredIntentIds: [i.id] });
+    const nextIntent = cmd('revision.propose', { targetType: 'intent', intentId: i.id, flowRevisionId: nextFlow.id, deliverable: newIntentFields.deliverable, approach: newIntentFields.approach, outOfScope: newIntentFields.outOfScope, criteria: newIntentFields.criteria, flowCriterionIds: newIntentFields.flowCriterionIds, criterionMappings: newIntentFields.criterionMappings });
+    const amendment = cmd('requirements.amend', { flowId: f.id, sourceFlowRevisionId: fr.id, affectedIntentIds: [i.id], reason: 'Add required deliverable', replacements: [{ targetType: 'flow', targetId: f.id, revisionId: nextFlow.id, contentDigest: nextFlow.contentDigest }, { targetType: 'intent', targetId: i.id, revisionId: nextIntent.id, contentDigest: nextIntent.contentDigest }] });
+    cmd('requirements.resolve-amendment', { amendmentId: amendment.id, manifestDigest: amendment.contentDigest, decision: 'approve', reason: 'Approve whole membership change' });
+    cmd('flow.start', { flowId: f.id, flowRevisionDigest: nextFlow.contentDigest });
+    expect(state.records.find(r => r.id === f.id)).toMatchObject({ state: 'in-progress', approvedRevisionId: nextFlow.id });
+    expect(JSON.stringify(state.records.find(r => r.id === fr.id))).toBe(oldRevision);
+});
+test('new draft required Intent under active Flow preserves frozen membership and accepted work', () => {
+    const { state, cmd, flowId, intentId, fr, a, sub } = fixture();
+    cmd('attempt.select', { intentId, attemptId: a.id, submissionId: sub.id, submissionDigest: sub.contentDigest, reason: 'Select existing work' });
+    const accepted = cmd('review.decide', { targetType: 'intent-review', targetId: intentId, submissionId: sub.id, submissionDigest: sub.contentDigest, decision: 'accept', reason: 'Accept existing work', waivers: [] });
+    const beforeFlow = structuredClone(state.records.find(r => r.id === flowId)), beforeIntent = JSON.stringify(state.records.find(r => r.id === intentId)), beforeRevision = JSON.stringify(state.records.find(r => r.id === fr.id));
+    const proposed = cmd('intent.create', { ...newIntentFields, flowId });
+    expect(state.records.find(r => r.id === flowId)).toMatchObject({ state: 'in-progress', approvedRevisionId: fr.id });
+    expect(JSON.stringify(state.records.find(r => r.id === intentId))).toBe(beforeIntent);
+    expect(JSON.stringify(state.records.find(r => r.id === fr.id))).toBe(beforeRevision);
+    expect(state.records.some(r => r.id === accepted.id)).toBe(true);
+    const preview = workRead(state, human, 'p', ['flows', flowId, 'acceptance-preview'], new URL('http://hub'), context) as {
+        acceptedIntents: {
+            intentId: string;
+        }[];
+    };
+    expect(preview.acceptedIntents.map(i => i.intentId)).toEqual([intentId as string]);
+    expect(preview.acceptedIntents.some(i => i.intentId === proposed.id)).toBe(false);
+    const afterFlow = state.records.find(r => r.id === flowId);
+    expect(afterFlow && 'version' in afterFlow && afterFlow.version).toBe((beforeFlow && 'version' in beforeFlow ? beforeFlow.version : 0) + 1);
+});
+test('terminal Flow refuses proposal-only Intent creation without changing history', () => {
+    const { state, cmd, f } = emptyApprovedFlowFixture();
+    cmd('work.cancel', { targetType: 'flow', targetId: f.id, reason: 'Cancel parent' });
+    const before = JSON.stringify(state);
+    expect(() => cmd('intent.create', { ...newIntentFields, flowId: f.id })).toThrow('terminal');
+    expect(JSON.stringify(state)).toBe(before);
+});
+test('new proposed required flags do not join an already approved Flow start membership', () => {
+    const { state, cmd, f, fr } = requirementsFixture();
+    cmd('intent.create', { ...newIntentFields, flowId: f.id });
+    cmd('flow.start', { flowId: f.id, flowRevisionDigest: fr.contentDigest });
+    expect(state.records.find(r => r.id === f.id)).toMatchObject({ state: 'in-progress', approvedRevisionId: fr.id });
+});

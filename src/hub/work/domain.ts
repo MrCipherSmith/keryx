@@ -96,6 +96,12 @@ export function workCommand(state: WorkState, actor: Principal, projectId: strin
     state.operations = staged.operations;
     return structuredClone(receipt);
 }
+/** Append order is durable: proposals introduced after the first Flow approval need membership amendment. */
+function introducedAfterFlowApproval(records: WorkRecord[], intent: WorkIntent, flow: WorkFlow): boolean {
+    const intentIndex = records.findIndex(r => r.id === intent.id);
+    const approvalIndex = records.findIndex(r => r.kind === 'decision' && r.targetType === 'flow-revision' && r.decision === 'approve' && records.some(fr => fr.kind === 'flow-revision' && fr.id === r.targetId && fr.flowId === flow.id));
+    return approvalIndex >= 0 && intentIndex > approvalIndex;
+}
 function execute(state: WorkState, actor: Principal, projectId: string, command: WorkCommand, context: WorkContext): unknown {
     const resolveDocument = (reference: {
         documentId: string;
@@ -246,8 +252,6 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
             const p = command.payload, f = find(p.flowId, 'flow');
             cas(f);
             open(f);
-            if (f.state !== 'draft')
-                fail(409, 'amendment-required', 'Add Intent before Flow approval');
             const fr = find(f.currentRevisionId, 'flow-revision');
             mappings(p, fr);
             const id = randomUUID(), r = add(seal({ ...base(), kind: 'intent-revision' as const, intentId: id, revision: 1, flowRevisionId: fr.id, deliverable: p.deliverable, approach: p.approach, outOfScope: p.outOfScope, criteria: p.criteria, flowCriterionIds: p.flowCriterionIds, criterionMappings: p.criterionMappings }));
@@ -312,6 +316,8 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
                 cas(f);
                 open(i);
                 pending(f.id, i.id);
+                if (introducedAfterFlowApproval(state.records, i, f))
+                    fail(409, 'amendment-required', 'An Intent introduced after Flow approval requires a human membership amendment');
                 if (i.approvedRevisionId || i.currentRevisionId !== r.id)
                     fail(409, 'amendment-required', 'Existing approval requires amendment');
                 if (f.approvedRevisionId !== r.flowRevisionId || p.flowRevisionId !== r.flowRevisionId)
@@ -332,9 +338,12 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
             pin(fr.contentDigest, p.flowRevisionDigest);
             if (fr.requiredIntentIds.length === 0)
                 fail(409, 'required-intents-missing', 'Flow start requires at least one approved required Intent');
-            const required = state.records.filter((r): r is WorkIntent => r.kind === 'intent' && r.flowId === f.id && r.required);
-            if (canonical(required.map(i => i.id).sort()) !== canonical([...fr.requiredIntentIds].sort()))
-                fail(409, 'required-intents-mismatch', 'Required Intent set differs from approved Flow revision');
+            const required = fr.requiredIntentIds.map(id => {
+                const i = find(id, 'intent');
+                if (i.flowId !== f.id)
+                    fail(409, 'required-intents-mismatch', 'Approved membership references another Flow');
+                return i;
+            });
             const mapped = new Set<string>();
             for (const i of required) {
                 cas(i);
@@ -623,6 +632,11 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
                 cas(i);
                 if (!p.replacements.some(r => r.targetType === 'intent' && r.targetId === id))
                     fail(400, 'incomplete-amendment', 'Each affected Intent requires exact replacement');
+                if (i.required && !find(p.sourceFlowRevisionId, 'flow-revision').requiredIntentIds.includes(i.id)) {
+                    const replacement = p.replacements.find(r => r.targetType === 'flow' && r.targetId === f.id);
+                    if (!replacement || !find(replacement.revisionId, 'flow-revision').requiredIntentIds.includes(i.id))
+                        fail(409, 'membership-amendment-required', 'A new required Intent needs an exact Flow membership replacement in the same amendment');
+                }
             }
             for (const e of p.replacements) {
                 const r = find(e.revisionId, e.targetType === 'flow' ? 'flow-revision' : 'intent-revision');
@@ -762,9 +776,9 @@ function acceptanceManifest(state: WorkState, projectId: string, flowId: string,
         fail(409, 'unapproved-flow', 'Flow is not approved');
     const fr = records.find((r): r is FlowRevision => r.id === f.approvedRevisionId && r.kind === 'flow-revision')!;
     const intents = records.filter((r): r is WorkIntent => r.kind === 'intent' && r.flowId === flowId);
-    if (intents.filter(i => i.required).some(i => !fr.requiredIntentIds.includes(i.id)) || fr.requiredIntentIds.some(id => !intents.some(i => i.id === id && i.required)))
-        fail(409, 'required-intents-mismatch', 'Required Intent set differs from frozen Flow revision');
-    const selected = intents.filter(i => i.required).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    if (fr.requiredIntentIds.some(id => !intents.some(i => i.id === id)))
+        fail(409, 'required-intents-mismatch', 'Frozen Flow membership references unavailable Intent');
+    const selected = intents.filter(i => fr.requiredIntentIds.includes(i.id)).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     if (!selected.length)
         fail(409, 'empty-acceptance', 'At least one accepted Intent required');
     const criterionCoverage: FlowSubmission['criterionCoverage'] = [], knowledgeProposalIds: string[] = [];

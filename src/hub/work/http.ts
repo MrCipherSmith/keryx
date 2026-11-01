@@ -162,7 +162,10 @@ export function createWorkHttp(deps: Dependencies) {
         else {
             const records = structuredClone(state.records);
             const bytes = Buffer.byteLength(JSON.stringify(records));
-            if (bytes > workLimits.maxSnapshotBytes || snapshotBytes + bytes > 64 * 1024 * 1024 || snapshots.size >= 32)
+            if(bytes>workLimits.maxSnapshotBytes)fail(413,'quota-exceeded','Snapshot export exceeds quota; use scoped views');
+            // A complete response has no continuation state to retain.
+            if(records.length<=limit)return {records,nextCursor:null,eventCursor:eventCursor(actor,projectId,state.events.at(-1)?.sequence??0)};
+            if (snapshotBytes + bytes > 64 * 1024 * 1024 || snapshots.size >= 32)
                 fail(413, 'quota-exceeded', 'Snapshot export exceeds quota; use scoped views');
             id = randomBytes(24).toString('base64url');
             exported = {
@@ -172,7 +175,9 @@ export function createWorkHttp(deps: Dependencies) {
             snapshotBytes += bytes;
         }
         const records = exported.records.slice(index, index + limit), nextIndex = index + records.length;
-        return { records, nextCursor: nextIndex < exported.records.length ? cursor({ id, index: nextIndex }) : null, eventCursor: eventCursor(actor, projectId, exported.eventCursor) };
+        const nextCursor=nextIndex<exported.records.length?cursor({id,index:nextIndex}):null;
+        if(nextCursor===null){snapshots.delete(id);snapshotBytes-=exported.bytes;}
+        return { records, nextCursor, eventCursor: eventCursor(actor, projectId, exported.eventCursor) };
     }
     function events(state: WorkState, actor: Principal, projectId: string, url: URL) {
         const limit = pageLimit(url, 1000), token = url.searchParams.get('after'), currentScope = workDigest({ actorId: actor.id, projectId });
