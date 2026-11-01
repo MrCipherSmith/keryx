@@ -1,3 +1,4 @@
+import { editStoredPrincipal } from './session-authority.test-support';
 import { afterEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
@@ -14,6 +15,6 @@ test("scoped human machine projections never expose another project's checkout l
   const metadata = await success<MachineSummary>(await f.call(`/hub/v2/machines/${s.machine.machineId}`, { cookie: f.cookie })); const inventory = metadata.inventory as FrameOf<"inventory">["payload"];
   peer.send("inventory", { inventoryVersion: 2, checkouts: [...inventory.checkouts, { ...inventory.checkouts[0], projectId: other.id, checkoutId: "private-checkout", label: "PRIVATE-FOREIGN-LABEL" }] }); peer.send("heartbeat", { daemonId: "daemon-1" }); await peer.next("heartbeat-ack");
   const cookie = await f.login(reviewerToken); const sessionDigest = createHash("sha256").update(cookie.slice(cookie.indexOf("=") + 1)).digest("hex");
-  const database = new Database(join(f.dataDir, "hub.sqlite")); const aggregate = JSON.parse(database.query<{ body: string }, []>("SELECT body FROM hub_state WHERE id=1").get()!.body); aggregate.sessions[sessionDigest].principal.projectIds = [f.project.id]; database.query("UPDATE hub_state SET body=? WHERE id=1").run(JSON.stringify(aggregate)); database.close();
+  editStoredPrincipal(f.dataDir, sessionDigest, principal => { principal.projectIds = [f.project.id]; });
   const scoped = await success<MachineSummary>(await f.call(`/hub/v2/machines/${s.machine.machineId}?projectId=${f.project.id}`, { cookie })); expect(scoped.projectIds).toEqual([f.project.id]); expect(scoped.inventory!.checkouts).toHaveLength(1); expect(JSON.stringify(scoped)).not.toContain("PRIVATE-FOREIGN-LABEL");
 });
