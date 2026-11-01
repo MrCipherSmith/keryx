@@ -33,6 +33,7 @@ import { listPresence, type PresenceClassifyOptions, type PresenceLiveness } fro
 import { resolveRecipients } from "./send";
 import { MAX_LEASE_TTL_MS, type LeaseScope, type PauseLease } from "./schema";
 import { displaySafe } from "./display";
+import { redactSensitiveText } from "../security/service";
 
 /** specification §4.3: the default TTL is 30 minutes. */
 export const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000;
@@ -142,6 +143,10 @@ export async function createPauseLease(root: string, input: CreatePauseLeaseInpu
   }
 
   const leaseId = randomUUID();
+  // Redacted once and stored the same in both places: the event body and the
+  // lease file peers read back (bus_list, the hold banner). It also keeps the
+  // lease reason inside the schema bound whenever the body passed its own.
+  const reason = redactSensitiveText(input.reason);
   let fileWritten = false;
   let lease: PauseLease | undefined;
 
@@ -153,7 +158,7 @@ export async function createPauseLease(root: string, input: CreatePauseLeaseInpu
         to: targets,
         toLabel: input.toLabel,
         kind: "pause-request",
-        body: input.reason,
+        body: reason,
         refs: { leaseId },
       },
       {
@@ -181,7 +186,7 @@ export async function createPauseLease(root: string, input: CreatePauseLeaseInpu
             holder: { instanceId: input.holder.instanceId, name: input.holder.name, origin: input.holder.origin },
             targets,
             scope: input.scope,
-            reason: input.reason,
+            reason,
             createdAt: event.ts,
             expiresAt: new Date(Date.parse(event.ts) + ttlMs).toISOString(),
             requestEventSeq: event.seq,

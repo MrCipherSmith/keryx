@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isBusRefusal, type BusRefusalCode } from "./errors";
@@ -114,6 +114,32 @@ describe("createPauseLease", () => {
       refs: { leaseId: lease.leaseId },
     });
     expect(lease.requestEventSeq).toBe(events[0]!.seq);
+  });
+
+  test("a secret in the reason is redacted in the lease file on disk, identically to the event body", async () => {
+    const root = await busRoot();
+    const secret = `ghp_${"a1B2c3D4e5".repeat(4)}`;
+    const lease = await createPauseLease(root, {
+      holder: HOLDER,
+      toLabel: "@all",
+      scope: "turns",
+      reason: `rotating key ${secret}`,
+      ...clock,
+    });
+
+    const raw = await readFile(path.join(root, "leases", `${lease.leaseId}.json`), "utf8");
+    expect(raw).not.toContain(secret);
+    expect(lease.reason).not.toContain(secret);
+    const events = await allEvents(root);
+    expect(lease.reason).toBe(events[0]!.body!);
+  });
+
+  test("a long reason that redaction shrinks under the bound still yields a lease every reader sees", async () => {
+    const root = await busRoot();
+    const pem = `-----BEGIN PRIVATE KEY-----\n${"QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=\n".repeat(80)}-----END PRIVATE KEY-----`;
+    expect(pem.length).toBeGreaterThan(2048);
+    const lease = await createPauseLease(root, { holder: HOLDER, toLabel: "@all", scope: "turns", reason: pem, ...clock });
+    expect(await readLease(root, lease.leaseId)).toEqual(lease);
   });
 
   test("an explicit ttlMs is honoured within [1 min, 4 h]", async () => {
