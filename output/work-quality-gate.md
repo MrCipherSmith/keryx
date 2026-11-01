@@ -1,8 +1,8 @@
 # Integrated work candidate quality gate
 
-Verified worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`  
-Branch: `feat-hub-work-management`  
-HEAD at start: `11a776df1643d5127277f9c2f3909f76c962aacf`  
+Verified worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`
+Branch: `feat-hub-work-management`
+HEAD at start: `11a776df1643d5127277f9c2f3909f76c962aacf`
 Checks started: 2026-11-01T10:45:56Z; report finalized: 2026-11-01T10:49:41.657Z.
 
 ```yaml
@@ -185,5 +185,3 @@ Scope manifests: `output/work-quality-backend-start.json` and `output/work-quali
 No frontend checks, embedded asset generation, deployment, vendor calls, dependency installation, or source edits were performed in this refresh. Frontend first-patch 123/123 results remain historical evidence only; the pending second increment requires its own checks. The overall candidate is not packaging-ready until embedded assets are regenerated and verified.
 
 Routing audit unchanged: source ctx used; graph not relevant to execution-only checks; no raw rg.
-
-

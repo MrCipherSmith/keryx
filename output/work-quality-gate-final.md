@@ -1,8 +1,8 @@
 # Final integrated candidate quality gate
 
-Worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`  
-Branch: `feat-hub-work-management`  
-HEAD: `c2109a7aad5be794680eed89e45d1d1040564ad3`  
+Worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`
+Branch: `feat-hub-work-management`
+HEAD: `c2109a7aad5be794680eed89e45d1d1040564ad3`
 Verification window: 2026-11-01T11:21:35Z through 2026-11-01T11:23:02Z.
 
 **Gate: PASS for the exact measured candidate.** This report supersedes prior failed or preliminary quality-gate snapshots. It does not constitute product acceptance, deployment approval, a security audit, or live-provider certification.
@@ -187,5 +187,3 @@ The delta commands started at 2026-11-01T11:53:05Z. All commands completed succe
 The six packaging cases again passed against the third UI's regenerated assets, including a real extracted allowlisted archive, frozen offline installation into disposable cache/home, isolated managed-work and authenticated MCP smoke, runtime import closure, Docker COPY/schema-context layout and symlink rejection. No real Docker container or vendor service was invoked by these checks.
 
 No source edits, global installation, deployment or product acceptance occurred. Builds generated ignored output and tests used disposable fixtures only. Counts are per scope and supersede their corresponding previous runs; repeated runs are not added together. Independent UI review and browser validation remain separate evidence. Any later code or asset change invalidates this exact candidate proof and requires affected-scope revalidation.
-
-

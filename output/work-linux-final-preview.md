@@ -17,3 +17,5 @@ Result: PASS for isolated source-archive installation, existing synthetic databa
 - Laptop SSH forwarding exposes the loopback service at `http://localhost:18794`.
 
 The archive was hash-checked and extracted only after validating its single expected root and regular-file/directory members. Preview credentials are intentionally public dummy fixture values from the tracked smoke launcher, never production credentials. Production Hub, Cloudflare, DNS and production data were untouched. Public deployment and human product acceptance remain pending.
+
+Final root Chrome smoke: navigation initially timed out, but binding the created tab confirmed the actual rendered login. Public fixture operator login succeeded; project work-demo-project → Work showed live work API, connected updates, preserved Linux smoke Flow and New Flow control. Screenshot output/work-final-preview.png. The live Chrome tab was left open as a deliverable. No production login or secret was used.

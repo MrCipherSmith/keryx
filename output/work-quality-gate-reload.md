@@ -2,9 +2,9 @@
 
 **Latest gate: PASS.** This supersedes the earlier review-pending snapshot. The owner reports that the original pending operation is now preserved after an uncertain outcome followed by 4xx, the ID validator is aligned, and independent review returned APPROVE. This verifier completed the affected automated checks below; it did not perform product acceptance or deployment.
 
-Worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`  
-Branch: `feat-hub-work-management`  
-HEAD: `dec5ecce4fc778f34ba8ce15f30d47bdc484ceaf`  
+Worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`
+Branch: `feat-hub-work-management`
+HEAD: `dec5ecce4fc778f34ba8ce15f30d47bdc484ceaf`
 Source window: 2026-11-01T13:00:19Z through 2026-11-01T13:01:20Z.
 
 ```yaml
@@ -101,4 +101,3 @@ No dependency upgrade, global installation, live vendor call, source feature edi
 Any subsequent code, schema, asset or measured document change requires affected-scope verification and an updated digest before reusing this candidate proof. Owner packaging/archive publication and preview activities are subsequent work.
 
 Routing audit: source ctx run used; graph not relevant to execution-only verification; prior wiki routing retained; raw_rg_used: no.
-

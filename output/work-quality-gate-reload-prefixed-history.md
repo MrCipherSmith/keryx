@@ -2,9 +2,9 @@
 
 **PRE-FIX / REVIEW PENDING. Candidate clearance is withheld.** All requested automated checks passed, but the owner reported a potential major review issue after this run: `retryOriginal` may erase the original pending envelope on a 4xx even though an earlier unknown operation could already have committed. Current authorization can return 403 before receipt lookup. Reproduction and remediation were still in progress when this report was written. This verifier did not reproduce or resolve that finding and makes no final candidate PASS claim.
 
-Worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`  
-Branch: `feat-hub-work-management`  
-HEAD: `dec5ecce4fc778f34ba8ce15f30d47bdc484ceaf`  
+Worktree: `/Users/Goodea/.codex/worktrees/hub-work-management/keryx`
+Branch: `feat-hub-work-management`
+HEAD: `dec5ecce4fc778f34ba8ce15f30d47bdc484ceaf`
 Measured window: 2026-11-01T12:55:50Z through 2026-11-01T12:56:40Z.
 
 ```yaml
@@ -101,4 +101,3 @@ Requirements verification is a timestamped snapshot. The owner plans final evide
 After the reported review issue is resolved, rerun the affected regression plus full configured UI tests, UI types/lint/build, embedded asset regeneration/freshness and the six packaging cases. Root types need repeating if the fix changes relevant types. Independent review must clear before final candidate clearance. This pre-fix record is intentionally retained, not overwritten as though the issue had been tested here.
 
 Routing audit: source ctx run used; graph not relevant to execution-only verification; prior wiki routing retained; raw_rg_used: no.
-
