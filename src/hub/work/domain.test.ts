@@ -390,3 +390,27 @@ test('attempt author is authenticated and an agent cannot impersonate a human co
     expect(JSON.stringify(state)).toBe(before);
     expect(cmd('attempt.create', payload, agent)).toMatchObject({ createdBy: agent.id, participantId: agent.id, method: 'native-agent' });
 });
+
+test('membership amendment drops a cancelled approved Intent without requiring an impossible replacement', () => {
+    const { state, cmd, flowId, intentId, fr, optional, optionalRevision, intentPayload } = fixture(false, 'pass', false, true);
+    if (!optional || !optionalRevision) throw new Error('Missing optional fixture');
+    cmd('work.cancel', { targetType: 'intent', targetId: intentId, reason: 'Remove cancelled deliverable from scope' });
+    const nextFlow = cmd('revision.propose', { targetType: 'flow', flowId, problem: flowPayload.problem, expectedOutcome: flowPayload.expectedOutcome, scope: flowPayload.scope, outOfScope: flowPayload.outOfScope, specification: null, criteria: flowPayload.criteria, requiredIntentIds: [optional.id] });
+    const nextIntent = cmd('revision.propose', { targetType: 'intent', intentId: optional.id, flowRevisionId: nextFlow.id, deliverable: intentPayload.deliverable, approach: intentPayload.approach, outOfScope: intentPayload.outOfScope, criteria: intentPayload.criteria, flowCriterionIds: intentPayload.flowCriterionIds, criterionMappings: intentPayload.criterionMappings });
+    const amendment = cmd('requirements.amend', { flowId, sourceFlowRevisionId: fr.id, affectedIntentIds: [optional.id], replacements: [{ targetType: 'flow', targetId: flowId, revisionId: nextFlow.id, contentDigest: nextFlow.contentDigest }, { targetType: 'intent', targetId: optional.id, revisionId: nextIntent.id, contentDigest: nextIntent.contentDigest }], reason: 'Drop cancelled membership' });
+    cmd('requirements.resolve-amendment', { amendmentId: amendment.id, manifestDigest: amendment.contentDigest, decision: 'approve', reason: 'Reviewed membership change' });
+    cmd('flow.start', { flowId, flowRevisionDigest: nextFlow.contentDigest });
+    expect(state.records.find(r => r.id === flowId)).toMatchObject({ state: 'in-progress', approvedRevisionId: nextFlow.id });
+    expect(state.records.find(r => r.id === intentId)).toMatchObject({ state: 'cancelled' });
+});
+
+test('initial approval excludes cancelled required Intents but still requires live criterion coverage', () => {
+    const state = createWorkState(); let operation = 0;
+    const cmd = (command: string, payload: unknown) => workCommand(state, human, 'p', { operationId: 'cancel-membership-' + (++operation), expectedVersions: Object.fromEntries(state.records.filter(r => 'version' in r).map(r => [r.id, 'version' in r ? r.version : 1])), command, payload }, context).result as Record<string, unknown>;
+    const flow = cmd('flow.create', flowPayload);
+    const cancelled = cmd('intent.create', { ...newIntentFields, flowId: flow.id });
+    cmd('work.cancel', { targetType: 'intent', targetId: cancelled.id, reason: 'Scope removed before approval' });
+    const revision = cmd('revision.propose', { targetType: 'flow', flowId: flow.id, problem: flowPayload.problem, expectedOutcome: flowPayload.expectedOutcome, scope: flowPayload.scope, outOfScope: flowPayload.outOfScope, specification: null, criteria: flowPayload.criteria, requiredIntentIds: [] });
+    cmd('requirements.approve', { targetType: 'flow-revision', revisionId: revision.id, revisionDigest: revision.contentDigest, flowRevisionId: revision.id, reason: 'Approve remaining scope' });
+    expect(() => cmd('flow.start', { flowId: flow.id, flowRevisionDigest: revision.contentDigest })).toThrow('at least one');
+});

@@ -305,7 +305,7 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
                     fail(409, 'amendment-required', 'Existing approval requires amendment');
                 if (p.flowRevisionId !== r.id)
                     fail(409, 'revision-conflict', 'Flow revision mismatch');
-                const required = state.records.filter((i): i is WorkIntent => i.kind === 'intent' && i.flowId === f.id && i.required).map(i => i.id);
+                const required = state.records.filter((i): i is WorkIntent => i.kind === 'intent' && i.flowId === f.id && i.required && i.state !== 'cancelled').map(i => i.id);
                 if (canonical([...required].sort()) !== canonical([...r.requiredIntentIds].sort()))
                     fail(409, 'required-intents-mismatch', 'Freeze exact required Intent set in Flow revision');
                 f.approvedRevisionId = r.id;
@@ -677,7 +677,7 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
                     if (f.currentRevisionId !== nextFr.id)
                         fail(409, 'stale-proposal', 'Flow proposal changed');
                     const all = state.records.filter((r): r is WorkIntent => r.kind === 'intent' && r.flowId === f.id);
-                    if (all.some(i => i.approvedRevisionId && !m.affectedIntentIds.includes(i.id)))
+                    if (all.some(i => i.state !== 'cancelled' && i.approvedRevisionId && !m.affectedIntentIds.includes(i.id)))
                         fail(409, 'incomplete-amendment', 'Flow pin change must include all approved dependent Intents');
                 }
                 for (const e of m.replacements.filter(r => r.targetType === 'intent')) {
