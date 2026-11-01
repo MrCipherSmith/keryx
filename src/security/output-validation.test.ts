@@ -520,6 +520,32 @@ test("an exfil exemption never drops entropy coverage from the same string", () 
   }
 });
 
+// review-regression-slice-33:F-001 (owner decision): now that the floor runs entropy,
+// it must inherit the document-host allow-list — a Sheets/Notion id in the path passes
+// unchanged, while the same id on any other host is still masked.
+const SHEETS_URL = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0";
+const NOTION_URL = "https://www.notion.so/team/Roadmap-8f3c2a9b1d4e4f6a9c7b2e1d0a5f3c8b";
+
+test("the floor passes a known document host's path id unchanged and masks it on any other host", () => {
+  setEntropyBackendEnabledForTests(true);
+  try {
+    for (const url of [SHEETS_URL, NOTION_URL]) {
+      const result = validateOutputForTransport({ value: `see ${url}`, format: "text" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.text).toBe(`see ${url}`);
+    }
+
+    const elsewhere = "https://files.example.net/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit";
+    const result = validateOutputForTransport({ value: `see ${elsewhere}`, format: "text" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.text).not.toContain("1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms");
+  } finally {
+    resetEntropyGateForTests();
+  }
+});
+
 // review-backend-slice-36:F-003: a JSON number was never screened, so a card
 // number carried as a number (or as a bare digit-only payload) left unmasked.
 const CARD = 4111111111111111;
