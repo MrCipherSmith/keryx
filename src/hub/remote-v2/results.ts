@@ -14,10 +14,10 @@ function pinDrift(state: HubState, association: Control["FlowAssociation"]): Non
 export function resultUpload(state: HubState, repo: RemoteRepository, machine: MachineRecord, projectId: string, runId: string, body: Control["ResultUpload"], key: string): Control["ResultReceipt"] {
   const run = repo.get<RunRow>("remote_run", runId);
   if (!run || run.machineId !== machine.machineId || run.projectId !== projectId || !machine.projectIds.includes(projectId)) fail(404, "not-found", "Run not found");
-  if(run.association.mode==='flow')assertLegacyFlowWritable(state,projectId,run.association.flowId);
   const previous = repo.get<{ payloadDigest: string; key: string; receipt: Control["ResultReceipt"] }>("remote_result_receipt", runId);
   const payloadDigest = canonicalDigest(body);
   if (previous) { if (previous.payloadDigest !== payloadDigest) fail(409, "payload-conflict", "Immutable result changed"); return previous.receipt; }
+  if(run.association.mode==='flow')assertLegacyFlowWritable(state,projectId,run.association.flowId);
   version(run.version, body.expectedRunVersion);
   if (body.sessionId !== run.sessionId || body.turnId !== run.turnId || canonicalDigest(body.association) !== canonicalDigest(run.association)) fail(409, "stale-reference", "Result ownership or association changed");
   if (!["succeeded", "failed", "cancelled"].includes(run.state) || body.outcome !== run.state) fail(409, "stale-reference", "Result requires confirmed matching terminal observation");
