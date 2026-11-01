@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { legacyStorageLimits } from "./legacy-limits";
 import { canTransition } from "../flow/machine";
 import type { CodeRevision, GitDeliveryAdapter, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
 import type { HubState } from "./store";
@@ -101,15 +102,28 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     }
     case "context": {
       const afterRaw = url.searchParams.get("after"); const after = afterRaw === null ? -1 : Number(afterRaw);
-      const fullSnapshot = !Number.isSafeInteger(after) || after < 0 || after > p.contextRevision;
+      const firstRetainedChange = state.documentChanges.find(change => change.projectId === p.id)?.revision ?? p.contextRevision + 1;
+      const fullSnapshot = !Number.isSafeInteger(after) || after < 0 || after > p.contextRevision || after < firstRetainedChange - 1;
       const documents = state.documents.filter((d) => d.projectId === p.id);
       const changed = new Set(state.documentChanges.filter((c) => c.projectId === p.id && c.revision > after).map((c) => c.document.id));
       return { revision: p.contextRevision, fullSnapshot, manifest: documents.map(({ id, path, kind, version, contentDigest }) => ({ id, path, kind, version, contentDigest })), documents: fullSnapshot ? documents : documents.filter((d) => changed.has(d.id)), deletedDocumentIds: [] };
     }
     case "revisions": {
       if (!path[3]) {
-        const revisions = state.revisions.filter((r) => r.projectId === p.id);
-        return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions };
+        const all = state.revisions.filter((r) => r.projectId === p.id), after = url.searchParams.get('afterId');
+        const index = after ? all.findIndex(revision => revision.id === after) : -1;
+        if (after && index < 0) fail(400,'invalid-cursor','Revision cursor not found');
+        const rawLimit = url.searchParams.get('limit'), limit = rawLimit === null ? legacyStorageLimits.maxRevisionPageSize : Number(rawLimit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > legacyStorageLimits.maxRevisionPageSize) fail(400,'invalid-limit','Revision page limit is out of range');
+        const revisions = all.slice(index + 1,index + 1 + limit);
+        if (url.searchParams.get('summary') !== '1') {
+          let bytes = 0;
+          for (const revision of revisions) for (const file of revision.files) {
+            bytes += Buffer.byteLength(file.contentBase64);
+            if (bytes > legacyStorageLimits.maxRevisionResponseBytes) fail(413,'revision-page-too-large','Use summary=1 and exact single-revision reads');
+          }
+        }
+        return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions, ...(index + 1 + limit < all.length ? {nextCursor:revisions.at(-1)!.id} : {}) };
       }
       const r = scopedRevision(state, p, path[3]);
       if (path[4] !== "changes") return r;
@@ -122,6 +136,7 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     case "events": {
       const after = Number(url.searchParams.get("after") ?? "0");
       if (!Number.isSafeInteger(after) || after < 0) fail(400, "invalid-cursor", "Invalid event cursor");
+      if (after > 0 && after < (state.events[0]?.sequence ?? 1) - 1) fail(410,'resync-required','Event window expired; reload the project and restart from after=0');
       const events = state.events.filter((e) => e.projectId === p.id && e.sequence > after).slice(0, 500);
       return { events, cursor: events.at(-1)?.sequence ?? after };
     }

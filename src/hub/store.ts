@@ -1,3 +1,4 @@
+import { legacyArtifacts } from "./legacy-artifacts";
 import { deliveryJobs } from "./delivery-jobs";
 import { fail } from "./domain";
 import { Database } from "bun:sqlite";
@@ -9,7 +10,7 @@ import {remoteBudgets as normalizeRemoteBudgets,type RemoteBudgets} from './remo
 import type { CodeRevision, Delivery, Evidence, HubDocument, HubEvent, HubFlow, Principal, Project, Proposal } from "./contracts";
 import type { VerifiedAccessIdentity } from "./cloudflare-access";
 export type StoredSession = { principal: Principal; credentialDigest?: string; accessIdentity?: VerifiedAccessIdentity; expiresAt: number };
-export type StoredReplay = { digest: string; status: number; body: unknown };
+export type StoredReplay = { digest: string; status: number; body: unknown; revisionId?: string };
 export type HubState = {
   projects: Project[]; documents: HubDocument[]; proposals: Proposal[]; flows: HubFlow[];
   evidence: Evidence[]; revisions: CodeRevision[]; deliveries: Delivery[]; events: HubEvent[];
@@ -35,6 +36,7 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   const remote = remoteRepository(db,budgetConfig);
   const work = workRepository(db);
   const deliveries = deliveryJobs(db);
+  const artifacts = legacyArtifacts(db);
   const withConversionProjection = (state: HubState): HubState => {
     delete state.legacyConversions;
     const conversions = new Proxy<Record<string, {projectId:string;managedFlowId:string}>>({}, {
@@ -47,16 +49,14 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   const load = (): HubState => {
     const row = db.query<{ body: string }, []>("SELECT body FROM hub_state WHERE id=1").get();
     const state=row ? JSON.parse(row.body) as HubState : emptyState();
+    artifacts.hydrate(state);
     withConversionProjection(state);
     legacyBaselines.set(state, serializedLegacy(state));
     return state;
   };
   const listeners = new Set<(state: HubState, previous: HubState) => void>();
   const notify = (state: HubState, previous: HubState) => { for (const listener of listeners) { try { listener(state, previous); } catch (error) { console.error("Hub committed notification failed", error instanceof Error ? error.name : "UnknownError"); } } };
-  const serializedLegacy = (state: HubState): string => {
-    const { legacyConversions: unused, ...durable } = state; void unused;
-    return JSON.stringify(durable);
-  };
+  const serializedLegacy = artifacts.serialize;
   const project = (id: string): Project | undefined => {
     const row = db.query<{ body: string }, [string]>("SELECT body FROM hub_legacy_records WHERE kind='projects' AND id=?").get(id);
     return row ? JSON.parse(row.body) as Project : undefined;
@@ -65,9 +65,9 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     const kinds = ['projects','documents','proposals','flows','evidence','revisions','deliveries'] as const;
     const put = db.query('INSERT INTO hub_legacy_records(kind,id,project_id,body) VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET project_id=excluded.project_id,body=excluded.body WHERE body<>excluded.body');
     for (const kind of kinds) {
-      const old = new Map((previous?.[kind] ?? []).map(record => [record.id, JSON.stringify(record)]));
+      const old = new Map((previous?.[kind] ?? []).map(record => [record.id, kind === 'revisions' ? JSON.stringify(artifacts.metadataRevision(record as CodeRevision)) : JSON.stringify(record)]));
       for (const record of state[kind]) {
-        const body = JSON.stringify(record);
+        const body = kind === 'revisions' ? JSON.stringify(artifacts.metadataRevision(record as CodeRevision)) : JSON.stringify(record);
         if (body !== old.get(record.id)) put.run(kind, record.id, kind === 'projects' ? record.id : 'projectId' in record ? record.projectId : '', body);
         old.delete(record.id);
       }
@@ -109,14 +109,16 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     for (const id of ids) for (const row of db.query<{ kind: string; body: string }, [string,string]>('SELECT kind,body FROM hub_legacy_records WHERE project_id=? AND id=?').all(projectId,id)) {
       if (row.kind === 'projects') continue;
       const values = state[row.kind as 'documents'];
-      values.push(JSON.parse(row.body));
+      const record = JSON.parse(row.body);
+      values.push(row.kind === 'revisions' ? artifacts.hydrateRevision(record) : record);
     }
     return state;
   };
-  const persist = db.transaction((state: HubState, previous?: HubState) => {
+  const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false) => {
     syncProjectReferences(db, state.projects);
     syncLegacy(state, previous);
-    db.query("INSERT INTO hub_state(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body WHERE body<>excluded.body").run(serializedLegacy(state));
+    const body = artifacts.persist(state, allowExisting, previous);
+    db.query("INSERT INTO hub_state(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body WHERE body<>excluded.body").run(body);
   });
   const save = (state: HubState) => {
     let previous!: HubState;
@@ -138,7 +140,7 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   const writeTransaction = <T>(action: (state: HubState, remote: RemoteRepository) => T): T => {
     let previous!: HubState, committed!: HubState, changed = false;
     const result = db.transaction(() => {
-      previous = load(); const state = withConversionProjection(structuredClone(previous)); committed = state;
+      previous = load(); const state = withConversionProjection(artifacts.hydrate(JSON.parse(serializedLegacy(previous)) as HubState)); committed = state;
       const result = action(state, remote);
       if (result instanceof Promise) throw new TypeError('Hub transactions must be synchronous');
       changed = serializedLegacy(state) !== serializedLegacy(previous);
@@ -148,6 +150,12 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     if (changed) notify(committed, previous);
     return result;
   };
+  try {
+    if (!db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get()) db.transaction(() => {
+      const state = load(); persist(state, undefined, true);
+      db.query("INSERT INTO hub_work_settings(key,value) VALUES('legacy-artifacts-v1','1')").run();
+    })();
+  } catch (error) { db.close(); throw error; }
   let closed = false;
   const backup = (destination: string): void => {
     if (closed) throw new Error("Hub store is closed");

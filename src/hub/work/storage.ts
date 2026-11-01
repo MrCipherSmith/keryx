@@ -7,7 +7,7 @@ import type { GitObservation } from './git-observer';
 import type { WorkExecutionReservation } from './execution';
 import type { LegacyPreview } from './legacy';
 import type { WorkEvent, WorkReceipt, WorkRecord, WorkState } from './model';
-export const workStorageLimits = { retainedEvents: 10000, maxRecords: 100000, maxOperations: 100000, maxRecordBytes: 1024 * 1024, maxOperationBytes: 2 * 1024 * 1024, maxHistoryBytes: 256 * 1024 * 1024 } as const;
+export const workStorageLimits = { retainedEvents: 10000, maxRecords: 100000, maxOperations: 100000, maxRecordBytes: 1024 * 1024, maxOperationBytes: 2 * 1024 * 1024, maxHistoryBytes: 256 * 1024 * 1024, maxArchivedDocumentBytes: 512 * 1024 * 1024, maxArchivedDocumentVersions: 100000 } as const;
 export type WorkObservationJob = {
     projectId: string;
     actorId: string;
@@ -75,6 +75,10 @@ export function migrateWork(db: Database): void {
     })();
     db.exec(`CREATE TRIGGER IF NOT EXISTS hub_work_incident_evidence AFTER INSERT ON hub_work_records WHEN json_extract(new.body,'$.kind')='evidence' AND json_extract(new.body,'$.result')<>'pass' BEGIN INSERT OR IGNORE INTO hub_work_incidents ${incidentSelection} AND e.project_id=new.project_id AND e.id=new.id; END;
     CREATE TRIGGER IF NOT EXISTS hub_work_incident_replaced AFTER INSERT ON hub_work_records WHEN json_extract(new.body,'$.kind')='decision' AND json_extract(new.body,'$.targetType')='intent-review' AND json_extract(new.body,'$.decision')='accept' BEGIN DELETE FROM hub_work_incidents WHERE project_id=new.project_id AND intent_id=json_extract(new.body,'$.targetId') AND NOT EXISTS(${incidentSelection} AND e.project_id=hub_work_incidents.project_id AND e.id=hub_work_incidents.evidence_id); END;`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS hub_work_document_usage(id INTEGER PRIMARY KEY CHECK(id=1),bytes INTEGER NOT NULL,count INTEGER NOT NULL);
+    INSERT OR IGNORE INTO hub_work_document_usage SELECT 1,coalesce(sum(length(CAST(body AS BLOB))),0),count(*) FROM hub_work_documents;
+    CREATE TRIGGER IF NOT EXISTS hub_work_document_insert AFTER INSERT ON hub_work_documents BEGIN UPDATE hub_work_document_usage SET bytes=bytes+length(CAST(new.body AS BLOB)),count=count+1 WHERE id=1; END;`);
 
 }
 export function workRepository(db: Database) {
@@ -270,9 +274,15 @@ export function workRepository(db: Database) {
         const usage = db.query<{ records: number; operations: number; bytes: number }, [string]>('SELECT records,operations,bytes FROM hub_work_usage WHERE project_id=?').get(projectId);
         if (usage && (usage.records > workStorageLimits.maxRecords || usage.operations > workStorageLimits.maxOperations || usage.bytes > workStorageLimits.maxHistoryBytes)) fail(413, 'quota-exceeded', 'Managed work durable history quota exceeded; archive the project before adding more history');
     });
-    const archiveDocument = (document: HubDocument): void => {
-        db.query('INSERT OR IGNORE INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId, document.id, document.version, document.contentDigest, JSON.stringify(document));
-    };
+    const archiveDocument = db.transaction((document: HubDocument): void => {
+        const result = db.query('INSERT OR IGNORE INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId, document.id, document.version, document.contentDigest, JSON.stringify(document));
+        // Existing old histories are preserved during the one-time archival migration.
+        // Once that completes, refuse new growth rather than silently dropping immutable wiki/spec pins.
+        if (result.changes && db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get()) {
+            const usage = db.query<{bytes:number;count:number},[]>('SELECT bytes,count FROM hub_work_document_usage WHERE id=1').get()!;
+            if (usage.bytes > workStorageLimits.maxArchivedDocumentBytes || usage.count > workStorageLimits.maxArchivedDocumentVersions) fail(413,'quota-exceeded','Immutable document archive quota exceeded; explicit archival is required');
+        }
+    });
     const documentVersion = (projectId: string, reference: {
         documentId: string;
         version: number;

@@ -4,6 +4,7 @@
 Never runs the fresh installer over existing data. Does not print Docker inspect,
 credentials, environment values, cookies, role mappings or container logs.
 """
+import base64
 import argparse
 from contextlib import contextmanager, nullcontext
 from typing import NamedTuple
@@ -258,14 +259,70 @@ def verified_bundle(artifacts, version, destination):
     return bundle, image
 
 
+def canonical_legacy_state(db, body, tables):
+    """Compare semantic immutable data across inline-v3 and content-addressed-v4 layouts."""
+    revisions = {revision["id"]: revision for revision in body.get("revisions", [])}
+    for revision in revisions.values():
+        for file in revision.get("files", []):
+            encoded_digest = file.pop("blobDigest", None)
+            if "contentBase64" not in file:
+                require("hub_revision_blobs" in tables, "Revision blob store is missing")
+                row = db.execute("SELECT content_base64 FROM hub_revision_blobs WHERE digest=?", (encoded_digest or file["contentDigest"],)).fetchone()
+                require(row is not None, "Immutable revision blob is missing")
+                file["contentBase64"] = row[0]
+            if encoded_digest is not None:
+                require(hashlib.sha256(file["contentBase64"].encode()).hexdigest() == encoded_digest, "Immutable revision encoding digest mismatch")
+            decoded = base64.b64decode(file["contentBase64"], validate=True)
+            require(hashlib.sha256(decoded).hexdigest() == file["contentDigest"], "Immutable revision blob digest mismatch")
+    for replay in body.get("replays", {}).values():
+        reference = replay.pop("revisionId", None)
+        if reference is not None:
+            require(reference in revisions, "Replay revision reference is missing")
+            replay["body"] = revisions[reference]
+    # Preserve and verify every immutable wiki/spec version before allowing delta-window expiry.
+    # A missing older archive after pruning therefore changes the logical digest and refuses adoption.
+    versions = {}
+    def include_document(document):
+        fields = ("projectId", "id", "path", "kind", "version", "contentDigest", "content")
+        if not all(field in document for field in fields):
+            return  # old minimal test/admin rows still remain protected by the main aggregate digest
+        require(hashlib.sha256(document["content"].encode()).hexdigest() == document["contentDigest"], "Archived document content digest mismatch")
+        key = (document["projectId"], document["id"], document["version"], document["contentDigest"])
+        versions[key] = {field: document[field] for field in fields}
+    if "hub_work_documents" in tables:
+        for (raw,) in db.execute("SELECT body FROM hub_work_documents"):
+            include_document(json.loads(raw))
+    for document in body.get("documents", []):
+        include_document(document)
+    for change in body.get("documentChanges", []):
+        include_document(change["document"])
+    document_digest = hashlib.sha256()
+    for key in sorted(versions):
+        document_digest.update(json.dumps(versions[key], sort_keys=True, separators=(",", ":")).encode() + b"\n")
+    body["_verifiedDocumentHistory"] = {"versions": len(versions), "digest": document_digest.hexdigest()}
+    body["_transientRetentionPolicy"] = {"events": 10000, "documentChanges": 5000}
+    # These are transport recovery windows, never accepted artifacts/decisions.
+    body["events"] = body.get("events", [])[-10000:]
+    body["documentChanges"] = body.get("documentChanges", [])[-5000:]
+    conversions = []
+    if "hub_work_conversions" in tables:
+        conversions = list(db.execute("SELECT project_id,legacy_flow_id,managed_flow_id FROM hub_work_conversions ORDER BY project_id,legacy_flow_id"))
+    body["_verifiedLegacyConversions"] = conversions
+    body.pop("legacyConversions", None)  # derived duplicate; actual authoritative rows are verified above
+    return body
+
+
+
 def info_for(database):
     db = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     try:
         require(db.execute("PRAGMA integrity_check").fetchall() == [("ok",)], "SQLite integrity check failed")
         row = db.execute("SELECT body FROM hub_state WHERE id=1").fetchone()
         require(row is not None, "Existing Hub state is missing")
-        body = json.loads(row[0])
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        body = canonical_legacy_state(db, json.loads(row[0]), tables)
         summary = {key: len(body.get(key, [])) for key in ("projects", "documents", "flows", "proposals", "events")}
+        summary["retentionPolicy"] = {"events": 10000, "documentChanges": 5000, "verifiedImmutableDocumentVersions": body["_verifiedDocumentHistory"]["versions"]}
         summary["stateDigest"] = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         active = 0
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}

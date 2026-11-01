@@ -284,5 +284,43 @@ class MigrationSafety(unittest.TestCase):
         self.assertEqual(m.info_for(path)["remoteHistory"]["remote_session"]["count"], 0)
 
 
+    def test_v4_artifact_hydration_and_retention_preserve_verified_history_digest(self):
+        import base64
+        import hashlib
+        contents = b"accepted immutable bytes"
+        digest = hashlib.sha256(contents).hexdigest()
+        encoded = base64.b64encode(contents).decode()
+        revision = {"id": "r", "projectId": "p", "files": [{"path": "a", "mode": "100644", "contentDigest": digest, "contentBase64": encoded}]}
+        def document(version):
+            content = "version " + str(version)
+            return {"id": "d", "projectId": "p", "path": "wiki.md", "kind": "wiki", "version": version, "content": content, "contentDigest": hashlib.sha256(content.encode()).hexdigest()}
+        changes = [{"projectId": "p", "revision": version, "document": document(version)} for version in range(1, 5002)]
+        body = {"projects": [{"id": "p"}], "documents": [document(5001)], "flows": [{"id": "f", "status": "done", "acceptedBy": "human"}], "proposals": [], "events": [], "documentChanges": changes, "revisions": [revision], "replays": {"operation": {"digest": "request", "status": 200, "body": revision}}}
+        old_path = self.root / "old.sqlite"
+        old = sqlite3.connect(old_path)
+        old.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT)")
+        old.execute("INSERT INTO hub_state VALUES(1,?)", (json.dumps(body),)); old.commit(); old.close()
+        before = m.info_for(old_path)
+        candidate_path = self.root / "candidate.sqlite"
+        candidate = sqlite3.connect(candidate_path)
+        candidate.executescript("CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT);CREATE TABLE hub_revision_blobs(digest TEXT PRIMARY KEY,content_base64 TEXT);CREATE TABLE hub_work_documents(body TEXT)")
+        normalized = json.loads(json.dumps(body))
+        normalized["revisions"][0]["files"][0].pop("contentBase64")
+        normalized["revisions"][0]["files"][0]["blobDigest"] = hashlib.sha256(encoded.encode()).hexdigest()
+        normalized["replays"]["operation"] = {"digest": "request", "status": 200, "revisionId": "r"}
+        normalized["documentChanges"] = normalized["documentChanges"][-5000:]
+        candidate.execute("INSERT INTO hub_state VALUES(1,?)", (json.dumps(normalized),))
+        candidate.execute("INSERT INTO hub_revision_blobs VALUES(?,?)", (hashlib.sha256(encoded.encode()).hexdigest(), encoded))
+        candidate.executemany("INSERT INTO hub_work_documents VALUES(?)", ((json.dumps(change["document"]),) for change in changes)); candidate.commit()
+        self.assertEqual(m.info_for(candidate_path)["stateDigest"], before["stateDigest"])
+        candidate.execute("DELETE FROM hub_work_documents WHERE json_extract(body,'$.version')=1"); candidate.commit()
+        self.assertNotEqual(m.info_for(candidate_path)["stateDigest"], before["stateDigest"])
+        candidate.execute("UPDATE hub_revision_blobs SET content_base64=?", (base64.b64encode(b"tampered").decode(),)); candidate.commit()
+        with self.assertRaisesRegex(m.MigrationError, "(?:blob|encoding) digest mismatch"):
+            m.info_for(candidate_path)
+        candidate.close()
+
+
+
 if __name__ == "__main__":
     unittest.main()
