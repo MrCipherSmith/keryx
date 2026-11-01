@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { resetEntropyGateForTests, setEntropyBackendEnabledForTests } from "./entropy-gate";
 import { validateOutputForTransport } from "./output-validation";
 import { validateSerializedOutput } from "./service";
 
@@ -478,4 +479,88 @@ test("exemptExfil (json): applies inside nested string values too", () => {
   expect(result.ok).toBe(true);
   if (!result.ok) return;
   expect(JSON.stringify(result.value)).toContain("https://example.com/badge.svg");
+});
+
+// review-logic-slice-36:F-001: the floor ran secrets/PII/exfil only, so a token
+// that only the entropy pass recognises left it raw — alone (the empty-match early
+// return) or next to an exempted exfil match (the `applyRedaction(value, matches)`
+// branch, which never had entropy spans).
+const ENTROPY_ONLY_URL =
+  "https://api.example.com/webhooks/K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+const ENTROPY_TOKEN = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+
+test("the floor masks a token only the entropy detector recognises", () => {
+  setEntropyBackendEnabledForTests(true);
+  try {
+    const result = validateOutputForTransport({ value: `hook: ${ENTROPY_ONLY_URL}`, format: "text" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.text).not.toContain(ENTROPY_TOKEN);
+    expect(result.text).toContain("[REDACTED:entropy]");
+    expect(result.redaction).toEqual({ state: "redacted", reasons: ["secrets.high-entropy"] });
+
+    const serialized = validateSerializedOutput(JSON.stringify({ hook: ENTROPY_ONLY_URL }));
+    expect(serialized.text).not.toContain(ENTROPY_TOKEN);
+  } finally {
+    resetEntropyGateForTests();
+  }
+});
+
+test("an exfil exemption never drops entropy coverage from the same string", () => {
+  setEntropyBackendEnabledForTests(true);
+  try {
+    const value = `<img src="https://example.com/badge.svg"> ${ENTROPY_ONLY_URL}`;
+    const result = validateOutputForTransport({ value, format: "text", exemptExfil: () => true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.text).toContain("https://example.com/badge.svg");
+    expect(result.text).not.toContain(ENTROPY_TOKEN);
+  } finally {
+    resetEntropyGateForTests();
+  }
+});
+
+// review-backend-slice-36:F-003: a JSON number was never screened, so a card
+// number carried as a number (or as a bare digit-only payload) left unmasked.
+const CARD = 4111111111111111;
+
+test("a card number carried as a JSON number fails closed without leaking it", () => {
+  const result = validateOutputForTransport({ value: { cardNumber: CARD }, format: "json" });
+  expect(result).toEqual({
+    ok: false,
+    text: FORMAT_UNSAFE_TEXT,
+    redaction: { state: "format-unsafe", reasons: ["sensitive-numeric-value"] },
+  });
+  const nested = validateSerializedOutput(`{"items":[1,${CARD}]}`);
+  expect(nested.ok).toBe(false);
+  expect(nested.text).not.toContain(String(CARD));
+});
+
+test("a bare digit-only payload is screened as text", () => {
+  const result = validateSerializedOutput(String(CARD));
+  expect(result.ok).toBe(true);
+  expect(result.text).not.toContain(String(CARD));
+  expect(result.text).toContain("[REDACTED:cc]");
+});
+
+test("ordinary JSON numbers pass the number screen unchanged", () => {
+  const value = {
+    count: 42,
+    port: 8080,
+    // Luhn-valid by chance: a millisecond epoch is not a card (no network starts with 1).
+    createdAt: 1730000000126,
+    epochSeconds: 1730000000,
+    userId: 123456789012345,
+    ratio: 0.5,
+    big: 1e21,
+    negative: -17,
+    phoneLike: 4155552671,
+  };
+  const content = JSON.stringify(value);
+  const result = validateSerializedOutput(content);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.text).toBe(content);
+  expect(result.redaction).toEqual({ state: "none", reasons: [] });
+  expect(validateSerializedOutput("8080").text).toBe("8080");
 });
