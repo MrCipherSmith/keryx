@@ -185,7 +185,7 @@ A failure before the switch restarts the old Hub on untouched data. After the sw
 
 Managed-work settings (`KERYX_HUB_WORK_ENABLED`, default `false`, and `KERYX_HUB_WORK_REPOSITORIES`, default `[]`) come from `secrets/hub.env`. Stable `compose.override.yaml` and custom per-release `compose.access.yaml` remain in force across staging. The isolated trial carries the configured Work/Cloudflare Access settings and read-only role mapping, with independent throwaway operator/agent tokens.
 
-Legacy geekom installations using the old source-build wrapper need the separately verified [one-time adoption procedure](../handoffs/hub-legacy-adoption.md) before the release update command can operate. The helper ships inside the install bundle and defaults to rehearsal only.
+Legacy geekom installations using the old source-build wrapper need the separately verified [one-time adoption procedure](https://github.com/MrCipherSmith/keryx/blob/main/docs/handoffs/hub-legacy-adoption.md) before the release update command can operate. The helper ships inside the install bundle and defaults to rehearsal only.
 
 ## Rollback
 
