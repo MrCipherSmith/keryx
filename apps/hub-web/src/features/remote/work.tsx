@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
-import { getJson } from "../../api/client";
+import {ApiError,getClientScope, getJson, type NativeWorkHint } from "../../api/client";
+import {NativeAttemptPicker,useNativeWorkSelection} from "../managed-work/native-selection";
 import { remoteProject } from "../../api/remote";
 import {
   sessionPath,
@@ -39,6 +40,7 @@ export function MessageComposer({
 }) {
   const hub = useHub();
   const { t } = useTranslation("remote");
+  const {t:workT}=useTranslation("work");
   const action = useRemoteAction<Control["TurnReceipt"]>();
   const [draft, setDraft, clearDraft] = useDraft(
     `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,
@@ -56,6 +58,11 @@ export function MessageComposer({
       configVersion: record.config.configVersion,
     },
   );
+  const managed=useNativeWorkSelection(record,draft.mode,control.active);
+  type NativeSubmission={scope:string;operationId:string;path:string;body:Control['MessageSubmit'];hint:NativeWorkHint;draft:typeof draft;phase:'sending'|'unknown'};
+  const nativeScope=[hub.scopeKey,hub.principal.id,record.projectId,record.sessionId].join(':');
+  const nativeScopeRef=useRef(nativeScope);nativeScopeRef.current=nativeScope;
+  const [nativeOperation,setNativeOperation]=useDraft<NativeSubmission|null>('native-work-message:'+nativeScope,null);
   const flows = useQuery({
     queryKey: [hub.scopeKey, record.projectId, "flows"],
     queryFn: ({ signal }) =>
@@ -95,7 +102,7 @@ export function MessageComposer({
   }
   function association(): Control["FlowAssociation"] | null {
     if (
-      draft.mode === "ad-hoc" &&
+      (draft.mode === "ad-hoc" || draft.mode === "managed") &&
       draft.consent &&
       Number.isSafeInteger(Number(draft.consentVersion)) &&
       Number(draft.consentVersion) > 0
@@ -120,31 +127,37 @@ export function MessageComposer({
       };
     return null;
   }
-  function submit() {
-    const assoc = association();
-    if (!control.binding || !assoc || !draft.text.trim()) {
-      setValidation(t("required"));
-      return;
-    }
-    const submitted = draft;
-    action.mutate(
-      {
-        path: sessionPath(record.projectId, record.sessionId) + "/messages",
-        body: {
-          expectedSessionVersion: control.advanceVersion(
-            submitted.sessionVersion,
-          ),
-          controller: control.binding,
-          expectedConfigVersion: submitted.configVersion,
-          text: submitted.text,
-          interpretation: "literal-message",
-          association: assoc,
-          busyPolicy: submitted.busyPolicy,
-        } satisfies Control["MessageSubmit"],
+  function sendNative(original:NativeSubmission){
+    const generation=getClientScope();
+    setNativeOperation({...original,phase:'sending'});
+    action.mutate({path:original.path,body:original.body,operationId:original.operationId,workHint:original.hint},{
+      onSuccess:(receipt)=>{
+        if(generation!==getClientScope())return;
+        if(typeof receipt.operationId!=='string'||!receipt.operationId||receipt.sessionId!==record.sessionId||!['queued','admitted','rejected'].includes(receipt.status)){setNativeOperation({...original,phase:'unknown'});return;}
+        setNativeOperation(null);
+        if(receipt.status!=='rejected'){const preserved=!clearDraft(original.draft);if(nativeScopeRef.current===original.scope)setPreserved(preserved);}
       },
-      { onSuccess: () => setPreserved(!clearDraft(submitted)) },
-    );
+      onError:(error)=>{
+        if(generation!==getClientScope())return;
+        const ambiguous=!(error instanceof ApiError)||error.status===0||error.status>=500||/unknown|pending|uncertain/.test(error.code);
+        setNativeOperation(ambiguous?{...original,phase:'unknown'}:null);
+      }
+    });
   }
+  function submit() {
+    const assoc=association();
+    if(nativeOperation)return;
+    if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
+    if(draft.mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
+    const submitted=draft;
+    const body={expectedSessionVersion:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
+    if(draft.mode==='managed'&&managed.hint){
+      if(assoc.mode!=='ad-hoc'){setValidation(workT('nativeConsentRequired'));return;}
+      const original:NativeSubmission={scope:nativeScope,operationId:crypto.randomUUID(),path:sessionPath(record.projectId,record.sessionId)+'/messages',body:structuredClone(body),hint:Object.freeze({...managed.hint}),draft:submitted,phase:'sending'};
+      sendNative(original);
+    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:()=>setPreserved(!clearDraft(submitted))});
+  }
+
   return (
     <Panel title={t("message")}>
       <Field label={t("message")}>
@@ -160,10 +173,12 @@ export function MessageComposer({
         <Field label={t("workMode")}>
           <Select
             value={draft.mode}
-            onChange={(e) => setDraft({ ...draft, mode: e.target.value })}
+            disabled={!!nativeOperation}
+            onChange={(e) => setDraft({ ...draft, mode: e.target.value,consent:false })}
           >
             <option value="flow">{t("flow")}</option>
             <option value="ad-hoc">{t("adHoc")}</option>
+            {(managed.available||draft.mode==='managed')&&<option value="managed" disabled={!managed.available||!managed.operator}>{workT("managedAttempt")}</option>}
           </Select>
         </Field>
         {draft.mode === "flow" ? (
@@ -223,6 +238,8 @@ export function MessageComposer({
           {t("adHocConsent")}
         </label>
       )}
+      {draft.mode==='managed' && <><NativeAttemptPicker value={managed} locked={!!nativeOperation}/>{!association()&&<p className="composer-hint">{workT("nativeConsentRequired")}</p>}</>}
+      {nativeOperation && <Notice>{workT(nativeOperation.phase==='sending'?"pending":"nativeOutcomeUnknown")}<p>{workT("operation")}: <code>{nativeOperation.operationId}</code></p><p>{workT("managedAttempt")}: <code>{nativeOperation.hint.attemptId}</code> · v{nativeOperation.hint.attemptVersion}</p>{nativeOperation.phase==='unknown'&&<Button variant="secondary" disabled={!managed.operator||!control.active||action.isPending} onClick={()=>sendNative(nativeOperation)}>{workT("retryOriginalMessage")}</Button>}</Notice>}
       {stale && (
         <Notice>
           {t("stale")}
@@ -264,6 +281,8 @@ export function MessageComposer({
             !control.active ||
             stale ||
             action.isPending ||
+            !!nativeOperation ||
+            (draft.mode==='managed'&&!managed.valid) ||
             !draft.text.trim() ||
             !association()
           }

@@ -7,7 +7,7 @@ import {
   InvalidationBatch,
   parseInvalidation,
 } from "./browser-invalidations";
-import { ApiError, invalidateAuthentication } from "./client";
+import { ApiError, invalidateAuthentication, type NativeWorkHint } from "./client";
 export function useRemoteQuery<T>(
   key: readonly unknown[],
   path: string,
@@ -28,11 +28,15 @@ export function useRemoteAction<T = unknown>() {
       path,
       body,
       method = "POST",
+      operationId,
+      workHint,
     }: {
       path: string;
       body: unknown;
       method?: "POST" | "PUT" | "PATCH" | "DELETE";
-    }) => remoteMutate<T>(method, path, body),
+      operationId?:string;
+      workHint?:NativeWorkHint;
+    }) => operationId||workHint?remoteMutate<T>(method,path,body,{operationId,workHint}):remoteMutate<T>(method, path, body),
     retry: false,
     onSuccess: () =>
       client.invalidateQueries({ queryKey: [scopeKey, projectId, "remote"] }),

@@ -28,6 +28,12 @@ Work events poll using independent opaque cursors with bounded backoff and canon
 
 Git observation refresh/history separates object availability, PR head drift, CI provenance and immutable reviewed subjects; pending observation operations reconcile without repeating provider mutation. Legacy conversion is human-only, capability-gated and requires the exact durable source preview plus an explicit new deliverable. Exact archived document content never falls back to latest.
 
+## Native session integration
+
+The existing v2 composer offers explicit Managed Attempt selection only for a human operator controlling the current session when managedExecution is available. Current approved Flow/Intent/context pins and Attempt version require confirmation; stale selections require a fresh choice and confirmation. Existing ad-hoc consent and controller/lease guards remain authoritative. Only the original ad-hoc message POST receives paired work Attempt/version headers. No permission or execution profile is changed.
+
+An uncertain message retains its original body, Attempt/version and request key in principal/project/session scope. Explicit retry uses that frozen request; newer draft text is retained. A server receipt operation ID is opaque and distinct from the client request key. Execution association does not establish runtime consumption of pinned context; the UI labels that verification separately.
+
 ## Current limits
 
-Native managed Attempt selection in the existing v2 composer is a separate integration increment. Controller/ad-hoc consent/lease behavior remains unchanged; no machine binding is fabricated by this UI. Git observer configuration remains administrator-owned; the UI only reads and refreshes permitted metadata. A result form accepts one immutable artifact; the domain supports multi-artifact subjects. No deployment has been performed.
+No machine binding is fabricated by this UI. Git observer configuration remains administrator-owned; the UI only reads and refreshes permitted metadata. A result form accepts one immutable artifact; the domain supports multi-artifact subjects. No deployment has been performed.

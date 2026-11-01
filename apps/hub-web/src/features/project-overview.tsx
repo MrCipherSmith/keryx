@@ -162,6 +162,7 @@ export function ProjectOverview() {
       />
       <QueryFeedback query={project} label={t("overviewTitle")} />
       {project.data && <ManagedAttentionOverview projects={[project.data]} />}
+      <h2 className="legacy-overview-scope">{t("work:legacyOverviewScope")}</h2>
       <div className="project-signal-strip">
         {metrics.map(({ label, value, icon: Icon, action }) => (
           <button type="button" key={label} onClick={action}>

@@ -13,6 +13,7 @@ let generation = 0;
 let controller = new AbortController();
 let onAuthLoss: (error: ApiError) => void = () => undefined;
 const operations = new Map<string, string>();
+export type NativeWorkHint = Readonly<{ attemptId: string; attemptVersion: number }>;
 export function setAuthLossHandler(handler: (error: ApiError) => void) {
   onAuthLoss = handler;
 }
@@ -43,13 +44,16 @@ async function request<T>(
   signal?: AbortSignal,
   version: "v1" | "v2" | "work/v1" = "v1",
   operationId?: string,
+  workHint?: NativeWorkHint,
 ): Promise<T> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new ApiError(400, "invalid-path", "Invalid API path");
   const scope = generation;
   const serialized = body === undefined ? undefined : JSON.stringify(body);
-  const op = JSON.stringify([scope, version, method, path, serialized]);
+  const op = JSON.stringify([scope, version, method, path, serialized,workHint?.attemptId??null,workHint?.attemptVersion??null]);
   const headers = new Headers({ "X-Requested-With": "XMLHttpRequest" });
+  if(workHint&&(version!=='v2'||method!=='POST'||!/^\/projects\/[^/]+\/sessions\/[^/]+\/messages$/.test(path)))throw new ApiError(400,'invalid-work-binding','Managed headers are limited to original native message submission');
+  if(workHint){headers.set('X-Keryx-Work-Attempt',workHint.attemptId);headers.set('X-Keryx-Work-Version',String(workHint.attemptVersion));}
   if (serialized !== undefined) headers.set("Content-Type", "application/json");
   if (method !== "GET") {
     let key = operationId ?? operations.get(op);
@@ -162,8 +166,9 @@ export function versionedJson<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown,
   signal?: AbortSignal,
+  transport?: {operationId?:string;workHint?:NativeWorkHint},
 ) {
-  return request<T>(path, method, body, signal, version);
+  return request<T>(path, method, body, signal, version,transport?.operationId,transport?.workHint);
 }
 
 export function invalidateAuthentication() {
