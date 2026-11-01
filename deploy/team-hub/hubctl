@@ -763,6 +763,15 @@ online_snapshot() {
   _snapshot_size=$(docker exec "$_snapshot_cid" stat -c %s /data/hub.sqlite 2>/dev/null) \
     || die "could not determine the database size for an online backup; use hubctl backup --offline"
   case $_snapshot_size in ''|*[!0-9]*) die "invalid database size for an online backup; use hubctl backup --offline" ;; esac
+  # Uncheckpointed pages may make serialize() much larger than the main file.
+  # Count WAL bytes conservatively; only an absent WAL in a readable directory is zero.
+  _snapshot_wal=$(docker exec "$_snapshot_cid" sh -c 'if [ -e /data/hub.sqlite-wal ]; then stat -c %s /data/hub.sqlite-wal; elif [ -r /data ] && [ -x /data ]; then printf 0; else exit 1; fi' 2>/dev/null) \
+    || die "could not determine the WAL size for an online backup; use hubctl backup --offline"
+  case $_snapshot_wal in ''|*[!0-9]*) die "invalid WAL size for an online backup; use hubctl backup --offline" ;; esac
+  # Bound each operand before shell arithmetic to avoid overflow on corrupt stat output.
+  [ "$_snapshot_size" -le 157286400 ] && [ "$_snapshot_wal" -le 157286400 ] \
+    || die "database plus WAL exceeds the online backup memory budget; use hubctl backup --offline"
+  _snapshot_size=$(( _snapshot_size + _snapshot_wal ))
   [ "$_snapshot_size" -le 157286400 ] \
     || die "the database is $_snapshot_size bytes; an online backup holds it in the Hub container's memory (limit 512 MB). Use: hubctl backup --offline"
   docker exec "$_snapshot_cid" bun -e "$ONLINE_BACKUP_JS" > "$_snapshot_file" || die "the online backup failed"

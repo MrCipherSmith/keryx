@@ -25,6 +25,7 @@ new_tmp() { NEW_TMP="$ROOT/preflight"; }
 docker() {
   case "$*" in
     'exec live stat -c %s /data/hub.sqlite') printf '%s\\n' "$DATABASE_BYTES" ;;
+    'exec live sh -c '*) printf '%s\\n' "\${WAL_BYTES:-0}" ;;
     'exec live bun -e '*) printf serialized >> "$ROOT/serialize-called"; printf fixture ;;
     *) return 91 ;;
   esac
@@ -93,5 +94,13 @@ for (const state of ['stopped', 'missing', 'restarting']) {
     expect(result.exitCode).not.toBe(0);
     expect(readFileSync(join(directory, 'selected'), 'utf8')).toBe('v2');
     expect(result.stderr.toString()).toContain('current data and release were preserved');
+  });
+}
+
+for (const wal of ['157286401', 'unreadable']) {
+  test(`online rollback refuses WAL budget ${wal} before serialization`, () => {
+    const { directory, result } = libraryFixture(preflightPorts, { DATABASE_BYTES: '4096', WAL_BYTES: wal });
+    expect(result.exitCode).not.toBe(0);
+    expect(() => readFileSync(join(directory, 'serialize-called'))).toThrow();
   });
 }
