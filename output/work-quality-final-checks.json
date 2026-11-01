@@ -1,0 +1,98 @@
+[
+  {
+    "name": "final-health",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun --no-env-file src/cli.ts health run --changed --source eslint,typescript",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:43.278Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-22-32-169Z-0655b4_run.log"
+  },
+  {
+    "name": "final-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.652Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-22-17-615Z-df912d_run.log"
+  },
+  {
+    "name": "final-script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.656Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-53-986Z-20c389_run.log"
+  },
+  {
+    "name": "final-backend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun node_modules/eslint/bin/eslint.js src/hub src/remote-control src/remote src/commands/hub.ts src/commands/hub-machine.ts src/commands/hub-machine.test.ts scripts/package-team-hub.ts scripts/package-team-hub.test.ts scripts/build-hub-web.ts scripts/build-hub-web.test.ts",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.653Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-51-311Z-f4825c_run.log"
+  },
+  {
+    "name": "final-backend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test src/hub/ src/remote-control/ src/remote/ src/commands/hub-machine.test.ts src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:43.279Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-22-27-644Z-1fbb9b_run.log"
+  },
+  {
+    "name": "final-packaging-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/package-team-hub.test.ts",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.656Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-52-146Z-2ee4bf_run.log"
+  },
+  {
+    "name": "final-frontend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web test",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.656Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-49-588Z-190b2e_run.log"
+  },
+  {
+    "name": "final-frontend-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web typecheck",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.653Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-57-171Z-7eac1b_run.log"
+  },
+  {
+    "name": "final-frontend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web lint",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.656Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-42-950Z-2fd8c3_run.log"
+  },
+  {
+    "name": "final-frontend-build",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web build",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.656Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-39-176Z-f48dfd_run.log"
+  },
+  {
+    "name": "final-embedded-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.657Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-36-986Z-36f3f4_run.log"
+  },
+  {
+    "name": "final-schema-docs",
+    "command": "bun --no-env-file src/cli.ts ctx run -- node docs/requirements/hub-work-management/verify.cjs",
+    "started": "2026-11-01T11:21:35.377Z",
+    "completedObservation": "2026-11-01T11:22:22.656Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-21-37-678Z-ee00d2_run.log"
+  }
+]

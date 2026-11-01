@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { openHubStore } from "../store";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { fixture, admittedSession, appliedController, success, D, HEAD, type Fixture } from "./fixture.test-support";
@@ -10,10 +11,13 @@ test.each(["ad-hoc", "flow"] as const)("%s machine result atomically creates imm
   f = await fixture(); const s = await admittedSession(f);
   const c = await appliedController(f, s);
   let association: Control["FlowAssociation"] = { mode: "ad-hoc", profileConsentVersion: 1 };
+  let frozenReplay: {path:string;body:{expectedVersion:number};response:unknown}|undefined;
   if (mode === "flow") {
     const imported = await success<{ documents: { id: string; contentDigest: string }[] }>(await f.call(`/hub/v1/projects/${f.project.id}/import`, { method: "POST", token: "remote-test-agent-" + "a".repeat(64), body: { expectedVersion: f.project.version, sourceRevision: "source", documents: [{ path: "spec.md", kind: "spec", content: "# Frozen execution\nActual check." }] } }));
     let flow = await success<{ id: string; version: number; specContentDigest: string; criteria: string[] }>(await f.call(`/hub/v1/projects/${f.project.id}/flows`, { method: "POST", cookie: f.cookie, body: { title: "Managed result", specDocumentId: imported.documents[0]!.id, criteria: ["Actual check"] } }));
-    flow = await success<typeof flow>(await f.call(`/hub/v1/projects/${f.project.id}/flows/${flow.id}/freeze`, { method: "POST", cookie: f.cookie, body: { expectedVersion: flow.version } }));
+    const freezePath=`/hub/v1/projects/${f.project.id}/flows/${flow.id}/freeze`,freezeBody={expectedVersion:flow.version};
+    flow = await success<typeof flow>(await f.call(freezePath, { method: "POST", cookie: f.cookie, key:"freeze-before-conversion", body:freezeBody }));
+    frozenReplay={path:freezePath,body:freezeBody,response:flow};
     flow = await success<typeof flow>(await f.call(`/hub/v1/projects/${f.project.id}/flows/${flow.id}/start`, { method: "POST", cookie: f.cookie, body: { expectedVersion: flow.version } }));
     const { criteriaDigest } = await import("../../remote-control/protocol");
     association = { mode: "flow", flowId: flow.id, expectedFlowVersion: flow.version, specDigest: flow.specContentDigest, criteriaDigest: criteriaDigest(flow.criteria) };
@@ -37,6 +41,11 @@ test.each(["ad-hoc", "flow"] as const)("%s machine result atomically creates imm
   const result = await success<Control["ResultReceipt"]>(await f.call(path, { method: "POST", token: s.machine.secret, origin: null, key: "result-1", body }));
   if (mode === "ad-hoc") expect(result).toMatchObject({ checksKind: "RunChecks", flowId: null, evidenceId: null });
   else { expect(result.checksKind).toBe("FlowEvidence"); expect(result.evidenceId).not.toBeNull(); }
+  if(mode==='flow'){
+    const store=openHubStore(f.dataDir);store.workTransaction(()=>store.work.markConverted(f.project.id,association.mode==='flow'?association.flowId:'','managed-replacement'));store.close();
+    expect<unknown>(await success(await f.call(frozenReplay!.path,{method:'POST',cookie:f.cookie,key:'freeze-before-conversion',body:frozenReplay!.body}))).toEqual(frozenReplay!.response);
+    expect((await f.call(frozenReplay!.path,{method:'POST',cookie:f.cookie,key:'new-freeze-operation',body:frozenReplay!.body})).status).toBe(409);
+  }
   expect(await success<Control["ResultReceipt"]>(await f.call(path, { method: "POST", token: s.machine.secret, origin: null, key: "result-1", body }))).toEqual(result);
   expect((await f.call(path, { method: "POST", token: s.machine.secret, origin: null, key: "result-1", body: { ...body, partial: true } })).status).toBe(409);
   const db = new Database(join(f.dataDir, "hub.sqlite"), { readonly: true });

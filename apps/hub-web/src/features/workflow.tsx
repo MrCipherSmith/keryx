@@ -1,8 +1,12 @@
+import {ManagedAttentionOverview} from "./managed-work/overview-attention";
+import { ProjectOverview } from './project-overview';
+export { GlobalFlowsView } from './global-flows';
+import { FlowRows } from './global-flows';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getJson, postJson } from '../api/client';
-import type { CodeRevisionSummary, Evidence, HubDocument, HubFlow, Project, Proposal } from '../api/types';
+import type { CodeRevisionSummary, Evidence, HubDocument, HubFlow, Project } from '../api/types';
 import { useHub } from '../app/hub-context';
 import { useDraft } from '../state/drafts';
 import { Button, EmptyState, Field, Notice, PageHeading, Panel, StatusBadge } from '../components/ui';
@@ -51,7 +55,8 @@ export function ProjectsView() {
   return <div className="space-y-8">
     <PageHeading title={t('projectsTitle')} description={t('projectsDescription')} />
     <QueryFeedback query={projects} />
-    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="group min-w-0 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
+    {projects.data && <ManagedAttentionOverview projects={projects.data.projects}/>}
+    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card group min-w-0 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
       <span className="mb-5 flex size-11 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
       <span className="block break-words text-lg font-semibold text-slate-950">{project.name}</span><span className="mt-2 block text-sm text-slate-500">{t('openProject')} <span aria-hidden="true">→</span></span>
     </button>)}</div>}
@@ -65,24 +70,9 @@ export function ProjectsView() {
 }
 
 export function OverviewView() {
-  const hub = useHub(); const { t } = useTranslation('workflow'); const prefix = hub.projectId ? projectPath(hub.projectId) : null;
-  const overview = useQuery({ queryKey: [hub.scopeKey, hub.projectId, 'overview'], enabled: !!prefix, queryFn: async ({ signal }) => {
-    const [project, documents, flows, proposals, revisions] = await Promise.all([
-      getJson<Project>(prefix!, signal), getJson<{ documents: HubDocument[] }>(`${prefix}/documents`, signal), getJson<{ flows: HubFlow[] }>(`${prefix}/flows`, signal), getJson<{ proposals: Proposal[] }>(`${prefix}/proposals`, signal), getJson<{ revisions: CodeRevisionSummary[] }>(`${prefix}/revisions?summary=1`, signal),
-    ]);
-    return { project, counts: [documents.documents.length, flows.flows.filter(flow => flow.status !== 'done').length, proposals.proposals.filter(proposal => proposal.status === 'pending').length, revisions.revisions.length] };
-  } });
-  if (!hub.projectId) return <ProjectsView />;
-  const cards = [{ label: t('documents'), tab: 'documents' }, { label: t('activeFlows'), tab: 'flows' }, { label: t('pendingProposals'), tab: 'proposals' }, { label: t('revisions'), tab: 'code' }] as const;
-  return <div className="space-y-6"><PageHeading title={overview.data?.project.name ?? t('overviewTitle')} description={t('overviewDescription')} /><QueryFeedback query={overview} />
-    {overview.data && <>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{cards.map((card, index) => <button type="button" key={card.tab} onClick={() => hub.navigate({ tab: card.tab })} aria-label={t('openSection', { section: card.label })} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block text-sm text-slate-500">{card.label}</span><span className="mt-3 block text-3xl font-semibold tracking-tight text-slate-950">{overview.data.counts[index]}</span></button>)}</div>
-      <div className="grid gap-6 xl:grid-cols-2"><Panel title={t('integrationTitle')} description={t('integrationDescription')}><dl className="space-y-5"><Definition label={t('subjectRevision')}><span className={monoClass}>{overview.data.project.lineRevisionId ?? t('noSelectedRevision')}</span></Definition><Definition label={t('lineVersion')}>{overview.data.project.lineVersion}</Definition></dl></Panel><Panel title={t('approvalTitle')}><p className="text-sm leading-7 text-slate-600">{t('approvalDescription')}</p><p className="mt-4 text-sm leading-6 text-slate-500">{t('localEnvironment')}</p></Panel></div>
-      <Panel title={t('nextTitle')} description={t('nextDescription')}><div className="flex flex-wrap gap-3"><Button onClick={() => hub.navigate({ tab: 'documents' })}>{t('nextDocuments')}</Button><Button variant="secondary" onClick={() => hub.navigate({ tab: 'flows' })}>{t('nextFlows')}</Button><Button variant="secondary" onClick={() => hub.navigate({ tab: 'proposals' })}>{t('nextProposals')}</Button></div></Panel>
-    </>}
-  </div>;
+ const hub = useHub();
+ return hub.projectId ? <ProjectOverview key={hub.scopeKey + ':' + hub.projectId} /> : <ProjectsView />;
 }
-
 export function FlowsView() {
   const hub = useHub(); const { t } = useTranslation('workflow');
   if (!hub.projectId) return <ProjectsView />;
@@ -91,6 +81,7 @@ export function FlowsView() {
 
 function FlowsProject({ projectId, title }: { projectId: string; title: string }) {
   const hub = useHub(); const { t } = useTranslation('workflow'); const client = useQueryClient(); const prefix = projectPath(projectId);
+  const [layout, setLayout] = useState<'list' | 'board'>('list');
   const [creating, setCreating] = useState(false); const [search, setSearch] = useState(''); const [validation, setValidation] = useState('');
   const [draftKept, setDraftKept] = useState(false);
   const [draft, setDraft, clearDraft] = useDraft(`create-flow:${projectId}`, { title: '', specDocumentId: '', criteria: '' });
@@ -117,7 +108,8 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
     <QueryFeedback query={flows} /><QueryFeedback query={documents} />
     {flows.data && <><Field label={t('searchFlows')}><input className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('searchFlowsPlaceholder')} aria-label={t('flowSearchLabel')} /></Field>
       {flows.data.flows.length === 0 && <EmptyState>{t('noFlows')}</EmptyState>}
-      <div className="min-w-0 overflow-x-auto pb-3" aria-label={t('boardLabel')}><div className="grid min-w-[1320px] grid-cols-6 gap-3">{flowStatuses.map(status => <section key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"><div className="mb-3 flex items-center justify-between gap-2 px-1"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t(statusKeys[status])}</h2><span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500">{filtered.filter(flow => flow.status === status).length}</span></div><div className="space-y-3">{filtered.filter(flow => flow.status === status).map(flow => <button key={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => hub.navigate({ tab: 'flows', flowId: flow.id })} className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block break-words text-sm font-semibold leading-6 text-slate-900">{flow.title}</span><span className="mt-4 block font-mono text-[11px] text-slate-400">{flow.specContentDigest.slice(0, 12)}</span><span className="mt-2 block text-xs text-slate-500">{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</span></button>)}{filtered.every(flow => flow.status !== status) && <p className="px-1 py-4 text-xs text-slate-400">{t('noLaneItems')}</p>}</div></section>)}</div></div>
+      <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
+      {layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <div className="min-w-0 overflow-x-auto pb-3" aria-label={t('boardLabel')}><div className="grid min-w-[1320px] grid-cols-6 gap-3">{flowStatuses.map(status => <section key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"><div className="mb-3 flex items-center justify-between gap-2 px-1"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t(statusKeys[status])}</h2><span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500">{filtered.filter(flow => flow.status === status).length}</span></div><div className="space-y-3">{filtered.filter(flow => flow.status === status).map(flow => <button key={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => hub.navigate({ tab: 'flows', flowId: flow.id })} className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block break-words text-sm font-semibold leading-6 text-slate-900">{flow.title}</span><span className="mt-4 block font-mono text-[11px] text-slate-400">{flow.specContentDigest.slice(0, 12)}</span><span className="mt-2 block text-xs text-slate-500">{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</span></button>)}{filtered.every(flow => flow.status !== status) && <p className="px-1 py-4 text-xs text-slate-400">{t('noLaneItems')}</p>}</div></section>)}</div></div>}
     </>}
   </div>;
 }

@@ -1,0 +1,2307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.example/schemas/hub-work-management/command.v1.json",
+  "title": "Hub work-management command envelopes, v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "flow.create"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "problem": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "expectedOutcome": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "outOfScope": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "ownerId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "specification": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "contentDigest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "documentId",
+                    "version",
+                    "contentDigest"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "criteria": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "criterionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "waivable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "criterionId",
+                  "text",
+                  "waivable"
+                ]
+              }
+            }
+          },
+          "required": [
+            "title",
+            "problem",
+            "expectedOutcome",
+            "scope",
+            "outOfScope",
+            "ownerId",
+            "specification",
+            "criteria"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "intent.create"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "deliverable": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "approach": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "outOfScope": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "ownerId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "criteria": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "criterionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "waivable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "criterionId",
+                  "text",
+                  "waivable"
+                ]
+              }
+            },
+            "flowCriterionIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "criterionMappings": {
+              "type": "array",
+              "maxItems": 2000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "intentCriterionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "flowCriterionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "intentCriterionId",
+                  "flowCriterionId"
+                ]
+              }
+            }
+          },
+          "required": [
+            "flowId",
+            "title",
+            "deliverable",
+            "approach",
+            "outOfScope",
+            "ownerId",
+            "required",
+            "criteria",
+            "flowCriterionIds",
+            "criterionMappings"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "requirements.approve"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "targetType": {
+              "enum": [
+                "flow-revision",
+                "intent-revision"
+              ]
+            },
+            "revisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "revisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "flowRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "targetType",
+            "revisionId",
+            "revisionDigest",
+            "flowRevisionId",
+            "reason"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "requirements.amend"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "affectedIntentIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "minItems": 1
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "sourceFlowRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "replacements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "targetType": {
+                    "enum": [
+                      "flow",
+                      "intent"
+                    ]
+                  },
+                  "targetId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "revisionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "contentDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "targetType",
+                  "targetId",
+                  "revisionId",
+                  "contentDigest"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 201
+            }
+          },
+          "required": [
+            "flowId",
+            "affectedIntentIds",
+            "reason",
+            "sourceFlowRevisionId",
+            "replacements"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "requirements.resolve-amendment"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "decision": {
+              "enum": [
+                "approve",
+                "withdraw"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "amendmentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "manifestDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "decision",
+            "reason",
+            "amendmentId",
+            "manifestDigest"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "attempt.create"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "intentRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "contextSnapshotId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "participantId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "method": {
+              "enum": [
+                "human",
+                "native-agent",
+                "external-agent"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            },
+            "supersedesAttemptId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "intentRevisionId",
+            "contextSnapshotId",
+            "participantId",
+            "method",
+            "summary",
+            "supersedesAttemptId"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "attempt.start"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "flowRevisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "intentRevisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "contextDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "attemptId",
+            "flowRevisionDigest",
+            "intentRevisionDigest",
+            "contextDigest"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "attempt.report"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "event": {
+              "enum": [
+                "progress",
+                "blocked",
+                "failed",
+                "cancel-request",
+                "cancel-confirmed"
+              ]
+            },
+            "report": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32768
+            }
+          },
+          "required": [
+            "attemptId",
+            "event",
+            "report"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "execution.bind"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "turnId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "machineId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "checkoutId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "associationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "attemptId",
+            "sessionId",
+            "runId",
+            "turnId",
+            "machineId",
+            "checkoutId",
+            "associationDigest"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "subject.create"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "artifacts": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "git"
+                      },
+                      "repositoryId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "commitOid": {
+                        "type": "string",
+                        "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                      },
+                      "treeOid": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "pullRequestNumber": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "repositoryId",
+                      "commitOid",
+                      "treeOid",
+                      "pullRequestNumber"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "document"
+                      },
+                      "reference": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "documentId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "contentDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        },
+                        "required": [
+                          "documentId",
+                          "version",
+                          "contentDigest"
+                        ]
+                      },
+                      "proposalId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "reference",
+                      "proposalId"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "legacy"
+                      },
+                      "revisionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "treeDigest": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "revisionId",
+                      "treeDigest"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "report"
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 65536
+                      },
+                      "contentDigest": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "text",
+                      "contentDigest"
+                    ]
+                  }
+                ]
+              },
+              "minItems": 1
+            },
+            "report": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536
+            }
+          },
+          "required": [
+            "attemptId",
+            "artifacts",
+            "report"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "evidence.record"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "subjectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "subjectDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "criterionIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "minItems": 1
+            },
+            "result": {
+              "enum": [
+                "pass",
+                "fail",
+                "inconclusive"
+              ]
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "report": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32768
+            },
+            "outputDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "sourceRunId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sourceObservationId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "attemptId",
+            "subjectId",
+            "subjectDigest",
+            "criterionIds",
+            "result",
+            "method",
+            "report",
+            "outputDigest",
+            "sourceRunId",
+            "sourceObservationId"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "attempt.submit"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "subjectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "subjectDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "evidenceIds": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "coverage": {
+              "$ref": "https://keryx.example/schemas/hub-work-management/domain.v1.json#/$defs/Coverage"
+            },
+            "knowledgeFollowup": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "proposalIds": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "noUpdateReason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "proposalIds",
+                "noUpdateReason"
+              ]
+            }
+          },
+          "required": [
+            "attemptId",
+            "subjectId",
+            "subjectDigest",
+            "evidenceIds",
+            "coverage",
+            "knowledgeFollowup"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "attempt.withdraw"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "submissionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "submissionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "attemptId",
+            "submissionId",
+            "submissionDigest",
+            "reason"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "attempt.select"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "intentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "attemptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "submissionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "submissionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "intentId",
+            "attemptId",
+            "submissionId",
+            "submissionDigest",
+            "reason"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "review.decide"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "targetType": {
+              "enum": [
+                "intent-review",
+                "flow-review"
+              ]
+            },
+            "targetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "submissionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "submissionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "decision": {
+              "enum": [
+                "accept",
+                "reject",
+                "request-changes"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "waivers": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "criterionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "criterionId",
+                  "reason"
+                ]
+              }
+            }
+          },
+          "required": [
+            "targetType",
+            "targetId",
+            "submissionId",
+            "submissionDigest",
+            "decision",
+            "reason",
+            "waivers"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "flow.submit"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "flowRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "acceptedIntentDecisionIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "minItems": 1
+            },
+            "acceptanceManifestDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "flowId",
+            "flowRevisionId",
+            "acceptedIntentDecisionIds",
+            "acceptanceManifestDigest"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "work.cancel"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "targetType": {
+              "enum": [
+                "flow",
+                "intent"
+              ]
+            },
+            "targetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "targetType",
+            "targetId",
+            "reason"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "legacy.convert"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "legacyFlowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "sourceVersion": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "dryRunReceiptId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "dryRunDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "intent": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "deliverable": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "approach": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "outOfScope": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "ownerId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "criteria": {
+                  "type": "array",
+                  "maxItems": 200,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "criterionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "waivable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "criterionId",
+                      "text",
+                      "waivable"
+                    ]
+                  }
+                },
+                "flowCriterionIds": {
+                  "type": "array",
+                  "maxItems": 200,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "required": [
+                "title",
+                "deliverable",
+                "approach",
+                "outOfScope",
+                "ownerId",
+                "required",
+                "criteria",
+                "flowCriterionIds"
+              ]
+            }
+          },
+          "required": [
+            "legacyFlowId",
+            "sourceVersion",
+            "dryRunReceiptId",
+            "dryRunDigest",
+            "intent"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "context.create"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flowRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "intentRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "entries": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "entryId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "role": {
+                    "enum": [
+                      "spec",
+                      "wiki",
+                      "rule",
+                      "skill",
+                      "decision",
+                      "local-overlay"
+                    ]
+                  },
+                  "reference": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "documentId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "contentDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        },
+                        "required": [
+                          "documentId",
+                          "version",
+                          "contentDigest"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "contentDigest": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "entryId",
+                  "role",
+                  "reference",
+                  "required",
+                  "contentDigest"
+                ]
+              }
+            },
+            "gitBases": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "repositoryId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "commitOid": {
+                    "type": "string",
+                    "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                  }
+                },
+                "required": [
+                  "repositoryId",
+                  "commitOid"
+                ]
+              }
+            }
+          },
+          "required": [
+            "flowRevisionId",
+            "intentRevisionId",
+            "entries",
+            "gitBases"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "revision.propose"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "targetType": {
+                  "const": "flow"
+                },
+                "flowId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "problem": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "expectedOutcome": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "scope": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "outOfScope": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "specification": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "documentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      },
+                      "required": [
+                        "documentId",
+                        "version",
+                        "contentDigest"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "criteria": {
+                  "type": "array",
+                  "maxItems": 200,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "criterionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "waivable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "criterionId",
+                      "text",
+                      "waivable"
+                    ]
+                  }
+                },
+                "requiredIntentIds": {
+                  "type": "array",
+                  "maxItems": 200,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "required": [
+                "targetType",
+                "flowId",
+                "problem",
+                "expectedOutcome",
+                "scope",
+                "outOfScope",
+                "specification",
+                "criteria",
+                "requiredIntentIds"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "targetType": {
+                  "const": "intent"
+                },
+                "intentId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "flowRevisionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "deliverable": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "approach": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "outOfScope": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                },
+                "criteria": {
+                  "type": "array",
+                  "maxItems": 200,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "criterionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "waivable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "criterionId",
+                      "text",
+                      "waivable"
+                    ]
+                  }
+                },
+                "flowCriterionIds": {
+                  "type": "array",
+                  "maxItems": 200,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "criterionMappings": {
+                  "type": "array",
+                  "maxItems": 2000,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "intentCriterionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "flowCriterionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "intentCriterionId",
+                      "flowCriterionId"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "targetType",
+                "intentId",
+                "flowRevisionId",
+                "deliverable",
+                "approach",
+                "outOfScope",
+                "criteria",
+                "flowCriterionIds",
+                "criterionMappings"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "flow.start"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "flowRevisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "flowId",
+            "flowRevisionDigest"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "expectedVersions": {
+          "type": "object",
+          "maxProperties": 210,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "command": {
+          "const": "legacy.preview"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "legacyFlowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "sourceVersion": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "legacyFlowId",
+            "sourceVersion"
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedVersions",
+        "command",
+        "payload"
+      ]
+    }
+  ],
+  "description": "The complete serialized UTF-8 command envelope is limited to 65536 bytes (64 KiB). Per-field maxima are upper bounds within this total limit.",
+  "$comment": "Canonical protocol schema; the browser copy is generated by scripts/sync-hub-work-schemas.ts. Edit this canonical file, then regenerate the browser copies."
+}

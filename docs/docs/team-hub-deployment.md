@@ -160,9 +160,17 @@ Change the domain or the mode by editing `secrets/hub.env` and running `hubctl r
 
 ## Upgrade
 
+Run on the Hub host; a project URL or agent token does not grant update authority. The CLI delegates to the installation-owned tool, using a ready release image rather than rebuilding a checkout:
+
 ```sh
+keryx hub update --check
+keryx hub update <version> --dry-run
+keryx hub update <version>
+# Equivalent low-level operation:
 ~/keryx-team-hub/hubctl upgrade <version>        # or: latest
 ```
+
+`--install-dir` selects a non-default installation. Check/dry-run verify the version, bundle checksums, required files and pinned image digest in a private temporary directory outside the installation; they do not stop containers, acquire an install lock, change the current release or write its data. A legacy source-build layout requires an explicit one-time migration, not running the fresh installer over its existing volume.
 
 `upgrade` confirms (`--yes` skips the question), then:
 
@@ -173,7 +181,38 @@ Change the domain or the mode by editing `secrets/hub.env` and running `hubctl r
 5. switches `current` with an atomic rename, starts the new release and verifies it the same way;
 6. on success installs that release's `hubctl`.
 
-If anything fails, it puts the old release back by itself. A failure before the switch just restarts the old Hub on its untouched data. A failure after the switch re-points `current`, makes sure the Hub container is **stopped**, **restores the full backup into the volume**, recreates the Hub on the old release and verifies it. Recovery runs with Ctrl-C ignored, so it cannot be cut off between emptying the volume and refilling it. The backup is kept as `backups/upgrade-<time>-<from>-to-<to>/hub-data.tar`; the backup that `rollback --restore-data` follows is changed only by an upgrade that finished. Run upgrades when nobody is mid-task.
+A failure before the switch restarts the old Hub on untouched data. After the switch, the new service might already have accepted writes: recovery stops it and saves the **latest** data as `failed-candidate-data.tar`. It trial-starts the old image against that copy and returns to it only if compatible, keeping the latest live volume rather than rewinding the database. If the old image cannot read it, the new release stays selected and stopped for a forward repair; both latest and pre-upgrade backups are retained. It never silently restores pre-upgrade data after public startup. The original backup is `backups/upgrade-<time>-<from>-to-<to>/hub-data.tar`; the pointer used by explicit `rollback --restore-data` changes only after a completed upgrade. Run upgrades when nobody is mid-task.
+
+Managed-work settings (`KERYX_HUB_WORK_ENABLED`, default `false`, and `KERYX_HUB_WORK_REPOSITORIES`, default `[]`) come from `secrets/hub.env`. Keep install-owned Access configuration in stable `compose.override.yaml`. Legacy per-release `compose.access.yaml` is copied forward on staging; rollback refuses a target missing that overlay, so migrate it to the stable file or explicitly stage a target with equivalent settings first. The isolated trial carries the configured Work/Cloudflare Access settings and read-only role mapping, with independent throwaway operator/agent tokens.
+
+Compatible legacy source-build installations need adoption before the release update command can operate. The generic `migrate-legacy.py` helper ships inside the verified install bundle, defaults to rehearsal only, and requires an explicit non-secret deployment profile. It has no private hostname, project, overlay or image-repository default.
+
+Create a profile owned by the installation owner (or root), with no group/world write permission. It accepts exactly these four fields:
+
+```json
+{
+  "composeProject": "example-team-hub",
+  "publicOrigin": "https://hub.example.test",
+  "imageRepository": "ghcr.io/mrciphersmith/keryx-team-hub",
+  "legacyOverlay": "compose.legacy.yaml"
+}
+```
+
+Replace the example project, origin and overlay with the existing installation's identities; the image repository must match the verified release's digest-pinned image. Review the file before selecting it. The helper checks it against running container labels, the existing origin, source paths and the original `<composeProject>_hub-data` volume. Unknown/duplicate fields, userinfo or paths in the HTTPS origin, unpinned images, overlay paths and unsafe profile file permissions are rejected before deployment work.
+
+```sh
+python3 verified-install/migrate-legacy.py \
+  --root "$HOME/example-team-hub" \
+  --deployment-profile "$PWD/deployment-profile.json" \
+  --artifacts "$PWD" --version "$release" --check
+# Only after successful rehearsal and a maintenance window:
+python3 verified-install/migrate-legacy.py \
+  --root "$HOME/example-team-hub" \
+  --deployment-profile "$PWD/deployment-profile.json" \
+  --artifacts "$PWD" --version "$release" --apply --yes
+```
+
+The [adoption handoff](https://github.com/MrCipherSmith/keryx/blob/main/docs/handoffs/hub-legacy-adoption.md) supplies a profile template and complete download/backup procedure. Each installation fills its own profile with the same safety checks. `keryx hub update` continues to refuse legacy wrappers until adoption succeeds.
 
 ## Rollback
 
@@ -182,7 +221,9 @@ hubctl rollback                    # back to the previous release; the data stay
 hubctl rollback --restore-data     # also restore the backup taken at the last upgrade (only straight after it)
 ```
 
-A release's data changes are additive (new `remote_*` tables); an older release ignores tables it does not know, so a plain rollback keeps everything written since the upgrade. `--restore-data` throws that work away. It only follows a backup that was taken when leaving the release you are rolling back to, checks that backup before touching anything, asks you to confirm (the question names the project and volume), and first saves the data it replaces to `backups/pre-rollback-<time>/`. A release that stored data an older one would misread is the exception: the release notes say so, and then a plain rollback is the wrong tool. Once any rollback has run, `--restore-data` has nothing to restore; the upgrade's `hub-data.tar` can still be restored by hand with `hubctl restore`. If a rollback fails part-way, `hubctl` puts the release and the data back as they were.
+A plain rollback confirms first, preserves current data and tests the previous image against a consistent online database copy when the Hub is stably running. A stopped, missing or restarting Hub uses a quiescent full-volume copy without requiring `docker exec` into the broken service. It then takes a final full quiescent backup and repeats the trial before switching, closing the race with intervening writes. Allow downtime for the full copy and compatibility trial, and free disk for the retained backup plus the disposable trial volume (at least twice the live volume in addition to existing data/backups). The online snapshot refuses a main database plus WAL above 150 MiB before allocation; use the offline path for larger installations. An incompatible old reader is refused, not assumed safe because tables were additive. In particular, the first managed-work write activates minimum writer3; original0.4.x readers accepting only writer2 cannot be used afterwards.
+
+`--restore-data` deliberately replaces current work with the pre-upgrade snapshot. It follows only the backup taken when leaving the selected previous release, verifies it, names the destructive effect in its confirmation and first saves current data under `backups/pre-rollback-<time>/`. Both data copies remain available. Once a rollback has run, its automatic pre-upgrade restore pointer is cleared; backups remain usable through explicit `hubctl restore`. Prefer a compatible release or a forward fix when new work already exists.
 
 ## Backup and restore
 
@@ -242,3 +283,5 @@ Pushing a `v*` tag runs the existing release job first (the whole suite and gate
 The first time the package is published to GitHub Container Registry it may be private. The job fails at its anonymous-pull step in that case; make the package public once in its settings and re-run the job.
 
 CI (`team-hub-distribution` in `ci.yml`) builds the image from the packaged archive on every pull request and runs the same checks, so a change that breaks the image fails before a tag does.
+
+Safety backups from upgrade, restore and rollback retain the three newest directories plus the explicitly referenced pre-upgrade backup. Retention has a count bound even during frequent operations; manual and legacy-adoption backups remain operator-managed.

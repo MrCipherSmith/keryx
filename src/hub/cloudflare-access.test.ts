@@ -40,11 +40,17 @@ describe("Cloudflare Access JWT trust boundary", () => {
     await f.verifier.verify(jwt());
     expect(f.fetches()).toBe(1);
   });
+  test("accepts a signed bare-string audience for the configured application", async () => {
+    const f = fixture();
+    expect(await f.verifier.verify(jwt({ aud: audience }))).toEqual({
+      issuer, subject: "person-1", email: "owner@example.com", expiresAt: 2000_000,
+    });
+  });
   test("rejects wrong claims, signature, algorithm, malformed and unsigned tokens", async () => {
     const f = fixture();
     for (const token of [
       jwt({ iss: "https://evil.example" }), jwt({ aud: ["other-app"] }), jwt({ exp: 1000 }),
-      jwt({ exp: "2000" }), jwt({ nbf: 1001 }), jwt({ nbf: "900" }), jwt({ sub: "" }),
+      jwt({ exp: undefined }), jwt({ exp: 2000.5 }), jwt({ sub: "s".repeat(513) }), jwt({ exp: "2000" }), jwt({ nbf: 1001 }), jwt({ nbf: "900" }), jwt({ sub: "" }),
       jwt({ email: "" }), jwt({ email: "not-an-email" }), jwt({ aud: [audience, 1] }),
       jwt({}, second), jwt({}, first, { alg: "none" }), jwt({}, first, { alg: "HS256" }),
       jwt({}, first, { kid: "missing" }), "unsigned.payload.", "garbage",

@@ -1,0 +1,18 @@
+# Acceptance criteria
+
+- AC1: one Flow/Intent and two human/agent/manual Attempts are represented without fabricating session or code upload; all project relationships enforced. [verify: judged]
+- AC2: exact immutable requirement/context versions are retrievable; start refuses missing required content, amendment drift and stale expected versions. [verify: judged]
+- AC3: run links attach only verified exact existing execution, never duplicate/reassign history or grant new authority; multi-turn Attempt and zero-run manual Attempt work. [verify: judged]
+- AC4: immutable commit/document subjects work without CodeRevision; mutable PR-head observations and unavailable/wrong-repository objects remain explicit. [verify: judged]
+- AC5: Evidence coverage handles pass/fail/inconclusive/missing and authorized exact waivers; source trust/criterion/subject mismatch refuses. [verify: judged]
+- AC6: only authorized human selects/accepts/waives/approves requirements; direct agent/machine API and cross-project misuse refuse. [verify: judged]
+- AC7: immutable ReviewSubmission/Decision survives later reports, context edits and changed PR heads; stale acceptance cannot silently apply. [verify: judged]
+- AC8: response loss, restart, duplicate/reordered metadata and concurrent reviewer races yield one canonical decision/event and visible conflicts. [verify: judged]
+- AC9: known/unknown cancellation and late results cannot produce fake stopped/submitted/accepted state; physical leases untouched by work-state changes. [verify: judged]
+- AC10: optional Git observation refreshes freshness and links actual PR/commit/CI state without push/merge or automatic product acceptance. [verify: judged]
+- AC11: linked knowledge proposals/no-update reasons remain separate from content verification and product acceptance. [verify: judged]
+- AC12: legacy v1 and frozen machine-v2 regressions pass; conversion eligibility, dry-run, backup and old-writer refusal are tested without invented Attempts. [verify: judged]
+- AC13: HTTP/CLI/MCP share same state/auth invariants; agent tool surface excludes human Decisions; no false installed command claims. [verify: judged]
+- AC14: real RU/EN375px browser journey and state matrix preserve identity/drafts and show distinct actions/provenance. [verify: judged]
+- AC15: quota/redaction/retention/backup/restore failures preserve accepted subject meaning; no secrets/environment/source upload required. [verify: judged]
+- AC16: exact candidate docs/API/schema/migration and independent verification/review delivered for owner review; no self-acceptance/deploy/publication. [verify: judged]

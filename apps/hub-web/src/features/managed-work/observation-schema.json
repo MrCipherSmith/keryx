@@ -1,0 +1,308 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "subjectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "subjectDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "createdBy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "commitOid": {
+            "type": "string",
+            "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+          },
+          "treeOid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policyDigest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "availability": {
+            "enum": [
+              "available",
+              "unavailable",
+              "identity-mismatch",
+              "not-configured"
+            ]
+          },
+          "reasonCode": {
+            "enum": [
+              "observed",
+              "not-configured",
+              "provider-unavailable",
+              "identity-mismatch"
+            ]
+          },
+          "pullRequest": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "number": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "headOid": {
+                    "type": "string",
+                    "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                  },
+                  "baseRepositoryId": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "headRepositoryId": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "state": {
+                    "enum": ["open", "closed"]
+                  },
+                  "updatedAt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  }
+                },
+                "required": [
+                  "number",
+                  "headOid",
+                  "baseRepositoryId",
+                  "headRepositoryId",
+                  "state",
+                  "updatedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ci": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availability": {
+                "enum": ["available", "unavailable", "not-configured"]
+              },
+              "runs": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "runId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "runNumber": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "runAttempt": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "workflowId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "workflowPath": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    "workflowRef": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "headOid": {
+                      "type": "string",
+                      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                    },
+                    "repositoryProviderId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "headRepositoryProviderId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "event": {
+                      "enum": [
+                        "push",
+                        "pull_request",
+                        "workflow_dispatch",
+                        "workflow_call",
+                        "workflow_run",
+                        "schedule",
+                        "merge_group",
+                        "pull_request_target",
+                        "repository_dispatch"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "completed",
+                        "in_progress",
+                        "queued",
+                        "requested",
+                        "waiting",
+                        "pending"
+                      ]
+                    },
+                    "conclusion": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "success",
+                            "failure",
+                            "neutral",
+                            "cancelled",
+                            "skipped",
+                            "timed_out",
+                            "action_required",
+                            "stale",
+                            "startup_failure"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "trusted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "runNumber",
+                    "runAttempt",
+                    "workflowId",
+                    "workflowPath",
+                    "workflowRef",
+                    "headOid",
+                    "repositoryProviderId",
+                    "headRepositoryProviderId",
+                    "event",
+                    "status",
+                    "conclusion",
+                    "updatedAt",
+                    "trusted"
+                  ]
+                }
+              }
+            },
+            "required": ["availability", "runs"]
+          }
+        },
+        "required": [
+          "repositoryId",
+          "commitOid",
+          "treeOid",
+          "policyDigest",
+          "availability",
+          "reasonCode",
+          "pullRequest",
+          "ci"
+        ]
+      }
+    },
+    "contentDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "id",
+    "projectId",
+    "subjectId",
+    "subjectDigest",
+    "createdBy",
+    "observedAt",
+    "generation",
+    "artifacts",
+    "contentDigest"
+  ]
+}

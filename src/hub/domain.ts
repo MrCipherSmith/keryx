@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { legacyStorageLimits } from "./legacy-limits";
 import { canTransition } from "../flow/machine";
-import type { CodeRevision, GitDeliveryAdapter, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
+import type { CodeRevision, GitDeliveryAdapter, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
 import type { HubState } from "./store";
 export class HubFailure extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -46,6 +47,11 @@ function changedDocument(state: HubState, p: Project, doc: HubDocument) {
 function proposal(state: HubState, actor: Principal, p: Project, doc: HubDocument, content: string, reason: string, sourceRevision?: string): Proposal {
   const value: Proposal = { id: randomUUID(), projectId: p.id, documentId: doc.id, baseVersion: doc.version, content, contentDigest: sha256(content), reason, status: "pending", version: 1, createdBy: actor.id, ...(sourceRevision ? { sourceRevision } : {}) };
   state.proposals.push(value); event(state, actor, p.id, "proposal-created", value.id); return value;
+}
+/** Shared guard for REST/MCP and remote execution/result adapters. */
+export function assertLegacyFlowWritable(state:HubState,projectId:string,flowId:string):void {
+  const conversion=state.legacyConversions?.[flowId];
+  if(conversion?.projectId===projectId)fail(409,'flow-converted','Legacy Flow is read-only; managed replacement '+conversion.managedFlowId);
 }
 function currentSpec(state: HubState, flow: HubFlow) {
   const spec = found(state.documents.find((d) => d.id === flow.specDocumentId && d.projectId === flow.projectId));
@@ -96,15 +102,29 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     }
     case "context": {
       const afterRaw = url.searchParams.get("after"); const after = afterRaw === null ? -1 : Number(afterRaw);
-      const fullSnapshot = !Number.isSafeInteger(after) || after < 0 || after > p.contextRevision;
+      const firstRetainedChange = state.documentChanges.find(change => change.projectId === p.id)?.revision ?? p.contextRevision + 1;
+      const fullSnapshot = !Number.isSafeInteger(after) || after < 0 || after > p.contextRevision || after < firstRetainedChange - 1;
       const documents = state.documents.filter((d) => d.projectId === p.id);
       const changed = new Set(state.documentChanges.filter((c) => c.projectId === p.id && c.revision > after).map((c) => c.document.id));
       return { revision: p.contextRevision, fullSnapshot, manifest: documents.map(({ id, path, kind, version, contentDigest }) => ({ id, path, kind, version, contentDigest })), documents: fullSnapshot ? documents : documents.filter((d) => changed.has(d.id)), deletedDocumentIds: [] };
     }
     case "revisions": {
       if (!path[3]) {
-        const revisions = state.revisions.filter((r) => r.projectId === p.id);
-        return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions };
+        const all = state.revisions.filter((r) => r.projectId === p.id), after = url.searchParams.get('afterId');
+        const index = after ? all.findIndex(revision => revision.id === after) : -1;
+        if (after && index < 0) fail(400,'invalid-cursor','Revision cursor not found');
+        const rawLimit = url.searchParams.get('limit'), limit = rawLimit === null ? legacyStorageLimits.maxRevisionPageSize : Number(rawLimit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > legacyStorageLimits.maxRevisionPageSize) fail(400,'invalid-limit','Revision page limit is out of range');
+        const revisions = all.slice(index + 1,index + 1 + limit);
+        const nextCursor = index + 1 + limit < all.length ? revisions.at(-1)!.id : undefined;
+        if (url.searchParams.get('summary') !== '1') {
+          let bytes = Buffer.byteLength(JSON.stringify({revisions:[],...(nextCursor ? {nextCursor} : {})}));
+          for (const [position,revision] of revisions.entries()) {
+            bytes += Buffer.byteLength(JSON.stringify(revision)) + (position ? 1 : 0);
+            if (bytes > legacyStorageLimits.maxRevisionResponseBytes) fail(413,'revision-page-too-large','Use summary=1 and exact single-revision reads');
+          }
+        }
+        return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions, ...(nextCursor ? {nextCursor} : {}) };
       }
       const r = scopedRevision(state, p, path[3]);
       if (path[4] !== "changes") return r;
@@ -117,6 +137,7 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     case "events": {
       const after = Number(url.searchParams.get("after") ?? "0");
       if (!Number.isSafeInteger(after) || after < 0) fail(400, "invalid-cursor", "Invalid event cursor");
+      if (after > 0 && after < (state.events[0]?.sequence ?? 1) - 1) fail(410,'resync-required','Event window expired; reload the project and restart from after=0');
       const events = state.events.filter((e) => e.projectId === p.id && e.sequence > after).slice(0, 500);
       return { events, cursor: events.at(-1)?.sequence ?? after };
     }
@@ -176,7 +197,7 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
       const f: HubFlow = { id: randomUUID(), projectId: p.id, title: text(body.title, "title", 500), specDocumentId: spec.id, specContentDigest: spec.contentDigest, criteria, status: "initializing", version: 1, subjectRevisionId: null };
       state.flows.push(f); event(state, actor, p.id, "flow-created", f.id); return f;
     }
-    const f = found(state.flows.find((f) => f.projectId === p.id && f.id === path[3])); const action = path[4];
+    const f = found(state.flows.find((f) => f.projectId === p.id && f.id === path[3])); assertLegacyFlowWritable(state,p.id,f.id); const action = path[4];
     if (path.length === 5 && action === "evidence") {
       if (f.status !== "in-progress") fail(409, "invalid-transition", "Evidence can only be submitted during implementation");
       const r = scopedRevision(state, p, body.subjectRevisionId); const exitCode = integer(body.exitCode, "exitCode");
@@ -215,17 +236,31 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
     p.lineRevisionId = r.id; p.lineVersion++; event(state, actor, p.id, "line-selected", r.id); return p;
   }
   if (path.length === 3 && path[2] === "deliveries") {
-    human(actor); version(body.expectedLineVersion, p.lineVersion); const r = scopedRevision(state, p, body.revisionId);
-    deliverableRevision(r);
-    if (p.lineRevisionId !== r.id) fail(409, "line-conflict", "Revision is not the selected integration line");
-    const remoteUrl = text(body.remoteUrl, "remoteUrl"); const baseBranch = text(body.baseBranch, "baseBranch", 200);
-    let result;
-    try { result = await deliveryAdapter({ dataDir: config.dataDir, projectId: p.id, operationId, revision: r, remoteUrl, baseBranch }); }
-    catch { result = { status: "failed" as const, error: "Git delivery failed; inspect managed repository state before retry" }; }
-    const delivery = { id: operationId, projectId: p.id, revisionId: r.id, remoteUrl, baseBranch, ...result, receipt: receipt(actor) };
-    state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id); return delivery;
+    const request = prepareGitDelivery(state, actor, p.id, body, config.dataDir, operationId);
+    let result: GitDeliveryResult;
+    try { result = await deliveryAdapter(request); }
+    catch { result = { status: 'failed', error: 'Git delivery failed; inspect managed repository state before retry' }; }
+    return completeGitDelivery(state, actor, request, result, Number(body.expectedLineVersion));
   }
   fail(404, "not-found", "Route not found");
+}
+
+/** Pure reservation checks; the caller must run Git outside its authority transaction. */
+export function prepareGitDelivery(state: HubState, actor: Principal, projectId: string, input: unknown, dataDir: string, operationId: string): GitDeliveryRequest {
+  const body = object(input), p = found(state.projects.find(project => project.id === projectId));
+  human(actor); version(body.expectedLineVersion, p.lineVersion);
+  const revision = scopedRevision(state, p, body.revisionId); deliverableRevision(revision);
+  if (p.lineRevisionId !== revision.id) fail(409, 'line-conflict', 'Revision is not the selected integration line');
+  return { dataDir, projectId, operationId, revision, remoteUrl: text(body.remoteUrl,'remoteUrl'), baseBranch: text(body.baseBranch,'baseBranch',200) };
+}
+/** Finalize against current authority state, never the pre-network legacy snapshot. */
+export function completeGitDelivery(state: HubState, actor: Principal, request: GitDeliveryRequest, result: GitDeliveryResult, expectedLineVersion: number) {
+  const p = found(state.projects.find(project => project.id === request.projectId));
+  human(actor); version(expectedLineVersion, p.lineVersion);
+  if (p.lineRevisionId !== request.revision.id) fail(409,'line-conflict','Selected integration line changed during Git delivery; inspect the recorded external result');
+  const delivery = { id: request.operationId, projectId: p.id, revisionId: request.revision.id, remoteUrl: request.remoteUrl, baseBranch: request.baseBranch, ...result, receipt: receipt(actor) };
+  state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id);
+  return delivery;
 }
 
 /** Shared synchronous revision construction; callers supply their own authority and transaction. */

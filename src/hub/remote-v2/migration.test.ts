@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { assertDatabaseMarkerNamespace, DATABASE_MARKERS } from "./storage";
 import { openHubStore } from "../store";
 
 test("additive migration preserves the exact legacy aggregate and rejects unsupported future schema", () => {
@@ -17,4 +18,9 @@ test("additive migration preserves the exact legacy aggregate and rejects unsupp
     db.exec("UPDATE remote_schema_version SET version=999"); db.close();
     expect(() => openHubStore(dir)).toThrow("Unsupported remote schema");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('schema and feature writer barriers reserve distinct marker values', () => {
+  expect(() => assertDatabaseMarkerNamespace()).not.toThrow();
+  expect(() => assertDatabaseMarkerNamespace({...DATABASE_MARKERS,remoteSchema:DATABASE_MARKERS.managedWorkWriter})).toThrow('reserved value');
 });

@@ -1,0 +1,1836 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.example/schemas/hub-work-management/domain.v1.json",
+  "title": "Hub work-management domain records, v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/FlowRevision"
+    },
+    {
+      "$ref": "#/$defs/WorkFlow"
+    },
+    {
+      "$ref": "#/$defs/IntentRevision"
+    },
+    {
+      "$ref": "#/$defs/WorkIntent"
+    },
+    {
+      "$ref": "#/$defs/ContextSnapshot"
+    },
+    {
+      "$ref": "#/$defs/Attempt"
+    },
+    {
+      "$ref": "#/$defs/ExecutionLink"
+    },
+    {
+      "$ref": "#/$defs/ResultSubject"
+    },
+    {
+      "$ref": "#/$defs/EvidenceRecord"
+    },
+    {
+      "$ref": "#/$defs/ReviewSubmission"
+    },
+    {
+      "$ref": "#/$defs/Decision"
+    },
+    {
+      "$ref": "#/$defs/FlowSubmission"
+    },
+    {
+      "$ref": "#/$defs/AmendmentManifest"
+    }
+  ],
+  "$defs": {
+    "DocumentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "documentId",
+        "version",
+        "contentDigest"
+      ]
+    },
+    "Criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "criterionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "waivable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "criterionId",
+        "text",
+        "waivable"
+      ]
+    },
+    "Artifact": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "git"
+            },
+            "repositoryId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "commitOid": {
+              "type": "string",
+              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+            },
+            "treeOid": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "pullRequest": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "number": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "observedHeadOid": {
+                      "type": "string",
+                      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "observedHeadOid"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "verification": {
+              "enum": [
+                "claimed",
+                "observed"
+              ]
+            },
+            "observedAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "repositoryId",
+            "commitOid",
+            "treeOid",
+            "pullRequest",
+            "verification",
+            "observedAt"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "document"
+            },
+            "reference": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "proposalId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "reference",
+            "proposalId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "legacy"
+            },
+            "revisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "treeDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "revisionId",
+            "treeDigest"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "report"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536
+            },
+            "contentDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "text",
+            "contentDigest"
+          ]
+        }
+      ]
+    },
+    "Coverage": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "criterionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "result": {
+            "enum": [
+              "pass",
+              "fail",
+              "inconclusive",
+              "missing"
+            ]
+          },
+          "evidenceIds": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        },
+        "required": [
+          "criterionId",
+          "result",
+          "evidenceIds"
+        ]
+      }
+    },
+    "FlowRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "flow-revision"
+        },
+        "flowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "problem": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "expectedOutcome": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "outOfScope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "specification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "criteria": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/Criterion"
+          }
+        },
+        "requiredIntentIds": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "flowId",
+        "revision",
+        "problem",
+        "expectedOutcome",
+        "scope",
+        "outOfScope",
+        "specification",
+        "criteria",
+        "requiredIntentIds",
+        "contentDigest"
+      ]
+    },
+    "WorkFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "flow"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "ownerId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "ready",
+            "in-progress",
+            "in-review",
+            "accepted",
+            "cancelled"
+          ]
+        },
+        "currentRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "approvedRevisionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptanceDecisionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "legacyFlowId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "title",
+        "ownerId",
+        "version",
+        "state",
+        "currentRevisionId",
+        "approvedRevisionId",
+        "acceptanceDecisionId",
+        "legacyFlowId",
+        "updatedAt"
+      ]
+    },
+    "IntentRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "intent-revision"
+        },
+        "intentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "flowRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "deliverable": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "approach": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "outOfScope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "criteria": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/Criterion"
+          }
+        },
+        "flowCriterionIds": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "criterionMappings": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "intentCriterionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "flowCriterionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "intentCriterionId",
+              "flowCriterionId"
+            ]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "intentId",
+        "revision",
+        "flowRevisionId",
+        "deliverable",
+        "approach",
+        "outOfScope",
+        "criteria",
+        "flowCriterionIds",
+        "contentDigest",
+        "criterionMappings"
+      ]
+    },
+    "WorkIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "intent"
+        },
+        "flowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "ownerId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "ready",
+            "in-progress",
+            "in-review",
+            "accepted",
+            "cancelled"
+          ]
+        },
+        "currentRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "approvedRevisionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectedSubmissionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptanceDecisionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "flowId",
+        "title",
+        "ownerId",
+        "required",
+        "version",
+        "state",
+        "currentRevisionId",
+        "approvedRevisionId",
+        "selectedSubmissionId",
+        "acceptanceDecisionId",
+        "updatedAt"
+      ]
+    },
+    "ContextSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "context"
+        },
+        "flowRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "intentRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "entries": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "entryId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "role": {
+                "enum": [
+                  "spec",
+                  "wiki",
+                  "rule",
+                  "skill",
+                  "decision",
+                  "local-overlay"
+                ]
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DocumentRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "resolution": {
+                "enum": [
+                  "resolved",
+                  "unavailable",
+                  "unverified"
+                ]
+              },
+              "contentDigest": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "provenance": {
+                "enum": [
+                  "hub",
+                  "contributor",
+                  "runtime-observed"
+                ]
+              }
+            },
+            "required": [
+              "entryId",
+              "role",
+              "reference",
+              "required",
+              "resolution",
+              "contentDigest",
+              "provenance"
+            ]
+          }
+        },
+        "gitBases": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "repositoryId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "commitOid": {
+                "type": "string",
+                "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+              },
+              "verification": {
+                "enum": [
+                  "claimed",
+                  "observed"
+                ]
+              }
+            },
+            "required": [
+              "repositoryId",
+              "commitOid",
+              "verification"
+            ]
+          }
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "flowRevisionId",
+        "intentRevisionId",
+        "entries",
+        "gitBases",
+        "contentDigest"
+      ]
+    },
+    "Attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "attempt"
+        },
+        "flowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "intentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "flowRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "intentRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "contextSnapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "participantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "method": {
+          "enum": [
+            "human",
+            "native-agent",
+            "external-agent"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "supersedesAttemptId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "running",
+            "blocked",
+            "submitted",
+            "failed",
+            "cancelled",
+            "accepted",
+            "changes-requested",
+            "rejected",
+            "withdrawn"
+          ]
+        },
+        "executionOutcome": {
+          "enum": [
+            "none",
+            "active",
+            "known-terminal",
+            "unknown"
+          ]
+        },
+        "submissionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "flowId",
+        "intentId",
+        "flowRevisionId",
+        "intentRevisionId",
+        "contextSnapshotId",
+        "participantId",
+        "method",
+        "summary",
+        "supersedesAttemptId",
+        "version",
+        "state",
+        "executionOutcome",
+        "submissionId",
+        "updatedAt"
+      ]
+    },
+    "ExecutionLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "execution-link"
+        },
+        "attemptId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "machineId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "checkoutId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "associationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "contextObservation": {
+          "enum": [
+            "unverified",
+            "observed-match",
+            "observed-drift"
+          ]
+        },
+        "observedContextDigest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "attemptId",
+        "sessionId",
+        "runId",
+        "turnId",
+        "machineId",
+        "checkoutId",
+        "associationDigest",
+        "contextObservation",
+        "observedContextDigest"
+      ]
+    },
+    "ResultSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "subject"
+        },
+        "attemptId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "artifacts": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "minItems": 1
+        },
+        "report": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "attemptId",
+        "artifacts",
+        "report",
+        "contentDigest"
+      ]
+    },
+    "EvidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "evidence"
+        },
+        "attemptId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "subjectDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "criterionIds": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 1
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "fail",
+            "inconclusive"
+          ]
+        },
+        "source": {
+          "enum": [
+            "contributor-report",
+            "machine-observation",
+            "ci-observation",
+            "human-review"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "report": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "outputDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceRunId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceObservationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "attemptId",
+        "subjectId",
+        "subjectDigest",
+        "criterionIds",
+        "result",
+        "source",
+        "method",
+        "report",
+        "outputDigest",
+        "sourceRunId",
+        "sourceObservationId",
+        "contentDigest"
+      ]
+    },
+    "ReviewSubmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "submission"
+        },
+        "attemptId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "subjectDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "flowRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "intentRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "contextSnapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "evidenceIds": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "knowledgeFollowup": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proposalIds": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "noUpdateReason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "proposalIds",
+            "noUpdateReason"
+          ]
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "attemptId",
+        "subjectId",
+        "subjectDigest",
+        "flowRevisionId",
+        "intentRevisionId",
+        "contextSnapshotId",
+        "evidenceIds",
+        "coverage",
+        "knowledgeFollowup",
+        "contentDigest"
+      ]
+    },
+    "Decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "decision"
+        },
+        "targetType": {
+          "enum": [
+            "flow-revision",
+            "intent-revision",
+            "amendment",
+            "attempt-selection",
+            "intent-review",
+            "flow-review",
+            "criterion-waiver"
+          ]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "targetDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "decision": {
+          "enum": [
+            "approve",
+            "withdraw",
+            "select",
+            "accept",
+            "reject",
+            "request-changes",
+            "waive"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "actorKind": {
+          "const": "human"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "targetType",
+        "targetId",
+        "targetDigest",
+        "decision",
+        "reason",
+        "actorKind",
+        "operationId",
+        "contentDigest"
+      ]
+    },
+    "FlowSubmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "flow-submission"
+        },
+        "flowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "flowRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "acceptedIntents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "intentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "intentRevisionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "decisionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "submissionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "subjectDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "intentId",
+              "intentRevisionId",
+              "decisionId",
+              "submissionId",
+              "subjectDigest"
+            ]
+          },
+          "maxItems": 200,
+          "minItems": 1
+        },
+        "knowledgeProposalIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "maxItems": 200
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "criterionCoverage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "flowCriterionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "intentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "intentCriterionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "submissionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "decisionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "flowCriterionId",
+              "intentId",
+              "intentCriterionId",
+              "submissionId",
+              "decisionId"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2000
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "flowId",
+        "flowRevisionId",
+        "acceptedIntents",
+        "knowledgeProposalIds",
+        "contentDigest",
+        "criterionCoverage"
+      ]
+    },
+    "AmendmentManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "kind": {
+          "const": "amendment"
+        },
+        "flowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "sourceFlowRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "affectedIntentIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 1,
+          "maxItems": 200
+        },
+        "replacements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "targetType": {
+                "enum": [
+                  "flow",
+                  "intent"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "revisionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "contentDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "targetType",
+              "targetId",
+              "revisionId",
+              "contentDigest"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 201
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "createdBy",
+        "createdAt",
+        "kind",
+        "flowId",
+        "sourceFlowRevisionId",
+        "affectedIntentIds",
+        "replacements",
+        "reason",
+        "contentDigest"
+      ]
+    }
+  },
+  "$comment": "Canonical protocol schema; the browser copy is generated by scripts/sync-hub-work-schemas.ts. Edit this canonical file, then regenerate the browser copies."
+}

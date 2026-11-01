@@ -31,7 +31,13 @@ The build embeds exact generated HTML, hashed JavaScript/CSS chunks and favicon 
 
 - TanStack Query owns server payloads. Keys include authenticated session scope and project/entity identifiers.
 - Zustand holds in-memory drafts only. Dirty drafts retain their original base version; query refresh does not rebase them.
-- Only the RU/EN preference is persisted, under `keryx.hub.locale`; private data and credentials are never written to browser storage.
+- Only non-sensitive RU/EN and appearance preferences are persisted, under `keryx.hub.locale` and `keryx.hub.theme`; private data and credentials are never written to browser storage.
 - 401 and revoked-role 403 clear identity, drafts, operation keys and query cache. Ordinary permission denial preserves the valid identity.
 - Mutation retries are explicit. An identical uncertain operation retains its idempotency key; capacity fails closed rather than evicting unresolved keys.
 - Cloudflare bootstrap occurs once per attempt; failures require explicit retry. SSO-disabled deployments retain token login. Legacy shared-token principals are labeled as shared token access rather than verified personal profiles.
+
+## Workspace presentation
+
+Global Machines and Flows views keep authorized project ownership. Machine cards aggregate paginated session reads; a plus sign marks incomplete session counts. Flow context is the active run association, never an assumed permanent session property. Criterion counts and human acceptance are shown separately; per-criterion evidence coverage is not available in the current API.
+
+Light/dark/system themes share semantic tokens; theme changes do not alter private caches, drafts or authority. Global remote views subscribe to each authorized project, reconcile on connection, and retain scoped invalidation/coalescing. Project Flow views keep list and board layouts.

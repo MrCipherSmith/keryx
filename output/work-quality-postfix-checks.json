@@ -1,0 +1,73 @@
+[
+  {
+    "name": "postfix-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.167Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-51-669Z-e920a1_run.log"
+  },
+  {
+    "name": "postfix-script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.167Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-32-205Z-4ee3a2_run.log"
+  },
+  {
+    "name": "postfix-frontend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web test",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.168Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-29-972Z-719147_run.log"
+  },
+  {
+    "name": "postfix-frontend-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web typecheck",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.167Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-34-512Z-070bfa_run.log"
+  },
+  {
+    "name": "postfix-frontend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web lint",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.167Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-25-978Z-c50599_run.log"
+  },
+  {
+    "name": "postfix-frontend-build",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web build",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.167Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-22-492Z-803d58_run.log"
+  },
+  {
+    "name": "postfix-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T13:00:19.988Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-21-001Z-91a3ed_run.log"
+  },
+  {
+    "name": "postfix-packaging",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/package-team-hub.test.ts",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.167Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-31-535Z-b9cbe4_run.log"
+  },
+  {
+    "name": "postfix-docs",
+    "command": "bun --no-env-file src/cli.ts ctx run -- node docs/requirements/hub-work-management/verify.cjs",
+    "started": "2026-11-01T13:00:19.988Z",
+    "completedObservation": "2026-11-01T13:01:12.168Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T13-00-21-455Z-00c317_run.log"
+  }
+]
