@@ -12,6 +12,9 @@ COPY --chown=bun:bun src/flow/machine.ts src/flow/types.ts ./src/flow/
 COPY --chown=bun:bun src/lib/git-revision.ts ./src/lib/
 COPY --chown=bun:bun src/remote-control ./src/remote-control
 COPY --chown=bun:bun docs/requirements/hub-remote-sessions ./docs/requirements/hub-remote-sessions
+# Managed-work runtime JSON imports and its published closed HTTP contract.
+COPY --chown=bun:bun docs/requirements/hub-work-management/schemas ./docs/requirements/hub-work-management/schemas
+COPY --chown=bun:bun docs/requirements/hub-work-management/openapi.json ./docs/requirements/hub-work-management/openapi.json
 ENV KERYX_HUB_HOST=0.0.0.0 KERYX_HUB_PORT=8787 KERYX_HUB_DATA_DIR=/data
 EXPOSE 8787
 VOLUME ["/data"]

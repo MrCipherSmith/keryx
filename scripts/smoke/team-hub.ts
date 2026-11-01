@@ -14,7 +14,7 @@ const directory = await mkdtemp(join(tmpdir(), "team-hub-release-smoke-"));
 const operator = randomBytes(32).toString("hex");
 const agent = randomBytes(32).toString("hex");
 const command = args[1] ? [resolve(args[1])] : [process.execPath, "run", "src/hub/main.ts"];
-const child = Bun.spawn(command, { cwd: root, env: { PATH: process.env.PATH ?? "", HOME: directory, TMPDIR: directory, KERYX_HUB_DATA_DIR: directory, KERYX_HUB_PORT: "0", KERYX_HUB_HOST: "127.0.0.1", KERYX_HUB_PUBLIC_ORIGIN: "", KERYX_HUB_REVIEWER_TOKEN: "", KERYX_HUB_OPERATOR_TOKEN: operator, KERYX_HUB_AGENT_TOKEN: agent }, stdout: "pipe", stderr: "inherit" });
+const child = Bun.spawn(command, { cwd: root, env: { PATH: process.env.PATH ?? "", HOME: directory, TMPDIR: directory, KERYX_HUB_DATA_DIR: directory, KERYX_HUB_WORK_ENABLED: "true", KERYX_HUB_PORT: "0", KERYX_HUB_HOST: "127.0.0.1", KERYX_HUB_PUBLIC_ORIGIN: "", KERYX_HUB_REVIEWER_TOKEN: "", KERYX_HUB_OPERATOR_TOKEN: operator, KERYX_HUB_AGENT_TOKEN: agent }, stdout: "pipe", stderr: "inherit" });
 const deadline = setTimeout(() => child.kill("SIGKILL"), 30_000);
 try {
   const reader = child.stdout.getReader();
@@ -80,6 +80,32 @@ try {
   await json(base + "/line", "POST", { revisionId: revision.id, expectedVersion: 0 });
   const events = await json<{ events: unknown[] }>(base + "/events");
   if (!events.events.length) throw new Error("Missing audit events");
+  const workBase = "/hub/work/v1/projects/" + project.id;
+  const capabilities = await json<{enabled:boolean;allowedCommands:string[]}>(workBase + "/capabilities", "GET", undefined, agent);
+  if(!capabilities.enabled || !capabilities.allowedCommands.includes("flow.create"))throw new Error("Managed work runtime is unavailable");
+  const workOperation = randomUUID();
+  const workInput = {operationId:workOperation,expectedVersions:{},command:"flow.create",payload:{title:"Managed release smoke",problem:"Validate packaged runtime",expectedOutcome:"Standalone managed metadata",scope:"Package only",outOfScope:"External execution",ownerId:null,specification:null,criteria:[{criterionId:"packaging",text:"Source package runs without repository dependencies",waivable:false}]}};
+  const managed = await json<{operationId:string;receiptId:string;eventCursor:string;entities:{kind:string;id:string}[]}>(workBase + "/commands", "POST", workInput, agent, workOperation);
+  const managedFlow = managed.entities.find(entity=>entity.kind==="flow");
+  if(!managedFlow || !managed.receiptId || typeof managed.eventCursor!=="string")throw new Error("Packaged managed work mutation failed");
+  const managedReplay = await json<typeof managed>(workBase + "/commands", "POST", workInput, agent, workOperation);
+  if(JSON.stringify(managedReplay)!==JSON.stringify(managed))throw new Error("Managed work replay changed its committed receipt");
+  const {Client} = await import("@modelcontextprotocol/sdk/client/index.js");
+  const {StreamableHTTPClientTransport} = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+  const mcp = new Client({name:"hub-package-smoke",version:"1"});
+  const transport = new StreamableHTTPClientTransport(new URL("/mcp", origin),{requestInit:{headers:{Authorization:"Bearer "+agent}}});
+  const link:Omit<typeof transport,"sessionId"> = transport;
+  try{
+    await mcp.connect(link);
+    const tools = await mcp.listTools();
+    if(!tools.tools.some(tool=>tool.name==="hub_work_get_document_version"))throw new Error("Packaged immutable context MCP read is missing");
+    const read = await mcp.callTool({name:"hub_work_get_flow",arguments:{projectId:project.id,flowId:managedFlow.id}});
+    const first=Array.isArray(read.content)?read.content[0]:undefined;
+    if(read.isError||!first||first.type!=="text")throw new Error("Packaged authenticated work MCP read failed");
+    const projection=JSON.parse(String(first.text)) as {records:{id:string}[]};
+    if(!projection.records.some(record=>record.id===managedFlow.id))throw new Error("Packaged MCP returned unrelated managed work");
+  }finally{await mcp.close();}
+  console.log("PASS: managed work metadata and authenticated MCP from the packaged runtime");
   await remotePackageSmoke(origin, cookie, agent, project.id);
   const logout = await api("/hub/v1/session", "DELETE"); if (!logout.ok) throw new Error("Logout failed");
   console.log("PASS: real server process, assets, cookie session, project replay, spec import, protected Flow/evidence/acceptance, exact proposal review, integration selection, events, logout");

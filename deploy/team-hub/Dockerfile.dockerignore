@@ -23,3 +23,10 @@ src/hub/**/*.test-support.ts
 !docs/requirements
 !docs/requirements/hub-remote-sessions
 !docs/requirements/hub-remote-sessions/**
+
+!docs/requirements/hub-work-management
+!docs/requirements/hub-work-management/schemas
+!docs/requirements/hub-work-management/schemas/domain.schema.json
+!docs/requirements/hub-work-management/schemas/command.schema.json
+!docs/requirements/hub-work-management/schemas/event.schema.json
+!docs/requirements/hub-work-management/openapi.json
