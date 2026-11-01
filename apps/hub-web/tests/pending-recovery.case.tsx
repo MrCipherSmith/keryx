@@ -1,3 +1,4 @@
+import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { HubContext, type HubContextValue } from "../src/app/hub-context";
@@ -12,7 +13,7 @@ const command: Omit<WorkCommand,"operationId"> = {command:"flow.create",expected
 const context: HubContextValue={projectId:"p",principal:{id:"human:test",kind:"human",role:"operator"},scopeKey:1,location:{projectId:"p",tab:"flows"},navigate:()=>undefined,refresh:async()=>undefined};
 const scope=pendingScope("work","human:test","p","live");
 beforeEach(()=>{useDraftStore.getState().clearAll();resetClient();});
-function hook(adapter=liveWorkAdapter("p"), ctx=context){return renderHook(()=>useWorkOperation(adapter,()=>undefined),{wrapper:({children})=><HubContext.Provider value={ctx}>{children}</HubContext.Provider>});}
+function hook(adapter=liveWorkAdapter("p"), ctx=context){return renderHook(()=>useWorkOperation(adapter,()=>undefined),{wrapper:({children})=><QueryClientProvider client={new QueryClient()}><HubContext.Provider value={ctx}>{children}</HubContext.Provider></QueryClientProvider>});}
 test("lost response survives reload; lookup404 retains original and explicit retry uses exact original UUID/body",async()=>{
  const adapter=liveWorkAdapter("p");const send=vi.spyOn(adapter,"command").mockRejectedValueOnce(new TypeError("lost response")).mockResolvedValue({operationId:"result",status:"committed",receiptId:"r"});
  const lookup=vi.spyOn(adapter,"operation").mockRejectedValue(new ApiError(404,"not-found","not found"));

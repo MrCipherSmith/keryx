@@ -17,10 +17,27 @@ import type {
   DocumentRef,
 } from "./types";
 
+const SNAPSHOT_PAGE_LIMIT = 200;
+const SNAPSHOT_MAX_PAGES = 500;
+const SNAPSHOT_MAX_BYTES = 20 * 1024 * 1024;
+const DOCUMENT_MAX_BYTES = 1024 * 1024;
+const EVENTS_PAGE_LIMIT = 1000;
+const EVENTS_MAX_BYTES = 1024 * 1024;
+const ATTENTION_PAGE_LIMIT = 50;
+const OBSERVATIONS_PAGE_LIMIT = 50;
+const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value)).byteLength;
+const isCursor = (value: unknown) => value === null || typeof value === "string";
+function pageOf<T>(value: unknown, key: string, guard: (item: unknown) => item is T, limit: number, belongs: (item: T) => boolean): value is Record<string, unknown> & Record<string, T[]> {
+  if (!isObject(value)) return false;
+  const items = value[key];
+  return Array.isArray(items) && items.length <= limit && items.every(guard) && items.every(belongs);
+}
+
 export interface WorkAdapter {
   readonly mode: "live" | "demo";
   capabilities(signal?: AbortSignal): Promise<WorkCapabilities>;
   snapshot(signal?: AbortSignal): Promise<WorkSnapshot>;
+  record(id: string, signal?: AbortSignal): Promise<{record: WorkRecord; eventCursor: string}>;
   command(command: WorkCommand, signal?: AbortSignal): Promise<WorkReceipt>;
   operation(id: string, signal?: AbortSignal): Promise<WorkReceipt>;
   document(
@@ -81,6 +98,7 @@ function receipt(value: unknown, operationId: string): WorkReceipt {
     operationId,
     status: "committed",
     receiptId: value.receiptId,
+    ...(committedEnvelope ? {entities: value.entities as WorkRecord[], eventCursor: value.eventCursor as string} : {}),
     ...(isLegacyPreview(value.preview) ? { preview: value.preview } : {}),
     ...(isGitObservation(value.observation)
       ? { observation: value.observation }
@@ -90,6 +108,11 @@ function receipt(value: unknown, operationId: string): WorkReceipt {
 export function liveWorkAdapter(projectId: string): WorkAdapter {
   const base = "/projects/" + encodeURIComponent(projectId);
   return {
+    async record(id, signal) {
+      const value = await workJson<unknown>(base + "/records/" + encodeURIComponent(id), "GET", undefined, signal);
+      if (!isObject(value) || !isWorkRecord(value.record) || value.record.id !== id || value.record.projectId !== projectId || typeof value.eventCursor !== "string") return invalid();
+      return {record: value.record, eventCursor: value.eventCursor};
+    },
     mode: "live",
     async capabilities(signal) {
       const data = await workJson<unknown>(
@@ -136,7 +159,7 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
       do {
         const data: unknown = await workJson<unknown>(
           base +
-            "/snapshot?limit=200" +
+            "/snapshot?limit=" + SNAPSHOT_PAGE_LIMIT +
             (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""),
           "GET",
           undefined,
@@ -144,11 +167,9 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
         );
         if (
           !isObject(data) ||
-          !Array.isArray(data.records) ||
-          data.records.length > 200 ||
-          !data.records.every(isWorkRecord) ||
+          !pageOf(data, "records", isWorkRecord, SNAPSHOT_PAGE_LIMIT, (record) => record.projectId === projectId) ||
           typeof data.eventCursor !== "string" ||
-          (data.nextCursor !== null && typeof data.nextCursor !== "string")
+          !isCursor(data.nextCursor)
         )
           return invalid();
         const nextEventCursor = String(data.eventCursor);
@@ -157,8 +178,8 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
         eventCursor = nextEventCursor;
         if (data.records.some((r) => r.projectId !== projectId))
           return invalid();
-        bytes += new TextEncoder().encode(JSON.stringify(data)).byteLength;
-        if (bytes > 20 * 1024 * 1024 || cursors.size >= 500)
+        bytes += byteLength(data);
+        if (bytes > SNAPSHOT_MAX_BYTES || cursors.size >= SNAPSHOT_MAX_PAGES)
           throw new ApiError(413, "snapshot-limit", "Snapshot is too large");
         records.push(...data.records);
         cursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
@@ -219,7 +240,7 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
         typeof d.kind !== "string"
       )
         return invalid();
-      if (new TextEncoder().encode(d.content).byteLength > 1024 * 1024)
+      if (byteLength(d.content) > DOCUMENT_MAX_BYTES)
         throw new ApiError(
           413,
           "document-limit",
@@ -237,19 +258,17 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
     },
     async events(cursor, signal) {
       const data = await workJson<unknown>(
-        base + "/events?limit=1000&after=" + encodeURIComponent(cursor),
+        base + "/events?limit=" + EVENTS_PAGE_LIMIT + "&after=" + encodeURIComponent(cursor),
         "GET",
         undefined,
         signal,
       );
       if (
         !isObject(data) ||
-        !Array.isArray(data.events) ||
-        data.events.length > 1000 ||
-        !data.events.every(isWorkEvent) ||
+        !pageOf(data, "events", isWorkEvent, EVENTS_PAGE_LIMIT, (event) => event.projectId === projectId) ||
         typeof data.nextCursor !== "string" ||
         data.events.some((e) => e.projectId !== projectId) ||
-        new TextEncoder().encode(JSON.stringify(data)).byteLength > 1024 * 1024
+        byteLength(data) > EVENTS_MAX_BYTES
       )
         return invalid();
       return { events: data.events, nextCursor: data.nextCursor };
@@ -257,7 +276,7 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
     async attention(cursor, signal) {
       const data = await workJson<unknown>(
         base +
-          "/attention?limit=50" +
+          "/attention?limit=" + ATTENTION_PAGE_LIMIT +
           (cursor ? "&afterId=" + encodeURIComponent(cursor) : ""),
         "GET",
         undefined,
@@ -265,15 +284,13 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
       );
       if (
         !isObject(data) ||
-        !Array.isArray(data.records) ||
-        data.records.length > 50 ||
-        !data.records.every(isWorkRecord) ||
+        !pageOf(data, "records", isWorkRecord, ATTENTION_PAGE_LIMIT, (record) => record.projectId === projectId) ||
         data.records.some(
           (r) =>
             r.projectId !== projectId ||
             !["flow", "intent", "attempt"].includes(r.kind),
         ) ||
-        (data.nextCursor !== null && typeof data.nextCursor !== "string")
+        !isCursor(data.nextCursor)
       )
         return invalid();
       return {
@@ -289,7 +306,7 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
         base +
           "/subjects/" +
           encodeURIComponent(subjectId) +
-          "/observations?limit=50" +
+          "/observations?limit=" + OBSERVATIONS_PAGE_LIMIT +
           (cursor ? "&afterId=" + encodeURIComponent(cursor) : ""),
         "GET",
         undefined,
@@ -297,13 +314,11 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
       );
       if (
         !isObject(data) ||
-        !Array.isArray(data.observations) ||
-        data.observations.length > 50 ||
-        !data.observations.every(isGitObservation) ||
+        !pageOf(data, "observations", isGitObservation, OBSERVATIONS_PAGE_LIMIT, (observation) => observation.projectId === projectId) ||
         data.observations.some(
           (o) => o.projectId !== projectId || o.subjectId !== subjectId,
         ) ||
-        (data.nextCursor !== null && typeof data.nextCursor !== "string")
+        !isCursor(data.nextCursor)
       )
         return invalid();
       return { observations: data.observations, nextCursor: data.nextCursor };

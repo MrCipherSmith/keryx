@@ -234,7 +234,7 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
         allowedCommands: [
           "attempt.select",
           "review.decide",
-          "requirements.approve",
+
         ],
         limits: {},
         features: {
@@ -243,6 +243,12 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
           legacyConversion: false,
         },
       };
+    },
+    async record(id) {
+      const snapshot = await this.snapshot();
+      const record = snapshot.records.find((record) => record.id === id);
+      if (!record) throw new Error("Missing demo work record");
+      return {record, eventCursor: snapshot.eventCursor};
     },
     async snapshot() {
       return structuredClone({
@@ -372,7 +378,7 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
         operationId: command.operationId,
         receiptId: "demo-" + command.operationId,
         status: "committed" as const,
-        entities: [],
+        entities: structuredClone(records),
         eventCursor: String(receipts.size + 1),
       };
       receipts.set(command.operationId, {

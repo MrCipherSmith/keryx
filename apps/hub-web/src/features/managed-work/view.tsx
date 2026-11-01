@@ -73,7 +73,7 @@ export function ManagedWorkView() {
     [projectId, demo],
   );
   const capabilities = useQuery({
-    queryKey: [scopeKey, projectId, "work", demo, "capabilities"],
+    queryKey: [scopeKey, projectId, "work", adapter?.mode ?? "live", "capabilities"],
     queryFn: ({ signal }) => adapter!.capabilities(signal),
     enabled: !!adapter,
     retry: false,
@@ -165,6 +165,7 @@ function WorkBoard({
     queryKey: [hub.scopeKey, hub.projectId, "work", adapter.mode, "snapshot"],
     queryFn: ({ signal }) => adapter.snapshot(signal),
     retry: false,
+    staleTime: Infinity,
   });
   const eventStatus = useWorkEvents(adapter, snapshot.data?.eventCursor);
   const records = snapshot.data?.records ?? [];
@@ -186,7 +187,7 @@ function WorkBoard({
   const can = (command: string) =>
     capabilities.allowedCommands.includes(command);
   const human = hub.principal.kind === "human";
-  const refresh = () => snapshot.refetch();
+  const refresh = () => undefined;
   return (
     <>
       {adapter.mode === "live" && (
@@ -236,7 +237,7 @@ function WorkBoard({
           <Button
             variant="secondary"
             disabled={snapshot.isFetching}
-            onClick={() => void refresh()}
+            onClick={() => void snapshot.refetch()}
           >
             <RefreshCw size={14} />
             {t("retry")}

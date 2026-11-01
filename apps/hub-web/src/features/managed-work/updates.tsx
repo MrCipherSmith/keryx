@@ -5,7 +5,12 @@ import { ApiError } from "../../api/client";
 import { useHub } from "../../app/hub-context";
 import { Button } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
-import type { WorkRecord } from "./types";
+import type { WorkRecord, WorkSnapshot } from "./types";
+import { fetchEventRecords, mergeWorkCache, workSnapshotKey } from "./cache";
+
+const ACTIVE_POLL_MS = 2000;
+const HIDDEN_POLL_MS = 15000;
+const MAX_POLL_MS = 30000;
 
 /** Work cursors are opaque and independent from document/machine cursors. */
 export function useWorkEvents(
@@ -19,55 +24,66 @@ export function useWorkEvents(
   const [status, setStatus] = useState<"waiting" | "connected" | "retrying">(
     "waiting",
   );
-  const cache = useRef({ client, scopeKey: hub.scopeKey, projectId });
-  cache.current = { client, scopeKey: hub.scopeKey, projectId };
+  const initialCursor = useRef(eventCursor);
+  initialCursor.current = eventCursor;
+  const hasCursor = !!eventCursor;
   useEffect(() => {
-    if (adapter.mode === "demo" || !eventCursor) return;
+    if (adapter.mode === "demo" || !hasCursor) return;
     const controller = new AbortController();
+    const key = workSnapshotKey(hub.scopeKey, projectId, adapter.mode);
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let cursor = eventCursor;
+    let cursor = initialCursor.current!;
     let failures = 0;
-    const invalidate = () => {
-      const current = cache.current;
-      void current.client.invalidateQueries({
-        queryKey: [current.scopeKey, current.projectId, "work", adapter.mode],
-      });
-    };
+    let idlePages = 0;
     const poll = async () => {
       if (controller.signal.aborted) return;
       if (document.visibilityState === "hidden") {
-        timer = setTimeout(() => void poll(), 15000);
+        timer = setTimeout(() => void poll(), HIDDEN_POLL_MS);
         return;
       }
       try {
         const page = await adapter.events(cursor, controller.signal);
         if (controller.signal.aborted) return;
+        const records = await fetchEventRecords(adapter, client.getQueryData<WorkSnapshot>(key), page.events, controller.signal);
+        if (controller.signal.aborted) return;
+        mergeWorkCache(client, key, records);
         cursor = page.nextCursor;
         failures = 0;
+        idlePages = page.events.length ? 0 : idlePages + 1;
         setStatus("connected");
-        // Event content is only an invalidation hint. Fetch canonical records;
-        // never execute commands, trust hints or cache writes from event text.
-        if (page.events.length) invalidate();
+        if (records.length) void client.invalidateQueries({queryKey:[hub.scopeKey, projectId,"work",adapter.mode,"attention"],exact:true});
       } catch (error) {
         if (controller.signal.aborted) return;
         failures++;
         setStatus("retrying");
         if (error instanceof ApiError && [409, 410].includes(error.status)) {
-          invalidate();
-          return;
+          try {
+            // Retention gaps require one canonical resync. Keep the loop alive even
+            // when the server returns the same opaque cursor or the resync fails.
+            if (client.getQueryData(key)) {
+              const snapshot = await adapter.snapshot(controller.signal);
+              if (controller.signal.aborted) return;
+              client.setQueryData(key, snapshot);
+              cursor = snapshot.eventCursor;
+            } else {
+              const page = await adapter.attention(undefined, controller.signal);
+              if (controller.signal.aborted) return;
+              client.setQueryData([hub.scopeKey, projectId, "work", adapter.mode, "attention"], {pages:[page],pageParams:[""]});
+              if (page.eventCursor) cursor = page.eventCursor;
+            }
+          } catch {
+            if (controller.signal.aborted) return;
+          }
         }
       }
-      timer = setTimeout(
-        () => void poll(),
-        Math.min(30000, 2000 * 2 ** Math.min(failures, 4)),
-      );
+      timer = setTimeout(() => void poll(), Math.min(MAX_POLL_MS, ACTIVE_POLL_MS * 2 ** Math.min(failures || idlePages, 4)));
     };
     void poll();
     return () => {
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [adapter, eventCursor]);
+  }, [adapter, hasCursor, hub.scopeKey, projectId, client]);
   return status;
 }
 
