@@ -165,7 +165,7 @@ if (db.query("SELECT name FROM sqlite_master WHERE name=?").get("remote_schema_v
 } db.close(); }'
 exec bun run src/hub/main.ts
 OLDREADER
-printf 'FROM %s\nCOPY check.sh /app/old-reader.sh\nCMD ["sh","/app/old-reader.sh"]\n' "$image" > "$E/old-reader/Dockerfile"
+printf 'FROM %s\nCOPY --chmod=0444 check.sh /app/old-reader.sh\nCMD ["sh","/app/old-reader.sh"]\n' "$image" > "$E/old-reader/Dockerfile"
 docker build -q -t "kth-e2e-$run-old-reader" "$E/old-reader" >/dev/null
 publish 0.0.5 "kth-e2e-$run-old-reader"
 
@@ -420,6 +420,11 @@ eq "automatic rollback: current is back on v0.0.1" "$(readlink "$hub/current")" 
 assert "the Hub is healthy after the automatic rollback" curl -fsS --max-time 10 "$base/healthz"
 eq "automatic recovery preserved all current data" "$(project_count)" 4
 
+# Capture every safety copy that this run has already produced. Earlier refusal now happens
+# before backup creation, so a fixed minimum count is not a retention assertion.
+find "$hub/backups" -mindepth 1 -maxdepth 1 -type d \( -name 'upgrade-*' -o -name 'pre-restore-*' -o -name 'pre-rollback-*' \) > "$E/young-safety-backups"
+[ -s "$E/young-safety-backups" ] || fail "the rehearsal produced no safety backups to verify"
+
 # A writer3 database must reject the simulated old-writer image BEFORE stopping the live Hub.
 hubctl upgrade 0.0.2 --yes >>"$steps" 2>&1 || fail "upgrade for writer compatibility test failed"
 bearer_header "$operator"
@@ -431,14 +436,18 @@ hubctl _stage "$E/old-reader-bundle" 0.0.5 "kth-e2e-$run-old-reader" >>"$steps" 
 printf 'v0.0.5\n' > "$hub/state/previous-release"
 check_cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)
 refuses_saying "writer3 downgrade refuses before stopping current" "current Hub and release are unchanged" hubctl rollback --yes
+# A broken fixture must not masquerade as the writer-version incompatibility being tested.
+tail -n 30 "$steps" | grep -q 'Unsupported remote schema version' || fail "old-reader trial did not exercise its schema writer gate"
 eq "refused downgrade keeps the current release" "$(readlink "$hub/current")" releases/v0.0.2
 eq "refused downgrade does not replace the live container" "$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)" "$check_cid"
 assert "live Hub remains healthy after incompatible downgrade" curl -fsS --max-time 5 "$base/healthz"
 assert "managed metadata remains readable" curl -fsS --max-time 10 -H "@$E/.header" "$base/hub/work/v1/projects/$first/flows"
 
-# Safety backups are pruned by count only once they are old: every one of these is minutes old.
-safety=$(count_files "$hub"/backups/upgrade-* "$hub"/backups/pre-restore-* "$hub"/backups/pre-rollback-*)
-if [ "$safety" -gt 3 ]; then pass "no safety backup younger than 14 days was pruned ($safety kept)"; else fail "only $safety safety backups are left"; fi
+# Verify actual backup identities rather than assuming failed preflights create backups.
+while IFS= read -r retained; do
+  [ -d "$retained" ] || fail "a safety backup made during this rehearsal was removed: $retained"
+done < "$E/young-safety-backups"
+pass "all prior safety backups remain present after the writer compatibility rehearsal"
 
 # --- the operator token is shown on a terminal, once; two installs side by side ------------------------------------
 # A second install into a directory whose name starts with the first one's, in its own compose project.
