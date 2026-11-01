@@ -48,6 +48,8 @@ export function remoteRepository(db: Database, options:Partial<RemoteBudgets>={}
   const budgets=remoteBudgets(options);
   return {
     budgets,
+    /** Nested calls use a SQLite savepoint on this same shared connection. */
+    atomic<T>(action:()=>T):T { return db.transaction(action)(); },
     sessionRuns(sessionId:string):number{return db.query<{n:number},[string]>("SELECT COUNT(*) AS n FROM remote_run WHERE sessionId=?").get(sessionId)!.n;},
     unresolvedSessionCommands(sessionId:string):number{return db.query<{n:number},[string]>("SELECT COUNT(*) AS n FROM remote_command WHERE sessionId=? AND COALESCE(json_extract(body,'$.status'),'unknown') NOT IN ('applied','not-applied','rejected','expired-unconfirmed')").get(sessionId)!.n;},
     dispatchCommands<T>():T[]{return db.query<{body:string},[]>("SELECT body FROM remote_command WHERE json_extract(body,'$.status')='pending' ORDER BY machineId,seq,id").all().map(r=>JSON.parse(r.body) as T);},
