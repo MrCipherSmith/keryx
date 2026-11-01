@@ -1,7 +1,7 @@
 # Release-backed Hub updates
 Version: 0.1.0
 
-Status: implementation authorized; production rollout requires successful backup restoration and rehearsal. User explicitly authorized main integration and a successor release after0.4.3 on2026-11-01. Latest steering: publish the release and prepare instructions so the owner performs production cutover; do not switch the live Hub automatically.
+Status: PR1113 preparation only. Keep the PR in Draft. Owner review must precede merge; no release tag, publication or production cutover is authorized before that review. Implementation and isolated backup/migration rehearsal continue. User explicitly authorized main integration and a successor release after0.4.3 on2026-11-01. Latest steering: publish the release and prepare instructions so the owner performs production cutover; do not switch the live Hub automatically.
 
 ## Contract
 

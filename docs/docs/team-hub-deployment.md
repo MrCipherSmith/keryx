@@ -160,9 +160,17 @@ Change the domain or the mode by editing `secrets/hub.env` and running `hubctl r
 
 ## Upgrade
 
+Run on the Hub host; a project URL or agent token does not grant update authority. The CLI delegates to the installation-owned tool, using a ready release image rather than rebuilding a checkout:
+
 ```sh
+keryx hub update --check
+keryx hub update <version> --dry-run
+keryx hub update <version>
+# Equivalent low-level operation:
 ~/keryx-team-hub/hubctl upgrade <version>        # or: latest
 ```
+
+`--install-dir` selects a non-default installation. Check/dry-run verify the version, bundle checksums, required files and pinned image digest in a private temporary directory outside the installation; they do not stop containers, acquire an install lock, change the current release or write its data. A legacy source-build layout requires an explicit one-time migration, not running the fresh installer over its existing volume.
 
 `upgrade` confirms (`--yes` skips the question), then:
 
@@ -173,7 +181,11 @@ Change the domain or the mode by editing `secrets/hub.env` and running `hubctl r
 5. switches `current` with an atomic rename, starts the new release and verifies it the same way;
 6. on success installs that release's `hubctl`.
 
-If anything fails, it puts the old release back by itself. A failure before the switch just restarts the old Hub on its untouched data. A failure after the switch re-points `current`, makes sure the Hub container is **stopped**, **restores the full backup into the volume**, recreates the Hub on the old release and verifies it. Recovery runs with Ctrl-C ignored, so it cannot be cut off between emptying the volume and refilling it. The backup is kept as `backups/upgrade-<time>-<from>-to-<to>/hub-data.tar`; the backup that `rollback --restore-data` follows is changed only by an upgrade that finished. Run upgrades when nobody is mid-task.
+A failure before the switch restarts the old Hub on untouched data. After the switch, the new service might already have accepted writes: recovery stops it and saves the **latest** data as `failed-candidate-data.tar`. It trial-starts the old image against that copy and returns to it only if compatible, keeping the latest live volume rather than rewinding the database. If the old image cannot read it, the new release stays selected and stopped for a forward repair; both latest and pre-upgrade backups are retained. It never silently restores pre-upgrade data after public startup. The original backup is `backups/upgrade-<time>-<from>-to-<to>/hub-data.tar`; the pointer used by explicit `rollback --restore-data` changes only after a completed upgrade. Run upgrades when nobody is mid-task.
+
+Managed-work settings (`KERYX_HUB_WORK_ENABLED`, default `false`, and `KERYX_HUB_WORK_REPOSITORIES`, default `[]`) come from `secrets/hub.env`. Stable `compose.override.yaml` and custom per-release `compose.access.yaml` remain in force across staging. The isolated trial carries the configured Work/Cloudflare Access settings and read-only role mapping, with independent throwaway operator/agent tokens.
+
+Legacy geekom installations using the old source-build wrapper need the separately verified [one-time adoption procedure](../handoffs/hub-legacy-adoption.md) before the release update command can operate. The helper ships inside the install bundle and defaults to rehearsal only.
 
 ## Rollback
 
@@ -182,7 +194,9 @@ hubctl rollback                    # back to the previous release; the data stay
 hubctl rollback --restore-data     # also restore the backup taken at the last upgrade (only straight after it)
 ```
 
-A release's data changes are additive (new `remote_*` tables); an older release ignores tables it does not know, so a plain rollback keeps everything written since the upgrade. `--restore-data` throws that work away. It only follows a backup that was taken when leaving the release you are rolling back to, checks that backup before touching anything, asks you to confirm (the question names the project and volume), and first saves the data it replaces to `backups/pre-rollback-<time>/`. A release that stored data an older one would misread is the exception: the release notes say so, and then a plain rollback is the wrong tool. Once any rollback has run, `--restore-data` has nothing to restore; the upgrade's `hub-data.tar` can still be restored by hand with `hubctl restore`. If a rollback fails part-way, `hubctl` puts the release and the data back as they were.
+A plain rollback preserves current data and tests the previous image against a consistent online database copy **before stopping the live Hub**. After confirmation, it takes a final full quiescent backup and repeats the trial before switching, closing the race with intervening writes. An incompatible old reader is refused, not assumed safe because tables were additive. In particular, the first managed-work write activates minimum writer3; original0.4.x readers accepting only writer2 cannot be used afterwards.
+
+`--restore-data` deliberately replaces current work with the pre-upgrade snapshot. It follows only the backup taken when leaving the selected previous release, verifies it, names the destructive effect in its confirmation and first saves current data under `backups/pre-rollback-<time>/`. Both data copies remain available. Once a rollback has run, its automatic pre-upgrade restore pointer is cleared; backups remain usable through explicit `hubctl restore`. Prefer a compatible release or a forward fix when new work already exists.
 
 ## Backup and restore
 

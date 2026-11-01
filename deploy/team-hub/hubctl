@@ -1,4 +1,5 @@
 #!/bin/sh
+# keryx-hub-update-protocol: 1
 # shellcheck disable=SC2015
 # (Every `a && b || die` here chains tests only: it dies unless all of them hold.)
 # hubctl — the operator's tool for a self-hosted Keryx Team Hub.
@@ -30,6 +31,8 @@ export PATH
 unset KERYX_HUB_OPERATOR_TOKEN KERYX_HUB_AGENT_TOKEN KERYX_HUB_REVIEWER_TOKEN \
   KERYX_HUB_PUBLIC_ORIGIN KERYX_HUB_MODE HUB_PORT HUB_DOMAIN ACME_EMAIL \
   CF_TUNNEL_ID CF_ACCESS_TEAM CF_ACCESS_AUD KERYX_HUB_PROJECT \
+  KERYX_HUB_WORK_ENABLED KERYX_HUB_WORK_REPOSITORIES \
+  KERYX_HUB_ACCESS_ENABLED KERYX_HUB_ACCESS_ISSUER KERYX_HUB_ACCESS_AUDIENCE KERYX_HUB_ACCESS_ROLES_FILE \
   COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES COMPOSE_PATH_SEPARATOR 2>/dev/null || true
 
 # --- where am I -------------------------------------------------------------
@@ -134,7 +137,18 @@ project() { env_get KERYX_HUB_PROJECT keryx-team-hub; }
 state_get() { [ -f "$ROOT/state/$1" ] && cat "$ROOT/state/$1" || true; }
 state_set() { mkdir -p "$ROOT/state"; printf '%s\n' "$2" > "$ROOT/state/$1.new"; mv -f "$ROOT/state/$1.new" "$ROOT/state/$1"; }
 
+adoption_delegated() {
+  [ -L "$ROOT/state/legacy-adoption.lock" ] && [ -L "$ROOT/state/lock" ] || return 1
+  _adopter=$(readlink "$ROOT/state/legacy-adoption.lock")
+  [ "$_adopter" = "${PPID:-}" ] && [ "$(readlink "$ROOT/state/lock")" = "$_adopter" ] || return 1
+  [ -n "${KERYX_HUB_ADOPTION_TOKEN:-}" ] && [ -f "$ROOT/state/legacy-adoption.token" ] || return 1
+  [ "$(cat "$ROOT/state/legacy-adoption.token")" = "$KERYX_HUB_ADOPTION_TOKEN" ]
+}
+
 need_install() {
+  if [ -L "$ROOT/state/legacy-adoption.lock" ]; then
+    adoption_delegated || die "legacy adoption is in progress (or its lock needs inspection)"
+  fi
   [ -f "$ENV_FILE" ] || die "no install found at $ROOT (secrets/hub.env is missing): run install.sh first"
   [ -L "$ROOT/current" ] || die "no current release at $ROOT/current"
 }
@@ -145,6 +159,12 @@ need_install() {
 # file is still empty and a second hubctl would call the lock stale).
 lock_try() {
   mkdir -p "$ROOT/state"
+  if [ -L "$ROOT/state/legacy-adoption.lock" ]; then
+    # Only an explicitly delegated direct child borrows the parent's atomic lock.
+    # LOCK_HELD stays false: the child must never unlink the adoption owner's lock.
+    adoption_delegated || return 1
+    return 0
+  fi
   _tries=0
   while [ "$_tries" -lt 3 ]; do
     if ln -s "$$" "$ROOT/state/lock" 2>/dev/null; then LOCK_HELD=1; return 0; fi
@@ -182,6 +202,38 @@ norm_version() {
   valid_version "$_v" || die "'$1' is not a version (expected 1.2.3 or v1.2.3)"
   printf '%s' "$_v"
 }
+# Semantic version precedence, including numeric/non-numeric prerelease identifiers.
+version_newer() { # target > installed
+  awk -v target="$1" -v installed="$2" 'BEGIN {
+    t=index(target,"-"); i=index(installed,"-");
+    tc=t?substr(target,1,t-1):target; ic=i?substr(installed,1,i-1):installed;
+    split(tc,a,"."); split(ic,b,".");
+    for(n=1;n<=3;n++) { if(a[n]+0>b[n]+0) exit 0; if(a[n]+0<b[n]+0) exit 1; }
+    if(!t && i) exit 0; if(t && !i) exit 1; if(!t && !i) exit 1;
+    na=split(substr(target,t+1),a,"."); nb=split(substr(installed,i+1),b,".");
+    for(n=1;n<=na && n<=nb;n++) {
+      if(a[n]==b[n]) continue;
+      an=a[n]~/^[0-9]+$/; bn=b[n]~/^[0-9]+$/;
+      if(an && bn) exit (a[n]+0>b[n]+0?0:1);
+      if(an!=bn) exit (an?1:0);
+      exit (a[n]>b[n]?0:1);
+    }
+    exit (na>nb?0:1);
+  }'
+}
+
+upgrade_target() {
+  _requested=$1
+  [ "$_requested" != latest ] || _requested=$(resolve_latest)
+  _requested=$(norm_version "$_requested")
+  _installed_rel=$(current_release)
+  [ -f "$_installed_rel/VERSION" ] || die "legacy installation: adopt the release layout before updating"
+  _installed=$(norm_version "$(cat "$_installed_rel/VERSION")")
+  if [ "$_requested" = "$_installed" ]; then die "already on v$_installed"; fi
+  version_newer "$_requested" "$_installed" || die "v$_requested is not newer than v$_installed; use rollback for an explicitly verified downgrade"
+  printf '%s' "$_requested"
+}
+
 # require_pinned <image ref>: a release must name its image by digest; a tag can be moved.
 # KERYX_HUB_ALLOW_UNPINNED_IMAGE=1 exists for the end-to-end test, which serves a local image.
 require_pinned() {
@@ -221,13 +273,10 @@ compose_for() ( # compose_for <release dir> <compose args...>
   export KERYX_HUB_HOME KERYX_HUB_IMAGE KERYX_HUB_RELEASE_TAG
   # Absolute paths and the physical release directory: a logical `cd` through the
   # `current` symlink resolves relative bind paths against the wrong directory.
-  if [ -f "$ROOT/compose.override.yaml" ]; then
-    docker compose --project-directory "$_rel" -p "$(project)" --env-file "$ENV_FILE" \
-      -f "$_rel/compose.base.yaml" -f "$_rel/compose.$_mode.yaml" -f "$ROOT/compose.override.yaml" "$@"
-  else
-    docker compose --project-directory "$_rel" -p "$(project)" --env-file "$ENV_FILE" \
-      -f "$_rel/compose.base.yaml" -f "$_rel/compose.$_mode.yaml" "$@"
-  fi
+  if [ -f "$ROOT/compose.override.yaml" ]; then set -- -f "$ROOT/compose.override.yaml" "$@"; fi
+  if [ -f "$_rel/compose.access.yaml" ]; then set -- -f "$_rel/compose.access.yaml" "$@"; fi
+  docker compose --project-directory "$_rel" -p "$(project)" --env-file "$ENV_FILE" \
+    -f "$_rel/compose.base.yaml" -f "$_rel/compose.$_mode.yaml" "$@"
 )
 
 compose() { compose_for "$(current_release)" "$@"; }
@@ -488,12 +537,51 @@ download_release() {
   if tar -tzf "$2/team-hub-install.tar.gz" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
     die "the install bundle contains an unsafe path"
   fi
+  # Releases contain regular files and directories only, never links/devices.
+  tar -tvzf "$2/team-hub-install.tar.gz" | awk 'substr($0,1,1)!="-" && substr($0,1,1)!="d" {bad=1} END {exit bad}' \
+    || die "the install bundle contains unsupported archive members"
   mkdir -p "$2/bundle"
   tar -xzf "$2/team-hub-install.tar.gz" -C "$2/bundle" --strip-components=1
   [ "$(cat "$2/bundle/VERSION" 2>/dev/null || true)" = "$1" ] || die "the install bundle is not the bundle of v$1"
   _ref=$(cat "$2/team-hub-image.txt")
   valid_image_ref "$_ref" || die "team-hub-image.txt does not hold an image reference"
   require_pinned "$_ref"
+  for _required in install.sh hubctl compose.base.yaml compose.local.yaml compose.https.yaml compose.cloudflare.yaml \
+    compose.access.example.yaml Caddyfile.in edge.https.conf.in edge.cloudflare.conf.in tunnel.yml.in; do
+    [ -f "$2/bundle/$_required" ] || die "the install bundle has no $_required"
+  done
+}
+
+# Read-only update inspection: all downloads live outside the installation.
+cmd_update_check() {
+  _check_want=latest; _check_json=0; _check_seen=0
+  for _arg in "$@"; do
+    case $_arg in
+      --json) _check_json=1 ;;
+      -*) die "update-check: unknown option $_arg" ;;
+      *) [ "$_check_seen" = 0 ] || die "update-check: one version at a time"; _check_want=$_arg; _check_seen=1 ;;
+    esac
+  done
+  need_install; need curl; need tar
+  _check_current=$(current_release)
+  [ -f "$_check_current/VERSION" ] && [ -f "$_check_current/image.ref" ] \
+    || die "legacy installation: adopt the release layout before updating"
+  _check_installed=$(norm_version "$(cat "$_check_current/VERSION")")
+  [ "$_check_want" != latest ] || _check_want=$(resolve_latest)
+  _check_version=$(norm_version "$_check_want")
+  NEW_TMP=$(mktemp -d "${TMPDIR:-/tmp}/keryx-hub-check.XXXXXX")
+  CLEAN_PATHS="$CLEAN_PATHS $NEW_TMP"
+  _check_tmp=$NEW_TMP
+  download_release "$_check_version" "$_check_tmp/dl"
+  _check_image=$(cat "$_check_tmp/dl/team-hub-image.txt")
+  _check_update=false; if version_newer "$_check_version" "$_check_installed"; then _check_update=true; fi
+  if [ "$_check_json" = 1 ]; then
+    printf '{"installedVersion":"%s","targetVersion":"%s","updateAvailable":%s,"image":"%s"}\n' \
+      "$_check_installed" "$_check_version" "$_check_update" "$_check_image"
+  else
+    say "installed: v$_check_installed; target: v$_check_version; update available: $_check_update"
+    say "verified release image: $_check_image"
+  fi
 }
 
 # render_into <dir>: write the mode's configs next to their templates in <dir> from hub.env.
@@ -573,6 +661,14 @@ cmd__stage() {
     chmod 644 "$_stage/$_f"
   done
   chmod 755 "$_stage/hubctl"
+  # A custom Access overlay is installation configuration, not a release default.
+  if [ -L "$ROOT/current" ]; then
+    _current=$(current_release)
+    if [ -f "$_current/compose.access.yaml" ]; then
+      cp "$_current/compose.access.yaml" "$_stage/compose.access.yaml"
+      chmod 600 "$_stage/compose.access.yaml"
+    fi
+  fi
   render_into "$_stage"
   printf '%s\n' "$3" > "$_stage/image.ref"; chmod 644 "$_stage/image.ref"
   printf '%s\n' "$2" > "$_stage/VERSION"; chmod 644 "$_stage/VERSION"
@@ -805,26 +901,58 @@ cmd_restore() {
 }
 
 # --- trial start ---------------------------------------------------------------------------
-trial_start() { # trial_start <image> <tar of the data>
+# Extract only non-secret runtime settings and the configured read-only Access mount.
+# The normalized Compose config reaches this parser by a private file/stdin, never a log.
+TRIAL_SETTINGS_JS='const config = JSON.parse(await Bun.stdin.text());
+const hub = config.services?.hub;
+if (!hub || typeof hub.environment !== "object") throw new Error("Missing Hub trial configuration");
+const env = hub.environment;
+for (const key of ["KERYX_HUB_WORK_ENABLED", "KERYX_HUB_WORK_REPOSITORIES", "KERYX_HUB_ACCESS_ENABLED", "KERYX_HUB_ACCESS_ISSUER", "KERYX_HUB_ACCESS_AUDIENCE", "KERYX_HUB_ACCESS_ROLES_FILE"]) {
+  if (env[key] === undefined || env[key] === null) continue;
+  const value = String(env[key]);
+  if (/[\r\n]/.test(value)) throw new Error("Multiline Hub trial settings are unsupported");
+  console.log("E|" + key + "=" + value);
+}
+if (String(env.KERYX_HUB_ACCESS_ENABLED) === "true") {
+  const file = env.KERYX_HUB_ACCESS_ROLES_FILE;
+  const mounts = Array.isArray(hub.volumes) ? hub.volumes : [];
+  const mount = mounts.find(v => v.type === "bind" && typeof v.target === "string" && typeof file === "string" && (file === v.target || file.startsWith(v.target + "/")));
+  if (!mount || !/^\/[A-Za-z0-9._/-]+$/.test(mount.source) || !/^\/[A-Za-z0-9._/-]+$/.test(mount.target)) throw new Error("Unsupported Access role mount in trial configuration");
+  console.log("M|" + mount.source + "|" + mount.target);
+}'
+
+# Optional fourth argument replaces the copied SQLite/WAL with a consistent online image.
+trial_start() { # trial_start <image> <tar of data> [release dir] [online db]
+  _trial_image=$1; _trial_archive=$2; _trial_rel=${3:-$(current_release)}; _trial_db=${4:-}
   _name=keryx-hub-trial-$$
   CLEAN_CONTAINERS="$CLEAN_CONTAINERS $_name"
   CLEAN_VOLUMES="$CLEAN_VOLUMES $_name-data"
   docker volume create "$_name-data" >/dev/null
-  docker_locked -i -v "$_name-data:/data" --entrypoint tar "$1" --no-overwrite-dir -C /data -xf - < "$2" || { warn "could not copy the data for the trial"; return 1; }
-  new_tmp; _envf=$NEW_TMP/trial.env
+  docker_locked -i -v "$_name-data:/data" --entrypoint tar "$_trial_image" --no-overwrite-dir -C /data -xf - < "$_trial_archive" || { warn "could not copy the data for the trial"; return 1; }
+  if [ -n "$_trial_db" ]; then
+    docker_locked -i -v "$_name-data:/data" --entrypoint sh "$_trial_image" -c \
+      'cat > /data/hub.sqlite && rm -f /data/hub.sqlite-wal /data/hub.sqlite-shm' < "$_trial_db" || return 1
+  fi
+  new_tmp; _trial_tmp=$NEW_TMP; _envf=$_trial_tmp/trial.env
+  compose_for "$_trial_rel" config --format json > "$_trial_tmp/compose.json" || return 1
+  docker_locked -i --entrypoint bun "$_trial_image" -e "$TRIAL_SETTINGS_JS" < "$_trial_tmp/compose.json" > "$_trial_tmp/settings" || return 1
   {
     printf 'KERYX_HUB_OPERATOR_TOKEN=%s\n' "$(openssl rand -hex 32)"
     printf 'KERYX_HUB_AGENT_TOKEN=%s\n' "$(openssl rand -hex 32)"
     printf 'KERYX_HUB_PUBLIC_ORIGIN=%s\n' "$(env_get KERYX_HUB_PUBLIC_ORIGIN)"
     printf 'KERYX_HUB_AGENT_CREDENTIALS_FILE=/run/keryx-agents/agents.json\n'
+    sed -n 's/^E|//p' "$_trial_tmp/settings"
   } > "$_envf"
-  # Throwaway tokens, no network, a copy of the data: nothing the trial does can
-  # reach the live Hub, and nothing it writes survives.
+  set -- -v "$_name-data:/data" -v "$ROOT/secrets/agents:/run/keryx-agents:ro"
+  while IFS='|' read -r _kind _source _target; do
+    [ "$_kind" = M ] || continue
+    set -- "$@" --mount "type=bind,source=$_source,target=$_target,readonly"
+  done < "$_trial_tmp/settings"
+  # No network/ports, fresh credentials and a copied volume: trial writes never touch production.
   docker run -d --name "$_name" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
-    --user 1000:1000 --tmpfs /tmp:rw,noexec,nosuid,size=64m --env-file "$_envf" \
-    -v "$_name-data:/data" -v "$ROOT/secrets/agents:/run/keryx-agents:ro" \
+    --user 1000:1000 --tmpfs /tmp:rw,noexec,nosuid,size=64m --env-file "$_envf" "$@" \
     --health-interval 2s --health-timeout 5s --health-retries 5 --health-start-period 2s \
-    "$1" >/dev/null || { warn "could not start the trial container"; return 1; }
+    "$_trial_image" >/dev/null || { warn "could not start the trial container"; return 1; }
   _deadline=$(( $(date +%s) + 90 ))
   while :; do
     _st=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$_name" 2>/dev/null || echo gone)
@@ -840,20 +968,41 @@ trial_start() { # trial_start <image> <tar of the data>
     || { warn "the trial container is healthy but /healthz did not answer 200"; return 1; }
   docker rm -f "$_name" >/dev/null 2>&1 || true
   docker volume rm -f "$_name-data" >/dev/null 2>&1 || true
-  say "the new image starts on a copy of the data"
+  say "the image starts on a copy of the data with the configured Work/Access settings"
+}
+
+# Online preflight keeps the live service running. Its serialized SQLite image is
+# consistent even when a raw file/WAL copy would not be; only the disposable copy is replaced.
+trial_running_data() { # trial_running_data <target image> <target release>
+  new_tmp; _preflight=$NEW_TMP
+  _cid=$(container_of hub)
+  [ -n "$_cid" ] || die "the Hub must be running for an online compatibility preflight"
+  docker exec "$_cid" bun -e "$ONLINE_BACKUP_JS" > "$_preflight/hub.sqlite" || die "could not snapshot the live database"
+  docker_locked -v "$_vol:/data:ro" --entrypoint tar "$_cur_image" -C /data -cf - . > "$_preflight/data.tar" || die "could not copy the live data for preflight"
+  trial_start "$1" "$_preflight/data.tar" "$2" "$_preflight/hub.sqlite"
 }
 
 # --- upgrade, rollback ---------------------------------------------------------------------
 cmd_upgrade() {
-  _want=
+  _want=; _dry_run=0
   for _a in "$@"; do
     case $_a in
       --yes|-y) ASSUME_YES=1 ;;
+      --dry-run) _dry_run=1 ;;
       -*) die "upgrade: unknown option $_a" ;;
       *) [ -z "$_want" ] || die "upgrade: one version at a time"; _want=$_a ;;
     esac
   done
   [ -n "$_want" ] || die "usage: hubctl upgrade <version|latest> [--yes]"
+  # Upgrade must never be an unguarded downgrade path. This is read-only and
+  # precedes Docker access, the installation lock and any service/data mutation.
+  need_install
+  _want=$(upgrade_target "$_want")
+  if [ "$_dry_run" = 1 ]; then
+    cmd_update_check "$_want"
+    say "dry-run: release artifacts verified; no services, installation state or data changed"
+    return 0
+  fi
   need_install; need_docker; need curl; need openssl; lock
   [ "$_want" != latest ] || _want=$(resolve_latest)
   _version=$(norm_version "$_want"); _tag=v$_version
@@ -882,16 +1031,21 @@ cmd_upgrade() {
   # puts the old release back and leaves the Hub running, whatever stage it got to.
   upgrade_recover() {
     if [ "$_switched" = 1 ]; then
-      warn "rolling back to $_old_tag with the data it had before the upgrade"
-      switch_current "$_old_tag"
-      state_set previous-release "$_prev_before"
-      restore_volume_tar "$_vol" "$_old_image" "$_backup/hub-data.tar"
-      start_hub_recreated
-      if verify_running; then
-        sync_hubctl
-        warn "rolled back: $_old_tag is running on the pre-upgrade data (backup: $_backup/hub-data.tar). Nothing of $_tag is running."
+      warn "upgrade verification failed; preserving all current data before recovery"
+      stop_hub_graceful
+      backup_volume "$_vol" "$_image" "$_backup/failed-candidate-data.tar" soft
+      if trial_start "$_old_image" "$_backup/failed-candidate-data.tar" "$_old_rel"; then
+        switch_current "$_old_tag"
+        state_set previous-release "$_prev_before"
+        start_hub_recreated
+        if verify_running; then
+          sync_hubctl
+          warn "rolled back: $_old_tag is running with the latest data; no database was rewound"
+        else
+          warn "recovery did not become healthy; latest data is retained in $_backup/failed-candidate-data.tar"
+        fi
       else
-        warn "the rollback to $_old_tag did not come up cleanly. The full pre-upgrade backup is $_backup/hub-data.tar; restore it with: hubctl restore $_backup/hub-data.tar"
+        warn "$_old_tag cannot read the latest data. Keeping $_tag selected and stopped for a forward repair; no data restored or discarded. Backup: $_backup/failed-candidate-data.tar"
       fi
     elif [ "$_stopped" = 1 ]; then
       warn "upgrade abandoned; starting $_old_tag again"
@@ -908,7 +1062,7 @@ cmd_upgrade() {
   backup_volume "$_vol" "$_old_image" "$_backup/hub-data.tar"
   printf 'from=%s\nto=%s\nvolume=%s\n' "$_old_tag" "$_tag" "$_vol" > "$_backup/meta"
   step "trial start of $_tag on a copy of the data"
-  trial_start "$_image" "$_backup/hub-data.tar" || die "the new image did not start on a copy of the data"
+  trial_start "$_image" "$_backup/hub-data.tar" "$_new_rel" || die "the new image did not start on a copy of the data"
   step "switching to $_tag"
   # The flag first: an interruption between the two lines must still be recovered as "switched".
   _switched=1
@@ -956,7 +1110,9 @@ cmd_rollback() {
     check_tar "$_backup/hub-data.tar" "$_image"
     confirm "Roll back project $(project) (volume $_vol) to $_prev AND restore the data from before the upgrade ($(basename -- "$_backup"))? Everything written since is lost."
   else
-    confirm "Roll back project $(project) from $_cur_tag to $_prev? The data (volume $_vol) is kept as it is: a release ignores the additive tables a newer one created."
+    step "checking the previous image against a copy of current data before stopping anything"
+    trial_running_data "$_image" "$_prev_rel" || die "the previous release cannot run on the current data; current Hub and release are unchanged"
+    confirm "Roll back project $(project) from $_cur_tag to $_prev? Current data is kept; compatibility will be checked again after the final snapshot."
   fi
   _wiped=0; _switched=0
   # Runs from the exit trap if anything below fails: back to the release and the data it started with.
@@ -972,14 +1128,17 @@ cmd_rollback() {
     if verify_running; then warn "the Hub is running again on $_cur_tag and the data it had before"; else warn "the Hub did not report healthy; run 'hubctl ps' and 'hubctl logs hub'"; fi
   }
   FAIL_HOOK=rollback_recover
+  _safety=$ROOT/backups/pre-rollback-$(timestamp); mkdir -p "$_safety"
+  step "stopping the Hub and saving the current data first"
+  stop_hub_graceful
+  backup_volume "$_vol" "$_cur_image" "$_safety/hub-data.tar" soft
   if [ "$_restore" = 1 ]; then
-    _safety=$ROOT/backups/pre-rollback-$(timestamp); mkdir -p "$_safety"
-    step "stopping the Hub and saving the current data first"
-    stop_hub_graceful
-    backup_volume "$_vol" "$_cur_image" "$_safety/hub-data.tar" soft
     say "the data being replaced is saved as $_safety/hub-data.tar"
+    trial_start "$_image" "$_backup/hub-data.tar" "$_prev_rel" || die "the previous release cannot run on the chosen backup"
     _wiped=1
     restore_volume_tar "$_vol" "$_image" "$_backup/hub-data.tar"
+  else
+    trial_start "$_image" "$_safety/hub-data.tar" "$_prev_rel" || die "the final data changed incompatibly; current data and release were preserved"
   fi
   _switched=1
   switch_current "$_prev"
@@ -1173,10 +1332,12 @@ hubctl — operate a self-hosted Keryx Team Hub (install dir: $ROOT)
   up [service...]                 start (or apply changes); never builds
   ps | logs [args] | stop | restart
   config                          validate the compose files (prints nothing secret)
-  upgrade <version|latest> [--yes]
+  update-check [version|latest] [--json]
+                                  inspect a verified release without changing the installation
+  upgrade <version|latest> [--yes] [--dry-run]
                                   download and verify the release, stop the Hub, back up the
                                   whole volume, trial-start the new image on a copy of the data,
-                                  switch, verify; rolls back by itself on failure
+                                  switch, verify; recovery preserves the latest data on failure
   rollback [--restore-data] [--yes]
                                   return to the previous release (data kept; --restore-data also
                                   restores the backup taken at the last upgrade, if no rollback has run since)
@@ -1204,6 +1365,7 @@ main() {
     logs) cmd_logs "$@" ;;
     config) cmd_config "$@" ;;
     status) cmd_status "$@" ;;
+    update-check) cmd_update_check "$@" ;;
     upgrade) cmd_upgrade "$@" ;;
     rollback) cmd_rollback "$@" ;;
     backup) cmd_backup "$@" ;;

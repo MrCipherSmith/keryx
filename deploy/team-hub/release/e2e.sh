@@ -49,7 +49,7 @@ project=kth-e2e-$run
 port=$(( 20000 + ($$ * 7919) % 20000 ))
 base=http://127.0.0.1:$port
 log=$E/install.log
-tags="kth-e2e-$run-v2 kth-e2e-$run-dies kth-e2e-$run-nonet"
+tags="kth-e2e-$run-v2 kth-e2e-$run-dies kth-e2e-$run-nonet kth-e2e-$run-old-reader"
 
 cleanup() {
   rc=$?
@@ -152,6 +152,23 @@ publish 0.0.2 "kth-e2e-$run-v2"
 publish 0.0.3 "kth-e2e-$run-dies"
 publish 0.0.4 "kth-e2e-$run-nonet"
 
+# An actual old-writer gate, independently of the candidate application version.
+mkdir -p "$E/old-reader"
+cat > "$E/old-reader/check.sh" <<'OLDREADER'
+#!/bin/sh
+set -eu
+bun -e 'import { Database } from "bun:sqlite"; import { existsSync } from "node:fs";
+if (existsSync("/data/hub.sqlite")) { const db = new Database("/data/hub.sqlite", { readonly: true });
+if (db.query("SELECT name FROM sqlite_master WHERE name=?").get("remote_schema_version")) {
+ const row = db.query("SELECT version FROM remote_schema_version").get();
+ if (row?.version > 2) { console.error("Unsupported remote schema version"); process.exit(42); }
+} db.close(); }'
+exec bun run src/hub/main.ts
+OLDREADER
+printf 'FROM %s\nCOPY check.sh /app/old-reader.sh\nCMD ["sh","/app/old-reader.sh"]\n' "$image" > "$E/old-reader/Dockerfile"
+docker build -q -t "kth-e2e-$run-old-reader" "$E/old-reader" >/dev/null
+publish 0.0.5 "kth-e2e-$run-old-reader"
+
 # The served images are local tags with no digest. install.sh and hubctl refuse that unless this
 # test-only variable says otherwise; the refusal itself is checked below.
 KERYX_HUB_ALLOW_UNPINNED_IMAGE=1
@@ -242,7 +259,7 @@ login() {
 }
 create_project() { # create_project <name> -> prints the id (the session cookie is a credential: it goes in a file, not argv)
   printf 'Cookie: %s\n' "$cookie" > "$E/.cookie"
-  curl -fsS --max-time 10 -X POST -H 'Content-Type: application/json' -H @"$E/.cookie" -H "Origin: $base" \
+  curl -fsS --max-time 10 -X POST -H 'Content-Type: application/json' -H @"$E/.cookie" -H "Origin: ${hub_origin:-$base}" \
     -H "Idempotency-Key: e2e-$run-$1" -d "{\"name\":\"$1\"}" "$base/hub/v1/projects" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'
 }
 project_count() {
@@ -339,11 +356,32 @@ hubctl agent-key revoke e2e-agent >>"$steps" 2>&1 || fail "revoke failed"
 eq "a revoked key is refused" "$(status_of "$key")" 401
 
 # --- upgrade, rollback ----------------------------------------------------------------------------------------------
+
+# Release settings are install-owned; staging must not lose SSO or opt-in Work.
+printf '\nKERYX_HUB_WORK_ENABLED=true\nKERYX_HUB_WORK_REPOSITORIES=[]\nKERYX_HUB_PUBLIC_ORIGIN=https://hub.example.test\nCF_ACCESS_TEAM=fixture\nCF_ACCESS_AUD=%s\n' "$(printf '%064d' 0)" >> "$hub/secrets/hub.env"
+mkdir -p "$hub/secrets/access"
+printf '[{"email":"operator@example.test","role":"operator"}]\n' > "$hub/secrets/access/roles.json"
+chown 1000:1000 "$hub/secrets/access" "$hub/secrets/access/roles.json"
+chmod 700 "$hub/secrets/access"; chmod 600 "$hub/secrets/access/roles.json"
+cp "$deploy/selfhost/compose.access.example.yaml" "$hub/compose.override.yaml"
+hubctl restage >>"$steps" 2>&1 || fail "could not apply Work and Access configuration"
+hub_origin=https://hub.example.test
+# Read-only inspection must not create install state or replace the running service.
+check_cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)
+check_pointer=$(readlink "$hub/current")
+assert "update-check verifies the release" hubctl update-check 0.0.2 --json
+assert "upgrade dry-run verifies without mutation" hubctl upgrade 0.0.2 --dry-run
+eq "dry-run preserves the current release" "$(readlink "$hub/current")" "$check_pointer"
+eq "dry-run preserves the running container" "$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)" "$check_cid"
 hubctl upgrade 0.0.2 --yes >>"$steps" 2>&1 || fail "upgrade to 0.0.2 failed"
 eq "upgraded: current -> releases/v0.0.2" "$(readlink "$hub/current")" releases/v0.0.2
 assert "the Hub is healthy after the upgrade" curl -fsS --max-time 5 "$base/healthz"
 eq "no data lost by the upgrade" "$(project_count)" 2
 assert "a full pre-upgrade backup exists" sh -c "ls '$hub'/backups/upgrade-*-v0.0.1-to-v0.0.2/hub-data.tar"
+assert "SSO override remains installation-owned" test -f "$hub/compose.override.yaml"
+work_cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)
+work_enabled=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$work_cid" | sed -n 's/^KERYX_HUB_WORK_ENABLED=//p')
+eq "Work opt-in reaches the upgraded image" "$work_enabled" true
 eq "the Hub container runs the new release's image" "$(docker inspect -f '{{.Config.Image}}' "$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)")" "kth-e2e-$run-v2"
 
 # rollback --restore-data: back to the release AND the data from before the upgrade.
@@ -374,13 +412,31 @@ assert "the Hub is running after the abandoned upgrade" curl -fsS --max-time 10 
 eq "the abandoned upgrade lost nothing" "$(project_count)" 3
 
 # An image that only dies with a network passes the trial (network-less), then fails after the switch:
-# the upgrade rolls itself back and restores the pre-upgrade data.
+# the upgrade preserves current data and returns to a compatible old image.
 create_project "e2e fourth" >/dev/null
 eq "four projects before the last upgrade" "$(project_count)" 4
 refuse "an image that fails after the switch is refused" hubctl upgrade 0.0.4 --yes
 eq "automatic rollback: current is back on v0.0.1" "$(readlink "$hub/current")" releases/v0.0.1
 assert "the Hub is healthy after the automatic rollback" curl -fsS --max-time 10 "$base/healthz"
-eq "the automatic rollback restored the pre-upgrade data" "$(project_count)" 4
+eq "automatic recovery preserved all current data" "$(project_count)" 4
+
+# A writer3 database must reject the old-writer image BEFORE stopping the live Hub.
+hubctl upgrade 0.0.2 --yes >>"$steps" 2>&1 || fail "upgrade for writer compatibility test failed"
+bearer_header "$operator"
+cat > "$E/work-command.json" <<'WORKCOMMAND'
+{"operationId":"release-e2e-work-activation","command":"flow.create","expectedVersions":{},"payload":{"title":"Release upgrade proof","problem":"Verify persistence","expectedOutcome":"Safe release update","scope":"Synthetic deployment proof","outOfScope":"Production","ownerId":null,"specification":null,"criteria":[{"criterionId":"c1","text":"Retained","waivable":false}]}}
+WORKCOMMAND
+assert "managed write succeeds through released settings" curl -fsS --max-time 10 -H "@$E/.header" -H 'Content-Type: application/json' -H 'Idempotency-Key: release-e2e-work-activation' --data-binary "@$E/work-command.json" "$base/hub/work/v1/projects/$first/commands"
+mkdir "$E/old-reader-bundle"
+tar -xzf "$E/releases/v0.0.5/team-hub-install.tar.gz" -C "$E/old-reader-bundle" --strip-components=1
+hubctl _stage "$E/old-reader-bundle" 0.0.5 "kth-e2e-$run-old-reader" >>"$steps" 2>&1 || fail "could not stage old-reader fixture"
+printf 'v0.0.5\n' > "$hub/state/previous-release"
+check_cid=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)
+refuses_saying "writer3 downgrade refuses before stopping current" "current Hub and release are unchanged" hubctl rollback --yes
+eq "refused downgrade keeps the current release" "$(readlink "$hub/current")" releases/v0.0.2
+eq "refused downgrade does not replace the live container" "$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=hub)" "$check_cid"
+assert "live Hub remains healthy after incompatible downgrade" curl -fsS --max-time 5 "$base/healthz"
+assert "managed metadata remains readable" curl -fsS --max-time 10 -H "@$E/.header" "$base/hub/work/v1/projects/$first/flows"
 
 # Safety backups are pruned by count only once they are old: every one of these is minutes old.
 safety=$(count_files "$hub"/backups/upgrade-* "$hub"/backups/pre-restore-* "$hub"/backups/pre-rollback-*)
