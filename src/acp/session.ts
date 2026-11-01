@@ -10,14 +10,8 @@
 // operator needs `requestedCwd` too.
 
 import type { NormalizedMessage } from "../harness/provider/types";
-import {
-  createSession,
-  listSessions,
-  openSession,
-  resolveProjectRoot,
-  TranscriptUnreadableError,
-  type SessionHandle,
-} from "../session";
+import { listSessions, resolveProjectRoot, TranscriptUnreadableError, type SessionHandle } from "../session";
+import { openLeasedSession, releaseSessionLease, type SessionLeaseHandle } from "../session/lease";
 import type { AcpClientCapabilities } from "./protocol";
 
 /**
@@ -63,8 +57,9 @@ export interface AcpSessionState {
    * The capabilities the client advertised on `initialize`, snapshotted at
    * session-creation time. T9-T13 branch on `fs`/`terminal` here (AC6): "with
    * `fs` advertised, file reads/writes go through `fs/read_text_file` /
-   * `fs/write_text_file`; without it, the harness uses its own tools." T7/T8
-   * only record it — nothing in this dispatch reads it yet.
+   * `fs/write_text_file`; without it, the harness uses its own tools." Read by
+   * `buildAcpSessionTools` (roster.ts) to decide whether read_file goes through
+   * `fs/read_text_file`.
    */
   readonly clientCapabilities: AcpClientCapabilities | undefined;
   /**
@@ -73,6 +68,12 @@ export interface AcpSessionState {
    * a restarted agent can continue the session on it.
    */
   readonly recordedModel?: { readonly providerId: string; readonly modelId: string };
+  /**
+   * The session lease this connection holds (agent bus D-07), taken the same
+   * way `keryx shell` takes it, so ACP and a live shell never both write one
+   * transcript. Released by `releaseAll()` when the connection ends.
+   */
+  readonly lease: SessionLeaseHandle;
 }
 
 /**
@@ -114,10 +115,11 @@ export class AcpSessionRegistry {
 
   constructor(private readonly options: AcpSessionRegistryOptions) {}
 
-  /** Creates a new durable keryx session bound to `resolveProjectRoot(cwd)` and registers it. */
+  /** Creates a new durable keryx session bound to `resolveProjectRoot(cwd)`, leases it and registers it. */
   create(cwd: string, clientCapabilities: AcpClientCapabilities | undefined): AcpSessionState {
     const resolvedRoot = resolveProjectRoot(cwd);
-    const handle = createSession({
+    // No resumeId: `openLeasedSession` creates the session (`createSession`) and leases it.
+    const { handle, lease } = openLeasedSession({
       cwd: resolvedRoot,
       provider: this.options.providerId,
       model: this.options.modelId,
@@ -131,6 +133,7 @@ export class AcpSessionRegistry {
       history: [],
       archive: { messages: [], next: 0 },
       clientCapabilities,
+      lease,
     };
     this.sessions.set(state.sessionId, state);
     return state;
@@ -152,6 +155,10 @@ export class AcpSessionRegistry {
    * projectPath` — F-6/F-7 of the flow's context.md): a session id that is
    * real but belongs to a different project is reported exactly the same as
    * one that does not exist at all, never loaded across the project boundary.
+   *
+   * A session another keryx instance holds (a live `keryx shell`) throws
+   * `SessionLeasedError` before its transcript is read, rather than letting two
+   * surfaces overwrite each other's turns.
    */
   load(sessionId: string, cwd: string, clientCapabilities: AcpClientCapabilities | undefined): AcpSessionState | undefined {
     const resolvedRoot = resolveProjectRoot(cwd);
@@ -159,16 +166,21 @@ export class AcpSessionRegistry {
     if (summary === undefined) {
       return undefined;
     }
-    // Read before `openSession`, which records this connection's launch model.
+    // Read before the open, which records this connection's launch model.
     const recordedModel =
       typeof summary.provider === "string" && summary.provider.length > 0 && typeof summary.model === "string" && summary.model.length > 0
         ? { providerId: summary.provider, modelId: summary.model }
         : undefined;
-    let opened: ReturnType<typeof openSession>;
+    let opened: ReturnType<typeof openLeasedSession>;
     try {
-      opened = openSession({
+      opened = openLeasedSession({
         cwd,
         resumeId: sessionId,
+        // An ACP client has no `--take-over` to pass, and a crashed shell's
+        // lease would lock the session out of the editor for good. Only a STALE
+        // holder (D-09: no heartbeat, or a dead pid) is reclaimed; a live one
+        // is still refused.
+        takeOver: true,
         ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
         provider: this.options.providerId,
         model: this.options.modelId,
@@ -202,9 +214,27 @@ export class AcpSessionRegistry {
       },
       clientCapabilities,
       ...(recordedModel !== undefined ? { recordedModel } : {}),
+      lease: opened.lease,
     };
     this.sessions.set(state.sessionId, state);
     return state;
+  }
+
+  /**
+   * False once another instance took this session's lease over: the turn must
+   * not be persisted. Checks the disk, so a take-over since the last heartbeat
+   * is caught at the write (lease.ts `checkLost`).
+   */
+  canPersist(sessionId: string): boolean {
+    const state = this.sessions.get(sessionId);
+    return state !== undefined && !state.lease.checkLost();
+  }
+
+  /** Releases every session lease this connection holds. Idempotent. */
+  releaseAll(): void {
+    for (const state of this.sessions.values()) {
+      releaseSessionLease(state.lease);
+    }
   }
 
   /** Replaces the stored handle (e.g. after a `persistHistory` call returns an updated one). */
