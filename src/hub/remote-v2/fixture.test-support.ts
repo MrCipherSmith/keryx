@@ -46,7 +46,7 @@ export function hubCommandReceipt(dataDir: string, sessionId: string, operationI
     .map((row) => JSON.parse(row.body) as { frameType?: string; operationId?: string; receipt?: { status: string; errorCode: string | null } })
     .find((command) => command.frameType === "session-command" && command.operationId === operationId)?.receipt);
 }
-export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'>={}) {
+export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'|'workManagement'>={}) {
   const dataDir = mkdtempSync(join(tmpdir(), "hub-remote-v2-"));
   const server = startHub({ dataDir, operatorToken, reviewerToken, agentToken, port: 0, host: "127.0.0.1",...overrides });
   const origin = server.url.origin;

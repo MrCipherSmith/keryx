@@ -1,7 +1,7 @@
 # Hub work management: shared context, execution history and acceptance
-Version: 0.1.1
+Version: 0.2.0
 
-Status: draft for owner review; proposed implementation contract, not frozen, implemented or deployed. Date: 2026-11-01. The owner requested this PRD/specification/plan and a parallel UI-agent brief. Existing approval to draft does not approve every newly proposed domain choice or freeze a Flow.
+Status: implementation candidate in progress; final verification/review and owner product acceptance pending. Date: 2026-11-01. The owner requested this PRD/specification/plan and a parallel UI-agent brief. Owner subsequently authorized implementation; remote human-only acceptance remains separate.
 
 ## Purpose
 
@@ -9,6 +9,9 @@ Build the missing product-work layer over Keryx0.4.0 remote execution: Flow → 
 
 ## Documents
 
+- [Candidate implementation status](implementation-status.md)
+- [Native execution binding](execution.md)
+- [Git/CI observations](observer.md)
 - [PRD](prd.md)
 - [Normative implementation specification](specification.md)
 - [HTTP, metadata and execution protocol](metadata-protocol.md)

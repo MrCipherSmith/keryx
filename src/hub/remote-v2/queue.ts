@@ -37,7 +37,7 @@ export function drainSessionQueue(state: HubState, repo: RemoteRepository, deps:
     head.admissionReceipt??=structuredClone(operation.response);
     if (head.item.kind === "message") {
       const request = control("MessageSubmit", head.request);
-      const receipt = admitMessage(repo, head.authority, row, { ...request, expectedSessionVersion: row.record.version, expectedConfigVersion: row.record.config.configVersion, controller: head.controller }, head.item.operationId, head.item.operationId);
+      const receipt = admitMessage(repo, head.authority, row, { ...request, expectedSessionVersion: row.record.version, expectedConfigVersion: row.record.config.configVersion, controller: head.controller }, head.item.operationId, head.item.operationId, deps);
       operation.response = receipt;
     } else if (head.item.kind === "config") {
       const request = control("ConfigChange", head.request);

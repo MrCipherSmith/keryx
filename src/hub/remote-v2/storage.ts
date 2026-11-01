@@ -4,6 +4,8 @@ export const REMOTE_TABLES = ["remote_project_ref", "remote_machine", "remote_pa
 export type RemoteTable = typeof REMOTE_TABLES[number];
 export class RemoteStorageFailure extends Error {}
 export const REMOTE_SCHEMA_VERSION = 2;
+/** Existing 0.4.1 startup rejects this marker; remote wire/table layout stays v2. */
+export const MANAGED_WORK_WRITER_VERSION = 3;
 function createRemoteTable(db: Database, table: RemoteTable, physical: string = table): void {
   const refs: string[] = [];
   if (table !== "remote_project_ref") refs.push("FOREIGN KEY(projectId) REFERENCES remote_project_ref(id) DEFERRABLE INITIALLY DEFERRED");
@@ -23,8 +25,8 @@ export function migrateRemote(db: Database): void {
     db.transaction(() => {
       db.exec("CREATE TABLE IF NOT EXISTS remote_schema_version(version INTEGER NOT NULL)");
       const row = db.query<{ version: number }, []>("SELECT version FROM remote_schema_version").get();
-      if (row && row.version !== 1 && row.version !== REMOTE_SCHEMA_VERSION) throw new RemoteStorageFailure("Unsupported remote schema version");
-      if (row?.version === REMOTE_SCHEMA_VERSION) return;
+      if (row && row.version !== 1 && row.version !== REMOTE_SCHEMA_VERSION && row.version !== MANAGED_WORK_WRITER_VERSION) throw new RemoteStorageFailure("Unsupported remote schema version");
+      if (row?.version === REMOTE_SCHEMA_VERSION || row?.version === MANAGED_WORK_WRITER_VERSION) return;
       for (const table of REMOTE_TABLES) {
         const old = db.query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
         const temporary = `${table}_v2`;

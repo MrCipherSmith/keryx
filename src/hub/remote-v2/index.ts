@@ -1,3 +1,4 @@
+import { createWorkExecution,workExecutionHint } from "../work/execution";
 import { isStopOnlyCommand, validateOwnedControl } from "./owned-control";
 import {authorizeLifecycle} from './lifecycle';
 import {expirePendingCommands} from "./delivery";
@@ -24,7 +25,7 @@ import { resultUpload } from "./results";
 import { runCommand, sessionCommand } from "./commands";
 export type RemoteSocketData = { kind: "machine"; machineId: string; credentialDigest: string; projectScopeDigest: string; epoch: number; daemonId: string | null; lastHeartbeat: number } | { kind: "browser"; authority: HumanAuthority; request: Request; projectId: string; lastHeartbeat: number };
 export type RemoteTransportObservation={peer:"machine"|"browser";frameBytes:number;bufferedBytes:number;result:number;closeReason:string|null};
-export type RemotePorts = { observeTransport?:(observation:RemoteTransportObservation)=>void; store: HubStore; human(request: Request): Promise<HumanAuthority>; authorityValid(auth: HumanAuthority, projectId?: string, readOnly?: boolean): boolean; checkOrigin(request: Request): void; transportAllowed(request: Request): boolean; serialized<T>(action: () => Promise<T>): Promise<T> };
+export type RemotePorts = { workManagementEnabled?:boolean; observeTransport?:(observation:RemoteTransportObservation)=>void; store: HubStore; human(request: Request): Promise<HumanAuthority>; authorityValid(auth: HumanAuthority, projectId?: string, readOnly?: boolean): boolean; checkOrigin(request: Request): void; transportAllowed(request: Request): boolean; serialized<T>(action: () => Promise<T>): Promise<T> };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 const mutationKey = (request: Request) => { const key = request.headers.get("idempotency-key"); if (!key || key.length > 200 || [...key].some((char) => char.charCodeAt(0) < 32)) fail(400, "idempotency-key-required", "Bounded operation key required"); return key; };
 async function body(request: Request): Promise<unknown> {
@@ -40,7 +41,8 @@ export function createRemoteControl(ports: RemotePorts) {
   let shutdownSnapshot: ServerWebSocket<RemoteSocketData>[] | undefined;
   const machines = new Map<string, ServerWebSocket<RemoteSocketData>>(); const pending = new Set<string>(); const browsers = new Set<ServerWebSocket<RemoteSocketData>>();
   const attempts = new Map<string, { count: number; reset: number }>();
-  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid };
+  const managedExecution=createWorkExecution(store);
+  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted };
   const humanRead = createRemoteReader(store, deps);
   const { queueMutation, lifecycle, invoke } = createSessionOperations(store, deps);
   const resolveMachine = (request: Request): MachineRecord | undefined => { const header = request.headers.get("authorization"); if (!header?.startsWith("Bearer ")) return undefined; const digest = sha256(header.slice(7)); return store.remote.all<MachineRecord>("remote_machine").find((m) => !m.revoked && m.credentialDigest === digest); };
@@ -115,7 +117,8 @@ export function createRemoteControl(ports: RemotePorts) {
     if (!write) return humanRead(p, url, auth);
     return ports.serialized(async () => {
       const current = await ports.human(request); if (!(p[2] === "sessions" && p[4] === "open")) operator(current);
-      const key = mutationKey(request); const operationId = sha256(JSON.stringify([current.actor.id, method, url.pathname, key])); const payloadDigest = canonicalDigest(input);
+      const workHint=workExecutionHint(request);if(workHint&&!ports.workManagementEnabled)fail(404,"work-disabled","Managed execution is disabled");
+      const key = mutationKey(request); const operationId = sha256(JSON.stringify([current.actor.id, method, url.pathname, key])); const payloadDigest = canonicalDigest(workHint?{input,workHint}:input);
       const response = store.writeTransaction((state, repo) => {
         const old = repo.get<OperationRecord>("remote_operation", operationId); if (old) { if (old.payloadDigest !== payloadDigest) fail(409, "payload-conflict", "Operation payload changed"); return json(old.deliveryFailure ?? old.response, old.status); }
         let value: unknown;
@@ -132,6 +135,12 @@ export function createRemoteControl(ports: RemotePorts) {
           else fail(404, "not-found", "Route not found");
         } else if (p[0] === "projects" && p[1]) {
           scoped(current, p[1], state);
+          if(workHint){
+            if(method!=="POST"||!(p[2]==="runs"&&!p[3]||p[2]==="sessions"&&p[3]&&p[4]==="messages"&&!p[5]))fail(400,"unsupported-work-binding","Managed execution headers apply only to original message/start requests");
+            const parsed=p[2]==="runs"?control("StartTurnRequest",input):control("MessageSubmit",input);
+            const row=session(repo,p[1],p[2]==="runs"?control("StartTurnRequest",input).sessionId:p[3]!);
+            managedExecution.reserve(current,state,p[1],row,workHint,operationId,parsed.association);
+          }
           value = projectMutation(state, p, method, input, current, operationId);
         } else fail(404, "not-found", "Route not found");
         repo.put("remote_operation", operationId, { id: operationId, key, actorId: current.actor.id, sessionDigest: current.sessionDigest, projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined, payloadDigest, request: input, ...(validateControl("SessionOperationReceipt", value).ok && p[2] === "sessions" && p[3] && control("SessionOperationReceipt", value).sessionId !== p[3] ? { derivedSessionId: control("SessionOperationReceipt", value).sessionId } : {}), kind: p.slice(2).join("/"), response: value, status: 200 } satisfies OperationRecord, { projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined });

@@ -3,7 +3,8 @@
 const fs=require('fs'),path=require('path');
 const root=process.cwd(), dir=path.join(root,'docs/requirements/hub-work-management');
 const failures=[];const check=(condition,message)=>{if(!condition)failures.push(message)};
-for(const name of ['README.md','prd.md','specification.md','metadata-protocol.md','migration.md','plan.md','decisions.md','ui-agent-prompt.md','verification.md','review.md']){
+const markdownFiles=fs.readdirSync(dir).filter(name=>name.endsWith('.md'));
+for(const name of markdownFiles){
  check(fs.existsSync(path.join(dir,name)),`missing ${name}`);
  if(!fs.existsSync(path.join(dir,name)))continue;
  const text=fs.readFileSync(path.join(dir,name),'utf8');
@@ -31,4 +32,4 @@ const examples=JSON.parse(fs.readFileSync(path.join(dir,'schemas/examples.json')
 for(const [group,shouldPass] of [['valid',true],['invalid',false]])for(const example of examples[group]){
  const v=ajv.getSchema(validators[example.schema]);const actual=v(example.value);check(actual===shouldPass,`example ${example.name}: expected${shouldPass} actual${actual}: ${JSON.stringify(v.errors)}`);shouldPass?valid++:invalid++;
 }
-const report={status:failures.length?'FAIL':'PASS',markdownFiles:10,prdRequirements:req.length,acceptanceCriteria:16,schemas:3,validExamples:valid,invalidExamples:invalid,failures};console.log(JSON.stringify(report,null,2));process.exitCode=failures.length?1:0;
+const report={status:failures.length?'FAIL':'PASS',markdownFiles:markdownFiles.length,prdRequirements:req.length,acceptanceCriteria:16,schemas:3,validExamples:valid,invalidExamples:invalid,failures};console.log(JSON.stringify(report,null,2));process.exitCode=failures.length?1:0;

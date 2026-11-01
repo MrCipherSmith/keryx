@@ -1,5 +1,5 @@
 # Work metadata protocol and application surface
-Version: 0.1.1
+Version: 0.2.0
 
 Status: proposed, not implemented. Base: `/hub/work/v1/projects/{p}`. All routes require existing Hub authentication; cookie mutations validate configured Origin. Server derives actor and project permissions. No untrusted document/agent output is an instruction or authority.
 
@@ -92,3 +92,11 @@ Capabilities returns `{protocolVersion:1,enabled,allowedCommands,limits,features
 Snapshot first GET without cursor creates a bounded consistent read snapshot token bound to project+principal+authorization generation+cursorN; pages return `{records,nextCursor,eventCursor:N}` in dependency order. Client stages all pages then atomically replaces its cache, preserving drafts separately, and fetches events>N. Token expires after five minutes; expiry410/resync-required discards staged pages and restarts. Revocation invalidates pages immediately. Snapshot includes all managed records and immutable referenced history needed by current active/reviewed work; historical pagination remains available through exact record routes. Server uses a bounded temporary snapshot export, never holds a SQLite write lock across browser requests; export cap20MiB/project, quota413 means use scoped views rather than silently omit records. Optional old history need not be cached globally. Events gaps invalidate the export and require restart. GET operations returns `{operationId,status:pending|committed,receiptId,result,eventCursor}` with nullable fields for pending; committed result is the same safe response as the original command. Conversion preview result is scoped to its original actor; AmendmentManifest is a project record and is readable by authorized reviewers without disclosing another actor's receipt.
 
 Input provenance is closed: subject.create Git inputs contain only repositoryId/commitOid/treeOid/pullRequestNumber; context.create entries contain entryId/role/reference/required/contentDigest, and gitBases only repositoryId/commitOid. Supplying verification, observedAt, resolution or provenance is400, never silently normalized into trust. Server resolves references, hashes content and assigns claimed/observed states. A local-overlay must reference an exact authorized archived Hub document version (use existing document proposal/import); null reference stays unresolved and cannot satisfy required content. Runtime consumption can only come from the verified execution bridge, never context.create.
+
+## Implemented candidate extensions
+
+The generated OpenAPI is the exact executable projection contract. External eventCursor values are opaque HMAC tokens bound to principal/project, not internal event numbers. Commands return {operationId,entities,eventCursor,receiptId}. GET operations additionally distinguishes pending202 from committed outcomes. Provider observations use the separate closed observe envelope documented in observer.md.
+
+GET /documents/{documentId}/versions/{version}?digest=<sha256> retrieves exact authorized archived content with its id/project/path/kind/version/contentDigest/content and eventCursor. Digest mismatch, wrong project and unavailable history return404 without latest fallback. Content is rehashed and bounded to1MiB. MCP hub_work_get_document_version and CLI document show --version --digest expose the same read boundary.
+
+Native execution sidecar HTTP headers and current guarantees are documented in execution.md. The minimum writer activation marker and candidate limitations are documented in implementation-status.md.

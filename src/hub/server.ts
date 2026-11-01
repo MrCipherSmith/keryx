@@ -1,15 +1,16 @@
+import { createWorkHttp, validateWorkRepositories, type WorkRepositoryConfig } from "./work/http";
 import {remoteBudgets,remoteBudgetsFromEnv} from './remote-v2/budgets';
 import { createRemoteControl, type RemoteSocketData } from "./remote-v2";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import type { HubApplication, HubConfig, Principal } from "./contracts";
 import { createAccessVerifier, readAccessRoles, validateAccessConfig, type AccessDependencies, type CloudflareAccessConfig, type VerifiedAccessIdentity } from "./cloudflare-access";
-import { fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
+import { assertLegacyFlowWritable, fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
 import { deliverRevision } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
 import { authorizeAgentRequest, resolveNamedAgent, validateAgentCredentialsConfiguration } from "./agent-credentials";
-export type HubServerConfig = HubConfig & { publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
+export type HubServerConfig = HubConfig & { workManagement?: { enabled: boolean; repositories?:WorkRepositoryConfig[]; observerFetch?:(request:Request)=>Promise<Response> }; publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
 const MAX_BODY = 32 * 1024 * 1024;
 function json(value: unknown, status = 200, headers?: HeadersInit): Response {
   const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8"); h.set("Cache-Control", "no-store");
@@ -41,6 +42,7 @@ async function readJson(request: Request): Promise<unknown> {
 }
 function validateConfig(config: HubServerConfig) {
   remoteBudgets(config.remoteBudgets);
+  if(config.workManagement?.repositories!==undefined)validateWorkRepositories(config.workManagement.repositories);
   const tokens = [config.operatorToken, config.agentToken, ...(config.reviewerToken ? [config.reviewerToken] : [])];
   if (tokens.some((t) => typeof t !== "string" || t.length < 32) || new Set(tokens).size !== tokens.length) throw new Error("Hub requires distinct bootstrap tokens of at least 32 characters");
   if (!config.dataDir) throw new Error("Hub dataDir is required");
@@ -101,7 +103,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const secure = new URL(config.publicOrigin ?? request.url).protocol === "https:" ? "; Secure" : "";
     return `${cookieName}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
   }
-  const remote = createRemoteControl({ store, serialized, checkOrigin,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
+  const remote = createRemoteControl({ store, serialized, checkOrigin,workManagementEnabled:config.workManagement?.enabled===true,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
     transportAllowed(request) { const origin = new URL(config.publicOrigin ?? request.url); return origin.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]", "::1"].includes(origin.hostname); },
     async human(request) { const identity = await authenticate(request); if (!identity.cookie || identity.actor.kind !== "human") fail(403, "human-session-required", "Current human browser session required"); const key = sessionKey(request); if (!key) fail(401, "unauthorized", "Session required"); return { actor: identity.actor, sessionDigest: sha256(key) }; },
     authorityValid(auth, projectId, readOnly = false) {
@@ -116,9 +118,11 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         && stored.credentialDigest === sha256(credentialFor(stored.principal, config));
     },
   });
+  const work = createWorkHttp({store, enabled: config.workManagement?.enabled === true, repositories:config.workManagement?.repositories??[], ...(config.workManagement?.observerFetch?{observerFetch:config.workManagement.observerFetch}:{}), protectedValues:(request)=>[config.operatorToken,config.agentToken,config.reviewerToken??"",...(config.workManagement?.repositories??[]).map(r=>r.github?.token??""),request.headers.get("authorization")?.replace(/^Bearer /,"")??"",sessionKey(request)??""], authenticate, checkOrigin, serialized, now});
   async function handle(request: Request): Promise<Response> {
     if (closed) fail(503, "closed", "Hub is closed");
     const url = new URL(request.url);
+    const workResponse = await work.handle(request); if (workResponse) return workResponse;
     const remoteResponse = await remote.handle(request); if (remoteResponse) return remoteResponse;
     if (url.pathname === "/mcp") {
       const actor = bearerIdentity(request);
@@ -218,7 +222,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       const currentIdentity = await authenticate(request);
       authorizeAgentRequest(currentIdentity.actor, path, request.method);
       const replayKey = sha256(JSON.stringify([currentIdentity.actor.id, request.method, url.pathname, key]));
-      const state = store.load(); const replay = state.replays[replayKey];
+      const state = store.load(); if(path[2]==="flows"&&path[3])assertLegacyFlowWritable(state,path[1]!,path[3]); const replay = state.replays[replayKey];
       if (replay) { if (replay.digest !== bodyDigest) fail(409, "idempotency-conflict", "Idempotency key was already used for another payload"); return json(replay.body, replay.status); }
       const result = await hubMutate(state, currentIdentity.actor, path, body, config, config.gitDelivery ?? deliverRevision, `delivery-${replayKey.slice(0, 32)}`);
       state.replays[replayKey] = { digest: bodyDigest, body: result, status: 200 }; store.save(state); return json(result);
@@ -237,13 +241,20 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     closeTransports() { remote.close(); },
     transportsClosed() { return remote.transportsClosed(); },
     async settle() { await queue; },
-    close() { if (!closed) { closed = true; remote.close(); store.close(); } },
+    close() { if (!closed) { closed = true; work.close(); remote.close(); store.close(); } },
   };
   return application;
 }
 export function loadHubConfig(env: Record<string, string | undefined> = process.env): HubServerConfig {
   const port = Number(env.KERYX_HUB_PORT ?? "8787"); if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("Invalid KERYX_HUB_PORT");
   const config: HubServerConfig = { dataDir: resolve(env.KERYX_HUB_DATA_DIR ?? ".keryx-hub"), operatorToken: env.KERYX_HUB_OPERATOR_TOKEN ?? "", agentToken: env.KERYX_HUB_AGENT_TOKEN ?? "", host: env.KERYX_HUB_HOST ?? "127.0.0.1", port, ...(env.KERYX_HUB_REVIEWER_TOKEN ? { reviewerToken: env.KERYX_HUB_REVIEWER_TOKEN } : {}), ...(env.KERYX_HUB_AGENT_CREDENTIALS_FILE !== undefined ? { agentCredentialsFile: env.KERYX_HUB_AGENT_CREDENTIALS_FILE ? resolve(env.KERYX_HUB_AGENT_CREDENTIALS_FILE) : "" } : {}), ...(env.KERYX_HUB_PUBLIC_ORIGIN ? { publicOrigin: env.KERYX_HUB_PUBLIC_ORIGIN } : {}) };
+  if (env.KERYX_HUB_WORK_ENABLED !== undefined && !["true", "false"].includes(env.KERYX_HUB_WORK_ENABLED)) throw new Error("Invalid KERYX_HUB_WORK_ENABLED; expected true or false");
+  config.workManagement = { enabled: env.KERYX_HUB_WORK_ENABLED === "true" };
+  if(env.KERYX_HUB_WORK_REPOSITORIES!==undefined){
+    if(Buffer.byteLength(env.KERYX_HUB_WORK_REPOSITORIES)>64*1024)throw new TypeError('Work repository registry exceeds quota');
+    let repositories:unknown;try{repositories=JSON.parse(env.KERYX_HUB_WORK_REPOSITORIES);}catch{throw new TypeError('Invalid work repository registry JSON');}
+    config.workManagement.repositories=validateWorkRepositories(repositories);
+  }
   const budgets=remoteBudgetsFromEnv(env);if(budgets)config.remoteBudgets=budgets;
   if (env.KERYX_HUB_ACCESS_ENABLED !== undefined && env.KERYX_HUB_ACCESS_ENABLED !== "true" && env.KERYX_HUB_ACCESS_ENABLED !== "false") throw new Error("Invalid KERYX_HUB_ACCESS_ENABLED; expected true or false");
   if (env.KERYX_HUB_ACCESS_ENABLED === "true") config.cloudflareAccess = { issuer: env.KERYX_HUB_ACCESS_ISSUER ?? "", audience: env.KERYX_HUB_ACCESS_AUDIENCE ?? "", rolesFile: env.KERYX_HUB_ACCESS_ROLES_FILE ?? "" };

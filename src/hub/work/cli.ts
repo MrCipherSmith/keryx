@@ -1,7 +1,7 @@
 import { open } from "node:fs/promises";
 import { constants } from "node:fs";
 import { HubConnector } from "../connector";
-import { contributorWorkCommands, createWorkClient } from "./client";
+import { contributorWorkCommands, createWorkClient, type WorkObserveInput } from "./client";
 import { matchesWorkSchema, type WorkReadName } from "./openapi";
 import type { WorkCommand } from "./model";
 
@@ -11,7 +11,10 @@ export const WORK_HELP = `keryx hub work — Managed work metadata
   flow list | flow show <id>                  Read managed Flows
   intent list --flow <id> | intent show <id>
   attempt list --intent <id> | attempt show <id>
+  document show <id> --version <n> --digest <sha256>  Fetch exact immutable Hub content
   context show <id> | subject show <id>        Fetch exact immutable metadata
+  subject observe <id> --input <file|->       Refresh configured read-only Git/CI metadata
+  observation list --subject <id>             Read immutable observation history
   evidence list --attempt <id> | decision list [--target <id>]
   submission show <id> | flow-submission show <id> | amendment show <id>
   revision show --flow <id> --revision <id>    Exact Flow revision (or --intent)
@@ -48,7 +51,7 @@ function parse(args: string[]) {
     for (let i = 0; i < args.length; i++) {
         const arg = args[i]!;
         if (!arg.startsWith("--")) { words.push(arg); continue; }
-        if (!["--input", "--token-env", "--flow", "--intent", "--attempt", "--target", "--revision", "--limit", "--after-id", "--cursor", "--after"].includes(arg) || flags.has(arg)) invalid();
+        if (!["--input", "--token-env", "--flow", "--intent", "--attempt", "--subject", "--target", "--revision", "--limit", "--after-id", "--cursor", "--after", "--version", "--digest"].includes(arg) || flags.has(arg)) invalid();
         const value = args[++i]; if (!value || value.startsWith("--")) invalid(); flags.set(arg, value);
     }
     return { words, flags };
@@ -69,10 +72,15 @@ export async function runWorkCommand(args: string[], options: Options = {}): Pro
     const shows: Record<string, [WorkReadName, string]> = { flow: ["get_flow", "flowId"], intent: ["get_intent", "intentId"], attempt: ["get_attempt", "attemptId"], context: ["get_context", "contextId"], subject: ["get_subject", "subjectId"], submission: ["get_submission", "submissionId"], "flow-submission": ["get_flow_submission", "submissionId"], amendment: ["get_amendment", "amendmentId"], operation: ["operation", "operationId"] };
     if (flags.has("--input")) {
         used.add("--input");
-        if (words.length !== 1 && words.length !== 2 || family !== "command" && !contributorWorkCommands.includes(`${family}.${action}` as WorkCommand["command"])) invalid();
-        if (family === "command" && words.length !== 1) invalid();
+        if (family === "subject" && action === "observe" && words.length === 3) { /* exact observation envelope below */ }
+        else {
+            if (words.length !== 1 && words.length !== 2 || family !== "command" && !contributorWorkCommands.includes(`${family}.${action}` as WorkCommand["command"])) invalid();
+            if (family === "command" && words.length !== 1) invalid();
+        }
     } else if (words.length === 1 && ["capabilities", "attention", "events", "snapshot"].includes(family!)) {
         read = family as "capabilities" | "attention" | "events" | "snapshot";
+    } else if(family==='document'&&action==='show'&&words.length===3){
+        read='get_document_version';params.documentId=entityId!;used.add('--version');const version=flags.get('--version');if(!version||!/^[1-9][0-9]{0,15}$/.test(version)||!Number.isSafeInteger(Number(version)))invalid();params.version=Number(version);take('--digest','digest',true);
     } else if (action === "show" && words.length === 3 && shows[family!]) {
         const [name, field] = shows[family!]!; read = name; params[field] = entityId!;
     } else if (action === "list" && words.length === 2) {
@@ -81,31 +89,38 @@ export async function runWorkCommand(args: string[], options: Options = {}): Pro
         else if (family === "attempt") { read = "list_attempts"; take("--intent", "intentId", true); }
         else if (family === "evidence") { read = "list_evidence"; take("--attempt", "attemptId", true); }
         else if (family === "decision") { read = "list_decisions"; take("--target", "targetId"); }
+        else if (family === "observation") { read = "list_observations"; take("--subject", "subjectId", true); }
         else invalid();
     } else if (family === "revision" && action === "show" && words.length === 2) {
         if (flags.has("--flow") === flags.has("--intent")) invalid();
         read = flags.has("--flow") ? "get_flow_revision" : "get_intent_revision";
         take(flags.has("--flow") ? "--flow" : "--intent", flags.has("--flow") ? "flowId" : "intentId", true); take("--revision", "revisionId", true);
     } else invalid();
-    if (read && ["list_flows", "list_intents", "list_attempts", "list_evidence", "list_decisions", "attention", "events", "snapshot"].includes(read)) {
+    if (read && ["list_flows", "list_intents", "list_attempts", "list_evidence", "list_decisions", "list_observations", "attention", "events", "snapshot"].includes(read)) {
         if (flags.has("--limit")) { used.add("--limit"); const value = flags.get("--limit")!; if (!/^\d+$/.test(value)) invalid(); params.limit = Number(value); }
         take(read === "events" ? "--after" : read === "snapshot" ? "--cursor" : "--after-id", read === "events" ? "after" : read === "snapshot" ? "cursor" : "afterId");
     }
     if ([...flags.keys()].some(flag => !used.has(flag))) invalid();
     let command: WorkCommand | undefined;
+    let observation: WorkObserveInput | undefined;
     if (flags.has("--input")) {
         const raw = await (options.readInput ?? inputText)(flags.get("--input")!);
         if (Buffer.byteLength(raw, "utf8") > 65536) throw Error("Work command input exceeds 64 KiB.");
         let value: unknown; try { value = JSON.parse(raw) as unknown; } catch { throw Error("Invalid work command JSON."); }
-        if (!matchesWorkSchema(value, { $ref: "#/components/schemas/WorkCommand" })) throw Error("Invalid work command envelope.");
-        command = value as WorkCommand;
-        if (!contributorWorkCommands.includes(command.command) || family !== "command" && command.command !== `${family}.${action}`) throw Error("This CLI exposes contributor work commands only; command does not match the requested action.");
+        if (family === "subject" && action === "observe") {
+            if (!matchesWorkSchema(value, { $ref: "#/components/schemas/ObserveSubject" })) throw Error("Invalid Git observation envelope.");
+            observation = value as WorkObserveInput;
+        } else {
+            if (!matchesWorkSchema(value, { $ref: "#/components/schemas/WorkCommand" })) throw Error("Invalid work command envelope.");
+            command = value as WorkCommand;
+            if (!contributorWorkCommands.includes(command.command) || family !== "command" && command.command !== `${family}.${action}`) throw Error("This CLI exposes contributor work commands only; command does not match the requested action.");
+        }
     }
     const binding = await connector.binding();
     const tokenEnv = flags.get("--token-env") ?? binding.tokenEnv;
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(tokenEnv)) throw Error("Invalid Hub token environment variable name.");
     const token = (options.env ?? process.env)[tokenEnv]; if (!token) throw Error("Hub token environment variable is empty.");
     const client = createWorkClient({ baseUrl: status.connection.url, headers: { Authorization: `Bearer ${token}` }, ...(options.fetch ? { fetch: options.fetch } : {}) });
-    const result = command ? await client.command(projectId, command) : await client.read(read!, projectId, params);
+    const result = observation ? await client.observeSubject(projectId, entityId!, observation) : command ? await client.command(projectId, command) : await client.read(read!, projectId, params);
     write(JSON.stringify(result, (_key, value: unknown) => typeof value === "string" ? value.replaceAll(token, "[REDACTED]") : value, 2));
 }

@@ -1,12 +1,12 @@
 import { releasedControllerAlias, verifiedControllerRecovery } from "./controller-recovery";
 import { canonicalDigest, criteriaDigest, type Control } from "../../remote-control/protocol";
-import { fail } from "../domain";
+import { assertLegacyFlowWritable, fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
 import type { HumanAuthority, Projection, QueueRow, RunRow, SessionRow } from "./model";
 import { control, held, id, idleFence, iso, machine, projectionKey, saveSession, version } from "./guards";
 import { runCommand, sessionCommand } from "./commands";
-export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean };
+export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string):void; admitted?(run:RunRow,operationId:string):void };
 export function completeProjection(repo: RemoteRepository, row: SessionRow): Projection {
   const p = repo.get<Projection>("remote_projection", projectionKey(row.record.machineId, row.record.projectId, row.record.checkoutId, row.record.agentProfileId));
   const current = machine(repo, row.record.machineId);
@@ -20,6 +20,7 @@ export function completeProjection(repo: RemoteRepository, row: SessionRow): Pro
 export function checkAssociation(state: HubState, association: Control["FlowAssociation"], projectId?: string): void {
   if (association.mode === "flow") {
     const flow = state.flows.find((f) => f.id === association.flowId);
+    if(flow&&(projectId===undefined||flow.projectId===projectId))assertLegacyFlowWritable(state,flow.projectId,flow.id);
     const spec = flow && state.documents.find((d) => d.id === flow.specDocumentId);
     if (!flow || (projectId !== undefined && flow.projectId !== projectId) || !spec || flow.status !== "in-progress" || flow.version !== association.expectedFlowVersion || flow.specContentDigest !== association.specDigest || spec.contentDigest !== association.specDigest || criteriaDigest(flow.criteria) !== association.criteriaDigest) fail(409, "stale-reference", "Managed Flow association is not current executable work");
   }
@@ -92,9 +93,10 @@ export function submitMessage(state: HubState, repo: RemoteRepository, deps: Ses
     sessionCommand(repo, machine(repo, row.record.machineId), row, auth, operationId, "submit-message", body);
     return { operationId, messageId: id(), sessionId: row.record.sessionId, sessionVersion: row.record.version, queueItemId: null, status: "queued", runId: null, turnId: null, turnOrdinal: null };
   }
-  return admitMessage(repo, auth, row, body, operationId);
+  return admitMessage(repo, auth, row, body, operationId, undefined, deps);
 }
-export function admitMessage(repo: RemoteRepository, auth: HumanAuthority, row: SessionRow, body: Control["MessageSubmit"], operationId: string, originalMessageId?: string): Control["TurnReceipt"] {
+export function admitMessage(repo: RemoteRepository, auth: HumanAuthority, row: SessionRow, body: Control["MessageSubmit"], operationId: string, originalMessageId?: string, deps?:SessionDependencies): Control["TurnReceipt"] {
+  deps?.beforeAdmission?.(auth,row,operationId);
   if(repo.activeRuns()>=repo.budgets.activeRuns)fail(413,'quota-exceeded','Active work budget exhausted; reconcile existing ownership');
   const m = machine(repo, row.record.machineId); const runId = id(), turnId = id(), ordinal = row.record.nextTurnOrdinal;
   const snapshot: Control["ConfigSnapshot"] = { config: structuredClone(row.record.config), configDigest: canonicalDigest(row.record.config), effectiveCandidateId: row.record.config.baselineCandidateId, routingDecision: "baseline", fallbackReason: "none", selectionReceiptId: id() };
@@ -102,6 +104,7 @@ export function admitMessage(repo: RemoteRepository, auth: HumanAuthority, row: 
   const command = runCommand(repo, m, row, auth, operationId, runId, turnId, 1, "start-turn", { request: start, snapshot, turnOrdinal: ordinal }, body.controller);
   const run: RunRow = { runId, turnId, sessionId: row.record.sessionId, projectId: row.record.projectId, checkoutId: row.record.checkoutId, machineId: m.machineId, version: 1, state: "dispatching", lastLocalSeq: 0, commandDigest: command.envelope.commandDigest, commandId: command.envelope.commandId, association: body.association, snapshot, turnOrdinal: ordinal, partial: false };
   repo.put("remote_run", runId, run, { projectId: row.record.projectId, machineId: m.machineId, sessionId: row.record.sessionId, runId }); saveSession(repo, row);
+  deps?.admitted?.(run,operationId);
   return { operationId, messageId: id(), sessionId: row.record.sessionId, sessionVersion: row.record.version, queueItemId: null, status: "admitted", runId, turnId, turnOrdinal: ordinal };
 }
 

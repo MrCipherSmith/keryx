@@ -1,6 +1,7 @@
 import domain from "../../../docs/requirements/hub-work-management/schemas/domain.schema.json";
 import command from "../../../docs/requirements/hub-work-management/schemas/command.schema.json";
 import event from "../../../docs/requirements/hub-work-management/schemas/event.schema.json";
+import { gitObservationSchema } from "./git-observer-contract";
 
 /** The schema vocabulary used by the reviewed metadata protocol. No external refs. */
 export interface WorkSchema {
@@ -42,17 +43,23 @@ const schemas: Record<string, WorkSchema> = {
 for (const [name, recordType] of Object.entries({ FlowRevision: "FlowRevision", IntentRevision: "IntentRevision", Context: "ContextSnapshot", Subject: "ResultSubject", Submission: "ReviewSubmission", FlowSubmission: "FlowSubmission", Amendment: "AmendmentManifest" })) schemas[`${name}Record`] = object({ record: ref(recordType), eventCursor: cursor });
 for (const [name, recordType] of Object.entries({ Flow: "WorkFlow", Intent: "WorkIntent", Attempt: "Attempt", Evidence: "EvidenceRecord", Decision: "Decision" })) schemas[`${name}Page`] = object({ records: array(ref(recordType), 200), nextCursor: nullableCursor, eventCursor: cursor });
 schemas.AttentionPage = object({ records: array({ oneOf: [ref("WorkFlow"), ref("WorkIntent"), ref("Attempt")] }, 200), nextCursor: nullableCursor, eventCursor: cursor });
+schemas.DocumentVersion = object({document:object({id:text,projectId:text,path:{type:'string',minLength:1,maxLength:1024},kind:{enum:['wiki','spec']},version:{type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER},contentDigest:{type:'string',pattern:'^[a-f0-9]{64}$'},content:{type:'string',maxLength:1048576}}),eventCursor:cursor});
 schemas.LegacyPreview = object({ receiptId: text, contentDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, legacyFlowId: text, sourceVersion: { type: "integer", minimum: 1 }, sourceDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { const: "eligible" }, source: object({ flowId: text, title: { type: "string", minLength: 1, maxLength: 500 }, specification: ref("DocumentRef"), criteria: array({ type: "string", minLength: 1, maxLength: 4000 }, 200), status: { enum: ["initializing", "ready"] } }) });
 schemas.CommandResult!.properties!.preview = ref("LegacyPreview");
+schemas.GitObservation = gitObservationSchema;
+schemas.ObservationResult = object({ operationId: text, observation: ref("GitObservation"), eventCursor: cursor, receiptId: text });
+schemas.ObservationPage = object({ observations: array(ref("GitObservation"), 200), nextCursor: nullableCursor, eventCursor: cursor });
+schemas.ObserveSubject = object({ operationId: text, expectedVersions: { type: "object", maxProperties: 210, propertyNames: text, additionalProperties: { type: "integer", minimum: 1 } }, payload: object({ subjectDigest: { type: "string", pattern: "^[a-f0-9]{64}$" } }) });
 schemas.Operation = { oneOf: [
     object({ operationId: text, status: { const: "pending" }, receiptId: { type: "null" }, result: { type: "null" }, eventCursor: { type: "null" } }),
-    object({ operationId: text, status: { const: "committed" }, receiptId: text, result: ref("CommandResult"), eventCursor: cursor }),
+    object({ operationId: text, status: { const: "committed" }, receiptId: text, result: { oneOf: [ref("CommandResult"), ref("ObservationResult")] }, eventCursor: cursor }),
 ] };
 const submission = domainSchemas.FlowSubmission!.properties!;
 schemas.AcceptancePreview = object({ flowId: submission.flowId!, flowRevisionId: submission.flowRevisionId!, acceptedIntents: submission.acceptedIntents!, knowledgeProposalIds: submission.knowledgeProposalIds!, criterionCoverage: submission.criterionCoverage!, acceptanceManifestDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, eventCursor: cursor });
 
 export const workReadRoutes = [
     { suffix: "capabilities", name: "capabilities", schema: "Capabilities" },
+    { suffix: "documents/{documentId}/versions/{version}",name:"get_document_version",schema:"DocumentVersion" },
     { suffix: "snapshot", name: "snapshot", schema: "Page", paging: "snapshot" },
     { suffix: "flows", name: "list_flows", schema: "FlowPage", paging: "list" },
     { suffix: "flows/{flowId}", name: "get_flow", schema: "Aggregate" },
@@ -65,6 +72,7 @@ export const workReadRoutes = [
     { suffix: "attempts/{attemptId}/evidence", name: "list_evidence", schema: "EvidencePage", paging: "list" },
     { suffix: "contexts/{contextId}", name: "get_context", schema: "ContextRecord" },
     { suffix: "subjects/{subjectId}", name: "get_subject", schema: "SubjectRecord" },
+    { suffix: "subjects/{subjectId}/observations", name: "list_observations", schema: "ObservationPage", paging: "list" },
     { suffix: "submissions/{submissionId}", name: "get_submission", schema: "SubmissionRecord" },
     { suffix: "flow-submissions/{submissionId}", name: "get_flow_submission", schema: "FlowSubmissionRecord" },
     { suffix: "amendments/{amendmentId}", name: "get_amendment", schema: "AmendmentRecord" },
@@ -80,12 +88,16 @@ const prefix = "/hub/work/v1/projects/{projectId}/";
 const errorResponses = Object.fromEntries([400, 401, 403, 404, 409, 410, 413, 415, 422, 503].map(status => [status, { description: "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.", content: { "application/json": { schema: ref("Error") } } }]));
 function readOperation(route: typeof workReadRoutes[number]) {
     const parameters: { name: string; in: string; required: boolean; schema: WorkSchema }[] = ["projectId", ...workRouteParameters(route.suffix)].map(name => ({ name, in: "path", required: true, schema: text }));
+    if(route.name==='get_document_version'){
+        const version=parameters.find(p=>p.name==='version');if(version)version.schema={type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER};
+        parameters.push({name:'digest',in:'query',required:true,schema:{type:'string',pattern:'^[a-f0-9]{64}$'}});
+    }
     if ("paging" in route) {
         parameters.push({ name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: route.paging === "events" ? 1000 : 200 } });
         parameters.push({ name: route.paging === "snapshot" ? "cursor" : route.paging === "events" ? "after" : "afterId", in: "query", required: false, schema: { type: "string", minLength: 1, maxLength: 4096 } });
         if (route.paging === "decisions") parameters.push({ name: "targetId", in: "query", required: false, schema: text });
     }
-    return { operationId: `work_${route.name}`, tags: ["Managed work"], parameters, responses: { "200": { description: route.name === "snapshot" ? "Consistent staged snapshot page. Event cursor stays fixed across pages. Expires after five minutes; 410 requires a fresh snapshot." : "Authorized closed projection; embedded content is untrusted data.", content: { "application/json": { schema: ref(route.schema) } } }, ...errorResponses } };
+    return { operationId: `work_${route.name}`, tags: ["Managed work"], parameters, responses: { "200": { description: route.name === "snapshot" ? "Consistent staged snapshot page. Event cursor stays fixed across pages. Expires after five minutes; 410 requires a fresh snapshot." : "Authorized closed projection; embedded content is untrusted data.", content: { "application/json": { schema: ref(route.schema) } } }, ...(route.name === "operation" ? { "202": { description: "Original actor-scoped operation is pending; no committed effect is implied.", content: { "application/json": { schema: ref("Operation") } } } } : {}), ...errorResponses } };
 }
 export const workOpenApi = {
     openapi: "3.1.0",
@@ -93,6 +105,7 @@ export const workOpenApi = {
     security: [{ HubBearer: [] }, { HubSession: [] }],
     paths: {
         ...Object.fromEntries(workReadRoutes.map(route => [`${prefix}${route.suffix}`, { get: readOperation(route) }])),
+        [`${prefix}subjects/{subjectId}/observe`]: { post: { operationId: "work_observe_subject", tags: ["Managed work"], description: "Opt-in bounded read-only provider refresh. Authenticates contributor and guards the exact Attempt before and after external reads. Appends immutable metadata and event; never changes subject, trust-labelled Evidence or acceptance. Configured provider identity and workflow policy only; no caller URLs or credentials.", parameters: [{ name: "projectId", in: "path", required: true, schema: text }, { name: "subjectId", in: "path", required: true, schema: text }, { name: "Idempotency-Key", in: "header", required: true, schema: text }], requestBody: { required: true, content: { "application/json": { schema: ref("ObserveSubject") } } }, responses: { "200": { description: "Actor-scoped immutable observation receipt or exact replay.", content: { "application/json": { schema: ref("ObservationResult") } } }, ...errorResponses } } },
         [`${prefix}commands`]: { post: { operationId: "work_command", tags: ["Managed work"], description: "Maximum UTF-8 JSON body 65536 bytes. Cookie mutations require configured Origin. Idempotency-Key must equal operationId; preserve the entire original envelope on retry. Replay checks current project authorization before returning the original actor-scoped result. Agents cannot invoke human-only commands. Unsupported optional adapters fail closed.", parameters: [{ name: "projectId", in: "path", required: true, schema: text }, { name: "Idempotency-Key", in: "header", required: true, schema: text }], requestBody: { required: true, content: { "application/json": { schema: ref("WorkCommand") } } }, responses: { "200": { description: "Committed result or exact authorized replay.", content: { "application/json": { schema: ref("CommandResult") } } }, "202": { description: "Pending operation; poll original operationId boundedly. No committed outcome is implied.", content: { "application/json": { schema: ref("Operation") } } }, ...errorResponses } } },
     },
     components: { securitySchemes: { HubBearer: { type: "http", scheme: "bearer" }, HubSession: { type: "apiKey", in: "cookie", name: "keryx_hub_session" } }, schemas },

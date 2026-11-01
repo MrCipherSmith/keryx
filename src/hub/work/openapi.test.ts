@@ -5,7 +5,7 @@ test("published OpenAPI is the exact generated closed HTTP contract", async () =
     const published = await Bun.file(new URL("../../../docs/requirements/hub-work-management/openapi.json", import.meta.url)).json();
     expect(published).toEqual(workOpenApi);
     expect(workOpenApi.openapi).toBe("3.1.0");
-    expect(Object.keys(workOpenApi.paths)).toHaveLength(22);
+    expect(Object.keys(workOpenApi.paths)).toHaveLength(25);
 });
 
 test("responses reject unknown fields, invalid records, and unsupported actions", () => {

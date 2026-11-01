@@ -47,6 +47,11 @@ function proposal(state: HubState, actor: Principal, p: Project, doc: HubDocumen
   const value: Proposal = { id: randomUUID(), projectId: p.id, documentId: doc.id, baseVersion: doc.version, content, contentDigest: sha256(content), reason, status: "pending", version: 1, createdBy: actor.id, ...(sourceRevision ? { sourceRevision } : {}) };
   state.proposals.push(value); event(state, actor, p.id, "proposal-created", value.id); return value;
 }
+/** Shared guard for REST/MCP and remote execution/result adapters. */
+export function assertLegacyFlowWritable(state:HubState,projectId:string,flowId:string):void {
+  const conversion=state.legacyConversions?.[flowId];
+  if(conversion?.projectId===projectId)fail(409,'flow-converted','Legacy Flow is read-only; managed replacement '+conversion.managedFlowId);
+}
 function currentSpec(state: HubState, flow: HubFlow) {
   const spec = found(state.documents.find((d) => d.id === flow.specDocumentId && d.projectId === flow.projectId));
   if (spec.contentDigest !== flow.specContentDigest) fail(409, "spec-changed", "Pinned specification changed; create a new Flow");
@@ -176,7 +181,7 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
       const f: HubFlow = { id: randomUUID(), projectId: p.id, title: text(body.title, "title", 500), specDocumentId: spec.id, specContentDigest: spec.contentDigest, criteria, status: "initializing", version: 1, subjectRevisionId: null };
       state.flows.push(f); event(state, actor, p.id, "flow-created", f.id); return f;
     }
-    const f = found(state.flows.find((f) => f.projectId === p.id && f.id === path[3])); const action = path[4];
+    const f = found(state.flows.find((f) => f.projectId === p.id && f.id === path[3])); assertLegacyFlowWritable(state,p.id,f.id); const action = path[4];
     if (path.length === 5 && action === "evidence") {
       if (f.status !== "in-progress") fail(409, "invalid-transition", "Evidence can only be submitted during implementation");
       const r = scopedRevision(state, p, body.subjectRevisionId); const exitCode = integer(body.exitCode, "exitCode");

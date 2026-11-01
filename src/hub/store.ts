@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { migrateWork, workRepository } from "./work/storage";
 import { migrateRemote, syncProjectReferences, remoteRepository, type RemoteRepository } from "./remote-v2/storage";
 import { closeSync, fsyncSync, mkdirSync, openSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -11,6 +12,7 @@ export type HubState = {
   projects: Project[]; documents: HubDocument[]; proposals: Proposal[]; flows: HubFlow[];
   evidence: Evidence[]; revisions: CodeRevision[]; deliveries: Delivery[]; events: HubEvent[];
   documentChanges: { projectId: string; revision: number; document: HubDocument }[];
+  legacyConversions?: Record<string,{projectId:string;managedFlowId:string}>;
   sessions: Record<string, StoredSession>; replays: Record<string, StoredReplay>;
 };
 function emptyState(): HubState {
@@ -22,11 +24,15 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const db = new Database(join(dataDir, "hub.sqlite"), { create: true });
   db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; CREATE TABLE IF NOT EXISTS hub_state (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL)");
-  try { migrateRemote(db); } catch (error) { db.close(); throw error; }
+  try { migrateRemote(db); migrateWork(db); } catch (error) { db.close(); throw error; }
   const remote = remoteRepository(db,budgetConfig);
+  const work = workRepository(db);
   const load = (): HubState => {
     const row = db.query<{ body: string }, []>("SELECT body FROM hub_state WHERE id=1").get();
-    return row ? JSON.parse(row.body) as HubState : emptyState();
+    const state=row ? JSON.parse(row.body) as HubState : emptyState();
+    const conversions=work.conversions();
+    if(conversions.length)state.legacyConversions=Object.fromEntries(conversions.map(c=>[c.legacy_flow_id,{projectId:c.project_id,managedFlowId:c.managed_flow_id}]));
+    return state;
   };
   const listeners = new Set<(state: HubState, previous: HubState) => void>();
   const notify = (state: HubState, previous: HubState) => { for (const listener of listeners) { try { listener(state, previous); } catch (error) { console.error("Hub committed notification failed", error instanceof Error ? error.name : "UnknownError"); } } };
@@ -56,6 +62,6 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     const descriptor = openSync(destination, "wx", 0o600);
     try { writeFileSync(descriptor, image); fsyncSync(descriptor); } finally { closeSync(descriptor); }
   };
-  return { load, save, remote, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
+  return { load, save, remote, work, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
 }
 export type HubStore = ReturnType<typeof openHubStore>;
