@@ -49,7 +49,7 @@ export function resultUpload(state: HubState, repo: RemoteRepository, machine: M
   }
   const receipt: Control["ResultReceipt"] = { receiptId: id(), runId, turnId: run.turnId, sessionId: run.sessionId, revisionId: revision.id, checksKind: flowId ? "FlowEvidence" : "RunChecks", flowId, evidenceId, partial: body.partial };
   repo.put("remote_result_receipt", runId, { payloadDigest, key, receipt }, { projectId, machineId: machine.machineId, sessionId: run.sessionId, runId });
-  run.result = receipt; run.partial = body.partial; if (drift.length > 0) run.pinDrift = drift; run.version++; repo.put("remote_run", runId, run, { projectId, machineId: machine.machineId, sessionId: run.sessionId, runId });
+  run.result = receipt; run.partial = body.partial; if (drift.length > 0) run.pinDrift = drift; run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; repo.put("remote_run", runId, run, { projectId, machineId: machine.machineId, sessionId: run.sessionId, runId });
   state.events.push({ sequence: (state.events.at(-1)?.sequence ?? 0) + 1, projectId, type: "revision-created", actorId: `machine:${machine.machineId}`, entityId: revision.id, createdAt: iso() });
   return receipt;
 }
