@@ -65,6 +65,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const result = queue.then(operation); queue = result.catch(() => undefined); return result;
   }
   const inFlightDeliveries = new Set<string>();
+  const deliverySettlers = new Set<() => void>();
   const cookieName = "keryx_hub_session";
   function sessionKey(request: Request): string | undefined {
     return request.headers.get("cookie")?.split(";").map((p) => p.trim()).find((p) => p.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
@@ -179,7 +180,10 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
           return json(response,status);
         });
       });
-    } finally { inFlightDeliveries.delete(job.id); }
+    } finally {
+      inFlightDeliveries.delete(job.id);
+      if (!inFlightDeliveries.size) { for (const resolve of deliverySettlers) resolve(); deliverySettlers.clear(); }
+    }
   }
   async function handle(request: Request): Promise<Response> {
     if (closed) fail(503, "closed", "Hub is closed");
@@ -303,7 +307,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     websocket: remote.websocket,
     closeTransports() { remote.close(); },
     transportsClosed() { return remote.transportsClosed(); },
-    async settle() { await queue; },
+    async settle() { await queue; if (inFlightDeliveries.size) await new Promise<void>(resolve => deliverySettlers.add(resolve)); await queue; },
     close() { if (!closed) { closed = true; work.close(); remote.close(); store.close(); } },
   };
   return application;

@@ -78,3 +78,13 @@ test('restart refuses an interrupted external effect and resumes a durably recor
     expect(deliveries).toHaveLength(1);
     store.close();
 });
+test('settle waits for an external Git delivery to persist its result before shutdown', async () => {
+    let release!:()=>void, entered!:()=>void, settled=false;
+    const gate=new Promise<void>(resolve=>release=resolve), started=new Promise<void>(resolve=>entered=resolve);
+    const f=fixture(async()=>{entered();await gate;return{status:'failed',error:'No remote publication'};});
+    const {p,body}=await selected(f.request);
+    const delivery=f.request('/projects/'+p.id+'/deliveries',body,'drain-delivery');await started;
+    const settling=f.app.settle!().then(()=>{settled=true;});
+    await Promise.resolve();await Promise.resolve();expect(settled).toBe(false);
+    release();expect((await delivery).status).toBe(200);await settling;expect(settled).toBe(true);
+});
