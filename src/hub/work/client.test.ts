@@ -69,3 +69,6 @@ test('MCP path identifiers reject dot segments before URL resolution', () => {
         expect(resolveWorkMcpOperation('hub_work_get_attempt', { projectId: 'p1', attemptId: value })).toEqual({ error: 'invalid-arguments' });
     }
 });
+test('raw control characters and whitespace cannot be silently normalized into a trusted Hub URL', () => {
+  for (const baseUrl of [' https://hub.test', 'https://hub.test ', 'https://hu\nb.test', 'http://local\thost']) expect(() => createWorkClient({ baseUrl })).toThrow('invalid-base-url');
+});

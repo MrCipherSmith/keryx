@@ -61,6 +61,7 @@ async function boundedJson(response: Response): Promise<unknown> {
 
 /** Credentials stay in the supplied transport; neither errors nor command queues contain them. */
 export function createWorkClient(options: WorkTransport) {
+    if ([...options.baseUrl].some(character => character.charCodeAt(0) < 33 || character.charCodeAt(0) === 127)) throw new WorkClientError("invalid-base-url", 0, false);
     const base = new URL(options.baseUrl);
     if (!/^https?:$/.test(base.protocol) || base.username || base.password || base.search || base.hash || base.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)) throw new WorkClientError("invalid-base-url", 0, false);
     const fetcher = options.fetch ?? globalThis.fetch;
