@@ -61,3 +61,7 @@
 - 2026-11-01T16:15:51.160Z - task-done: T18: Implement release-backed Hub update command and safe deployment integration
 - 2026-11-01T16:15:51.391Z - task-done: T19: Rehearse production backup migration restore and verify release artifact
 - 2026-11-01T16:15:51.673Z - task-done: T23: Fix and independently verify legacy adoption safety findings
+- 2026-11-01T18:55:58.015Z - task-added: T24: Fix PR1113 review root causes A-N and triage all linked findings
+- 2026-11-01T19:54:30.822Z - task-done: T21: Publish successor release and provide owner-run upgrade instructions
+- 2026-11-01T19:54:31.025Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-01T20:17:38.194Z - task-done: T22: Prepare PR1113 for owner review without merge release or production cutover

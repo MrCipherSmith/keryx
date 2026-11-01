@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-01T16:15:51.673Z",
+  "updatedAt": "2026-11-01T20:17:38.194Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,7 +90,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "Independent backend/UI/reload reviews APPROVE and review package ready. Verified handoff only: no PR opened or merge/product acceptance performed."
+      "dispositionReason": "Draft PR1113 exists on feat-hub-work-management. Reviewed head46982e50b is being corrected in a fresh worktree; merge and product acceptance remain the owner decision."
     },
     {
       "id": "T5",
@@ -431,7 +431,7 @@
       "id": "T21",
       "title": "Publish successor release and provide owner-run upgrade instructions",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -439,13 +439,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by the owner: PR1113 must remain Draft for review; no release, merge or production cutover is part of this correction task."
     },
     {
       "id": "T22",
       "title": "Prepare PR1113 for owner review without merge release or production cutover",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -453,7 +455,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Draft PR1113 is prepared with isolated-worktree correction commits, per-finding dispositions, independent audit and passing local quality gates. Final GitHub checks are authoritative for the published head; ready-for-review comment waits for green CI. No merge, release or product acceptance."
     },
     {
       "id": "T23",
@@ -476,6 +480,20 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "All five legacy adoption findings repaired; original three and independent four guard probes GREEN; Python10 and Bun10 PASS; independent final APPROVE."
+    },
+    {
+      "id": "T24",
+      "title": "Fix PR1113 review root causes A-N and triage all linked findings",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -761,6 +779,26 @@
       "at": "2026-11-01T16:15:51.673Z",
       "event": "task-done",
       "detail": "T23: Fix and independently verify legacy adoption safety findings"
+    },
+    {
+      "at": "2026-11-01T18:55:58.015Z",
+      "event": "task-added",
+      "detail": "T24: Fix PR1113 review root causes A-N and triage all linked findings"
+    },
+    {
+      "at": "2026-11-01T19:54:30.822Z",
+      "event": "task-done",
+      "detail": "T21: Publish successor release and provide owner-run upgrade instructions"
+    },
+    {
+      "at": "2026-11-01T19:54:31.025Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-01T20:17:38.194Z",
+      "event": "task-done",
+      "detail": "T22: Prepare PR1113 for owner review without merge release or production cutover"
     }
   ],
   "acKinds": {
