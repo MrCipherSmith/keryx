@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://keryx.example/schemas/hub-work-management/command.v1.json",
-  "title": "Proposed closed metadata command envelopes",
+  "title": "Hub work-management command envelopes, v1",
   "oneOf": [
     {
       "type": "object",

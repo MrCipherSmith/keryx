@@ -146,6 +146,148 @@
         }
       }
     },
+    "/hub/work/v1/projects/{projectId}/records/{recordId}": {
+      "get": {
+        "operationId": "work_get_record",
+        "tags": [
+          "Managed work"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "recordId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized closed projection; embedded content is untrusted data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Record"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/hub/work/v1/projects/{projectId}/documents/{documentId}/versions/{version}": {
       "get": {
         "operationId": "work_get_document_version",
@@ -5735,7 +5877,7 @@
         ]
       },
       "WorkCommand": {
-        "title": "Proposed closed metadata command envelopes",
+        "title": "Hub work-management command envelopes, v1",
         "oneOf": [
           {
             "type": "object",
@@ -6950,7 +7092,7 @@
                     }
                   },
                   "coverage": {
-                    "$ref": "https://keryx.example/schemas/hub-work-management/domain.v1.json#/components/schemas/Coverage"
+                    "$ref": "#/components/schemas/Coverage"
                   },
                   "knowledgeFollowup": {
                     "type": "object",

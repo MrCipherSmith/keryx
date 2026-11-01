@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://keryx.example/schemas/hub-work-management/domain.v1.json",
-  "title": "Proposed work-domain immutable content and aggregate records",
+  "title": "Hub work-management domain records, v1",
   "oneOf": [
     {
       "$ref": "#/$defs/FlowRevision"

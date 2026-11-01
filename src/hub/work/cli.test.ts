@@ -38,3 +38,16 @@ test("CLI explicitly refreshes an exact Git subject using the original guarded o
     expect(path).toBe("/hub/work/v1/projects/p1/subjects/s1/observe"); expect(JSON.parse(body)).toEqual(input);
 });
 test('CLI fetches immutable document content with explicit exact version and digest',async()=>{const digest='a'.repeat(64);let url='';const outputs:string[]=[];await runWorkCommand(['document','show','d1','--version','2','--digest',digest],{connector,env:{WORK_TEST_TOKEN:'private-token'},write:value=>outputs.push(value),fetch:async request=>{url=request.url;return Response.json({document:{id:'d1',projectId:'p1',path:'wiki/test.md',kind:'wiki',version:2,contentDigest:digest,content:'Exact archived context'},eventCursor:'opaque'});}});expect(url).toBe('https://hub.test/hub/work/v1/projects/p1/documents/d1/versions/2?digest='+digest);expect(JSON.parse(outputs[0]!).document.content).toBe('Exact archived context');});
+
+test('CLI sends valid attempt.submit coverage through the canonical contract', async () => {
+    const envelope = { operationId: 'submit-real', command: 'attempt.submit', expectedVersions: { a1: 1 }, payload: {
+        attemptId: 'a1', subjectId: 's1', subjectDigest: 'a'.repeat(64), evidenceIds: [],
+        coverage: [{ criterionId: 'ic', result: 'missing', evidenceIds: [] }],
+        knowledgeFollowup: { proposalIds: [], noUpdateReason: 'None' },
+    } };
+    let sent = '';
+    await runWorkCommand(['attempt', 'submit', '--input', '-'], { connector, env: { WORK_TEST_TOKEN: 'private-token' }, readInput: async () => JSON.stringify(envelope), write: () => {}, fetch: async request => {
+        sent = await request.text(); return Response.json({ operationId: envelope.operationId, entities: [], receiptId: 'receipt', eventCursor: 'opaque' });
+    } });
+    expect(JSON.parse(sent)).toEqual(envelope);
+});

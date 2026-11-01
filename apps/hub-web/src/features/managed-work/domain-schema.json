@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://keryx.example/schemas/hub-work-management/domain.v1.json",
-  "title": "Proposed work-domain immutable content and aggregate records",
+  "title": "Hub work-management domain records, v1",
   "oneOf": [
     {
       "$ref": "#/$defs/FlowRevision"
@@ -62,7 +62,11 @@
           "pattern": "^[a-f0-9]{64}$"
         }
       },
-      "required": ["documentId", "version", "contentDigest"]
+      "required": [
+        "documentId",
+        "version",
+        "contentDigest"
+      ]
     },
     "Criterion": {
       "type": "object",
@@ -82,7 +86,11 @@
           "type": "boolean"
         }
       },
-      "required": ["criterionId", "text", "waivable"]
+      "required": [
+        "criterionId",
+        "text",
+        "waivable"
+      ]
     },
     "Artifact": {
       "oneOf": [
@@ -128,7 +136,10 @@
                       "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
                     }
                   },
-                  "required": ["number", "observedHeadOid"]
+                  "required": [
+                    "number",
+                    "observedHeadOid"
+                  ]
                 },
                 {
                   "type": "null"
@@ -136,7 +147,10 @@
               ]
             },
             "verification": {
-              "enum": ["claimed", "observed"]
+              "enum": [
+                "claimed",
+                "observed"
+              ]
             },
             "observedAt": {
               "anyOf": [
@@ -186,7 +200,11 @@
                   "pattern": "^[a-f0-9]{64}$"
                 }
               },
-              "required": ["documentId", "version", "contentDigest"]
+              "required": [
+                "documentId",
+                "version",
+                "contentDigest"
+              ]
             },
             "proposalId": {
               "anyOf": [
@@ -201,7 +219,11 @@
               ]
             }
           },
-          "required": ["kind", "reference", "proposalId"]
+          "required": [
+            "kind",
+            "reference",
+            "proposalId"
+          ]
         },
         {
           "type": "object",
@@ -220,7 +242,11 @@
               "pattern": "^[a-f0-9]{64}$"
             }
           },
-          "required": ["kind", "revisionId", "treeDigest"]
+          "required": [
+            "kind",
+            "revisionId",
+            "treeDigest"
+          ]
         },
         {
           "type": "object",
@@ -239,7 +265,11 @@
               "pattern": "^[a-f0-9]{64}$"
             }
           },
-          "required": ["kind", "text", "contentDigest"]
+          "required": [
+            "kind",
+            "text",
+            "contentDigest"
+          ]
         }
       ]
     },
@@ -256,7 +286,12 @@
             "maxLength": 200
           },
           "result": {
-            "enum": ["pass", "fail", "inconclusive", "missing"]
+            "enum": [
+              "pass",
+              "fail",
+              "inconclusive",
+              "missing"
+            ]
           },
           "evidenceIds": {
             "type": "array",
@@ -268,7 +303,11 @@
             }
           }
         },
-        "required": ["criterionId", "result", "evidenceIds"]
+        "required": [
+          "criterionId",
+          "result",
+          "evidenceIds"
+        ]
       }
     },
     "FlowRevision": {
@@ -347,7 +386,11 @@
                   "pattern": "^[a-f0-9]{64}$"
                 }
               },
-              "required": ["documentId", "version", "contentDigest"]
+              "required": [
+                "documentId",
+                "version",
+                "contentDigest"
+              ]
             },
             {
               "type": "null"
@@ -375,7 +418,11 @@
                 "type": "boolean"
               }
             },
-            "required": ["criterionId", "text", "waivable"]
+            "required": [
+              "criterionId",
+              "text",
+              "waivable"
+            ]
           }
         },
         "requiredIntentIds": {
@@ -609,7 +656,11 @@
                 "type": "boolean"
               }
             },
-            "required": ["criterionId", "text", "waivable"]
+            "required": [
+              "criterionId",
+              "text",
+              "waivable"
+            ]
           }
         },
         "flowCriterionIds": {
@@ -643,7 +694,10 @@
                 "maxLength": 200
               }
             },
-            "required": ["intentCriterionId", "flowCriterionId"]
+            "required": [
+              "intentCriterionId",
+              "flowCriterionId"
+            ]
           }
         }
       },
@@ -876,7 +930,11 @@
                         "pattern": "^[a-f0-9]{64}$"
                       }
                     },
-                    "required": ["documentId", "version", "contentDigest"]
+                    "required": [
+                      "documentId",
+                      "version",
+                      "contentDigest"
+                    ]
                   },
                   {
                     "type": "null"
@@ -887,7 +945,11 @@
                 "type": "boolean"
               },
               "resolution": {
-                "enum": ["resolved", "unavailable", "unverified"]
+                "enum": [
+                  "resolved",
+                  "unavailable",
+                  "unverified"
+                ]
               },
               "contentDigest": {
                 "anyOf": [
@@ -901,7 +963,11 @@
                 ]
               },
               "provenance": {
-                "enum": ["hub", "contributor", "runtime-observed"]
+                "enum": [
+                  "hub",
+                  "contributor",
+                  "runtime-observed"
+                ]
               }
             },
             "required": [
@@ -932,10 +998,17 @@
                 "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
               },
               "verification": {
-                "enum": ["claimed", "observed"]
+                "enum": [
+                  "claimed",
+                  "observed"
+                ]
               }
             },
-            "required": ["repositoryId", "commitOid", "verification"]
+            "required": [
+              "repositoryId",
+              "commitOid",
+              "verification"
+            ]
           }
         },
         "contentDigest": {
@@ -1014,7 +1087,11 @@
           "maxLength": 200
         },
         "method": {
-          "enum": ["human", "native-agent", "external-agent"]
+          "enum": [
+            "human",
+            "native-agent",
+            "external-agent"
+          ]
         },
         "summary": {
           "type": "string",
@@ -1052,7 +1129,12 @@
           ]
         },
         "executionOutcome": {
-          "enum": ["none", "active", "known-terminal", "unknown"]
+          "enum": [
+            "none",
+            "active",
+            "known-terminal",
+            "unknown"
+          ]
         },
         "submissionId": {
           "anyOf": [
@@ -1156,7 +1238,11 @@
           "pattern": "^[a-f0-9]{64}$"
         },
         "contextObservation": {
-          "enum": ["unverified", "observed-match", "observed-drift"]
+          "enum": [
+            "unverified",
+            "observed-match",
+            "observed-drift"
+          ]
         },
         "observedContextDigest": {
           "anyOf": [
@@ -1301,7 +1387,11 @@
           "minItems": 1
         },
         "result": {
-          "enum": ["pass", "fail", "inconclusive"]
+          "enum": [
+            "pass",
+            "fail",
+            "inconclusive"
+          ]
         },
         "source": {
           "enum": [
@@ -1468,7 +1558,10 @@
               ]
             }
           },
-          "required": ["proposalIds", "noUpdateReason"]
+          "required": [
+            "proposalIds",
+            "noUpdateReason"
+          ]
         },
         "contentDigest": {
           "type": "string",
@@ -1789,7 +1882,10 @@
             "additionalProperties": false,
             "properties": {
               "targetType": {
-                "enum": ["flow", "intent"]
+                "enum": [
+                  "flow",
+                  "intent"
+                ]
               },
               "targetId": {
                 "type": "string",

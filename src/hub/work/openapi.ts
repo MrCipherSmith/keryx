@@ -20,7 +20,7 @@ const commandNames = command.oneOf.map(variant => variant.properties.command.con
 /** Rebase domain-local references into the single self-contained OpenAPI document. */
 function rebase(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(rebase);
-    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$schema" && key !== "$id").map(([key, item]) => [key, key === "$ref" && typeof item === "string" ? item.replace("#/$defs/", "#/components/schemas/") : rebase(item)]));
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$schema" && key !== "$id").map(([key, item]) => [key, key === "$ref" && typeof item === "string" ? item.replace(/^.*#\/\$defs\//, "#/components/schemas/") : rebase(item)]));
     return value;
 }
 // These values are JSON Schema documents checked by the shared vocabulary validator below.
@@ -36,7 +36,7 @@ const schemas: Record<string, WorkSchema> = {
     Record: object({ record: ref("WorkRecord"), eventCursor: cursor }),
     Aggregate: object({ records: array(ref("WorkRecord"), 200), actions: array(object({ command: { enum: commandNames }, allowed: { type: "boolean" }, reasonCode: { type: "string", minLength: 1, maxLength: 200 } }), commandNames.length), eventCursor: cursor }),
     Events: object({ events: array(ref("WorkEvent"), 1000), nextCursor: cursor }),
-    CommandResult: object({ operationId: text, entities: array(ref("WorkRecord"), 1000), eventCursor: cursor, receiptId: text }),
+    CommandResult: object({ operationId: text, entities: array(ref("WorkRecord"), 1000), eventCursor: cursor, receiptId: text, preview: ref("LegacyPreview") }, ["operationId", "entities", "eventCursor", "receiptId"]),
     Error: object({ error: object({ code: { type: "string", minLength: 1, maxLength: 200 }, message: { type: "string", maxLength: 4096 }, retryable: { type: "boolean" }, currentVersions: { type: "object", maxProperties: 210, additionalProperties: { type: "integer", minimum: 1 } } }, ["code", "message", "retryable"]), operationId: text }, ["error"]),
     Capabilities: object({ protocolVersion: { const: 1 }, enabled: { type: "boolean" }, allowedCommands: array({ enum: commandNames }, commandNames.length), limits: object({ maxCommandBytes: { const: 65536 }, defaultPageSize: { const: 50 }, maxPageSize: { const: 200 }, maxEventPageSize: { const: 1000 }, maxEventBytes: { const: 1048576 }, maxSnapshotBytes: { const: 20971520 } }), features: object({ managedExecution: { type: "boolean" }, gitObserver: { type: "boolean" }, legacyConversion: { type: "boolean" } }) }),
 };
@@ -45,7 +45,6 @@ for (const [name, recordType] of Object.entries({ Flow: "WorkFlow", Intent: "Wor
 schemas.AttentionPage = object({ records: array({ oneOf: [ref("WorkFlow"), ref("WorkIntent"), ref("Attempt")] }, 200), nextCursor: nullableCursor, eventCursor: cursor });
 schemas.DocumentVersion = object({document:object({id:text,projectId:text,path:{type:'string',minLength:1,maxLength:1024},kind:{enum:['wiki','spec']},version:{type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER},contentDigest:{type:'string',pattern:'^[a-f0-9]{64}$'},content:{type:'string',maxLength:1048576}}),eventCursor:cursor});
 schemas.LegacyPreview = object({ receiptId: text, contentDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, legacyFlowId: text, sourceVersion: { type: "integer", minimum: 1 }, sourceDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { const: "eligible" }, source: object({ flowId: text, title: { type: "string", minLength: 1, maxLength: 500 }, specification: ref("DocumentRef"), criteria: array({ type: "string", minLength: 1, maxLength: 4000 }, 200), status: { enum: ["initializing", "ready"] } }) });
-schemas.CommandResult!.properties!.preview = ref("LegacyPreview");
 schemas.GitObservation = gitObservationSchema;
 schemas.ObservationResult = object({ operationId: text, observation: ref("GitObservation"), eventCursor: cursor, receiptId: text });
 schemas.ObservationPage = object({ observations: array(ref("GitObservation"), 200), nextCursor: nullableCursor, eventCursor: cursor });
@@ -57,10 +56,13 @@ schemas.Operation = { oneOf: [
 const submission = domainSchemas.FlowSubmission!.properties!;
 schemas.AcceptancePreview = object({ flowId: submission.flowId!, flowRevisionId: submission.flowRevisionId!, acceptedIntents: submission.acceptedIntents!, knowledgeProposalIds: submission.knowledgeProposalIds!, criterionCoverage: submission.criterionCoverage!, acceptanceManifestDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, eventCursor: cursor });
 
+type ReadParameter = { name: string; in: string; required: boolean; schema: WorkSchema };
+type WorkReadRoute = { suffix: string; name: string; schema: string; paging?: 'snapshot' | 'list' | 'decisions' | 'events'; pathSchemas?: Record<string, WorkSchema>; extraParameters?: readonly ReadParameter[]; description?: string; pendingResponse?: boolean };
 export const workReadRoutes = [
     { suffix: "capabilities", name: "capabilities", schema: "Capabilities" },
-    { suffix: "documents/{documentId}/versions/{version}",name:"get_document_version",schema:"DocumentVersion" },
-    { suffix: "snapshot", name: "snapshot", schema: "Page", paging: "snapshot" },
+    { suffix: "records/{recordId}", name: "get_record", schema: "Record" },
+    { suffix: "documents/{documentId}/versions/{version}", name: "get_document_version", schema: "DocumentVersion", pathSchemas: { version: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER } }, extraParameters: [{ name: "digest", in: "query", required: true, schema: { type: "string", pattern: "^[a-f0-9]{64}$" } }] },
+    { suffix: "snapshot", name: "snapshot", schema: "Page", paging: "snapshot", description: "Consistent staged snapshot page. Event cursor stays fixed across pages. Expires after five minutes; 410 requires a fresh snapshot." },
     { suffix: "flows", name: "list_flows", schema: "FlowPage", paging: "list" },
     { suffix: "flows/{flowId}", name: "get_flow", schema: "Aggregate" },
     { suffix: "flows/{flowId}/intents", name: "list_intents", schema: "IntentPage", paging: "list" },
@@ -80,24 +82,21 @@ export const workReadRoutes = [
     { suffix: "events", name: "events", schema: "Events", paging: "events" },
     { suffix: "attention", name: "attention", schema: "AttentionPage", paging: "list" },
     { suffix: "flows/{flowId}/acceptance-preview", name: "acceptance_preview", schema: "AcceptancePreview" },
-    { suffix: "operations/{operationId}", name: "operation", schema: "Operation" },
-] as const;
+    { suffix: "operations/{operationId}", name: "operation", schema: "Operation", pendingResponse: true },
+] as const satisfies readonly WorkReadRoute[];
 export type WorkReadName = typeof workReadRoutes[number]["name"];
 export function workRouteParameters(suffix: string): string[] { return [...suffix.matchAll(/\{([^}]+)\}/g)].map(match => match[1]!); }
 const prefix = "/hub/work/v1/projects/{projectId}/";
 const errorResponses = Object.fromEntries([400, 401, 403, 404, 409, 410, 413, 415, 422, 503].map(status => [status, { description: "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.", content: { "application/json": { schema: ref("Error") } } }]));
-function readOperation(route: typeof workReadRoutes[number]) {
-    const parameters: { name: string; in: string; required: boolean; schema: WorkSchema }[] = ["projectId", ...workRouteParameters(route.suffix)].map(name => ({ name, in: "path", required: true, schema: text }));
-    if(route.name==='get_document_version'){
-        const version=parameters.find(p=>p.name==='version');if(version)version.schema={type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER};
-        parameters.push({name:'digest',in:'query',required:true,schema:{type:'string',pattern:'^[a-f0-9]{64}$'}});
-    }
-    if ("paging" in route) {
+function readOperation(route: WorkReadRoute) {
+    const parameters: ReadParameter[] = ["projectId", ...workRouteParameters(route.suffix)].map(name => ({ name, in: "path", required: true, schema: route.pathSchemas?.[name] ?? text }));
+    parameters.push(...route.extraParameters ?? []);
+    if (route.paging) {
         parameters.push({ name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: route.paging === "events" ? 1000 : 200 } });
         parameters.push({ name: route.paging === "snapshot" ? "cursor" : route.paging === "events" ? "after" : "afterId", in: "query", required: false, schema: { type: "string", minLength: 1, maxLength: 4096 } });
         if (route.paging === "decisions") parameters.push({ name: "targetId", in: "query", required: false, schema: text });
     }
-    return { operationId: `work_${route.name}`, tags: ["Managed work"], parameters, responses: { "200": { description: route.name === "snapshot" ? "Consistent staged snapshot page. Event cursor stays fixed across pages. Expires after five minutes; 410 requires a fresh snapshot." : "Authorized closed projection; embedded content is untrusted data.", content: { "application/json": { schema: ref(route.schema) } } }, ...(route.name === "operation" ? { "202": { description: "Original actor-scoped operation is pending; no committed effect is implied.", content: { "application/json": { schema: ref("Operation") } } } } : {}), ...errorResponses } };
+    return { operationId: `work_${route.name}`, tags: ["Managed work"], parameters, responses: { "200": { description: route.description ?? "Authorized closed projection; embedded content is untrusted data.", content: { "application/json": { schema: ref(route.schema) } } }, ...(route.pendingResponse ? { "202": { description: "Original actor-scoped operation is pending; no committed effect is implied.", content: { "application/json": { schema: ref("Operation") } } } } : {}), ...errorResponses } };
 }
 export const workOpenApi = {
     openapi: "3.1.0",
@@ -127,7 +126,7 @@ export function matchesWorkSchema(value: unknown, schema: WorkSchema): boolean {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;
         const entries = Object.entries(value);
         if (entries.length > (schema.maxProperties ?? Infinity) || schema.required?.some(key => !Object.hasOwn(value, key))) return false;
-        return entries.every(([key, item]) => (!schema.propertyNames || matchesWorkSchema(key, schema.propertyNames)) && (schema.properties?.[key] ? matchesWorkSchema(item, schema.properties[key]!) : schema.additionalProperties === false ? false : typeof schema.additionalProperties === "object" ? matchesWorkSchema(item, schema.additionalProperties) : true));
+        return entries.every(([key, item]) => (!schema.propertyNames || matchesWorkSchema(key, schema.propertyNames)) && (schema.properties && Object.hasOwn(schema.properties, key) ? matchesWorkSchema(item, schema.properties[key]!) : schema.additionalProperties === false ? false : typeof schema.additionalProperties === "object" ? matchesWorkSchema(item, schema.additionalProperties) : true));
     }
     return schema.const !== undefined || !!schema.enum || !!schema.oneOf || !!schema.anyOf;
 }

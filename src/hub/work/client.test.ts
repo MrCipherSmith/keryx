@@ -46,3 +46,19 @@ describe("managed work transport", () => {
     });
 });
 test('exact document-version read requires digest and exposes only read-only scoped MCP',async()=>{const digest='a'.repeat(64);const tool=listWorkMcpTools().find(t=>t.name==='hub_work_get_document_version');expect(tool?.annotations.readOnlyHint).toBe(true);const input={projectId:'p',documentId:'d',version:1,digest};expect(resolveWorkMcpOperation('hub_work_get_document_version',input)).toEqual({operation:{path:'/hub/work/v1/projects/p/documents/d/versions/1?digest='+digest}});expect(resolveWorkMcpOperation('hub_work_get_document_version',{projectId:'p',documentId:'d',version:1})).toEqual({error:'invalid-arguments'});let path='';const client=createWorkClient({baseUrl:'https://hub.test',fetch:async request=>{path=request.url;return Response.json({document:{id:'d',projectId:'p',path:'wiki/test.md',kind:'wiki',version:1,contentDigest:digest,content:'Exact text'},eventCursor:'opaque'});}});const result=await client.read('get_document_version','p',{documentId:'d',version:1,digest});expect(result.document.content).toBe('Exact text');expect(path).toBe('https://hub.test/hub/work/v1/projects/p/documents/d/versions/1?digest='+digest);});
+
+test('valid attempt submission coverage passes client preparation and contributor MCP while invalid coverage is refused', async () => {
+    const envelope = { operationId: 'submit-one', command: 'attempt.submit' as const, expectedVersions: { a1: 1 }, payload: {
+        attemptId: 'a1', subjectId: 's1', subjectDigest: 'a'.repeat(64), evidenceIds: [],
+        coverage: [{ criterionId: 'ic', result: 'missing' as const, evidenceIds: [] }],
+        knowledgeFollowup: { proposalIds: [], noUpdateReason: 'None' },
+    } };
+    const client = createWorkClient({ baseUrl: 'https://hub.test', fetch: async request => {
+        expect(await request.json()).toEqual(envelope);
+        return Response.json({ operationId: envelope.operationId, entities: [], eventCursor: 'opaque', receiptId: 'receipt' });
+    } });
+    await client.prepareCommand('p1', envelope).send();
+    const { command: _command, ...args } = envelope;
+    expect(resolveWorkMcpOperation('hub_work_attempt_submit', { projectId: 'p1', ...args })).toHaveProperty('operation');
+    expect(resolveWorkMcpOperation('hub_work_attempt_submit', { projectId: 'p1', ...args, payload: { ...args.payload, coverage: [{ criterionId: 'ic', result: 'invented', evidenceIds: [] }] } })).toEqual({ error: 'invalid-arguments' });
+});
