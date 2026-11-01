@@ -636,7 +636,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   string,
   (rest: readonly string[]) => void
 >([
-  ["hub", () => printHubHelp()],
+  ["hub", printHubHelp],
   ["flow", () => printFlowHelp()],
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],
