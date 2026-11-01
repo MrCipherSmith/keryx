@@ -44,3 +44,20 @@
 - 2026-11-01T13:05:08.876Z - task-done: T13: Deliver tested candidate with operator instructions
 
 2026-11-01 verified handoff: all16 implementation tasks finished. Final independent backend/UI/native/reload reviews APPROVE; documentation PASS. Backend1783PASS retained byte-identical; finalUI151/31files,packaging6,types/lint/build/assets/docsPASS. Browser original-retry403 regression independently RED→GREEN. Final source commit04568a466; packageSHA54d1e3916ab1fd05ee189de1f683f4b86c46b47183786f563e8f9df792d492a3. Isolated geekom loopback19879 final archive installed with existing synthetic DB preserved; HTTP/MCP37PASS. PublicHub/Cloudflare unchanged. No PR/merge or product acceptance requested/performed; leave Flow in-progress, judgedAC unconfirmed, owner unset rather than inferred. Evidence docs/handoffs/hub-work-management-result.md and output/work-quality-gate-reload.md.
+- 2026-11-01T13:24:17.214Z - task-added: T17: Integrate current main and remote lifecycle fixes
+- 2026-11-01T13:24:17.456Z - task-added: T18: Implement release-backed Hub update command and safe deployment integration
+- 2026-11-01T13:24:17.702Z - task-added: T19: Rehearse production backup migration restore and verify release artifact
+- 2026-11-01T13:24:17.950Z - task-added: T20: Publish successor release and update production Hub without losing data
+- 2026-11-01T13:25:33.977Z - task-attempt: T17: started (attempt 1) — Merge current origin/main; preserve latest remote run lifecycle changes and managed work fixture overrides.
+- 2026-11-01T13:25:34.203Z - task-attempt: T18: started (attempt 1) — Release-backed local admin CLI and installer safety implementation; spec docs/requirements/hub-release-update/specification.md.
+- 2026-11-01T13:28:24.297Z - task-done: T17: Integrate current main and remote lifecycle fixes
+- 2026-11-01T15:53:25.553Z - task-added: T21: Publish successor release and provide owner-run upgrade instructions
+- 2026-11-01T15:53:25.803Z - task-done: T20: Publish successor release and update production Hub without losing data
+- 2026-11-01T16:04:18.950Z - task-added: T22: Prepare PR1113 for owner review without merge release or production cutover
+- 2026-11-01T16:04:19.179Z - task-added: T23: Fix and independently verify legacy adoption safety findings
+
+2026-11-01 owner steering: prepare PR1113 and keep Draft; owner will run review, only after review consider merging. Do not merge, tag, publish or perform production cutover. Backend+CLI complete; real Docker E2E passes after Origin/header fixture fixes. Production-copy trial preserved162documents/9legacyFlows and createdWork only in copy; actualHubCID/state unchanged. Legacy helper safety review REQUEST_CHANGES (sharedlock,pending-sessionfence,Compose identity,UIDpolicy,remotehistory); assigned workerT23, do not claim ready until negative probes pass.
+- 2026-11-01T16:05:14.705Z - task-attempt: T23: started (attempt 1) — Repair five independent legacy adoption findings; keep PR1113 Draft and forbid merge/tag/production cutover until owner review.
+- 2026-11-01T16:15:51.160Z - task-done: T18: Implement release-backed Hub update command and safe deployment integration
+- 2026-11-01T16:15:51.391Z - task-done: T19: Rehearse production backup migration restore and verify release artifact
+- 2026-11-01T16:15:51.673Z - task-done: T23: Fix and independently verify legacy adoption safety findings

@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-01T13:05:08.876Z",
+  "updatedAt": "2026-11-01T16:15:51.673Z",
   "source": {
     "type": "description",
     "ref": null
@@ -350,6 +350,132 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "Independent final reload review APPROVE: original R001 probe GREEN unchanged,15targeted tests pass, no unresolved findings. Report output/work-ui-independent-review-reload.md."
+    },
+    {
+      "id": "T17",
+      "title": "Integrate current main and remote lifecycle fixes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T13:25:33.977Z",
+            "outcome": "started",
+            "detail": "Merge current origin/main; preserve latest remote run lifecycle changes and managed work fixture overrides."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Merged origin/main in73e964a07; preserved both fixture additions;28network/work/lifecycle tests720assertionsPASS."
+    },
+    {
+      "id": "T18",
+      "title": "Implement release-backed Hub update command and safe deployment integration",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T13:25:34.203Z",
+            "outcome": "started",
+            "detail": "Release-backed local admin CLI and installer safety implementation; spec docs/requirements/hub-release-update/specification.md."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Local release updater and Hub tool integration implemented; independent CLI/controller review APPROVE and final affected gates PASS."
+    },
+    {
+      "id": "T19",
+      "title": "Rehearse production backup migration restore and verify release artifact",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Consistent full backup restored/integrity checked; real local-source candidate trial on copied production data preserves legacy and remote history. Official successor artifact check remains post-review/release gate."
+    },
+    {
+      "id": "T20",
+      "title": "Publish successor release and update production Hub without losing data",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Owner redirected final action to release publication plus instructions; owner will perform live cutover. No automatic production update."
+    },
+    {
+      "id": "T21",
+      "title": "Publish successor release and provide owner-run upgrade instructions",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T22",
+      "title": "Prepare PR1113 for owner review without merge release or production cutover",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T23",
+      "title": "Fix and independently verify legacy adoption safety findings",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T16:05:14.705Z",
+            "outcome": "started",
+            "detail": "Repair five independent legacy adoption findings; keep PR1113 Draft and forbid merge/tag/production cutover until owner review."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All five legacy adoption findings repaired; original three and independent four guard probes GREEN; Python10 and Bun10 PASS; independent final APPROVE."
     }
   ],
   "history": [
@@ -560,6 +686,81 @@
       "at": "2026-11-01T13:05:08.876Z",
       "event": "task-done",
       "detail": "T13: Deliver tested candidate with operator instructions"
+    },
+    {
+      "at": "2026-11-01T13:24:17.214Z",
+      "event": "task-added",
+      "detail": "T17: Integrate current main and remote lifecycle fixes"
+    },
+    {
+      "at": "2026-11-01T13:24:17.456Z",
+      "event": "task-added",
+      "detail": "T18: Implement release-backed Hub update command and safe deployment integration"
+    },
+    {
+      "at": "2026-11-01T13:24:17.702Z",
+      "event": "task-added",
+      "detail": "T19: Rehearse production backup migration restore and verify release artifact"
+    },
+    {
+      "at": "2026-11-01T13:24:17.950Z",
+      "event": "task-added",
+      "detail": "T20: Publish successor release and update production Hub without losing data"
+    },
+    {
+      "at": "2026-11-01T13:25:33.977Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — Merge current origin/main; preserve latest remote run lifecycle changes and managed work fixture overrides."
+    },
+    {
+      "at": "2026-11-01T13:25:34.203Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — Release-backed local admin CLI and installer safety implementation; spec docs/requirements/hub-release-update/specification.md."
+    },
+    {
+      "at": "2026-11-01T13:28:24.297Z",
+      "event": "task-done",
+      "detail": "T17: Integrate current main and remote lifecycle fixes"
+    },
+    {
+      "at": "2026-11-01T15:53:25.553Z",
+      "event": "task-added",
+      "detail": "T21: Publish successor release and provide owner-run upgrade instructions"
+    },
+    {
+      "at": "2026-11-01T15:53:25.803Z",
+      "event": "task-done",
+      "detail": "T20: Publish successor release and update production Hub without losing data"
+    },
+    {
+      "at": "2026-11-01T16:04:18.950Z",
+      "event": "task-added",
+      "detail": "T22: Prepare PR1113 for owner review without merge release or production cutover"
+    },
+    {
+      "at": "2026-11-01T16:04:19.179Z",
+      "event": "task-added",
+      "detail": "T23: Fix and independently verify legacy adoption safety findings"
+    },
+    {
+      "at": "2026-11-01T16:05:14.705Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — Repair five independent legacy adoption findings; keep PR1113 Draft and forbid merge/tag/production cutover until owner review."
+    },
+    {
+      "at": "2026-11-01T16:15:51.160Z",
+      "event": "task-done",
+      "detail": "T18: Implement release-backed Hub update command and safe deployment integration"
+    },
+    {
+      "at": "2026-11-01T16:15:51.391Z",
+      "event": "task-done",
+      "detail": "T19: Rehearse production backup migration restore and verify release artifact"
+    },
+    {
+      "at": "2026-11-01T16:15:51.673Z",
+      "event": "task-done",
+      "detail": "T23: Fix and independently verify legacy adoption safety findings"
     }
   ],
   "acKinds": {
